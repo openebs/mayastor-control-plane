@@ -1,0 +1,40 @@
+repos:
+-   repo: https://github.com/nix-community/nixpkgs-fmt
+    rev: master
+    hooks:
+    -   id: nixpkgs-fmt
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.3.0
+    hooks:
+    -   id: trailing-whitespace
+-   repo: local
+    hooks:
+    -   id: rust-style
+        name: Rust style
+        description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
+        entry: cargo fmt --all -- --check
+        pass_filenames: true
+        types: [file, rust]
+        language: system
+    -   id: rust-lint
+        name: Rust lint
+        description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
+        entry: cargo clippy --all --all-targets -- -D warnings
+        pass_filenames: false
+        types: [file, rust]
+        language: system
+    -   id: commit-lint
+        name: Commit Lint
+        description: Runs commitlint against the commit message.
+        language: system
+        entry: bash -c "npm install @commitlint/config-conventional @commitlint/cli; cat $1 | npx commitlint"
+        args: [$1]
+        stages: [commit-msg]
+    -   id: openapi-check
+        name: OpenApi Generator
+        description: Ensures OpenApi spec is up to date
+        entry: ./scripts/openapi-check.sh
+        args: ["--changes"]
+        pass_filenames: false
+        language: system
+
