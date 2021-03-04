@@ -1,0 +1,16 @@
+[patch.crates-io]
+#rpc = { path = "./rpc" }
+rpc = { git = "https://github.com/openebs/mayastor", rev = "ebcb75f720adfb704ed44038ddd09d4c52eb8f80" }
+
+[workspace]
+
+members = [
+    "control-plane/agents",
+    "control-plane/mbus-api",
+    "composer",
+    "control-plane/rest",
+    "control-plane/macros",
+    "control-plane/deployer",
+# Test mayastor through the rest api
+    "tests-mayastor",
+]
