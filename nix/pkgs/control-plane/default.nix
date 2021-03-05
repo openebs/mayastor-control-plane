@@ -6,7 +6,7 @@
 let
   versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
   version = builtins.readFile "${versionDrv}";
-  project-builder = pkgs.callPackage ../control-plane/cargo-project.nix { version = version; };
+  project-builder = pkgs.callPackage ../control-plane/cargo-project.nix { inherit version; };
   agent = { name, src }: stdenv.mkDerivation {
     inherit src;
     name = "${name}-${version}";
