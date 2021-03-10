@@ -5,8 +5,9 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 }
 
 #[get("/v0", "/nodes", tags(Nodes))]
-async fn get_nodes() -> Result<web::Json<Vec<Node>>, RestError> {
+async fn get_nodes() -> Result<web::Json<Vec<Node>>, RestClusterError> {
     RestRespond::result(MessageBus::get_nodes().await)
+        .map_err(RestClusterError::from)
 }
 #[get("/v0", "/nodes/{id}", tags(Nodes))]
 async fn get_node(

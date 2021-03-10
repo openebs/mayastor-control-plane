@@ -10,7 +10,7 @@ use actix_web::{
 };
 use async_trait::async_trait;
 pub use mbus_api::message_bus::v0::*;
-use paperclip::actix::{api_v2_errors, Apiv2Schema};
+use paperclip::actix::{api_v2_errors, api_v2_errors_overlay, Apiv2Schema};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
@@ -577,6 +577,18 @@ impl ActixRestClient {
 #[derive(Debug)]
 pub struct RestError {
     inner: BusError,
+}
+
+/// Rest Cluster Error
+/// (RestError without 404 NotFound) used for Get /$resources handlers
+#[api_v2_errors_overlay(404)]
+#[derive(Debug)]
+pub struct RestClusterError(pub RestError);
+
+impl From<RestError> for RestClusterError {
+    fn from(error: RestError) -> Self {
+        RestClusterError(error)
+    }
 }
 
 /// Rest Json Error format

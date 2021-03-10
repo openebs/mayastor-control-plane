@@ -28,8 +28,14 @@ use actix_web::{
     web::Bytes,
 };
 use actix_web_opentelemetry::ClientExt;
-use futures::Stream;
-use paperclip::actix::Apiv2Schema;
+use futures::{future::Ready, Stream};
+use paperclip::{
+    actix::{Apiv2Schema, OperationModifier},
+    v2::{
+        models::{DefaultOperationRaw, DefaultSchemaRaw, Either, Response},
+        schema::Apiv2Schema,
+    },
+};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use std::{io::BufReader, string::ToString};
@@ -380,5 +386,46 @@ impl JsonGeneric {
     /// Get inner value
     pub fn into_inner(self) -> serde_json::Value {
         self.inner
+    }
+}
+
+/// Rest Unit JSON
+#[derive(Default)]
+pub struct JsonUnit;
+
+impl From<actix_web::web::Json<()>> for JsonUnit {
+    fn from(_: actix_web::web::Json<()>) -> Self {
+        JsonUnit {}
+    }
+}
+impl From<()> for JsonUnit {
+    fn from(_: ()) -> Self {
+        JsonUnit {}
+    }
+}
+impl actix_web::Responder for JsonUnit {
+    type Error = actix_web::Error;
+    type Future = Ready<Result<actix_web::HttpResponse, actix_web::Error>>;
+
+    fn respond_to(self, r: &actix_web::HttpRequest) -> Self::Future {
+        actix_web::web::Json(()).respond_to(r)
+    }
+}
+impl Apiv2Schema for JsonUnit {
+    const NAME: Option<&'static str> = None;
+    fn raw_schema() -> DefaultSchemaRaw {
+        actix_web::web::Json::<()>::raw_schema()
+    }
+}
+impl OperationModifier for JsonUnit {
+    fn update_response(op: &mut DefaultOperationRaw) {
+        op.responses.insert(
+            "200".into(),
+            Either::Right(Response {
+                description: Some("OK".into()),
+                schema: None,
+                ..Default::default()
+            }),
+        );
     }
 }

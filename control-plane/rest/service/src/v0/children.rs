@@ -76,7 +76,7 @@ async fn add_node_nexus_child(
 async fn delete_nexus_child(
     web::Path((nexus_id, child_id)): web::Path<(NexusId, ChildUri)>,
     req: HttpRequest,
-) -> Result<web::Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     delete_child_filtered(child_id, req, Filter::Nexus(nexus_id)).await
 }
 #[delete(
@@ -91,7 +91,7 @@ async fn delete_node_nexus_child(
         ChildUri,
     )>,
     req: HttpRequest,
-) -> Result<web::Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     delete_child_filtered(child_id, req, Filter::NodeNexus(node_id, nexus_id))
         .await
 }
@@ -155,7 +155,7 @@ async fn delete_child_filtered(
     child_id: ChildUri,
     req: HttpRequest,
     filter: Filter,
-) -> Result<web::Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     let child_uri = build_child_uri(child_id, req);
 
     let nexus = match MessageBus::get_nexus(filter).await {
@@ -169,6 +169,7 @@ async fn delete_child_filtered(
         uri: child_uri,
     };
     RestRespond::result(MessageBus::remove_nexus_child(destroy).await)
+        .map(JsonUnit::from)
 }
 
 fn build_child_uri(child_id: ChildUri, req: HttpRequest) -> ChildUri {

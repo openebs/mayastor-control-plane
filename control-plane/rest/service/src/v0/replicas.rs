@@ -17,8 +17,9 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 }
 
 #[get("/v0", "/replicas", tags(Replicas))]
-async fn get_replicas() -> Result<Json<Vec<Replica>>, RestError> {
+async fn get_replicas() -> Result<Json<Vec<Replica>>, RestClusterError> {
     RestRespond::result(MessageBus::get_replicas(Filter::None).await)
+        .map_err(RestClusterError::from)
 }
 #[get("/v0", "/replicas/{id}", tags(Replicas))]
 async fn get_replica(
@@ -106,13 +107,13 @@ async fn del_node_pool_replica(
         PoolId,
         ReplicaId,
     )>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     destroy_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await
 }
 #[delete("/v0", "/pools/{pool_id}/replicas/{replica_id}", tags(Replicas))]
 async fn del_pool_replica(
     web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     destroy_replica(Filter::PoolReplica(pool_id, replica_id)).await
 }
 
@@ -161,13 +162,13 @@ async fn del_node_pool_replica_share(
         PoolId,
         ReplicaId,
     )>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     unshare_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await
 }
 #[delete("/v0", "/pools/{pool_id}/replicas/{replica_id}/share", tags(Replicas))]
 async fn del_pool_replica_share(
     web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     unshare_replica(Filter::PoolReplica(pool_id, replica_id)).await
 }
 
@@ -201,7 +202,7 @@ async fn put_replica(
     RestRespond::result(MessageBus::create_replica(create).await)
 }
 
-async fn destroy_replica(filter: Filter) -> Result<Json<()>, RestError> {
+async fn destroy_replica(filter: Filter) -> Result<JsonUnit, RestError> {
     let destroy = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
             DestroyReplica {
@@ -233,6 +234,7 @@ async fn destroy_replica(filter: Filter) -> Result<Json<()>, RestError> {
     };
 
     RestRespond::result(MessageBus::destroy_replica(destroy).await)
+        .map(JsonUnit::from)
 }
 
 async fn share_replica(
@@ -272,7 +274,7 @@ async fn share_replica(
     RestRespond::result(MessageBus::share_replica(share).await)
 }
 
-async fn unshare_replica(filter: Filter) -> Result<Json<()>, RestError> {
+async fn unshare_replica(filter: Filter) -> Result<JsonUnit, RestError> {
     let unshare = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
             UnshareReplica {
@@ -304,4 +306,5 @@ async fn unshare_replica(filter: Filter) -> Result<Json<()>, RestError> {
     };
 
     RestRespond::result(MessageBus::unshare_replica(unshare).await)
+        .map(JsonUnit::from)
 }

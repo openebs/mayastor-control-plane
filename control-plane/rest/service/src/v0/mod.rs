@@ -12,7 +12,7 @@ pub mod replicas;
 pub mod swagger_ui;
 pub mod volumes;
 
-use rest_client::{versions::v0::*, JsonGeneric};
+use rest_client::{versions::v0::*, JsonGeneric, JsonUnit};
 
 use crate::authentication::authenticate;
 use actix_service::ServiceFactory;
