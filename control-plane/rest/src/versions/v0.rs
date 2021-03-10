@@ -634,6 +634,8 @@ pub enum RestJsonErrorKind {
     Unavailable,
     // code=401, description="Unauthorized",
     Unauthenticated,
+    // code=401, description="Unauthorized",
+    Unauthorized,
 }
 
 impl RestJsonError {
@@ -745,6 +747,13 @@ impl RestError {
             ReplyErrorKind::Unauthenticated => {
                 let error = RestJsonError::new(
                     RestJsonErrorKind::Unauthenticated,
+                    &details,
+                );
+                HttpResponse::Unauthorized().json(error)
+            }
+            ReplyErrorKind::Unauthorized => {
+                let error = RestJsonError::new(
+                    RestJsonErrorKind::Unauthorized,
                     &details,
                 );
                 HttpResponse::Unauthorized().json(error)
