@@ -1,5 +1,6 @@
 pub mod dns;
 mod empty;
+mod etcd;
 mod jaeger;
 mod mayastor;
 mod nats;
@@ -325,6 +326,7 @@ impl_component! {
     // to make sure that the IP does not change between tests
     Nats,       0,
     Dns,        1,
+    Etcd,       1,
     Jaeger,     1,
     Rest,       2,
     Core,       3,
