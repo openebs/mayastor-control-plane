@@ -7,13 +7,6 @@ impl ComponentAction for Mayastor {
         options: &StartOptions,
         cfg: Builder,
     ) -> Result<Builder, Error> {
-        if options.build {
-            let status = std::process::Command::new("cargo")
-                .args(&["build", "-p", "mayastor", "--bin", "mayastor"])
-                .status()?;
-            build_error("mayastor", status.code())?;
-        }
-
         let mut cfg = cfg;
         for i in 0 .. options.mayastors {
             let mayastor_socket = format!("{}:10124", cfg.next_container_ip()?);

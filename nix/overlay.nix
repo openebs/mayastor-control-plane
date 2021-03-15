@@ -1,6 +1,7 @@
 self: super: {
   images = super.callPackage ./pkgs/images { };
-  mayastor-src = super.fetchFromGitHub {
+  mayastor-src = super.fetchFromGitHub rec {
+    name = "mayastor-${rev}-source";
     owner = "openebs";
     repo = "Mayastor";
     # Use rev from the RPC patch in the workspace's Cargo.toml

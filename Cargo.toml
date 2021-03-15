@@ -1,8 +1,13 @@
 [patch.crates-io]
+# Update nix/overlay.nix with the sha256:
+# nix-prefetch-url https://github.com/openebs/Mayastor/tarball/$rev --print-path --unpack
 rpc = { git = "https://github.com/openebs/mayastor", rev = "5b4d4726190e176ba006c78582aa3fea5ac3ceb6" }
+paperclip = { git = "https://github.com/MayastorControlPlane/paperclip", branch = "develop" }
+
+[profile.dev]
+panic = "abort"
 
 [workspace]
-
 members = [
     "control-plane/agents",
     "control-plane/mbus-api",

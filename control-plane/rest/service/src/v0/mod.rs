@@ -12,14 +12,13 @@ pub mod replicas;
 pub mod swagger_ui;
 pub mod volumes;
 
-use rest_client::{versions::v0::*, JsonGeneric};
+use rest_client::{versions::v0::*, JsonGeneric, JsonUnit};
 
 use crate::authentication::authenticate;
 use actix_service::ServiceFactory;
 use actix_web::{
     dev::{MessageBody, ServiceRequest, ServiceResponse},
     web::{self, Json},
-    Error,
     FromRequest,
     HttpRequest,
 };
@@ -103,7 +102,7 @@ where
 pub struct BearerToken;
 
 impl FromRequest for BearerToken {
-    type Error = Error;
+    type Error = RestError;
     type Future = Ready<Result<Self, Self::Error>>;
     type Config = ();
 
@@ -111,6 +110,15 @@ impl FromRequest for BearerToken {
         req: &HttpRequest,
         _payload: &mut actix_web::dev::Payload,
     ) -> Self::Future {
-        futures::future::ready(authenticate(req).map(|_| Self {}))
+        futures::future::ready(authenticate(req).map(|_| Self {}).map_err(
+            |auth_error| {
+                RestError::from(ReplyError {
+                    kind: ReplyErrorKind::Unauthorized,
+                    resource: ResourceKind::Unknown,
+                    source: req.uri().to_string(),
+                    extra: auth_error.to_string(),
+                })
+            },
+        ))
     }
 }

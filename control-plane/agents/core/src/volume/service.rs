@@ -359,6 +359,12 @@ impl Service {
             .filter(|n| n.uuid.as_str() == request.uuid.as_str())
             .collect::<Vec<_>>();
 
+        if nexuses.is_empty() {
+            return Err(SvcError::VolumeNotFound {
+                vol_id: request.uuid.to_string(),
+            });
+        }
+
         for nexus in nexuses {
             self.destroy_nexus(&DestroyNexus {
                 node: nexus.node.clone(),

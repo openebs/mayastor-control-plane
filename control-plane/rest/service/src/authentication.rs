@@ -1,9 +1,30 @@
-use actix_web::{Error, HttpRequest};
+use actix_web::HttpRequest;
 use jsonwebtoken::{crypto, Algorithm, DecodingKey};
-use std::str::FromStr;
 
 use http::HeaderValue;
 use std::fs::File;
+
+use snafu::{ResultExt, Snafu};
+
+/// Authorization Errors
+#[derive(Debug, Snafu)]
+pub enum AuthError {
+    #[snafu(display("Internal error: {}", details))]
+    InternalError { details: String },
+    #[snafu(display("No Bearer Token was provided in the HTTP Header"))]
+    NoBearerToken {},
+    #[snafu(display("Invalid token, cannot be parsed into a string: {}", source.to_string()))]
+    InvalidTokenStr { source: http::header::ToStrError },
+    #[snafu(display("Unauthorized token({}) for uri({})", token, uri))]
+    Unauthorized { token: String, uri: String },
+    #[snafu(display(
+        "Verification process failed, {}. Please check your json web token.",
+        source
+    ))]
+    Verification { source: jsonwebtoken::errors::Error },
+    #[snafu(display("Invalid Bearer Token: {}", details))]
+    InvalidToken { details: String },
+}
 
 /// Initialise JWK with the contents of the file at 'jwk_path'.
 /// If jwk_path is 'None', authentication is disabled.
@@ -11,42 +32,82 @@ pub fn init(jwk_path: Option<String>) -> JsonWebKey {
     match jwk_path {
         Some(path) => {
             let jwk_file = File::open(path).expect("Failed to open JWK file");
-            let jwk = serde_json::from_reader(jwk_file)
-                .expect("Failed to deserialise JWK");
-            JsonWebKey {
-                jwk,
-            }
+            JsonWebKey::from(Some(jwk_file))
         }
-        None => JsonWebKey {
-            ..Default::default()
-        },
+        None => JsonWebKey::from(None),
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(serde::Deserialize, Default, Debug)]
 pub struct JsonWebKey {
-    jwk: serde_json::Value,
+    #[serde(skip_deserializing)]
+    enabled: bool,
+    #[serde(alias = "alg")]
+    algorithm: Algorithm,
+    #[serde(alias = "n")]
+    modulus: String,
+    #[serde(alias = "e")]
+    exponent: String,
 }
 
 impl JsonWebKey {
+    /// Validates and returns new JsonWebKey
+    pub(crate) fn from(jwk_file: Option<File>) -> Self {
+        match jwk_file {
+            Some(jwk_file) => {
+                let mut jwk: Self = match serde_json::from_reader(jwk_file) {
+                    Ok(jwk) => jwk,
+                    Err(e) => panic!("Failed to deserialize the jwk: {}", e),
+                };
+                jwk.enabled = true;
+                jwk
+            }
+            None => Self::default(),
+        }
+    }
+
+    /// Validate a bearer token
+    pub(crate) fn validate(
+        &self,
+        token: &str,
+        uri: &str,
+    ) -> Result<(), AuthError> {
+        let (message, signature) = split_token(&token)?;
+        match crypto::verify(
+            &signature,
+            &message,
+            &self.decoding_key(),
+            self.algorithm(),
+        ) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(AuthError::Unauthorized {
+                token: token.to_string(),
+                uri: uri.to_string(),
+            }),
+            Err(source) => Err(AuthError::Verification {
+                source,
+            }),
+        }
+    }
+
     // Returns true if REST calls should be authenticated.
     fn auth_enabled(&self) -> bool {
-        !self.jwk.is_null()
+        self.enabled
     }
 
     // Return the algorithm.
     fn algorithm(&self) -> Algorithm {
-        Algorithm::from_str(self.jwk["alg"].as_str().unwrap()).unwrap()
+        self.algorithm
     }
 
     // Return the modulus.
     fn modulus(&self) -> &str {
-        self.jwk["n"].as_str().unwrap()
+        &self.modulus
     }
 
     // Return the exponent.
     fn exponent(&self) -> &str {
-        self.jwk["e"].as_str().unwrap()
+        &self.exponent
     }
 
     // Return the decoding key
@@ -57,8 +118,14 @@ impl JsonWebKey {
 
 /// Authenticate the HTTP request by checking the authorisation token to ensure
 /// the sender is who they claim to be.
-pub fn authenticate(req: &HttpRequest) -> Result<(), Error> {
-    let jwk: &JsonWebKey = req.app_data().unwrap();
+pub fn authenticate(req: &HttpRequest) -> Result<(), AuthError> {
+    let jwk: &JsonWebKey = match req.app_data() {
+        Some(jwk) => Ok(jwk),
+        None => Err(AuthError::InternalError {
+            details: "Json Web Token not configured in the REST server"
+                .to_string(),
+        }),
+    }?;
 
     // If authentication is disabled there is nothing to do.
     if !jwk.auth_enabled() {
@@ -66,46 +133,21 @@ pub fn authenticate(req: &HttpRequest) -> Result<(), Error> {
     }
 
     match req.headers().get(http::header::AUTHORIZATION) {
-        Some(token) => validate(&format_token(token), jwk),
-        None => {
-            tracing::error!("Missing bearer token in HTTP request.");
-            Err(Error::from(actix_web::HttpResponse::Unauthorized()))
+        Some(token) => {
+            jwk.validate(&format_token(token)?, &req.uri().to_string())
         }
+        None => Err(AuthError::NoBearerToken {}),
     }
 }
 
-// Ensure the token is formatted correctly by removing the "Bearer" prefix if
+// Ensure the token is formatted correctly by removing the "Bearer " prefix if
 // present.
-fn format_token(token: &HeaderValue) -> String {
+fn format_token(token: &HeaderValue) -> Result<String, AuthError> {
     let token = token
         .to_str()
-        .expect("Failed to convert token to string")
-        .replace("Bearer", "");
-    token.trim().into()
-}
-
-/// Validate a bearer token.
-pub fn validate(token: &str, jwk: &JsonWebKey) -> Result<(), Error> {
-    let (message, signature) = split_token(&token);
-    return match crypto::verify(
-        &signature,
-        &message,
-        &jwk.decoding_key(),
-        jwk.algorithm(),
-    ) {
-        Ok(true) => Ok(()),
-        Ok(false) => {
-            tracing::error!("Signature verification failed.");
-            Err(Error::from(actix_web::HttpResponse::Unauthorized()))
-        }
-        Err(e) => {
-            tracing::error!(
-                "Failed to complete signature verification with error {}",
-                e
-            );
-            Err(Error::from(actix_web::HttpResponse::Unauthorized()))
-        }
-    };
+        .context(InvalidTokenStr)?
+        .trim_start_matches("Bearer ");
+    Ok(token.trim().into())
 }
 
 // Split the JSON Web Token (JWT) into 2 parts, message and signature.
@@ -116,11 +158,18 @@ pub fn validate(token: &str, jwk: &JsonWebKey) -> Result<(), Error> {
 //      \______  ________/
 //             \/
 //           message
-fn split_token(token: &str) -> (String, String) {
+fn split_token(token: &str) -> Result<(String, String), AuthError> {
     let elems = token.split('.').collect::<Vec<&str>>();
-    let message = format!("{}.{}", elems[0], elems[1]);
-    let signature = elems[2];
-    (message, signature.into())
+    if elems.len() == 3 {
+        let message = format!("{}.{}", elems[0], elems[1]);
+        let signature = elems[2];
+        Ok((message, signature.into()))
+    } else {
+        Err(AuthError::InvalidToken {
+            details: "Should be formatted as: header.payload.signature"
+                .to_string(),
+        })
+    }
 }
 
 #[test]
@@ -137,9 +186,9 @@ fn validate_test() {
         .join("jwk");
     let jwk = init(Some(jwk_file.to_str().unwrap().into()));
 
-    validate(&token, &jwk).expect("Validation should pass");
+    jwk.validate(&token, "uri").expect("Validation should pass");
     // create invalid token
     token.push_str("invalid");
-    validate(&token, &jwk)
+    jwk.validate(&token, "uri")
         .expect_err("Validation should fail with an invalid token");
 }

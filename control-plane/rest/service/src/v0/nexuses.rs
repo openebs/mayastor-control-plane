@@ -13,8 +13,9 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 }
 
 #[get("/v0", "/nexuses", tags(Nexuses))]
-async fn get_nexuses() -> Result<Json<Vec<Nexus>>, RestError> {
+async fn get_nexuses() -> Result<Json<Vec<Nexus>>, RestClusterError> {
     RestRespond::result(MessageBus::get_nexuses(Filter::None).await)
+        .map_err(RestClusterError::from)
 }
 #[get("/v0", "/nexuses/{nexus_id}", tags(Nexuses))]
 async fn get_nexus(
@@ -50,13 +51,13 @@ async fn put_node_nexus(
 #[delete("/v0", "/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
 async fn del_node_nexus(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     destroy_nexus(Filter::NodeNexus(node_id, nexus_id)).await
 }
 #[delete("/v0", "/nexuses/{nexus_id}", tags(Nexuses))]
 async fn del_nexus(
     web::Path(nexus_id): web::Path<NexusId>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     destroy_nexus(Filter::Nexus(nexus_id)).await
 }
 
@@ -84,15 +85,16 @@ async fn put_node_nexus_share(
 #[delete("/v0", "/nodes/{node_id}/nexuses/{nexus_id}/share", tags(Nexuses))]
 async fn del_node_nexus_share(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     let unshare = UnshareNexus {
         node: node_id,
         uuid: nexus_id,
     };
     RestRespond::result(MessageBus::unshare_nexus(unshare).await)
+        .map(JsonUnit::from)
 }
 
-async fn destroy_nexus(filter: Filter) -> Result<Json<()>, RestError> {
+async fn destroy_nexus(filter: Filter) -> Result<JsonUnit, RestError> {
     let destroy = match filter.clone() {
         Filter::NodeNexus(node_id, nexus_id) => DestroyNexus {
             node: node_id,
@@ -119,4 +121,5 @@ async fn destroy_nexus(filter: Filter) -> Result<Json<()>, RestError> {
     };
 
     RestRespond::result(MessageBus::destroy_nexus(destroy).await)
+        .map(JsonUnit::from)
 }

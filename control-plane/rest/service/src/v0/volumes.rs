@@ -10,8 +10,9 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 }
 
 #[get("/v0", "/volumes", tags(Volumes))]
-async fn get_volumes() -> Result<Json<Vec<Volume>>, RestError> {
+async fn get_volumes() -> Result<Json<Vec<Volume>>, RestClusterError> {
     RestRespond::result(MessageBus::get_volumes(Filter::None).await)
+        .map_err(RestClusterError::from)
 }
 
 #[get("/v0", "/volumes/{volume_id}", tags(Volumes))]
@@ -48,9 +49,10 @@ async fn put_volume(
 #[delete("/v0", "/volumes/{volume_id}", tags(Volumes))]
 async fn del_volume(
     web::Path(volume_id): web::Path<VolumeId>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     let request = DestroyVolume {
         uuid: volume_id,
     };
     RestRespond::result(MessageBus::delete_volume(request).await)
+        .map(JsonUnit::from)
 }

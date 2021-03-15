@@ -10,7 +10,7 @@ use actix_web::{
 };
 use async_trait::async_trait;
 pub use mbus_api::message_bus::v0::*;
-use paperclip::actix::Apiv2Schema;
+use paperclip::actix::{api_v2_errors, api_v2_errors_overlay, Apiv2Schema};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
@@ -541,55 +541,107 @@ impl ActixRestClient {
 }
 
 /// Rest Error
+#[api_v2_errors(
+    code = 400,
+    description = "Request Timeout",
+    code = 401,
+    description = "Unauthorized",
+    code = 404,
+    description = "Not Found",
+    code = 408,
+    description = "Bad Request",
+    code = 416,
+    description = "Range Not satisfiable",
+    code = 412,
+    description = "Precondition Failed",
+    code = 422,
+    description = "Unprocessable entity",
+    code = 500,
+    description = "Internal Server Error",
+    code = 501,
+    description = "Not Implemented",
+    code = 503,
+    description = "Service Unavailable",
+    code = 504,
+    description = "Gateway Timeout",
+    code = 507,
+    description = "Insufficient Storage",
+    default_schema = "RestJsonError"
+)]
 #[derive(Debug)]
 pub struct RestError {
     inner: BusError,
 }
 
+/// Rest Cluster Error
+/// (RestError without 404 NotFound) used for Get /$resources handlers
+#[api_v2_errors_overlay(404)]
+#[derive(Debug)]
+pub struct RestClusterError(pub RestError);
+
+impl From<RestError> for RestClusterError {
+    fn from(error: RestError) -> Self {
+        RestClusterError(error)
+    }
+}
+
 /// Rest Json Error format
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Apiv2Schema)]
 pub struct RestJsonError {
     /// error kind
-    kind: RestJsonErrorKind,
+    error: RestJsonErrorKind,
     /// detailed error information
     details: String,
 }
 
 /// RestJson error kind
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Apiv2Schema)]
 #[allow(missing_docs)]
 pub enum RestJsonErrorKind {
-    Deserialize,
-    Internal,
+    // code=400, description="Request Timeout",
     Timeout,
+    // code=500, description="Internal Error",
+    Deserialize,
+    // code=500, description="Internal Error",
+    Internal,
+    // code=400, description="Bad Request",
     InvalidArgument,
+    // code=504, description="Gateway Timeout",
     DeadlineExceeded,
+    // code=404, description="Not Found",
     NotFound,
+    // code=422, description="Unprocessable entity",
     AlreadyExists,
+    // code=401, description="Unauthorized",
     PermissionDenied,
+    // code=507, description="Insufficient Storage",
     ResourceExhausted,
+    // code=412, description="Precondition Failed",
     FailedPrecondition,
+    // code=503, description="Service Unavailable",
     Aborted,
+    // code=416, description="Range Not satisfiable",
     OutOfRange,
+    // code=501, description="Not Implemented",
     Unimplemented,
+    // code=503, description="Service Unavailable",
     Unavailable,
+    // code=401, description="Unauthorized",
     Unauthenticated,
+    // code=401, description="Unauthorized",
+    Unauthorized,
 }
 
 impl RestJsonError {
-    fn new(kind: RestJsonErrorKind, details: &str) -> Self {
+    fn new(error: RestJsonErrorKind, details: &str) -> Self {
         Self {
-            kind,
+            error,
             details: details.to_string(),
         }
     }
 }
 
-#[cfg(not(feature = "nightly"))]
-impl paperclip::v2::schema::Apiv2Errors for RestError {}
-
 impl RestError {
-    // todo: response type convention
     fn get_resp_error(&self) -> HttpResponse {
         let details = self.inner.extra.clone();
         match &self.inner.kind {
@@ -689,6 +741,13 @@ impl RestError {
             ReplyErrorKind::Unauthenticated => {
                 let error = RestJsonError::new(
                     RestJsonErrorKind::Unauthenticated,
+                    &details,
+                );
+                HttpResponse::Unauthorized().json(error)
+            }
+            ReplyErrorKind::Unauthorized => {
+                let error = RestJsonError::new(
+                    RestJsonErrorKind::Unauthorized,
                     &details,
                 );
                 HttpResponse::Unauthorized().json(error)

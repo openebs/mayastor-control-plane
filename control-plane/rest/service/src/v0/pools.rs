@@ -11,8 +11,9 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 }
 
 #[get("/v0", "/pools", tags(Pools))]
-async fn get_pools() -> Result<Json<Vec<Pool>>, RestError> {
+async fn get_pools() -> Result<Json<Vec<Pool>>, RestClusterError> {
     RestRespond::result(MessageBus::get_pools(Filter::None).await)
+        .map_err(RestClusterError::from)
 }
 #[get("/v0", "/pools/{pool_id}", tags(Pools))]
 async fn get_pool(
@@ -49,17 +50,17 @@ async fn put_node_pool(
 #[delete("/v0", "/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
 async fn del_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     destroy_pool(Filter::NodePool(node_id, pool_id)).await
 }
 #[delete("/v0", "/pools/{pool_id}", tags(Pools))]
 async fn del_pool(
     web::Path(pool_id): web::Path<PoolId>,
-) -> Result<Json<()>, RestError> {
+) -> Result<JsonUnit, RestError> {
     destroy_pool(Filter::Pool(pool_id)).await
 }
 
-async fn destroy_pool(filter: Filter) -> Result<Json<()>, RestError> {
+async fn destroy_pool(filter: Filter) -> Result<JsonUnit, RestError> {
     let destroy = match filter.clone() {
         Filter::NodePool(node_id, pool_id) => DestroyPool {
             node: node_id,
@@ -86,4 +87,5 @@ async fn destroy_pool(filter: Filter) -> Result<Json<()>, RestError> {
     };
 
     RestRespond::result(MessageBus::destroy_pool(destroy).await)
+        .map(JsonUnit::from)
 }

@@ -56,6 +56,8 @@ pub enum SvcError {
     PoolNotFound { pool_id: PoolId },
     #[snafu(display("Nexus '{}' not found", nexus_id))]
     NexusNotFound { nexus_id: String },
+    #[snafu(display("Volume '{}' not found", vol_id))]
+    VolumeNotFound { vol_id: String },
     #[snafu(display("Replica '{}' not found", replica_id))]
     ReplicaNotFound { replica_id: ReplicaId },
     #[snafu(display("Invalid filter value: {:?}", filter))]
@@ -218,6 +220,14 @@ impl From<SvcError> for ReplyError {
             } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Nexus,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::VolumeNotFound {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
