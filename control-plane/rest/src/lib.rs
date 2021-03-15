@@ -26,6 +26,7 @@ use actix_web::{
     },
     dev::ResponseHead,
     web::Bytes,
+    HttpResponse,
 };
 use actix_web_opentelemetry::ClientExt;
 use futures::{future::Ready, Stream};
@@ -143,7 +144,7 @@ impl ActixRestClient {
         body: B,
     ) -> Result<R, ClientError>
     where
-        for<'de> R: Deserialize<'de>,
+        for<'de> R: Deserialize<'de> + Default,
     {
         let uri = format!("{}{}", self.url, urn);
 
@@ -170,7 +171,7 @@ impl ActixRestClient {
     }
     async fn del<R>(&self, urn: String) -> ClientResult<R>
     where
-        for<'de> R: Deserialize<'de>,
+        for<'de> R: Deserialize<'de> + Default,
     {
         let uri = format!("{}{}", self.url, urn);
 
@@ -238,7 +239,7 @@ impl ActixRestClient {
     ) -> Result<R, ClientError>
     where
         S: Stream<Item = Result<Bytes, PayloadError>> + Unpin,
-        for<'de> R: Deserialize<'de>,
+        for<'de> R: Deserialize<'de> + Default,
     {
         let status = rest_response.status();
         let headers = rest_response.headers().clone();
@@ -251,12 +252,18 @@ impl ActixRestClient {
             head: head(),
         })?;
         if status.is_success() {
-            let result =
-                serde_json::from_slice(&body).context(InvalidBody {
-                    head: head(),
-                    body,
-                })?;
-            Ok(result)
+            let empty = body.is_empty();
+            let result = serde_json::from_slice(&body).context(InvalidBody {
+                head: head(),
+                body,
+            });
+            match result {
+                Ok(result) => Ok(result),
+                Err(_) if empty && std::any::type_name::<R>() == "()" => {
+                    Ok(R::default())
+                }
+                Err(error) => Err(error),
+            }
         } else if body.is_empty() {
             Err(ClientError::Header {
                 head: head(),
@@ -348,7 +355,7 @@ impl ClientError {
 }
 
 /// Generic JSON value eg: { "size": 1024 }
-#[derive(Debug, Clone, Apiv2Schema)]
+#[derive(Debug, Default, Clone, Apiv2Schema)]
 pub struct JsonGeneric {
     inner: serde_json::Value,
 }
@@ -407,8 +414,11 @@ impl actix_web::Responder for JsonUnit {
     type Error = actix_web::Error;
     type Future = Ready<Result<actix_web::HttpResponse, actix_web::Error>>;
 
-    fn respond_to(self, r: &actix_web::HttpRequest) -> Self::Future {
-        actix_web::web::Json(()).respond_to(r)
+    fn respond_to(self, _: &actix_web::HttpRequest) -> Self::Future {
+        futures::future::ok(
+            HttpResponse::build(actix_web::http::StatusCode::NO_CONTENT)
+                .finish(),
+        )
     }
 }
 impl Apiv2Schema for JsonUnit {
@@ -419,8 +429,9 @@ impl Apiv2Schema for JsonUnit {
 }
 impl OperationModifier for JsonUnit {
     fn update_response(op: &mut DefaultOperationRaw) {
+        op.responses.remove("200");
         op.responses.insert(
-            "200".into(),
+            "204".into(),
             Either::Right(Response {
                 description: Some("OK".into()),
                 schema: None,

@@ -29,7 +29,7 @@ let
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
   buildProps = rec {
-    name = "control-plane";
+    name = "control-plane-${version}";
     #cargoSha256 = "0000000000000000000000000000000000000000000000000000";
     cargoSha256 = "1bg09ws384di6kb896ynm4na0n10v3k823j6xqvdxpxz5ybgvhba";
     inherit version;
