@@ -15,6 +15,7 @@ members = [
     "control-plane/rest",
     "control-plane/macros",
     "control-plane/deployer",
+    "control-plane/store",
 # Test mayastor through the rest api
     "tests-mayastor",
 ]

@@ -17,6 +17,7 @@ path = "src/lib.rs"
 [dependencies]
 mbus_api = { path = "../mbus-api" }
 composer = { path = "../../composer" }
+store = { path = "../store" }
 nats = "0.8"
 structopt = "0.3.15"
 tokio = { version = "0.2", features = ["full"] }
@@ -25,3 +26,4 @@ rpc = "0.1.0"
 strum = "0.19"
 strum_macros = "0.19"
 paste = "1.0.4"
+serde_json = "1.0"

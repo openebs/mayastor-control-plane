@@ -33,6 +33,7 @@ mkShell {
     utillinux
     which
     docker
+    etcd
   ]
   ++ pkgs.lib.optional (!norust) channel.nightly.rust
   ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;

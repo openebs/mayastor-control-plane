@@ -106,6 +106,10 @@ pub struct StartOptions {
     /// Name of the cluster - currently only one allowed at a time
     #[structopt(short, long, default_value = DEFAULT_CLUSTER_NAME)]
     pub cluster_name: String,
+
+    /// Start an etcd cluster
+    #[structopt(short, long)]
+    pub etcd: bool,
 }
 
 impl StartOptions {
@@ -139,6 +143,10 @@ impl StartOptions {
         base_image: impl Into<Option<String>>,
     ) -> Self {
         self.base_image = base_image.into();
+        self
+    }
+    pub fn with_etcd(mut self, etcd: bool) -> Self {
+        self.etcd = etcd;
         self
     }
 }
