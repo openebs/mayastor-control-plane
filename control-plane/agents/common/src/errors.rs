@@ -83,6 +83,8 @@ pub enum SvcError {
     MBusError { source: mbus_api::Error },
     #[snafu(display("Invalid Arguments"))]
     InvalidArguments {},
+    #[snafu(display("Multiple nexuses not supported"))]
+    MultipleNexuses {},
 }
 
 impl From<mbus_api::Error> for SvcError {
@@ -250,6 +252,14 @@ impl From<SvcError> for ReplyError {
             SvcError::MBusError {
                 source,
             } => source.into(),
+            SvcError::MultipleNexuses {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
         }
     }
 }
