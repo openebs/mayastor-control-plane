@@ -207,8 +207,10 @@ impl Service {
             return Err(SvcError::InvalidArguments {});
         }
 
+        // TODO: Remove check when ANA support is added.
         if request.nexuses > 1 {
-            panic!("ANA volumes is not currently supported");
+            tracing::error!("ANA volumes are not currently supported");
+            return Err(SvcError::MultipleNexuses {});
         }
 
         // filter pools according to the following criteria (any order):
