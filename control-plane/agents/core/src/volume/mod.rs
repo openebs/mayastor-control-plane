@@ -150,7 +150,7 @@ mod tests {
             node: mayastor.into(),
             uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
             key: None,
-            protocol: Protocol::Nvmf,
+            protocol: NexusShareProtocol::Nvmf,
         }
         .request()
         .await

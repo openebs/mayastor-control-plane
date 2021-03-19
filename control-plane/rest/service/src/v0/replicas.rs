@@ -127,7 +127,7 @@ async fn put_node_pool_replica_share(
         NodeId,
         PoolId,
         ReplicaId,
-        Protocol,
+        ReplicaShareProtocol,
     )>,
 ) -> Result<Json<String>, RestError> {
     share_replica(
@@ -145,7 +145,7 @@ async fn put_pool_replica_share(
     web::Path((pool_id, replica_id, protocol)): web::Path<(
         PoolId,
         ReplicaId,
-        Protocol,
+        ReplicaShareProtocol,
     )>,
 ) -> Result<Json<String>, RestError> {
     share_replica(Filter::PoolReplica(pool_id, replica_id), protocol).await
@@ -239,7 +239,7 @@ async fn destroy_replica(filter: Filter) -> Result<JsonUnit, RestError> {
 
 async fn share_replica(
     filter: Filter,
-    protocol: Protocol,
+    protocol: ReplicaShareProtocol,
 ) -> Result<Json<String>, RestError> {
     let share = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => ShareReplica {

@@ -43,7 +43,13 @@ pub(crate) fn configure(builder: Service) -> Service {
 mod tests {
     use super::*;
     use composer::*;
-    use mbus_api::v0::{GetNodes, Liveness, Protocol, Replica};
+    use mbus_api::v0::{
+        GetNodes,
+        Liveness,
+        Protocol,
+        Replica,
+        ReplicaShareProtocol,
+    };
     use rpc::mayastor::Null;
 
     async fn wait_for_services() {
@@ -136,7 +142,7 @@ mod tests {
             node: mayastor.into(),
             uuid: "replica1".into(),
             pool: "pooloop".into(),
-            protocol: Protocol::Nvmf,
+            protocol: ReplicaShareProtocol::Nvmf,
         }
         .request()
         .await

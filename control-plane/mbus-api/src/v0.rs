@@ -608,7 +608,7 @@ pub struct ShareReplica {
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// protocol used for exposing the replica
-    pub protocol: Protocol,
+    pub protocol: ReplicaShareProtocol,
 }
 bus_impl_message_all!(ShareReplica, ShareReplica, String, Pool);
 
@@ -662,6 +662,83 @@ impl From<i32> for Protocol {
             1 => Self::Nvmf,
             2 => Self::Iscsi,
             _ => Self::Off,
+        }
+    }
+}
+impl From<ReplicaShareProtocol> for Protocol {
+    fn from(src: ReplicaShareProtocol) -> Self {
+        match src {
+            ReplicaShareProtocol::Nvmf => Self::Nvmf,
+        }
+    }
+}
+
+/// The protocol used to share the nexus.
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    EnumString,
+    ToString,
+    Eq,
+    PartialEq,
+    Apiv2Schema,
+)]
+#[strum(serialize_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
+pub enum NexusShareProtocol {
+    /// shared as NVMe-oF TCP
+    Nvmf = 1,
+    /// shared as iSCSI
+    Iscsi = 2,
+}
+
+impl Default for NexusShareProtocol {
+    fn default() -> Self {
+        Self::Nvmf
+    }
+}
+impl From<i32> for NexusShareProtocol {
+    fn from(src: i32) -> Self {
+        match src {
+            1 => Self::Nvmf,
+            2 => Self::Iscsi,
+            _ => panic!("Invalid nexus share protocol {}", src),
+        }
+    }
+}
+
+/// The protocol used to share the replica.
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    EnumString,
+    ToString,
+    Eq,
+    PartialEq,
+    Apiv2Schema,
+)]
+#[strum(serialize_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
+pub enum ReplicaShareProtocol {
+    /// shared as NVMe-oF TCP
+    Nvmf = 1,
+}
+
+impl Default for ReplicaShareProtocol {
+    fn default() -> Self {
+        Self::Nvmf
+    }
+}
+impl From<i32> for ReplicaShareProtocol {
+    fn from(src: i32) -> Self {
+        match src {
+            1 => Self::Nvmf,
+            _ => panic!("Invalid replica share protocol {}", src),
         }
     }
 }
@@ -862,7 +939,7 @@ pub struct ShareNexus {
     /// encryption key
     pub key: Option<String>,
     /// share protocol
-    pub protocol: Protocol,
+    pub protocol: NexusShareProtocol,
 }
 bus_impl_message_all!(ShareNexus, ShareNexus, String, Nexus);
 

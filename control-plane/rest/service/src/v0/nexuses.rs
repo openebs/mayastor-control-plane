@@ -70,7 +70,7 @@ async fn put_node_nexus_share(
     web::Path((node_id, nexus_id, protocol)): web::Path<(
         NodeId,
         NexusId,
-        Protocol,
+        NexusShareProtocol,
     )>,
 ) -> Result<Json<String>, RestError> {
     let share = ShareNexus {
