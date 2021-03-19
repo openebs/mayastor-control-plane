@@ -6,7 +6,8 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(get_node_volumes)
         .service(get_node_volume)
         .service(put_volume)
-        .service(del_volume);
+        .service(del_volume)
+        .service(volume_share);
 }
 
 #[get("/v0", "/volumes", tags(Volumes))]
@@ -55,4 +56,42 @@ async fn del_volume(
     };
     RestRespond::result(MessageBus::delete_volume(request).await)
         .map(JsonUnit::from)
+}
+
+#[put("/v0", "/volumes/{volume_id}/share/{protocol}", tags(Volumes))]
+async fn volume_share(
+    web::Path((volume_id, protocol)): web::Path<(VolumeId, Protocol)>,
+) -> Result<Json<String>, RestError> {
+    let volume =
+        MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
+
+    // TODO: For ANA we will want to share all nexuses not just the first.
+    match volume.children.first() {
+        Some(nexus) => match protocol {
+            // Unshare the volume if no protocol is selected.
+            Protocol::Off => RestRespond::result(
+                MessageBus::unshare_nexus(UnshareNexus {
+                    node: nexus.node.clone(),
+                    uuid: nexus.uuid.clone(),
+                })
+                .await,
+            )
+            .map(|_| Json::<String>(String::new())),
+            _ => RestRespond::result(
+                MessageBus::share_nexus(ShareNexus {
+                    node: nexus.node.clone(),
+                    uuid: nexus.uuid.clone(),
+                    key: None,
+                    protocol,
+                })
+                .await,
+            ),
+        },
+        None => Err(RestError::from(ReplyError {
+            kind: ReplyErrorKind::NotFound,
+            resource: ResourceKind::Nexus,
+            source: "".to_string(),
+            extra: format!("No nexuses found for volume {}", volume_id),
+        })),
+    }
 }

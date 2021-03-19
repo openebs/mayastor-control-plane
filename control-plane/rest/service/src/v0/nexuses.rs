@@ -8,8 +8,7 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(put_node_nexus)
         .service(del_node_nexus)
         .service(del_nexus)
-        .service(put_node_nexus_share)
-        .service(del_node_nexus_share);
+        .service(put_node_nexus_share);
 }
 
 #[get("/v0", "/nexuses", tags(Nexuses))]
@@ -73,25 +72,26 @@ async fn put_node_nexus_share(
         Protocol,
     )>,
 ) -> Result<Json<String>, RestError> {
-    let share = ShareNexus {
-        node: node_id,
-        uuid: nexus_id,
-        key: None,
-        protocol,
-    };
-    RestRespond::result(MessageBus::share_nexus(share).await)
-}
-
-#[delete("/v0", "/nodes/{node_id}/nexuses/{nexus_id}/share", tags(Nexuses))]
-async fn del_node_nexus_share(
-    web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
-) -> Result<JsonUnit, RestError> {
-    let unshare = UnshareNexus {
-        node: node_id,
-        uuid: nexus_id,
-    };
-    RestRespond::result(MessageBus::unshare_nexus(unshare).await)
-        .map(JsonUnit::from)
+    match protocol {
+        // Unshare the nexus if no protocol is selected.
+        Protocol::Off => RestRespond::result(
+            MessageBus::unshare_nexus(UnshareNexus {
+                node: node_id,
+                uuid: nexus_id,
+            })
+            .await,
+        )
+        .map(|_| Json::<String>(String::new())),
+        _ => RestRespond::result(
+            MessageBus::share_nexus(ShareNexus {
+                node: node_id,
+                uuid: nexus_id,
+                key: None,
+                protocol,
+            })
+            .await,
+        ),
+    }
 }
 
 async fn destroy_nexus(filter: Filter) -> Result<JsonUnit, RestError> {

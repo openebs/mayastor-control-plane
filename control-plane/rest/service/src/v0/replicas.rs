@@ -11,9 +11,7 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(del_node_pool_replica)
         .service(del_pool_replica)
         .service(put_node_pool_replica_share)
-        .service(put_pool_replica_share)
-        .service(del_node_pool_replica_share)
-        .service(del_pool_replica_share);
+        .service(put_pool_replica_share);
 }
 
 #[get("/v0", "/replicas", tags(Replicas))]
@@ -130,11 +128,21 @@ async fn put_node_pool_replica_share(
         Protocol,
     )>,
 ) -> Result<Json<String>, RestError> {
-    share_replica(
-        Filter::NodePoolReplica(node_id, pool_id, replica_id),
-        protocol,
-    )
-    .await
+    match protocol {
+        // Unshare the replica if no protocol is selected.
+        Protocol::Off => unshare_replica(Filter::NodePoolReplica(
+            node_id, pool_id, replica_id,
+        ))
+        .await
+        .map(|_| Json::<String>(String::new())),
+        _ => {
+            share_replica(
+                Filter::NodePoolReplica(node_id, pool_id, replica_id),
+                protocol,
+            )
+            .await
+        }
+    }
 }
 #[put(
     "/v0",
@@ -148,28 +156,18 @@ async fn put_pool_replica_share(
         Protocol,
     )>,
 ) -> Result<Json<String>, RestError> {
-    share_replica(Filter::PoolReplica(pool_id, replica_id), protocol).await
-}
-
-#[delete(
-    "/v0",
-    "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share",
-    tags(Replicas)
-)]
-async fn del_node_pool_replica_share(
-    web::Path((node_id, pool_id, replica_id)): web::Path<(
-        NodeId,
-        PoolId,
-        ReplicaId,
-    )>,
-) -> Result<JsonUnit, RestError> {
-    unshare_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await
-}
-#[delete("/v0", "/pools/{pool_id}/replicas/{replica_id}/share", tags(Replicas))]
-async fn del_pool_replica_share(
-    web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
-) -> Result<JsonUnit, RestError> {
-    unshare_replica(Filter::PoolReplica(pool_id, replica_id)).await
+    match protocol {
+        // Unshare the replica if no protocol is selected.
+        Protocol::Off => {
+            unshare_replica(Filter::PoolReplica(pool_id, replica_id))
+                .await
+                .map(|_| Json::<String>(String::new()))
+        }
+        _ => {
+            share_replica(Filter::PoolReplica(pool_id, replica_id), protocol)
+                .await
+        }
+    }
 }
 
 async fn put_replica(
