@@ -547,7 +547,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
             .into_inner()
             .uri;
         self.lock().await.share_replica(
-            &request.protocol,
+            &request.protocol.into(),
             &share,
             &request.pool,
             &request.uuid,

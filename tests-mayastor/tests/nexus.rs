@@ -138,7 +138,7 @@ async fn create_nexus_replicas() {
             node: cluster.node(1),
             pool: cluster.pool(1, 0),
             uuid: Cluster::replica(0, 0),
-            protocol: v0::Protocol::Nvmf,
+            protocol: v0::ReplicaShareProtocol::Nvmf,
         })
         .await
         .unwrap();
@@ -173,17 +173,16 @@ async fn create_nexus_replica_not_available() {
             node: cluster.node(1),
             pool: cluster.pool(1, 0),
             uuid: Cluster::replica(0, 0),
-            protocol: v0::Protocol::Nvmf,
+            protocol: v0::ReplicaShareProtocol::Nvmf,
         })
         .await
         .unwrap();
     cluster
         .rest_v0()
-        .share_replica(v0::ShareReplica {
+        .unshare_replica(v0::UnshareReplica {
             node: cluster.node(1),
             pool: cluster.pool(1, 0),
             uuid: Cluster::replica(0, 0),
-            protocol: v0::Protocol::Off,
         })
         .await
         .unwrap();

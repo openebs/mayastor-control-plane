@@ -164,7 +164,7 @@ impl MessageBusToRpc for mbus::ShareReplica {
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
             uuid: self.uuid.clone().into(),
-            share: self.protocol.clone() as i32,
+            share: self.protocol as i32,
         }
     }
 }
