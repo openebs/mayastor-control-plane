@@ -12,25 +12,25 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(del_node_nexus_share);
 }
 
-#[get("/v0", "/nexuses", tags(Nexuses))]
+#[get("/nexuses", tags(Nexuses))]
 async fn get_nexuses() -> Result<Json<Vec<Nexus>>, RestClusterError> {
     RestRespond::result(MessageBus::get_nexuses(Filter::None).await)
         .map_err(RestClusterError::from)
 }
-#[get("/v0", "/nexuses/{nexus_id}", tags(Nexuses))]
+#[get("/nexuses/{nexus_id}", tags(Nexuses))]
 async fn get_nexus(
     web::Path(nexus_id): web::Path<NexusId>,
 ) -> Result<Json<Nexus>, RestError> {
     RestRespond::result(MessageBus::get_nexus(Filter::Nexus(nexus_id)).await)
 }
 
-#[get("/v0", "/nodes/{id}/nexuses", tags(Nexuses))]
+#[get("/nodes/{id}/nexuses", tags(Nexuses))]
 async fn get_node_nexuses(
     web::Path(node_id): web::Path<NodeId>,
 ) -> Result<Json<Vec<Nexus>>, RestError> {
     RestRespond::result(MessageBus::get_nexuses(Filter::Node(node_id)).await)
 }
-#[get("/v0", "/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
+#[get("/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
 async fn get_node_nexus(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
 ) -> Result<Json<Nexus>, RestError> {
@@ -39,7 +39,7 @@ async fn get_node_nexus(
     )
 }
 
-#[put("/v0", "/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
+#[put("/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
 async fn put_node_nexus(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
     create: web::Json<CreateNexusBody>,
@@ -48,24 +48,20 @@ async fn put_node_nexus(
     RestRespond::result(MessageBus::create_nexus(create).await)
 }
 
-#[delete("/v0", "/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
+#[delete("/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
 async fn del_node_nexus(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
 ) -> Result<JsonUnit, RestError> {
     destroy_nexus(Filter::NodeNexus(node_id, nexus_id)).await
 }
-#[delete("/v0", "/nexuses/{nexus_id}", tags(Nexuses))]
+#[delete("/nexuses/{nexus_id}", tags(Nexuses))]
 async fn del_nexus(
     web::Path(nexus_id): web::Path<NexusId>,
 ) -> Result<JsonUnit, RestError> {
     destroy_nexus(Filter::Nexus(nexus_id)).await
 }
 
-#[put(
-    "/v0",
-    "/nodes/{node_id}/nexuses/{nexus_id}/share/{protocol}",
-    tags(Nexuses)
-)]
+#[put("/nodes/{node_id}/nexuses/{nexus_id}/share/{protocol}", tags(Nexuses))]
 async fn put_node_nexus_share(
     web::Path((node_id, nexus_id, protocol)): web::Path<(
         NodeId,
@@ -82,7 +78,7 @@ async fn put_node_nexus_share(
     RestRespond::result(MessageBus::share_nexus(share).await)
 }
 
-#[delete("/v0", "/nodes/{node_id}/nexuses/{nexus_id}/share", tags(Nexuses))]
+#[delete("/nodes/{node_id}/nexuses/{nexus_id}/share", tags(Nexuses))]
 async fn del_node_nexus_share(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
 ) -> Result<JsonUnit, RestError> {

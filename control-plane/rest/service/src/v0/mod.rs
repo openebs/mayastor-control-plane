@@ -73,8 +73,15 @@ where
         InitError = (),
     >,
 {
-    api.wrap_api_with_spec(get_api())
-        .configure(configure)
+    api.configure(swagger_ui::configure)
+        .wrap_api_with_spec(get_api())
+        .with_json_spec_at(&spec_uri())
+        .service(
+            // any /v0 services must either live within this scope or be
+            // declared beforehand
+            paperclip::actix::web::scope("/v0").configure(configure),
+        )
+        .trim_base_path()
         .with_raw_json_spec(|app, spec| {
             if let Some(dir) = super::CliArgs::from_args().output_specs {
                 let file = dir.join(&format!("{}_api_spec.json", version()));
@@ -86,9 +93,7 @@ where
             }
             app
         })
-        .with_json_spec_at(&spec_uri())
         .build()
-        .configure(swagger_ui::configure)
 }
 
 #[derive(Apiv2Security, Deserialize)]

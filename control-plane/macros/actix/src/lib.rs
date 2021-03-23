@@ -15,11 +15,9 @@ impl Method {
     // so they can be used with the paperclip::actix::api_v2_operation
     fn paperclip_attributes(attr: TokenStream) -> TokenStream {
         let mut attr = parse_macro_input!(attr as syn::AttributeArgs);
-        if attr.len() < 3 {
+        if attr.len() < 2 {
             TokenStream::new()
         } else {
-            // remove the base URI path
-            attr.remove(0);
             // remove the relative URI path
             attr.remove(0);
             let mut paperclip_attr = "".to_string();
@@ -32,25 +30,9 @@ impl Method {
             paperclip_attr.parse().unwrap()
         }
     }
-    /// URI with the full path used to register the handler
-    fn handler_uri(attr: TokenStream) -> TokenStream {
-        let mut attr = parse_macro_input!(attr as syn::AttributeArgs);
-        let base = attr.first().to_token_stream().to_string();
-        attr.remove(0);
-        let uri = attr.first().to_token_stream().to_string();
-        let base_unquoted = base.trim_matches('"');
-        let uri_unquoted = uri.trim_matches('"');
-        let handler_uri = format!("{}{}", base_unquoted, uri_unquoted);
-        let handler_uri_token = quote! {
-            #handler_uri
-        };
-        handler_uri_token.into()
-    }
     /// relative URI (full URI minus the openapi base path)
     fn openapi_uri(attr: TokenStream) -> TokenStream {
-        let mut attr = parse_macro_input!(attr as syn::AttributeArgs);
-        // remove the Base Path
-        attr.remove(0);
+        let attr = parse_macro_input!(attr as syn::AttributeArgs);
         attr.first().into_token_stream().into()
     }
     fn handler_name(item: TokenStream) -> syn::Result<syn::Ident> {
@@ -72,7 +54,6 @@ impl Method {
         attr: TokenStream,
         item: TokenStream,
     ) -> syn::Result<TokenStream2> {
-        let full_uri: TokenStream2 = Self::handler_uri(attr.clone()).into();
         let relative_uri: TokenStream2 = Self::openapi_uri(attr.clone()).into();
         let handler_name = Self::handler_name(item.clone())?;
         let handler_fn: TokenStream2 =
@@ -90,7 +71,7 @@ impl Method {
                 fn resource() -> paperclip::actix::web::Resource {
                     #[paperclip::actix::api_v2_operation(#attr)]
                     #handler_fn
-                    paperclip::actix::web::Resource::new(#full_uri)
+                    paperclip::actix::web::Resource::new(#relative_uri)
                         .name(#handler_name_str)
                         .guard(actix_web::guard::#variant())
                         .route(paperclip::actix::web::#method().to(#handler_name))

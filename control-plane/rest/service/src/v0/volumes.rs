@@ -11,26 +11,26 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(volume_unshare);
 }
 
-#[get("/v0", "/volumes", tags(Volumes))]
+#[get("/volumes", tags(Volumes))]
 async fn get_volumes() -> Result<Json<Vec<Volume>>, RestClusterError> {
     RestRespond::result(MessageBus::get_volumes(Filter::None).await)
         .map_err(RestClusterError::from)
 }
 
-#[get("/v0", "/volumes/{volume_id}", tags(Volumes))]
+#[get("/volumes/{volume_id}", tags(Volumes))]
 async fn get_volume(
     web::Path(volume_id): web::Path<VolumeId>,
 ) -> Result<Json<Volume>, RestError> {
     RestRespond::result(MessageBus::get_volume(Filter::Volume(volume_id)).await)
 }
 
-#[get("/v0", "/nodes/{node_id}/volumes", tags(Volumes))]
+#[get("/nodes/{node_id}/volumes", tags(Volumes))]
 async fn get_node_volumes(
     web::Path(node_id): web::Path<NodeId>,
 ) -> Result<Json<Vec<Volume>>, RestError> {
     RestRespond::result(MessageBus::get_volumes(Filter::Node(node_id)).await)
 }
-#[get("/v0", "/nodes/{node_id}/volumes/{volume_id}", tags(Volumes))]
+#[get("/nodes/{node_id}/volumes/{volume_id}", tags(Volumes))]
 async fn get_node_volume(
     web::Path((node_id, volume_id)): web::Path<(NodeId, VolumeId)>,
 ) -> Result<Json<Volume>, RestError> {
@@ -39,7 +39,7 @@ async fn get_node_volume(
     )
 }
 
-#[put("/v0", "/volumes/{volume_id}", tags(Volumes))]
+#[put("/volumes/{volume_id}", tags(Volumes))]
 async fn put_volume(
     web::Path(volume_id): web::Path<VolumeId>,
     create: web::Json<CreateVolumeBody>,
@@ -48,7 +48,7 @@ async fn put_volume(
     RestRespond::result(MessageBus::create_volume(create).await)
 }
 
-#[delete("/v0", "/volumes/{volume_id}", tags(Volumes))]
+#[delete("/volumes/{volume_id}", tags(Volumes))]
 async fn del_volume(
     web::Path(volume_id): web::Path<VolumeId>,
 ) -> Result<JsonUnit, RestError> {
@@ -59,7 +59,7 @@ async fn del_volume(
         .map(JsonUnit::from)
 }
 
-#[put("/v0", "/volumes/{volume_id}/share/{protocol}", tags(Volumes))]
+#[put("/volumes/{volume_id}/share/{protocol}", tags(Volumes))]
 async fn volume_share(
     web::Path((volume_id, protocol)): web::Path<(VolumeId, NexusShareProtocol)>,
 ) -> Result<Json<String>, RestError> {
@@ -86,7 +86,7 @@ async fn volume_share(
     }
 }
 
-#[delete("/v0", "/volumes{volume_id}/share", tags(Volumes))]
+#[delete("/volumes{volume_id}/share", tags(Volumes))]
 async fn volume_unshare(
     web::Path(volume_id): web::Path<VolumeId>,
 ) -> Result<JsonUnit, RestError> {

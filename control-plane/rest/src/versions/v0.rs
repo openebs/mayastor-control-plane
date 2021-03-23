@@ -570,7 +570,7 @@ impl ActixRestClient {
 )]
 #[derive(Debug)]
 pub struct RestError {
-    inner: BusError,
+    inner: ReplyError,
 }
 
 /// Rest Cluster Error
@@ -655,7 +655,7 @@ impl RestError {
                     RestJsonErrorKind::Deserialize,
                     &details,
                 );
-                HttpResponse::InternalServerError().json(error)
+                HttpResponse::BadRequest().json(error)
             }
             ReplyErrorKind::Internal => {
                 let error =
@@ -770,8 +770,8 @@ impl ResponseError for RestError {
         self.get_resp_error()
     }
 }
-impl From<BusError> for RestError {
-    fn from(inner: BusError) -> Self {
+impl From<ReplyError> for RestError {
+    fn from(inner: ReplyError) -> Self {
         Self {
             inner,
         }
@@ -783,7 +783,7 @@ impl From<RestError> for HttpResponse {
     }
 }
 
-/// Respond using a message bus response Result<Response,BusError>
+/// Respond using a message bus response Result<Response,ReplyError>
 /// In case of success the Response is sent via the body of a HttpResponse with
 /// StatusCode OK.
 /// Otherwise, the RestError is returned, also as a HttpResponse/ResponseError.
@@ -798,8 +798,8 @@ impl<T> Display for RestRespond<T> {
     }
 }
 impl<T: Serialize> RestRespond<T> {
-    /// Respond with a Result<T, BusError>
-    pub fn result(from: Result<T, BusError>) -> Result<Json<T>, RestError> {
+    /// Respond with a Result<T, ReplyError>
+    pub fn result(from: Result<T, ReplyError>) -> Result<Json<T>, RestError> {
         match from {
             Ok(v) => Ok(Json::<T>(v)),
             Err(e) => Err(e.into()),
@@ -810,8 +810,8 @@ impl<T: Serialize> RestRespond<T> {
         Ok(Json(object))
     }
 }
-impl<T> From<Result<T, BusError>> for RestRespond<T> {
-    fn from(src: Result<T, BusError>) -> Self {
+impl<T> From<Result<T, ReplyError>> for RestRespond<T> {
+    fn from(src: Result<T, ReplyError>) -> Self {
         RestRespond(src.map_err(RestError::from))
     }
 }

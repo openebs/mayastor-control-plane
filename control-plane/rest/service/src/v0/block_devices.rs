@@ -22,7 +22,7 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 //      curl -X GET "https://localhost:8080/v0/nodes/mayastor/block_devices" \
 //      -H  "accept: application/json" -k
 //
-#[get("/v0", "/nodes/{node}/block_devices", tags(BlockDevices))]
+#[get("/nodes/{node}/block_devices", tags(BlockDevices))]
 async fn get_block_devices(
     web::Query(info): web::Query<GetBlockDeviceQueryParams>,
     web::Path(node): web::Path<NodeId>,
