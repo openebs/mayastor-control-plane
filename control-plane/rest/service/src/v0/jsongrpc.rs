@@ -18,7 +18,7 @@ pub(crate) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 //  -H "accept: application/json" -H "Content-Type: application/json" \
 //  -d '{"block_size": 512, "num_blocks": 64, "name": "Malloc0"}'
 // ```
-#[put("/v0", "/nodes/{node}/jsongrpc/{method}", tags(JsonGrpc))]
+#[put("/nodes/{node}/jsongrpc/{method}", tags(JsonGrpc))]
 async fn json_grpc_call(
     web::Path((node, method)): web::Path<(NodeId, JsonGrpcMethod)>,
     body: web::Json<JsonGeneric>,

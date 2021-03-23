@@ -60,6 +60,19 @@ fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     block_devices::configure(cfg);
 }
 
+fn json_error(
+    err: impl std::fmt::Display,
+    _req: &actix_web::HttpRequest,
+) -> actix_web::Error {
+    RestError::from(ReplyError {
+        kind: ReplyErrorKind::DeserializeReq,
+        resource: ResourceKind::Unknown,
+        source: "".to_string(),
+        extra: err.to_string(),
+    })
+    .into()
+}
+
 pub(super) fn configure_api<T, B>(
     api: actix_web::App<T, B>,
 ) -> actix_web::App<T, B>
@@ -73,8 +86,24 @@ where
         InitError = (),
     >,
 {
-    api.wrap_api_with_spec(get_api())
-        .configure(configure)
+    api.configure(swagger_ui::configure)
+        .wrap_api_with_spec(get_api())
+        .with_json_spec_at(&spec_uri())
+        .service(
+            // any /v0 services must either live within this scope or be
+            // declared beforehand
+            paperclip::actix::web::scope("/v0")
+                .app_data(
+                    actix_web::web::PathConfig::default()
+                        .error_handler(|e, r| json_error(e, r)),
+                )
+                .app_data(
+                    actix_web::web::JsonConfig::default()
+                        .error_handler(|e, r| json_error(e, r)),
+                )
+                .configure(configure),
+        )
+        .trim_base_path()
         .with_raw_json_spec(|app, spec| {
             if let Some(dir) = super::CliArgs::from_args().output_specs {
                 let file = dir.join(&format!("{}_api_spec.json", version()));
@@ -86,9 +115,7 @@ where
             }
             app
         })
-        .with_json_spec_at(&spec_uri())
         .build()
-        .configure(swagger_ui::configure)
 }
 
 #[derive(Apiv2Security, Deserialize)]

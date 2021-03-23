@@ -10,26 +10,26 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(del_pool);
 }
 
-#[get("/v0", "/pools", tags(Pools))]
+#[get("/pools", tags(Pools))]
 async fn get_pools() -> Result<Json<Vec<Pool>>, RestClusterError> {
     RestRespond::result(MessageBus::get_pools(Filter::None).await)
         .map_err(RestClusterError::from)
 }
-#[get("/v0", "/pools/{pool_id}", tags(Pools))]
+#[get("/pools/{pool_id}", tags(Pools))]
 async fn get_pool(
     web::Path(pool_id): web::Path<PoolId>,
 ) -> Result<Json<Pool>, RestError> {
     RestRespond::result(MessageBus::get_pool(Filter::Pool(pool_id)).await)
 }
 
-#[get("/v0", "/nodes/{id}/pools", tags(Pools))]
+#[get("/nodes/{id}/pools", tags(Pools))]
 async fn get_node_pools(
     web::Path(node_id): web::Path<NodeId>,
 ) -> Result<Json<Vec<Pool>>, RestError> {
     RestRespond::result(MessageBus::get_pools(Filter::Node(node_id)).await)
 }
 
-#[get("/v0", "/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
+#[get("/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
 async fn get_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
 ) -> Result<Json<Pool>, RestError> {
@@ -38,7 +38,7 @@ async fn get_node_pool(
     )
 }
 
-#[put("/v0", "/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
+#[put("/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
 async fn put_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
     create: web::Json<CreatePoolBody>,
@@ -47,13 +47,13 @@ async fn put_node_pool(
     RestRespond::result(MessageBus::create_pool(create).await)
 }
 
-#[delete("/v0", "/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
+#[delete("/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
 async fn del_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
 ) -> Result<JsonUnit, RestError> {
     destroy_pool(Filter::NodePool(node_id, pool_id)).await
 }
-#[delete("/v0", "/pools/{pool_id}", tags(Pools))]
+#[delete("/pools/{pool_id}", tags(Pools))]
 async fn del_pool(
     web::Path(pool_id): web::Path<PoolId>,
 ) -> Result<JsonUnit, RestError> {

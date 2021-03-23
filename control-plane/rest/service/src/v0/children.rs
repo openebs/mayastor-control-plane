@@ -11,20 +11,20 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(delete_node_nexus_child);
 }
 
-#[get("/v0", "/nexuses/{nexus_id}/children", tags(Children))]
+#[get("/nexuses/{nexus_id}/children", tags(Children))]
 async fn get_nexus_children(
     web::Path(nexus_id): web::Path<NexusId>,
 ) -> Result<web::Json<Vec<Child>>, RestError> {
     get_children_response(Filter::Nexus(nexus_id)).await
 }
-#[get("/v0", "/nodes/{node_id}/nexuses/{nexus_id}/children", tags(Children))]
+#[get("/nodes/{node_id}/nexuses/{nexus_id}/children", tags(Children))]
 async fn get_node_nexus_children(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
 ) -> Result<web::Json<Vec<Child>>, RestError> {
     get_children_response(Filter::NodeNexus(node_id, nexus_id)).await
 }
 
-#[get("/v0", "/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
+#[get("/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
 async fn get_nexus_child(
     web::Path((nexus_id, child_id)): web::Path<(NexusId, ChildUri)>,
     req: HttpRequest,
@@ -32,7 +32,6 @@ async fn get_nexus_child(
     get_child_response(child_id, req, Filter::Nexus(nexus_id)).await
 }
 #[get(
-    "/v0",
     "/nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*}",
     tags(Children)
 )]
@@ -48,7 +47,7 @@ async fn get_node_nexus_child(
         .await
 }
 
-#[put("/v0", "/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
+#[put("/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
 async fn add_nexus_child(
     web::Path((nexus_id, child_id)): web::Path<(NexusId, ChildUri)>,
     req: HttpRequest,
@@ -56,7 +55,6 @@ async fn add_nexus_child(
     add_child_filtered(child_id, req, Filter::Nexus(nexus_id)).await
 }
 #[put(
-    "/v0",
     "/nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*}",
     tags(Children)
 )]
@@ -72,7 +70,7 @@ async fn add_node_nexus_child(
         .await
 }
 
-#[delete("/v0", "/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
+#[delete("/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
 async fn delete_nexus_child(
     web::Path((nexus_id, child_id)): web::Path<(NexusId, ChildUri)>,
     req: HttpRequest,
@@ -80,7 +78,6 @@ async fn delete_nexus_child(
     delete_child_filtered(child_id, req, Filter::Nexus(nexus_id)).await
 }
 #[delete(
-    "/v0",
     "/nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*}",
     tags(Children)
 )]
