@@ -12,14 +12,14 @@ pub type BusError = ReplyError;
 pub type BusResult<T> = Result<T, BusError>;
 
 macro_rules! only_one {
-    ($list:ident, $resource:expr, $filter:expr) => {
+    ($list:ident, $resource:expr) => {
         if let Some(obj) = $list.first() {
             if $list.len() > 1 {
                 Err(ReplyError {
                     kind: ReplyErrorKind::FailedPrecondition,
                     resource: $resource,
                     source: "".to_string(),
-                    extra: $filter.to_string(),
+                    extra: "".to_string(),
                 })
             } else {
                 Ok(obj.clone())
@@ -29,7 +29,7 @@ macro_rules! only_one {
                 kind: ReplyErrorKind::NotFound,
                 resource: $resource,
                 source: "".to_string(),
-                extra: $filter.to_string(),
+                extra: "".to_string(),
             })
         }
     };
@@ -53,14 +53,14 @@ pub trait MessageBusTrait: Sized {
             .into_iter()
             .filter(|n| &n.id == id)
             .collect::<Vec<_>>();
-        only_one!(nodes, ResourceKind::Node, Filter::Node(id.clone()))
+        only_one!(nodes, ResourceKind::Node)
     }
 
     /// Get pool with filter
     #[tracing::instrument(level = "debug", err)]
     async fn get_pool(filter: Filter) -> BusResult<Pool> {
         let pools = Self::get_pools(filter.clone()).await?;
-        only_one!(pools, ResourceKind::Pool, filter)
+        only_one!(pools, ResourceKind::Pool)
     }
 
     /// Get pools with filter
@@ -91,7 +91,7 @@ pub trait MessageBusTrait: Sized {
     #[tracing::instrument(level = "debug", err)]
     async fn get_replica(filter: Filter) -> BusResult<Replica> {
         let replicas = Self::get_replicas(filter.clone()).await?;
-        only_one!(replicas, ResourceKind::Replica, filter)
+        only_one!(replicas, ResourceKind::Replica)
     }
 
     /// Get replicas with filter
@@ -146,7 +146,7 @@ pub trait MessageBusTrait: Sized {
     #[tracing::instrument(level = "debug", err)]
     async fn get_nexus(filter: Filter) -> BusResult<Nexus> {
         let nexuses = Self::get_nexuses(filter.clone()).await?;
-        only_one!(nexuses, ResourceKind::Nexus, filter)
+        only_one!(nexuses, ResourceKind::Nexus)
     }
 
     /// create nexus
@@ -205,7 +205,7 @@ pub trait MessageBusTrait: Sized {
     #[tracing::instrument(level = "debug", err)]
     async fn get_volume(filter: Filter) -> BusResult<Volume> {
         let volumes = Self::get_volumes(filter.clone()).await?;
-        only_one!(volumes, ResourceKind::Volume, filter)
+        only_one!(volumes, ResourceKind::Volume)
     }
 
     /// create volume
