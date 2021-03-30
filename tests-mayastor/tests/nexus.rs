@@ -1,7 +1,5 @@
 #![feature(allow_fail)]
-
-pub mod common;
-use common::*;
+use testlib::*;
 
 #[actix_rt::test]
 async fn create_nexus_malloc() {

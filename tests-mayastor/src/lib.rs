@@ -9,10 +9,10 @@ use opentelemetry::{
 };
 
 use opentelemetry_jaeger::Uninstall;
-use rest_client::ClientError;
 pub use rest_client::{
     versions::v0::{self, RestClient},
     ActixRestClient,
+    ClientError,
 };
 
 #[actix_rt::test]
@@ -170,7 +170,7 @@ pub struct ClusterBuilder {
 }
 
 #[derive(Default)]
-pub struct Replica {
+struct Replica {
     count: u32,
     size: u64,
     share: v0::Protocol,
@@ -309,6 +309,7 @@ impl ClusterBuilder {
                 );
             }
         }
+
         for pool in &self.pools() {
             cluster
                 .rest_v0()
