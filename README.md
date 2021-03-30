@@ -1,8 +1,12 @@
-# MayaStor Control Plane
+# Mayastor Control Plane "2.0"
 
 [![CI-basic](https://mayastor-ci.mayadata.io/buildStatus/icon?job=Mayastor-Control-Plane%2Fmaster)](https://mayastor-ci.mayadata.io/blue/organizations/jenkins/Mayastor-Control-Plane/activity/)
 [![Slack](https://img.shields.io/badge/JOIN-SLACK-blue)](https://kubernetes.slack.com/messages/openebs)
 [![built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
+
+## Experimental
+
+This feature is currently under development and considered early alpha phase.  It is not intended for general use at this time:  Use the "moac" control plane and CSI driver which are deployed with the Mayastor project itself.
 
 ## Links
 
