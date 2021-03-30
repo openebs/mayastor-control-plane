@@ -1,5 +1,5 @@
 use super::*;
-use store::{etcd::Etcd as EtcdStore, kv_store::Store};
+use store::{etcd::Etcd as EtcdStore, store::Store};
 
 #[async_trait]
 impl ComponentAction for Etcd {
@@ -8,7 +8,7 @@ impl ComponentAction for Etcd {
         options: &StartOptions,
         cfg: Builder,
     ) -> Result<Builder, Error> {
-        Ok(if options.etcd {
+        Ok(if !options.no_etcd {
             cfg.add_container_spec(
                 ContainerSpec::from_binary(
                     "etcd",
@@ -33,7 +33,7 @@ impl ComponentAction for Etcd {
         options: &StartOptions,
         cfg: &ComposeTest,
     ) -> Result<(), Error> {
-        if options.etcd {
+        if !options.no_etcd {
             cfg.start("etcd").await?;
         }
         Ok(())
@@ -43,17 +43,11 @@ impl ComponentAction for Etcd {
         options: &StartOptions,
         _cfg: &ComposeTest,
     ) -> Result<(), Error> {
-        if options.etcd {
+        if !options.no_etcd {
             let mut store = EtcdStore::new("0.0.0.0:2379")
                 .await
                 .expect("Failed to connect to etcd.");
-            let key = serde_json::json!("wait");
-            let value = serde_json::json!("test");
-            store
-                .put(&key, &value)
-                .await
-                .expect("Failed to 'put' to etcd");
-            store.delete(&key).await.unwrap();
+            assert!(store.online().await);
         }
         Ok(())
     }
