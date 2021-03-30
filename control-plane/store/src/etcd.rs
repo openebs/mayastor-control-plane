@@ -1,14 +1,18 @@
-use crate::kv_store::{
+use crate::store::{
     Connect,
     Delete,
-    DeserialiseKey,
     DeserialiseValue,
     Get,
     KeyString,
+    ObjectKey,
     Put,
+    SerialiseValue,
+    StorableObject,
     Store,
     StoreError,
     StoreError::MissingEntry,
+    StoreKey,
+    StoreValue,
     ValueString,
     Watch,
     WatchEvent,
@@ -20,11 +24,18 @@ use snafu::ResultExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 /// etcd client
+#[derive(Clone)]
 pub struct Etcd(Client);
+
+impl std::fmt::Debug for Etcd {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
 
 impl Etcd {
     /// Create a new instance of the etcd client
-    pub async fn new(endpoint: &str) -> Result<Self, StoreError> {
+    pub async fn new(endpoint: &str) -> Result<Etcd, StoreError> {
         Ok(Self(
             Client::connect([endpoint], None)
                 .await
@@ -36,33 +47,36 @@ impl Etcd {
 #[async_trait]
 impl Store for Etcd {
     /// 'Put' a key-value pair into etcd.
-    async fn put(
+    async fn put_kv<K: StoreKey, V: StoreValue>(
         &mut self,
-        key: &Value,
-        value: &Value,
+        key: &K,
+        value: &V,
     ) -> Result<(), StoreError> {
+        let vec_value = serde_json::to_vec(value).context(SerialiseValue)?;
         self.0
-            .put(key.to_string(), value.to_string(), None)
+            .put(key.to_string(), vec_value, None)
             .await
             .context(Put {
                 key: key.to_string(),
-                value: value.to_string(),
+                value: serde_json::to_vec(value).context(SerialiseValue)?,
             })?;
         Ok(())
     }
 
     /// 'Get' the value for the given key from etcd.
-    async fn get(&mut self, key: &Value) -> Result<Value, StoreError> {
+    async fn get_kv<K: StoreKey>(
+        &mut self,
+        key: &K,
+    ) -> Result<Value, StoreError> {
         let resp = self.0.get(key.to_string(), None).await.context(Get {
             key: key.to_string(),
         })?;
         match resp.kvs().first() {
-            Some(kv) => {
-                let v = kv.value_str().context(ValueString {})?;
-                Ok(serde_json::from_str(v).context(DeserialiseValue {
-                    value: v.to_string(),
-                })?)
-            }
+            Some(kv) => Ok(serde_json::from_slice(kv.value()).context(
+                DeserialiseValue {
+                    value: kv.value_str().context(ValueString {})?,
+                },
+            )?),
             None => Err(MissingEntry {
                 key: key.to_string(),
             }),
@@ -70,7 +84,10 @@ impl Store for Etcd {
     }
 
     /// 'Delete' the entry with the given key from etcd.
-    async fn delete(&mut self, key: &Value) -> Result<(), StoreError> {
+    async fn delete_kv<K: StoreKey>(
+        &mut self,
+        key: &K,
+    ) -> Result<(), StoreError> {
         self.0.delete(key.to_string(), None).await.context(Delete {
             key: key.to_string(),
         })?;
@@ -80,17 +97,68 @@ impl Store for Etcd {
     /// 'Watch' the etcd entry with the given key.
     /// A receiver channel is returned which is signalled when the entry with
     /// the given key is changed.
-    async fn watch(
+    async fn watch_kv<K: StoreKey>(
         &mut self,
-        key: &Value,
+        key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
         let (sender, receiver) = channel(100);
+        println!("{}", key.to_string());
         let (watcher, stream) =
             self.0.watch(key.to_string(), None).await.context(Watch {
                 key: key.to_string(),
             })?;
         watch(watcher, stream, sender);
         Ok(receiver)
+    }
+
+    async fn put_obj<'a, O: StorableObject<'a>>(
+        &mut self,
+        object: &O,
+    ) -> Result<(), StoreError> {
+        let key = object.key().key();
+        let vec_value = serde_json::to_vec(object).context(SerialiseValue)?;
+        self.0.put(key, vec_value, None).await.context(Put {
+            key: object.key().key(),
+            value: serde_json::to_vec(object).context(SerialiseValue)?,
+        })?;
+        Ok(())
+    }
+
+    async fn get_obj<'a, O: StorableObject<'a>>(
+        &mut self,
+        key: &O::Key,
+    ) -> Result<O, StoreError> {
+        let resp = self.0.get(key.key(), None).await.context(Get {
+            key: key.key(),
+        })?;
+        match resp.kvs().first() {
+            Some(kv) => Ok(serde_json::from_slice(kv.value()).context(
+                DeserialiseValue {
+                    value: kv.value_str().context(ValueString {})?,
+                },
+            )?),
+            None => Err(MissingEntry {
+                key: key.key(),
+            }),
+        }
+    }
+
+    async fn watch_obj<K: ObjectKey>(
+        &mut self,
+        key: &K,
+    ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
+        println!("{}", key.key());
+        let (sender, receiver) = channel(100);
+        let (watcher, stream) =
+            self.0.watch(key.key(), None).await.context(Watch {
+                key: key.key(),
+            })?;
+        watch(watcher, stream, sender);
+        Ok(receiver)
+    }
+
+    async fn online(&mut self) -> bool {
+        self.0.status().await.is_ok()
     }
 }
 
@@ -111,16 +179,15 @@ fn watch(
                 Ok(msg) => {
                     match msg {
                         Some(resp) => resp,
-                        // If there is no message, continue to wait for the
-                        // next one.
-                        None => continue,
+                        // stream cancelled
+                        None => {
+                            return;
+                        }
                     }
                 }
                 Err(e) => {
-                    // If we failed to get a message, continue to wait for the
-                    // next one.
                     tracing::error!("Failed to get message with error {}", e);
-                    continue;
+                    return;
                 }
             };
 
@@ -155,14 +222,11 @@ fn watch(
 }
 
 /// Deserialise a key-value pair into serde_json::Value representations.
-fn deserialise_kv(kv: &KeyValue) -> Result<(Value, Value), StoreError> {
-    let key_str = kv.key_str().context(KeyString {})?;
-    let key = serde_json::from_str(key_str).context(DeserialiseKey {
-        key: key_str.to_string(),
-    })?;
+fn deserialise_kv(kv: &KeyValue) -> Result<(String, Value), StoreError> {
+    let key_str = kv.key_str().context(KeyString {})?.to_string();
     let value_str = kv.value_str().context(ValueString {})?;
     let value = serde_json::from_str(value_str).context(DeserialiseValue {
         value: value_str.to_string(),
     })?;
-    Ok((key, value))
+    Ok((key_str, value))
 }
