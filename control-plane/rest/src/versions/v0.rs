@@ -1,6 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
 use super::super::ActixRestClient;
-use crate::{ClientError, ClientResult, JsonGeneric};
+use crate::{ClientError, ClientResult, JsonGeneric, RestUri};
 use actix_web::{
     body::Body,
     http::StatusCode,
@@ -13,6 +13,7 @@ pub use mbus_api::message_bus::v0::*;
 use paperclip::actix::{api_v2_errors, api_v2_errors_overlay, Apiv2Schema};
 use serde::{Deserialize, Serialize};
 use std::{
+    convert::TryFrom,
     fmt::{Display, Formatter},
     string::ToString,
 };
@@ -176,6 +177,37 @@ pub struct GetBlockDeviceQueryParams {
     pub all: Option<bool>,
 }
 
+/// The difference types of watches
+#[derive(Deserialize, Apiv2Schema)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchTypeQueryParam {
+    /// URL callback
+    pub callback: RestUri,
+}
+
+/// Watch Resource in the store
+#[derive(Serialize, Deserialize, Debug, Clone, Apiv2Schema, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RestWatch {
+    /// id of the resource to watch on
+    pub resource: String,
+    /// callback used to notify the watcher of a change
+    pub callback: String,
+}
+
+impl TryFrom<&Watch> for RestWatch {
+    type Error = ();
+    fn try_from(value: &Watch) -> Result<Self, Self::Error> {
+        match &value.callback {
+            WatchCallback::Uri(uri) => Ok(Self {
+                resource: value.resource.to_string(),
+                callback: uri.to_string(),
+            }),
+            // _ => Err(()),
+        }
+    }
+}
+
 /// RestClient interface
 #[async_trait(?Send)]
 pub trait RestClient {
@@ -239,6 +271,23 @@ pub trait RestClient {
         &self,
         args: GetBlockDevices,
     ) -> ClientResult<Vec<BlockDevice>>;
+    /// Get all watches for resource
+    async fn get_watches(
+        &self,
+        resource: WatchResource,
+    ) -> ClientResult<Vec<RestWatch>>;
+    /// Create new watch
+    async fn create_watch(
+        &self,
+        resource: WatchResource,
+        callback: url::Url,
+    ) -> ClientResult<()>;
+    /// Delete watch
+    async fn delete_watch(
+        &self,
+        resource: WatchResource,
+        callback: url::Url,
+    ) -> ClientResult<()>;
 }
 
 #[derive(Display, Debug)]
@@ -510,6 +559,40 @@ impl RestClient for ActixRestClient {
             format!("/v0/nodes/{}/block_devices?all={}", args.node, args.all);
         self.get_vec(urn).await
     }
+
+    async fn get_watches(
+        &self,
+        resource: WatchResource,
+    ) -> ClientResult<Vec<RestWatch>> {
+        let urn = format!("/v0/watches/{}", resource.to_string());
+        self.get_vec(urn).await
+    }
+
+    async fn create_watch(
+        &self,
+        resource: WatchResource,
+        callback: url::Url,
+    ) -> ClientResult<()> {
+        let urn = format!(
+            "/v0/watches/{}?callback={}",
+            resource.to_string(),
+            callback.to_string()
+        );
+        self.put(urn, Body::Empty).await
+    }
+
+    async fn delete_watch(
+        &self,
+        resource: WatchResource,
+        callback: url::Url,
+    ) -> ClientResult<()> {
+        let urn = format!(
+            "/v0/watches/{}?callback={}",
+            resource.to_string(),
+            callback.to_string()
+        );
+        self.del(urn).await
+    }
 }
 
 impl From<CreatePoolBody> for Body {
@@ -774,6 +857,13 @@ impl From<ReplyError> for RestError {
     fn from(inner: ReplyError) -> Self {
         Self {
             inner,
+        }
+    }
+}
+impl From<mbus_api::Error> for RestError {
+    fn from(from: mbus_api::Error) -> Self {
+        Self {
+            inner: from.into(),
         }
     }
 }

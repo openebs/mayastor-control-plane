@@ -11,6 +11,7 @@ pub mod pools;
 pub mod replicas;
 pub mod swagger_ui;
 pub mod volumes;
+pub mod watches;
 
 use rest_client::{versions::v0::*, JsonGeneric, JsonUnit};
 
@@ -58,6 +59,7 @@ fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     volumes::configure(cfg);
     jsongrpc::configure(cfg);
     block_devices::configure(cfg);
+    watches::configure(cfg);
 }
 
 fn json_error(
@@ -99,6 +101,10 @@ where
                 )
                 .app_data(
                     actix_web::web::JsonConfig::default()
+                        .error_handler(|e, r| json_error(e, r)),
+                )
+                .app_data(
+                    actix_web::web::QueryConfig::default()
                         .error_handler(|e, r| json_error(e, r)),
                 )
                 .configure(configure),

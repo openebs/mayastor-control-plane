@@ -39,7 +39,7 @@ use paperclip::{
 };
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use std::{io::BufReader, string::ToString};
+use std::{io::BufReader, str::FromStr, string::ToString};
 
 /// Actix Rest Client
 #[derive(Clone)]
@@ -438,5 +438,41 @@ impl OperationModifier for JsonUnit {
                 ..Default::default()
             }),
         );
+    }
+}
+
+/// URL value, eg: https://localhost:8080/test
+#[derive(Debug, Clone)]
+pub struct RestUri(url::Url);
+
+impl std::ops::Deref for RestUri {
+    type Target = url::Url;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Apiv2Schema for RestUri {
+    const NAME: Option<&'static str> = None;
+    fn raw_schema() -> DefaultSchemaRaw {
+        actix_web::web::Json::<()>::raw_schema()
+    }
+}
+
+impl<'de> Deserialize<'de> for RestUri {
+    fn deserialize<D>(deserializer: D) -> Result<RestUri, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let string = String::deserialize(deserializer)?;
+        match url::Url::from_str(&string) {
+            Ok(url) => Ok(RestUri(url)),
+            Err(error) => {
+                let error =
+                    format!("Failed to parse into a URL, error: {}", error);
+                Err(serde::de::Error::custom(error))
+            }
+        }
     }
 }
