@@ -13,7 +13,7 @@ async fn put_watch(
     web::Query(watch): web::Query<WatchTypeQueryParam>,
 ) -> Result<Json<()>, RestError> {
     CreateWatch {
-        resource: WatchResource::Volume(volume_id),
+        id: WatchResourceId::Volume(volume_id),
         callback: WatchCallback::Uri(watch.callback.to_string()),
         watch_type: WatchType::Actual,
     }
@@ -27,8 +27,8 @@ async fn put_watch(
 async fn get_watches(
     web::Path(volume_id): web::Path<VolumeId>,
 ) -> Result<Json<Vec<RestWatch>>, RestError> {
-    let watches = GetWatches {
-        resource: WatchResource::Volume(volume_id),
+    let watches = GetWatchers {
+        resource: WatchResourceId::Volume(volume_id),
     }
     .request()
     .await?;
@@ -45,7 +45,7 @@ async fn del_watch(
     web::Query(watch): web::Query<WatchTypeQueryParam>,
 ) -> Result<JsonUnit, RestError> {
     DeleteWatch {
-        resource: WatchResource::Volume(volume_id),
+        id: WatchResourceId::Volume(volume_id),
         callback: WatchCallback::Uri(watch.callback.to_string()),
         watch_type: WatchType::Actual,
     }

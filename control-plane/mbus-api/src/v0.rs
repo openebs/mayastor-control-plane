@@ -1180,7 +1180,7 @@ bus_impl_message_all!(CreateWatch, CreateWatch, (), Watcher);
 #[serde(rename_all = "camelCase")]
 pub struct Watch {
     /// id of the resource to watch on
-    pub resource: WatchResource,
+    pub id: WatchResourceId,
     /// callback used to notify the watcher of a change
     pub callback: WatchCallback,
     /// type of watch
@@ -1194,12 +1194,12 @@ use store::store::*;
 /// Get Resource Watches
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct GetWatches {
+pub struct GetWatchers {
     /// id of the resource to get
-    pub resource: WatchResource,
+    pub resource: WatchResourceId,
 }
 
-bus_impl_message_all!(GetWatches, GetWatches, Watches, Watcher);
+bus_impl_message_all!(GetWatchers, GetWatches, Watches, Watcher);
 
 impl ObjectKey for VolumeId {
     fn key_type(&self) -> StorableObjectType {
@@ -1223,7 +1223,7 @@ impl ObjectKey for NexusId {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
-pub enum WatchResource {
+pub enum WatchResourceId {
     /// nodes
     Node(NodeId),
     /// pools
@@ -1235,39 +1235,41 @@ pub enum WatchResource {
     /// volumes
     Volume(VolumeId),
 }
-impl Default for WatchResource {
+impl Default for WatchResourceId {
     fn default() -> Self {
         Self::Node(Default::default())
     }
 }
-impl ToString for WatchResource {
+impl ToString for WatchResourceId {
     fn to_string(&self) -> String {
         match self {
-            WatchResource::Node(id) => format!("node/{}", id.to_string()),
-            WatchResource::Pool(id) => format!("pool/{}", id.to_string()),
-            WatchResource::Replica(id) => format!("replica/{}", id.to_string()),
-            WatchResource::Nexus(id) => format!("nexus/{}", id.to_string()),
-            WatchResource::Volume(id) => format!("volume/{}", id.to_string()),
+            WatchResourceId::Node(id) => format!("node/{}", id.to_string()),
+            WatchResourceId::Pool(id) => format!("pool/{}", id.to_string()),
+            WatchResourceId::Replica(id) => {
+                format!("replica/{}", id.to_string())
+            }
+            WatchResourceId::Nexus(id) => format!("nexus/{}", id.to_string()),
+            WatchResourceId::Volume(id) => format!("volume/{}", id.to_string()),
         }
     }
 }
-impl ObjectKey for WatchResource {
+impl ObjectKey for WatchResourceId {
     fn key_type(&self) -> StorableObjectType {
         match &self {
-            WatchResource::Node(_) => StorableObjectType::Node,
-            WatchResource::Pool(_) => StorableObjectType::Pool,
-            WatchResource::Replica(_) => StorableObjectType::Replica,
-            WatchResource::Nexus(_) => StorableObjectType::Nexus,
-            WatchResource::Volume(_) => StorableObjectType::Volume,
+            WatchResourceId::Node(_) => StorableObjectType::Node,
+            WatchResourceId::Pool(_) => StorableObjectType::Pool,
+            WatchResourceId::Replica(_) => StorableObjectType::Replica,
+            WatchResourceId::Nexus(_) => StorableObjectType::Nexus,
+            WatchResourceId::Volume(_) => StorableObjectType::Volume,
         }
     }
     fn key_uuid(&self) -> String {
         match &self {
-            WatchResource::Node(i) => i.to_string(),
-            WatchResource::Pool(i) => i.to_string(),
-            WatchResource::Replica(i) => i.to_string(),
-            WatchResource::Nexus(i) => i.to_string(),
-            WatchResource::Volume(i) => i.to_string(),
+            WatchResourceId::Node(i) => i.to_string(),
+            WatchResourceId::Pool(i) => i.to_string(),
+            WatchResourceId::Replica(i) => i.to_string(),
+            WatchResourceId::Nexus(i) => i.to_string(),
+            WatchResourceId::Volume(i) => i.to_string(),
         }
     }
 }
@@ -1289,15 +1291,16 @@ impl Default for WatchType {
     }
 }
 
-/// Delete Watch
+/// Delete Watch which was previously created by CreateWatcher
+/// Fields should match the ones used for the creation
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteWatch {
-    /// id of the resource to watch on
-    pub resource: WatchResource,
-    /// callback used to notify the watcher of a change
+    /// id of the resource to delete the watch from
+    pub id: WatchResourceId,
+    /// callback to be deleted
     pub callback: WatchCallback,
-    /// type of watch
+    /// type of watch to be deleted
     pub watch_type: WatchType,
 }
 bus_impl_message_all!(DeleteWatch, DeleteWatch, (), Watcher);

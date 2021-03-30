@@ -320,11 +320,11 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             .first()
     );
 
-    let watch_volume = WatchResource::Volume(volume.uuid);
+    let watch_volume = WatchResourceId::Volume(volume.uuid);
     let callback = url::Url::parse("http://lala/test").unwrap();
 
-    let watches = client.get_watches(watch_volume.clone()).await.unwrap();
-    assert!(watches.is_empty());
+    let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+    assert!(watchers.is_empty());
 
     client
         .create_watch(watch_volume.clone(), callback.clone())
@@ -336,8 +336,8 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         .await
         .expect_err("Does not exist");
 
-    let watches = client.get_watches(watch_volume.clone()).await.unwrap();
-    assert!(watches.is_empty());
+    let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+    assert!(watchers.is_empty());
 
     client
         .destroy_volume(DestroyVolume {

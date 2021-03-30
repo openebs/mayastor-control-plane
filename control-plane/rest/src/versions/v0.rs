@@ -177,7 +177,7 @@ pub struct GetBlockDeviceQueryParams {
     pub all: Option<bool>,
 }
 
-/// The difference types of watches
+/// Watch query parameters used by various watch calls
 #[derive(Deserialize, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct WatchTypeQueryParam {
@@ -200,10 +200,11 @@ impl TryFrom<&Watch> for RestWatch {
     fn try_from(value: &Watch) -> Result<Self, Self::Error> {
         match &value.callback {
             WatchCallback::Uri(uri) => Ok(Self {
-                resource: value.resource.to_string(),
+                resource: value.id.to_string(),
                 callback: uri.to_string(),
             }),
-            // _ => Err(()),
+            /* other types are not implemented yet and should map to an error
+             * _ => Err(()), */
         }
     }
 }
@@ -274,18 +275,18 @@ pub trait RestClient {
     /// Get all watches for resource
     async fn get_watches(
         &self,
-        resource: WatchResource,
+        resource: WatchResourceId,
     ) -> ClientResult<Vec<RestWatch>>;
     /// Create new watch
     async fn create_watch(
         &self,
-        resource: WatchResource,
+        resource: WatchResourceId,
         callback: url::Url,
     ) -> ClientResult<()>;
     /// Delete watch
     async fn delete_watch(
         &self,
-        resource: WatchResource,
+        resource: WatchResourceId,
         callback: url::Url,
     ) -> ClientResult<()>;
 }
@@ -562,7 +563,7 @@ impl RestClient for ActixRestClient {
 
     async fn get_watches(
         &self,
-        resource: WatchResource,
+        resource: WatchResourceId,
     ) -> ClientResult<Vec<RestWatch>> {
         let urn = format!("/v0/watches/{}", resource.to_string());
         self.get_vec(urn).await
@@ -570,7 +571,7 @@ impl RestClient for ActixRestClient {
 
     async fn create_watch(
         &self,
-        resource: WatchResource,
+        resource: WatchResourceId,
         callback: url::Url,
     ) -> ClientResult<()> {
         let urn = format!(
@@ -583,7 +584,7 @@ impl RestClient for ActixRestClient {
 
     async fn delete_watch(
         &self,
-        resource: WatchResource,
+        resource: WatchResourceId,
         callback: url::Url,
     ) -> ClientResult<()> {
         let urn = format!(

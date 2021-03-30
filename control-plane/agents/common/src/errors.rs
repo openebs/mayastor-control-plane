@@ -7,6 +7,7 @@ use mbus_api::{
     ResourceKind,
 };
 use snafu::{Error, Snafu};
+use store::store::StoreError;
 use tonic::Code;
 
 /// Common error type for send/receive
@@ -85,6 +86,22 @@ pub enum SvcError {
     InvalidArguments {},
     #[snafu(display("Multiple nexuses not supported"))]
     MultipleNexuses {},
+    #[snafu(display("Store returned an error: {}", source.to_string()))]
+    Store { source: store::store::StoreError },
+    #[snafu(display("Watch Config Not Found"))]
+    WatchNotFound {},
+    #[snafu(display("{} Resource to be watched does not exist", kind.to_string()))]
+    WatchResourceNotFound { kind: ResourceKind },
+    #[snafu(display("Watch Already Exists"))]
+    WatchAlreadyExists {},
+}
+
+impl From<StoreError> for SvcError {
+    fn from(source: StoreError) -> Self {
+        SvcError::Store {
+            source,
+        }
+    }
 }
 
 impl From<mbus_api::Error> for SvcError {
@@ -107,6 +124,7 @@ impl From<SvcError> for ReplyError {
     fn from(error: SvcError) -> Self {
         #[allow(deprecated)]
         let desc: &String = &error.description().to_string();
+        let error_str = error.full_string();
         match error {
             SvcError::BusGetNode {
                 source, ..
@@ -185,6 +203,14 @@ impl From<SvcError> for ReplyError {
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
+            SvcError::Store {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::Internal,
+                resource: ResourceKind::Watch,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
             SvcError::JsonRpc {
                 ..
             } => ReplyError {
@@ -230,6 +256,30 @@ impl From<SvcError> for ReplyError {
             } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::WatchResourceNotFound {
+                kind,
+            } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: kind,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::WatchNotFound {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Watch,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::WatchAlreadyExists {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::AlreadyExists,
+                resource: ResourceKind::Watch,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

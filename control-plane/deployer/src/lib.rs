@@ -110,12 +110,24 @@ pub struct StartOptions {
     /// Disable the etcd cluster
     #[structopt(long)]
     pub no_etcd: bool,
+
+    /// Override the node's deadline for the Core Agent
+    #[structopt(long)]
+    pub node_deadline: Option<String>,
 }
 
 impl StartOptions {
     pub fn with_agents(mut self, agents: Vec<&str>) -> Self {
         let agents: ControlPlaneAgents = agents.try_into().unwrap();
         self.agents = agents.into_inner();
+        self
+    }
+    pub fn with_node_deadline(mut self, deadline: &str) -> Self {
+        self.node_deadline = Some(deadline.into());
+        self
+    }
+    pub fn with_rest(mut self, enabled: bool) -> Self {
+        self.no_rest = !enabled;
         self
     }
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {

@@ -102,7 +102,6 @@ impl Store for Etcd {
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
         let (sender, receiver) = channel(100);
-        println!("{}", key.to_string());
         let (watcher, stream) =
             self.0.watch(key.to_string(), None).await.context(Watch {
                 key: key.to_string(),
@@ -147,7 +146,6 @@ impl Store for Etcd {
         &mut self,
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
-        println!("{}", key.key());
         let (sender, receiver) = channel(100);
         let (watcher, stream) =
             self.0.watch(key.key(), None).await.context(Watch {
