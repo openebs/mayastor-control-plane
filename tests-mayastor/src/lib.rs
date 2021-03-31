@@ -50,6 +50,12 @@ impl Cluster {
         Mayastor::name(index, &self.builder.opts).into()
     }
 
+    /// node ip for `index`
+    pub fn node_ip(&self, index: u32) -> String {
+        let name = self.node(index);
+        self.composer.container_ip(name.as_str())
+    }
+
     /// pool id for `pool` index on `node` index
     pub fn pool(&self, node: u32, pool: u32) -> v0::PoolId {
         format!("{}-pool-{}", self.node(node), pool + 1).into()
@@ -235,6 +241,22 @@ impl ClusterBuilder {
     /// Specify `count` mayastors for the cluster
     pub fn with_mayastors(mut self, count: u32) -> Self {
         self.opts = self.opts.with_mayastors(count);
+        self
+    }
+    /// Specify which agents to use
+    pub fn with_agents(mut self, agents: Vec<&str>) -> Self {
+        self.opts = self.opts.with_agents(agents);
+        self
+    }
+    /// Specify the node deadline for the node agent
+    /// eg: 2s
+    pub fn with_node_deadline(mut self, deadline: &str) -> Self {
+        self.opts = self.opts.with_node_deadline(deadline);
+        self
+    }
+    /// Specify whether rest is enabled or not
+    pub fn with_rest(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_rest(enabled);
         self
     }
     /// Build into the resulting Cluster using a composer closure, eg:

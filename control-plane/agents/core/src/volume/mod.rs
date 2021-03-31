@@ -30,64 +30,26 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use composer::*;
-    use rpc::mayastor::Null;
+    use testlib::ClusterBuilder;
 
-    async fn wait_for_services() {
-        let _ = GetNodes {}.request().await.unwrap();
-        Liveness {}.request_on(ChannelVs::Pool).await.unwrap();
-        Liveness {}.request_on(ChannelVs::Volume).await.unwrap();
-    }
-    // to avoid waiting for timeouts
-    async fn orderly_start(test: &ComposeTest) {
-        test.start_containers(vec!["nats", "core"]).await.unwrap();
-
-        test.connect_to_bus("nats").await;
-        wait_for_services().await;
-
-        test.start("mayastor").await.unwrap();
-        test.start("mayastor2").await.unwrap();
-
-        let mut hdl = test.grpc_handle("mayastor").await.unwrap();
-        hdl.mayastor.list_nexus(Null {}).await.unwrap();
-        let mut hdl = test.grpc_handle("mayastor2").await.unwrap();
-        hdl.mayastor.list_nexus(Null {}).await.unwrap();
-    }
-
-    #[tokio::test]
+    #[actix_rt::test]
     async fn volume() {
-        let mayastor = "volume-test-name";
-        let mayastor2 = "volume-test-name-replica";
-        let test = Builder::new()
-            .name("volume")
-            .add_container_bin("nats", Binary::from_nix("nats-server"))
-            .add_container_bin("core", Binary::from_dbg("core").with_nats("-n"))
-            .add_container_bin(
-                "mayastor",
-                Binary::from_nix("mayastor")
-                    .with_nats("-n")
-                    .with_args(vec!["-N", mayastor])
-                    .with_args(vec!["-g", "10.1.0.4:10124"]),
-            )
-            .add_container_bin(
-                "mayastor2",
-                Binary::from_nix("mayastor")
-                    .with_nats("-n")
-                    .with_args(vec!["-N", mayastor2])
-                    .with_args(vec!["-g", "10.1.0.5:10124"]),
-            )
-            .with_default_tracing()
-            .autorun(false)
+        let cluster = ClusterBuilder::builder()
+            .with_rest(false)
+            .with_agents(vec!["core"])
+            .with_mayastors(2)
             .build()
             .await
             .unwrap();
 
-        orderly_start(&test).await;
+        let mayastor = cluster.node(0).to_string();
+        let mayastor2 = cluster.node(1).to_string();
+
         let nodes = GetNodes {}.request().await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
 
-        prepare_pools(mayastor, mayastor2).await;
-        test_nexus(mayastor, mayastor2).await;
+        prepare_pools(&mayastor, &mayastor2).await;
+        test_nexus(&mayastor, &mayastor2).await;
         test_volume().await;
 
         assert!(GetNexuses::default().request().await.unwrap().0.is_empty());

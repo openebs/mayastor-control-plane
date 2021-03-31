@@ -34,73 +34,20 @@ pub(crate) fn configure(builder: Service) -> Service {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use composer::*;
-    use rpc::mayastor::Null;
+    use testlib::ClusterBuilder;
 
-    async fn bus_init() -> Result<(), Box<dyn std::error::Error>> {
-        tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            mbus_api::message_bus_init("10.1.0.2".into()).await
-        })
-        .await?;
-        Ok(())
-    }
-    async fn wait_for_node() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = GetNodes {}.request().await?;
-        Ok(())
-    }
-    fn init_tracing() {
-        if let Ok(filter) =
-            tracing_subscriber::EnvFilter::try_from_default_env()
-        {
-            tracing_subscriber::fmt().with_env_filter(filter).init();
-        } else {
-            tracing_subscriber::fmt().with_env_filter("info").init();
-        }
-    }
-    // to avoid waiting for timeouts
-    async fn orderly_start(
-        test: &ComposeTest,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        test.start_containers(vec!["nats", "core"]).await?;
-
-        bus_init().await?;
-        wait_for_node().await?;
-
-        test.start("mayastor").await?;
-
-        let mut hdl = test.grpc_handle("mayastor").await?;
-        hdl.mayastor.list_nexus(Null {}).await?;
-        Ok(())
-    }
-
-    #[tokio::test]
+    #[actix_rt::test]
     async fn node() {
-        init_tracing();
-        let maya_name = NodeId::from("node-test-name");
-        let test = Builder::new()
-            .name("node")
-            .add_container_bin(
-                "nats",
-                Binary::from_nix("nats-server").with_arg("-DV"),
-            )
-            .add_container_bin(
-                "core",
-                Binary::from_dbg("core")
-                    .with_nats("-n")
-                    .with_args(vec!["-d", "2sec"]),
-            )
-            .add_container_bin(
-                "mayastor",
-                Binary::from_nix("mayastor")
-                    .with_nats("-n")
-                    .with_args(vec!["-N", maya_name.as_str()]),
-            )
-            .autorun(false)
+        let cluster = ClusterBuilder::builder()
+            .with_rest(false)
+            .with_agents(vec!["core"])
+            .with_node_deadline("2s")
             .build()
             .await
             .unwrap();
 
-        orderly_start(&test).await.unwrap();
+        let maya_name = cluster.node(0);
+        let grpc = format!("{}:10124", cluster.node_ip(0));
 
         let nodes = GetNodes {}.request().await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
@@ -109,7 +56,7 @@ mod tests {
             nodes.0.first().unwrap(),
             &Node {
                 id: maya_name.clone(),
-                grpc_endpoint: "0.0.0.0:10124".to_string(),
+                grpc_endpoint: grpc.clone(),
                 state: NodeState::Online,
             }
         );
@@ -121,7 +68,7 @@ mod tests {
             nodes.0.first().unwrap(),
             &Node {
                 id: maya_name.clone(),
-                grpc_endpoint: "0.0.0.0:10124".to_string(),
+                grpc_endpoint: grpc.clone(),
                 state: NodeState::Offline,
             }
         );
