@@ -1189,8 +1189,6 @@ pub struct Watch {
 
 bus_impl_vector_request!(Watches, Watch);
 
-use store::store::*;
-
 /// Get Resource Watches
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -1200,24 +1198,6 @@ pub struct GetWatchers {
 }
 
 bus_impl_message_all!(GetWatchers, GetWatches, Watches, Watcher);
-
-impl ObjectKey for VolumeId {
-    fn key_type(&self) -> StorableObjectType {
-        StorableObjectType::Volume
-    }
-    fn key_uuid(&self) -> String {
-        self.0.to_string()
-    }
-}
-
-impl ObjectKey for NexusId {
-    fn key_type(&self) -> StorableObjectType {
-        StorableObjectType::Nexus
-    }
-    fn key_uuid(&self) -> String {
-        self.0.to_string()
-    }
-}
 
 /// The different resource types that can be watched
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1250,26 +1230,6 @@ impl ToString for WatchResourceId {
             }
             WatchResourceId::Nexus(id) => format!("nexus/{}", id.to_string()),
             WatchResourceId::Volume(id) => format!("volume/{}", id.to_string()),
-        }
-    }
-}
-impl ObjectKey for WatchResourceId {
-    fn key_type(&self) -> StorableObjectType {
-        match &self {
-            WatchResourceId::Node(_) => StorableObjectType::Node,
-            WatchResourceId::Pool(_) => StorableObjectType::Pool,
-            WatchResourceId::Replica(_) => StorableObjectType::Replica,
-            WatchResourceId::Nexus(_) => StorableObjectType::Nexus,
-            WatchResourceId::Volume(_) => StorableObjectType::Volume,
-        }
-    }
-    fn key_uuid(&self) -> String {
-        match &self {
-            WatchResourceId::Node(i) => i.to_string(),
-            WatchResourceId::Pool(i) => i.to_string(),
-            WatchResourceId::Replica(i) => i.to_string(),
-            WatchResourceId::Nexus(i) => i.to_string(),
-            WatchResourceId::Volume(i) => i.to_string(),
         }
     }
 }
