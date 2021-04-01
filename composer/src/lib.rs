@@ -1198,6 +1198,12 @@ impl ComposeTest {
         Ok(())
     }
 
+    /// get container ip
+    pub fn container_ip(&self, name: &str) -> String {
+        let (_id, ip) = self.containers.get(name).unwrap();
+        ip.to_string()
+    }
+
     /// stop all the containers part of the network
     /// returns the last error, if any or Ok
     pub async fn stop_network_containers(&self) -> Result<(), Error> {

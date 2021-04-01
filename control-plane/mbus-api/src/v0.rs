@@ -27,10 +27,12 @@ pub enum ChannelVs {
     Nexus,
     /// Keep it In Sync Service
     Kiiss,
-    /// Json gRPC Service
+    /// Json gRPC Agent
     JsonGrpc,
-    /// Core Service combines Node, Pool and Volume services
+    /// Core Agent combines Node, Pool and Volume services
     Core,
+    /// Watcher Agent
+    Watcher,
 }
 impl Default for ChannelVs {
     fn default() -> Self {
@@ -111,6 +113,12 @@ pub enum MessageIdVs {
     JsonGrpc,
     /// Get block devices
     GetBlockDevices,
+    /// Create new Resource Watch
+    CreateWatch,
+    /// Get watches
+    GetWatches,
+    /// Delete Resource Watch
+    DeleteWatch,
 }
 
 // Only V0 should export this macro
@@ -1158,3 +1166,154 @@ pub struct GetBlockDevices {
 }
 bus_impl_vector_request!(BlockDevices, BlockDevice);
 bus_impl_message_all!(GetBlockDevices, GetBlockDevices, BlockDevices, Node);
+
+///
+/// Watcher Agent
+
+/// Create new Resource Watch
+/// Uniquely identifiable by resource_id and callback
+pub type CreateWatch = Watch;
+bus_impl_message_all!(CreateWatch, CreateWatch, (), Watcher);
+
+/// Watch Resource in the store
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Watch {
+    /// id of the resource to watch on
+    pub id: WatchResourceId,
+    /// callback used to notify the watcher of a change
+    pub callback: WatchCallback,
+    /// type of watch
+    pub watch_type: WatchType,
+}
+
+bus_impl_vector_request!(Watches, Watch);
+
+use store::store::*;
+
+/// Get Resource Watches
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetWatchers {
+    /// id of the resource to get
+    pub resource: WatchResourceId,
+}
+
+bus_impl_message_all!(GetWatchers, GetWatches, Watches, Watcher);
+
+impl ObjectKey for VolumeId {
+    fn key_type(&self) -> StorableObjectType {
+        StorableObjectType::Volume
+    }
+    fn key_uuid(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+impl ObjectKey for NexusId {
+    fn key_type(&self) -> StorableObjectType {
+        StorableObjectType::Nexus
+    }
+    fn key_uuid(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+/// The different resource types that can be watched
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub enum WatchResourceId {
+    /// nodes
+    Node(NodeId),
+    /// pools
+    Pool(PoolId),
+    /// replicas
+    Replica(ReplicaId),
+    /// nexuses
+    Nexus(NexusId),
+    /// volumes
+    Volume(VolumeId),
+}
+impl Default for WatchResourceId {
+    fn default() -> Self {
+        Self::Node(Default::default())
+    }
+}
+impl ToString for WatchResourceId {
+    fn to_string(&self) -> String {
+        match self {
+            WatchResourceId::Node(id) => format!("node/{}", id.to_string()),
+            WatchResourceId::Pool(id) => format!("pool/{}", id.to_string()),
+            WatchResourceId::Replica(id) => {
+                format!("replica/{}", id.to_string())
+            }
+            WatchResourceId::Nexus(id) => format!("nexus/{}", id.to_string()),
+            WatchResourceId::Volume(id) => format!("volume/{}", id.to_string()),
+        }
+    }
+}
+impl ObjectKey for WatchResourceId {
+    fn key_type(&self) -> StorableObjectType {
+        match &self {
+            WatchResourceId::Node(_) => StorableObjectType::Node,
+            WatchResourceId::Pool(_) => StorableObjectType::Pool,
+            WatchResourceId::Replica(_) => StorableObjectType::Replica,
+            WatchResourceId::Nexus(_) => StorableObjectType::Nexus,
+            WatchResourceId::Volume(_) => StorableObjectType::Volume,
+        }
+    }
+    fn key_uuid(&self) -> String {
+        match &self {
+            WatchResourceId::Node(i) => i.to_string(),
+            WatchResourceId::Pool(i) => i.to_string(),
+            WatchResourceId::Replica(i) => i.to_string(),
+            WatchResourceId::Nexus(i) => i.to_string(),
+            WatchResourceId::Volume(i) => i.to_string(),
+        }
+    }
+}
+
+/// The difference types of watches
+#[derive(Serialize, Deserialize, Debug, Clone, Apiv2Schema, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum WatchType {
+    /// Watch for changes on the desired state
+    Desired,
+    /// Watch for changes on the actual state
+    Actual,
+    /// Watch for both `Desired` and `Actual` changes
+    All,
+}
+impl Default for WatchType {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
+/// Delete Watch which was previously created by CreateWatcher
+/// Fields should match the ones used for the creation
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteWatch {
+    /// id of the resource to delete the watch from
+    pub id: WatchResourceId,
+    /// callback to be deleted
+    pub callback: WatchCallback,
+    /// type of watch to be deleted
+    pub watch_type: WatchType,
+}
+bus_impl_message_all!(DeleteWatch, DeleteWatch, (), Watcher);
+
+/// Watcher Callback types
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum WatchCallback {
+    /// HTTP URI callback
+    Uri(String),
+}
+impl Default for WatchCallback {
+    fn default() -> Self {
+        Self::Uri(Default::default())
+    }
+}

@@ -26,6 +26,8 @@ tracing-subscriber = "0.2"
 paperclip = { version = "0.5.0", features = ["actix3"] }
 percent-encoding = "2.1.0"
 uuid = { version = "0.7", features = ["v4"] }
+url = "2.2.0"
+store = { path = "../store" }
 
 [dev-dependencies]
 composer = { path = "../../composer" }

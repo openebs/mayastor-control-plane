@@ -1,32 +1,47 @@
+//! Registry containing all mayastor instances which register themselves via the
+//! `Register` Message.
+//! Said instances may also send `Deregister` to unregister themselves
+//! during node/pod shutdown/restart. When this happens the node state is
+//! set as `Unknown`. It's TBD how to detect when a node is really going
+//! away for good.
+//!
+//! A mayastor instance sends `Register` every N seconds as sort of a keep
+//! alive message.
+//! A watchful watchdog is started for each node and it will change the
+//! state of said node to `Offline` if it is not petted before its
+//! `deadline`.
+//!
+//! Each instance also contains the known nexus, pools and replicas that live in
+//! said instance.
 use super::wrapper::NodeWrapper;
 use crate::core::wrapper::InternalOps;
 use mbus_api::v0::NodeId;
 use std::{collections::HashMap, sync::Arc};
+use store::{etcd::Etcd, store::Store};
 use tokio::sync::{Mutex, RwLock};
 
-/// Registry containing all mayastor instances which register themselves via the
-/// `Register` Message.
-/// Said instances may also send `Deregister` to unregister themselves during
-/// node/pod shutdown/restart. When this happens the node state is set as
-/// `Unknown`. It's TBD how to detect when a node is really going away for good.
-///
-/// A mayastor instance sends `Register` every N seconds as sort of a keep
-/// alive message.
-/// A watchful watchdog is started for each node and it will change the state
-/// of said node to `Offline` if it is not petted before its `deadline`.
+/// Registry containing all mayastor instances (aka nodes)
+pub type Registry = RegistryInner<Etcd>;
+
+/// Generic Registry Inner with a Store trait
 #[derive(Clone, Debug)]
-pub struct Registry {
+pub struct RegistryInner<S: Store> {
     pub(crate) nodes: Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>,
     /// period to refresh the cache
     period: std::time::Duration,
+    pub(crate) store: Arc<Mutex<S>>,
 }
 
 impl Registry {
     /// Create a new registry with the `period` to reload the cache
-    pub fn new(period: std::time::Duration) -> Self {
+    pub async fn new(period: std::time::Duration, store_url: String) -> Self {
+        let store = Etcd::new(&store_url)
+            .await
+            .expect("Should connect to the persistent store");
         let registry = Self {
             nodes: Default::default(),
             period,
+            store: Arc::new(Mutex::new(store)),
         };
         registry.start();
         registry

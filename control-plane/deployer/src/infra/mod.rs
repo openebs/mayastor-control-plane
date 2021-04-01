@@ -95,10 +95,15 @@ macro_rules! impl_ctrlp_agents {
                         .status()?;
                     build_error(&format!("the {} agent", name), status.code())?;
                 }
-                Ok(cfg.add_container_bin(
-                    &name,
-                    Binary::from_dbg(&name).with_nats("-n"),
-                ))
+                let mut binary = Binary::from_dbg(&name).with_nats("-n");
+                if name == "core" {
+                    let etcd = format!("etcd.{}:2379", options.cluster_name);
+                    binary = binary.with_args(vec!["--store", &etcd]);
+                    if let Some(deadline) = &options.node_deadline {
+                        binary = binary.with_args(vec!["-d", deadline]);
+                    }
+                }
+                Ok(cfg.add_container_bin(&name, binary))
             }
             async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
                 let name = stringify!($name).to_ascii_lowercase();

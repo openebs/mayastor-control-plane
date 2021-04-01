@@ -2,14 +2,14 @@ use composer::{Binary, Builder, ContainerSpec};
 use oneshot::Receiver;
 use serde::{Deserialize, Serialize};
 use std::{
+    io,
     net::{SocketAddr, TcpStream},
     str::FromStr,
-    thread::sleep,
     time::Duration,
 };
 use store::{
     etcd::Etcd,
-    kv_store::{Store, WatchEvent},
+    store::{Store, WatchEvent},
 };
 use tokio::task::JoinHandle;
 
@@ -60,10 +60,10 @@ async fn etcd() {
 
     // Add an entry to the store, read it back and make sure it is correct.
     store
-        .put(&key, &serde_json::json!(&data))
+        .put_kv(&key.to_string(), &serde_json::json!(&data))
         .await
         .expect("Failed to 'put' to etcd");
-    let v = store.get(&key).await.expect("Failed to 'get' from etcd");
+    let v = store.get_kv(&key).await.expect("Failed to 'get' from etcd");
     let result: TestStruct =
         serde_json::from_value(v).expect("Failed to deserialise value");
     assert_eq!(data, result);
@@ -75,7 +75,7 @@ async fn etcd() {
     // Modify entry.
     data.value = 200;
     store
-        .put(&key, &serde_json::json!(&data))
+        .put_kv(&key.to_string(), &serde_json::json!(&data))
         .await
         .expect("Failed to 'put' to etcd");
 
@@ -94,7 +94,7 @@ async fn etcd() {
     // Start a watcher which should send a message when the subsequent 'delete'
     // event occurs.
     let (del_hdl, r) = spawn_watcher(&key, &mut store).await;
-    store.delete(&key).await.unwrap();
+    store.delete_kv(&key).await.unwrap();
 
     // Wait up to 1 second for the watcher to see the delete event.
     let msg = r
@@ -104,7 +104,7 @@ async fn etcd() {
         WatchEvent::Delete => {
             // The entry is deleted. Let's check that a subsequent 'get' fails.
             store
-                .get(&key)
+                .get_kv(&key)
                 .await
                 .expect_err("Entry should have been deleted");
         }
@@ -117,12 +117,12 @@ async fn etcd() {
 
 /// Spawn a watcher thread which watches for a single change to the entry with
 /// the given key.
-async fn spawn_watcher(
+async fn spawn_watcher<W: Store>(
     key: &serde_json::Value,
-    store: &mut dyn Store,
+    store: &mut W,
 ) -> (JoinHandle<()>, Receiver<WatchEvent>) {
     let (s, r) = oneshot::channel();
-    let mut watcher = store.watch(&key).await.expect("Failed to watch");
+    let mut watcher = store.watch_kv(&key).await.expect("Failed to watch");
     let hdl = tokio::spawn(async move {
         match watcher.recv().await.unwrap() {
             Ok(event) => {
@@ -138,13 +138,7 @@ async fn spawn_watcher(
 
 /// Wait to establish a connection to etcd.
 /// Returns 'Ok' if connected otherwise 'Err' is returned.
-fn wait_for_etcd_ready(endpoint: &str) -> Result<(), ()> {
+fn wait_for_etcd_ready(endpoint: &str) -> io::Result<TcpStream> {
     let sa = SocketAddr::from_str(endpoint).unwrap();
-    for _ in 1 .. 10 {
-        if TcpStream::connect_timeout(&sa, Duration::from_millis(100)).is_ok() {
-            return Ok(());
-        }
-        sleep(Duration::from_millis(500));
-    }
-    Err(())
+    TcpStream::connect_timeout(&sa, Duration::from_secs(3))
 }

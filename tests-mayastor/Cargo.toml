@@ -7,9 +7,11 @@ description = "Control Plane 'Compose' Tests"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[lib]
+name = "testlib"
+path = "src/lib.rs"
 
-[dev-dependencies]
+[dependencies]
 composer = { path = "../composer" }
 deployer = { path = "../control-plane/deployer" }
 rest = { path = "../control-plane/rest" }

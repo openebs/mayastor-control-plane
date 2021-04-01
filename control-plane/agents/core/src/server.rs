@@ -2,6 +2,7 @@ pub mod core;
 pub mod node;
 pub mod pool;
 pub mod volume;
+pub mod watcher;
 
 use crate::core::registry;
 use common::*;
@@ -26,6 +27,12 @@ pub(crate) struct CliArgs {
     /// Default: 10s
     #[structopt(long, short, default_value = "10s")]
     pub(crate) deadline: humantime::Duration,
+
+    /// The Persistent Store URLs to connect to
+    /// (supports the http/https schema)
+    /// Default: http://localhost:2379
+    #[structopt(long, short, default_value = "http://localhost:2379")]
+    pub(crate) store: String,
 }
 
 fn init_tracing() {
@@ -47,22 +54,26 @@ async fn main() {
 }
 
 async fn server(cli_args: CliArgs) {
+    let registry = registry::Registry::new(
+        CliArgs::from_args().cache_period.into(),
+        CliArgs::from_args().store,
+    )
+    .await;
     Service::builder(cli_args.nats, ChannelVs::Core)
         .with_default_liveness()
         .connect_message_bus()
         .await
-        .with_shared_state(registry::Registry::new(
-            CliArgs::from_args().cache_period.into(),
-        ))
+        .with_shared_state(registry)
         .configure(node::configure)
         .configure(pool::configure)
         .configure(volume::configure)
+        .configure(watcher::configure)
         .run()
         .await;
 }
 
 /// Constructs a service handler for `RequestType` which gets redirected to a
-/// PoolSvc Handler named `ServiceFnName`
+/// Service Handler named `ServiceFnName`
 #[macro_export]
 macro_rules! impl_request_handler {
     ($RequestType:ident, $ServiceFnName:ident) => {
@@ -93,7 +104,7 @@ macro_rules! impl_request_handler {
 }
 
 /// Constructs a service handler for `PublishType` which gets redirected to a
-/// PoolSvc Handler named `ServiceFnName`
+/// Service Handler named `ServiceFnName`
 #[macro_export]
 macro_rules! impl_publish_handler {
     ($PublishType:ident, $ServiceFnName:ident) => {

@@ -304,6 +304,8 @@ pub enum ResourceKind {
     JsonGrpc,
     /// Block devices
     Block,
+    /// Watch
+    Watch,
 }
 
 /// Error type which is returned over the bus

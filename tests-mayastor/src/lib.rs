@@ -9,10 +9,10 @@ use opentelemetry::{
 };
 
 use opentelemetry_jaeger::Uninstall;
-use rest_client::ClientError;
 pub use rest_client::{
     versions::v0::{self, RestClient},
     ActixRestClient,
+    ClientError,
 };
 
 #[actix_rt::test]
@@ -48,6 +48,12 @@ impl Cluster {
     /// node id for `index`
     pub fn node(&self, index: u32) -> v0::NodeId {
         Mayastor::name(index, &self.builder.opts).into()
+    }
+
+    /// node ip for `index`
+    pub fn node_ip(&self, index: u32) -> String {
+        let name = self.node(index);
+        self.composer.container_ip(name.as_str())
     }
 
     /// pool id for `pool` index on `node` index
@@ -170,7 +176,7 @@ pub struct ClusterBuilder {
 }
 
 #[derive(Default)]
-pub struct Replica {
+struct Replica {
     count: u32,
     size: u64,
     share: v0::Protocol,
@@ -235,6 +241,22 @@ impl ClusterBuilder {
     /// Specify `count` mayastors for the cluster
     pub fn with_mayastors(mut self, count: u32) -> Self {
         self.opts = self.opts.with_mayastors(count);
+        self
+    }
+    /// Specify which agents to use
+    pub fn with_agents(mut self, agents: Vec<&str>) -> Self {
+        self.opts = self.opts.with_agents(agents);
+        self
+    }
+    /// Specify the node deadline for the node agent
+    /// eg: 2s
+    pub fn with_node_deadline(mut self, deadline: &str) -> Self {
+        self.opts = self.opts.with_node_deadline(deadline);
+        self
+    }
+    /// Specify whether rest is enabled or not
+    pub fn with_rest(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_rest(enabled);
         self
     }
     /// Build into the resulting Cluster using a composer closure, eg:
@@ -309,6 +331,7 @@ impl ClusterBuilder {
                 );
             }
         }
+
         for pool in &self.pools() {
             cluster
                 .rest_v0()

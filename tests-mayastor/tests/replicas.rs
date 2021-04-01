@@ -1,7 +1,5 @@
 #![feature(allow_fail)]
-
-pub mod common;
-use common::*;
+use testlib::*;
 
 // FIXME: CAS-721
 #[actix_rt::test]

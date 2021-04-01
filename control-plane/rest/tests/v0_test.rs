@@ -6,6 +6,10 @@ use mbus_api::{
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use rest_client::{versions::v0::*, ActixRestClient};
 use rpc::mayastor::Null;
+use std::{
+    io,
+    net::{SocketAddr, TcpStream},
+};
 use tracing::info;
 
 async fn wait_for_services() {
@@ -49,7 +53,12 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
             )
             .with_portmap("4222", "4222"),
         )
-        .add_container_bin("core", Binary::from_dbg("core").with_nats("-n"))
+        .add_container_bin(
+            "core",
+            Binary::from_dbg("core")
+                .with_nats("-n")
+                .with_args(vec!["--store", "http://etcd.rest:2379"]),
+        )
         .add_container_spec(
             ContainerSpec::from_binary(
                 "rest",
@@ -79,6 +88,21 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
             "jsongrpc",
             Binary::from_dbg("jsongrpc").with_nats("-n"),
         )
+        .add_container_spec(
+            ContainerSpec::from_binary(
+                "etcd",
+                Binary::from_nix("etcd").with_args(vec![
+                    "--data-dir",
+                    "/tmp/etcd-data",
+                    "--advertise-client-urls",
+                    "http://0.0.0.0:2379",
+                    "--listen-client-urls",
+                    "http://0.0.0.0:2379",
+                ]),
+            )
+            .with_portmap("2379", "2379")
+            .with_portmap("2380", "2380"),
+        )
         .with_default_tracing()
         .autorun(false)
         .build()
@@ -87,13 +111,26 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
     (mayastor.into(), test)
 }
 
+/// Wait to establish a connection to etcd.
+/// Returns 'Ok' if connected otherwise 'Err' is returned.
+fn wait_for_etcd_ready(endpoint: &str) -> io::Result<TcpStream> {
+    use std::{str::FromStr, time::Duration};
+    let sa = SocketAddr::from_str(endpoint).unwrap();
+    TcpStream::connect_timeout(&sa, Duration::from_secs(3))
+}
+
 // to avoid waiting for timeouts
 async fn orderly_start(test: &ComposeTest) {
-    test.start_containers(vec!["nats", "core", "jsongrpc", "rest", "jaeger"])
+    test.start_containers(vec!["nats", "jsongrpc", "rest", "jaeger", "etcd"])
         .await
         .unwrap();
+    assert!(
+        wait_for_etcd_ready("0.0.0.0:2379").is_ok(),
+        "etcd not ready"
+    );
 
     test.connect_to_bus("nats").await;
+    test.start("core").await.unwrap();
     wait_for_services().await;
 
     test.start("mayastor").await.unwrap();
@@ -282,6 +319,25 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             .unwrap()
             .first()
     );
+
+    let watch_volume = WatchResourceId::Volume(volume.uuid);
+    let callback = url::Url::parse("http://lala/test").unwrap();
+
+    let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+    assert!(watchers.is_empty());
+
+    client
+        .create_watch(watch_volume.clone(), callback.clone())
+        .await
+        .expect_err("volume does not exist in the store");
+
+    client
+        .delete_watch(watch_volume.clone(), callback.clone())
+        .await
+        .expect_err("Does not exist");
+
+    let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+    assert!(watchers.is_empty());
 
     client
         .destroy_volume(DestroyVolume {
