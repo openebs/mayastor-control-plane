@@ -10,11 +10,12 @@ etcd-client = "0.5.5"
 tokio = { version = "0.2", features = ["full"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-async-trait = "=0.1.42"
+async-trait = "0.1.36"
 snafu = "0.6"
 tracing = "0.1"
 strum = "0.19"
 strum_macros = "0.19"
+mbus_api = { path = "../mbus-api" }
 
 [dev-dependencies]
 composer = { path = "../../composer" }
