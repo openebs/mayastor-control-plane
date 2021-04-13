@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use etcd_client::Error;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{Error as SerdeError, Value};
 use snafu::Snafu;
 use strum_macros::Display;
@@ -109,12 +109,12 @@ pub trait Store: Sync + Send + Clone {
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError>;
 
-    async fn put_obj<'a, O: StorableObject<'a>>(
+    async fn put_obj<O: StorableObject>(
         &mut self,
         object: &O,
     ) -> Result<(), StoreError>;
 
-    async fn get_obj<'a, O: StorableObject<'a>>(
+    async fn get_obj<O: StorableObject>(
         &mut self,
         _key: &O::Key,
     ) -> Result<O, StoreError>;
@@ -140,9 +140,7 @@ pub trait ObjectKey: Sync + Send {
 
 /// Implemented by objects which get stored in the store, eg: Volume
 #[async_trait]
-pub trait StorableObject<'a>:
-    Serialize + Sync + Send + for<'de> Deserialize<'de>
-{
+pub trait StorableObject: Serialize + Sync + Send + DeserializeOwned {
     type Key: ObjectKey;
 
     fn key(&self) -> Self::Key;

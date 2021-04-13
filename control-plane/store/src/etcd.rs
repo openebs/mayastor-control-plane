@@ -110,7 +110,7 @@ impl Store for Etcd {
         Ok(receiver)
     }
 
-    async fn put_obj<'a, O: StorableObject<'a>>(
+    async fn put_obj<O: StorableObject>(
         &mut self,
         object: &O,
     ) -> Result<(), StoreError> {
@@ -123,7 +123,7 @@ impl Store for Etcd {
         Ok(())
     }
 
-    async fn get_obj<'a, O: StorableObject<'a>>(
+    async fn get_obj<O: StorableObject>(
         &mut self,
         key: &O::Key,
     ) -> Result<O, StoreError> {

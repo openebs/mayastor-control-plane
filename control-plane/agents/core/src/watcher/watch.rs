@@ -51,7 +51,7 @@ struct WatchCfg {
     pub watch_id: WatchCfgId,
     pub watchers: Vec<WatchParamsCfg>,
 }
-impl<'a> StorableObject<'a> for WatchCfg {
+impl StorableObject for WatchCfg {
     type Key = WatchCfgId;
     fn key(&self) -> Self::Key {
         self.watch_id.clone()
