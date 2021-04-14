@@ -603,7 +603,7 @@ pub struct CreateReplica {
     pub share: Protocol,
     /// Managed by our control plane
     pub managed: bool,
-    /// Owner Resource
+    /// Owners of the resource
     pub owners: ReplicaOwners,
 }
 bus_impl_message_all!(CreateReplica, CreateReplica, Replica, Pool);
@@ -624,7 +624,7 @@ impl ReplicaOwners {
         self.volume.as_ref() == Some(id)
     }
     /// Create new owners from the volume Id
-    pub fn from_volume(volume: &VolumeId) -> Self {
+    pub fn new(volume: &VolumeId) -> Self {
         Self {
             volume: Some(volume.clone()),
             nexuses: vec![],
@@ -659,6 +659,26 @@ pub struct ShareReplica {
     pub protocol: ReplicaShareProtocol,
 }
 bus_impl_message_all!(ShareReplica, ShareReplica, String, Pool);
+
+impl From<ShareReplica> for UnshareReplica {
+    fn from(share: ShareReplica) -> Self {
+        Self {
+            node: share.node,
+            pool: share.pool,
+            uuid: share.uuid,
+        }
+    }
+}
+impl From<UnshareReplica> for ShareReplica {
+    fn from(share: UnshareReplica) -> Self {
+        Self {
+            node: share.node,
+            pool: share.pool,
+            uuid: share.uuid,
+            protocol: ReplicaShareProtocol::Nvmf,
+        }
+    }
+}
 
 /// Unshare Replica Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
@@ -1004,6 +1024,15 @@ pub struct ShareNexus {
 }
 bus_impl_message_all!(ShareNexus, ShareNexus, String, Nexus);
 
+impl From<ShareNexus> for UnshareNexus {
+    fn from(share: ShareNexus) -> Self {
+        Self {
+            node: share.node,
+            uuid: share.uuid,
+        }
+    }
+}
+
 /// Unshare Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -1027,6 +1056,16 @@ pub struct RemoveNexusChild {
     pub uri: ChildUri,
 }
 bus_impl_message_all!(RemoveNexusChild, RemoveNexusChild, (), Nexus);
+
+impl From<AddNexusChild> for RemoveNexusChild {
+    fn from(add: AddNexusChild) -> Self {
+        Self {
+            node: add.node,
+            nexus: add.nexus,
+            uri: add.uri,
+        }
+    }
+}
 
 /// Add child to Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]

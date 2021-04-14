@@ -57,6 +57,10 @@ pub enum SvcError {
     PoolNotFound { pool_id: PoolId },
     #[snafu(display("Nexus '{}' not found", nexus_id))]
     NexusNotFound { nexus_id: String },
+    #[snafu(display("Child '{}' not found in Nexus '{}'", child, nexus))]
+    ChildNotFound { nexus: String, child: String },
+    #[snafu(display("Child '{}' already exists in Nexus '{}'", child, nexus))]
+    ChildAlreadyExists { nexus: String, child: String },
     #[snafu(display("Volume '{}' not found", vol_id))]
     VolumeNotFound { vol_id: String },
     #[snafu(display("Replica '{}' not found", replica_id))]
@@ -96,6 +100,8 @@ pub enum SvcError {
     WatchAlreadyExists {},
     #[snafu(display("Conflicts with existing operation - please retry"))]
     Conflict {},
+    #[snafu(display("{} Resource id {} still in still use", kind.to_string(), id))]
+    InUse { kind: ResourceKind, id: String },
     #[snafu(display("{} Resource id {} already exists", kind.to_string(), id))]
     AlreadyExists { kind: ResourceKind, id: String },
 }
@@ -130,6 +136,31 @@ impl From<SvcError> for ReplyError {
         let desc: &String = &error.description().to_string();
         let error_str = error.full_string();
         match error {
+            SvcError::ChildNotFound {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Child,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::ChildAlreadyExists {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::AlreadyExists,
+                resource: ResourceKind::Child,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::InUse {
+                kind,
+                id,
+            } => ReplyError {
+                kind: ReplyErrorKind::Conflict,
+                resource: kind,
+                source: desc.to_string(),
+                extra: format!("id: {}", id),
+            },
             SvcError::AlreadyExists {
                 kind,
                 id,

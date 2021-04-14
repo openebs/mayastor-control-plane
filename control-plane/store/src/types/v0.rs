@@ -105,7 +105,8 @@ pub struct PoolSpec {
     pub state: PoolSpecState,
     /// Pool labels.
     pub labels: Vec<PoolLabel>,
-    /// Updating
+    /// Update in progress
+    #[serde(skip)]
     pub updating: bool,
 }
 impl From<&PoolSpec> for v0::Pool {
@@ -168,6 +169,7 @@ pub struct VolumeSpec {
     /// State that the volume should eventually achieve.
     pub state: VolumeSpecState,
     /// Update of the state in progress
+    #[serde(skip)]
     pub updating: bool,
 }
 
@@ -270,6 +272,7 @@ pub struct NexusSpec {
     /// Volume which owns this nexus, if any
     pub owner: Option<v0::VolumeId>,
     /// Update of the state in progress
+    #[serde(skip)]
     pub updating: bool,
 }
 impl From<&NexusSpec> for v0::Nexus {
@@ -396,7 +399,8 @@ pub struct ReplicaSpec {
     pub managed: bool,
     /// Owner Resource
     pub owners: v0::ReplicaOwners,
-    /// Updating
+    /// Update in progress
+    #[serde(skip)]
     pub updating: bool,
 }
 

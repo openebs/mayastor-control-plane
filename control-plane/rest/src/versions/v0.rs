@@ -720,6 +720,8 @@ pub enum RestJsonErrorKind {
     Unauthorized,
     // code=409, description="Conflict",
     Conflict,
+    // code=507, description="Insufficient Storage",
+    FailedPersist,
 }
 
 impl RestJsonError {
@@ -846,6 +848,13 @@ impl RestError {
                 let error =
                     RestJsonError::new(RestJsonErrorKind::Conflict, &details);
                 HttpResponse::Conflict().json(error)
+            }
+            ReplyErrorKind::FailedPersist => {
+                let error = RestJsonError::new(
+                    RestJsonErrorKind::FailedPersist,
+                    &details,
+                );
+                HttpResponse::InsufficientStorage().json(error)
             }
         }
     }

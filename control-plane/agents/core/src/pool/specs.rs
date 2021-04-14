@@ -64,27 +64,6 @@ impl ResourceSpecs {
     fn del_pool(&mut self, id: &PoolId) {
         let _ = self.pools.remove(id);
     }
-
-    pub(crate) async fn get_created_pools(&self) -> Vec<PoolSpec> {
-        let mut pools = vec![];
-        for pool in self.pools.values() {
-            let pool_spec = pool.lock().await;
-            if pool_spec.state.created() || pool_spec.state.deleting() {
-                pools.push(pool_spec.clone());
-            }
-        }
-        pools
-    }
-    pub(crate) async fn get_created_replicas(&self) -> Vec<ReplicaSpec> {
-        let mut replicas = vec![];
-        for replica in self.replicas.values() {
-            let replica = replica.lock().await;
-            if replica.state.created() || replica.state.deleting() {
-                replicas.push(replica.clone());
-            }
-        }
-        replicas
-    }
 }
 
 impl ResourceSpecsLocked {
@@ -179,22 +158,25 @@ impl ResourceSpecsLocked {
             } else if pool_spec.state.deleted() {
                 return Ok(());
             }
-            if !pool_spec.state.deleting() {
-                pool_spec.state = PoolSpecState::Deleting;
-                // write it to the store
-                let mut store = registry.store.lock().await;
-                store.put_obj(pool_spec.deref()).await?;
-            }
             pool_spec.updating = true;
         }
 
         let pool_in_use = self.pool_has_replicas(&request.id).await;
         if let Some(pool_spec) = &pool_spec {
+            let mut pool_spec = pool_spec.lock().await;
             if pool_in_use {
-                let mut pool_spec = pool_spec.lock().await;
                 pool_spec.updating = false;
-                // replica is currently in use so we shouldn't delete it
-                return Err(SvcError::Conflict {});
+                // pool is currently in use so we shouldn't delete it
+                return Err(SvcError::InUse {
+                    kind: ResourceKind::Pool,
+                    id: request.id.to_string(),
+                });
+            }
+            if !pool_spec.state.deleting() {
+                pool_spec.state = PoolSpecState::Deleting;
+                // write it to the store
+                let mut store = registry.store.lock().await;
+                store.put_obj(pool_spec.deref()).await?;
             }
         }
 
@@ -310,14 +292,17 @@ impl ResourceSpecsLocked {
             let mut replica = replica.lock().await;
             let destroy_replica = force || !replica.owners.is_owned();
 
-            if replica.updating {
+            if !destroy_replica {
+                return Err(SvcError::InUse {
+                    kind: ResourceKind::Replica,
+                    id: request.uuid.to_string(),
+                });
+            } else if replica.updating {
                 return Err(SvcError::Conflict {});
             } else if replica.state.deleted() {
                 return Ok(());
             }
-            if !destroy_replica {
-                return Err(SvcError::Conflict {});
-            }
+
             if !replica.state.deleting() {
                 replica.state = ReplicaSpecState::Deleting;
                 // write it to the store
@@ -373,21 +358,44 @@ impl ResourceSpecsLocked {
             },
         )?;
 
-        if let Some(spec) = self.get_replica(&request.uuid).await {
-            let mut spec = spec.lock().await;
-            if spec.updating {
+        if let Some(replica_spec) = self.get_replica(&request.uuid).await {
+            let mut spec = replica_spec.lock().await;
+            if spec.updating || spec.share == Protocol::Nvmf {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::ReplicaNotFound {
                     replica_id: request.uuid.clone(),
                 });
             }
+            spec.updating = true;
+            let mut spec_clone = spec.clone();
+            drop(spec);
 
-            spec.share = request.protocol.into();
-
-            let mut store = registry.store.lock().await;
-            store.put_obj(spec.deref()).await?;
-            node.share_replica(request).await
+            match node.share_replica(request).await {
+                Ok(share) => {
+                    spec_clone.share = request.protocol.into();
+                    let result = {
+                        let mut store = registry.store.lock().await;
+                        store.put_obj(&spec_clone).await
+                    };
+                    if let Err(error) = result {
+                        let _ =
+                            node.unshare_replica(&request.clone().into()).await;
+                        let mut spec = replica_spec.lock().await;
+                        spec.updating = false;
+                        return Err(error.into());
+                    }
+                    let mut spec = replica_spec.lock().await;
+                    spec.share = request.protocol.into();
+                    spec.updating = false;
+                    Ok(share)
+                }
+                Err(error) => {
+                    let mut spec = replica_spec.lock().await;
+                    spec.updating = false;
+                    Err(error)
+                }
+            }
         } else {
             node.share_replica(request).await
         }
@@ -403,22 +411,44 @@ impl ResourceSpecsLocked {
             },
         )?;
 
-        let specs = self.read().await;
-        if let Some(spec) = specs.get_replica(&request.uuid) {
-            let mut spec = spec.lock().await;
-            if spec.updating {
+        if let Some(replica_spec) = self.get_replica(&request.uuid).await {
+            let mut spec = replica_spec.lock().await;
+            if spec.updating || spec.share == Protocol::Off {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::ReplicaNotFound {
                     replica_id: request.uuid.clone(),
                 });
             }
-            spec.share = Protocol::Off;
+            spec.updating = true;
+            let mut spec_clone = spec.clone();
+            drop(spec);
 
-            drop(specs);
-            let mut store = registry.store.lock().await;
-            store.put_obj(spec.deref()).await?;
-            node.unshare_replica(request).await
+            match node.unshare_replica(request).await {
+                Ok(_) => {
+                    spec_clone.share = Protocol::Off;
+                    let result = {
+                        let mut store = registry.store.lock().await;
+                        store.put_obj(&spec_clone).await
+                    };
+                    if let Err(error) = result {
+                        let _ =
+                            node.share_replica(&request.clone().into()).await;
+                        let mut spec = replica_spec.lock().await;
+                        spec.updating = false;
+                        return Err(error.into());
+                    }
+                    let mut spec = replica_spec.lock().await;
+                    spec.share = Protocol::Off;
+                    spec.updating = false;
+                    Ok(())
+                }
+                Err(error) => {
+                    let mut spec = replica_spec.lock().await;
+                    spec.updating = false;
+                    Err(error)
+                }
+            }
         } else {
             node.unshare_replica(request).await
         }

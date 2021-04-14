@@ -8,6 +8,8 @@ use crate::{
 use common::errors::{NodeNotFound, NotEnough, SvcError};
 use mbus_api::{
     v0::{
+        AddNexusChild,
+        Child,
         ChildUri,
         CreateNexus,
         CreateReplica,
@@ -17,10 +19,12 @@ use mbus_api::{
         DestroyVolume,
         Nexus,
         NexusId,
+        NexusShareProtocol,
         NexusState,
         NodeId,
         PoolState,
         Protocol,
+        RemoveNexusChild,
         ReplicaId,
         ReplicaOwners,
         ShareNexus,
@@ -135,7 +139,7 @@ async fn get_node_replicas(
                     thin: false,
                     share: Protocol::Nvmf,
                     managed: true,
-                    owners: ReplicaOwners::from_volume(&request.uuid),
+                    owners: ReplicaOwners::new(&request.uuid),
                 })
                 .collect()
         })
@@ -408,9 +412,9 @@ impl ResourceSpecsLocked {
             },
         )?;
 
-        if let Some(spec) = self.get_nexus(&request.uuid).await {
-            let mut spec = spec.lock().await;
-            if spec.updating {
+        if let Some(nexus_spec) = self.get_nexus(&request.uuid).await {
+            let mut spec = nexus_spec.lock().await;
+            if spec.updating || spec.share != Protocol::Off {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::NexusNotFound {
@@ -418,11 +422,35 @@ impl ResourceSpecsLocked {
                 });
             }
 
-            spec.share = request.protocol.into();
+            spec.updating = true;
+            let mut spec_clone = spec.clone();
+            drop(spec);
 
-            let mut store = registry.store.lock().await;
-            store.put_obj(spec.deref()).await?;
-            node.share_nexus(request).await
+            match node.share_nexus(request).await {
+                Ok(share) => {
+                    spec_clone.share = request.protocol.into();
+                    let result = {
+                        let mut store = registry.store.lock().await;
+                        store.put_obj(&spec_clone).await
+                    };
+                    if let Err(error) = result {
+                        let _ =
+                            node.unshare_nexus(&request.clone().into()).await;
+                        let mut spec = nexus_spec.lock().await;
+                        spec.updating = false;
+                        return Err(error.into());
+                    }
+                    let mut spec = nexus_spec.lock().await;
+                    spec.share = request.protocol.into();
+                    spec.updating = false;
+                    Ok(share)
+                }
+                Err(error) => {
+                    let mut spec = nexus_spec.lock().await;
+                    spec.updating = false;
+                    Err(error)
+                }
+            }
         } else {
             node.share_nexus(request).await
         }
@@ -439,23 +467,175 @@ impl ResourceSpecsLocked {
         )?;
 
         let specs = self.read().await;
-        if let Some(spec) = specs.get_nexus(&request.uuid) {
-            let mut spec = spec.lock().await;
-            if spec.updating {
+        if let Some(nexus_spec) = specs.get_nexus(&request.uuid) {
+            let mut spec = nexus_spec.lock().await;
+            if spec.updating || spec.share == Protocol::Off {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::NexusNotFound {
                     nexus_id: request.uuid.to_string(),
                 });
             }
-            spec.share = Protocol::Off;
+            spec.updating = true;
+            let mut spec_clone = spec.clone();
+            drop(spec);
 
-            drop(specs);
-            let mut store = registry.store.lock().await;
-            store.put_obj(spec.deref()).await?;
-            node.unshare_nexus(request).await
+            match node.unshare_nexus(request).await {
+                Ok(_) => {
+                    let previous_share = spec_clone.share;
+                    spec_clone.share = Protocol::Off;
+                    let result = {
+                        let mut store = registry.store.lock().await;
+                        store.put_obj(&spec_clone).await
+                    };
+                    if let Err(error) = result {
+                        let share = ShareNexus {
+                            node: request.node.clone(),
+                            uuid: request.uuid.clone(),
+                            key: None,
+                            protocol: match previous_share {
+                                Protocol::Off => unreachable!(),
+                                Protocol::Nvmf => NexusShareProtocol::Nvmf,
+                                Protocol::Iscsi => NexusShareProtocol::Iscsi,
+                                Protocol::Nbd => unreachable!(),
+                            },
+                        };
+                        let _ = node.share_nexus(&share).await;
+                        let mut spec = nexus_spec.lock().await;
+                        spec.updating = false;
+                        return Err(error.into());
+                    }
+                    let mut spec = nexus_spec.lock().await;
+                    spec.share = Protocol::Off;
+                    spec.updating = false;
+                    Ok(())
+                }
+                Err(error) => {
+                    let mut spec = nexus_spec.lock().await;
+                    spec.updating = false;
+                    Err(error)
+                }
+            }
         } else {
             node.unshare_nexus(request).await
+        }
+    }
+
+    pub(super) async fn add_nexus_child(
+        &self,
+        registry: &Registry,
+        request: &AddNexusChild,
+    ) -> Result<Child, SvcError> {
+        let node = registry.get_node_wrapper(&request.node).await.context(
+            NodeNotFound {
+                node_id: request.node.clone(),
+            },
+        )?;
+
+        if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
+            let mut spec = nexus_spec.lock().await;
+            if spec.updating {
+                return Err(SvcError::Conflict {});
+            } else if !spec.state.created() {
+                return Err(SvcError::NexusNotFound {
+                    nexus_id: request.nexus.to_string(),
+                });
+            } else if spec.children.contains(&request.uri) {
+                return Err(SvcError::ChildAlreadyExists {
+                    nexus: request.nexus.to_string(),
+                    child: request.uri.to_string(),
+                });
+            }
+
+            spec.updating = true;
+            let mut spec_clone = spec.clone();
+            drop(spec);
+
+            match node.add_child(request).await {
+                Ok(share) => {
+                    spec_clone.children.push(request.uri.clone());
+                    let result = {
+                        let mut store = registry.store.lock().await;
+                        store.put_obj(&spec_clone).await
+                    };
+                    if let Err(error) = result {
+                        let _ =
+                            node.remove_child(&request.clone().into()).await;
+                        let mut spec = nexus_spec.lock().await;
+                        spec.updating = false;
+                        return Err(error.into());
+                    }
+                    let mut spec = nexus_spec.lock().await;
+                    spec.children.push(request.uri.clone());
+                    spec.updating = false;
+                    Ok(share)
+                }
+                Err(error) => {
+                    let mut spec = nexus_spec.lock().await;
+                    spec.updating = false;
+                    Err(error)
+                }
+            }
+        } else {
+            node.add_child(request).await
+        }
+    }
+
+    pub(super) async fn remove_nexus_child(
+        &self,
+        registry: &Registry,
+        request: &RemoveNexusChild,
+    ) -> Result<(), SvcError> {
+        let node = registry.get_node_wrapper(&request.node).await.context(
+            NodeNotFound {
+                node_id: request.node.clone(),
+            },
+        )?;
+
+        if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
+            let mut spec = nexus_spec.lock().await;
+            if spec.updating {
+                return Err(SvcError::Conflict {});
+            } else if !spec.state.created() {
+                return Err(SvcError::NexusNotFound {
+                    nexus_id: request.nexus.to_string(),
+                });
+            } else if !spec.children.contains(&request.uri) {
+                return Err(SvcError::ChildNotFound {
+                    nexus: request.nexus.to_string(),
+                    child: request.uri.to_string(),
+                });
+            }
+
+            spec.updating = true;
+            let mut spec_clone = spec.clone();
+            drop(spec);
+
+            match node.remove_child(request).await {
+                Ok(_) => {
+                    spec_clone.children.retain(|c| c != &request.uri);
+                    let result = {
+                        let mut store = registry.store.lock().await;
+                        store.put_obj(&spec_clone).await
+                    };
+                    if let Err(error) = result {
+                        let mut spec = nexus_spec.lock().await;
+                        spec.updating = false;
+                        return Err(error.into());
+                    }
+                    let mut spec = nexus_spec.lock().await;
+                    spec.children.retain(|c| c != &request.uri);
+                    spec.updating = false;
+                    Ok(())
+                }
+                Err(error) => {
+                    let mut spec = nexus_spec.lock().await;
+                    spec.updating = false;
+                    Err(error)
+                }
+            }
+        } else {
+            node.remove_child(request).await
         }
     }
 

@@ -1,5 +1,5 @@
-use crate::core::{registry::Registry, wrapper::ClientOps};
-use common::errors::{NodeNotFound, SvcError};
+use crate::core::registry::Registry;
+use common::errors::SvcError;
 use mbus_api::v0::{
     AddNexusChild,
     Child,
@@ -18,7 +18,6 @@ use mbus_api::v0::{
     Volume,
     Volumes,
 };
-use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -39,7 +38,7 @@ impl Service {
         request: &GetNexuses,
     ) -> Result<Nexuses, SvcError> {
         let filter = request.filter.clone();
-        let mut nexuses = match filter {
+        let nexuses = match filter {
             Filter::None => self.registry.get_node_opt_nexuses(None).await?,
             Filter::Node(node_id) => {
                 self.registry.get_node_nexuses(&node_id).await?
@@ -59,14 +58,6 @@ impl Service {
                 })
             }
         };
-        let nexus_specs = self.registry.specs.get_created_nexus_specs().await;
-        nexus_specs.iter().for_each(|spec| {
-            // if we can't find a nexus state, then report the nexus with
-            // unknown state
-            if !nexuses.iter().any(|r| r.uuid == spec.uuid) {
-                nexuses.push(Nexus::from(spec));
-            }
-        });
         Ok(Nexuses(nexuses))
     }
 
@@ -124,14 +115,10 @@ impl Service {
         &self,
         request: &AddNexusChild,
     ) -> Result<Child, SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .add_nexus_child(&self.registry, request)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.add_child(request).await
     }
 
     /// Remove nexus child
@@ -140,14 +127,10 @@ impl Service {
         &self,
         request: &RemoveNexusChild,
     ) -> Result<(), SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .remove_nexus_child(&self.registry, request)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.remove_child(request).await
     }
 
     /// Get volumes
@@ -160,18 +143,20 @@ impl Service {
         let nexus_specs = self.registry.specs.get_created_nexus_specs().await;
         let volumes = nexuses
             .iter()
-            .map(|n| {
+            .map(|nexus| {
                 let uuid = nexus_specs
                     .iter()
-                    .find(|nn| nn.uuid == n.uuid)
-                    .map(|nn| nn.owner.clone())
+                    .find(|nexus_spec| nexus_spec.uuid == nexus.uuid)
+                    .map(|nexus_spec| nexus_spec.owner.clone())
                     .flatten();
                 if let Some(uuid) = uuid {
                     Some(Volume {
                         uuid,
-                        size: n.size,
-                        state: n.state.clone(),
-                        children: vec![n.clone()],
+                        size: nexus.size,
+                        // ANA not supported so derive volume state from the
+                        // single Nexus
+                        state: nexus.state.clone(),
+                        children: vec![nexus.clone()],
                     })
                 } else {
                     None
@@ -184,15 +169,15 @@ impl Service {
             Filter::None => volumes,
             Filter::NodeVolume(node, volume) => volumes
                 .iter()
-                .filter(|v| {
-                    v.children.iter().any(|c| &c.node == node)
-                        && &v.uuid == volume
+                .filter(|volume_iter| {
+                    volume_iter.children.iter().any(|c| &c.node == node)
+                        && &volume_iter.uuid == volume
                 })
                 .cloned()
                 .collect(),
             Filter::Volume(volume) => volumes
                 .iter()
-                .filter(|v| &v.uuid == volume)
+                .filter(|volume_iter| &volume_iter.uuid == volume)
                 .cloned()
                 .collect(),
             filter => {
