@@ -62,10 +62,14 @@ impl Cluster {
     }
 
     /// replica id with index for `pool` index and `replica` index
-    pub fn replica(pool: usize, replica: u32) -> v0::ReplicaId {
+    pub fn replica(node: u32, pool: usize, replica: u32) -> v0::ReplicaId {
         let mut uuid = v0::ReplicaId::default().to_string();
-        let _ = uuid.drain(27 .. uuid.len());
-        format!("{}{:01x}{:08x}", uuid, pool as u8, replica).into()
+        let _ = uuid.drain(24 .. uuid.len());
+        format!(
+            "{}{:01x}{:01x}{:08x}",
+            uuid, node as u8, pool as u8, replica
+        )
+        .into()
     }
 
     /// rest client v0
@@ -368,11 +372,13 @@ impl ClusterBuilder {
                 for replica_index in 0 .. self.replicas.count {
                     pool.replicas.push(v0::CreateReplica {
                         node: pool.node.clone().into(),
-                        uuid: Cluster::replica(pool_index, replica_index),
+                        uuid: Cluster::replica(node, pool_index, replica_index),
                         pool: pool.id(),
                         size: self.replicas.size,
                         thin: false,
                         share: self.replicas.share.clone(),
+                        managed: false,
+                        owners: Default::default(),
                     });
                 }
                 pools.push(pool);

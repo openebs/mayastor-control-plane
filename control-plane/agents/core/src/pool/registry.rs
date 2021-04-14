@@ -60,6 +60,18 @@ impl Registry {
         Ok(pools)
     }
 
+    /// Get pool wrappers per node
+    pub(crate) async fn get_node_pools_wrapper(
+        &self,
+    ) -> Result<Vec<Vec<PoolWrapper>>, SvcError> {
+        let nodes = self.get_nodes_wrapper().await;
+        let mut pools = vec![];
+        for node in nodes {
+            pools.push(node.pools().await);
+        }
+        Ok(pools)
+    }
+
     /// Get all pools
     pub(crate) async fn get_pools_inner(&self) -> Result<Vec<Pool>, SvcError> {
         let nodes = self.get_pools_wrapper().await?;

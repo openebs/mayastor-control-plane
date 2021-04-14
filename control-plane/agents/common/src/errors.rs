@@ -94,6 +94,10 @@ pub enum SvcError {
     WatchResourceNotFound { kind: ResourceKind },
     #[snafu(display("Watch Already Exists"))]
     WatchAlreadyExists {},
+    #[snafu(display("Conflicts with existing operation - please retry"))]
+    Conflict {},
+    #[snafu(display("{} Resource id {} already exists", kind.to_string(), id))]
+    AlreadyExists { kind: ResourceKind, id: String },
 }
 
 impl From<StoreError> for SvcError {
@@ -126,6 +130,23 @@ impl From<SvcError> for ReplyError {
         let desc: &String = &error.description().to_string();
         let error_str = error.full_string();
         match error {
+            SvcError::AlreadyExists {
+                kind,
+                id,
+            } => ReplyError {
+                kind: ReplyErrorKind::AlreadyExists,
+                resource: kind,
+                source: desc.to_string(),
+                extra: format!("id: {}", id),
+            },
+            SvcError::Conflict {
+                ..
+            } => ReplyError {
+                kind: ReplyErrorKind::Conflict,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
             SvcError::BusGetNode {
                 source, ..
             } => source,

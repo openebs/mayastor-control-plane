@@ -1,5 +1,5 @@
-use crate::core::{registry::Registry, wrapper::ClientOps};
-use common::errors::{NodeNotFound, SvcError};
+use crate::core::registry::Registry;
+use common::errors::SvcError;
 use mbus_api::v0::{
     CreatePool,
     CreateReplica,
@@ -15,7 +15,6 @@ use mbus_api::v0::{
     ShareReplica,
     UnshareReplica,
 };
-use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -36,7 +35,7 @@ impl Service {
         request: &GetPools,
     ) -> Result<Pools, SvcError> {
         let filter = request.filter.clone();
-        Ok(Pools(match filter {
+        let mut pools = match filter {
             Filter::None => self.registry.get_node_opt_pools(None).await?,
             Filter::Node(node_id) => {
                 self.registry.get_node_pools(&node_id).await?
@@ -57,7 +56,18 @@ impl Service {
                     filter,
                 })
             }
-        }))
+        };
+        let specs = self.registry.specs.read().await;
+        let pool_specs = specs.get_created_pools().await;
+        pool_specs.iter().for_each(|spec| {
+            // if we can't find a pool state, then report the pool with unknown
+            // state
+            if !pools.iter().any(|p| p.id == spec.id) {
+                pools.push(Pool::from(spec));
+            }
+        });
+
+        Ok(Pools(pools))
     }
 
     /// Get replicas according to the filter
@@ -67,7 +77,7 @@ impl Service {
         request: &GetReplicas,
     ) -> Result<Replicas, SvcError> {
         let filter = request.filter.clone();
-        Ok(Replicas(match filter {
+        let mut replicas = match filter {
             Filter::None => self.registry.get_node_opt_replicas(None).await?,
             Filter::Node(node_id) => {
                 self.registry.get_node_opt_replicas(Some(node_id)).await?
@@ -112,7 +122,24 @@ impl Service {
                     filter,
                 })
             }
-        }))
+        };
+        let specs = self.registry.specs.read().await;
+        let replica_specs = specs.get_created_replicas().await;
+        let pool_specs = specs.get_created_pools().await;
+        replica_specs.iter().for_each(|spec| {
+            // if we can't find a pool state, then report the pool with unknown
+            // state
+            if !replicas.iter().any(|r| r.uuid == spec.uuid) {
+                let mut replica = Replica::from(spec);
+                if let Some(pool) =
+                    pool_specs.iter().find(|p| p.id == replica.pool)
+                {
+                    replica.node = pool.node.clone();
+                }
+                replicas.push(replica);
+            }
+        });
+        Ok(Replicas(replicas))
     }
 
     /// Create pool
@@ -121,14 +148,10 @@ impl Service {
         &self,
         request: &CreatePool,
     ) -> Result<Pool, SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .create_pool(&self.registry, request)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.create_pool(request).await
     }
 
     /// Destroy pool
@@ -137,14 +160,10 @@ impl Service {
         &self,
         request: &DestroyPool,
     ) -> Result<(), SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .destroy_pool(&self.registry, request)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.destroy_pool(request).await
     }
 
     /// Create replica
@@ -153,14 +172,10 @@ impl Service {
         &self,
         request: &CreateReplica,
     ) -> Result<Replica, SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .create_replica(&self.registry, request)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.create_replica(request).await
     }
 
     /// Destroy replica
@@ -169,14 +184,10 @@ impl Service {
         &self,
         request: &DestroyReplica,
     ) -> Result<(), SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .destroy_replica(&self.registry, request, true)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.destroy_replica(&request).await
     }
 
     /// Share replica
@@ -185,14 +196,10 @@ impl Service {
         &self,
         request: &ShareReplica,
     ) -> Result<String, SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .share_replica(&self.registry, request)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.share_replica(&request).await
     }
 
     /// Unshare replica
@@ -201,13 +208,9 @@ impl Service {
         &self,
         request: &UnshareReplica,
     ) -> Result<(), SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
+        self.registry
+            .specs
+            .unshare_replica(&self.registry, request)
             .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
-        node.unshare_replica(&request).await
     }
 }

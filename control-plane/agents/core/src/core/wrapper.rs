@@ -198,7 +198,11 @@ impl NodeWrapper {
     fn add_replica(&mut self, replica: &Replica) {
         match self.pools.iter_mut().find(|(id, _)| id == &&replica.pool) {
             None => {
-                tracing::error!("Can't add replica '{} to pool '{}' because the pool does not exist", replica.uuid, replica.pool);
+                tracing::error!(
+                    "Can't add replica '{} to pool '{}' because the pool does not exist",
+                    replica.uuid,
+                    replica.pool
+                );
             }
             Some((_, pool)) => {
                 pool.add_replica(replica);
