@@ -706,6 +706,10 @@ pub enum RestJsonErrorKind {
     ResourceExhausted,
     // code=412, description="Precondition Failed",
     FailedPrecondition,
+    // code=412, description="Precondition Failed",
+    NotShared,
+    // code=412, description="Precondition Failed",
+    AlreadyShared,
     // code=503, description="Service Unavailable",
     Aborted,
     // code=416, description="Range Not satisfiable",
@@ -855,6 +859,18 @@ impl RestError {
                     &details,
                 );
                 HttpResponse::InsufficientStorage().json(error)
+            }
+            ReplyErrorKind::AlreadyShared => {
+                let error = RestJsonError::new(
+                    RestJsonErrorKind::AlreadyShared,
+                    &details,
+                );
+                HttpResponse::PreconditionFailed().json(error)
+            }
+            ReplyErrorKind::NotShared => {
+                let error =
+                    RestJsonError::new(RestJsonErrorKind::NotShared, &details);
+                HttpResponse::PreconditionFailed().json(error)
             }
         }
     }
