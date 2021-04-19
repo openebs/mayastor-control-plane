@@ -19,6 +19,7 @@ async fn create_replica() {
         size: 5 * 1024 * 1024,
         thin: true,
         share: v0::Protocol::Off,
+        ..Default::default()
     };
     let created_replica = cluster
         .rest_v0()
@@ -62,6 +63,7 @@ async fn create_replica_protocols() {
                 size: 5 * 1024 * 1024,
                 thin: true,
                 share: protocol.clone(),
+                ..Default::default()
             }),
         )
         .await
@@ -98,7 +100,7 @@ async fn create_replica_sizes() {
                     pool: cluster.pool(0, 0),
                     size,
                     thin: false,
-                    share: Default::default(),
+                    ..Default::default()
                 })
                 .await;
             if let Ok(replica) = &result {
@@ -141,6 +143,7 @@ async fn create_replica_idempotent_different_sizes() {
             size,
             thin: false,
             share: v0::Protocol::Off,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -155,6 +158,7 @@ async fn create_replica_idempotent_different_sizes() {
             size,
             thin: replica.thin,
             share: v0::Protocol::Off,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -171,6 +175,7 @@ async fn create_replica_idempotent_different_sizes() {
                 size,
                 thin: replica.thin,
                 share: v0::Protocol::Off,
+                ..Default::default()
             }),
         )
         .await
@@ -200,6 +205,7 @@ async fn create_replica_idempotent_different_protocols() {
             size,
             thin: false,
             share: v0::Protocol::Off,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -221,6 +227,7 @@ async fn create_replica_idempotent_different_protocols() {
                 size: replica.size,
                 thin: replica.thin,
                 share: protocol.clone(),
+                ..Default::default()
             }),
         )
         .await

@@ -80,6 +80,8 @@ impl CreateReplicaBody {
             size: self.size,
             thin: self.thin,
             share: self.share.clone(),
+            managed: false,
+            owners: Default::default(),
         }
     }
 }
@@ -115,6 +117,8 @@ impl CreateNexusBody {
             uuid: nexus_id,
             size: self.size,
             children: self.children.clone(),
+            managed: false,
+            owner: None,
         }
     }
 }
@@ -714,6 +718,10 @@ pub enum RestJsonErrorKind {
     Unauthenticated,
     // code=401, description="Unauthorized",
     Unauthorized,
+    // code=409, description="Conflict",
+    Conflict,
+    // code=507, description="Insufficient Storage",
+    FailedPersist,
 }
 
 impl RestJsonError {
@@ -835,6 +843,18 @@ impl RestError {
                     &details,
                 );
                 HttpResponse::Unauthorized().json(error)
+            }
+            ReplyErrorKind::Conflict => {
+                let error =
+                    RestJsonError::new(RestJsonErrorKind::Conflict, &details);
+                HttpResponse::Conflict().json(error)
+            }
+            ReplyErrorKind::FailedPersist => {
+                let error = RestJsonError::new(
+                    RestJsonErrorKind::FailedPersist,
+                    &details,
+                );
+                HttpResponse::InsufficientStorage().json(error)
             }
         }
     }

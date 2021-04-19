@@ -13,7 +13,7 @@
 //!
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
-use super::wrapper::NodeWrapper;
+use super::{specs::*, wrapper::NodeWrapper};
 use crate::core::wrapper::InternalOps;
 use mbus_api::v0::NodeId;
 use std::{collections::HashMap, sync::Arc};
@@ -26,7 +26,10 @@ pub type Registry = RegistryInner<Etcd>;
 /// Generic Registry Inner with a Store trait
 #[derive(Clone, Debug)]
 pub struct RegistryInner<S: Store> {
+    /// the actual state of the node
     pub(crate) nodes: Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>,
+    /// spec (aka desired state) for the various resources
+    pub(crate) specs: ResourceSpecsLocked,
     /// period to refresh the cache
     period: std::time::Duration,
     pub(crate) store: Arc<Mutex<S>>,
@@ -40,6 +43,7 @@ impl Registry {
             .expect("Should connect to the persistent store");
         let registry = Self {
             nodes: Default::default(),
+            specs: Default::default(),
             period,
             store: Arc::new(Mutex::new(store)),
         };

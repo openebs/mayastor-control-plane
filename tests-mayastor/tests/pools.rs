@@ -96,7 +96,7 @@ async fn create_pool_idempotent() {
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
-        .unwrap();
+        .expect_err("already exists");
 }
 
 /// FIXME: CAS-710
@@ -157,6 +157,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
             size: 10 * 1024 * 1024,
             thin: true,
             share: v0::Protocol::Nvmf,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -175,11 +176,12 @@ async fn create_pool_idempotent_different_nvmf_host() {
         .rest_v0()
         .create_replica(v0::CreateReplica {
             node: "mayastor-2".into(),
-            uuid: "0aa4a830-a971-4e96-a97c-15c39dd8f162".into(),
+            uuid: "0aa4a830-a971-4e96-a97c-15c39dd8f163".into(),
             pool: "pooloop-2".into(),
             size: 10 * 1024 * 1024,
             thin: true,
             share: v0::Protocol::Nvmf,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -202,7 +204,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
             disks: vec![replica1.uri],
         })
         .await
-        .unwrap();
+        .expect_err("already exists");
 
     cluster
         .rest_v0()

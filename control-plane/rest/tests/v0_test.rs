@@ -211,6 +211,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
                              * create it like so */
             thin: true,
             share: Protocol::Nvmf,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -226,6 +227,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             share: Protocol::Nvmf,
             uri: "nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:replica1"
                 .to_string(),
+            state: ReplicaState::Online
         }
     );
     assert_eq!(
@@ -249,7 +251,9 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             node: "node-test-name".into(),
             uuid: "058a95e5-cee6-4e81-b682-fe864ca99b9c".into(),
             size: 12582912,
-            children: vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()]})
+            children: vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
+            ..Default::default()
+        })
         .await.unwrap();
     info!("Nexus: {:#?}", nexus);
 

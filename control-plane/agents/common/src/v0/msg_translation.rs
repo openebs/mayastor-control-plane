@@ -2,7 +2,7 @@
 
 use mbus_api::{
     v0 as mbus,
-    v0::{ChildState, NexusState, Protocol},
+    v0::{ChildState, NexusState, Protocol, ReplicaState},
 };
 use rpc::mayastor as rpc;
 
@@ -98,6 +98,7 @@ impl RpcToMessageBus for rpc::Replica {
             size: self.size,
             share: self.share.into(),
             uri: self.uri.clone(),
+            state: ReplicaState::Online,
         }
     }
 }
@@ -226,7 +227,7 @@ impl MessageBusToRpc for mbus::ShareNexus {
         Self::RpcMessage {
             uuid: self.uuid.clone().into(),
             key: self.key.clone().unwrap_or_default(),
-            share: self.protocol.clone() as i32,
+            share: self.protocol as i32,
         }
     }
 }

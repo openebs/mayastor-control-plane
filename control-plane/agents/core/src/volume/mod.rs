@@ -1,5 +1,6 @@
 pub(crate) mod registry;
 mod service;
+pub mod specs;
 
 use std::{convert::TryInto, marker::PhantomData};
 
@@ -67,7 +68,7 @@ mod tests {
 
         CreatePool {
             node: mayastor2.into(),
-            id: "pooloop".into(),
+            id: "pooloop2".into(),
             disks: vec!["malloc:///disk0?size_mb=100".into()],
         }
         .request()
@@ -82,11 +83,12 @@ mod tests {
         let replica = CreateReplica {
             node: mayastor2.into(),
             uuid: "replica".into(),
-            pool: "pooloop".into(),
+            pool: "pooloop2".into(),
             size: 12582912, /* actual size will be a multiple of 4MB so just
                              * create it like so */
             thin: true,
             share: Protocol::Nvmf,
+            ..Default::default()
         }
         .request()
         .await
@@ -99,6 +101,7 @@ mod tests {
             uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
             size: 5242880,
             children: vec![replica.uri.into(), local],
+            ..Default::default()
         }
         .request()
         .await

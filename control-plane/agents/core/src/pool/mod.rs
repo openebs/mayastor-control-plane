@@ -1,5 +1,6 @@
 mod registry;
 pub mod service;
+pub mod specs;
 
 use std::{convert::TryInto, marker::PhantomData};
 
@@ -42,7 +43,13 @@ pub(crate) fn configure(builder: Service) -> Service {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbus_api::v0::{GetNodes, Protocol, Replica, ReplicaShareProtocol};
+    use mbus_api::v0::{
+        GetNodes,
+        Protocol,
+        Replica,
+        ReplicaShareProtocol,
+        ReplicaState,
+    };
     use testlib::ClusterBuilder;
 
     #[actix_rt::test]
@@ -78,6 +85,7 @@ mod tests {
                              * create it like so */
             thin: true,
             share: Protocol::Off,
+            ..Default::default()
         }
         .request()
         .await
@@ -95,7 +103,8 @@ mod tests {
                 thin: false,
                 size: 12582912,
                 share: Protocol::Off,
-                uri: "bdev:///replica1".into()
+                uri: "bdev:///replica1".into(),
+                state: ReplicaState::Online
             }
         );
 

@@ -568,10 +568,22 @@ pub struct Replica {
     pub share: Protocol,
     /// uri usable by nexus to access it
     pub uri: String,
+    /// state of the replica
+    pub state: ReplicaState,
 }
 
 bus_impl_vector_request!(Replicas, Replica);
 bus_impl_message_all!(GetReplicas, GetReplicas, Replicas, Pool);
+
+impl From<Replica> for DestroyReplica {
+    fn from(replica: Replica) -> Self {
+        Self {
+            node: replica.node,
+            pool: replica.pool,
+            uuid: replica.uuid,
+        }
+    }
+}
 
 /// Create Replica Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
@@ -589,8 +601,36 @@ pub struct CreateReplica {
     pub thin: bool,
     /// protocol to expose the replica over
     pub share: Protocol,
+    /// Managed by our control plane
+    pub managed: bool,
+    /// Owners of the resource
+    pub owners: ReplicaOwners,
 }
 bus_impl_message_all!(CreateReplica, CreateReplica, Replica, Pool);
+
+/// Replica owners which is a volume or none and a list of nexuses
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct ReplicaOwners {
+    volume: Option<v0::VolumeId>,
+    nexuses: Vec<NexusId>,
+}
+impl ReplicaOwners {
+    /// Check if this replica is owned by any nexuses or a volume
+    pub fn is_owned(&self) -> bool {
+        self.volume.is_some() || !self.nexuses.is_empty()
+    }
+    /// Check if this replica is owned by this volume
+    pub fn owned_by(&self, id: &v0::VolumeId) -> bool {
+        self.volume.as_ref() == Some(id)
+    }
+    /// Create new owners from the volume Id
+    pub fn new(volume: &VolumeId) -> Self {
+        Self {
+            volume: Some(volume.clone()),
+            nexuses: vec![],
+        }
+    }
+}
 
 /// Destroy Replica Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
@@ -619,6 +659,26 @@ pub struct ShareReplica {
     pub protocol: ReplicaShareProtocol,
 }
 bus_impl_message_all!(ShareReplica, ShareReplica, String, Pool);
+
+impl From<ShareReplica> for UnshareReplica {
+    fn from(share: ShareReplica) -> Self {
+        Self {
+            node: share.node,
+            pool: share.pool,
+            uuid: share.uuid,
+        }
+    }
+}
+impl From<UnshareReplica> for ShareReplica {
+    fn from(share: UnshareReplica) -> Self {
+        Self {
+            node: share.node,
+            pool: share.pool,
+            uuid: share.uuid,
+            protocol: ReplicaShareProtocol::Nvmf,
+        }
+    }
+}
 
 /// Unshare Replica Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
@@ -680,12 +740,21 @@ impl From<ReplicaShareProtocol> for Protocol {
         }
     }
 }
+impl From<NexusShareProtocol> for Protocol {
+    fn from(src: NexusShareProtocol) -> Self {
+        match src {
+            NexusShareProtocol::Nvmf => Self::Nvmf,
+            NexusShareProtocol::Iscsi => Self::Iscsi,
+        }
+    }
+}
 
 /// The protocol used to share the nexus.
 #[derive(
     Serialize,
     Deserialize,
     Debug,
+    Copy,
     Clone,
     EnumString,
     ToString,
@@ -922,6 +991,10 @@ pub struct CreateNexus {
     ///
     /// uris to the targets we connect to
     pub children: Vec<ChildUri>,
+    /// Managed by our control plane
+    pub managed: bool,
+    /// Volume which owns this nexus, if any
+    pub owner: Option<v0::VolumeId>,
 }
 bus_impl_message_all!(CreateNexus, CreateNexus, Nexus, Nexus);
 
@@ -951,6 +1024,15 @@ pub struct ShareNexus {
 }
 bus_impl_message_all!(ShareNexus, ShareNexus, String, Nexus);
 
+impl From<ShareNexus> for UnshareNexus {
+    fn from(share: ShareNexus) -> Self {
+        Self {
+            node: share.node,
+            uuid: share.uuid,
+        }
+    }
+}
+
 /// Unshare Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -974,6 +1056,16 @@ pub struct RemoveNexusChild {
     pub uri: ChildUri,
 }
 bus_impl_message_all!(RemoveNexusChild, RemoveNexusChild, (), Nexus);
+
+impl From<AddNexusChild> for RemoveNexusChild {
+    fn from(add: AddNexusChild) -> Self {
+        Self {
+            node: add.node,
+            nexus: add.nexus,
+            uri: add.uri,
+        }
+    }
+}
 
 /// Add child to Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -1198,6 +1290,9 @@ pub struct GetWatchers {
 }
 
 bus_impl_message_all!(GetWatchers, GetWatches, Watches, Watcher);
+
+/// Uniquely Identify a Resource
+pub type Resource = WatchResourceId;
 
 /// The different resource types that can be watched
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

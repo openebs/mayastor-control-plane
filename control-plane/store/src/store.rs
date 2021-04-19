@@ -154,7 +154,11 @@ pub enum StorableObjectType {
     Nexus,
     Node,
     Pool,
+    PoolSpec,
     Replica,
+    ReplicaSpec,
+    VolumeSpec,
+    NexusSpec,
 }
 
 /// create a key based on the object's key trait
