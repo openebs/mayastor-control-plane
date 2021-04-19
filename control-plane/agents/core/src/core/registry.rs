@@ -52,7 +52,7 @@ impl Registry {
     }
 
     /// Start thread which updates the registry
-    pub fn start(&self) {
+    fn start(&self) {
         let registry = self.clone();
         tokio::spawn(async move {
             registry.poller().await;
