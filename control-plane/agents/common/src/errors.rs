@@ -65,6 +65,14 @@ pub enum SvcError {
     VolumeNotFound { vol_id: String },
     #[snafu(display("Replica '{}' not found", replica_id))]
     ReplicaNotFound { replica_id: ReplicaId },
+    #[snafu(display("{} '{}' is already shared over {}", kind.to_string(), id, share))]
+    AlreadyShared {
+        kind: ResourceKind,
+        id: String,
+        share: String,
+    },
+    #[snafu(display("{} '{}' is not shared", kind.to_string(), id))]
+    NotShared { kind: ResourceKind, id: String },
     #[snafu(display("Invalid filter value: {:?}", filter))]
     InvalidFilter { filter: Filter },
     #[snafu(display("Operation failed due to insufficient resources"))]
@@ -136,6 +144,22 @@ impl From<SvcError> for ReplyError {
         let desc: &String = &error.description().to_string();
         let error_str = error.full_string();
         match error {
+            SvcError::NotShared {
+                kind, ..
+            } => ReplyError {
+                kind: ReplyErrorKind::NotShared,
+                resource: kind,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::AlreadyShared {
+                kind, ..
+            } => ReplyError {
+                kind: ReplyErrorKind::AlreadyShared,
+                resource: kind,
+                source: desc.to_string(),
+                extra: error_str,
+            },
             SvcError::ChildNotFound {
                 ..
             } => ReplyError {

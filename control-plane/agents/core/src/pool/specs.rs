@@ -360,13 +360,20 @@ impl ResourceSpecsLocked {
 
         if let Some(replica_spec) = self.get_replica(&request.uuid).await {
             let mut spec = replica_spec.lock().await;
-            if spec.updating || spec.share == Protocol::Nvmf {
+            if spec.updating {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::ReplicaNotFound {
                     replica_id: request.uuid.clone(),
                 });
+            } else if spec.share != Protocol::Off {
+                return Err(SvcError::AlreadyShared {
+                    kind: ResourceKind::Replica,
+                    id: request.uuid.to_string(),
+                    share: spec.share.to_string(),
+                });
             }
+
             spec.updating = true;
             let mut spec_clone = spec.clone();
             drop(spec);
@@ -413,13 +420,19 @@ impl ResourceSpecsLocked {
 
         if let Some(replica_spec) = self.get_replica(&request.uuid).await {
             let mut spec = replica_spec.lock().await;
-            if spec.updating || spec.share == Protocol::Off {
+            if spec.updating {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::ReplicaNotFound {
                     replica_id: request.uuid.clone(),
                 });
+            } else if spec.share == Protocol::Off {
+                return Err(SvcError::NotShared {
+                    kind: ResourceKind::Replica,
+                    id: request.uuid.to_string(),
+                });
             }
+
             spec.updating = true;
             let mut spec_clone = spec.clone();
             drop(spec);

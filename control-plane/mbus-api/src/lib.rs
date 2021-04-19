@@ -369,6 +369,8 @@ pub enum ReplyErrorKind {
     Unauthorized,
     Conflict,
     FailedPersist,
+    NotShared,
+    AlreadyShared,
 }
 
 impl From<Error> for ReplyError {

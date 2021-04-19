@@ -414,11 +414,17 @@ impl ResourceSpecsLocked {
 
         if let Some(nexus_spec) = self.get_nexus(&request.uuid).await {
             let mut spec = nexus_spec.lock().await;
-            if spec.updating || spec.share != Protocol::Off {
+            if spec.updating {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::NexusNotFound {
                     nexus_id: request.uuid.to_string(),
+                });
+            } else if spec.share != Protocol::Off {
+                return Err(SvcError::AlreadyShared {
+                    kind: ResourceKind::Nexus,
+                    id: request.uuid.to_string(),
+                    share: spec.share.to_string(),
                 });
             }
 
@@ -469,13 +475,19 @@ impl ResourceSpecsLocked {
         let specs = self.read().await;
         if let Some(nexus_spec) = specs.get_nexus(&request.uuid) {
             let mut spec = nexus_spec.lock().await;
-            if spec.updating || spec.share == Protocol::Off {
+            if spec.updating {
                 return Err(SvcError::Conflict {});
             } else if !spec.state.created() {
                 return Err(SvcError::NexusNotFound {
                     nexus_id: request.uuid.to_string(),
                 });
+            } else if spec.share == Protocol::Off {
+                return Err(SvcError::NotShared {
+                    kind: ResourceKind::Nexus,
+                    id: request.uuid.to_string(),
+                });
             }
+
             spec.updating = true;
             let mut spec_clone = spec.clone();
             drop(spec);
