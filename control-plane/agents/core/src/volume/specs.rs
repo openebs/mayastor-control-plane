@@ -1,10 +1,8 @@
-use crate::{
-    core::{
-        specs::{ResourceSpecs, ResourceSpecsLocked},
-        wrapper::{ClientOps, PoolWrapper},
-    },
-    registry::Registry,
-};
+use std::{ops::Deref, sync::Arc};
+
+use snafu::OptionExt;
+use tokio::sync::Mutex;
+
 use common::errors::{NodeNotFound, NotEnough, SvcError};
 use mbus_api::{
     v0::{
@@ -35,19 +33,22 @@ use mbus_api::{
     },
     ResourceKind,
 };
-use snafu::OptionExt;
-use std::{ops::Deref, sync::Arc};
 use store::{
     store::{ObjectKey, Store, StoreError},
     types::v0::{
-        NexusSpec,
-        NexusSpecState,
-        ReplicaSpec,
-        VolumeSpec,
-        VolumeSpecState,
+        nexus::{NexusSpec, NexusSpecKey, NexusSpecState},
+        replica::ReplicaSpec,
+        volume::{VolumeSpec, VolumeSpecKey, VolumeSpecState},
     },
 };
-use tokio::sync::Mutex;
+
+use crate::{
+    core::{
+        specs::{ResourceSpecs, ResourceSpecsLocked},
+        wrapper::{ClientOps, PoolWrapper},
+    },
+    registry::Registry,
+};
 
 impl ResourceSpecs {
     fn get_nexus(&self, id: &NexusId) -> Option<Arc<Mutex<NexusSpec>>> {
@@ -376,8 +377,9 @@ impl ResourceSpecsLocked {
                         // if it fails, then fail the request and let the op
                         // retry
                         let mut store = registry.store.lock().await;
-                        if let Err(error) =
-                            store.delete_kv(&request.uuid.key()).await
+                        if let Err(error) = store
+                            .delete_kv(&NexusSpecKey::from(&request.uuid).key())
+                            .await
                         {
                             if !matches!(error, StoreError::MissingEntry { .. })
                             {
@@ -885,8 +887,11 @@ impl ResourceSpecsLocked {
                     volume.updating = false;
                     {
                         let mut store = registry.store.lock().await;
-                        if let Err(error) =
-                            store.delete_kv(&request.uuid.key()).await
+                        if let Err(error) = store
+                            .delete_kv(
+                                &VolumeSpecKey::from(&request.uuid).key(),
+                            )
+                            .await
                         {
                             if !matches!(error, StoreError::MissingEntry { .. })
                             {
