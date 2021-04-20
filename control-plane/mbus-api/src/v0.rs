@@ -1,6 +1,12 @@
 #![allow(clippy::field_reassign_with_default)]
 use super::*;
-use paperclip::actix::Apiv2Schema;
+use paperclip::{
+    actix::Apiv2Schema,
+    v2::{
+        models::{DataType, DataTypeFormat},
+        schema::TypedData,
+    },
+};
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
@@ -308,16 +314,7 @@ impl Default for Filter {
 macro_rules! bus_impl_string_id_inner {
     ($Name:ident, $Doc:literal) => {
         #[doc = $Doc]
-        #[derive(
-            Serialize,
-            Deserialize,
-            Debug,
-            Clone,
-            Eq,
-            PartialEq,
-            Hash,
-            Apiv2Schema,
-        )]
+        #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
         pub struct $Name(String);
 
         impl std::fmt::Display for $Name {
@@ -377,6 +374,44 @@ macro_rules! bus_impl_string_id {
                 $Name(uuid::Uuid::new_v4().to_string())
             }
         }
+        impl TypedData for $Name {
+            fn data_type() -> DataType {
+                DataType::String
+            }
+            fn format() -> Option<DataTypeFormat> {
+                None
+            }
+        }
+    };
+}
+
+macro_rules! bus_impl_string_uuid {
+    ($Name:ident, $Doc:literal) => {
+        bus_impl_string_id_inner!($Name, $Doc);
+        impl Default for $Name {
+            /// Generates new blank identifier
+            fn default() -> Self {
+                $Name(uuid::Uuid::default().to_string())
+            }
+        }
+        impl $Name {
+            /// Build Self from a string trait id
+            pub fn from<T: Into<String>>(id: T) -> Self {
+                $Name(id.into())
+            }
+            /// Generates new random identifier
+            pub fn new() -> Self {
+                $Name(uuid::Uuid::new_v4().to_string())
+            }
+        }
+        impl TypedData for $Name {
+            fn data_type() -> DataType {
+                DataType::String
+            }
+            fn format() -> Option<DataTypeFormat> {
+                Some(DataTypeFormat::Uuid)
+            }
+        }
     };
 }
 
@@ -399,15 +434,23 @@ macro_rules! bus_impl_string_id_percent_decoding {
                 $Name(decoded_src)
             }
         }
+        impl TypedData for $Name {
+            fn data_type() -> DataType {
+                DataType::String
+            }
+            fn format() -> Option<DataTypeFormat> {
+                None
+            }
+        }
     };
 }
 
 bus_impl_string_id!(NodeId, "ID of a mayastor node");
 bus_impl_string_id!(PoolId, "ID of a mayastor pool");
-bus_impl_string_id!(ReplicaId, "UUID of a mayastor pool replica");
-bus_impl_string_id!(NexusId, "UUID of a mayastor nexus");
+bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
+bus_impl_string_uuid!(NexusId, "UUID of a mayastor nexus");
 bus_impl_string_id_percent_decoding!(ChildUri, "URI of a mayastor nexus child");
-bus_impl_string_id!(VolumeId, "UUID of a mayastor volume");
+bus_impl_string_uuid!(VolumeId, "UUID of a mayastor volume");
 bus_impl_string_id!(JsonGrpcMethod, "JSON gRPC method");
 bus_impl_string_id!(
     JsonGrpcParams,
