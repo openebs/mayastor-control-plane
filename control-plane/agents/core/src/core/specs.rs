@@ -1,8 +1,15 @@
-use mbus_api::v0::{NexusId, NodeId, PoolId, ReplicaId, VolumeId};
 use std::{collections::HashMap, ops::Deref, sync::Arc};
-use store::types::v0 as sv0;
-use sv0::{NexusSpec, NodeSpec, PoolSpec, ReplicaSpec, VolumeSpec};
+
 use tokio::sync::{Mutex, RwLock};
+
+use mbus_api::v0::{NexusId, NodeId, PoolId, ReplicaId, VolumeId};
+use store::types::v0::{
+    nexus::NexusSpec,
+    node::NodeSpec,
+    pool::PoolSpec,
+    replica::ReplicaSpec,
+    volume::VolumeSpec,
+};
 
 /// Locked Resource Specs
 #[derive(Default, Clone, Debug)]

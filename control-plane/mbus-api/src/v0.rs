@@ -1348,6 +1348,10 @@ pub enum WatchResourceId {
     Pool(PoolId),
     /// replicas
     Replica(ReplicaId),
+    /// replica state
+    ReplicaState(ReplicaId),
+    /// replica spec
+    ReplicaSpec(ReplicaId),
     /// nexuses
     Nexus(NexusId),
     /// volumes
@@ -1365,6 +1369,12 @@ impl ToString for WatchResourceId {
             WatchResourceId::Pool(id) => format!("pool/{}", id.to_string()),
             WatchResourceId::Replica(id) => {
                 format!("replica/{}", id.to_string())
+            }
+            WatchResourceId::ReplicaState(id) => {
+                format!("replica_state/{}", id.to_string())
+            }
+            WatchResourceId::ReplicaSpec(id) => {
+                format!("replica_spec/{}", id.to_string())
             }
             WatchResourceId::Nexus(id) => format!("nexus/{}", id.to_string()),
             WatchResourceId::Volume(id) => format!("volume/{}", id.to_string()),

@@ -188,6 +188,8 @@ impl WatchCfg {
             WatchResourceId::Node(_) => ResourceKind::Node,
             WatchResourceId::Pool(_) => ResourceKind::Pool,
             WatchResourceId::Replica(_) => ResourceKind::Replica,
+            WatchResourceId::ReplicaState(_) => ResourceKind::ReplicaState,
+            WatchResourceId::ReplicaSpec(_) => ResourceKind::ReplicaSpec,
             WatchResourceId::Nexus(_) => ResourceKind::Nexus,
             WatchResourceId::Volume(_) => ResourceKind::Volume,
         }

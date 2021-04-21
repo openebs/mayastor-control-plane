@@ -152,13 +152,19 @@ pub enum StorableObjectType {
     WatchConfig,
     Volume,
     Nexus,
+    NexusSpec,
+    NexusState,
     Node,
+    NodeSpec,
     Pool,
     PoolSpec,
     Replica,
+    ReplicaState,
     ReplicaSpec,
     VolumeSpec,
-    NexusSpec,
+    VolumeState,
+    ChildSpec,
+    ChildState,
 }
 
 /// create a key based on the object's key trait

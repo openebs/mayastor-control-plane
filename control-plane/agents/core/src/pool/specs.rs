@@ -1,10 +1,8 @@
-use crate::{
-    core::{
-        specs::{ResourceSpecs, ResourceSpecsLocked},
-        wrapper::ClientOps,
-    },
-    registry::Registry,
-};
+use std::{ops::Deref, sync::Arc};
+
+use snafu::OptionExt;
+use tokio::sync::Mutex;
+
 use common::errors::{NodeNotFound, SvcError};
 use mbus_api::{
     v0::{
@@ -24,17 +22,21 @@ use mbus_api::{
     },
     ResourceKind,
 };
-use snafu::OptionExt;
-use std::{ops::Deref, sync::Arc};
 use store::{
     store::{ObjectKey, Store, StoreError},
-    types::{
-        v0 as sv0,
-        v0::{PoolSpec, PoolSpecState, ReplicaSpecState},
+    types::v0::{
+        pool::{PoolSpec, PoolSpecKey, PoolSpecState},
+        replica::{ReplicaSpec, ReplicaSpecKey, ReplicaSpecState},
     },
 };
-use sv0::ReplicaSpec;
-use tokio::sync::Mutex;
+
+use crate::{
+    core::{
+        specs::{ResourceSpecs, ResourceSpecsLocked},
+        wrapper::ClientOps,
+    },
+    registry::Registry,
+};
 
 impl ResourceSpecs {
     fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
@@ -131,7 +133,8 @@ impl ResourceSpecsLocked {
             drop(pool_spec);
             self.del_pool(&request.id).await;
             let mut store = registry.store.lock().await;
-            let _ = store.delete_kv(&request.id.key()).await;
+            let _ =
+                store.delete_kv(&PoolSpecKey::from(&request.id).key()).await;
         }
 
         result
@@ -187,7 +190,9 @@ impl ResourceSpecsLocked {
                 // remove the spec from the persistent store
                 // if it fails, then fail the request and let the op retry
                 let mut store = registry.store.lock().await;
-                if let Err(error) = store.delete_kv(&request.id.key()).await {
+                if let Err(error) =
+                    store.delete_kv(&PoolSpecKey::from(&request.id).key()).await
+                {
                     if !matches!(error, StoreError::MissingEntry { .. }) {
                         return Err(error.into());
                     }
@@ -269,7 +274,9 @@ impl ResourceSpecsLocked {
             drop(replica_spec);
             self.del_replica(&request.uuid).await;
             let mut store = registry.store.lock().await;
-            let _ = store.delete_kv(&request.uuid.key()).await;
+            let _ = store
+                .delete_kv(&ReplicaSpecKey::from(&request.uuid).key())
+                .await;
         }
 
         result
@@ -323,8 +330,11 @@ impl ResourceSpecsLocked {
                         // if it fails, then fail the request and let the op
                         // retry
                         let mut store = registry.store.lock().await;
-                        if let Err(error) =
-                            store.delete_kv(&request.uuid.key()).await
+                        if let Err(error) = store
+                            .delete_kv(
+                                &ReplicaSpecKey::from(&request.uuid).key(),
+                            )
+                            .await
                         {
                             if !matches!(error, StoreError::MissingEntry { .. })
                             {
