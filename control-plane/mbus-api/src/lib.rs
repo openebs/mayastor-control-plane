@@ -20,6 +20,7 @@ pub use mbus_nats::{
     message_bus_init,
     message_bus_init_options,
     message_bus_init_tokio,
+    NatsMessageBus,
 };
 pub use receive::*;
 pub use send::*;
@@ -264,6 +265,13 @@ pub trait Message {
         &self,
         channel: C,
         options: TimeoutOptions,
+    ) -> BusResult<Self::Reply>;
+    /// publish a message with a request for a `Self::Reply` reply
+    /// and non default timeout options on the given channel and bus
+    async fn request_on_bus<C: Into<Channel> + Send>(
+        &self,
+        channel: C,
+        bus: DynBus,
     ) -> BusResult<Self::Reply>;
 }
 

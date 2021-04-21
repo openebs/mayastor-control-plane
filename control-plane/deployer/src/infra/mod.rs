@@ -3,9 +3,10 @@ mod empty;
 mod etcd;
 mod jaeger;
 mod mayastor;
-mod nats;
+pub mod nats;
 mod rest;
 
+use self::nats::bus;
 use super::StartOptions;
 use async_trait::async_trait;
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
@@ -100,7 +101,7 @@ macro_rules! impl_ctrlp_agents {
                     let etcd = format!("etcd.{}:2379", options.cluster_name);
                     binary = binary.with_args(vec!["--store", &etcd]);
                     if let Some(deadline) = &options.node_deadline {
-                        binary = binary.with_args(vec!["-d", deadline]);
+                        binary = binary.with_args(vec!["-d", &deadline.to_string()]);
                     }
                 }
                 Ok(cfg.add_container_bin(&name, binary))
@@ -111,7 +112,7 @@ macro_rules! impl_ctrlp_agents {
                 Ok(())
             }
             async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
-                Liveness {}.request_on(ChannelVs::$name).await?;
+                Liveness {}.request_on_bus(ChannelVs::$name, bus()).await?;
                 Ok(())
             }
         })+

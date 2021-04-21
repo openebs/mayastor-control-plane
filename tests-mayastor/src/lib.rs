@@ -10,10 +10,11 @@ use opentelemetry::{
 
 use opentelemetry_jaeger::Uninstall;
 pub use rest_client::{
-    versions::v0::{self, RestClient},
+    versions::v0::{self, Message, RestClient},
     ActixRestClient,
     ClientError,
 };
+use std::time::Duration;
 
 #[actix_rt::test]
 #[ignore]
@@ -45,6 +46,11 @@ pub struct Cluster {
 }
 
 impl Cluster {
+    /// compose utility
+    pub fn composer(&self) -> &ComposeTest {
+        &self.composer
+    }
+
     /// node id for `index`
     pub fn node(&self, index: u32) -> v0::NodeId {
         Mayastor::name(index, &self.builder.opts).into()
@@ -81,6 +87,7 @@ impl Cluster {
     async fn new(
         trace_rest: bool,
         timeout_rest: std::time::Duration,
+        bus_timeout: TimeoutOptions,
         bearer_token: Option<String>,
         components: Components,
         composer: ComposeTest,
@@ -97,6 +104,10 @@ impl Cluster {
         components
             .start_wait(&composer, std::time::Duration::from_secs(10))
             .await?;
+
+        // the deployer uses a "fake" message bus so now it's time to
+        // connect to the "real" message bus
+        composer.connect_to_bus_timeout("nats", bus_timeout).await;
 
         let cluster = Cluster {
             composer,
@@ -176,7 +187,8 @@ pub struct ClusterBuilder {
     replicas: Replica,
     trace: bool,
     bearer_token: Option<String>,
-    timeout: std::time::Duration,
+    rest_timeout: std::time::Duration,
+    bus_timeout: TimeoutOptions,
 }
 
 #[derive(Default)]
@@ -184,6 +196,14 @@ struct Replica {
     count: u32,
     size: u64,
     share: v0::Protocol,
+}
+
+/// default timeout options for every bus request
+fn bus_timeout_opts() -> TimeoutOptions {
+    TimeoutOptions::default()
+        .with_timeout(Duration::from_millis(500))
+        .with_timeout_backoff(Duration::from_millis(500))
+        .with_max_retries(2)
 }
 
 impl ClusterBuilder {
@@ -195,7 +215,8 @@ impl ClusterBuilder {
             replicas: Default::default(),
             trace: true,
             bearer_token: None,
-            timeout: std::time::Duration::from_secs(3),
+            rest_timeout: std::time::Duration::from_secs(3),
+            bus_timeout: bus_timeout_opts(),
         }
     }
     /// Update the start options
@@ -213,7 +234,7 @@ impl ClusterBuilder {
     }
     /// Rest request timeout
     pub fn with_rest_timeout(mut self, timeout: std::time::Duration) -> Self {
-        self.timeout = timeout;
+        self.rest_timeout = timeout;
         self
     }
     /// Add `count` malloc pools (100MiB size) to each node
@@ -256,6 +277,11 @@ impl ClusterBuilder {
     /// eg: 2s
     pub fn with_node_deadline(mut self, deadline: &str) -> Self {
         self.opts = self.opts.with_node_deadline(deadline);
+        self
+    }
+    /// Specify the message bus timeout options
+    pub fn with_bus_timeouts(mut self, timeout: TimeoutOptions) -> Self {
+        self.bus_timeout = timeout;
         self
     }
     /// Specify whether rest is enabled or not
@@ -308,9 +334,11 @@ impl ClusterBuilder {
             .unwrap();
 
         let composer = compose_builder.build().await?;
+
         let cluster = Cluster::new(
             self.trace,
-            self.timeout,
+            self.rest_timeout,
+            self.bus_timeout.clone(),
             self.bearer_token.clone(),
             components,
             composer,
@@ -337,21 +365,17 @@ impl ClusterBuilder {
         }
 
         for pool in &self.pools() {
-            cluster
-                .rest_v0()
-                .create_pool(v0::CreatePool {
-                    node: pool.node.clone().into(),
-                    id: pool.id(),
-                    disks: vec![pool.disk()],
-                })
-                .await
-                .unwrap();
+            v0::CreatePool {
+                node: pool.node.clone().into(),
+                id: pool.id(),
+                disks: vec![pool.disk()],
+            }
+            .request()
+            .await
+            .unwrap();
+
             for replica in &pool.replicas {
-                cluster
-                    .rest_v0()
-                    .create_replica(replica.clone())
-                    .await
-                    .unwrap();
+                replica.request().await.unwrap();
             }
         }
 

@@ -1117,8 +1117,10 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "composer",
+ "humantime 2.1.0",
  "mbus_api",
  "nats",
+ "once_cell",
  "paste",
  "rpc",
  "serde_json",

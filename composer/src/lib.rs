@@ -40,7 +40,7 @@ use bollard::{
     models::ContainerInspectResponse,
     network::DisconnectNetworkOptions,
 };
-use mbus_api::TimeoutOptions;
+pub use mbus_api::TimeoutOptions;
 use rpc::mayastor::{
     bdev_rpc_client::BdevRpcClient,
     mayastor_client::MayastorClient,
@@ -1298,17 +1298,23 @@ impl ComposeTest {
 
     /// connect to message bus helper for the cargo test code
     pub async fn connect_to_bus(&self, name: &str) {
+        let timeout = TimeoutOptions::new()
+            .with_timeout(Duration::from_millis(500))
+            .with_timeout_backoff(Duration::from_millis(500))
+            .with_max_retries(10);
+        self.connect_to_bus_timeout(name, timeout).await;
+    }
+
+    /// connect to message bus helper for the cargo test code with bus timeouts
+    pub async fn connect_to_bus_timeout(
+        &self,
+        name: &str,
+        bus_timeout: TimeoutOptions,
+    ) {
         let (_, ip) = self.containers.get(name).unwrap();
         let url = format!("{}", ip);
         tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            mbus_api::message_bus_init_options(
-                url,
-                TimeoutOptions::new()
-                    .with_timeout(Duration::from_millis(500))
-                    .with_timeout_backoff(Duration::from_millis(500))
-                    .with_max_retries(10),
-            )
-            .await
+            mbus_api::message_bus_init_options(url, bus_timeout).await
         })
         .await
         .unwrap();
