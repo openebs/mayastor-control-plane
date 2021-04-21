@@ -103,6 +103,18 @@ macro_rules! impl_ctrlp_agents {
                     if let Some(deadline) = &options.node_deadline {
                         binary = binary.with_args(vec!["-d", &deadline.to_string()]);
                     }
+                    if let Some(timeout) = &options.node_conn_timeout {
+                        binary = binary.with_args(vec!["--connect", &timeout.to_string()]);
+                    }
+                    if let Some(timeout) = &options.node_req_timeout {
+                        binary = binary.with_args(vec!["-r", &timeout.to_string()]);
+                    }
+                    if let Some(timeout) = &options.store_timeout {
+                        binary = binary.with_args(vec!["--store-timeout", &timeout.to_string()]);
+                    }
+                    if let Some(period) = &options.reconcile_period {
+                        binary = binary.with_args(vec!["--reconcile-period", &period.to_string()]);
+                    }
                 }
                 Ok(cfg.add_container_bin(&name, binary))
             }

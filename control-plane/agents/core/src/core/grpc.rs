@@ -1,3 +1,4 @@
+use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
 use mbus_api::v0::NodeId;
 use rpc::mayastor::mayastor_client::MayastorClient;
@@ -18,6 +19,8 @@ pub(crate) struct GrpcContext {
     node: NodeId,
     /// gRPC URI endpoint
     endpoint: tonic::transport::Endpoint,
+    /// gRPC connect and request timeouts
+    comms_timeouts: NodeCommsTimeout,
 }
 
 impl GrpcContext {
@@ -25,6 +28,7 @@ impl GrpcContext {
         lock: Arc<tokio::sync::Mutex<()>>,
         node: &NodeId,
         endpoint: &str,
+        comms_timeouts: &NodeCommsTimeout,
     ) -> Result<Self, SvcError> {
         let uri = format!("http://{}", endpoint);
         let uri = http::uri::Uri::from_str(&uri).context(GrpcConnectUri {
@@ -32,12 +36,13 @@ impl GrpcContext {
             uri: uri.clone(),
         })?;
         let endpoint = tonic::transport::Endpoint::from(uri)
-            .timeout(std::time::Duration::from_secs(5));
+            .timeout(comms_timeouts.request());
 
         Ok(Self {
             node: node.clone(),
             lock,
             endpoint,
+            comms_timeouts: comms_timeouts.clone(),
         })
     }
     pub(crate) async fn lock(&self) -> tokio::sync::OwnedMutexGuard<()> {
@@ -64,7 +69,7 @@ pub(crate) type MayaClient = MayastorClient<Channel>;
 impl GrpcClient {
     pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
         let client = match tokio::time::timeout(
-            std::time::Duration::from_secs(1),
+            context.comms_timeouts.connect(),
             MayaClient::connect(context.endpoint.clone()),
         )
         .await
@@ -72,7 +77,7 @@ impl GrpcClient {
             Err(_) => Err(SvcError::GrpcConnectTimeout {
                 node_id: context.node.to_string(),
                 endpoint: format!("{:?}", context.endpoint),
-                timeout: std::time::Duration::from_secs(1),
+                timeout: context.comms_timeouts.connect(),
             }),
             Ok(client) => Ok(client.context(GrpcConnect)?),
         }?;

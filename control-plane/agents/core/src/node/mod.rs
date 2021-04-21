@@ -20,8 +20,12 @@ use structopt::StructOpt;
 pub(crate) fn configure(builder: Service) -> Service {
     let registry = builder.get_shared_state::<registry::Registry>().clone();
     let deadline = CliArgs::from_args().deadline.into();
+    let request = CliArgs::from_args().request.into();
+    let connect = CliArgs::from_args().request.into();
     builder
-        .with_shared_state(service::Service::new(registry, deadline))
+        .with_shared_state(service::Service::new(
+            registry, deadline, connect, request,
+        ))
         .with_channel(ChannelVs::Registry)
         .with_subscription(handler_publish!(Register))
         .with_subscription(handler_publish!(Deregister))

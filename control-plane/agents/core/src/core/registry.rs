@@ -33,11 +33,20 @@ pub struct RegistryInner<S: Store> {
     /// period to refresh the cache
     period: std::time::Duration,
     pub(crate) store: Arc<Mutex<S>>,
+    /// store gRPC operation timeout
+    store_timeout: std::time::Duration,
+    /// reconciliation period when no work is being done
+    pub(crate) reconcile_period: std::time::Duration,
 }
 
 impl Registry {
     /// Create a new registry with the `period` to reload the cache
-    pub async fn new(period: std::time::Duration, store_url: String) -> Self {
+    pub async fn new(
+        period: std::time::Duration,
+        store_url: String,
+        store_timeout: std::time::Duration,
+        reconcile_period: std::time::Duration,
+    ) -> Self {
         let store = Etcd::new(&store_url)
             .await
             .expect("Should connect to the persistent store");
@@ -46,6 +55,8 @@ impl Registry {
             specs: Default::default(),
             period,
             store: Arc::new(Mutex::new(store)),
+            store_timeout,
+            reconcile_period,
         };
         registry.start();
         registry

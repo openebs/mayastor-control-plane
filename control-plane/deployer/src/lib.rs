@@ -3,7 +3,7 @@ pub mod infra;
 use infra::*;
 
 use composer::Builder;
-use std::convert::TryInto;
+use std::{convert::TryInto, str::FromStr, time::Duration};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -113,7 +113,23 @@ pub struct StartOptions {
 
     /// Override the node's deadline for the Core Agent
     #[structopt(long)]
-    pub node_deadline: Option<String>,
+    pub node_deadline: Option<humantime::Duration>,
+
+    /// Override the node's request timeout
+    #[structopt(long)]
+    pub node_req_timeout: Option<humantime::Duration>,
+
+    /// Override the node's connection timeout
+    #[structopt(long)]
+    pub node_conn_timeout: Option<humantime::Duration>,
+
+    /// Override the core agent's store operation timeout
+    #[structopt(long)]
+    pub store_timeout: Option<humantime::Duration>,
+
+    /// Override the core agent's reconcile period
+    #[structopt(long)]
+    pub reconcile_period: Option<humantime::Duration>,
 }
 
 impl StartOptions {
@@ -123,7 +139,25 @@ impl StartOptions {
         self
     }
     pub fn with_node_deadline(mut self, deadline: &str) -> Self {
-        self.node_deadline = Some(deadline.into());
+        self.node_deadline =
+            Some(humantime::Duration::from_str(deadline).unwrap());
+        self
+    }
+    pub fn with_store_timeout(mut self, timeout: Duration) -> Self {
+        self.store_timeout = Some(timeout.into());
+        self
+    }
+    pub fn with_reconcile_period(mut self, period: Duration) -> Self {
+        self.reconcile_period = Some(period.into());
+        self
+    }
+    pub fn with_node_timeouts(
+        mut self,
+        connect: Duration,
+        request: Duration,
+    ) -> Self {
+        self.node_conn_timeout = Some(connect.into());
+        self.node_req_timeout = Some(request.into());
         self
     }
     pub fn with_rest(mut self, enabled: bool) -> Self {

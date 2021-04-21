@@ -279,6 +279,25 @@ impl ClusterBuilder {
         self.opts = self.opts.with_node_deadline(deadline);
         self
     }
+    /// With reconcile period
+    pub fn with_reconcile_period(mut self, period: Duration) -> Self {
+        self.opts = self.opts.with_reconcile_period(period);
+        self
+    }
+    /// With store operation timeout
+    pub fn with_store_timeout(mut self, timeout: Duration) -> Self {
+        self.opts = self.opts.with_store_timeout(timeout);
+        self
+    }
+    /// Specify the node connect and request timeouts
+    pub fn with_node_timeouts(
+        mut self,
+        connect: Duration,
+        request: Duration,
+    ) -> Self {
+        self.opts = self.opts.with_node_timeouts(connect, request);
+        self
+    }
     /// Specify the message bus timeout options
     pub fn with_bus_timeouts(mut self, timeout: TimeoutOptions) -> Self {
         self.bus_timeout = timeout;

@@ -39,6 +39,8 @@ pub(crate) struct NodeWrapper {
     watchdog: Watchdog,
     /// gRPC CRUD lock
     lock: Arc<tokio::sync::Mutex<()>>,
+    /// node communication timeouts
+    comms_timeouts: NodeCommsTimeout,
     /// pools part of the node
     pools: HashMap<PoolId, PoolWrapper>,
     /// nexuses part of the node
@@ -47,7 +49,11 @@ pub(crate) struct NodeWrapper {
 
 impl NodeWrapper {
     /// Create a new wrapper for a `Node` with a `deadline` for its watchdog
-    pub(crate) fn new(node: &Node, deadline: std::time::Duration) -> Self {
+    pub(crate) fn new(
+        node: &Node,
+        deadline: std::time::Duration,
+        comms_timeouts: NodeCommsTimeout,
+    ) -> Self {
         tracing::debug!("Creating new node {:?}", node);
         Self {
             node: node.clone(),
@@ -55,22 +61,23 @@ impl NodeWrapper {
             pools: Default::default(),
             nexuses: Default::default(),
             lock: Default::default(),
+            comms_timeouts,
         }
     }
 
     /// Get `GrpcClient` for this node
     async fn grpc_client(&self) -> Result<GrpcClient, SvcError> {
-        GrpcClient::new(&GrpcContext::new(
-            self.lock.clone(),
-            &self.id,
-            &self.node.grpc_endpoint,
-        )?)
-        .await
+        GrpcClient::new(&self.grpc_context()?).await
     }
 
     /// Get `GrpcContext` for this node
     pub(crate) fn grpc_context(&self) -> Result<GrpcContext, SvcError> {
-        GrpcContext::new(self.lock.clone(), &self.id, &self.node.grpc_endpoint)
+        GrpcContext::new(
+            self.lock.clone(),
+            &self.id,
+            &self.node.grpc_endpoint,
+            &self.comms_timeouts,
+        )
     }
 
     /// Whether the watchdog deadline has expired
@@ -151,7 +158,7 @@ impl NodeWrapper {
     }
 
     /// Reload the node by fetching information from mayastor
-    pub(super) async fn reload(&mut self) -> Result<(), SvcError> {
+    pub(crate) async fn reload(&mut self) -> Result<(), SvcError> {
         if self.is_online() {
             tracing::trace!("Reloading node '{}'", self.id);
 
@@ -338,7 +345,10 @@ impl std::ops::Deref for NodeWrapper {
     }
 }
 
-use crate::core::grpc::{GrpcClient, GrpcClientLocked};
+use crate::{
+    core::grpc::{GrpcClient, GrpcClientLocked},
+    node::service::NodeCommsTimeout,
+};
 use async_trait::async_trait;
 use mbus_api::v0::{
     AddNexusChild,

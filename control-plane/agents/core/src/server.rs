@@ -23,6 +23,10 @@ pub(crate) struct CliArgs {
     #[structopt(long, short, default_value = "20s")]
     pub(crate) cache_period: humantime::Duration,
 
+    /// The period at which the reconcile loop checks for work
+    #[structopt(long, default_value = "30s")]
+    pub(crate) reconcile_period: humantime::Duration,
+
     /// Deadline for the mayastor instance keep alive registration
     /// Default: 10s
     #[structopt(long, short, default_value = "10s")]
@@ -33,6 +37,18 @@ pub(crate) struct CliArgs {
     /// Default: http://localhost:2379
     #[structopt(long, short, default_value = "http://localhost:2379")]
     pub(crate) store: String,
+
+    /// The timeout for store operations
+    #[structopt(long, default_value = "5s")]
+    pub(crate) store_timeout: humantime::Duration,
+
+    /// The timeout for every node connection (gRPC)
+    #[structopt(long, default_value = "1s")]
+    pub(crate) connect: humantime::Duration,
+
+    /// The timeout for every node request operation (gRPC)
+    #[structopt(long, short, default_value = "6s")]
+    pub(crate) request: humantime::Duration,
 }
 
 fn init_tracing() {
@@ -57,6 +73,8 @@ async fn server(cli_args: CliArgs) {
     let registry = registry::Registry::new(
         CliArgs::from_args().cache_period.into(),
         CliArgs::from_args().store,
+        CliArgs::from_args().store_timeout.into(),
+        CliArgs::from_args().reconcile_period.into(),
     )
     .await;
     Service::builder(cli_args.nats, ChannelVs::Core)
