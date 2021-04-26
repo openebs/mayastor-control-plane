@@ -2,7 +2,7 @@ use super::*;
 use crate::core::{registry::Registry, wrapper::NodeWrapper};
 use common::{
     errors::{GrpcRequestError, NodeNotFound, SvcError},
-    v0::msg_translation::RpcToMessageBus,
+    v0::{msg_translation::RpcToMessageBus, GetSpecs, Specs},
 };
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::{OptionExt, ResultExt};
@@ -15,6 +15,35 @@ pub(crate) struct Service {
     registry: Registry,
     /// deadline for receiving keepalive/Register messages
     deadline: std::time::Duration,
+    /// node communication timeouts
+    comms_timeouts: NodeCommsTimeout,
+}
+
+/// Node communication Timeouts for establishing the connection to a node and
+/// the request itself
+#[derive(Debug, Clone)]
+pub(crate) struct NodeCommsTimeout {
+    /// node gRPC connection timeout
+    connect: std::time::Duration,
+    /// gRPC request timeout
+    request: std::time::Duration,
+}
+
+impl NodeCommsTimeout {
+    fn new(connect: std::time::Duration, request: std::time::Duration) -> Self {
+        Self {
+            connect,
+            request,
+        }
+    }
+    /// timeout to establish connection to the node
+    pub fn connect(&self) -> std::time::Duration {
+        self.connect
+    }
+    /// timeout for the request itself
+    pub fn request(&self) -> std::time::Duration {
+        self.request
+    }
 }
 
 impl Service {
@@ -23,10 +52,13 @@ impl Service {
     pub(super) fn new(
         registry: Registry,
         deadline: std::time::Duration,
+        request: std::time::Duration,
+        connect: std::time::Duration,
     ) -> Self {
         Self {
             registry,
             deadline,
+            comms_timeouts: NodeCommsTimeout::new(connect, request),
         }
     }
 
@@ -57,7 +89,11 @@ impl Service {
         let mut nodes = self.registry.nodes.write().await;
         match nodes.get_mut(&node.id) {
             None => {
-                let mut node = NodeWrapper::new(&node, self.deadline);
+                let mut node = NodeWrapper::new(
+                    &node,
+                    self.deadline,
+                    self.comms_timeouts.clone(),
+                );
                 node.watchdog_mut().arm(self.clone());
                 nodes.insert(node.id.clone(), Arc::new(Mutex::new(node)));
             }
@@ -131,6 +167,21 @@ impl Service {
             .map(|rpc_bdev| rpc_bdev.to_mbus())
             .collect();
         Ok(BlockDevices(bdevs))
+    }
+
+    /// Get specs from the registry
+    pub(crate) async fn get_specs(
+        &self,
+        _request: &GetSpecs,
+    ) -> Result<Specs, SvcError> {
+        let registry = self.registry.specs.write().await;
+        let nexuses = registry.get_nexuses().await;
+        let replicas = registry.get_replicas().await;
+        Ok(Specs {
+            nexuses,
+            replicas,
+            ..Default::default()
+        })
     }
 }
 

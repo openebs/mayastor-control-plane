@@ -15,9 +15,13 @@
 //! said instance.
 use super::{specs::*, wrapper::NodeWrapper};
 use crate::core::wrapper::InternalOps;
+use common::errors::SvcError;
 use mbus_api::v0::NodeId;
 use std::{collections::HashMap, sync::Arc};
-use store::{etcd::Etcd, store::Store};
+use store::{
+    etcd::Etcd,
+    store::{StorableObject, Store, StoreError},
+};
 use tokio::sync::{Mutex, RwLock};
 
 /// Registry containing all mayastor instances (aka nodes)
@@ -31,32 +35,72 @@ pub struct RegistryInner<S: Store> {
     /// spec (aka desired state) for the various resources
     pub(crate) specs: ResourceSpecsLocked,
     /// period to refresh the cache
-    period: std::time::Duration,
+    cache_period: std::time::Duration,
     pub(crate) store: Arc<Mutex<S>>,
+    /// store gRPC operation timeout
+    store_timeout: std::time::Duration,
+    /// reconciliation period when no work is being done
+    pub(crate) reconcile_period: std::time::Duration,
 }
 
 impl Registry {
-    /// Create a new registry with the `period` to reload the cache
-    pub async fn new(period: std::time::Duration, store_url: String) -> Self {
+    /// Create a new registry with the `cache_period` to reload the cache, the
+    /// `store_url` to connect to, a `store_timeout` for store operations
+    /// and a `reconcile_period` for reconcile operations
+    pub async fn new(
+        cache_period: std::time::Duration,
+        store_url: String,
+        store_timeout: std::time::Duration,
+        reconcile_period: std::time::Duration,
+    ) -> Self {
         let store = Etcd::new(&store_url)
             .await
             .expect("Should connect to the persistent store");
         let registry = Self {
             nodes: Default::default(),
-            specs: Default::default(),
-            period,
+            specs: ResourceSpecsLocked::new(),
+            cache_period,
             store: Arc::new(Mutex::new(store)),
+            store_timeout,
+            reconcile_period,
         };
         registry.start();
         registry
     }
 
-    /// Start thread which updates the registry
+    /// Serialized write to the persistent store
+    pub async fn store_obj<O: StorableObject>(
+        &self,
+        object: &O,
+    ) -> Result<(), SvcError> {
+        let mut store = self.store.lock().await;
+        match tokio::time::timeout(self.store_timeout, async move {
+            store.put_obj(object).await
+        })
+        .await
+        {
+            Ok(_) => Ok(()),
+            Err(_) => Err(StoreError::Timeout {
+                operation: "Put".to_string(),
+                timeout: self.store_timeout,
+            }
+            .into()),
+        }
+    }
+
+    /// Check if the persistent store is currently online
+    pub async fn store_online(&self) -> bool {
+        let mut store = self.store.lock().await;
+        store.online().await
+    }
+
+    /// Start the worker thread which updates the registry
     fn start(&self) {
         let registry = self.clone();
         tokio::spawn(async move {
             registry.poller().await;
         });
+        self.specs.start(self.clone());
     }
 
     /// Poll each node for resource updates
@@ -74,7 +118,7 @@ impl Registry {
                 }
             }
             self.trace_all().await;
-            tokio::time::delay_for(self.period).await;
+            tokio::time::delay_for(self.cache_period).await;
         }
     }
     async fn trace_all(&self) {

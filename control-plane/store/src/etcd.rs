@@ -58,7 +58,7 @@ impl Store for Etcd {
             .await
             .context(Put {
                 key: key.to_string(),
-                value: serde_json::to_vec(value).context(SerialiseValue)?,
+                value: serde_json::to_string(value).context(SerialiseValue)?,
             })?;
         Ok(())
     }
@@ -118,7 +118,7 @@ impl Store for Etcd {
         let vec_value = serde_json::to_vec(object).context(SerialiseValue)?;
         self.0.put(key, vec_value, None).await.context(Put {
             key: object.key().key(),
-            value: serde_json::to_vec(object).context(SerialiseValue)?,
+            value: serde_json::to_string(object).context(SerialiseValue)?,
         })?;
         Ok(())
     }

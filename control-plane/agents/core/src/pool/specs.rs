@@ -26,7 +26,13 @@ use store::{
     store::{ObjectKey, Store, StoreError},
     types::v0::{
         pool::{PoolSpec, PoolSpecKey, PoolSpecState},
-        replica::{ReplicaSpec, ReplicaSpecKey, ReplicaSpecState},
+        replica::{
+            ReplicaOperation,
+            ReplicaSpec,
+            ReplicaSpecKey,
+            ReplicaSpecState,
+        },
+        SpecTransaction,
     },
 };
 
@@ -58,6 +64,14 @@ impl ResourceSpecs {
             }
         }
         replicas
+    }
+    pub(crate) async fn get_replicas(&self) -> Vec<ReplicaSpec> {
+        let mut vector = vec![];
+        for object in self.replicas.values() {
+            let object = object.lock().await;
+            vector.push(object.clone());
+        }
+        vector
     }
 
     fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
@@ -369,50 +383,50 @@ impl ResourceSpecsLocked {
         )?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid).await {
-            let mut spec = replica_spec.lock().await;
-            if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::ReplicaNotFound {
-                    replica_id: request.uuid.clone(),
-                });
-            } else if spec.share != Protocol::Off {
-                return Err(SvcError::AlreadyShared {
-                    kind: ResourceKind::Replica,
-                    id: request.uuid.to_string(),
-                    share: spec.share.to_string(),
-                });
+            let spec_clone = {
+                let status = registry.get_replica(&request.uuid).await?;
+                let mut spec = replica_spec.lock().await;
+                if spec.pending_op() {
+                    return Err(SvcError::StoreSave {
+                        kind: ResourceKind::Replica,
+                        id: request.uuid.to_string(),
+                    });
+                } else if spec.updating {
+                    return Err(SvcError::Conflict {});
+                } else if !spec.state.created() {
+                    return Err(SvcError::ReplicaNotFound {
+                        replica_id: request.uuid.clone(),
+                    });
+                } else if spec.share != Protocol::Off
+                    && status.share != Protocol::Off
+                {
+                    return Err(SvcError::AlreadyShared {
+                        kind: ResourceKind::Replica,
+                        id: request.uuid.to_string(),
+                        share: spec.share.to_string(),
+                    });
+                }
+
+                spec.updating = true;
+                spec.start_op(ReplicaOperation::Share(request.protocol));
+                spec.clone()
+            };
+
+            if let Err(error) = registry.store_obj(&spec_clone).await {
+                let mut spec = replica_spec.lock().await;
+                spec.updating = false;
+                spec.clear_op();
+                return Err(error);
             }
 
-            spec.updating = true;
-            let mut spec_clone = spec.clone();
-            drop(spec);
-
-            match node.share_replica(request).await {
-                Ok(share) => {
-                    spec_clone.share = request.protocol.into();
-                    let result = {
-                        let mut store = registry.store.lock().await;
-                        store.put_obj(&spec_clone).await
-                    };
-                    if let Err(error) = result {
-                        let _ =
-                            node.unshare_replica(&request.clone().into()).await;
-                        let mut spec = replica_spec.lock().await;
-                        spec.updating = false;
-                        return Err(error.into());
-                    }
-                    let mut spec = replica_spec.lock().await;
-                    spec.share = request.protocol.into();
-                    spec.updating = false;
-                    Ok(share)
-                }
-                Err(error) => {
-                    let mut spec = replica_spec.lock().await;
-                    spec.updating = false;
-                    Err(error)
-                }
-            }
+            let result = node.share_replica(request).await;
+            Self::replica_complete_op(
+                registry,
+                result,
+                replica_spec,
+                spec_clone,
+            )
+            .await
         } else {
             node.share_replica(request).await
         }
@@ -429,54 +443,102 @@ impl ResourceSpecsLocked {
         )?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid).await {
-            let mut spec = replica_spec.lock().await;
-            if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::ReplicaNotFound {
-                    replica_id: request.uuid.clone(),
-                });
-            } else if spec.share == Protocol::Off {
-                return Err(SvcError::NotShared {
-                    kind: ResourceKind::Replica,
-                    id: request.uuid.to_string(),
-                });
+            let spec_clone = {
+                let status = registry.get_replica(&request.uuid).await?;
+                let mut spec = replica_spec.lock().await;
+                if spec.pending_op() {
+                    return Err(SvcError::StoreSave {
+                        kind: ResourceKind::Replica,
+                        id: request.uuid.to_string(),
+                    });
+                } else if spec.updating {
+                    return Err(SvcError::Conflict {});
+                } else if !spec.state.created() {
+                    return Err(SvcError::ReplicaNotFound {
+                        replica_id: request.uuid.clone(),
+                    });
+                } else if spec.share == Protocol::Off
+                    && status.share == Protocol::Off
+                {
+                    return Err(SvcError::NotShared {
+                        kind: ResourceKind::Replica,
+                        id: request.uuid.to_string(),
+                    });
+                }
+
+                spec.updating = true;
+                spec.start_op(ReplicaOperation::Unshare);
+                spec.clone()
+            };
+
+            if let Err(error) = registry.store_obj(&spec_clone).await {
+                let mut spec = replica_spec.lock().await;
+                spec.updating = false;
+                spec.clear_op();
+                return Err(error);
             }
 
-            spec.updating = true;
-            let mut spec_clone = spec.clone();
-            drop(spec);
-
-            match node.unshare_replica(request).await {
-                Ok(_) => {
-                    spec_clone.share = Protocol::Off;
-                    let result = {
-                        let mut store = registry.store.lock().await;
-                        store.put_obj(&spec_clone).await
-                    };
-                    if let Err(error) = result {
-                        let _ =
-                            node.share_replica(&request.clone().into()).await;
-                        let mut spec = replica_spec.lock().await;
-                        spec.updating = false;
-                        return Err(error.into());
-                    }
-                    let mut spec = replica_spec.lock().await;
-                    spec.share = Protocol::Off;
-                    spec.updating = false;
-                    Ok(())
-                }
-                Err(error) => {
-                    let mut spec = replica_spec.lock().await;
-                    spec.updating = false;
-                    Err(error)
-                }
-            }
+            let result = node.unshare_replica(request).await;
+            Self::replica_complete_op(
+                registry,
+                result,
+                replica_spec,
+                spec_clone,
+            )
+            .await
         } else {
             node.unshare_replica(request).await
         }
     }
 
+    /// Completes a replica update operation by trying to update the spec with
+    /// the persistent store.
+    /// If the persistent store operation fails then the spec is marked
+    /// accordingly and the dirty spec reconciler will attempt to update the
+    /// store when the store is back online.
+    async fn replica_complete_op<T>(
+        registry: &Registry,
+        result: Result<T, SvcError>,
+        replica_spec: Arc<Mutex<ReplicaSpec>>,
+        mut spec_clone: ReplicaSpec,
+    ) -> Result<T, SvcError> {
+        match result {
+            Ok(val) => {
+                spec_clone.commit_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                let mut spec = replica_spec.lock().await;
+                spec.updating = false;
+                match stored {
+                    Ok(_) => {
+                        spec.commit_op();
+                        Ok(val)
+                    }
+                    Err(error) => {
+                        spec.set_op_result(true);
+                        Err(error)
+                    }
+                }
+            }
+            Err(error) => {
+                spec_clone.clear_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                let mut spec = replica_spec.lock().await;
+                spec.updating = false;
+                match stored {
+                    Ok(_) => {
+                        spec.clear_op();
+                        Err(error)
+                    }
+                    Err(error) => {
+                        spec.set_op_result(false);
+                        Err(error)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get a locked ReplicaSpec for the given replica `id`, if it exists
     async fn get_replica(
         &self,
         id: &ReplicaId,
@@ -484,20 +546,102 @@ impl ResourceSpecsLocked {
         let specs = self.read().await;
         specs.replicas.get(id).cloned()
     }
+    /// Get a locked PoolSpec for the given pool `id`, if it exists
     async fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
         let specs = self.read().await;
         specs.pools.get(id).cloned()
     }
+    /// Check if the given pool `id` has any replicas
     async fn pool_has_replicas(&self, id: &PoolId) -> bool {
         let specs = self.read().await;
         !specs.get_pool_replicas(id).await.is_empty()
     }
+    /// Delete the replica `id` from the spec list
     async fn del_replica(&self, id: &ReplicaId) {
         let mut specs = self.write().await;
         specs.replicas.remove(id);
     }
+    /// Delete the Pool `id` from the spec list
     async fn del_pool(&self, id: &PoolId) {
         let mut specs = self.write().await;
         specs.pools.remove(id);
+    }
+
+    /// Get a vector of locked ReplicaSpec's which are in the created
+    pub(crate) async fn get_replicas(&self) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+        let specs = self.read().await;
+        specs.replicas.values().cloned().collect()
+    }
+
+    /// Worker that reconciles dirty ReplicaSpec's with the persistent store.
+    /// This is useful when replica operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub(crate) async fn reconcile_dirty_replicas_work(
+        &self,
+        registry: &Registry,
+    ) -> Option<std::time::Duration> {
+        if registry.store_online().await {
+            let mut pending_count = 0;
+            let replicas = self.get_replicas().await;
+            for replica_spec in replicas {
+                let mut replica = replica_spec.lock().await;
+                if replica.updating || !replica.state.created() {
+                    continue;
+                }
+                if let Some(op) = replica.operation.clone() {
+                    let mut replica_clone = replica.clone();
+
+                    let fail = !match op.result {
+                        Some(true) => {
+                            replica_clone.commit_op();
+                            let result =
+                                registry.store_obj(&replica_clone).await;
+                            if result.is_ok() {
+                                replica.commit_op();
+                            }
+                            result.is_ok()
+                        }
+                        Some(false) => {
+                            replica_clone.clear_op();
+                            let result =
+                                registry.store_obj(&replica_clone).await;
+                            if result.is_ok() {
+                                replica.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                        None => {
+                            // we must have crashed... we could check the
+                            // node to see what the current state is but for
+                            // now assume failure
+                            replica_clone.clear_op();
+                            let result =
+                                registry.store_obj(&replica_clone).await;
+                            if result.is_ok() {
+                                replica.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                    };
+                    if fail {
+                        pending_count += 1;
+                    }
+                }
+            }
+            if pending_count > 0 {
+                Some(std::time::Duration::from_secs(1))
+            } else {
+                None
+            }
+        } else {
+            Some(std::time::Duration::from_secs(1))
+        }
+    }
+    pub(crate) async fn reconcile_dirty_replicas(&self, registry: Registry) {
+        loop {
+            let period = self.reconcile_dirty_replicas_work(&registry).await;
+            let period = period.unwrap_or(registry.reconcile_period);
+            tokio::time::delay_for(period).await;
+        }
     }
 }

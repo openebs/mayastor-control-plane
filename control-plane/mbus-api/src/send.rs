@@ -166,6 +166,13 @@ macro_rules! bus_impl_message {
             ) -> BusResult<$R> {
                 $T::Request_Ext(self, channel.into(), bus(), options).await
             }
+            async fn request_on_bus<C: Into<Channel> + Send>(
+                &self,
+                channel: C,
+                bus: DynBus,
+            ) -> BusResult<$R> {
+                $T::Request(self, channel.into(), bus).await
+            }
         }
     };
 }

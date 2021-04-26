@@ -157,6 +157,14 @@ async fn get_node_replicas(
 }
 
 impl ResourceSpecs {
+    pub(crate) async fn get_nexuses(&self) -> Vec<NexusSpec> {
+        let mut vector = vec![];
+        for object in self.nexuses.values() {
+            let object = object.lock().await;
+            vector.push(object.clone());
+        }
+        vector
+    }
     pub(crate) async fn get_created_nexuses(&self) -> Vec<NexusSpec> {
         let mut nexuses = vec![];
         for nexus in self.nexuses.values() {

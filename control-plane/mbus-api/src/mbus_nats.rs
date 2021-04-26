@@ -54,12 +54,15 @@ pub fn bus() -> DynBus {
 }
 
 // Would we want to have both sync and async clients?
+/// Nats implementation of the Bus
 #[derive(Clone)]
-struct NatsMessageBus {
+pub struct NatsMessageBus {
     timeout_options: TimeoutOptions,
     connection: Connection,
 }
 impl NatsMessageBus {
+    /// Connect to the provided server
+    /// Logs the first error and quietly continues retrying forever
     pub async fn connect(server: &str) -> Connection {
         info!("Connecting to the nats server {}...", server);
         // We retry in a loop until successful. Once connected the nats
@@ -94,7 +97,8 @@ impl NatsMessageBus {
         }
     }
 
-    async fn new(
+    /// Connects to the server and returns a new `NatsMessageBus`
+    pub async fn new(
         server: &str,
         _bus_options: BusOptions,
         timeout_options: TimeoutOptions,

@@ -59,6 +59,13 @@ pub(crate) struct CliArgs {
     no_auth: bool,
 }
 
+/// default timeout options for every bus request
+fn bus_timeout_opts() -> TimeoutOptions {
+    TimeoutOptions::default()
+        .with_max_retries(0)
+        .with_timeout(Duration::from_secs(6))
+}
+
 fn parse_dir(src: &str) -> anyhow::Result<std::path::PathBuf> {
     let path = std::path::PathBuf::from_str(src)?;
     anyhow::ensure!(path.exists(), "does not exist!");
@@ -67,12 +74,13 @@ fn parse_dir(src: &str) -> anyhow::Result<std::path::PathBuf> {
 }
 
 use actix_web_opentelemetry::RequestTracing;
+use mbus_api::TimeoutOptions;
 use opentelemetry::{
     global,
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
 use opentelemetry_jaeger::Uninstall;
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 fn init_tracing() -> Option<(Tracer, Uninstall)> {
     if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
@@ -200,7 +208,11 @@ async fn main() -> anyhow::Result<()> {
         let _ = app();
         Ok(())
     } else {
-        mbus_api::message_bus_init(CliArgs::from_args().nats).await;
+        mbus_api::message_bus_init_options(
+            CliArgs::from_args().nats,
+            bus_timeout_opts(),
+        )
+        .await;
         let server = HttpServer::new(app)
             .bind_rustls(CliArgs::from_args().https, get_certificates()?)?;
         if let Some(http) = CliArgs::from_args().http {
