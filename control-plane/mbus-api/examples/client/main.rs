@@ -61,8 +61,7 @@ async fn start_server_side() {
 #[tokio::main]
 async fn main() {
     env_logger::init_from_env(
-        env_logger::Env::default()
-            .filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
     );
     let cli_args = CliArgs::from_args();
     log::info!("Using args: {:?}", cli_args);
@@ -84,12 +83,8 @@ async fn main() {
     info!("Received reply: {:?}", reply);
 
     // We can also use the following api to specify a different channel and bus
-    let reply = DummyRequest::Request(
-        &DummyRequest {},
-        Channel::v0(v0::ChannelVs::Default),
-        bus(),
-    )
-    .await
-    .unwrap();
+    let reply = DummyRequest::Request(&DummyRequest {}, Channel::v0(v0::ChannelVs::Default), bus())
+        .await
+        .unwrap();
     info!("Received reply: {:?}", reply);
 }

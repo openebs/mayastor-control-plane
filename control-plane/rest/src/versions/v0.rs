@@ -1,13 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 use super::super::ActixRestClient;
 use crate::{ClientError, ClientResult, JsonGeneric, RestUri};
-use actix_web::{
-    body::Body,
-    http::StatusCode,
-    web::Json,
-    HttpResponse,
-    ResponseError,
-};
+use actix_web::{body::Body, http::StatusCode, web::Json, HttpResponse, ResponseError};
 use async_trait::async_trait;
 pub use mbus_api::message_bus::v0::*;
 use paperclip::actix::{api_v2_errors, api_v2_errors_overlay, Apiv2Schema};
@@ -44,11 +38,7 @@ impl From<CreatePool> for CreatePoolBody {
 }
 impl CreatePoolBody {
     /// convert into message bus type
-    pub fn bus_request(
-        &self,
-        node_id: NodeId,
-        pool_id: PoolId,
-    ) -> v0::CreatePool {
+    pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId) -> v0::CreatePool {
         v0::CreatePool {
             node: node_id,
             id: pool_id,
@@ -107,11 +97,7 @@ impl From<CreateNexus> for CreateNexusBody {
 }
 impl CreateNexusBody {
     /// convert into message bus type
-    pub fn bus_request(
-        &self,
-        node_id: NodeId,
-        nexus_id: NexusId,
-    ) -> v0::CreateNexus {
+    pub fn bus_request(&self, node_id: NodeId, nexus_id: NexusId) -> v0::CreateNexus {
         v0::CreateNexus {
             node: node_id,
             uuid: nexus_id,
@@ -164,10 +150,7 @@ impl CreateVolumeBody {
             replicas: self.replicas,
             allowed_nodes: self.allowed_nodes.clone().unwrap_or_default(),
             preferred_nodes: self.preferred_nodes.clone().unwrap_or_default(),
-            preferred_nexus_nodes: self
-                .preferred_nexus_nodes
-                .clone()
-                .unwrap_or_default(),
+            preferred_nexus_nodes: self.preferred_nexus_nodes.clone().unwrap_or_default(),
         }
     }
 }
@@ -227,10 +210,7 @@ pub trait RestClient {
     /// Get all the known replicas
     async fn get_replicas(&self, filter: Filter) -> ClientResult<Vec<Replica>>;
     /// Create new replica with arguments
-    async fn create_replica(
-        &self,
-        args: CreateReplica,
-    ) -> ClientResult<Replica>;
+    async fn create_replica(&self, args: CreateReplica) -> ClientResult<Replica>;
     /// Destroy replica with arguments
     async fn destroy_replica(&self, args: DestroyReplica) -> ClientResult<()>;
     /// Share replica with arguments
@@ -248,18 +228,11 @@ pub trait RestClient {
     /// Unshare nexus
     async fn unshare_nexus(&self, args: UnshareNexus) -> ClientResult<()>;
     /// Remove nexus child
-    async fn remove_nexus_child(
-        &self,
-        args: RemoveNexusChild,
-    ) -> ClientResult<()>;
+    async fn remove_nexus_child(&self, args: RemoveNexusChild) -> ClientResult<()>;
     /// Add nexus child
-    async fn add_nexus_child(&self, args: AddNexusChild)
-        -> ClientResult<Child>;
+    async fn add_nexus_child(&self, args: AddNexusChild) -> ClientResult<Child>;
     /// Get all children by filter
-    async fn get_nexus_children(
-        &self,
-        filter: Filter,
-    ) -> ClientResult<Vec<Child>>;
+    async fn get_nexus_children(&self, filter: Filter) -> ClientResult<Vec<Child>>;
     /// Get all volumes by filter
     async fn get_volumes(&self, filter: Filter) -> ClientResult<Vec<Volume>>;
     /// Create volume
@@ -267,32 +240,17 @@ pub trait RestClient {
     /// Destroy volume
     async fn destroy_volume(&self, args: DestroyVolume) -> ClientResult<()>;
     /// Generic JSON gRPC call
-    async fn json_grpc(
-        &self,
-        args: JsonGrpcRequest,
-    ) -> ClientResult<JsonGeneric>;
+    async fn json_grpc(&self, args: JsonGrpcRequest) -> ClientResult<JsonGeneric>;
     /// Get block devices
-    async fn get_block_devices(
-        &self,
-        args: GetBlockDevices,
-    ) -> ClientResult<Vec<BlockDevice>>;
+    async fn get_block_devices(&self, args: GetBlockDevices) -> ClientResult<Vec<BlockDevice>>;
     /// Get all watches for resource
-    async fn get_watches(
-        &self,
-        resource: WatchResourceId,
-    ) -> ClientResult<Vec<RestWatch>>;
+    async fn get_watches(&self, resource: WatchResourceId) -> ClientResult<Vec<RestWatch>>;
     /// Create new watch
-    async fn create_watch(
-        &self,
-        resource: WatchResourceId,
-        callback: url::Url,
-    ) -> ClientResult<()>;
+    async fn create_watch(&self, resource: WatchResourceId, callback: url::Url)
+        -> ClientResult<()>;
     /// Delete watch
-    async fn delete_watch(
-        &self,
-        resource: WatchResourceId,
-        callback: url::Url,
-    ) -> ClientResult<()>;
+    async fn delete_watch(&self, resource: WatchResourceId, callback: url::Url)
+        -> ClientResult<()>;
 }
 
 #[derive(Display, Debug)]
@@ -359,9 +317,7 @@ fn get_filtered_urn(filter: Filter, r: &RestUrns) -> ClientResult<String> {
                 format!("nodes/{}/pools/{}/replicas/{}", n, p, r)
             }
             Filter::PoolReplica(p, r) => format!("pools/{}/replicas/{}", p, r),
-            _ => {
-                return Err(ClientError::filter("Invalid filter for replicas"))
-            }
+            _ => return Err(ClientError::filter("Invalid filter for replicas")),
         },
         RestUrns::GetNexuses(_) => match filter {
             Filter::None => "nexuses".to_string(),
@@ -417,10 +373,7 @@ impl RestClient for ActixRestClient {
         Ok(replicas)
     }
 
-    async fn create_replica(
-        &self,
-        args: CreateReplica,
-    ) -> ClientResult<Replica> {
+    async fn create_replica(&self, args: CreateReplica) -> ClientResult<Replica> {
         let urn = format!(
             "/v0/nodes/{}/pools/{}/replicas/{}",
             &args.node, &args.pool, &args.uuid
@@ -491,16 +444,12 @@ impl RestClient for ActixRestClient {
 
     /// Unshare nexus
     async fn unshare_nexus(&self, args: UnshareNexus) -> ClientResult<()> {
-        let urn =
-            format!("/v0/nodes/{}/nexuses/{}/share", &args.node, &args.uuid);
+        let urn = format!("/v0/nodes/{}/nexuses/{}/share", &args.node, &args.uuid);
         self.del(urn).await?;
         Ok(())
     }
 
-    async fn remove_nexus_child(
-        &self,
-        args: RemoveNexusChild,
-    ) -> ClientResult<()> {
+    async fn remove_nexus_child(&self, args: RemoveNexusChild) -> ClientResult<()> {
         let urn = match url::Url::parse(args.uri.as_str()) {
             Ok(uri) => {
                 // remove initial '/'
@@ -512,10 +461,7 @@ impl RestClient for ActixRestClient {
         Ok(())
     }
 
-    async fn add_nexus_child(
-        &self,
-        args: AddNexusChild,
-    ) -> ClientResult<Child> {
+    async fn add_nexus_child(&self, args: AddNexusChild) -> ClientResult<Child> {
         let urn = format!(
             "/v0/nodes/{}/nexuses/{}/children/{}",
             &args.node, &args.nexus, &args.uri
@@ -523,10 +469,7 @@ impl RestClient for ActixRestClient {
         let replica = self.put(urn, Body::Empty).await?;
         Ok(replica)
     }
-    async fn get_nexus_children(
-        &self,
-        filter: Filter,
-    ) -> ClientResult<Vec<Child>> {
+    async fn get_nexus_children(&self, filter: Filter) -> ClientResult<Vec<Child>> {
         let children = get_filter!(self, filter, GetChildren).await?;
         Ok(children)
     }
@@ -548,27 +491,17 @@ impl RestClient for ActixRestClient {
         Ok(())
     }
 
-    async fn json_grpc(
-        &self,
-        args: JsonGrpcRequest,
-    ) -> ClientResult<JsonGeneric> {
+    async fn json_grpc(&self, args: JsonGrpcRequest) -> ClientResult<JsonGeneric> {
         let urn = format!("/v0/nodes/{}/jsongrpc/{}", args.node, args.method);
         self.put(urn, Body::from(args.params.to_string())).await
     }
 
-    async fn get_block_devices(
-        &self,
-        args: GetBlockDevices,
-    ) -> ClientResult<Vec<BlockDevice>> {
-        let urn =
-            format!("/v0/nodes/{}/block_devices?all={}", args.node, args.all);
+    async fn get_block_devices(&self, args: GetBlockDevices) -> ClientResult<Vec<BlockDevice>> {
+        let urn = format!("/v0/nodes/{}/block_devices?all={}", args.node, args.all);
         self.get_vec(urn).await
     }
 
-    async fn get_watches(
-        &self,
-        resource: WatchResourceId,
-    ) -> ClientResult<Vec<RestWatch>> {
+    async fn get_watches(&self, resource: WatchResourceId) -> ClientResult<Vec<RestWatch>> {
         let urn = format!("/v0/watches/{}", resource.to_string());
         self.get_vec(urn).await
     }
@@ -742,134 +675,87 @@ impl RestError {
         let details = self.inner.extra.clone();
         match &self.inner.kind {
             ReplyErrorKind::WithMessage => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::Internal, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::Internal, &details);
                 HttpResponse::InternalServerError().json(error)
             }
             ReplyErrorKind::DeserializeReq => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::Deserialize,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::Deserialize, &details);
                 HttpResponse::BadRequest().json(error)
             }
             ReplyErrorKind::Internal => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::Internal, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::Internal, &details);
                 HttpResponse::InternalServerError().json(error)
             }
             ReplyErrorKind::Timeout => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::Timeout, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::Timeout, &details);
                 HttpResponse::RequestTimeout().json(error)
             }
             ReplyErrorKind::InvalidArgument => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::InvalidArgument,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::InvalidArgument, &details);
                 HttpResponse::BadRequest().json(error)
             }
             ReplyErrorKind::DeadlineExceeded => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::DeadlineExceeded,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::DeadlineExceeded, &details);
                 HttpResponse::GatewayTimeout().json(error)
             }
             ReplyErrorKind::NotFound => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::NotFound, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::NotFound, &details);
                 HttpResponse::NotFound().json(error)
             }
             ReplyErrorKind::AlreadyExists => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::AlreadyExists,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::AlreadyExists, &details);
                 HttpResponse::UnprocessableEntity().json(error)
             }
             ReplyErrorKind::PermissionDenied => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::PermissionDenied,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::PermissionDenied, &details);
                 HttpResponse::Unauthorized().json(error)
             }
             ReplyErrorKind::ResourceExhausted => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::ResourceExhausted,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::ResourceExhausted, &details);
                 HttpResponse::InsufficientStorage().json(error)
             }
             ReplyErrorKind::FailedPrecondition => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::FailedPrecondition,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::FailedPrecondition, &details);
                 HttpResponse::PreconditionFailed().json(error)
             }
             ReplyErrorKind::Aborted => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::Aborted, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::Aborted, &details);
                 HttpResponse::ServiceUnavailable().json(error)
             }
             ReplyErrorKind::OutOfRange => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::OutOfRange, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::OutOfRange, &details);
                 HttpResponse::RangeNotSatisfiable().json(error)
             }
             ReplyErrorKind::Unimplemented => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::Unimplemented,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::Unimplemented, &details);
                 HttpResponse::NotImplemented().json(error)
             }
             ReplyErrorKind::Unavailable => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::Unavailable,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::Unavailable, &details);
                 HttpResponse::ServiceUnavailable().json(error)
             }
             ReplyErrorKind::Unauthenticated => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::Unauthenticated,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::Unauthenticated, &details);
                 HttpResponse::Unauthorized().json(error)
             }
             ReplyErrorKind::Unauthorized => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::Unauthorized,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::Unauthorized, &details);
                 HttpResponse::Unauthorized().json(error)
             }
             ReplyErrorKind::Conflict => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::Conflict, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::Conflict, &details);
                 HttpResponse::Conflict().json(error)
             }
             ReplyErrorKind::FailedPersist => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::FailedPersist,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::FailedPersist, &details);
                 HttpResponse::InsufficientStorage().json(error)
             }
             ReplyErrorKind::AlreadyShared => {
-                let error = RestJsonError::new(
-                    RestJsonErrorKind::AlreadyShared,
-                    &details,
-                );
+                let error = RestJsonError::new(RestJsonErrorKind::AlreadyShared, &details);
                 HttpResponse::PreconditionFailed().json(error)
             }
             ReplyErrorKind::NotShared => {
-                let error =
-                    RestJsonError::new(RestJsonErrorKind::NotShared, &details);
+                let error = RestJsonError::new(RestJsonErrorKind::NotShared, &details);
                 HttpResponse::PreconditionFailed().json(error)
             }
         }

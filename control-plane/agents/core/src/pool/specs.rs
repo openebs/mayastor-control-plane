@@ -26,12 +26,7 @@ use store::{
     store::{ObjectKey, Store, StoreError},
     types::v0::{
         pool::{PoolSpec, PoolSpecKey, PoolSpecState},
-        replica::{
-            ReplicaOperation,
-            ReplicaSpec,
-            ReplicaSpecKey,
-            ReplicaSpecState,
-        },
+        replica::{ReplicaOperation, ReplicaSpec, ReplicaSpecKey, ReplicaSpecState},
         SpecTransaction,
     },
 };
@@ -44,19 +39,21 @@ use crate::{
     registry::Registry,
 };
 
+/// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
+/// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
+    /// Get a protected ReplicaSpec for the given replica `id`, if it exists
     fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
         self.replicas.get(id).cloned()
     }
+    /// Add a new ReplicaSpec to the specs list
     fn add_replica(&mut self, replica: ReplicaSpec) -> Arc<Mutex<ReplicaSpec>> {
         let spec = Arc::new(Mutex::new(replica.clone()));
         self.replicas.insert(replica.uuid, spec.clone());
         spec
     }
-    async fn get_pool_replicas(
-        &self,
-        id: &PoolId,
-    ) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+    /// Gets list of protected ReplicaSpec's for a given pool `id`
+    async fn get_pool_replicas(&self, id: &PoolId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         let mut replicas = vec![];
         for replica in self.replicas.values() {
             if id == &replica.lock().await.pool {
@@ -65,6 +62,7 @@ impl ResourceSpecs {
         }
         replicas
     }
+    /// Gets all ReplicaSpec's
     pub(crate) async fn get_replicas(&self) -> Vec<ReplicaSpec> {
         let mut vector = vec![];
         for object in self.replicas.values() {
@@ -73,27 +71,28 @@ impl ResourceSpecs {
         }
         vector
     }
-
+    /// Get a protected PoolSpec for the given `id`, if any exists
     fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
         self.pools.get(id).cloned()
     }
+    /// Delete the pool `id`
     fn del_pool(&mut self, id: &PoolId) {
         let _ = self.pools.remove(id);
     }
 }
 
 impl ResourceSpecsLocked {
-    /// Create Pool
     pub(crate) async fn create_pool(
         &self,
         registry: &Registry,
         request: &CreatePool,
     ) -> Result<Pool, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
         let pool_spec = {
             let mut specs = self.write().await;
 
@@ -147,8 +146,7 @@ impl ResourceSpecsLocked {
             drop(pool_spec);
             self.del_pool(&request.id).await;
             let mut store = registry.store.lock().await;
-            let _ =
-                store.delete_kv(&PoolSpecKey::from(&request.id).key()).await;
+            let _ = store.delete_kv(&PoolSpecKey::from(&request.id).key()).await;
         }
 
         result
@@ -161,11 +159,12 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         // what if the node is never coming back?
         // do we need a way to forcefully "delete" things?
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         let pool_spec = self.get_pool(&request.id).await;
         if let Some(pool_spec) = &pool_spec {
@@ -204,9 +203,7 @@ impl ResourceSpecsLocked {
                 // remove the spec from the persistent store
                 // if it fails, then fail the request and let the op retry
                 let mut store = registry.store.lock().await;
-                if let Err(error) =
-                    store.delete_kv(&PoolSpecKey::from(&request.id).key()).await
-                {
+                if let Err(error) = store.delete_kv(&PoolSpecKey::from(&request.id).key()).await {
                     if !matches!(error, StoreError::MissingEntry { .. }) {
                         return Err(error.into());
                     }
@@ -229,11 +226,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateReplica,
     ) -> Result<Replica, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         let replica_spec = {
             let mut specs = self.write().await;
@@ -281,8 +279,7 @@ impl ResourceSpecsLocked {
             replica.state = ReplicaSpecState::Created(ReplicaState::Online);
             let mut store = registry.store.lock().await;
             store.put_obj(&replica).await?;
-            replica_spec.state =
-                ReplicaSpecState::Created(ReplicaState::Online);
+            replica_spec.state = ReplicaSpecState::Created(ReplicaState::Online);
         } else {
             // todo: check if this was a mayastor or a transport error
             drop(replica_spec);
@@ -302,11 +299,12 @@ impl ResourceSpecsLocked {
         request: &DestroyReplica,
         force: bool,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         let replica = self.get_replica(&request.uuid).await;
         if let Some(replica) = &replica {
@@ -345,13 +343,10 @@ impl ResourceSpecsLocked {
                         // retry
                         let mut store = registry.store.lock().await;
                         if let Err(error) = store
-                            .delete_kv(
-                                &ReplicaSpecKey::from(&request.uuid).key(),
-                            )
+                            .delete_kv(&ReplicaSpecKey::from(&request.uuid).key())
                             .await
                         {
-                            if !matches!(error, StoreError::MissingEntry { .. })
-                            {
+                            if !matches!(error, StoreError::MissingEntry { .. }) {
                                 return Err(error.into());
                             }
                         }
@@ -376,11 +371,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &ShareReplica,
     ) -> Result<String, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid).await {
             let spec_clone = {
@@ -397,9 +393,7 @@ impl ResourceSpecsLocked {
                     return Err(SvcError::ReplicaNotFound {
                         replica_id: request.uuid.clone(),
                     });
-                } else if spec.share != Protocol::Off
-                    && status.share != Protocol::Off
-                {
+                } else if spec.share != Protocol::Off && status.share != Protocol::Off {
                     return Err(SvcError::AlreadyShared {
                         kind: ResourceKind::Replica,
                         id: request.uuid.to_string(),
@@ -420,13 +414,7 @@ impl ResourceSpecsLocked {
             }
 
             let result = node.share_replica(request).await;
-            Self::replica_complete_op(
-                registry,
-                result,
-                replica_spec,
-                spec_clone,
-            )
-            .await
+            Self::replica_complete_op(registry, result, replica_spec, spec_clone).await
         } else {
             node.share_replica(request).await
         }
@@ -436,11 +424,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &UnshareReplica,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid).await {
             let spec_clone = {
@@ -457,9 +446,7 @@ impl ResourceSpecsLocked {
                     return Err(SvcError::ReplicaNotFound {
                         replica_id: request.uuid.clone(),
                     });
-                } else if spec.share == Protocol::Off
-                    && status.share == Protocol::Off
-                {
+                } else if spec.share == Protocol::Off && status.share == Protocol::Off {
                     return Err(SvcError::NotShared {
                         kind: ResourceKind::Replica,
                         id: request.uuid.to_string(),
@@ -479,23 +466,15 @@ impl ResourceSpecsLocked {
             }
 
             let result = node.unshare_replica(request).await;
-            Self::replica_complete_op(
-                registry,
-                result,
-                replica_spec,
-                spec_clone,
-            )
-            .await
+            Self::replica_complete_op(registry, result, replica_spec, spec_clone).await
         } else {
             node.unshare_replica(request).await
         }
     }
 
-    /// Completes a replica update operation by trying to update the spec with
-    /// the persistent store.
-    /// If the persistent store operation fails then the spec is marked
-    /// accordingly and the dirty spec reconciler will attempt to update the
-    /// store when the store is back online.
+    /// Completes a replica update operation by trying to update the spec with the persistent store.
+    /// If the persistent store operation fails then the spec is marked accordingly and the dirty
+    /// spec reconciler will attempt to update the store when the store is back online.
     async fn replica_complete_op<T>(
         registry: &Registry,
         result: Result<T, SvcError>,
@@ -538,15 +517,12 @@ impl ResourceSpecsLocked {
         }
     }
 
-    /// Get a locked ReplicaSpec for the given replica `id`, if it exists
-    async fn get_replica(
-        &self,
-        id: &ReplicaId,
-    ) -> Option<Arc<Mutex<ReplicaSpec>>> {
+    /// Get a protected ReplicaSpec for the given replica `id`, if it exists
+    async fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
         let specs = self.read().await;
         specs.replicas.get(id).cloned()
     }
-    /// Get a locked PoolSpec for the given pool `id`, if it exists
+    /// Get a protected PoolSpec for the given pool `id`, if it exists
     async fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
         let specs = self.read().await;
         specs.pools.get(id).cloned()
@@ -567,7 +543,7 @@ impl ResourceSpecsLocked {
         specs.pools.remove(id);
     }
 
-    /// Get a vector of locked ReplicaSpec's which are in the created
+    /// Get a vector of protected ReplicaSpec's which are in the created
     pub(crate) async fn get_replicas(&self) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         let specs = self.read().await;
         specs.replicas.values().cloned().collect()
@@ -594,8 +570,7 @@ impl ResourceSpecsLocked {
                     let fail = !match op.result {
                         Some(true) => {
                             replica_clone.commit_op();
-                            let result =
-                                registry.store_obj(&replica_clone).await;
+                            let result = registry.store_obj(&replica_clone).await;
                             if result.is_ok() {
                                 replica.commit_op();
                             }
@@ -603,8 +578,7 @@ impl ResourceSpecsLocked {
                         }
                         Some(false) => {
                             replica_clone.clear_op();
-                            let result =
-                                registry.store_obj(&replica_clone).await;
+                            let result = registry.store_obj(&replica_clone).await;
                             if result.is_ok() {
                                 replica.clear_op();
                             }
@@ -615,8 +589,7 @@ impl ResourceSpecsLocked {
                             // node to see what the current state is but for
                             // now assume failure
                             replica_clone.clear_op();
-                            let result =
-                                registry.store_obj(&replica_clone).await;
+                            let result = registry.store_obj(&replica_clone).await;
                             if result.is_ok() {
                                 replica.clear_op();
                             }

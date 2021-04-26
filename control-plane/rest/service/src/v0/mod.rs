@@ -62,10 +62,7 @@ fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     watches::configure(cfg);
 }
 
-fn json_error(
-    err: impl std::fmt::Display,
-    _req: &actix_web::HttpRequest,
-) -> actix_web::Error {
+fn json_error(err: impl std::fmt::Display, _req: &actix_web::HttpRequest) -> actix_web::Error {
     RestError::from(ReplyError {
         kind: ReplyErrorKind::DeserializeReq,
         resource: ResourceKind::Unknown,
@@ -75,9 +72,7 @@ fn json_error(
     .into()
 }
 
-pub(super) fn configure_api<T, B>(
-    api: actix_web::App<T, B>,
-) -> actix_web::App<T, B>
+pub(super) fn configure_api<T, B>(api: actix_web::App<T, B>) -> actix_web::App<T, B>
 where
     B: MessageBody,
     T: ServiceFactory<
@@ -96,16 +91,13 @@ where
             // declared beforehand
             paperclip::actix::web::scope("/v0")
                 .app_data(
-                    actix_web::web::PathConfig::default()
-                        .error_handler(|e, r| json_error(e, r)),
+                    actix_web::web::PathConfig::default().error_handler(|e, r| json_error(e, r)),
                 )
                 .app_data(
-                    actix_web::web::JsonConfig::default()
-                        .error_handler(|e, r| json_error(e, r)),
+                    actix_web::web::JsonConfig::default().error_handler(|e, r| json_error(e, r)),
                 )
                 .app_data(
-                    actix_web::web::QueryConfig::default()
-                        .error_handler(|e, r| json_error(e, r)),
+                    actix_web::web::QueryConfig::default().error_handler(|e, r| json_error(e, r)),
                 )
                 .configure(configure),
         )
@@ -114,8 +106,7 @@ where
             if let Some(dir) = super::CliArgs::from_args().output_specs {
                 let file = dir.join(&format!("{}_api_spec.json", version()));
                 info!("Writing {} to {}", spec_uri(), file.to_string_lossy());
-                let mut file = std::fs::File::create(file)
-                    .expect("Should create the spec file");
+                let mut file = std::fs::File::create(file).expect("Should create the spec file");
                 file.write_all(spec.to_string().as_ref())
                     .expect("Should write the spec to file");
             }
@@ -139,19 +130,14 @@ impl FromRequest for BearerToken {
     type Future = Ready<Result<Self, Self::Error>>;
     type Config = ();
 
-    fn from_request(
-        req: &HttpRequest,
-        _payload: &mut actix_web::dev::Payload,
-    ) -> Self::Future {
-        futures::future::ready(authenticate(req).map(|_| Self {}).map_err(
-            |auth_error| {
-                RestError::from(ReplyError {
-                    kind: ReplyErrorKind::Unauthorized,
-                    resource: ResourceKind::Unknown,
-                    source: req.uri().to_string(),
-                    extra: auth_error.to_string(),
-                })
-            },
-        ))
+    fn from_request(req: &HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
+        futures::future::ready(authenticate(req).map(|_| Self {}).map_err(|auth_error| {
+            RestError::from(ReplyError {
+                kind: ReplyErrorKind::Unauthorized,
+                resource: ResourceKind::Unknown,
+                source: req.uri().to_string(),
+                extra: auth_error.to_string(),
+            })
+        }))
     }
 }

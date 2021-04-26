@@ -12,13 +12,10 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 
 #[get("/pools", tags(Pools))]
 async fn get_pools() -> Result<Json<Vec<Pool>>, RestClusterError> {
-    RestRespond::result(MessageBus::get_pools(Filter::None).await)
-        .map_err(RestClusterError::from)
+    RestRespond::result(MessageBus::get_pools(Filter::None).await).map_err(RestClusterError::from)
 }
 #[get("/pools/{pool_id}", tags(Pools))]
-async fn get_pool(
-    web::Path(pool_id): web::Path<PoolId>,
-) -> Result<Json<Pool>, RestError> {
+async fn get_pool(web::Path(pool_id): web::Path<PoolId>) -> Result<Json<Pool>, RestError> {
     RestRespond::result(MessageBus::get_pool(Filter::Pool(pool_id)).await)
 }
 
@@ -33,9 +30,7 @@ async fn get_node_pools(
 async fn get_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
 ) -> Result<Json<Pool>, RestError> {
-    RestRespond::result(
-        MessageBus::get_pool(Filter::NodePool(node_id, pool_id)).await,
-    )
+    RestRespond::result(MessageBus::get_pool(Filter::NodePool(node_id, pool_id)).await)
 }
 
 #[put("/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
@@ -54,9 +49,7 @@ async fn del_node_pool(
     destroy_pool(Filter::NodePool(node_id, pool_id)).await
 }
 #[delete("/pools/{pool_id}", tags(Pools))]
-async fn del_pool(
-    web::Path(pool_id): web::Path<PoolId>,
-) -> Result<JsonUnit, RestError> {
+async fn del_pool(web::Path(pool_id): web::Path<PoolId>) -> Result<JsonUnit, RestError> {
     destroy_pool(Filter::Pool(pool_id)).await
 }
 
@@ -86,6 +79,5 @@ async fn destroy_pool(filter: Filter) -> Result<JsonUnit, RestError> {
         }
     };
 
-    RestRespond::result(MessageBus::destroy_pool(destroy).await)
-        .map(JsonUnit::from)
+    RestRespond::result(MessageBus::destroy_pool(destroy).await).map(JsonUnit::from)
 }

@@ -237,12 +237,8 @@ impl Service {
 
         #[async_trait]
         impl ServiceSubscriber for ServiceHandler<Liveness> {
-            async fn handler(
-                &self,
-                args: Arguments<'_>,
-            ) -> Result<(), SvcError> {
-                let request: ReceivedMessage<Liveness> =
-                    args.request.try_into()?;
+            async fn handler(&self, args: Arguments<'_>) -> Result<(), SvcError> {
+                let request: ReceivedMessage<Liveness> = args.request.try_into()?;
                 Ok(request.reply(()).await?)
             }
             fn filter(&self) -> Vec<MessageId> {
@@ -262,10 +258,7 @@ impl Service {
     }
 
     /// Add a new subscriber on the default channel
-    pub fn with_subscription(
-        self,
-        service_subscriber: impl ServiceSubscriber + 'static,
-    ) -> Self {
+    pub fn with_subscription(self, service_subscriber: impl ServiceSubscriber + 'static) -> Self {
         let channel = self.channel.clone();
         self.with_subscription_channel(channel, service_subscriber)
     }
@@ -281,10 +274,8 @@ impl Service {
                 entry.push(Box::from(service_subscriber));
             }
             None => {
-                self.subscriptions.insert(
-                    channel.to_string(),
-                    vec![Box::from(service_subscriber)],
-                );
+                self.subscriptions
+                    .insert(channel.to_string(), vec![Box::from(service_subscriber)]);
             }
         };
         self
@@ -296,10 +287,9 @@ impl Service {
         subscriptions: &[Box<dyn ServiceSubscriber>],
         state: std::sync::Arc<Container>,
     ) -> Result<(), ServiceError> {
-        let mut handle =
-            bus.subscribe(channel.clone()).await.context(Subscribe {
-                channel: channel.clone(),
-            })?;
+        let mut handle = bus.subscribe(channel.clone()).await.context(Subscribe {
+            channel: channel.clone(),
+        })?;
 
         loop {
             let message = handle.next().await.context(GetMessage {
@@ -310,9 +300,7 @@ impl Service {
             let args = Arguments::new(&context, &message);
             debug!("Processing message: {{ {} }}", args.request);
 
-            if let Err(error) =
-                Self::process_message(args, &subscriptions).await
-            {
+            if let Err(error) = Self::process_message(args, &subscriptions).await {
                 error!("Error processing message: {}", error.full_string());
             }
         }
@@ -329,9 +317,7 @@ impl Service {
 
         let subscription = subscriptions
             .iter()
-            .find(|&subscriber| {
-                subscriber.filter().iter().any(|find_id| find_id == id)
-            })
+            .find(|&subscriber| subscriber.filter().iter().any(|find_id| find_id == id))
             .context(FindSubscription {
                 channel: channel.clone(),
                 id: id.clone(),
@@ -377,13 +363,7 @@ impl Service {
             let state = self.shared_state.clone();
 
             let handle = tokio::spawn(async move {
-                Self::run_channel(
-                    bus,
-                    channel.parse().unwrap(),
-                    &subscriptions,
-                    state,
-                )
-                .await
+                Self::run_channel(bus, channel.parse().unwrap(), &subscriptions, state).await
             });
 
             threads.push(handle);

@@ -64,8 +64,7 @@ bus_impl_message_all!(DummyRequest, Default, DummyReply, Default);
 #[tokio::main]
 async fn main() {
     env_logger::init_from_env(
-        env_logger::Env::default()
-            .filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
     );
     let cli_args = CliArgs::from_args();
     log::info!("Using args: {:?}", cli_args);
@@ -104,8 +103,7 @@ async fn receive_v2(sub: &mut nats::asynk::Subscription, count: u64) {
     let message = &sub.next().await.unwrap();
     // notice that try_into can fail if the received type does not
     // match the received message
-    let message: ReceivedMessageExt<DummyRequest, DummyReply> =
-        message.try_into().unwrap();
+    let message: ReceivedMessageExt<DummyRequest, DummyReply> = message.try_into().unwrap();
     message
         .reply(DummyReply {
             name: format!("example {}", count),
@@ -116,8 +114,7 @@ async fn receive_v2(sub: &mut nats::asynk::Subscription, count: u64) {
 
 async fn receive_v3(sub: &mut nats::asynk::Subscription, count: u64) {
     let message = &sub.next().await.unwrap();
-    let message: ReceivedMessageExt<DummyRequest, DummyReply> =
-        message.try_into().unwrap();
+    let message: ReceivedMessageExt<DummyRequest, DummyReply> = message.try_into().unwrap();
     message
         // same function can receive an error
         .reply(Err(ReplyError {

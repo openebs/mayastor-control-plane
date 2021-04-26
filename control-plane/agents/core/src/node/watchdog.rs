@@ -59,9 +59,7 @@ impl Watchdog {
     }
 
     /// meet the deadline
-    pub(crate) async fn pet(
-        &mut self,
-    ) -> Result<(), tokio::sync::mpsc::error::SendError<()>> {
+    pub(crate) async fn pet(&mut self) -> Result<(), tokio::sync::mpsc::error::SendError<()>> {
         self.timestamp = std::time::Instant::now();
         if let Some(chan) = &mut self.pet_chan {
             chan.send(()).await

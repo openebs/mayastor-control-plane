@@ -226,13 +226,7 @@ impl NodeWrapper {
         };
     }
     /// Update a replica's share uri and protocol
-    fn share_replica(
-        &mut self,
-        share: &Protocol,
-        uri: &str,
-        pool: &PoolId,
-        replica: &ReplicaId,
-    ) {
+    fn share_replica(&mut self, share: &Protocol, uri: &str, pool: &PoolId, replica: &ReplicaId) {
         match self.pools.iter_mut().find(|(id, _)| id == &pool) {
             None => (),
             Some((_, pool)) => {
@@ -287,12 +281,14 @@ impl NodeWrapper {
     /// Fetch all replicas from this node via gRPC
     async fn fetch_replicas(&self) -> Result<Vec<Replica>, SvcError> {
         let mut ctx = self.grpc_client().await?;
-        let rpc_replicas = ctx.client.list_replicas(Null {}).await.context(
-            GrpcRequestError {
+        let rpc_replicas = ctx
+            .client
+            .list_replicas(Null {})
+            .await
+            .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
                 request: "list_replicas",
-            },
-        )?;
+            })?;
         let rpc_replicas = &rpc_replicas.get_ref().replicas;
         let pools = rpc_replicas
             .iter()
@@ -303,14 +299,14 @@ impl NodeWrapper {
     /// Fetch all pools from this node via gRPC
     async fn fetch_pools(&self) -> Result<Vec<Pool>, SvcError> {
         let mut ctx = self.grpc_client().await?;
-        let rpc_pools =
-            ctx.client
-                .list_pools(Null {})
-                .await
-                .context(GrpcRequestError {
-                    resource: ResourceKind::Pool,
-                    request: "list_pools",
-                })?;
+        let rpc_pools = ctx
+            .client
+            .list_pools(Null {})
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Pool,
+                request: "list_pools",
+            })?;
         let rpc_pools = &rpc_pools.get_ref().pools;
         let pools = rpc_pools
             .iter()
@@ -321,14 +317,14 @@ impl NodeWrapper {
     /// Fetch all nexuses from the node via gRPC
     async fn fetch_nexuses(&self) -> Result<Vec<Nexus>, SvcError> {
         let mut ctx = self.grpc_client().await?;
-        let rpc_nexuses =
-            ctx.client
-                .list_nexus(Null {})
-                .await
-                .context(GrpcRequestError {
-                    resource: ResourceKind::Nexus,
-                    request: "list_nexus",
-                })?;
+        let rpc_nexuses = ctx
+            .client
+            .list_nexus(Null {})
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Nexus,
+                request: "list_nexus",
+            })?;
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
@@ -368,62 +364,30 @@ use std::{ops::Deref, sync::Arc};
 /// pools, replicas, nexuses and their children
 #[async_trait]
 pub trait ClientOps {
-    async fn create_pool(&self, request: &CreatePool)
-        -> Result<Pool, SvcError>;
+    async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError>;
     /// Destroy a pool on the node via gRPC
-    async fn destroy_pool(&self, request: &DestroyPool)
-        -> Result<(), SvcError>;
+    async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError>;
     /// Create a replica on the pool via gRPC
-    async fn create_replica(
-        &self,
-        request: &CreateReplica,
-    ) -> Result<Replica, SvcError>;
+    async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError>;
     /// Share a replica on the pool via gRPC
-    async fn share_replica(
-        &self,
-        request: &ShareReplica,
-    ) -> Result<String, SvcError>;
+    async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError>;
     /// Unshare a replica on the pool via gRPC
-    async fn unshare_replica(
-        &self,
-        request: &UnshareReplica,
-    ) -> Result<(), SvcError>;
+    async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError>;
     /// Destroy a replica on the pool via gRPC
-    async fn destroy_replica(
-        &self,
-        request: &DestroyReplica,
-    ) -> Result<(), SvcError>;
+    async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError>;
 
     /// Create a nexus on a node via gRPC or MBUS
-    async fn create_nexus(
-        &self,
-        request: &CreateNexus,
-    ) -> Result<Nexus, SvcError>;
+    async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError>;
     /// Destroy a nexus on a node via gRPC or MBUS
-    async fn destroy_nexus(
-        &self,
-        request: &DestroyNexus,
-    ) -> Result<(), SvcError>;
+    async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError>;
     /// Share a nexus on the node via gRPC
-    async fn share_nexus(
-        &self,
-        request: &ShareNexus,
-    ) -> Result<String, SvcError>;
+    async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError>;
     /// Unshare a nexus on the node via gRPC
-    async fn unshare_nexus(
-        &self,
-        request: &UnshareNexus,
-    ) -> Result<(), SvcError>;
+    async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError>;
     /// Add a child to a nexus via gRPC
-    async fn add_child(
-        &self,
-        request: &AddNexusChild,
-    ) -> Result<Child, SvcError>;
+    async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError>;
     /// Remove a child from its parent nexus via gRPC
-    async fn remove_child(
-        &self,
-        request: &RemoveNexusChild,
-    ) -> Result<(), SvcError>;
+    async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError>;
 }
 
 /// Internal Operations on a mayastor locked `NodeWrapper` for the implementor
@@ -492,63 +456,55 @@ impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
 #[async_trait]
 impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
-    async fn create_pool(
-        &self,
-        request: &CreatePool,
-    ) -> Result<Pool, SvcError> {
+    async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let rpc_pool = ctx.client.create_pool(request.to_rpc()).await.context(
-            GrpcRequestError {
-                resource: ResourceKind::Pool,
-                request: "create_pool",
-            },
-        )?;
+        let rpc_pool =
+            ctx.client
+                .create_pool(request.to_rpc())
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Pool,
+                    request: "create_pool",
+                })?;
         let pool = rpc_pool_to_bus(&rpc_pool.into_inner(), &request.node);
 
         self.lock().await.add_pool_with_replicas(&pool, &[]);
         Ok(pool)
     }
     /// Destroy a pool on the node via gRPC
-    async fn destroy_pool(
-        &self,
-        request: &DestroyPool,
-    ) -> Result<(), SvcError> {
+    async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let _ = ctx.client.destroy_pool(request.to_rpc()).await.context(
-            GrpcRequestError {
+        let _ = ctx
+            .client
+            .destroy_pool(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
                 resource: ResourceKind::Pool,
                 request: "destroy_pool",
-            },
-        )?;
+            })?;
         self.lock().await.remove_pool(&request.id);
         Ok(())
     }
 
     /// Create a replica on the pool via gRPC
-    async fn create_replica(
-        &self,
-        request: &CreateReplica,
-    ) -> Result<Replica, SvcError> {
+    async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
         let rpc_replica =
-            ctx.client.create_replica(request.to_rpc()).await.context(
-                GrpcRequestError {
+            ctx.client
+                .create_replica(request.to_rpc())
+                .await
+                .context(GrpcRequestError {
                     resource: ResourceKind::Replica,
                     request: "create_replica",
-                },
-            )?;
+                })?;
 
-        let replica =
-            rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node);
+        let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node);
         self.lock().await.add_replica(&replica);
         Ok(replica)
     }
 
     /// Share a replica on the pool via gRPC
-    async fn share_replica(
-        &self,
-        request: &ShareReplica,
-    ) -> Result<String, SvcError> {
+    async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
         let share = ctx
             .client
@@ -570,17 +526,16 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
 
     /// Unshare a replica on the pool via gRPC
-    async fn unshare_replica(
-        &self,
-        request: &UnshareReplica,
-    ) -> Result<(), SvcError> {
+    async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let _ = ctx.client.share_replica(request.to_rpc()).await.context(
-            GrpcRequestError {
+        let _ = ctx
+            .client
+            .share_replica(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
                 request: "unshare_replica",
-            },
-        )?;
+            })?;
         self.lock()
             .await
             .unshare_replica(&request.pool, &request.uuid);
@@ -588,17 +543,16 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
 
     /// Destroy a replica on the pool via gRPC
-    async fn destroy_replica(
-        &self,
-        request: &DestroyReplica,
-    ) -> Result<(), SvcError> {
+    async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let _ = ctx.client.destroy_replica(request.to_rpc()).await.context(
-            GrpcRequestError {
+        let _ = ctx
+            .client
+            .destroy_replica(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
                 request: "destroy_replica",
-            },
-        )?;
+            })?;
         self.lock()
             .await
             .remove_replica(&request.pool, &request.uuid);
@@ -606,95 +560,85 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
 
     /// Create a nexus on the node via gRPC
-    async fn create_nexus(
-        &self,
-        request: &CreateNexus,
-    ) -> Result<Nexus, SvcError> {
+    async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
         let rpc_nexus =
-            ctx.client.create_nexus(request.to_rpc()).await.context(
-                GrpcRequestError {
+            ctx.client
+                .create_nexus(request.to_rpc())
+                .await
+                .context(GrpcRequestError {
                     resource: ResourceKind::Nexus,
                     request: "create_nexus",
-                },
-            )?;
+                })?;
         let nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node);
         self.lock().await.add_nexus(&nexus);
         Ok(nexus)
     }
 
     /// Destroy a nexus on the node via gRPC
-    async fn destroy_nexus(
-        &self,
-        request: &DestroyNexus,
-    ) -> Result<(), SvcError> {
+    async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let _ = ctx.client.destroy_nexus(request.to_rpc()).await.context(
-            GrpcRequestError {
+        let _ = ctx
+            .client
+            .destroy_nexus(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "destroy_nexus",
-            },
-        )?;
+            })?;
         self.lock().await.remove_nexus(&request.uuid);
         Ok(())
     }
 
     /// Share a nexus on the node via gRPC
-    async fn share_nexus(
-        &self,
-        request: &ShareNexus,
-    ) -> Result<String, SvcError> {
+    async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let share = ctx.client.publish_nexus(request.to_rpc()).await.context(
-            GrpcRequestError {
+        let share = ctx
+            .client
+            .publish_nexus(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "publish_nexus",
-            },
-        )?;
+            })?;
         let share = share.into_inner().device_uri;
         self.lock().await.share_nexus(&share, &request.uuid);
         Ok(share)
     }
 
     /// Unshare a nexus on the node via gRPC
-    async fn unshare_nexus(
-        &self,
-        request: &UnshareNexus,
-    ) -> Result<(), SvcError> {
+    async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let _ = ctx.client.unpublish_nexus(request.to_rpc()).await.context(
-            GrpcRequestError {
+        let _ = ctx
+            .client
+            .unpublish_nexus(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "unpublish_nexus",
-            },
-        )?;
+            })?;
         self.lock().await.unshare_nexus(&request.uuid);
         Ok(())
     }
 
     /// Add a child to a nexus via gRPC
-    async fn add_child(
-        &self,
-        request: &AddNexusChild,
-    ) -> Result<Child, SvcError> {
+    async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
         let rpc_child =
-            ctx.client.add_child_nexus(request.to_rpc()).await.context(
-                GrpcRequestError {
+            ctx.client
+                .add_child_nexus(request.to_rpc())
+                .await
+                .context(GrpcRequestError {
                     resource: ResourceKind::Child,
                     request: "add_child_nexus",
-                },
-            )?;
+                })?;
         let child = rpc_child.into_inner().to_mbus();
         self.lock().await.add_child(&request.nexus, &child);
         Ok(child)
     }
 
     /// Remove a child from its parent nexus via gRPC
-    async fn remove_child(
-        &self,
-        request: &RemoveNexusChild,
-    ) -> Result<(), SvcError> {
+    async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
         let _ = ctx
             .client
@@ -717,10 +661,7 @@ fn rpc_pool_to_bus(rpc_pool: &rpc::mayastor::Pool, id: &NodeId) -> Pool {
 }
 
 /// convert rpc replica to a message bus replica
-fn rpc_replica_to_bus(
-    rpc_replica: &rpc::mayastor::Replica,
-    id: &NodeId,
-) -> Replica {
+fn rpc_replica_to_bus(rpc_replica: &rpc::mayastor::Replica, id: &NodeId) -> Replica {
     let mut replica = rpc_replica.to_mbus();
     replica.node = id.clone();
     replica
@@ -795,12 +736,7 @@ impl PoolWrapper {
         self.replicas.retain(|replica| &replica.uuid != uuid)
     }
     /// update replica from list
-    pub fn update_replica(
-        &mut self,
-        uuid: &ReplicaId,
-        share: &Protocol,
-        uri: &str,
-    ) {
+    pub fn update_replica(&mut self, uuid: &ReplicaId, share: &Protocol, uri: &str) {
         if let Some(replica) = self
             .replicas
             .iter_mut()
@@ -863,15 +799,11 @@ impl PartialOrd for PoolWrapper {
         match self.pool.state.partial_cmp(&other.pool.state) {
             Some(Ordering::Greater) => Some(Ordering::Greater),
             Some(Ordering::Less) => Some(Ordering::Less),
-            Some(Ordering::Equal) => {
-                match self.replicas.len().cmp(&other.replicas.len()) {
-                    Ordering::Greater => Some(Ordering::Greater),
-                    Ordering::Less => Some(Ordering::Less),
-                    Ordering::Equal => {
-                        Some(self.free_space().cmp(&other.free_space()))
-                    }
-                }
-            }
+            Some(Ordering::Equal) => match self.replicas.len().cmp(&other.replicas.len()) {
+                Ordering::Greater => Some(Ordering::Greater),
+                Ordering::Less => Some(Ordering::Less),
+                Ordering::Equal => Some(self.free_space().cmp(&other.free_space())),
+            },
             None => None,
         }
     }
@@ -882,15 +814,11 @@ impl Ord for PoolWrapper {
         match self.pool.state.partial_cmp(&other.pool.state) {
             Some(Ordering::Greater) => Ordering::Greater,
             Some(Ordering::Less) => Ordering::Less,
-            Some(Ordering::Equal) => {
-                match self.replicas.len().cmp(&other.replicas.len()) {
-                    Ordering::Greater => Ordering::Greater,
-                    Ordering::Less => Ordering::Less,
-                    Ordering::Equal => {
-                        self.free_space().cmp(&other.free_space())
-                    }
-                }
-            }
+            Some(Ordering::Equal) => match self.replicas.len().cmp(&other.replicas.len()) {
+                Ordering::Greater => Ordering::Greater,
+                Ordering::Less => Ordering::Less,
+                Ordering::Equal => self.free_space().cmp(&other.free_space()),
+            },
             None => Ordering::Equal,
         }
     }

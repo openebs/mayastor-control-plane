@@ -33,19 +33,13 @@ impl Service {
 
     /// Get nexuses according to the filter
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn get_nexuses(
-        &self,
-        request: &GetNexuses,
-    ) -> Result<Nexuses, SvcError> {
+    pub(super) async fn get_nexuses(&self, request: &GetNexuses) -> Result<Nexuses, SvcError> {
         let filter = request.filter.clone();
         let nexuses = match filter {
             Filter::None => self.registry.get_node_opt_nexuses(None).await?,
-            Filter::Node(node_id) => {
-                self.registry.get_node_nexuses(&node_id).await?
-            }
+            Filter::Node(node_id) => self.registry.get_node_nexuses(&node_id).await?,
             Filter::NodeNexus(node_id, nexus_id) => {
-                let nexus =
-                    self.registry.get_node_nexus(&node_id, &nexus_id).await?;
+                let nexus = self.registry.get_node_nexus(&node_id, &nexus_id).await?;
                 vec![nexus]
             }
             Filter::Nexus(nexus_id) => {
@@ -63,10 +57,7 @@ impl Service {
 
     /// Create nexus
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn create_nexus(
-        &self,
-        request: &CreateNexus,
-    ) -> Result<Nexus, SvcError> {
+    pub(super) async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         self.registry
             .specs
             .create_nexus(&self.registry, request)
@@ -75,10 +66,7 @@ impl Service {
 
     /// Destroy nexus
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn destroy_nexus(
-        &self,
-        request: &DestroyNexus,
-    ) -> Result<(), SvcError> {
+    pub(super) async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         self.registry
             .specs
             .destroy_nexus(&self.registry, request, true)
@@ -87,10 +75,7 @@ impl Service {
 
     /// Share nexus
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn share_nexus(
-        &self,
-        request: &ShareNexus,
-    ) -> Result<String, SvcError> {
+    pub(super) async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         self.registry
             .specs
             .share_nexus(&self.registry, request)
@@ -99,10 +84,7 @@ impl Service {
 
     /// Unshare nexus
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn unshare_nexus(
-        &self,
-        request: &UnshareNexus,
-    ) -> Result<(), SvcError> {
+    pub(super) async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         self.registry
             .specs
             .unshare_nexus(&self.registry, request)
@@ -111,10 +93,7 @@ impl Service {
 
     /// Add nexus child
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn add_nexus_child(
-        &self,
-        request: &AddNexusChild,
-    ) -> Result<Child, SvcError> {
+    pub(super) async fn add_nexus_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         self.registry
             .specs
             .add_nexus_child(&self.registry, request)
@@ -135,10 +114,7 @@ impl Service {
 
     /// Get volumes
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn get_volumes(
-        &self,
-        request: &GetVolumes,
-    ) -> Result<Volumes, SvcError> {
+    pub(super) async fn get_volumes(&self, request: &GetVolumes) -> Result<Volumes, SvcError> {
         let nexuses = self.get_nexuses(&Default::default()).await?.0;
         let nexus_specs = self.registry.specs.get_created_nexus_specs().await;
         let volumes = nexuses
@@ -191,10 +167,7 @@ impl Service {
 
     /// Create volume
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn create_volume(
-        &self,
-        request: &CreateVolume,
-    ) -> Result<Volume, SvcError> {
+    pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
         self.registry
             .specs
             .create_volume(&self.registry, request)
@@ -203,10 +176,7 @@ impl Service {
 
     /// Destroy volume
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn destroy_volume(
-        &self,
-        request: &DestroyVolume,
-    ) -> Result<(), SvcError> {
+    pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
         self.registry
             .specs
             .destroy_volume(&self.registry, request)

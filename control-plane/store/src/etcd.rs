@@ -64,19 +64,16 @@ impl Store for Etcd {
     }
 
     /// 'Get' the value for the given key from etcd.
-    async fn get_kv<K: StoreKey>(
-        &mut self,
-        key: &K,
-    ) -> Result<Value, StoreError> {
+    async fn get_kv<K: StoreKey>(&mut self, key: &K) -> Result<Value, StoreError> {
         let resp = self.0.get(key.to_string(), None).await.context(Get {
             key: key.to_string(),
         })?;
         match resp.kvs().first() {
-            Some(kv) => Ok(serde_json::from_slice(kv.value()).context(
-                DeserialiseValue {
+            Some(kv) => Ok(
+                serde_json::from_slice(kv.value()).context(DeserialiseValue {
                     value: kv.value_str().context(ValueString {})?,
-                },
-            )?),
+                })?,
+            ),
             None => Err(MissingEntry {
                 key: key.to_string(),
             }),
@@ -84,10 +81,7 @@ impl Store for Etcd {
     }
 
     /// 'Delete' the entry with the given key from etcd.
-    async fn delete_kv<K: StoreKey>(
-        &mut self,
-        key: &K,
-    ) -> Result<(), StoreError> {
+    async fn delete_kv<K: StoreKey>(&mut self, key: &K) -> Result<(), StoreError> {
         self.0.delete(key.to_string(), None).await.context(Delete {
             key: key.to_string(),
         })?;
@@ -102,18 +96,14 @@ impl Store for Etcd {
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
         let (sender, receiver) = channel(100);
-        let (watcher, stream) =
-            self.0.watch(key.to_string(), None).await.context(Watch {
-                key: key.to_string(),
-            })?;
+        let (watcher, stream) = self.0.watch(key.to_string(), None).await.context(Watch {
+            key: key.to_string(),
+        })?;
         watch(watcher, stream, sender);
         Ok(receiver)
     }
 
-    async fn put_obj<O: StorableObject>(
-        &mut self,
-        object: &O,
-    ) -> Result<(), StoreError> {
+    async fn put_obj<O: StorableObject>(&mut self, object: &O) -> Result<(), StoreError> {
         let key = object.key().key();
         let vec_value = serde_json::to_vec(object).context(SerialiseValue)?;
         self.0.put(key, vec_value, None).await.context(Put {
@@ -123,19 +113,16 @@ impl Store for Etcd {
         Ok(())
     }
 
-    async fn get_obj<O: StorableObject>(
-        &mut self,
-        key: &O::Key,
-    ) -> Result<O, StoreError> {
+    async fn get_obj<O: StorableObject>(&mut self, key: &O::Key) -> Result<O, StoreError> {
         let resp = self.0.get(key.key(), None).await.context(Get {
             key: key.key(),
         })?;
         match resp.kvs().first() {
-            Some(kv) => Ok(serde_json::from_slice(kv.value()).context(
-                DeserialiseValue {
+            Some(kv) => Ok(
+                serde_json::from_slice(kv.value()).context(DeserialiseValue {
                     value: kv.value_str().context(ValueString {})?,
-                },
-            )?),
+                })?,
+            ),
             None => Err(MissingEntry {
                 key: key.key(),
             }),
@@ -147,10 +134,9 @@ impl Store for Etcd {
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
         let (sender, receiver) = channel(100);
-        let (watcher, stream) =
-            self.0.watch(key.key(), None).await.context(Watch {
-                key: key.key(),
-            })?;
+        let (watcher, stream) = self.0.watch(key.key(), None).await.context(Watch {
+            key: key.key(),
+        })?;
         watch(watcher, stream, sender);
         Ok(receiver)
     }
@@ -194,9 +180,7 @@ fn watch(
                     EventType::Put => {
                         if let Some(kv) = event.kv() {
                             let result = match deserialise_kv(&kv) {
-                                Ok((key, value)) => {
-                                    Ok(WatchEvent::Put(key, value))
-                                }
+                                Ok((key, value)) => Ok(WatchEvent::Put(key, value)),
                                 Err(e) => Err(e),
                             };
                             if sender.send(result).await.is_err() {

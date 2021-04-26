@@ -103,12 +103,8 @@ macro_rules! impl_request_handler {
         }
         #[async_trait]
         impl common::ServiceSubscriber for ServiceHandler<$RequestType> {
-            async fn handler(
-                &self,
-                args: common::Arguments<'_>,
-            ) -> Result<(), SvcError> {
-                let request: ReceivedMessage<$RequestType> =
-                    args.request.try_into()?;
+            async fn handler(&self, args: common::Arguments<'_>) -> Result<(), SvcError> {
+                let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
 
                 let service: &service::Service = args.context.get_state()?;
                 let reply = service.$ServiceFnName(&request.inner()).await?;
@@ -134,12 +130,8 @@ macro_rules! impl_publish_handler {
         }
         #[async_trait]
         impl common::ServiceSubscriber for ServiceHandler<$PublishType> {
-            async fn handler(
-                &self,
-                args: common::Arguments<'_>,
-            ) -> Result<(), SvcError> {
-                let request: ReceivedMessage<$PublishType> =
-                    args.request.try_into()?;
+            async fn handler(&self, args: common::Arguments<'_>) -> Result<(), SvcError> {
+                let request: ReceivedMessage<$PublishType> = args.request.try_into()?;
 
                 let service: &service::Service = args.context.get_state()?;
                 service.$ServiceFnName(&request.inner()).await;

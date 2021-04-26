@@ -102,10 +102,7 @@ pub enum Error {
     },
     #[snafu(display("Failed to flush the message bus"))]
     Flush { source: io::Error },
-    #[snafu(display(
-        "Failed to subscribe to channel '{}' on the message bus",
-        channel
-    ))]
+    #[snafu(display("Failed to subscribe to channel '{}' on the message bus", channel))]
     Subscribe { channel: String, source: io::Error },
     #[snafu(display("Reply message came back with an error"))]
     ReplyWithError { source: ReplyError },
@@ -148,8 +145,7 @@ impl FromStr for Channel {
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         match source.split('/').next() {
             Some(v0::VERSION) => {
-                let c: v0::ChannelVs =
-                    source[v0::VERSION.len() + 1 ..].parse()?;
+                let c: v0::ChannelVs = source[v0::VERSION.len() + 1 ..].parse()?;
                 Ok(Self::v0(c))
             }
             _ => Err(strum::ParseError::VariantNotFound),
@@ -197,8 +193,7 @@ impl<'de> Deserialize<'de> for MessageId {
         match string.parse() {
             Ok(id) => Ok(id),
             Err(error) => {
-                let error =
-                    format!("Failed to parse into MessageId, error: {}", error);
+                let error = format!("Failed to parse into MessageId, error: {}", error);
                 Err(serde::de::Error::custom(error))
             }
         }
@@ -211,8 +206,7 @@ impl FromStr for MessageId {
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         match source.split('/').next() {
             Some(v0::VERSION) => {
-                let id: v0::MessageIdVs =
-                    source[v0::VERSION.len() + 1 ..].parse()?;
+                let id: v0::MessageIdVs = source[v0::VERSION.len() + 1 ..].parse()?;
                 Ok(Self::v0(id))
             }
             _ => Err(strum::ParseError::VariantNotFound),
@@ -249,16 +243,10 @@ pub trait Message {
     async fn request(&self) -> BusResult<Self::Reply>;
     /// publish a message on the given channel with a request for a
     /// `Self::Reply` reply
-    async fn request_on<C: Into<Channel> + Send>(
-        &self,
-        channel: C,
-    ) -> BusResult<Self::Reply>;
+    async fn request_on<C: Into<Channel> + Send>(&self, channel: C) -> BusResult<Self::Reply>;
     /// publish a message with a request for a `Self::Reply` reply
     /// and non default timeout options
-    async fn request_ext(
-        &self,
-        options: TimeoutOptions,
-    ) -> BusResult<Self::Reply>;
+    async fn request_ext(&self, options: TimeoutOptions) -> BusResult<Self::Reply>;
     /// publish a message with a request for a `Self::Reply` reply
     /// and non default timeout options on the given channel
     async fn request_on_ext<C: Into<Channel> + Send>(
@@ -481,10 +469,7 @@ impl TimeoutOptions {
 
     /// Specify a max number of retries before giving up
     /// None for unlimited retries
-    pub fn with_max_retries<M: Into<Option<u32>>>(
-        mut self,
-        max_retries: M,
-    ) -> Self {
+    pub fn with_max_retries<M: Into<Option<u32>>>(mut self, max_retries: M) -> Self {
         self.max_retries = max_retries.into();
         self
     }

@@ -41,10 +41,7 @@ use bollard::{
     network::DisconnectNetworkOptions,
 };
 pub use mbus_api::TimeoutOptions;
-use rpc::mayastor::{
-    bdev_rpc_client::BdevRpcClient,
-    mayastor_client::MayastorClient,
-};
+use rpc::mayastor::{bdev_rpc_client::BdevRpcClient, mayastor_client::MayastorClient};
 
 pub const TEST_NET_NAME: &str = "mayastor-testing-network";
 pub const TEST_NET_NETWORK: &str = "10.1.0.0/16";
@@ -58,36 +55,26 @@ pub struct RpcHandle {
 
 impl RpcHandle {
     /// connect to the containers and construct a handle
-    async fn connect(
-        name: String,
-        endpoint: SocketAddr,
-    ) -> Result<Self, String> {
+    async fn connect(name: String, endpoint: SocketAddr) -> Result<Self, String> {
         let mut attempts = 40;
         loop {
-            if TcpStream::connect_timeout(&endpoint, Duration::from_millis(100))
-                .is_ok()
-            {
+            if TcpStream::connect_timeout(&endpoint, Duration::from_millis(100)).is_ok() {
                 break;
             } else {
                 thread::sleep(Duration::from_millis(101));
             }
             attempts -= 1;
             if attempts == 0 {
-                return Err(format!(
-                    "Failed to connect to {}/{}",
-                    name, endpoint
-                ));
+                return Err(format!("Failed to connect to {}/{}", name, endpoint));
             }
         }
 
-        let mayastor =
-            MayastorClient::connect(format!("http://{}", endpoint.to_string()))
-                .await
-                .unwrap();
-        let bdev =
-            BdevRpcClient::connect(format!("http://{}", endpoint.to_string()))
-                .await
-                .unwrap();
+        let mayastor = MayastorClient::connect(format!("http://{}", endpoint.to_string()))
+            .await
+            .unwrap();
+        let bdev = BdevRpcClient::connect(format!("http://{}", endpoint.to_string()))
+            .await
+            .unwrap();
 
         Ok(Self {
             name,
@@ -172,10 +159,7 @@ impl Binary {
     fn which(name: &str) -> std::io::Result<String> {
         let output = std::process::Command::new("which").arg(name).output()?;
         if !output.status.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                name,
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, name));
         }
         Ok(String::from_utf8_lossy(&output.stdout).trim().into())
     }
@@ -340,10 +324,7 @@ impl Default for Builder {
 
 /// trait to allow extensibility using the Builder pattern
 pub trait BuilderConfigure {
-    fn configure(
-        &self,
-        cfg: Builder,
-    ) -> Result<Builder, Box<dyn std::error::Error>>;
+    fn configure(&self, cfg: Builder) -> Result<Builder, Box<dyn std::error::Error>>;
 }
 
 impl Builder {
@@ -378,21 +359,19 @@ impl Builder {
 
     /// next ordinal container ip
     pub fn next_container_ip(&self) -> Result<String, Error> {
-        let net: Ipv4Network = self.network.parse().map_err(|error| {
-            bollard::errors::Error::IOError {
-                err: std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!("Invalid network format: {}", error),
-                ),
-            }
-        })?;
+        let net: Ipv4Network =
+            self.network
+                .parse()
+                .map_err(|error| bollard::errors::Error::IOError {
+                    err: std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("Invalid network format: {}", error),
+                    ),
+                })?;
         let ip = net.nth((self.containers.len() + 2) as u32);
         match ip {
             None => Err(bollard::errors::Error::IOError {
-                err: std::io::Error::new(
-                    std::io::ErrorKind::AddrNotAvailable,
-                    "No available ip",
-                ),
+                err: std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "No available ip"),
             }),
             Some(ip) => Ok(ip.to_string()),
         }
@@ -473,10 +452,7 @@ impl Builder {
     }
 
     /// use base image for all binary containers
-    pub fn with_base_image<S: Into<Option<String>>>(
-        mut self,
-        image: S,
-    ) -> Builder {
+    pub fn with_base_image<S: Into<Option<String>>>(mut self, image: S) -> Builder {
         self.image = image.into();
         self
     }
@@ -489,9 +465,7 @@ impl Builder {
     /// setup tracing for the cargo test code with `filter`
     /// ignore when called multiple times
     pub fn with_tracing(self, filter: &str) -> Self {
-        let builder = if let Ok(filter) =
-            tracing_subscriber::EnvFilter::try_from_default_env()
-        {
+        let builder = if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
             tracing_subscriber::fmt().with_env_filter(filter)
         } else {
             tracing_subscriber::fmt().with_env_filter(filter)
@@ -501,9 +475,7 @@ impl Builder {
     }
 
     /// build the config and start the containers
-    pub async fn build(
-        self,
-    ) -> Result<ComposeTest, Box<dyn std::error::Error>> {
+    pub async fn build(self) -> Result<ComposeTest, Box<dyn std::error::Error>> {
         let autorun = self.autorun;
         let mut compose = self.build_only().await?;
         if autorun {
@@ -535,17 +507,12 @@ impl Builder {
     /// useful for testing without having to change the code
     fn override_clean(&mut self) {
         Self::override_flags(&mut self.clean, "clean");
-        Self::override_flags(
-            &mut self.allow_clean_on_panic,
-            "allow_clean_on_panic",
-        );
+        Self::override_flags(&mut self.allow_clean_on_panic, "allow_clean_on_panic");
         Self::override_flags(&mut self.logs_on_panic, "logs_on_panic");
     }
 
     /// build the config but don't start the containers
-    async fn build_only(
-        mut self,
-    ) -> Result<ComposeTest, Box<dyn std::error::Error>> {
+    async fn build_only(mut self) -> Result<ComposeTest, Box<dyn std::error::Error>> {
         self.override_clean();
         let net: Ipv4Network = self.network.parse()?;
 
@@ -582,12 +549,10 @@ impl Builder {
             logs_on_panic: self.logs_on_panic,
         };
 
-        compose.network_id =
-            compose.network_create().await.map_err(|e| e.to_string())?;
+        compose.network_id = compose.network_create().await.map_err(|e| e.to_string())?;
 
         if self.reuse {
-            let containers =
-                compose.list_network_containers(&self.name).await?;
+            let containers = compose.list_network_containers(&self.name).await?;
 
             for container in containers {
                 let networks = container
@@ -610,10 +575,7 @@ impl Builder {
             // containers are created where the IPs are ordinal
             for (i, spec) in self.containers.iter().enumerate() {
                 compose
-                    .create_container(
-                        spec,
-                        &net.nth((i + 2) as u32).unwrap().to_string(),
-                    )
+                    .create_container(spec, &net.nth((i + 2) as u32).unwrap().to_string())
                     .await?;
             }
         }
@@ -754,16 +716,12 @@ impl ComposeTest {
     }
 
     /// remove all containers from the network
-    pub async fn remove_network_containers(
-        &self,
-        name: &str,
-    ) -> Result<(), Error> {
+    pub async fn remove_network_containers(&self, name: &str) -> Result<(), Error> {
         let containers = self.list_network_containers(name).await?;
         for k in &containers {
             let name = k.id.clone().unwrap();
             self.remove_container(&name).await?;
-            while let Ok(_c) = self.docker.inspect_container(&name, None).await
-            {
+            while let Ok(_c) = self.docker.inspect_container(&name, None).await {
                 tokio::time::delay_for(Duration::from_millis(500)).await;
             }
         }
@@ -809,16 +767,13 @@ impl ComposeTest {
     }
 
     /// list containers
-    pub async fn list_cluster_containers(
-        &self,
-    ) -> Result<Vec<ContainerSummaryInner>, Error> {
+    pub async fn list_cluster_containers(&self) -> Result<Vec<ContainerSummaryInner>, Error> {
         self.docker
             .list_containers(Some(ListContainersOptions {
                 all: true,
                 filters: vec![(
                     "label",
-                    vec![format!("{}.name={}", self.label_prefix, self.name)
-                        .as_str()],
+                    vec![format!("{}.name={}", self.label_prefix, self.name).as_str()],
                 )]
                 .into_iter()
                 .collect(),
@@ -864,11 +819,7 @@ impl ComposeTest {
     /// for the container. (2) endpoints: this allows us to plugin in the
     /// container into our network configuration (3) config: the actual
     /// config which includes the above objects
-    async fn create_container(
-        &mut self,
-        spec: &ContainerSpec,
-        ipv4: &str,
-    ) -> Result<(), Error> {
+    async fn create_container(&mut self, spec: &ContainerSpec, ipv4: &str) -> Result<(), Error> {
         if self.prune {
             let _ = self
                 .docker
@@ -1055,17 +1006,15 @@ impl ComposeTest {
 
     /// start the container
     pub async fn start(&self, name: &str) -> Result<(), Error> {
-        let id = self.containers.get(name).ok_or(
-            bollard::errors::Error::IOError {
+        let id = self
+            .containers
+            .get(name)
+            .ok_or(bollard::errors::Error::IOError {
                 err: std::io::Error::new(
                     std::io::ErrorKind::NotFound,
-                    format!(
-                        "Can't start container {} as it was not configured",
-                        name
-                    ),
+                    format!("Can't start container {} as it was not configured", name),
                 ),
-            },
-        )?;
+            })?;
         if !self.reuse {
             self.docker
                 .start_container::<&str>(id.0.as_str(), None)
@@ -1188,10 +1137,7 @@ impl ComposeTest {
     }
 
     /// start the containers
-    pub async fn start_containers(
-        &self,
-        containers: Vec<&str>,
-    ) -> Result<(), Error> {
+    pub async fn start_containers(&self, containers: Vec<&str>) -> Result<(), Error> {
         for k in containers {
             self.start(k).await?;
         }
@@ -1237,10 +1183,7 @@ impl ComposeTest {
     }
 
     /// inspect the given container
-    pub async fn inspect(
-        &self,
-        name: &str,
-    ) -> Result<ContainerInspectResponse, Error> {
+    pub async fn inspect(&self, name: &str) -> Result<ContainerInspectResponse, Error> {
         self.docker.inspect_container(name, None).await
     }
 
@@ -1306,11 +1249,7 @@ impl ComposeTest {
     }
 
     /// connect to message bus helper for the cargo test code with bus timeouts
-    pub async fn connect_to_bus_timeout(
-        &self,
-        name: &str,
-        bus_timeout: TimeoutOptions,
-    ) {
+    pub async fn connect_to_bus_timeout(&self, name: &str, bus_timeout: TimeoutOptions) {
         let (_, ip) = self.containers.get(name).unwrap();
         let url = format!("{}", ip);
         tokio::time::timeout(std::time::Duration::from_secs(2), async {
@@ -1332,17 +1271,13 @@ mod tests {
             .name("composer")
             .network("10.1.0.0/16")
             .add_container_spec(
-                ContainerSpec::from_binary(
-                    "nats",
-                    Binary::from_nix("nats-server").with_arg("-DV"),
-                )
-                .with_portmap("4222", "4222"),
+                ContainerSpec::from_binary("nats", Binary::from_nix("nats-server").with_arg("-DV"))
+                    .with_portmap("4222", "4222"),
             )
             .add_container("mayastor")
             .add_container_bin(
                 "mayastor2",
-                Binary::from_nix("mayastor")
-                    .with_args(vec!["-n", "nats.composer"]),
+                Binary::from_nix("mayastor").with_args(vec!["-n", "nats.composer"]),
             )
             .with_clean(true)
             .build()

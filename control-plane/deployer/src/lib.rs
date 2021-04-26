@@ -139,8 +139,7 @@ impl StartOptions {
         self
     }
     pub fn with_node_deadline(mut self, deadline: &str) -> Self {
-        self.node_deadline =
-            Some(humantime::Duration::from_str(deadline).unwrap());
+        self.node_deadline = Some(humantime::Duration::from_str(deadline).unwrap());
         self
     }
     pub fn with_store_timeout(mut self, timeout: Duration) -> Self {
@@ -151,11 +150,7 @@ impl StartOptions {
         self.reconcile_period = Some(period.into());
         self
     }
-    pub fn with_node_timeouts(
-        mut self,
-        connect: Duration,
-        request: Duration,
-    ) -> Self {
+    pub fn with_node_timeouts(mut self, connect: Duration, request: Duration) -> Self {
         self.node_conn_timeout = Some(connect.into());
         self.node_req_timeout = Some(request.into());
         self
@@ -184,10 +179,7 @@ impl StartOptions {
         self.cluster_name = cluster_name.to_string();
         self
     }
-    pub fn with_base_image(
-        mut self,
-        base_image: impl Into<Option<String>>,
-    ) -> Self {
+    pub fn with_base_image(mut self, base_image: impl Into<Option<String>>) -> Self {
         self.base_image = base_image.into();
         self
     }
@@ -251,15 +243,13 @@ impl StopOptions {
 }
 impl ListOptions {
     fn list_docker(&self) -> Result<(), Error> {
-        let label_filter =
-            format!("label=io.mayastor.test.name={}", self.cluster_name);
+        let label_filter = format!("label=io.mayastor.test.name={}", self.cluster_name);
         let mut args = vec!["ps", "-a", "--filter", &label_filter];
         if let Some(format) = &self.format {
             args.push("--format");
             args.push(format)
         }
-        let status =
-            std::process::Command::new("docker").args(args).status()?;
+        let status = std::process::Command::new("docker").args(args).status()?;
         build_error("docker", status.code())
     }
     /// Simple listing of all started components

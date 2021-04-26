@@ -30,16 +30,11 @@ impl Service {
 
     /// Get pools according to the filter
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn get_pools(
-        &self,
-        request: &GetPools,
-    ) -> Result<Pools, SvcError> {
+    pub(super) async fn get_pools(&self, request: &GetPools) -> Result<Pools, SvcError> {
         let filter = request.filter.clone();
         let pools = match filter {
             Filter::None => self.registry.get_node_opt_pools(None).await?,
-            Filter::Node(node_id) => {
-                self.registry.get_node_pools(&node_id).await?
-            }
+            Filter::Node(node_id) => self.registry.get_node_pools(&node_id).await?,
             Filter::NodePool(node_id, pool_id) => {
                 let pool = self
                     .registry
@@ -62,16 +57,11 @@ impl Service {
 
     /// Get replicas according to the filter
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn get_replicas(
-        &self,
-        request: &GetReplicas,
-    ) -> Result<Replicas, SvcError> {
+    pub(super) async fn get_replicas(&self, request: &GetReplicas) -> Result<Replicas, SvcError> {
         let filter = request.filter.clone();
         let replicas = match filter {
             Filter::None => self.registry.get_node_opt_replicas(None).await?,
-            Filter::Node(node_id) => {
-                self.registry.get_node_opt_replicas(Some(node_id)).await?
-            }
+            Filter::Node(node_id) => self.registry.get_node_opt_replicas(Some(node_id)).await?,
             Filter::NodePool(node_id, pool_id) => {
                 let pool = self
                     .registry
@@ -118,10 +108,7 @@ impl Service {
 
     /// Create pool
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn create_pool(
-        &self,
-        request: &CreatePool,
-    ) -> Result<Pool, SvcError> {
+    pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         self.registry
             .specs
             .create_pool(&self.registry, request)
@@ -130,10 +117,7 @@ impl Service {
 
     /// Destroy pool
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn destroy_pool(
-        &self,
-        request: &DestroyPool,
-    ) -> Result<(), SvcError> {
+    pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         self.registry
             .specs
             .destroy_pool(&self.registry, request)
@@ -154,10 +138,7 @@ impl Service {
 
     /// Destroy replica
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn destroy_replica(
-        &self,
-        request: &DestroyReplica,
-    ) -> Result<(), SvcError> {
+    pub(super) async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         self.registry
             .specs
             .destroy_replica(&self.registry, request, true)
@@ -166,10 +147,7 @@ impl Service {
 
     /// Share replica
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn share_replica(
-        &self,
-        request: &ShareReplica,
-    ) -> Result<String, SvcError> {
+    pub(super) async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         self.registry
             .specs
             .share_replica(&self.registry, request)
@@ -178,10 +156,7 @@ impl Service {
 
     /// Unshare replica
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn unshare_replica(
-        &self,
-        request: &UnshareReplica,
-    ) -> Result<(), SvcError> {
+    pub(super) async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
         self.registry
             .specs
             .unshare_replica(&self.registry, request)

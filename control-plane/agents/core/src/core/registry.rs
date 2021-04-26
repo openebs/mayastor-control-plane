@@ -69,14 +69,12 @@ impl Registry {
     }
 
     /// Serialized write to the persistent store
-    pub async fn store_obj<O: StorableObject>(
-        &self,
-        object: &O,
-    ) -> Result<(), SvcError> {
+    pub async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
-        match tokio::time::timeout(self.store_timeout, async move {
-            store.put_obj(object).await
-        })
+        match tokio::time::timeout(
+            self.store_timeout,
+            async move { store.put_obj(object).await },
+        )
         .await
         {
             Ok(_) => Ok(()),

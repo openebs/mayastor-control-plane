@@ -59,8 +59,7 @@ mod tests {
         actix_rt::spawn(async move {
             let _ = actix_web::HttpServer::new(|| {
                 actix_web::App::new().service(
-                    actix_web::web::resource("/test")
-                        .route(actix_web::web::put().to(notify)),
+                    actix_web::web::resource("/test").route(actix_web::web::put().to(notify)),
                 )
             })
             .bind("10.1.0.1:8082")

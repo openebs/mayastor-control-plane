@@ -147,16 +147,10 @@ macro_rules! bus_impl_message {
             async fn request(&self) -> BusResult<$R> {
                 $T::Request(self, self.channel(), bus()).await
             }
-            async fn request_on<C: Into<Channel> + Send>(
-                &self,
-                channel: C,
-            ) -> BusResult<$R> {
+            async fn request_on<C: Into<Channel> + Send>(&self, channel: C) -> BusResult<$R> {
                 $T::Request(self, channel.into(), bus()).await
             }
-            async fn request_ext(
-                &self,
-                options: TimeoutOptions,
-            ) -> BusResult<$R> {
+            async fn request_ext(&self, options: TimeoutOptions) -> BusResult<$R> {
                 $T::Request_Ext(self, self.channel(), bus(), options).await
             }
             async fn request_on_ext<C: Into<Channel> + Send>(
@@ -243,11 +237,7 @@ where
     /// forget)
     /// May fail if the bus fails to publish the message
     #[allow(non_snake_case)]
-    async fn Publish(
-        payload: &'a S,
-        channel: Channel,
-        bus: DynBus,
-    ) -> BusResult<()> {
+    async fn Publish(payload: &'a S, channel: Channel, bus: DynBus) -> BusResult<()> {
         let msg = SendMessage::<S, R>::new(payload, channel, bus);
         msg.publish().await
     }
@@ -300,22 +290,17 @@ where
     /// Publishes the Message - not guaranteed to be sent or received (fire and
     /// forget).
     pub(crate) async fn publish(&self) -> BusResult<()> {
-        let payload =
-            serde_json::to_vec(&self.payload).context(SerializeSend {
-                channel: self.channel.clone(),
-            })?;
+        let payload = serde_json::to_vec(&self.payload).context(SerializeSend {
+            channel: self.channel.clone(),
+        })?;
         self.bus.publish(self.channel.clone(), &payload).await
     }
 
     /// Sends the message and requests a reply.
-    pub(crate) async fn request(
-        &self,
-        options: Option<TimeoutOptions>,
-    ) -> BusResult<R> {
-        let payload =
-            serde_json::to_vec(&self.payload).context(SerializeSend {
-                channel: self.channel.clone(),
-            })?;
+    pub(crate) async fn request(&self, options: Option<TimeoutOptions>) -> BusResult<R> {
+        let payload = serde_json::to_vec(&self.payload).context(SerializeSend {
+            channel: self.channel.clone(),
+        })?;
         let reply = self
             .bus
             .request(self.channel.clone(), &payload, options)

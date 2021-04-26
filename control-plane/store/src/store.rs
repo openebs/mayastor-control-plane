@@ -26,28 +26,16 @@ pub enum StoreError {
         source: Error,
     },
     /// Failed to 'get' an entry from the store.
-    #[snafu(display(
-        "Failed to 'get' entry with key {}. Error {}",
-        key,
-        source
-    ))]
+    #[snafu(display("Failed to 'get' entry with key {}. Error {}", key, source))]
     Get { key: String, source: Error },
     /// Failed to find an entry with the given key.
     #[snafu(display("Entry with key {} not found.", key))]
     MissingEntry { key: String },
     /// Failed to 'delete' an entry from the store.
-    #[snafu(display(
-        "Failed to 'delete' entry with key {}. Error {}",
-        key,
-        source
-    ))]
+    #[snafu(display("Failed to 'delete' entry with key {}. Error {}", key, source))]
     Delete { key: String, source: Error },
     /// Failed to 'watch' an entry in the store.
-    #[snafu(display(
-        "Failed to 'watch' entry with key {}. Error {}",
-        key,
-        source
-    ))]
+    #[snafu(display("Failed to 'watch' entry with key {}. Error {}", key, source))]
     Watch { key: String, source: Error },
     /// Empty key.
     #[snafu(display("Failed to get key as string. Error {}", source))]
@@ -56,21 +44,13 @@ pub enum StoreError {
     #[snafu(display("Failed to get value as string. Error {}", source))]
     ValueString { source: Error },
     /// Failed to deserialise value.
-    #[snafu(display(
-        "Failed to deserialise value {}. Error {}",
-        value,
-        source
-    ))]
+    #[snafu(display("Failed to deserialise value {}. Error {}", value, source))]
     DeserialiseValue { value: String, source: SerdeError },
     /// Failed to serialise value.
     #[snafu(display("Failed to serialise value. Error {}", source))]
     SerialiseValue { source: SerdeError },
     /// Failed to run operation within a timeout.
-    #[snafu(display(
-        "Timed out during {} operation after {:?}",
-        operation,
-        timeout
-    ))]
+    #[snafu(display("Timed out during {} operation after {:?}", operation, timeout))]
     Timeout {
         operation: String,
         timeout: std::time::Duration,
@@ -103,15 +83,9 @@ pub trait Store: Sync + Send + Clone {
         value: &V,
     ) -> Result<(), StoreError>;
     /// Get an entry from the store.
-    async fn get_kv<K: StoreKey>(
-        &mut self,
-        key: &K,
-    ) -> Result<Value, StoreError>;
+    async fn get_kv<K: StoreKey>(&mut self, key: &K) -> Result<Value, StoreError>;
     /// Delete an entry from the store.
-    async fn delete_kv<K: StoreKey>(
-        &mut self,
-        key: &K,
-    ) -> Result<(), StoreError>;
+    async fn delete_kv<K: StoreKey>(&mut self, key: &K) -> Result<(), StoreError>;
     /// Watch for changes to the entry with the given key.
     /// Returns a channel which will be signalled when an event occurs.
     async fn watch_kv<K: StoreKey>(
@@ -119,20 +93,11 @@ pub trait Store: Sync + Send + Clone {
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError>;
 
-    async fn put_obj<O: StorableObject>(
-        &mut self,
-        object: &O,
-    ) -> Result<(), StoreError>;
+    async fn put_obj<O: StorableObject>(&mut self, object: &O) -> Result<(), StoreError>;
 
-    async fn get_obj<O: StorableObject>(
-        &mut self,
-        _key: &O::Key,
-    ) -> Result<O, StoreError>;
+    async fn get_obj<O: StorableObject>(&mut self, _key: &O::Key) -> Result<O, StoreError>;
 
-    async fn watch_obj<K: ObjectKey>(
-        &mut self,
-        key: &K,
-    ) -> Result<StoreWatchReceiver, StoreError>;
+    async fn watch_obj<K: ObjectKey>(&mut self, key: &K) -> Result<StoreWatchReceiver, StoreError>;
 
     async fn online(&mut self) -> bool;
 }

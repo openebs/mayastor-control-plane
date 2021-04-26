@@ -22,10 +22,9 @@ impl Registry {
         node_id: &NodeId,
         pool_id: &PoolId,
     ) -> Result<PoolWrapper, SvcError> {
-        let node =
-            self.get_node_wrapper(node_id).await.context(NodeNotFound {
-                node_id: node_id.clone(),
-            })?;
+        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
+            node_id: node_id.clone(),
+        })?;
         let pool = node.pool(pool_id).await.context(PoolNotFound {
             pool_id: pool_id.clone(),
         })?;
@@ -33,10 +32,7 @@ impl Registry {
     }
 
     /// Get pool wrapper for `pool_id`
-    pub(crate) async fn get_pool_wrapper(
-        &self,
-        pool_id: &PoolId,
-    ) -> Result<PoolWrapper, SvcError> {
+    pub(crate) async fn get_pool_wrapper(&self, pool_id: &PoolId) -> Result<PoolWrapper, SvcError> {
         let nodes = self.get_nodes_wrapper().await;
         for node in nodes {
             if let Some(pool) = node.pool(pool_id).await {
@@ -49,9 +45,7 @@ impl Registry {
     }
 
     /// Get all pool wrappers
-    pub(crate) async fn get_pools_wrapper(
-        &self,
-    ) -> Result<Vec<PoolWrapper>, SvcError> {
+    pub(crate) async fn get_pools_wrapper(&self) -> Result<Vec<PoolWrapper>, SvcError> {
         let nodes = self.get_nodes_wrapper().await;
         let mut pools = vec![];
         for node in nodes {
@@ -61,9 +55,7 @@ impl Registry {
     }
 
     /// Get pool wrappers per node
-    pub(crate) async fn get_node_pools_wrapper(
-        &self,
-    ) -> Result<Vec<Vec<PoolWrapper>>, SvcError> {
+    pub(crate) async fn get_node_pools_wrapper(&self) -> Result<Vec<Vec<PoolWrapper>>, SvcError> {
         let nodes = self.get_nodes_wrapper().await;
         let mut pools = vec![];
         for node in nodes {
@@ -79,14 +71,10 @@ impl Registry {
     }
 
     /// Get all pools from node `node_id`
-    pub(crate) async fn get_node_pools(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<Vec<Pool>, SvcError> {
-        let node =
-            self.get_node_wrapper(node_id).await.context(NodeNotFound {
-                node_id: node_id.clone(),
-            })?;
+    pub(crate) async fn get_node_pools(&self, node_id: &NodeId) -> Result<Vec<Pool>, SvcError> {
+        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
+            node_id: node_id.clone(),
+        })?;
         Ok(node.pools().await.iter().map(Pool::from).collect())
     }
 }
@@ -111,16 +99,14 @@ impl Registry {
     }
 
     /// Get replica `replica_id`
-    pub(crate) async fn get_replica(
-        &self,
-        replica_id: &ReplicaId,
-    ) -> Result<Replica, SvcError> {
+    pub(crate) async fn get_replica(&self, replica_id: &ReplicaId) -> Result<Replica, SvcError> {
         let replicas = self.get_replicas().await?;
-        let replica = replicas.iter().find(|r| &r.uuid == replica_id).context(
-            ReplicaNotFound {
+        let replica = replicas
+            .iter()
+            .find(|r| &r.uuid == replica_id)
+            .context(ReplicaNotFound {
                 replica_id: replica_id.clone(),
-            },
-        )?;
+            })?;
         Ok(replica.clone())
     }
 
@@ -129,10 +115,9 @@ impl Registry {
         &self,
         node_id: &NodeId,
     ) -> Result<Vec<Replica>, SvcError> {
-        let node =
-            self.get_node_wrapper(node_id).await.context(NodeNotFound {
-                node_id: node_id.clone(),
-            })?;
+        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
+            node_id: node_id.clone(),
+        })?;
         Ok(node.replicas().await)
     }
 
@@ -142,14 +127,12 @@ impl Registry {
         node_id: &NodeId,
         replica_id: &ReplicaId,
     ) -> Result<Replica, SvcError> {
-        let node =
-            self.get_node_wrapper(node_id).await.context(NodeNotFound {
-                node_id: node_id.clone(),
-            })?;
-        let replica =
-            node.replica(replica_id).await.context(ReplicaNotFound {
-                replica_id: replica_id.clone(),
-            })?;
+        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
+            node_id: node_id.clone(),
+        })?;
+        let replica = node.replica(replica_id).await.context(ReplicaNotFound {
+            replica_id: replica_id.clone(),
+        })?;
         Ok(replica)
     }
 
@@ -173,10 +156,9 @@ impl Registry {
         pool_id: &PoolId,
         replica_id: &ReplicaId,
     ) -> Result<Replica, SvcError> {
-        let node =
-            self.get_node_wrapper(node_id).await.context(NodeNotFound {
-                node_id: node_id.clone(),
-            })?;
+        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
+            node_id: node_id.clone(),
+        })?;
         let pool = node.pool(pool_id).await.context(PoolNotFound {
             pool_id: pool_id.clone(),
         })?;

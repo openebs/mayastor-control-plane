@@ -287,10 +287,7 @@ impl WatchCfg {
     }
 
     /// Notify the watcher using its callback
-    async fn notify(
-        cancel: &mut tokio::sync::mpsc::Receiver<()>,
-        callback: &WatchCallback,
-    ) {
+    async fn notify(cancel: &mut tokio::sync::mpsc::Receiver<()>, callback: &WatchCallback) {
         let mut tries = 0;
         let mut log_failure = true;
         loop {
@@ -310,10 +307,7 @@ impl WatchCfg {
                         Ok(resp) if resp.status().is_success() => {
                             // notification complete
                             if !log_failure {
-                                tracing::info!(
-                                    "Completed notification for url {}",
-                                    uri
-                                );
+                                tracing::info!("Completed notification for url {}", uri);
                             }
                             return;
                         }
@@ -412,10 +406,7 @@ async fn backoff(tries: &mut u32, max: Duration) {
 
 impl StoreWatcher {
     /// Get all the watchers for `watch_id`
-    pub async fn get_watchers(
-        &self,
-        watch_id: &WatchCfgId,
-    ) -> Result<Watches, SvcError> {
+    pub async fn get_watchers(&self, watch_id: &WatchCfgId) -> Result<Watches, SvcError> {
         let watches = match self.get_watch_cfg(watch_id).await {
             Some(db) => {
                 let db = db.lock().await;
@@ -435,10 +426,7 @@ impl StoreWatcher {
     }
 
     /// Get the watch configuration for `watch_id`
-    async fn get_watch_cfg(
-        &self,
-        watch_id: &WatchCfgId,
-    ) -> Option<Arc<Mutex<WatchCfg>>> {
+    async fn get_watch_cfg(&self, watch_id: &WatchCfgId) -> Option<Arc<Mutex<WatchCfg>>> {
         for db in &self.watches {
             let found = {
                 let db = db.lock().await;
@@ -452,10 +440,7 @@ impl StoreWatcher {
     }
 
     /// Gets or creates the watch config for `watch_id` if it does not exist
-    async fn get_or_create_watch_cfg(
-        &mut self,
-        watch_id: &WatchCfgId,
-    ) -> Arc<Mutex<WatchCfg>> {
+    async fn get_or_create_watch_cfg(&mut self, watch_id: &WatchCfgId) -> Arc<Mutex<WatchCfg>> {
         match self.get_watch_cfg(watch_id).await {
             Some(watch) => watch,
             None => {

@@ -89,11 +89,7 @@ impl Service {
         let mut nodes = self.registry.nodes.write().await;
         match nodes.get_mut(&node.id) {
             None => {
-                let mut node = NodeWrapper::new(
-                    &node,
-                    self.deadline,
-                    self.comms_timeouts.clone(),
-                );
+                let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
                 node.watchdog_mut().arm(self.clone());
                 nodes.insert(node.id.clone(), Arc::new(Mutex::new(node)));
             }
@@ -119,10 +115,7 @@ impl Service {
     }
 
     /// Get all nodes
-    pub(crate) async fn get_nodes(
-        &self,
-        _: &GetNodes,
-    ) -> Result<Nodes, SvcError> {
+    pub(crate) async fn get_nodes(&self, _: &GetNodes) -> Result<Nodes, SvcError> {
         let nodes = self.registry.get_nodes_wrapper().await;
         let mut nodes_vec = vec![];
         for node in nodes {
@@ -170,10 +163,7 @@ impl Service {
     }
 
     /// Get specs from the registry
-    pub(crate) async fn get_specs(
-        &self,
-        _request: &GetSpecs,
-    ) -> Result<Specs, SvcError> {
+    pub(crate) async fn get_specs(&self, _request: &GetSpecs) -> Result<Specs, SvcError> {
         let registry = self.registry.specs.write().await;
         let nexuses = registry.get_nexuses().await;
         let replicas = registry.get_replicas().await;
@@ -187,9 +177,7 @@ impl Service {
 
 impl Registry {
     /// Get all node wrappers
-    pub(crate) async fn get_nodes_wrapper(
-        &self,
-    ) -> Vec<Arc<Mutex<NodeWrapper>>> {
+    pub(crate) async fn get_nodes_wrapper(&self) -> Vec<Arc<Mutex<NodeWrapper>>> {
         let nodes = self.nodes.read().await;
         nodes.values().cloned().collect()
     }

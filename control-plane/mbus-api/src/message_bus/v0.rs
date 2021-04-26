@@ -236,17 +236,13 @@ pub trait MessageBusTrait: Sized {
 
     /// Generic JSON gRPC call
     #[tracing::instrument(level = "debug", err)]
-    async fn json_grpc_call(
-        request: JsonGrpcRequest,
-    ) -> BusResult<serde_json::Value> {
+    async fn json_grpc_call(request: JsonGrpcRequest) -> BusResult<serde_json::Value> {
         Ok(request.request().await?)
     }
 
     /// Get block devices on a node
     #[tracing::instrument(level = "debug", err)]
-    async fn get_block_devices(
-        request: GetBlockDevices,
-    ) -> BusResult<BlockDevices> {
+    async fn get_block_devices(request: GetBlockDevices) -> BusResult<BlockDevices> {
         Ok(request.request().await?)
     }
 }
@@ -273,18 +269,14 @@ mod tests {
         Ok(())
     }
     fn init_tracing() {
-        if let Ok(filter) =
-            tracing_subscriber::EnvFilter::try_from_default_env()
-        {
+        if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
             tracing_subscriber::fmt().with_env_filter(filter).init();
         } else {
             tracing_subscriber::fmt().with_env_filter("info").init();
         }
     }
     // to avoid waiting for timeouts
-    async fn orderly_start(
-        test: &ComposeTest,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn orderly_start(test: &ComposeTest) -> Result<(), Box<dyn std::error::Error>> {
         test.start_containers(vec!["nats", "node"]).await?;
 
         bus_init().await?;
@@ -303,10 +295,7 @@ mod tests {
         let mayastor = "node-test-name";
         let test = Builder::new()
             .name("rest_backend")
-            .add_container_bin(
-                "nats",
-                Binary::from_nix("nats-server").with_arg("-DV"),
-            )
+            .add_container_bin("nats", Binary::from_nix("nats-server").with_arg("-DV"))
             .add_container_bin("node", Binary::from_dbg("node").with_nats("-n"))
             .add_container_bin(
                 "mayastor",

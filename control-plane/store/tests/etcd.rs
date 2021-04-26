@@ -64,8 +64,7 @@ async fn etcd() {
         .await
         .expect("Failed to 'put' to etcd");
     let v = store.get_kv(&key).await.expect("Failed to 'get' from etcd");
-    let result: TestStruct =
-        serde_json::from_value(v).expect("Failed to deserialise value");
+    let result: TestStruct = serde_json::from_value(v).expect("Failed to deserialise value");
     assert_eq!(data, result);
 
     // Start a watcher which should send a message when the subsequent 'put'
@@ -84,9 +83,7 @@ async fn etcd() {
         .recv_timeout(Duration::from_secs(1))
         .expect("Timed out waiting for message");
     let result: TestStruct = match msg {
-        WatchEvent::Put(_k, v) => {
-            serde_json::from_value(v).expect("Failed to deserialise value")
-        }
+        WatchEvent::Put(_k, v) => serde_json::from_value(v).expect("Failed to deserialise value"),
         _ => panic!("Expected a 'put' event"),
     };
     assert_eq!(result, data);

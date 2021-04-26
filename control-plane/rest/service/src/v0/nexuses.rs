@@ -14,13 +14,10 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 
 #[get("/nexuses", tags(Nexuses))]
 async fn get_nexuses() -> Result<Json<Vec<Nexus>>, RestClusterError> {
-    RestRespond::result(MessageBus::get_nexuses(Filter::None).await)
-        .map_err(RestClusterError::from)
+    RestRespond::result(MessageBus::get_nexuses(Filter::None).await).map_err(RestClusterError::from)
 }
 #[get("/nexuses/{nexus_id}", tags(Nexuses))]
-async fn get_nexus(
-    web::Path(nexus_id): web::Path<NexusId>,
-) -> Result<Json<Nexus>, RestError> {
+async fn get_nexus(web::Path(nexus_id): web::Path<NexusId>) -> Result<Json<Nexus>, RestError> {
     RestRespond::result(MessageBus::get_nexus(Filter::Nexus(nexus_id)).await)
 }
 
@@ -34,9 +31,7 @@ async fn get_node_nexuses(
 async fn get_node_nexus(
     web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
 ) -> Result<Json<Nexus>, RestError> {
-    RestRespond::result(
-        MessageBus::get_nexus(Filter::NodeNexus(node_id, nexus_id)).await,
-    )
+    RestRespond::result(MessageBus::get_nexus(Filter::NodeNexus(node_id, nexus_id)).await)
 }
 
 #[put("/nodes/{node_id}/nexuses/{nexus_id}", tags(Nexuses))]
@@ -55,19 +50,13 @@ async fn del_node_nexus(
     destroy_nexus(Filter::NodeNexus(node_id, nexus_id)).await
 }
 #[delete("/nexuses/{nexus_id}", tags(Nexuses))]
-async fn del_nexus(
-    web::Path(nexus_id): web::Path<NexusId>,
-) -> Result<JsonUnit, RestError> {
+async fn del_nexus(web::Path(nexus_id): web::Path<NexusId>) -> Result<JsonUnit, RestError> {
     destroy_nexus(Filter::Nexus(nexus_id)).await
 }
 
 #[put("/nodes/{node_id}/nexuses/{nexus_id}/share/{protocol}", tags(Nexuses))]
 async fn put_node_nexus_share(
-    web::Path((node_id, nexus_id, protocol)): web::Path<(
-        NodeId,
-        NexusId,
-        NexusShareProtocol,
-    )>,
+    web::Path((node_id, nexus_id, protocol)): web::Path<(NodeId, NexusId, NexusShareProtocol)>,
 ) -> Result<Json<String>, RestError> {
     let share = ShareNexus {
         node: node_id,
@@ -86,8 +75,7 @@ async fn del_node_nexus_share(
         node: node_id,
         uuid: nexus_id,
     };
-    RestRespond::result(MessageBus::unshare_nexus(unshare).await)
-        .map(JsonUnit::from)
+    RestRespond::result(MessageBus::unshare_nexus(unshare).await).map(JsonUnit::from)
 }
 
 async fn destroy_nexus(filter: Filter) -> Result<JsonUnit, RestError> {
@@ -116,6 +104,5 @@ async fn destroy_nexus(filter: Filter) -> Result<JsonUnit, RestError> {
         }
     };
 
-    RestRespond::result(MessageBus::destroy_nexus(destroy).await)
-        .map(JsonUnit::from)
+    RestRespond::result(MessageBus::destroy_nexus(destroy).await).map(JsonUnit::from)
 }
