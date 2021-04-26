@@ -227,15 +227,7 @@ pub struct GetNodes {}
 
 /// State of the Node
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    EnumString,
-    ToString,
-    Eq,
-    PartialEq,
-    Apiv2Schema,
+    Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq, Apiv2Schema,
 )]
 pub enum NodeState {
     /// Node has unexpectedly disappeared
@@ -255,9 +247,7 @@ impl Default for NodeState {
 }
 
 /// Node information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct Node {
     /// id of the mayastor instance
@@ -469,15 +459,7 @@ pub struct GetPools {
 
 /// State of the Pool
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    EnumString,
-    ToString,
-    Eq,
-    PartialEq,
-    Apiv2Schema,
+    Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq, Apiv2Schema,
 )]
 pub enum PoolState {
     /// unknown state
@@ -507,9 +489,7 @@ impl From<i32> for PoolState {
 }
 
 /// Pool information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct Pool {
     /// id of the mayastor instance
@@ -594,9 +574,7 @@ pub struct GetReplicas {
 }
 
 /// Replica information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct Replica {
     /// id of the mayastor instance
@@ -759,15 +737,7 @@ bus_impl_message_all!(UnshareReplica, UnshareReplica, (), Pool);
 
 /// Indicates what protocol the bdev is shared as
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    EnumString,
-    ToString,
-    Eq,
-    PartialEq,
-    Apiv2Schema,
+    Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq, Apiv2Schema,
 )]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
@@ -815,16 +785,7 @@ impl From<NexusShareProtocol> for Protocol {
 
 /// The protocol used to share the nexus.
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Copy,
-    Clone,
-    EnumString,
-    ToString,
-    Eq,
-    PartialEq,
-    Apiv2Schema,
+    Serialize, Deserialize, Debug, Copy, Clone, EnumString, ToString, Eq, PartialEq, Apiv2Schema,
 )]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
@@ -852,16 +813,7 @@ impl From<i32> for NexusShareProtocol {
 
 /// The protocol used to share the replica.
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    Copy,
-    EnumString,
-    ToString,
-    Eq,
-    PartialEq,
-    Apiv2Schema,
+    Serialize, Deserialize, Debug, Clone, Copy, EnumString, ToString, Eq, PartialEq, Apiv2Schema,
 )]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
@@ -886,15 +838,7 @@ impl From<i32> for ReplicaShareProtocol {
 
 /// State of the Replica
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    EnumString,
-    ToString,
-    Eq,
-    PartialEq,
-    Apiv2Schema,
+    Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq, Apiv2Schema,
 )]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
@@ -935,9 +879,7 @@ pub struct GetNexuses {
 }
 
 /// Nexus information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct Nexus {
     /// id of the mayastor instance
@@ -958,9 +900,7 @@ pub struct Nexus {
 }
 
 /// Child information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct Child {
     /// uri of the child device
@@ -1001,15 +941,7 @@ impl From<i32> for ChildState {
 
 /// Nexus State information
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    EnumString,
-    ToString,
-    Eq,
-    PartialEq,
-    Apiv2Schema,
+    Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq, Apiv2Schema,
 )]
 pub enum NexusState {
     /// Default Unknown state
@@ -1149,9 +1081,7 @@ bus_impl_message_all!(AddNexusChild, AddNexusChild, Child, Nexus);
 /// Volumes
 ///
 /// Volume information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct Volume {
     /// name of the volume
@@ -1248,9 +1178,7 @@ pub struct JsonGrpcRequest {
 bus_impl_message_all!(JsonGrpcRequest, JsonGrpc, Value, JsonGrpc);
 
 /// Partition information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 pub struct Partition {
     /// devname of parent device to which this partition belongs
     pub parent: String,
@@ -1267,9 +1195,7 @@ pub struct Partition {
 }
 
 /// Filesystem information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 pub struct Filesystem {
     /// filesystem type: ext3, ntfs, ...
     pub fstype: String,
@@ -1282,9 +1208,7 @@ pub struct Filesystem {
 }
 
 /// Block device information
-#[derive(
-    Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema,
-)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockDevice {
     /// entry in /dev associated with device

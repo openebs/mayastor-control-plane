@@ -159,8 +159,7 @@ impl Components {
             Ok(result) => result,
             Err(_) => {
                 let error = format!("Time out of {:?} expired", timeout);
-                Err(std::io::Error::new(std::io::ErrorKind::TimedOut, error)
-                    .into())
+                Err(std::io::Error::new(std::io::ErrorKind::TimedOut, error).into())
             }
         }
     }

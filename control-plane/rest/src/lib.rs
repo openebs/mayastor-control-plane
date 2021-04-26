@@ -17,13 +17,7 @@ pub mod versions;
 
 use actix_web::{
     body::Body,
-    client::{
-        Client,
-        ClientBuilder,
-        ClientResponse,
-        PayloadError,
-        SendRequestError,
-    },
+    client::{Client, ClientBuilder, ClientResponse, PayloadError, SendRequestError},
     dev::ResponseHead,
     web::Bytes,
     HttpResponse,
@@ -52,17 +46,8 @@ pub struct ActixRestClient {
 impl ActixRestClient {
     /// creates a new client which uses the specified `url`
     /// uses the rustls connector if the url has the https scheme
-    pub fn new(
-        url: &str,
-        trace: bool,
-        bearer_token: Option<String>,
-    ) -> anyhow::Result<Self> {
-        Self::new_timeout(
-            url,
-            trace,
-            bearer_token,
-            std::time::Duration::from_secs(5),
-        )
+    pub fn new(url: &str, trace: bool, bearer_token: Option<String>) -> anyhow::Result<Self> {
+        Self::new_timeout(url, trace, bearer_token, std::time::Duration::from_secs(5))
     }
     /// creates a new client which uses the specified `url`
     /// uses the rustls connector if the url has the https scheme
@@ -88,22 +73,15 @@ impl ActixRestClient {
         }
     }
     /// creates a new secure client
-    fn new_https(
-        client: ClientBuilder,
-        url: &url::Url,
-        trace: bool,
-    ) -> anyhow::Result<Self> {
-        let cert_file = &mut BufReader::new(
-            &std::include_bytes!("../certs/rsa/ca.cert")[..],
-        );
+    fn new_https(client: ClientBuilder, url: &url::Url, trace: bool) -> anyhow::Result<Self> {
+        let cert_file = &mut BufReader::new(&std::include_bytes!("../certs/rsa/ca.cert")[..]);
 
         let mut config = rustls::ClientConfig::new();
         config
             .root_store
             .add_pem_file(cert_file)
             .map_err(|_| anyhow::anyhow!("Add pem file to the root store!"))?;
-        let connector = actix_web::client::Connector::new()
-            .rustls(std::sync::Arc::new(config));
+        let connector = actix_web::client::Connector::new().rustls(std::sync::Arc::new(config));
         let rest_client = client.connector(connector.finish()).finish();
 
         Ok(Self {
@@ -138,11 +116,7 @@ impl ActixRestClient {
 
         Self::rest_vec_result(rest_response).await
     }
-    async fn put<R, B: Into<Body>>(
-        &self,
-        urn: String,
-        body: B,
-    ) -> Result<R, ClientError>
+    async fn put<R, B: Into<Body>>(&self, urn: String, body: B) -> Result<R, ClientError>
     where
         for<'de> R: Deserialize<'de> + Default,
     {
@@ -188,9 +162,7 @@ impl ActixRestClient {
         Self::rest_result(rest_response).await
     }
 
-    async fn rest_vec_result<S, R>(
-        mut rest_response: ClientResponse<S>,
-    ) -> ClientResult<Vec<R>>
+    async fn rest_vec_result<S, R>(mut rest_response: ClientResponse<S>) -> ClientResult<Vec<R>>
     where
         S: Stream<Item = Result<Bytes, PayloadError>> + Unpin,
         for<'de> R: Deserialize<'de>,
@@ -209,11 +181,10 @@ impl ActixRestClient {
             match serde_json::from_slice(&body) {
                 Ok(r) => Ok(r),
                 Err(_) => {
-                    let result =
-                        serde_json::from_slice(&body).context(InvalidBody {
-                            head: head(),
-                            body,
-                        })?;
+                    let result = serde_json::from_slice(&body).context(InvalidBody {
+                        head: head(),
+                        body,
+                    })?;
                     Ok(vec![result])
                 }
             }
@@ -222,8 +193,8 @@ impl ActixRestClient {
                 head: head(),
             })
         } else {
-            let error = serde_json::from_slice::<serde_json::Value>(&body)
-                .context(InvalidBody {
+            let error =
+                serde_json::from_slice::<serde_json::Value>(&body).context(InvalidBody {
                     head: head(),
                     body,
                 })?;
@@ -234,9 +205,7 @@ impl ActixRestClient {
         }
     }
 
-    async fn rest_result<S, R>(
-        mut rest_response: ClientResponse<S>,
-    ) -> Result<R, ClientError>
+    async fn rest_result<S, R>(mut rest_response: ClientResponse<S>) -> Result<R, ClientError>
     where
         S: Stream<Item = Result<Bytes, PayloadError>> + Unpin,
         for<'de> R: Deserialize<'de> + Default,
@@ -259,9 +228,7 @@ impl ActixRestClient {
             });
             match result {
                 Ok(result) => Ok(result),
-                Err(_) if empty && std::any::type_name::<R>() == "()" => {
-                    Ok(R::default())
-                }
+                Err(_) if empty && std::any::type_name::<R>() == "()" => Ok(R::default()),
                 Err(error) => Err(error),
             }
         } else if body.is_empty() {
@@ -269,8 +236,8 @@ impl ActixRestClient {
                 head: head(),
             })
         } else {
-            let error = serde_json::from_slice::<serde_json::Value>(&body)
-                .context(InvalidBody {
+            let error =
+                serde_json::from_slice::<serde_json::Value>(&body).context(InvalidBody {
                     head: head(),
                     body,
                 })?;
@@ -304,11 +271,7 @@ pub enum ClientError {
         details: String,
     },
     /// Response an error code and with an invalid payload
-    #[snafu(display(
-        "Invalid payload, header: {:?}, reason: {}",
-        head,
-        source
-    ))]
+    #[snafu(display("Invalid payload, header: {:?}, reason: {}", head, source))]
     InvalidPayload {
         /// http Header
         head: ResponseHead,
@@ -415,10 +378,7 @@ impl actix_web::Responder for JsonUnit {
     type Future = Ready<Result<actix_web::HttpResponse, actix_web::Error>>;
 
     fn respond_to(self, _: &actix_web::HttpRequest) -> Self::Future {
-        futures::future::ok(
-            HttpResponse::build(actix_web::http::StatusCode::NO_CONTENT)
-                .finish(),
-        )
+        futures::future::ok(HttpResponse::build(actix_web::http::StatusCode::NO_CONTENT).finish())
     }
 }
 impl Apiv2Schema for JsonUnit {
@@ -469,8 +429,7 @@ impl<'de> Deserialize<'de> for RestUri {
         match url::Url::from_str(&string) {
             Ok(url) => Ok(RestUri(url)),
             Err(error) => {
-                let error =
-                    format!("Failed to parse into a URL, error: {}", error);
+                let error = format!("Failed to parse into a URL, error: {}", error);
                 Err(serde::de::Error::custom(error))
             }
         }

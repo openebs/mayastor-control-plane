@@ -2,11 +2,7 @@ use super::*;
 
 #[async_trait]
 impl ComponentAction for Dns {
-    fn configure(
-        &self,
-        options: &StartOptions,
-        cfg: Builder,
-    ) -> Result<Builder, Error> {
+    fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         Ok(if options.dns {
             cfg.add_container_spec(
                 ContainerSpec::from_image("dns", "defreitas/dns-proxy-server")
@@ -17,11 +13,7 @@ impl ComponentAction for Dns {
             cfg
         })
     }
-    async fn start(
-        &self,
-        options: &StartOptions,
-        cfg: &ComposeTest,
-    ) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         if options.dns {
             cfg.start("dns").await?;
         }

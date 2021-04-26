@@ -2,11 +2,7 @@ use super::*;
 
 #[async_trait]
 impl ComponentAction for Rest {
-    fn configure(
-        &self,
-        options: &StartOptions,
-        cfg: Builder,
-    ) -> Result<Builder, Error> {
+    fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         Ok(if options.no_rest {
             cfg
         } else {
@@ -48,11 +44,7 @@ impl ComponentAction for Rest {
             }
         })
     }
-    async fn start(
-        &self,
-        options: &StartOptions,
-        cfg: &ComposeTest,
-    ) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         if !options.no_rest {
             cfg.start("rest").await?;
         }

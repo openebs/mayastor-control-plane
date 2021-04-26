@@ -34,8 +34,7 @@ pub struct ReceivedMessageExt<'a, S, R> {
 /// // or we can also use the same fn to return an error
 /// msg.respond(Err(Error::Message("failure".into()))).await.unwrap();
 /// ```
-pub type ReceivedMessage<'a, S> =
-    ReceivedMessageExt<'a, S, <S as Message>::Reply>;
+pub type ReceivedMessage<'a, S> = ReceivedMessageExt<'a, S, <S as Message>::Reply>;
 
 impl<'a, S, R> ReceivedMessageExt<'a, S, R>
 where
@@ -56,10 +55,7 @@ where
     /// May fail if serialization of the reply fails or if the
     /// message bus fails to respond.
     /// Can receive either `R`, `Err()` or `ReplyPayload<R>`.
-    pub async fn reply<T: Into<ReplyPayload<R>>>(
-        &self,
-        reply: T,
-    ) -> BusResult<()> {
+    pub async fn reply<T: Into<ReplyPayload<R>>>(&self, reply: T) -> BusResult<()> {
         let reply: ReplyPayload<R> = reply.into();
         let payload = serde_json::to_vec(&reply).context(SerializeReply {
             request: self.request.id.clone(),
@@ -72,8 +68,8 @@ where
     /// Create a new received message object which wraps the send and
     /// receive types around a raw bus message.
     fn new(bus_message: &'a BusMessage) -> Result<Self, Error> {
-        let request: SendPayload<S> = serde_json::from_slice(&bus_message.data)
-            .context(DeserializeSend {
+        let request: SendPayload<S> =
+            serde_json::from_slice(&bus_message.data).context(DeserializeSend {
                 receiver: std::any::type_name::<S>(),
                 payload: String::from_utf8(bus_message.data.clone()),
             })?;
@@ -121,21 +117,19 @@ impl<'a> ReceivedRawMessage<'a> {
     /// Get a copy of the actual payload data which was sent
     /// May fail if the raw data cannot be deserialized into `S`
     pub fn inner<S: Deserialize<'a> + Message>(&self) -> BusResult<S> {
-        let request: SendPayload<S> = serde_json::from_slice(
-            &self.bus_msg.data,
-        )
-        .context(DeserializeSend {
-            receiver: std::any::type_name::<S>(),
-            payload: String::from_utf8(self.bus_msg.data.clone()),
-        })?;
+        let request: SendPayload<S> =
+            serde_json::from_slice(&self.bus_msg.data).context(DeserializeSend {
+                receiver: std::any::type_name::<S>(),
+                payload: String::from_utf8(self.bus_msg.data.clone()),
+            })?;
         Ok(request.data)
     }
 
     /// Get the identifier of this message.
     /// May fail if the raw data cannot be deserialized into the preamble.
     pub fn id(&self) -> BusResult<MessageId> {
-        let preamble: Preamble = serde_json::from_slice(&self.bus_msg.data)
-            .context(DeserializeSend {
+        let preamble: Preamble =
+            serde_json::from_slice(&self.bus_msg.data).context(DeserializeSend {
                 receiver: std::any::type_name::<Preamble>(),
                 payload: String::from_utf8(self.bus_msg.data.clone()),
             })?;
@@ -174,8 +168,7 @@ impl<'a> std::convert::From<&'a BusMessage> for ReceivedRawMessage<'a> {
     }
 }
 
-impl<'a, S, R> std::convert::TryFrom<&'a BusMessage>
-    for ReceivedMessageExt<'a, S, R>
+impl<'a, S, R> std::convert::TryFrom<&'a BusMessage> for ReceivedMessageExt<'a, S, R>
 where
     for<'de> S: Deserialize<'de> + 'a + Debug + Clone + Message,
     R: Serialize,
@@ -187,8 +180,7 @@ where
     }
 }
 
-impl<'a, S, R> std::convert::TryFrom<ReceivedRawMessage<'a>>
-    for ReceivedMessageExt<'a, S, R>
+impl<'a, S, R> std::convert::TryFrom<ReceivedRawMessage<'a>> for ReceivedMessageExt<'a, S, R>
 where
     for<'de> S: Deserialize<'de> + 'a + Debug + Clone + Message,
     R: Serialize,

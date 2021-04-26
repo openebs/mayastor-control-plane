@@ -35,8 +35,7 @@ impl GrpcContext {
             node_id: node.to_string(),
             uri: uri.clone(),
         })?;
-        let endpoint = tonic::transport::Endpoint::from(uri)
-            .timeout(comms_timeouts.request());
+        let endpoint = tonic::transport::Endpoint::from(uri).timeout(comms_timeouts.request());
 
         Ok(Self {
             node: node.clone(),
@@ -51,9 +50,7 @@ impl GrpcContext {
     pub(crate) async fn connect(&self) -> Result<GrpcClient, SvcError> {
         GrpcClient::new(self).await
     }
-    pub(crate) async fn connect_locked(
-        &self,
-    ) -> Result<GrpcClientLocked, SvcError> {
+    pub(crate) async fn connect_locked(&self) -> Result<GrpcClientLocked, SvcError> {
         GrpcClientLocked::new(self).await
     }
 }

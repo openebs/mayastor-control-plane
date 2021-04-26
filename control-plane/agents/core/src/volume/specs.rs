@@ -227,18 +227,12 @@ impl ResourceSpecsLocked {
         let specs = self.read().await;
         specs.nexuses.get(id).cloned()
     }
-    async fn get_volume(
-        &self,
-        id: &VolumeId,
-    ) -> Option<Arc<Mutex<VolumeSpec>>> {
+    async fn get_volume(&self, id: &VolumeId) -> Option<Arc<Mutex<VolumeSpec>>> {
         let specs = self.read().await;
         specs.volumes.get(id).cloned()
     }
     // we could also get the replicas from the volume nexuses
-    async fn get_volume_replicas(
-        &self,
-        id: &VolumeId,
-    ) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+    async fn get_volume_replicas(&self, id: &VolumeId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         let mut replicas = vec![];
         let specs = self.read().await;
         for replica in specs.replicas.values() {
@@ -249,10 +243,7 @@ impl ResourceSpecsLocked {
         }
         replicas
     }
-    async fn get_replica_node(
-        registry: &Registry,
-        replica: &ReplicaSpec,
-    ) -> Option<NodeId> {
+    async fn get_replica_node(registry: &Registry, replica: &ReplicaSpec) -> Option<NodeId> {
         let pools = registry.get_pools_inner().await.unwrap();
         pools.iter().find_map(|p| {
             if p.id == replica.pool {
@@ -263,10 +254,7 @@ impl ResourceSpecsLocked {
         })
     }
     // we could also tag the volume with the "latest" nexuses
-    async fn get_volume_nexuses(
-        &self,
-        id: &VolumeId,
-    ) -> Vec<Arc<Mutex<NexusSpec>>> {
+    async fn get_volume_nexuses(&self, id: &VolumeId) -> Vec<Arc<Mutex<NexusSpec>>> {
         let mut nexuses = vec![];
         let specs = self.read().await;
         for nexus in specs.nexuses.values() {
@@ -283,11 +271,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateNexus,
     ) -> Result<Nexus, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         let nexus_spec = {
             let mut specs = self.write().await;
@@ -346,11 +335,12 @@ impl ResourceSpecsLocked {
         request: &DestroyNexus,
         force: bool,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         let nexus = self.get_nexus(&request.uuid).await;
         if let Some(nexus) = &nexus {
@@ -389,8 +379,7 @@ impl ResourceSpecsLocked {
                             .delete_kv(&NexusSpecKey::from(&request.uuid).key())
                             .await
                         {
-                            if !matches!(error, StoreError::MissingEntry { .. })
-                            {
+                            if !matches!(error, StoreError::MissingEntry { .. }) {
                                 return Err(error.into());
                             }
                         }
@@ -416,11 +405,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &ShareNexus,
     ) -> Result<String, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.uuid).await {
             let mut spec = nexus_spec.lock().await;
@@ -450,8 +440,7 @@ impl ResourceSpecsLocked {
                         store.put_obj(&spec_clone).await
                     };
                     if let Err(error) = result {
-                        let _ =
-                            node.unshare_nexus(&request.clone().into()).await;
+                        let _ = node.unshare_nexus(&request.clone().into()).await;
                         let mut spec = nexus_spec.lock().await;
                         spec.updating = false;
                         return Err(error.into());
@@ -476,11 +465,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &UnshareNexus,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         let specs = self.read().await;
         if let Some(nexus_spec) = specs.get_nexus(&request.uuid) {
@@ -548,11 +538,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &AddNexusChild,
     ) -> Result<Child, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
             let mut spec = nexus_spec.lock().await;
@@ -581,8 +572,7 @@ impl ResourceSpecsLocked {
                         store.put_obj(&spec_clone).await
                     };
                     if let Err(error) = result {
-                        let _ =
-                            node.remove_child(&request.clone().into()).await;
+                        let _ = node.remove_child(&request.clone().into()).await;
                         let mut spec = nexus_spec.lock().await;
                         spec.updating = false;
                         return Err(error.into());
@@ -608,11 +598,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &RemoveNexusChild,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await.context(
-            NodeNotFound {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
                 node_id: request.node.clone(),
-            },
-        )?;
+            })?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
             let mut spec = nexus_spec.lock().await;
@@ -661,10 +652,7 @@ impl ResourceSpecsLocked {
         }
     }
 
-    fn destroy_replica_request(
-        spec: ReplicaSpec,
-        node: &NodeId,
-    ) -> DestroyReplica {
+    fn destroy_replica_request(spec: ReplicaSpec, node: &NodeId) -> DestroyReplica {
         DestroyReplica {
             node: node.clone(),
             pool: spec.pool,
@@ -766,10 +754,7 @@ impl ResourceSpecsLocked {
                     node: replicas[0].node.clone(),
                     uuid: NexusId::new(),
                     size: request.size,
-                    children: replicas
-                        .iter()
-                        .map(|r| ChildUri::from(&r.uri))
-                        .collect(),
+                    children: replicas.iter().map(|r| ChildUri::from(&r.uri)).collect(),
                     managed: true,
                     owner: Some(request.uuid.clone()),
                 },
@@ -783,11 +768,7 @@ impl ResourceSpecsLocked {
                 drop(volume_spec);
                 for replica in &replicas {
                     if let Err(error) = self
-                        .destroy_replica(
-                            registry,
-                            &replica.clone().into(),
-                            true,
-                        )
+                        .destroy_replica(registry, &replica.clone().into(), true)
                         .await
                     {
                         tracing::error!(
@@ -868,9 +849,7 @@ impl ResourceSpecsLocked {
             let replicas = self.get_volume_replicas(&request.uuid).await;
             for replica in replicas {
                 let spec = replica.lock().await.deref().clone();
-                if let Some(node) =
-                    Self::get_replica_node(registry, &spec).await
-                {
+                if let Some(node) = Self::get_replica_node(registry, &spec).await {
                     if let Err(error) = self
                         .destroy_replica(
                             registry,
@@ -896,13 +875,10 @@ impl ResourceSpecsLocked {
                     {
                         let mut store = registry.store.lock().await;
                         if let Err(error) = store
-                            .delete_kv(
-                                &VolumeSpecKey::from(&request.uuid).key(),
-                            )
+                            .delete_kv(&VolumeSpecKey::from(&request.uuid).key())
                             .await
                         {
-                            if !matches!(error, StoreError::MissingEntry { .. })
-                            {
+                            if !matches!(error, StoreError::MissingEntry { .. }) {
                                 return Err(error.into());
                             }
                         }

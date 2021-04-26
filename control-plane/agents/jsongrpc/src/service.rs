@@ -16,16 +16,14 @@ impl JsonGrpcSvc {
     pub(super) async fn json_grpc_call(
         request: &JsonGrpcRequest,
     ) -> Result<serde_json::Value, SvcError> {
-        let node =
-            MessageBus::get_node(&request.node)
-                .await
-                .context(BusGetNode {
-                    node: request.node.clone(),
-                })?;
-        let mut client =
-            JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
-                .await
-                .unwrap();
+        let node = MessageBus::get_node(&request.node)
+            .await
+            .context(BusGetNode {
+                node: request.node.clone(),
+            })?;
+        let mut client = JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
+            .await
+            .unwrap();
         let response: JsonRpcReply = client
             .json_rpc_call(JsonRpcRequest {
                 method: request.method.to_string(),
@@ -39,7 +37,6 @@ impl JsonGrpcSvc {
             })?
             .into_inner();
 
-        Ok(serde_json::from_str(&response.result)
-            .context(JsonRpcDeserialise)?)
+        Ok(serde_json::from_str(&response.result).context(JsonRpcDeserialise)?)
     }
 }

@@ -31,15 +31,10 @@ macro_rules! impl_service_handler {
     ($RequestType:ident, $ServiceFnName:ident) => {
         #[async_trait]
         impl ServiceSubscriber for ServiceHandler<$RequestType> {
-            async fn handler(
-                &self,
-                args: Arguments<'_>,
-            ) -> Result<(), SvcError> {
-                let request: ReceivedMessage<$RequestType> =
-                    args.request.try_into()?;
+            async fn handler(&self, args: Arguments<'_>) -> Result<(), SvcError> {
+                let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
 
-                let reply =
-                    JsonGrpcSvc::$ServiceFnName(&request.inner()).await?;
+                let reply = JsonGrpcSvc::$ServiceFnName(&request.inner()).await?;
                 Ok(request.reply(reply).await?)
             }
             fn filter(&self) -> Vec<MessageId> {

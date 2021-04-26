@@ -443,11 +443,7 @@ fn grpc_to_reply_error(error: SvcError) -> ReplyError {
 #[derive(Debug, Snafu)]
 #[allow(missing_docs)]
 pub enum NotEnough {
-    #[snafu(display(
-        "Not enough suitable pools available, {}/{}",
-        have,
-        need
-    ))]
+    #[snafu(display("Not enough suitable pools available, {}/{}", have, need))]
     OfPools { have: u64, need: u64 },
     #[snafu(display("Not enough replicas available, {}/{}", have, need))]
     OfReplicas { have: u64, need: u64 },

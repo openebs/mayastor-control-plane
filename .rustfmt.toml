@@ -1,8 +1,7 @@
-# changed from 100 to 80
-max_width = 80
+max_width = 100
 # default is false
 wrap_comments = true
-comment_width = 80
+comment_width = 100
 # was true
 struct_lit_single_line = false
 #changed from Mixed

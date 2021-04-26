@@ -139,8 +139,7 @@ fn get_certificates() -> anyhow::Result<ServerConfig> {
         let cert_file = CliArgs::from_args()
             .cert_file
             .expect("cert_file is required");
-        let key_file =
-            CliArgs::from_args().key_file.expect("key_file is required");
+        let key_file = CliArgs::from_args().key_file.expect("key_file is required");
         let cert_file = &mut BufReader::new(File::open(cert_file)?);
         let key_file = &mut BufReader::new(File::open(key_file)?);
         load_certificates(cert_file, key_file)
@@ -148,12 +147,8 @@ fn get_certificates() -> anyhow::Result<ServerConfig> {
 }
 
 fn get_dummy_certificates() -> anyhow::Result<ServerConfig> {
-    let cert_file = &mut BufReader::new(
-        &std::include_bytes!("../../certs/rsa/user.chain")[..],
-    );
-    let key_file = &mut BufReader::new(
-        &std::include_bytes!("../../certs/rsa/user.rsa")[..],
-    );
+    let cert_file = &mut BufReader::new(&std::include_bytes!("../../certs/rsa/user.chain")[..]);
+    let key_file = &mut BufReader::new(&std::include_bytes!("../../certs/rsa/user.rsa")[..]);
 
     load_certificates(cert_file, key_file)
 }
@@ -164,14 +159,10 @@ fn load_certificates<R: std::io::Read>(
 ) -> anyhow::Result<ServerConfig> {
     let mut config = ServerConfig::new(NoClientAuth::new());
     let cert_chain = certs(cert_file).map_err(|_| {
-        anyhow::anyhow!(
-            "Failed to retrieve certificates from the certificate file",
-        )
+        anyhow::anyhow!("Failed to retrieve certificates from the certificate file",)
     })?;
     let mut keys = rsa_private_keys(key_file).map_err(|_| {
-        anyhow::anyhow!(
-            "Failed to retrieve the rsa private keys from the key file",
-        )
+        anyhow::anyhow!("Failed to retrieve the rsa private keys from the key file",)
     })?;
     if keys.is_empty() {
         anyhow::bail!("No keys found in the keys file");
@@ -208,13 +199,9 @@ async fn main() -> anyhow::Result<()> {
         let _ = app();
         Ok(())
     } else {
-        mbus_api::message_bus_init_options(
-            CliArgs::from_args().nats,
-            bus_timeout_opts(),
-        )
-        .await;
-        let server = HttpServer::new(app)
-            .bind_rustls(CliArgs::from_args().https, get_certificates()?)?;
+        mbus_api::message_bus_init_options(CliArgs::from_args().nats, bus_timeout_opts()).await;
+        let server =
+            HttpServer::new(app).bind_rustls(CliArgs::from_args().https, get_certificates()?)?;
         if let Some(http) = CliArgs::from_args().http {
             server.bind(http).map_err(anyhow::Error::from)?
         } else {

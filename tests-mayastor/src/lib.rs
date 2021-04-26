@@ -158,9 +158,7 @@ where
             expected,
             error
         )),
-        Ok(_) => {
-            Err(anyhow::anyhow!("Expected '{:#?}' but succeeded!", expected))
-        }
+        Ok(_) => Err(anyhow::anyhow!("Expected '{:#?}' but succeeded!", expected)),
     }
 }
 
@@ -250,12 +248,7 @@ impl ClusterBuilder {
         self
     }
     /// Specify `count` replicas to add to each node per pool
-    pub fn with_replicas(
-        mut self,
-        count: u32,
-        size: u64,
-        share: v0::Protocol,
-    ) -> Self {
+    pub fn with_replicas(mut self, count: u32, size: u64, share: v0::Protocol) -> Self {
         self.replicas = Replica {
             count,
             size,
@@ -290,11 +283,7 @@ impl ClusterBuilder {
         self
     }
     /// Specify the node connect and request timeouts
-    pub fn with_node_timeouts(
-        mut self,
-        connect: Duration,
-        request: Duration,
-    ) -> Self {
+    pub fn with_node_timeouts(mut self, connect: Duration, request: Duration) -> Self {
         self.opts = self.opts.with_node_timeouts(connect, request);
         self
     }
@@ -367,8 +356,7 @@ impl ClusterBuilder {
 
         if self.opts.show_info {
             for container in cluster.composer.list_cluster_containers().await? {
-                let networks =
-                    container.network_settings.unwrap().networks.unwrap();
+                let networks = container.network_settings.unwrap().networks.unwrap();
                 let ip = networks
                     .get(&self.opts.cluster_name)
                     .unwrap()

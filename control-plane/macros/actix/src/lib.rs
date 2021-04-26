@@ -22,10 +22,7 @@ impl Method {
             attr.remove(0);
             let mut paperclip_attr = "".to_string();
             for i in attr {
-                paperclip_attr.push_str(&format!(
-                    "{},",
-                    i.into_token_stream().to_string()
-                ));
+                paperclip_attr.push_str(&format!("{},", i.into_token_stream().to_string()));
             }
             paperclip_attr.parse().unwrap()
         }
@@ -49,15 +46,10 @@ impl Method {
         func.sig.inputs.push(new_input);
         Ok(func)
     }
-    fn generate(
-        &self,
-        attr: TokenStream,
-        item: TokenStream,
-    ) -> syn::Result<TokenStream2> {
+    fn generate(&self, attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream2> {
         let relative_uri: TokenStream2 = Self::openapi_uri(attr.clone()).into();
         let handler_name = Self::handler_name(item.clone())?;
-        let handler_fn: TokenStream2 =
-            Self::handler_fn_with_auth(item)?.to_token_stream();
+        let handler_fn: TokenStream2 = Self::handler_fn_with_auth(item)?.to_token_stream();
         let method: TokenStream2 = self.method().parse()?;
         let variant: TokenStream2 = self.variant().parse()?;
         let handler_name_str = handler_name.to_string();

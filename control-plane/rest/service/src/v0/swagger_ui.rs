@@ -4,9 +4,8 @@ use tinytemplate::TinyTemplate;
 
 pub(super) fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::resource(&format!("{}/swagger-ui", super::version())).route(
-            web::get().to(GetSwaggerUi(get_swagger_html(&super::spec_uri()))),
-        ),
+        web::resource(&format!("{}/swagger-ui", super::version()))
+            .route(web::get().to(GetSwaggerUi(get_swagger_html(&super::spec_uri())))),
     );
 }
 
@@ -25,15 +24,10 @@ fn get_swagger_html(spec_uri: &str) -> Result<String, String> {
 #[derive(Clone)]
 struct GetSwaggerUi(Result<String, String>);
 
-impl
-    Factory<(), Ready<Result<HttpResponse, Error>>, Result<HttpResponse, Error>>
-    for GetSwaggerUi
-{
+impl Factory<(), Ready<Result<HttpResponse, Error>>, Result<HttpResponse, Error>> for GetSwaggerUi {
     fn call(&self, _: ()) -> Ready<Result<HttpResponse, Error>> {
         match &self.0 {
-            Ok(html) => {
-                fut_ok(HttpResponse::Ok().content_type("text/html").body(html))
-            }
+            Ok(html) => fut_ok(HttpResponse::Ok().content_type("text/html").body(html)),
             Err(error) => fut_ok(
                 HttpResponse::NotFound()
                     .content_type("application/json")

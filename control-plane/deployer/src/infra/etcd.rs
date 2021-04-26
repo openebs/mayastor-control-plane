@@ -3,11 +3,7 @@ use store::{etcd::Etcd as EtcdStore, store::Store};
 
 #[async_trait]
 impl ComponentAction for Etcd {
-    fn configure(
-        &self,
-        options: &StartOptions,
-        cfg: Builder,
-    ) -> Result<Builder, Error> {
+    fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         Ok(if !options.no_etcd {
             cfg.add_container_spec(
                 ContainerSpec::from_binary(
@@ -28,21 +24,13 @@ impl ComponentAction for Etcd {
             cfg
         })
     }
-    async fn start(
-        &self,
-        options: &StartOptions,
-        cfg: &ComposeTest,
-    ) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         if !options.no_etcd {
             cfg.start("etcd").await?;
         }
         Ok(())
     }
-    async fn wait_on(
-        &self,
-        options: &StartOptions,
-        _cfg: &ComposeTest,
-    ) -> Result<(), Error> {
+    async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if !options.no_etcd {
             let mut store = EtcdStore::new("0.0.0.0:2379")
                 .await

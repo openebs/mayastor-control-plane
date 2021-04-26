@@ -47,11 +47,8 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
     let test = Builder::new()
         .name("rest")
         .add_container_spec(
-            ContainerSpec::from_binary(
-                "nats",
-                Binary::from_nix("nats-server").with_arg("-DV"),
-            )
-            .with_portmap("4222", "4222"),
+            ContainerSpec::from_binary("nats", Binary::from_nix("nats-server").with_arg("-DV"))
+                .with_portmap("4222", "4222"),
         )
         .add_container_bin(
             "core",
@@ -77,17 +74,11 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
                 .with_args(vec!["-g", "10.1.0.5:10124"]),
         )
         .add_container_spec(
-            ContainerSpec::from_image(
-                "jaeger",
-                "jaegertracing/all-in-one:latest",
-            )
-            .with_portmap("16686", "16686")
-            .with_portmap("6831/udp", "6831/udp"),
+            ContainerSpec::from_image("jaeger", "jaegertracing/all-in-one:latest")
+                .with_portmap("16686", "16686")
+                .with_portmap("6831/udp", "6831/udp"),
         )
-        .add_container_bin(
-            "jsongrpc",
-            Binary::from_dbg("jsongrpc").with_nats("-n"),
-        )
+        .add_container_bin("jsongrpc", Binary::from_dbg("jsongrpc").with_nats("-n"))
         .add_container_spec(
             ContainerSpec::from_binary(
                 "etcd",
@@ -225,8 +216,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             thin: false,
             size: 12582912,
             share: Protocol::Nvmf,
-            uri: "nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:replica1"
-                .to_string(),
+            uri: "nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:replica1".to_string(),
             state: ReplicaState::Online
         }
     );
@@ -393,10 +383,9 @@ async fn client_invalid_token() {
     let mut token = bearer_token();
     token.push_str("invalid");
 
-    let client =
-        ActixRestClient::new("https://localhost:8080", true, Some(token))
-            .unwrap()
-            .v0();
+    let client = ActixRestClient::new("https://localhost:8080", true, Some(token))
+        .unwrap()
+        .v0();
     client
         .get_nodes()
         .await

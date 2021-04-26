@@ -13,14 +13,11 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 
 #[get("/volumes", tags(Volumes))]
 async fn get_volumes() -> Result<Json<Vec<Volume>>, RestClusterError> {
-    RestRespond::result(MessageBus::get_volumes(Filter::None).await)
-        .map_err(RestClusterError::from)
+    RestRespond::result(MessageBus::get_volumes(Filter::None).await).map_err(RestClusterError::from)
 }
 
 #[get("/volumes/{volume_id}", tags(Volumes))]
-async fn get_volume(
-    web::Path(volume_id): web::Path<VolumeId>,
-) -> Result<Json<Volume>, RestError> {
+async fn get_volume(web::Path(volume_id): web::Path<VolumeId>) -> Result<Json<Volume>, RestError> {
     RestRespond::result(MessageBus::get_volume(Filter::Volume(volume_id)).await)
 }
 
@@ -34,9 +31,7 @@ async fn get_node_volumes(
 async fn get_node_volume(
     web::Path((node_id, volume_id)): web::Path<(NodeId, VolumeId)>,
 ) -> Result<Json<Volume>, RestError> {
-    RestRespond::result(
-        MessageBus::get_volume(Filter::NodeVolume(node_id, volume_id)).await,
-    )
+    RestRespond::result(MessageBus::get_volume(Filter::NodeVolume(node_id, volume_id)).await)
 }
 
 #[put("/volumes/{volume_id}", tags(Volumes))]
@@ -49,22 +44,18 @@ async fn put_volume(
 }
 
 #[delete("/volumes/{volume_id}", tags(Volumes))]
-async fn del_volume(
-    web::Path(volume_id): web::Path<VolumeId>,
-) -> Result<JsonUnit, RestError> {
+async fn del_volume(web::Path(volume_id): web::Path<VolumeId>) -> Result<JsonUnit, RestError> {
     let request = DestroyVolume {
         uuid: volume_id,
     };
-    RestRespond::result(MessageBus::delete_volume(request).await)
-        .map(JsonUnit::from)
+    RestRespond::result(MessageBus::delete_volume(request).await).map(JsonUnit::from)
 }
 
 #[put("/volumes/{volume_id}/share/{protocol}", tags(Volumes))]
 async fn volume_share(
     web::Path((volume_id, protocol)): web::Path<(VolumeId, NexusShareProtocol)>,
 ) -> Result<Json<String>, RestError> {
-    let volume =
-        MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
+    let volume = MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
 
     // TODO: For ANA we will want to share all nexuses not just the first.
     match volume.children.first() {
@@ -87,11 +78,8 @@ async fn volume_share(
 }
 
 #[delete("/volumes{volume_id}/share", tags(Volumes))]
-async fn volume_unshare(
-    web::Path(volume_id): web::Path<VolumeId>,
-) -> Result<JsonUnit, RestError> {
-    let volume =
-        MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
+async fn volume_unshare(web::Path(volume_id): web::Path<VolumeId>) -> Result<JsonUnit, RestError> {
+    let volume = MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
 
     match volume.children.first() {
         Some(nexus) => RestRespond::result(

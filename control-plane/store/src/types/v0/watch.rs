@@ -7,12 +7,8 @@ impl ObjectKey for v0::WatchResourceId {
             v0::WatchResourceId::Node(_) => StorableObjectType::Node,
             v0::WatchResourceId::Pool(_) => StorableObjectType::Pool,
             v0::WatchResourceId::Replica(_) => StorableObjectType::Replica,
-            v0::WatchResourceId::ReplicaState(_) => {
-                StorableObjectType::ReplicaState
-            }
-            v0::WatchResourceId::ReplicaSpec(_) => {
-                StorableObjectType::ReplicaSpec
-            }
+            v0::WatchResourceId::ReplicaState(_) => StorableObjectType::ReplicaState,
+            v0::WatchResourceId::ReplicaSpec(_) => StorableObjectType::ReplicaSpec,
             v0::WatchResourceId::Nexus(_) => StorableObjectType::Nexus,
             v0::WatchResourceId::Volume(_) => StorableObjectType::Volume,
         }

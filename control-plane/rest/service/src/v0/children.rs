@@ -36,15 +36,10 @@ async fn get_nexus_child(
     tags(Children)
 )]
 async fn get_node_nexus_child(
-    web::Path((node_id, nexus_id, child_id)): web::Path<(
-        NodeId,
-        NexusId,
-        ChildUri,
-    )>,
+    web::Path((node_id, nexus_id, child_id)): web::Path<(NodeId, NexusId, ChildUri)>,
     req: HttpRequest,
 ) -> Result<web::Json<Child>, RestError> {
-    get_child_response(child_id, req, Filter::NodeNexus(node_id, nexus_id))
-        .await
+    get_child_response(child_id, req, Filter::NodeNexus(node_id, nexus_id)).await
 }
 
 #[put("/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
@@ -59,15 +54,10 @@ async fn add_nexus_child(
     tags(Children)
 )]
 async fn add_node_nexus_child(
-    web::Path((node_id, nexus_id, child_id)): web::Path<(
-        NodeId,
-        NexusId,
-        ChildUri,
-    )>,
+    web::Path((node_id, nexus_id, child_id)): web::Path<(NodeId, NexusId, ChildUri)>,
     req: HttpRequest,
 ) -> Result<web::Json<Child>, RestError> {
-    add_child_filtered(child_id, req, Filter::NodeNexus(node_id, nexus_id))
-        .await
+    add_child_filtered(child_id, req, Filter::NodeNexus(node_id, nexus_id)).await
 }
 
 #[delete("/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
@@ -82,20 +72,13 @@ async fn delete_nexus_child(
     tags(Children)
 )]
 async fn delete_node_nexus_child(
-    web::Path((node_id, nexus_id, child_id)): web::Path<(
-        NodeId,
-        NexusId,
-        ChildUri,
-    )>,
+    web::Path((node_id, nexus_id, child_id)): web::Path<(NodeId, NexusId, ChildUri)>,
     req: HttpRequest,
 ) -> Result<JsonUnit, RestError> {
-    delete_child_filtered(child_id, req, Filter::NodeNexus(node_id, nexus_id))
-        .await
+    delete_child_filtered(child_id, req, Filter::NodeNexus(node_id, nexus_id)).await
 }
 
-async fn get_children_response(
-    filter: Filter,
-) -> Result<web::Json<Vec<Child>>, RestError> {
+async fn get_children_response(filter: Filter) -> Result<web::Json<Vec<Child>>, RestError> {
     let nexus = MessageBus::get_nexus(filter).await?;
     RestRespond::ok(nexus.children)
 }
@@ -111,10 +94,7 @@ async fn get_child_response(
     RestRespond::ok(child)
 }
 
-fn find_nexus_child(
-    nexus: &Nexus,
-    child_uri: &ChildUri,
-) -> Result<Child, BusError> {
+fn find_nexus_child(nexus: &Nexus, child_uri: &ChildUri) -> Result<Child, BusError> {
     if let Some(child) = nexus.children.iter().find(|&c| &c.uri == child_uri) {
         Ok(child.clone())
     } else {
@@ -165,8 +145,7 @@ async fn delete_child_filtered(
         nexus: nexus.uuid,
         uri: child_uri,
     };
-    RestRespond::result(MessageBus::remove_nexus_child(destroy).await)
-        .map(JsonUnit::from)
+    RestRespond::result(MessageBus::remove_nexus_child(destroy).await).map(JsonUnit::from)
 }
 
 fn build_child_uri(child_id: ChildUri, req: HttpRequest) -> ChildUri {

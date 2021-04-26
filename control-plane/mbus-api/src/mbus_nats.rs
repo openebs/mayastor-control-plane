@@ -10,20 +10,13 @@ pub fn message_bus_init_tokio(server: String) {
     NATS_MSG_BUS.get_or_init(|| {
         // Waits for the message bus to become ready
         tokio::runtime::Handle::current().block_on(async {
-            NatsMessageBus::new(
-                &server,
-                BusOptions::new(),
-                TimeoutOptions::new(),
-            )
-            .await
+            NatsMessageBus::new(&server, BusOptions::new(), TimeoutOptions::new()).await
         })
     });
 }
 /// Initialise the Nats Message Bus
 pub async fn message_bus_init(server: String) {
-    let nc =
-        NatsMessageBus::new(&server, BusOptions::new(), TimeoutOptions::new())
-            .await;
+    let nc = NatsMessageBus::new(&server, BusOptions::new(), TimeoutOptions::new()).await;
     NATS_MSG_BUS
         .set(nc)
         .ok()
@@ -32,13 +25,9 @@ pub async fn message_bus_init(server: String) {
 
 /// Initialise the Nats Message Bus with Options
 /// IGNORES all but the first initialisation of NATS_MSG_BUS
-pub async fn message_bus_init_options(
-    server: String,
-    timeouts: TimeoutOptions,
-) {
+pub async fn message_bus_init_options(server: String, timeouts: TimeoutOptions) {
     if NATS_MSG_BUS.get().is_none() {
-        let nc =
-            NatsMessageBus::new(&server, BusOptions::new(), timeouts).await;
+        let nc = NatsMessageBus::new(&server, BusOptions::new(), timeouts).await;
         NATS_MSG_BUS.set(nc).ok();
     }
 }
@@ -76,18 +65,12 @@ impl NatsMessageBus {
                 .await
             {
                 Ok(connection) => {
-                    info!(
-                        "Successfully connected to the nats server {}",
-                        server
-                    );
+                    info!("Successfully connected to the nats server {}", server);
                     return connection;
                 }
                 Err(error) => {
                     if log_error {
-                        warn!(
-                            "Error connection: {}. Quietly retrying...",
-                            error
-                        );
+                        warn!("Error connection: {}. Quietly retrying...", error);
                         log_error = false;
                     }
                     smol::Timer::after(interval).await;
@@ -154,8 +137,7 @@ impl Bus for NatsMessageBus {
                 let error = Error::RequestTimeout {
                     channel: channel.to_string(),
                     payload: String::from_utf8(Vec::from(message)),
-                    options: req_options
-                        .unwrap_or_else(|| self.timeout_options.clone()),
+                    options: req_options.unwrap_or_else(|| self.timeout_options.clone()),
                 };
                 tracing::error!("{}", error);
                 return Err(error);
@@ -173,10 +155,7 @@ impl Bus for NatsMessageBus {
             );
 
             retries += 1;
-            timeout = std::cmp::min(
-                options.timeout_step * retries,
-                Duration::from_secs(10),
-            );
+            timeout = std::cmp::min(options.timeout_step * retries, Duration::from_secs(10));
         }
     }
 

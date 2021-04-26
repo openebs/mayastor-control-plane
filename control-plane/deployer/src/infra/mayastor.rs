@@ -2,11 +2,7 @@ use super::*;
 
 #[async_trait]
 impl ComponentAction for Mayastor {
-    fn configure(
-        &self,
-        options: &StartOptions,
-        cfg: Builder,
-    ) -> Result<Builder, Error> {
+    fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let mut cfg = cfg;
         for i in 0 .. options.mayastors {
             let mayastor_socket = format!("{}:10124", cfg.next_container_ip()?);
@@ -21,24 +17,15 @@ impl ComponentAction for Mayastor {
         }
         Ok(cfg)
     }
-    async fn start(
-        &self,
-        options: &StartOptions,
-        cfg: &ComposeTest,
-    ) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         for i in 0 .. options.mayastors {
             cfg.start(&Self::name(i, options)).await?;
         }
         Ok(())
     }
-    async fn wait_on(
-        &self,
-        options: &StartOptions,
-        cfg: &ComposeTest,
-    ) -> Result<(), Error> {
+    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         for i in 0 .. options.mayastors {
-            let mut hdl =
-                cfg.grpc_handle(&Self::name(i, options)).await.unwrap();
+            let mut hdl = cfg.grpc_handle(&Self::name(i, options)).await.unwrap();
             hdl.mayastor
                 .list_nexus(rpc::mayastor::Null {})
                 .await

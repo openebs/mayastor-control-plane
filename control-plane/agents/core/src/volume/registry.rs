@@ -17,14 +17,10 @@ impl Registry {
     }
 
     /// Get all nexuses from node `node_id`
-    pub(crate) async fn get_node_nexuses(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<Vec<Nexus>, SvcError> {
-        let node =
-            self.get_node_wrapper(node_id).await.context(NodeNotFound {
-                node_id: node_id.clone(),
-            })?;
+    pub(crate) async fn get_node_nexuses(&self, node_id: &NodeId) -> Result<Vec<Nexus>, SvcError> {
+        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
+            node_id: node_id.clone(),
+        })?;
         Ok(node.nexuses().await)
     }
 
@@ -34,10 +30,9 @@ impl Registry {
         node_id: &NodeId,
         nexus_id: &NexusId,
     ) -> Result<Nexus, SvcError> {
-        let node =
-            self.get_node_wrapper(node_id).await.context(NodeNotFound {
-                node_id: node_id.clone(),
-            })?;
+        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
+            node_id: node_id.clone(),
+        })?;
         let nexus = node.nexus(nexus_id).await.context(NexusNotFound {
             nexus_id: nexus_id.clone(),
         })?;
@@ -45,10 +40,7 @@ impl Registry {
     }
 
     /// Get nexus `nexus_id`
-    pub(crate) async fn get_nexus(
-        &self,
-        nexus_id: &NexusId,
-    ) -> Result<Nexus, SvcError> {
+    pub(crate) async fn get_nexus(&self, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
         let nodes = self.get_nodes_wrapper().await;
         for node in nodes {
             if let Some(nexus) = node.nexus(nexus_id).await {

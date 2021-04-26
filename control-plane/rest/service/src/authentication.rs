@@ -67,18 +67,9 @@ impl JsonWebKey {
     }
 
     /// Validate a bearer token
-    pub(crate) fn validate(
-        &self,
-        token: &str,
-        uri: &str,
-    ) -> Result<(), AuthError> {
+    pub(crate) fn validate(&self, token: &str, uri: &str) -> Result<(), AuthError> {
         let (message, signature) = split_token(&token)?;
-        match crypto::verify(
-            &signature,
-            &message,
-            &self.decoding_key(),
-            self.algorithm(),
-        ) {
+        match crypto::verify(&signature, &message, &self.decoding_key(), self.algorithm()) {
             Ok(true) => Ok(()),
             Ok(false) => Err(AuthError::Unauthorized {
                 token: token.to_string(),
@@ -122,8 +113,7 @@ pub fn authenticate(req: &HttpRequest) -> Result<(), AuthError> {
     let jwk: &JsonWebKey = match req.app_data() {
         Some(jwk) => Ok(jwk),
         None => Err(AuthError::InternalError {
-            details: "Json Web Token not configured in the REST server"
-                .to_string(),
+            details: "Json Web Token not configured in the REST server".to_string(),
         }),
     }?;
 
@@ -133,9 +123,7 @@ pub fn authenticate(req: &HttpRequest) -> Result<(), AuthError> {
     }
 
     match req.headers().get(http::header::AUTHORIZATION) {
-        Some(token) => {
-            jwk.validate(&format_token(token)?, &req.uri().to_string())
-        }
+        Some(token) => jwk.validate(&format_token(token)?, &req.uri().to_string()),
         None => Err(AuthError::NoBearerToken {}),
     }
 }
@@ -166,8 +154,7 @@ fn split_token(token: &str) -> Result<(String, String), AuthError> {
         Ok((message, signature.into()))
     } else {
         Err(AuthError::InvalidToken {
-            details: "Should be formatted as: header.payload.signature"
-                .to_string(),
+            details: "Should be formatted as: header.payload.signature".to_string(),
         })
     }
 }
@@ -178,8 +165,7 @@ fn validate_test() {
         .expect("Failed to get current directory")
         .join("authentication")
         .join("token");
-    let mut token = std::fs::read_to_string(token_file)
-        .expect("Failed to get bearer token");
+    let mut token = std::fs::read_to_string(token_file).expect("Failed to get bearer token");
     let jwk_file = std::env::current_dir()
         .expect("Failed to get current directory")
         .join("authentication")
