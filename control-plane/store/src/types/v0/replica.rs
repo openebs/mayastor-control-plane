@@ -2,9 +2,12 @@
 
 use crate::{
     store::{ObjectKey, StorableObject, StorableObjectType},
-    types::SpecState,
+    types::{v0::SpecTransaction, SpecState},
 };
-use mbus_api::{v0, v0::ReplicaId};
+use mbus_api::{
+    v0,
+    v0::{Protocol, ReplicaId, ReplicaShareProtocol},
+};
 use serde::{Deserialize, Serialize};
 
 /// Replica information
@@ -68,6 +71,60 @@ pub struct ReplicaSpec {
     /// Update in progress
     #[serde(skip)]
     pub updating: bool,
+    /// Record of the operation in progress
+    pub operation: Option<ReplicaOperationState>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ReplicaOperationState {
+    /// Record of the operation
+    pub operation: ReplicaOperation,
+    /// Result of the operation
+    pub result: Option<bool>,
+}
+
+impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
+    fn pending_op(&self) -> bool {
+        self.operation.is_some()
+    }
+
+    fn commit_op(&mut self) {
+        if let Some(op) = self.operation.clone() {
+            match op.operation {
+                ReplicaOperation::Share(share) => {
+                    self.share = share.into();
+                }
+                ReplicaOperation::Unshare => {
+                    self.share = Protocol::Off;
+                }
+            }
+            self.clear_op();
+        }
+    }
+
+    fn clear_op(&mut self) {
+        self.operation = None;
+    }
+
+    fn start_op(&mut self, operation: ReplicaOperation) {
+        self.operation = Some(ReplicaOperationState {
+            operation,
+            result: None,
+        })
+    }
+
+    fn set_op_result(&mut self, result: bool) {
+        if let Some(op) = &mut self.operation {
+            op.result = Some(result);
+        }
+    }
+}
+
+/// Available Replica Operations
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ReplicaOperation {
+    Share(ReplicaShareProtocol),
+    Unshare,
 }
 
 /// Key used by the store to uniquely identify a ReplicaSpec structure.
@@ -127,6 +184,7 @@ impl From<&v0::CreateReplica> for ReplicaSpec {
             managed: request.managed,
             owners: request.owners.clone(),
             updating: true,
+            operation: None,
         }
     }
 }

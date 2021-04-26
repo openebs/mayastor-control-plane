@@ -22,7 +22,7 @@ pub enum StoreError {
     ))]
     Put {
         key: String,
-        value: Vec<u8>,
+        value: String,
         source: Error,
     },
     /// Failed to 'get' an entry from the store.
@@ -65,6 +65,16 @@ pub enum StoreError {
     /// Failed to serialise value.
     #[snafu(display("Failed to serialise value. Error {}", source))]
     SerialiseValue { source: SerdeError },
+    /// Failed to run operation within a timeout.
+    #[snafu(display(
+        "Timed out during {} operation after {:?}",
+        operation,
+        timeout
+    ))]
+    Timeout {
+        operation: String,
+        timeout: std::time::Duration,
+    },
 }
 
 /// Representation of a watch event.

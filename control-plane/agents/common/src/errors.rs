@@ -98,8 +98,10 @@ pub enum SvcError {
     InvalidArguments {},
     #[snafu(display("Multiple nexuses not supported"))]
     MultipleNexuses {},
-    #[snafu(display("Store returned an error: {}", source.to_string()))]
-    Store { source: store::store::StoreError },
+    #[snafu(display("Storage Error: {}", source.to_string()))]
+    Store { source: StoreError },
+    #[snafu(display("Storage Error: {} Config for Resource id {} not committed to the store", kind.to_string(), id))]
+    StoreSave { kind: ResourceKind, id: String },
     #[snafu(display("Watch Config Not Found"))]
     WatchNotFound {},
     #[snafu(display("{} Resource to be watched does not exist", kind.to_string()))]
@@ -144,6 +146,14 @@ impl From<SvcError> for ReplyError {
         let desc: &String = &error.description().to_string();
         let error_str = error.full_string();
         match error {
+            SvcError::StoreSave {
+                kind, ..
+            } => ReplyError {
+                kind: ReplyErrorKind::FailedPersist,
+                resource: kind,
+                source: desc.to_string(),
+                extra: error_str,
+            },
             SvcError::NotShared {
                 kind, ..
             } => ReplyError {
@@ -282,8 +292,8 @@ impl From<SvcError> for ReplyError {
             SvcError::Store {
                 ..
             } => ReplyError {
-                kind: ReplyErrorKind::Internal,
-                resource: ResourceKind::Watch,
+                kind: ReplyErrorKind::FailedPersist,
+                resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

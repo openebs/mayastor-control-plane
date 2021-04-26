@@ -2,7 +2,7 @@ use super::*;
 use crate::core::{registry::Registry, wrapper::NodeWrapper};
 use common::{
     errors::{GrpcRequestError, NodeNotFound, SvcError},
-    v0::msg_translation::RpcToMessageBus,
+    v0::{msg_translation::RpcToMessageBus, GetSpecs, Specs},
 };
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::{OptionExt, ResultExt};
@@ -167,6 +167,21 @@ impl Service {
             .map(|rpc_bdev| rpc_bdev.to_mbus())
             .collect();
         Ok(BlockDevices(bdevs))
+    }
+
+    /// Get specs from the registry
+    pub(crate) async fn get_specs(
+        &self,
+        _request: &GetSpecs,
+    ) -> Result<Specs, SvcError> {
+        let registry = self.registry.specs.write().await;
+        let nexuses = registry.get_nexuses().await;
+        let replicas = registry.get_replicas().await;
+        Ok(Specs {
+            nexuses,
+            replicas,
+            ..Default::default()
+        })
     }
 }
 

@@ -10,7 +10,7 @@ use super::{
     impl_request_handler,
     CliArgs,
 };
-use common::{errors::SvcError, Service};
+use common::{errors::SvcError, v0::GetSpecs, Service};
 use mbus_api::{v0::*, *};
 
 use async_trait::async_trait;
@@ -18,21 +18,25 @@ use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
 
 pub(crate) fn configure(builder: Service) -> Service {
-    let registry = builder.get_shared_state::<registry::Registry>().clone();
-    let deadline = CliArgs::from_args().deadline.into();
-    let request = CliArgs::from_args().request.into();
-    let connect = CliArgs::from_args().request.into();
+    let node_service = create_node_service(&builder);
     builder
-        .with_shared_state(service::Service::new(
-            registry, deadline, connect, request,
-        ))
+        .with_shared_state(node_service)
         .with_channel(ChannelVs::Registry)
         .with_subscription(handler_publish!(Register))
         .with_subscription(handler_publish!(Deregister))
+        .with_subscription(handler!(GetSpecs))
         .with_channel(ChannelVs::Node)
         .with_subscription(handler!(GetNodes))
         .with_subscription(handler!(GetBlockDevices))
         .with_default_liveness()
+}
+
+fn create_node_service(builder: &Service) -> service::Service {
+    let registry = builder.get_shared_state::<registry::Registry>().clone();
+    let deadline = CliArgs::from_args().deadline.into();
+    let request = CliArgs::from_args().request.into();
+    let connect = CliArgs::from_args().connect.into();
+    service::Service::new(registry, deadline, connect, request)
 }
 
 #[cfg(test)]

@@ -125,6 +125,8 @@ pub enum MessageIdVs {
     GetWatches,
     /// Delete Resource Watch
     DeleteWatch,
+    /// Get Specs
+    GetSpecs,
 }
 
 // Only V0 should export this macro
@@ -689,7 +691,7 @@ pub struct DestroyReplica {
 bus_impl_message_all!(DestroyReplica, DestroyReplica, (), Pool);
 
 /// Share Replica Request
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareReplica {
     /// id of the mayastor instance
@@ -712,6 +714,25 @@ impl From<ShareReplica> for UnshareReplica {
         }
     }
 }
+impl From<&Replica> for ShareReplica {
+    fn from(from: &Replica) -> Self {
+        Self {
+            node: from.node.clone(),
+            pool: from.pool.clone(),
+            uuid: from.uuid.clone(),
+            protocol: ReplicaShareProtocol::Nvmf,
+        }
+    }
+}
+impl From<&Replica> for UnshareReplica {
+    fn from(from: &Replica) -> Self {
+        Self {
+            node: from.node.clone(),
+            pool: from.pool.clone(),
+            uuid: from.uuid.clone(),
+        }
+    }
+}
 impl From<UnshareReplica> for ShareReplica {
     fn from(share: UnshareReplica) -> Self {
         Self {
@@ -724,7 +745,7 @@ impl From<UnshareReplica> for ShareReplica {
 }
 
 /// Unshare Replica Request
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UnshareReplica {
     /// id of the mayastor instance
