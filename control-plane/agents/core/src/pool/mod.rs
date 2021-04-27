@@ -249,7 +249,7 @@ mod tests {
             .with_pools(1)
             .with_agents(vec!["core"])
             .with_node_timeouts(Duration::from_millis(500), Duration::from_millis(500))
-            .with_reconcile_period(reconcile_period)
+            .with_reconcile_period(reconcile_period, reconcile_period)
             .with_store_timeout(store_timeout)
             .with_bus_timeouts(bus_timeout_opts())
             .build()

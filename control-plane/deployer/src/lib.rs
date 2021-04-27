@@ -130,6 +130,10 @@ pub struct StartOptions {
     /// Override the core agent's reconcile period
     #[structopt(long)]
     pub reconcile_period: Option<humantime::Duration>,
+
+    /// Override the core agent's reconcile idle period
+    #[structopt(long)]
+    pub reconcile_idle_period: Option<humantime::Duration>,
 }
 
 impl StartOptions {
@@ -146,8 +150,9 @@ impl StartOptions {
         self.store_timeout = Some(timeout.into());
         self
     }
-    pub fn with_reconcile_period(mut self, period: Duration) -> Self {
-        self.reconcile_period = Some(period.into());
+    pub fn with_reconcile_period(mut self, work: Duration, idle: Duration) -> Self {
+        self.reconcile_period = Some(work.into());
+        self.reconcile_idle_period = Some(idle.into());
         self
     }
     pub fn with_node_timeouts(mut self, connect: Duration, request: Duration) -> Self {

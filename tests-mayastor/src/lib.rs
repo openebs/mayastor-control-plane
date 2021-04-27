@@ -273,8 +273,8 @@ impl ClusterBuilder {
         self
     }
     /// With reconcile period
-    pub fn with_reconcile_period(mut self, period: Duration) -> Self {
-        self.opts = self.opts.with_reconcile_period(period);
+    pub fn with_reconcile_period(mut self, work: Duration, idle: Duration) -> Self {
+        self.opts = self.opts.with_reconcile_period(work, idle);
         self
     }
     /// With store operation timeout
