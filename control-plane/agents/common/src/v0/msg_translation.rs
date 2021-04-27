@@ -5,6 +5,7 @@ use mbus_api::{
     v0::{ChildState, NexusState, Protocol, ReplicaState},
 };
 use rpc::mayastor as rpc;
+use std::convert::TryFrom;
 
 /// Trait for converting rpc messages to message bus messages.
 pub trait RpcToMessageBus {
@@ -117,6 +118,8 @@ impl RpcToMessageBus for rpc::Nexus {
             children: self.children.iter().map(|c| c.to_mbus()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
+            // todo: do we need an "other" Protocol variant in case we don't recognise it?
+            share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::Off),
         }
     }
 }

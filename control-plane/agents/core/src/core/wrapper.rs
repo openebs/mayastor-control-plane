@@ -247,17 +247,18 @@ impl NodeWrapper {
         self.nexuses.remove(nexus);
     }
     /// Update a nexus share uri
-    fn share_nexus(&mut self, uri: &str, nexus: &NexusId) {
+    fn share_nexus(&mut self, uri: &str, protocol: Protocol, nexus: &NexusId) {
         match self.nexuses.get_mut(nexus) {
             None => (),
             Some(nexus) => {
                 nexus.device_uri = uri.to_string();
+                nexus.share = protocol;
             }
         }
     }
     /// Unshare a nexus by removing its share uri
     fn unshare_nexus(&mut self, nexus: &NexusId) {
-        self.share_nexus("", nexus);
+        self.share_nexus("", Protocol::Off, nexus);
     }
     /// Add a Child to the nexus
     fn add_child(&mut self, nexus: &NexusId, child: &Child) {
@@ -602,7 +603,9 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 request: "publish_nexus",
             })?;
         let share = share.into_inner().device_uri;
-        self.lock().await.share_nexus(&share, &request.uuid);
+        self.lock()
+            .await
+            .share_nexus(&share, request.protocol.into(), &request.uuid);
         Ok(share)
     }
 

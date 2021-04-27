@@ -24,6 +24,8 @@ use crate::errors::SvcError;
 
 /// Agent level errors
 pub mod errors;
+/// Messages required by a common handler
+pub mod handler;
 /// Version 0 of the message bus types
 pub mod v0;
 

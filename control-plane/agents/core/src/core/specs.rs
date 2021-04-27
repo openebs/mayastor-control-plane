@@ -41,8 +41,22 @@ impl ResourceSpecsLocked {
     /// 1. test store connections and commit dirty specs to the store
     pub(crate) fn start(&self, registry: Registry) {
         let this = self.clone();
-        tokio::spawn(async move {
-            this.reconcile_dirty_replicas(registry).await;
-        });
+        tokio::spawn(async move { this.reconcile_dirty_specs(registry).await });
+    }
+
+    /// Reconcile dirty specs to the persistent store
+    async fn reconcile_dirty_specs(&self, registry: Registry) {
+        loop {
+            let dirty_replicas = self.reconcile_dirty_replicas(&registry).await;
+            let dirty_nexuses = self.reconcile_dirty_nexuses(&registry).await;
+
+            let period = if dirty_nexuses || dirty_replicas {
+                registry.reconcile_period
+            } else {
+                registry.reconcile_idle_period
+            };
+
+            tokio::time::delay_for(period).await;
+        }
     }
 }

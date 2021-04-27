@@ -17,7 +17,6 @@ use mbus_api::{
         DestroyVolume,
         Nexus,
         NexusId,
-        NexusShareProtocol,
         NexusState,
         NodeId,
         PoolState,
@@ -49,6 +48,7 @@ use crate::{
     },
     registry::Registry,
 };
+use store::types::v0::{nexus::NexusOperation, SpecTransaction};
 
 impl ResourceSpecs {
     fn get_nexus(&self, id: &NexusId) -> Option<Arc<Mutex<NexusSpec>>> {
@@ -156,7 +156,10 @@ async fn get_node_replicas(
     }
 }
 
+/// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
+/// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
+    /// Get all NexusSpec's
     pub(crate) async fn get_nexuses(&self) -> Vec<NexusSpec> {
         let mut vector = vec![];
         for object in self.nexuses.values() {
@@ -165,6 +168,7 @@ impl ResourceSpecs {
         }
         vector
     }
+    /// Get all NexusSpec's which are in a created state
     pub(crate) async fn get_created_nexuses(&self) -> Vec<NexusSpec> {
         let mut nexuses = vec![];
         for nexus in self.nexuses.values() {
@@ -175,7 +179,7 @@ impl ResourceSpecs {
         }
         nexuses
     }
-
+    /// Get a list of all protected VolumeSpec's
     async fn create_volume_spec(
         &mut self,
         registry: &Registry,
@@ -219,19 +223,24 @@ impl ResourceSpecs {
     }
 }
 impl ResourceSpecsLocked {
+    /// Get a list of created NexusSpec's
     pub(crate) async fn get_created_nexus_specs(&self) -> Vec<NexusSpec> {
         let specs = self.read().await;
         specs.get_created_nexuses().await
     }
+    /// Get the protected NexusSpec for the given nexus `id`, if any exists
     async fn get_nexus(&self, id: &NexusId) -> Option<Arc<Mutex<NexusSpec>>> {
         let specs = self.read().await;
         specs.nexuses.get(id).cloned()
     }
+    /// Get the protected VolumeSpec for the given volume `id`, if any exists
     async fn get_volume(&self, id: &VolumeId) -> Option<Arc<Mutex<VolumeSpec>>> {
         let specs = self.read().await;
         specs.volumes.get(id).cloned()
     }
-    // we could also get the replicas from the volume nexuses
+
+    /// Get a list of protected ReplicaSpec's for the given `id`
+    /// todo: we could also get the replicas from the volume nexuses?
     async fn get_volume_replicas(&self, id: &VolumeId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         let mut replicas = vec![];
         let specs = self.read().await;
@@ -243,6 +252,7 @@ impl ResourceSpecsLocked {
         }
         replicas
     }
+    /// Get the `NodeId` where `replica` lives
     async fn get_replica_node(registry: &Registry, replica: &ReplicaSpec) -> Option<NodeId> {
         let pools = registry.get_pools_inner().await.unwrap();
         pools.iter().find_map(|p| {
@@ -253,7 +263,7 @@ impl ResourceSpecsLocked {
             }
         })
     }
-    // we could also tag the volume with the "latest" nexuses
+    /// Get a list of protected NexusSpecs's for the given volume `id`
     async fn get_volume_nexuses(&self, id: &VolumeId) -> Vec<Arc<Mutex<NexusSpec>>> {
         let mut nexuses = vec![];
         let specs = self.read().await;
@@ -413,53 +423,47 @@ impl ResourceSpecsLocked {
             })?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.uuid).await {
-            let mut spec = nexus_spec.lock().await;
-            if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::NexusNotFound {
-                    nexus_id: request.uuid.to_string(),
-                });
-            } else if spec.share != Protocol::Off {
-                return Err(SvcError::AlreadyShared {
-                    kind: ResourceKind::Nexus,
-                    id: request.uuid.to_string(),
-                    share: spec.share.to_string(),
-                });
+            let spec_clone = {
+                let status = registry.get_nexus(&request.uuid).await?;
+                let mut spec = nexus_spec.lock().await;
+                if spec.pending_op() {
+                    return Err(SvcError::StoreSave {
+                        kind: ResourceKind::Nexus,
+                        id: request.uuid.to_string(),
+                    });
+                } else if spec.updating {
+                    return Err(SvcError::Conflict {});
+                } else if !spec.state.created() {
+                    return Err(SvcError::NexusNotFound {
+                        nexus_id: request.uuid.to_string(),
+                    });
+                } else if spec.share == status.share && spec.share != Protocol::Off {
+                    return Err(SvcError::AlreadyShared {
+                        kind: ResourceKind::Nexus,
+                        id: request.uuid.to_string(),
+                        share: spec.share.to_string(),
+                    });
+                }
+
+                spec.updating = true;
+                spec.start_op(NexusOperation::Share(request.protocol));
+                spec.clone()
+            };
+
+            if let Err(error) = registry.store_obj(&spec_clone).await {
+                let mut spec = nexus_spec.lock().await;
+                spec.updating = false;
+                spec.clear_op();
+                return Err(error);
             }
 
-            spec.updating = true;
-            let mut spec_clone = spec.clone();
-            drop(spec);
-
-            match node.share_nexus(request).await {
-                Ok(share) => {
-                    spec_clone.share = request.protocol.into();
-                    let result = {
-                        let mut store = registry.store.lock().await;
-                        store.put_obj(&spec_clone).await
-                    };
-                    if let Err(error) = result {
-                        let _ = node.unshare_nexus(&request.clone().into()).await;
-                        let mut spec = nexus_spec.lock().await;
-                        spec.updating = false;
-                        return Err(error.into());
-                    }
-                    let mut spec = nexus_spec.lock().await;
-                    spec.share = request.protocol.into();
-                    spec.updating = false;
-                    Ok(share)
-                }
-                Err(error) => {
-                    let mut spec = nexus_spec.lock().await;
-                    spec.updating = false;
-                    Err(error)
-                }
-            }
+            let result = node.share_nexus(request).await;
+            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.share_nexus(request).await
         }
     }
+
     pub(super) async fn unshare_nexus(
         &self,
         registry: &Registry,
@@ -472,62 +476,42 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let specs = self.read().await;
-        if let Some(nexus_spec) = specs.get_nexus(&request.uuid) {
-            let mut spec = nexus_spec.lock().await;
-            if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::NexusNotFound {
-                    nexus_id: request.uuid.to_string(),
-                });
-            } else if spec.share == Protocol::Off {
-                return Err(SvcError::NotShared {
-                    kind: ResourceKind::Nexus,
-                    id: request.uuid.to_string(),
-                });
+        if let Some(nexus_spec) = self.get_nexus(&request.uuid).await {
+            let spec_clone = {
+                let status = registry.get_nexus(&request.uuid).await?;
+                let mut spec = nexus_spec.lock().await;
+                if spec.pending_op() {
+                    return Err(SvcError::StoreSave {
+                        kind: ResourceKind::Nexus,
+                        id: request.uuid.to_string(),
+                    });
+                } else if spec.updating {
+                    return Err(SvcError::Conflict {});
+                } else if !spec.state.created() {
+                    return Err(SvcError::NexusNotFound {
+                        nexus_id: request.uuid.to_string(),
+                    });
+                } else if spec.share == status.share && status.share == Protocol::Off {
+                    return Err(SvcError::NotShared {
+                        kind: ResourceKind::Nexus,
+                        id: request.uuid.to_string(),
+                    });
+                }
+
+                spec.updating = true;
+                spec.start_op(NexusOperation::Unshare);
+                spec.clone()
+            };
+
+            if let Err(error) = registry.store_obj(&spec_clone).await {
+                let mut spec = nexus_spec.lock().await;
+                spec.updating = false;
+                spec.clear_op();
+                return Err(error);
             }
 
-            spec.updating = true;
-            let mut spec_clone = spec.clone();
-            drop(spec);
-
-            match node.unshare_nexus(request).await {
-                Ok(_) => {
-                    let previous_share = spec_clone.share;
-                    spec_clone.share = Protocol::Off;
-                    let result = {
-                        let mut store = registry.store.lock().await;
-                        store.put_obj(&spec_clone).await
-                    };
-                    if let Err(error) = result {
-                        let share = ShareNexus {
-                            node: request.node.clone(),
-                            uuid: request.uuid.clone(),
-                            key: None,
-                            protocol: match previous_share {
-                                Protocol::Off => unreachable!(),
-                                Protocol::Nvmf => NexusShareProtocol::Nvmf,
-                                Protocol::Iscsi => NexusShareProtocol::Iscsi,
-                                Protocol::Nbd => unreachable!(),
-                            },
-                        };
-                        let _ = node.share_nexus(&share).await;
-                        let mut spec = nexus_spec.lock().await;
-                        spec.updating = false;
-                        return Err(error.into());
-                    }
-                    let mut spec = nexus_spec.lock().await;
-                    spec.share = Protocol::Off;
-                    spec.updating = false;
-                    Ok(())
-                }
-                Err(error) => {
-                    let mut spec = nexus_spec.lock().await;
-                    spec.updating = false;
-                    Err(error)
-                }
-            }
+            let result = node.unshare_nexus(request).await;
+            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.unshare_nexus(request).await
         }
@@ -546,48 +530,43 @@ impl ResourceSpecsLocked {
             })?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
-            let mut spec = nexus_spec.lock().await;
-            if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::NexusNotFound {
-                    nexus_id: request.nexus.to_string(),
-                });
-            } else if spec.children.contains(&request.uri) {
-                return Err(SvcError::ChildAlreadyExists {
-                    nexus: request.nexus.to_string(),
-                    child: request.uri.to_string(),
-                });
+            let spec_clone = {
+                let status = registry.get_nexus(&request.nexus).await?;
+                let mut spec = nexus_spec.lock().await;
+                if spec.pending_op() {
+                    return Err(SvcError::StoreSave {
+                        kind: ResourceKind::Nexus,
+                        id: request.nexus.to_string(),
+                    });
+                } else if spec.updating {
+                    return Err(SvcError::Conflict {});
+                } else if !spec.state.created() {
+                    return Err(SvcError::NexusNotFound {
+                        nexus_id: request.nexus.to_string(),
+                    });
+                } else if spec.children.contains(&request.uri)
+                    && status.children.iter().any(|c| c.uri == request.uri)
+                {
+                    return Err(SvcError::ChildAlreadyExists {
+                        nexus: request.nexus.to_string(),
+                        child: request.uri.to_string(),
+                    });
+                }
+
+                spec.updating = true;
+                spec.start_op(NexusOperation::AddChild(request.uri.clone()));
+                spec.clone()
+            };
+
+            if let Err(error) = registry.store_obj(&spec_clone).await {
+                let mut spec = nexus_spec.lock().await;
+                spec.updating = false;
+                spec.clear_op();
+                return Err(error);
             }
 
-            spec.updating = true;
-            let mut spec_clone = spec.clone();
-            drop(spec);
-
-            match node.add_child(request).await {
-                Ok(share) => {
-                    spec_clone.children.push(request.uri.clone());
-                    let result = {
-                        let mut store = registry.store.lock().await;
-                        store.put_obj(&spec_clone).await
-                    };
-                    if let Err(error) = result {
-                        let _ = node.remove_child(&request.clone().into()).await;
-                        let mut spec = nexus_spec.lock().await;
-                        spec.updating = false;
-                        return Err(error.into());
-                    }
-                    let mut spec = nexus_spec.lock().await;
-                    spec.children.push(request.uri.clone());
-                    spec.updating = false;
-                    Ok(share)
-                }
-                Err(error) => {
-                    let mut spec = nexus_spec.lock().await;
-                    spec.updating = false;
-                    Err(error)
-                }
-            }
+            let result = node.add_child(request).await;
+            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.add_child(request).await
         }
@@ -606,49 +585,90 @@ impl ResourceSpecsLocked {
             })?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
-            let mut spec = nexus_spec.lock().await;
-            if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::NexusNotFound {
-                    nexus_id: request.nexus.to_string(),
-                });
-            } else if !spec.children.contains(&request.uri) {
-                return Err(SvcError::ChildNotFound {
-                    nexus: request.nexus.to_string(),
-                    child: request.uri.to_string(),
-                });
+            let spec_clone = {
+                let status = registry.get_nexus(&request.nexus).await?;
+                let mut spec = nexus_spec.lock().await;
+                if spec.pending_op() {
+                    return Err(SvcError::StoreSave {
+                        kind: ResourceKind::Nexus,
+                        id: request.nexus.to_string(),
+                    });
+                } else if spec.updating {
+                    return Err(SvcError::Conflict {});
+                } else if !spec.state.created() {
+                    return Err(SvcError::NexusNotFound {
+                        nexus_id: request.nexus.to_string(),
+                    });
+                } else if !spec.children.contains(&request.uri)
+                    && !status.children.iter().any(|c| c.uri == request.uri)
+                {
+                    return Err(SvcError::ChildNotFound {
+                        nexus: request.nexus.to_string(),
+                        child: request.uri.to_string(),
+                    });
+                }
+
+                spec.updating = true;
+                spec.start_op(NexusOperation::RemoveChild(request.uri.clone()));
+                spec.clone()
+            };
+
+            if let Err(error) = registry.store_obj(&spec_clone).await {
+                let mut spec = nexus_spec.lock().await;
+                spec.updating = false;
+                spec.clear_op();
+                return Err(error);
             }
 
-            spec.updating = true;
-            let mut spec_clone = spec.clone();
-            drop(spec);
-
-            match node.remove_child(request).await {
-                Ok(_) => {
-                    spec_clone.children.retain(|c| c != &request.uri);
-                    let result = {
-                        let mut store = registry.store.lock().await;
-                        store.put_obj(&spec_clone).await
-                    };
-                    if let Err(error) = result {
-                        let mut spec = nexus_spec.lock().await;
-                        spec.updating = false;
-                        return Err(error.into());
-                    }
-                    let mut spec = nexus_spec.lock().await;
-                    spec.children.retain(|c| c != &request.uri);
-                    spec.updating = false;
-                    Ok(())
-                }
-                Err(error) => {
-                    let mut spec = nexus_spec.lock().await;
-                    spec.updating = false;
-                    Err(error)
-                }
-            }
+            let result = node.remove_child(request).await;
+            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.remove_child(request).await
+        }
+    }
+
+    /// Completes a nexus update operation by trying to update the spec in the persistent store.
+    /// If the persistent store operation fails then the spec is marked accordingly and the dirty
+    /// spec reconciler will attempt to update the store when the store is back online.
+    async fn nexus_complete_op<T>(
+        registry: &Registry,
+        result: Result<T, SvcError>,
+        nexus_spec: Arc<Mutex<NexusSpec>>,
+        mut spec_clone: NexusSpec,
+    ) -> Result<T, SvcError> {
+        match result {
+            Ok(val) => {
+                spec_clone.commit_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                let mut spec = nexus_spec.lock().await;
+                spec.updating = false;
+                match stored {
+                    Ok(_) => {
+                        spec.commit_op();
+                        Ok(val)
+                    }
+                    Err(error) => {
+                        spec.set_op_result(true);
+                        Err(error)
+                    }
+                }
+            }
+            Err(error) => {
+                spec_clone.clear_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                let mut spec = nexus_spec.lock().await;
+                spec.updating = false;
+                match stored {
+                    Ok(_) => {
+                        spec.clear_op();
+                        Err(error)
+                    }
+                    Err(error) => {
+                        spec.set_op_result(false);
+                        Err(error)
+                    }
+                }
+            }
         }
     }
 
@@ -900,12 +920,74 @@ impl ResourceSpecsLocked {
             })
         }
     }
+    /// Delete volume by its `id`
     async fn del_volume(&self, id: &VolumeId) {
         let mut specs = self.write().await;
         specs.volumes.remove(id);
     }
+    /// Delete nexus by its `id`
     async fn del_nexus(&self, id: &NexusId) {
         let mut specs = self.write().await;
         specs.nexuses.remove(id);
+    }
+    /// Get a vector of protected NexusSpec's
+    pub(crate) async fn get_nexuses(&self) -> Vec<Arc<Mutex<NexusSpec>>> {
+        let specs = self.read().await;
+        specs.nexuses.values().cloned().collect()
+    }
+
+    /// Worker that reconciles dirty NexusSpecs's with the persistent store.
+    /// This is useful when nexus operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub(crate) async fn reconcile_dirty_nexuses(&self, registry: &Registry) -> bool {
+        if registry.store_online().await {
+            let mut pending_count = 0;
+
+            let nexuses = self.get_nexuses().await;
+            for nexus_spec in nexuses {
+                let mut nexus = nexus_spec.lock().await;
+                if nexus.updating || !nexus.state.created() {
+                    continue;
+                }
+                if let Some(op) = nexus.operation.clone() {
+                    let mut nexus_clone = nexus.clone();
+
+                    let fail = !match op.result {
+                        Some(true) => {
+                            nexus_clone.commit_op();
+                            let result = registry.store_obj(&nexus_clone).await;
+                            if result.is_ok() {
+                                nexus.commit_op();
+                            }
+                            result.is_ok()
+                        }
+                        Some(false) => {
+                            nexus_clone.clear_op();
+                            let result = registry.store_obj(&nexus_clone).await;
+                            if result.is_ok() {
+                                nexus.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                        None => {
+                            // we must have crashed... we could check the node to see what the
+                            // current state is but for now assume failure
+                            nexus_clone.clear_op();
+                            let result = registry.store_obj(&nexus_clone).await;
+                            if result.is_ok() {
+                                nexus.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                    };
+                    if fail {
+                        pending_count += 1;
+                    }
+                }
+            }
+            pending_count > 0
+        } else {
+            true
+        }
     }
 }

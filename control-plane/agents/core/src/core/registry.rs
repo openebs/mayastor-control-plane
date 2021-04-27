@@ -93,7 +93,9 @@ impl Registry {
     /// Check if the persistent store is currently online
     pub async fn store_online(&self) -> bool {
         let mut store = self.store.lock().await;
-        store.online().await
+        tokio::time::timeout(self.store_timeout, async move { store.online().await })
+            .await
+            .unwrap_or(false)
     }
 
     /// Start the worker thread which updates the registry

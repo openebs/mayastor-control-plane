@@ -261,6 +261,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             }],
             device_uri: "".to_string(),
             rebuilds: 0,
+            share: v0::Protocol::Off
         }
     );
 
