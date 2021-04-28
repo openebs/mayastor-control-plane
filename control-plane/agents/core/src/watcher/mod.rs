@@ -39,11 +39,8 @@ mod tests {
             .create_volume(v0::CreateVolume {
                 uuid: v0::VolumeId::new(),
                 size: 10 * 1024 * 1024,
-                nexuses: 1,
                 replicas: 1,
-                allowed_nodes: vec![],
-                preferred_nodes: vec![],
-                preferred_nexus_nodes: vec![],
+                ..Default::default()
             })
             .await
             .unwrap();

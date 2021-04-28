@@ -294,11 +294,8 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         .create_volume(CreateVolume {
             uuid: "058a95e5-cee6-4e81-b682-fe864ca99b9c".into(),
             size: 12582912,
-            nexuses: 1,
             replicas: 1,
-            allowed_nodes: vec![],
-            preferred_nodes: vec![],
-            preferred_nexus_nodes: vec![],
+            ..Default::default()
         })
         .await
         .unwrap();

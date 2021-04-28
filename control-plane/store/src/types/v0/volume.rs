@@ -127,7 +127,7 @@ impl From<&v0::CreateVolume> for VolumeSpec {
             labels: vec![],
             num_replicas: request.replicas as u8,
             protocol: v0::Protocol::Off,
-            num_paths: request.nexuses as u8,
+            num_paths: 1,
             state: VolumeSpecState::Creating,
             updating: true,
         }

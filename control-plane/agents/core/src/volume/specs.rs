@@ -67,7 +67,7 @@ async fn get_node_pools(
 
     let size = request.size;
     let replicas = request.replicas;
-    let allowed_nodes = request.allowed_nodes.clone();
+    let allowed_nodes = request.allowed_nodes();
 
     if !allowed_nodes.is_empty() && replicas > allowed_nodes.len() as u64 {
         // oops, how would this even work mr requester?
@@ -685,11 +685,6 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateVolume,
     ) -> Result<Volume, SvcError> {
-        if request.nexuses > 1 {
-            tracing::error!("ANA volumes are not currently supported");
-            return Err(SvcError::MultipleNexuses {});
-        }
-
         // hold the specs lock while we determine the nodes/pools/replicas
         let mut specs = self.write().await;
         // todo: pick nodes and pools using the Node&Pool Topology

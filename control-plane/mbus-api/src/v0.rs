@@ -1143,6 +1143,93 @@ pub struct Volume {
 /// Currently it's the same as the nexus
 pub type VolumeState = NexusState;
 
+/// Volume topology using labels to determine how to place/distribute the data
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct LabelTopology {
+    /// node topology
+    node_topology: NodeTopology,
+    /// pool topology
+    pool_topology: PoolTopology,
+}
+
+/// Volume topology used to determine how to place/distribute the data
+/// Should either be labelled or explicit, not both.
+/// If neither is used then the control plane will select from all available resources.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct Topology {
+    /// volume topology using labels
+    pub labelled: Option<LabelTopology>,
+    /// volume topology, explicitly selected
+    pub explicit: Option<ExplicitTopology>,
+}
+
+/// Excludes resources with the same $label name, eg:
+/// "Zone" would not allow for resources with the same "Zone" value
+/// to be used for a certain operation, eg:
+/// A node with "Zone: A" would not be paired up with a node with "Zone: A",
+/// but it could be paired up with a node with "Zone: B"
+/// exclusive label NAME in the form "NAME", and not "NAME: VALUE"
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct ExclusiveLabel(
+    /// inner label
+    pub String,
+);
+
+/// Includes resources with the same $label or $label:$value eg:
+/// if label is "Zone: A":
+/// A resource with "Zone: A" would be paired up with a resource with "Zone: A",
+/// but not with a resource with "Zone: B"
+/// if label is "Zone":
+/// A resource with "Zone: A" would be paired up with a resource with "Zone: B",
+/// but not with a resource with "OtherLabel: B"
+/// inclusive label key value in the form "NAME: VALUE"
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct InclusiveLabel(
+    /// inner label
+    pub String,
+);
+
+/// Placement node topology used by volume operations
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct NodeTopology {
+    /// exclusive labels
+    #[serde(default)]
+    pub exclusion: Vec<ExclusiveLabel>,
+    /// inclusive labels
+    #[serde(default)]
+    pub inclusion: Vec<InclusiveLabel>,
+}
+
+/// Placement pool topology used by volume operations
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct PoolTopology {
+    /// inclusive labels
+    #[serde(default)]
+    pub inclusion: Vec<InclusiveLabel>,
+}
+
+/// Explicit node placement Selection for a volume
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct ExplicitTopology {
+    /// replicas can only be placed on these nodes
+    #[serde(default)]
+    pub allowed_nodes: Vec<NodeId>,
+    /// preferred nodes to place the replicas
+    #[serde(default)]
+    pub preferred_nodes: Vec<NodeId>,
+}
+
+/// Volume Healing policy used to determine if and how to replace a replica
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct VolumeHealPolicy {
+    /// the server will attempt to heal the volume by itself
+    /// the client should not attempt to do the same if this is enabled
+    pub self_heal: bool,
+    /// topology to choose a replacement replica for self healing
+    /// (overrides the initial creation topology)
+    pub topology: Option<Topology>,
+}
+
 /// Get volumes
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -1161,21 +1248,25 @@ pub struct CreateVolume {
     pub uuid: VolumeId,
     /// size of the volume in bytes
     pub size: u64,
-    /// number of children nexuses (ANA)
-    pub nexuses: u64,
-    /// number of replicas per nexus
+    /// number of storage replicas
     pub replicas: u64,
-    /// only these nodes can be used for the replicas
-    #[serde(default)]
-    pub allowed_nodes: Vec<NodeId>,
-    /// preferred nodes for the replicas
-    #[serde(default)]
-    pub preferred_nodes: Vec<NodeId>,
-    /// preferred nodes for the nexuses
-    #[serde(default)]
-    pub preferred_nexus_nodes: Vec<NodeId>,
+    /// volume healing policy
+    pub policy: VolumeHealPolicy,
+    /// initial replica placement topology
+    pub topology: Topology,
 }
 bus_impl_message_all!(CreateVolume, CreateVolume, Volume, Volume);
+
+impl CreateVolume {
+    /// explicitly selected allowed_nodes
+    pub fn allowed_nodes(&self) -> Vec<NodeId> {
+        self.topology
+            .explicit
+            .clone()
+            .unwrap_or_default()
+            .allowed_nodes
+    }
+}
 
 /// Delete volume
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
