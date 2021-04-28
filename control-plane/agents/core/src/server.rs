@@ -23,8 +23,12 @@ pub(crate) struct CliArgs {
     #[structopt(long, short, default_value = "20s")]
     pub(crate) cache_period: humantime::Duration,
 
-    /// The period at which the reconcile loop checks for work
+    /// The period at which the reconcile loop checks for new work
     #[structopt(long, default_value = "30s")]
+    pub(crate) reconcile_idle_period: humantime::Duration,
+
+    /// The period at which the reconcile loop attempts to do work
+    #[structopt(long, default_value = "3s")]
     pub(crate) reconcile_period: humantime::Duration,
 
     /// Deadline for the mayastor instance keep alive registration
@@ -75,6 +79,7 @@ async fn server(cli_args: CliArgs) {
         CliArgs::from_args().store,
         CliArgs::from_args().store_timeout.into(),
         CliArgs::from_args().reconcile_period.into(),
+        CliArgs::from_args().reconcile_idle_period.into(),
     )
     .await;
     Service::builder(cli_args.nats, ChannelVs::Core)

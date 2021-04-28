@@ -115,6 +115,9 @@ macro_rules! impl_ctrlp_agents {
                     if let Some(period) = &options.reconcile_period {
                         binary = binary.with_args(vec!["--reconcile-period", &period.to_string()]);
                     }
+                    if let Some(period) = &options.reconcile_idle_period {
+                        binary = binary.with_args(vec!["--reconcile-idle-period", &period.to_string()]);
+                    }
                 }
                 Ok(cfg.add_container_bin(&name, binary))
             }

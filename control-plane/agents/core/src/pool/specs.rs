@@ -393,7 +393,7 @@ impl ResourceSpecsLocked {
                     return Err(SvcError::ReplicaNotFound {
                         replica_id: request.uuid.clone(),
                     });
-                } else if spec.share != Protocol::Off && status.share != Protocol::Off {
+                } else if spec.share == status.share && spec.share != Protocol::Off {
                     return Err(SvcError::AlreadyShared {
                         kind: ResourceKind::Replica,
                         id: request.uuid.to_string(),
@@ -472,7 +472,7 @@ impl ResourceSpecsLocked {
         }
     }
 
-    /// Completes a replica update operation by trying to update the spec with the persistent store.
+    /// Completes a replica update operation by trying to update the spec in the persistent store.
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn replica_complete_op<T>(
@@ -543,7 +543,7 @@ impl ResourceSpecsLocked {
         specs.pools.remove(id);
     }
 
-    /// Get a vector of protected ReplicaSpec's which are in the created
+    /// Get a vector of protected ReplicaSpec's
     pub(crate) async fn get_replicas(&self) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         let specs = self.read().await;
         specs.replicas.values().cloned().collect()
@@ -552,12 +552,10 @@ impl ResourceSpecsLocked {
     /// Worker that reconciles dirty ReplicaSpec's with the persistent store.
     /// This is useful when replica operations are performed but we fail to
     /// update the spec with the persistent store.
-    pub(crate) async fn reconcile_dirty_replicas_work(
-        &self,
-        registry: &Registry,
-    ) -> Option<std::time::Duration> {
+    pub(crate) async fn reconcile_dirty_replicas(&self, registry: &Registry) -> bool {
         if registry.store_online().await {
             let mut pending_count = 0;
+
             let replicas = self.get_replicas().await;
             for replica_spec in replicas {
                 let mut replica = replica_spec.lock().await;
@@ -585,9 +583,8 @@ impl ResourceSpecsLocked {
                             result.is_ok()
                         }
                         None => {
-                            // we must have crashed... we could check the
-                            // node to see what the current state is but for
-                            // now assume failure
+                            // we must have crashed... we could check the node to see what the
+                            // current state is but for now assume failure
                             replica_clone.clear_op();
                             let result = registry.store_obj(&replica_clone).await;
                             if result.is_ok() {
@@ -601,20 +598,9 @@ impl ResourceSpecsLocked {
                     }
                 }
             }
-            if pending_count > 0 {
-                Some(std::time::Duration::from_secs(1))
-            } else {
-                None
-            }
+            pending_count > 0
         } else {
-            Some(std::time::Duration::from_secs(1))
-        }
-    }
-    pub(crate) async fn reconcile_dirty_replicas(&self, registry: Registry) {
-        loop {
-            let period = self.reconcile_dirty_replicas_work(&registry).await;
-            let period = period.unwrap_or(registry.reconcile_period);
-            tokio::time::delay_for(period).await;
+            true
         }
     }
 }

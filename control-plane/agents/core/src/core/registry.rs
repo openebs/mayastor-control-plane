@@ -40,6 +40,8 @@ pub struct RegistryInner<S: Store> {
     /// store gRPC operation timeout
     store_timeout: std::time::Duration,
     /// reconciliation period when no work is being done
+    pub(crate) reconcile_idle_period: std::time::Duration,
+    /// reconciliation period when work is pending
     pub(crate) reconcile_period: std::time::Duration,
 }
 
@@ -52,6 +54,7 @@ impl Registry {
         store_url: String,
         store_timeout: std::time::Duration,
         reconcile_period: std::time::Duration,
+        reconcile_idle_period: std::time::Duration,
     ) -> Self {
         let store = Etcd::new(&store_url)
             .await
@@ -63,6 +66,7 @@ impl Registry {
             store: Arc::new(Mutex::new(store)),
             store_timeout,
             reconcile_period,
+            reconcile_idle_period,
         };
         registry.start();
         registry
@@ -89,7 +93,9 @@ impl Registry {
     /// Check if the persistent store is currently online
     pub async fn store_online(&self) -> bool {
         let mut store = self.store.lock().await;
-        store.online().await
+        tokio::time::timeout(self.store_timeout, async move { store.online().await })
+            .await
+            .unwrap_or(false)
     }
 
     /// Start the worker thread which updates the registry

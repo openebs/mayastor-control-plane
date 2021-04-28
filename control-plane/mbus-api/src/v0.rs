@@ -10,7 +10,7 @@ use paperclip::{
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
-use std::{cmp::Ordering, fmt::Debug};
+use std::{cmp::Ordering, convert::TryFrom, fmt::Debug};
 use strum_macros::{EnumString, ToString};
 
 pub(super) const VERSION: &str = "v0";
@@ -782,6 +782,31 @@ impl From<NexusShareProtocol> for Protocol {
         }
     }
 }
+/// Convert a device URI to a share Protocol
+/// Uses the URI scheme to determine the protocol
+/// Temporary WA until the share is added to the mayastor RPC
+impl TryFrom<&str> for Protocol {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(if value.is_empty() {
+            Protocol::Off
+        } else {
+            match url::Url::from_str(value) {
+                Ok(url) => match url.scheme() {
+                    "nvmf" => Self::Nvmf,
+                    "iscsi" => Self::Iscsi,
+                    "nbd" => Self::Nbd,
+                    other => return Err(format!("Invalid nexus protocol: {}", other)),
+                },
+                Err(error) => {
+                    tracing::error!("error parsing uri's ({}) protocol: {}", value, error);
+                    return Err(error.to_string());
+                }
+            }
+        })
+    }
+}
 
 /// The protocol used to share the nexus.
 #[derive(
@@ -897,6 +922,8 @@ pub struct Nexus {
     pub device_uri: String,
     /// total number of rebuild tasks
     pub rebuilds: u32,
+    /// protocol used for exposing the nexus
+    pub share: Protocol,
 }
 
 /// Child information
@@ -1020,6 +1047,24 @@ pub struct ShareNexus {
 }
 bus_impl_message_all!(ShareNexus, ShareNexus, String, Nexus);
 
+impl From<(&Nexus, Option<String>, NexusShareProtocol)> for ShareNexus {
+    fn from((nexus, key, protocol): (&Nexus, Option<String>, NexusShareProtocol)) -> Self {
+        Self {
+            node: nexus.node.clone(),
+            uuid: nexus.uuid.clone(),
+            key,
+            protocol,
+        }
+    }
+}
+impl From<&Nexus> for UnshareNexus {
+    fn from(from: &Nexus) -> Self {
+        Self {
+            node: from.node.clone(),
+            uuid: from.uuid.clone(),
+        }
+    }
+}
 impl From<ShareNexus> for UnshareNexus {
     fn from(share: ShareNexus) -> Self {
         Self {

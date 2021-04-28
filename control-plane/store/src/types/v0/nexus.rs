@@ -2,9 +2,12 @@
 
 use crate::{
     store::{ObjectKey, StorableObject, StorableObjectType},
-    types::SpecState,
+    types::{v0::SpecTransaction, SpecState},
 };
-use mbus_api::{v0, v0::NexusId};
+use mbus_api::{
+    v0,
+    v0::{ChildUri, NexusId, NexusShareProtocol, Protocol},
+};
 use serde::{Deserialize, Serialize};
 
 /// Nexus information
@@ -75,6 +78,65 @@ pub struct NexusSpec {
     /// Update of the state in progress
     #[serde(skip)]
     pub updating: bool,
+    /// Record of the operation in progress
+    pub operation: Option<NexusOperationState>,
+}
+
+/// Operation State for a Nexus spec resource
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NexusOperationState {
+    /// Record of the operation
+    pub operation: NexusOperation,
+    /// Result of the operation
+    pub result: Option<bool>,
+}
+
+impl SpecTransaction<NexusOperation> for NexusSpec {
+    fn pending_op(&self) -> bool {
+        self.operation.is_some()
+    }
+
+    fn commit_op(&mut self) {
+        if let Some(op) = self.operation.clone() {
+            match op.operation {
+                NexusOperation::Share(share) => {
+                    self.share = share.into();
+                }
+                NexusOperation::Unshare => {
+                    self.share = Protocol::Off;
+                }
+                NexusOperation::AddChild(uri) => self.children.push(uri),
+                NexusOperation::RemoveChild(uri) => self.children.retain(|c| c != &uri),
+            }
+            self.clear_op();
+        }
+    }
+
+    fn clear_op(&mut self) {
+        self.operation = None;
+    }
+
+    fn start_op(&mut self, operation: NexusOperation) {
+        self.operation = Some(NexusOperationState {
+            operation,
+            result: None,
+        })
+    }
+
+    fn set_op_result(&mut self, result: bool) {
+        if let Some(op) = &mut self.operation {
+            op.result = Some(result);
+        }
+    }
+}
+
+/// Available Nexus Operations
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum NexusOperation {
+    Share(NexusShareProtocol),
+    Unshare,
+    AddChild(ChildUri),
+    RemoveChild(ChildUri),
 }
 
 /// Key used by the store to uniquely identify a NexusSpec structure.
@@ -116,6 +178,7 @@ impl From<&v0::CreateNexus> for NexusSpec {
             managed: request.managed,
             owner: request.owner.clone(),
             updating: true,
+            operation: None,
         }
     }
 }
@@ -147,6 +210,7 @@ impl From<&NexusSpec> for v0::Nexus {
                 .collect(),
             device_uri: "".to_string(),
             rebuilds: 0,
+            share: nexus.share.clone(),
         }
     }
 }

@@ -272,9 +272,11 @@ impl ClusterBuilder {
         self.opts = self.opts.with_node_deadline(deadline);
         self
     }
-    /// With reconcile period
-    pub fn with_reconcile_period(mut self, period: Duration) -> Self {
-        self.opts = self.opts.with_reconcile_period(period);
+    /// With reconcile periods:
+    /// `busy` for when there's work that needs to be retried on the next poll
+    /// `idle` when there's no work pending
+    pub fn with_reconcile_period(mut self, busy: Duration, idle: Duration) -> Self {
+        self.opts = self.opts.with_reconcile_period(busy, idle);
         self
     }
     /// With store operation timeout
