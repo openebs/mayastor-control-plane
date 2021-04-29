@@ -114,29 +114,21 @@ impl CreateNexusBody {
 pub struct CreateVolumeBody {
     /// size of the volume in bytes
     pub size: u64,
-    /// number of children nexuses (ANA)
-    pub nexuses: u64,
-    /// number of replicas per nexus
+    /// number of storage replicas
     pub replicas: u64,
-    /// only these nodes can be used for the replicas
-    #[serde(default)]
-    pub allowed_nodes: Option<Vec<NodeId>>,
-    /// preferred nodes for the replicas
-    #[serde(default)]
-    pub preferred_nodes: Option<Vec<NodeId>>,
-    /// preferred nodes for the nexuses
-    #[serde(default)]
-    pub preferred_nexus_nodes: Option<Vec<NodeId>>,
+    // docs will be auto generated from the actual types
+    #[allow(missing_docs)]
+    pub policy: VolumeHealPolicy,
+    #[allow(missing_docs)]
+    pub topology: Topology,
 }
 impl From<CreateVolume> for CreateVolumeBody {
     fn from(create: CreateVolume) -> Self {
         CreateVolumeBody {
             size: create.size,
-            nexuses: create.nexuses,
             replicas: create.replicas,
-            preferred_nodes: create.preferred_nodes.into(),
-            allowed_nodes: create.allowed_nodes.into(),
-            preferred_nexus_nodes: create.preferred_nexus_nodes.into(),
+            policy: create.policy,
+            topology: create.topology,
         }
     }
 }
@@ -146,11 +138,9 @@ impl CreateVolumeBody {
         CreateVolume {
             uuid: volume_id,
             size: self.size,
-            nexuses: self.nexuses,
             replicas: self.replicas,
-            allowed_nodes: self.allowed_nodes.clone().unwrap_or_default(),
-            preferred_nodes: self.preferred_nodes.clone().unwrap_or_default(),
-            preferred_nexus_nodes: self.preferred_nexus_nodes.clone().unwrap_or_default(),
+            policy: self.policy.clone(),
+            topology: self.topology.clone(),
         }
     }
 }

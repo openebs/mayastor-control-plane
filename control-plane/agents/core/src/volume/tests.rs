@@ -118,11 +118,8 @@ async fn test_volume() {
     let volume = CreateVolume {
         uuid: "359b7e1a-b724-443b-98b4-e6d97fabbb40".into(),
         size: 5242880,
-        nexuses: 1,
         replicas: 2,
-        allowed_nodes: vec![],
-        preferred_nodes: vec![],
-        preferred_nexus_nodes: vec![],
+        ..Default::default()
     };
 
     let volume = volume.request().await.unwrap();
