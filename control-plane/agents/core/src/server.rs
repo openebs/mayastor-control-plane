@@ -1,4 +1,5 @@
 pub mod core;
+pub mod nexus;
 pub mod node;
 pub mod pool;
 pub mod volume;
@@ -89,6 +90,7 @@ async fn server(cli_args: CliArgs) {
         .with_shared_state(registry)
         .configure(node::configure)
         .configure(pool::configure)
+        .configure(nexus::configure)
         .configure(volume::configure)
         .configure(watcher::configure)
         .run()

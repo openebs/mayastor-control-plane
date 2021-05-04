@@ -15,6 +15,7 @@ use tracing::info;
 async fn wait_for_services() {
     Liveness {}.request_on(ChannelVs::Node).await.unwrap();
     Liveness {}.request_on(ChannelVs::Pool).await.unwrap();
+    Liveness {}.request_on(ChannelVs::Nexus).await.unwrap();
     Liveness {}.request_on(ChannelVs::Volume).await.unwrap();
     Liveness {}.request_on(ChannelVs::JsonGrpc).await.unwrap();
 }
