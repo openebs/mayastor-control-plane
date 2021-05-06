@@ -16,11 +16,7 @@ pub mod v0;
 use async_trait::async_trait;
 use dyn_clonable::clonable;
 pub use mbus_nats::{
-    bus,
-    message_bus_init,
-    message_bus_init_options,
-    message_bus_init_tokio,
-    NatsMessageBus,
+    bus, message_bus_init, message_bus_init_options, message_bus_init_tokio, NatsMessageBus,
 };
 pub use receive::*;
 pub use send::*;
@@ -378,17 +374,13 @@ impl From<Error> for ReplyError {
         #[allow(deprecated)]
         let source_name = error.description().to_string();
         match error {
-            Error::RequestTimeout {
-                ..
-            } => Self {
+            Error::RequestTimeout { .. } => Self {
                 kind: ReplyErrorKind::Timeout,
                 resource: ResourceKind::Unknown,
                 source: source_name,
                 extra: error.to_string(),
             },
-            Error::ReplyWithError {
-                source,
-            } => source,
+            Error::ReplyWithError { source } => source,
             _ => Self {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,

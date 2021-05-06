@@ -6,17 +6,8 @@ use tokio::sync::Mutex;
 use common::errors::{NodeNotFound, SvcError};
 use mbus_api::{
     v0::{
-        AddNexusChild,
-        Child,
-        CreateNexus,
-        DestroyNexus,
-        Nexus,
-        NexusId,
-        NexusState,
-        Protocol,
-        RemoveNexusChild,
-        ShareNexus,
-        UnshareNexus,
+        AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState, Protocol,
+        RemoveNexusChild, ShareNexus, UnshareNexus,
     },
     ResourceKind,
 };

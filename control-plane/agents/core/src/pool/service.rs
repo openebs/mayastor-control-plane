@@ -1,19 +1,8 @@
 use crate::core::registry::Registry;
 use common::errors::SvcError;
 use mbus_api::v0::{
-    CreatePool,
-    CreateReplica,
-    DestroyPool,
-    DestroyReplica,
-    Filter,
-    GetPools,
-    GetReplicas,
-    Pool,
-    Pools,
-    Replica,
-    Replicas,
-    ShareReplica,
-    UnshareReplica,
+    CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas, Pool,
+    Pools, Replica, Replicas, ShareReplica, UnshareReplica,
 };
 
 #[derive(Debug, Clone)]
@@ -23,9 +12,7 @@ pub(super) struct Service {
 
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
-        Self {
-            registry,
-        }
+        Self { registry }
     }
 
     /// Get pools according to the filter
@@ -46,11 +33,7 @@ impl Service {
                 let pool = self.registry.get_pool_wrapper(&pool_id).await?;
                 vec![pool.into()]
             }
-            _ => {
-                return Err(SvcError::InvalidFilter {
-                    filter,
-                })
-            }
+            _ => return Err(SvcError::InvalidFilter { filter }),
         };
         Ok(Pools(pools))
     }
@@ -97,11 +80,7 @@ impl Service {
             Filter::Replica(replica_id) => {
                 vec![self.registry.get_replica(&replica_id).await?]
             }
-            _ => {
-                return Err(SvcError::InvalidFilter {
-                    filter,
-                })
-            }
+            _ => return Err(SvcError::InvalidFilter { filter }),
         };
         Ok(Replicas(replicas))
     }

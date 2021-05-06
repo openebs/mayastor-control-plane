@@ -768,16 +768,12 @@ impl ResponseError for RestError {
 }
 impl From<ReplyError> for RestError {
     fn from(inner: ReplyError) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 }
 impl From<mbus_api::Error> for RestError {
     fn from(from: mbus_api::Error) -> Self {
-        Self {
-            inner: from.into(),
-        }
+        Self { inner: from.into() }
     }
 }
 impl From<RestError> for HttpResponse {

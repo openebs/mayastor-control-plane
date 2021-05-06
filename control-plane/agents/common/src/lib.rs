@@ -100,10 +100,7 @@ pub struct Context<'a> {
 impl<'a> Context<'a> {
     /// create a new context
     pub fn new(bus: &'a DynBus, state: &'a Container) -> Self {
-        Self {
-            bus,
-            state,
-        }
+        Self { bus, state }
     }
     /// get the message bus from the context
     pub fn get_bus_as_ref(&self) -> &'a DynBus {
@@ -120,9 +117,7 @@ impl<'a> Context<'a> {
                     type_name
                 );
                 error!("{}", error_msg);
-                Err(SvcError::Internal {
-                    details: error_msg,
-                })
+                Err(SvcError::Internal { details: error_msg })
             }
         }
     }

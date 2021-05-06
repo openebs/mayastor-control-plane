@@ -174,30 +174,24 @@ impl ActixRestClient {
             head.headers = headers.clone();
             head
         };
-        let body = rest_response.body().await.context(InvalidPayload {
-            head: head(),
-        })?;
+        let body = rest_response
+            .body()
+            .await
+            .context(InvalidPayload { head: head() })?;
         if status.is_success() {
             match serde_json::from_slice(&body) {
                 Ok(r) => Ok(r),
                 Err(_) => {
-                    let result = serde_json::from_slice(&body).context(InvalidBody {
-                        head: head(),
-                        body,
-                    })?;
+                    let result = serde_json::from_slice(&body)
+                        .context(InvalidBody { head: head(), body })?;
                     Ok(vec![result])
                 }
             }
         } else if body.is_empty() {
-            Err(ClientError::Header {
-                head: head(),
-            })
+            Err(ClientError::Header { head: head() })
         } else {
-            let error =
-                serde_json::from_slice::<serde_json::Value>(&body).context(InvalidBody {
-                    head: head(),
-                    body,
-                })?;
+            let error = serde_json::from_slice::<serde_json::Value>(&body)
+                .context(InvalidBody { head: head(), body })?;
             Err(ClientError::RestServer {
                 head: head(),
                 error,
@@ -217,30 +211,23 @@ impl ActixRestClient {
             head.headers = headers.clone();
             head
         };
-        let body = rest_response.body().await.context(InvalidPayload {
-            head: head(),
-        })?;
+        let body = rest_response
+            .body()
+            .await
+            .context(InvalidPayload { head: head() })?;
         if status.is_success() {
             let empty = body.is_empty();
-            let result = serde_json::from_slice(&body).context(InvalidBody {
-                head: head(),
-                body,
-            });
+            let result = serde_json::from_slice(&body).context(InvalidBody { head: head(), body });
             match result {
                 Ok(result) => Ok(result),
                 Err(_) if empty && std::any::type_name::<R>() == "()" => Ok(R::default()),
                 Err(error) => Err(error),
             }
         } else if body.is_empty() {
-            Err(ClientError::Header {
-                head: head(),
-            })
+            Err(ClientError::Header { head: head() })
         } else {
-            let error =
-                serde_json::from_slice::<serde_json::Value>(&body).context(InvalidBody {
-                    head: head(),
-                    body,
-                })?;
+            let error = serde_json::from_slice::<serde_json::Value>(&body)
+                .context(InvalidBody { head: head(), body })?;
             Err(ClientError::RestServer {
                 head: head(),
                 error,
@@ -348,9 +335,7 @@ impl std::fmt::Display for JsonGeneric {
 impl JsonGeneric {
     /// New JsonGeneric from a JSON value
     pub fn from(value: serde_json::Value) -> Self {
-        Self {
-            inner: value,
-        }
+        Self { inner: value }
     }
 
     /// Get inner value

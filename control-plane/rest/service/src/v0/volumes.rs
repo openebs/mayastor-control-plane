@@ -45,9 +45,7 @@ async fn put_volume(
 
 #[delete("/volumes/{volume_id}", tags(Volumes))]
 async fn del_volume(web::Path(volume_id): web::Path<VolumeId>) -> Result<JsonUnit, RestError> {
-    let request = DestroyVolume {
-        uuid: volume_id,
-    };
+    let request = DestroyVolume { uuid: volume_id };
     RestRespond::result(MessageBus::delete_volume(request).await).map(JsonUnit::from)
 }
 

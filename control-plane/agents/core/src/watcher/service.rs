@@ -6,9 +6,7 @@ pub use common::errors::SvcError;
 use mbus_api::v0::{GetWatchers, Watches};
 pub use mbus_api::{
     v0::{CreateWatch, DeleteWatch},
-    Message,
-    MessageId,
-    ReceivedMessage,
+    Message, MessageId, ReceivedMessage,
 };
 pub use std::convert::TryInto;
 use std::sync::Arc;

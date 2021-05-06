@@ -20,8 +20,7 @@ use actix_service::ServiceFactory;
 use actix_web::{
     dev::{MessageBody, ServiceRequest, ServiceResponse},
     web::{self, Json},
-    FromRequest,
-    HttpRequest,
+    FromRequest, HttpRequest,
 };
 use futures::future::Ready;
 use macros::actix::{delete, get, put};

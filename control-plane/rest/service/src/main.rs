@@ -4,15 +4,12 @@ mod v0;
 use actix_service::ServiceFactory;
 use actix_web::{
     dev::{MessageBody, ServiceRequest, ServiceResponse},
-    middleware,
-    App,
-    HttpServer,
+    middleware, App, HttpServer,
 };
 
 use rustls::{
     internal::pemfile::{certs, rsa_private_keys},
-    NoClientAuth,
-    ServerConfig,
+    NoClientAuth, ServerConfig,
 };
 use std::{fs::File, io::BufReader, str::FromStr};
 use structopt::StructOpt;

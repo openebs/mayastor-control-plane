@@ -31,10 +31,7 @@ pub(crate) struct NodeCommsTimeout {
 
 impl NodeCommsTimeout {
     fn new(connect: std::time::Duration, request: std::time::Duration) -> Self {
-        Self {
-            connect,
-            request,
-        }
+        Self { connect, request }
     }
     /// timeout to establish connection to the node
     pub fn connect(&self) -> std::time::Duration {
@@ -142,9 +139,7 @@ impl Service {
 
         let result = client
             .client
-            .list_block_devices(ListBlockDevicesRequest {
-                all: request.all,
-            })
+            .list_block_devices(ListBlockDevicesRequest { all: request.all })
             .await;
 
         let response = result

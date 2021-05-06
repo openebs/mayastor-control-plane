@@ -3,12 +3,7 @@ pub(super) mod service;
 pub(crate) mod watchdog;
 
 use super::{
-    core::registry,
-    handler,
-    handler_publish,
-    impl_publish_handler,
-    impl_request_handler,
-    CliArgs,
+    core::registry, handler, handler_publish, impl_publish_handler, impl_request_handler, CliArgs,
 };
 use common::{errors::SvcError, v0::GetSpecs, Service};
 use mbus_api::{v0::*, *};

@@ -75,9 +75,7 @@ impl JsonWebKey {
                 token: token.to_string(),
                 uri: uri.to_string(),
             }),
-            Err(source) => Err(AuthError::Verification {
-                source,
-            }),
+            Err(source) => Err(AuthError::Verification { source }),
         }
     }
 

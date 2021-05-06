@@ -1,21 +1,7 @@
 use crate::store::{
-    Connect,
-    Delete,
-    DeserialiseValue,
-    Get,
-    KeyString,
-    ObjectKey,
-    Put,
-    SerialiseValue,
-    StorableObject,
-    Store,
-    StoreError,
-    StoreError::MissingEntry,
-    StoreKey,
-    StoreValue,
-    ValueString,
-    Watch,
-    WatchEvent,
+    Connect, Delete, DeserialiseValue, Get, KeyString, ObjectKey, Put, SerialiseValue,
+    StorableObject, Store, StoreError, StoreError::MissingEntry, StoreKey, StoreValue, ValueString,
+    Watch, WatchEvent,
 };
 use async_trait::async_trait;
 use etcd_client::{Client, EventType, KeyValue, WatchStream, Watcher};
@@ -114,18 +100,18 @@ impl Store for Etcd {
     }
 
     async fn get_obj<O: StorableObject>(&mut self, key: &O::Key) -> Result<O, StoreError> {
-        let resp = self.0.get(key.key(), None).await.context(Get {
-            key: key.key(),
-        })?;
+        let resp = self
+            .0
+            .get(key.key(), None)
+            .await
+            .context(Get { key: key.key() })?;
         match resp.kvs().first() {
             Some(kv) => Ok(
                 serde_json::from_slice(kv.value()).context(DeserialiseValue {
                     value: kv.value_str().context(ValueString {})?,
                 })?,
             ),
-            None => Err(MissingEntry {
-                key: key.key(),
-            }),
+            None => Err(MissingEntry { key: key.key() }),
         }
     }
 
@@ -134,9 +120,11 @@ impl Store for Etcd {
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
         let (sender, receiver) = channel(100);
-        let (watcher, stream) = self.0.watch(key.key(), None).await.context(Watch {
-            key: key.key(),
-        })?;
+        let (watcher, stream) = self
+            .0
+            .watch(key.key(), None)
+            .await
+            .context(Watch { key: key.key() })?;
         watch(watcher, stream, sender);
         Ok(receiver)
     }
