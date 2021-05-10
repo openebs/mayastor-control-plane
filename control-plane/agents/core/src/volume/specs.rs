@@ -5,22 +5,9 @@ use tokio::sync::Mutex;
 use common::errors::{NotEnough, SvcError};
 use mbus_api::{
     v0::{
-        ChildUri,
-        CreateNexus,
-        CreateReplica,
-        CreateVolume,
-        DestroyNexus,
-        DestroyReplica,
-        DestroyVolume,
-        NexusId,
-        NodeId,
-        PoolState,
-        Protocol,
-        ReplicaId,
-        ReplicaOwners,
-        Volume,
-        VolumeId,
-        VolumeState,
+        ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus, DestroyReplica,
+        DestroyVolume, NexusId, NodeId, PoolState, Protocol, ReplicaId, ReplicaOwners, Volume,
+        VolumeId, VolumeState,
     },
     ResourceKind,
 };

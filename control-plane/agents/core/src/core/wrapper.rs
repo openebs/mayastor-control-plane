@@ -5,21 +5,8 @@ use common::{
 };
 use mbus_api::{
     v0::{
-        CreatePool,
-        CreateReplica,
-        DestroyPool,
-        DestroyReplica,
-        Node,
-        NodeId,
-        NodeState,
-        Pool,
-        PoolId,
-        PoolState,
-        Protocol,
-        Replica,
-        ReplicaId,
-        ShareReplica,
-        UnshareReplica,
+        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Node, NodeId, NodeState, Pool,
+        PoolId, PoolState, Protocol, Replica, ReplicaId, ShareReplica, UnshareReplica,
     },
     ResourceKind,
 };
@@ -348,16 +335,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use mbus_api::v0::{
-    AddNexusChild,
-    Child,
-    ChildUri,
-    CreateNexus,
-    DestroyNexus,
-    Nexus,
-    NexusId,
-    RemoveNexusChild,
-    ShareNexus,
-    UnshareNexus,
+    AddNexusChild, Child, ChildUri, CreateNexus, DestroyNexus, Nexus, NexusId, RemoveNexusChild,
+    ShareNexus, UnshareNexus,
 };
 use std::{ops::Deref, sync::Arc};
 

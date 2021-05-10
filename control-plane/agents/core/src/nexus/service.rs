@@ -1,17 +1,8 @@
 use crate::core::registry::Registry;
 use common::errors::SvcError;
 use mbus_api::v0::{
-    AddNexusChild,
-    Child,
-    CreateNexus,
-    DestroyNexus,
-    Filter,
-    GetNexuses,
-    Nexus,
-    Nexuses,
-    RemoveNexusChild,
-    ShareNexus,
-    UnshareNexus,
+    AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus, Nexuses,
+    RemoveNexusChild, ShareNexus, UnshareNexus,
 };
 
 #[derive(Debug, Clone)]
@@ -21,9 +12,7 @@ pub(super) struct Service {
 
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
-        Self {
-            registry,
-        }
+        Self { registry }
     }
 
     /// Get nexuses according to the filter
@@ -41,11 +30,7 @@ impl Service {
                 let nexus = self.registry.get_nexus(&nexus_id).await?;
                 vec![nexus]
             }
-            _ => {
-                return Err(SvcError::InvalidFilter {
-                    filter,
-                })
-            }
+            _ => return Err(SvcError::InvalidFilter { filter }),
         };
         Ok(Nexuses(nexuses))
     }

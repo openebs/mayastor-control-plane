@@ -11,8 +11,7 @@ use opentelemetry::{
 use opentelemetry_jaeger::Uninstall;
 pub use rest_client::{
     versions::v0::{self, Message, RestClient},
-    ActixRestClient,
-    ClientError,
+    ActixRestClient, ClientError,
 };
 use std::time::Duration;
 
@@ -145,9 +144,7 @@ where
     match future.await {
         Ok(_) if expected.is_ok() => Ok(()),
         Err(error) if expected.is_err() => match error {
-            ClientError::RestServer {
-                ..
-            } => Ok(()),
+            ClientError::RestServer { .. } => Ok(()),
             _ => {
                 // not the error we were waiting for
                 Err(anyhow::anyhow!("Invalid rest response: {}", error))
@@ -249,11 +246,7 @@ impl ClusterBuilder {
     }
     /// Specify `count` replicas to add to each node per pool
     pub fn with_replicas(mut self, count: u32, size: u64, share: v0::Protocol) -> Self {
-        self.replicas = Replica {
-            count,
-            size,
-            share,
-        };
+        self.replicas = Replica { count, size, share };
         self
     }
     /// Specify `count` mayastors for the cluster

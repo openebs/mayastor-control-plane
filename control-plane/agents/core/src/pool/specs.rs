@@ -6,19 +6,8 @@ use tokio::sync::Mutex;
 use common::errors::{NodeNotFound, SvcError};
 use mbus_api::{
     v0::{
-        CreatePool,
-        CreateReplica,
-        DestroyPool,
-        DestroyReplica,
-        Pool,
-        PoolId,
-        PoolState,
-        Protocol,
-        Replica,
-        ReplicaId,
-        ReplicaState,
-        ShareReplica,
-        UnshareReplica,
+        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState, Protocol,
+        Replica, ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
     },
     ResourceKind,
 };

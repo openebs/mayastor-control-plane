@@ -1,10 +1,5 @@
 use mbus_api::{
-    message_bus::v0::BusError,
-    v0::*,
-    ErrorChain,
-    ReplyError,
-    ReplyErrorKind,
-    ResourceKind,
+    message_bus::v0::BusError, v0::*, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind,
 };
 use snafu::{Error, Snafu};
 use store::store::StoreError;
@@ -118,25 +113,19 @@ pub enum SvcError {
 
 impl From<StoreError> for SvcError {
     fn from(source: StoreError) -> Self {
-        SvcError::Store {
-            source,
-        }
+        SvcError::Store { source }
     }
 }
 
 impl From<mbus_api::Error> for SvcError {
     fn from(source: mbus_api::Error) -> Self {
-        Self::MBusError {
-            source,
-        }
+        Self::MBusError { source }
     }
 }
 
 impl From<NotEnough> for SvcError {
     fn from(source: NotEnough) -> Self {
-        Self::NotEnoughResources {
-            source,
-        }
+        Self::NotEnoughResources { source }
     }
 }
 
@@ -146,78 +135,56 @@ impl From<SvcError> for ReplyError {
         let desc: &String = &error.description().to_string();
         let error_str = error.full_string();
         match error {
-            SvcError::StoreSave {
-                kind, ..
-            } => ReplyError {
+            SvcError::StoreSave { kind, .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPersist,
                 resource: kind,
                 source: desc.to_string(),
                 extra: error_str,
             },
-            SvcError::NotShared {
-                kind, ..
-            } => ReplyError {
+            SvcError::NotShared { kind, .. } => ReplyError {
                 kind: ReplyErrorKind::NotShared,
                 resource: kind,
                 source: desc.to_string(),
                 extra: error_str,
             },
-            SvcError::AlreadyShared {
-                kind, ..
-            } => ReplyError {
+            SvcError::AlreadyShared { kind, .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyShared,
                 resource: kind,
                 source: desc.to_string(),
                 extra: error_str,
             },
-            SvcError::ChildNotFound {
-                ..
-            } => ReplyError {
+            SvcError::ChildNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Child,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::ChildAlreadyExists {
-                ..
-            } => ReplyError {
+            SvcError::ChildAlreadyExists { .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyExists,
                 resource: ResourceKind::Child,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::InUse {
-                kind,
-                id,
-            } => ReplyError {
+            SvcError::InUse { kind, id } => ReplyError {
                 kind: ReplyErrorKind::Conflict,
                 resource: kind,
                 source: desc.to_string(),
                 extra: format!("id: {}", id),
             },
-            SvcError::AlreadyExists {
-                kind,
-                id,
-            } => ReplyError {
+            SvcError::AlreadyExists { kind, id } => ReplyError {
                 kind: ReplyErrorKind::AlreadyExists,
                 resource: kind,
                 source: desc.to_string(),
                 extra: format!("id: {}", id),
             },
-            SvcError::Conflict {
-                ..
-            } => ReplyError {
+            SvcError::Conflict { .. } => ReplyError {
                 kind: ReplyErrorKind::Conflict,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::BusGetNode {
-                source, ..
-            } => source,
-            SvcError::BusGetNodes {
-                source,
-            } => source,
+            SvcError::BusGetNode { source, .. } => source,
+            SvcError::BusGetNodes { source } => source,
             SvcError::GrpcRequestError {
                 source,
                 request,
@@ -228,169 +195,127 @@ impl From<SvcError> for ReplyError {
                 resource,
             }),
 
-            SvcError::InvalidArguments {
-                ..
-            } => ReplyError {
+            SvcError::InvalidArguments { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
 
-            SvcError::NodeNotOnline {
-                ..
-            } => ReplyError {
+            SvcError::NodeNotOnline { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Node,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
 
-            SvcError::GrpcConnectTimeout {
-                ..
-            } => ReplyError {
+            SvcError::GrpcConnectTimeout { .. } => ReplyError {
                 kind: ReplyErrorKind::Timeout,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
 
-            SvcError::GrpcConnectUri {
-                ..
-            } => ReplyError {
+            SvcError::GrpcConnectUri { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
 
-            SvcError::GrpcConnect {
-                source,
-            } => ReplyError {
+            SvcError::GrpcConnect { source } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: source.to_string(),
             },
 
-            SvcError::NotEnoughResources {
-                ..
-            } => ReplyError {
+            SvcError::NotEnoughResources { .. } => ReplyError {
                 kind: ReplyErrorKind::ResourceExhausted,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::JsonRpcDeserialise {
-                ..
-            } => ReplyError {
+            SvcError::JsonRpcDeserialise { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::JsonGrpc,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::Store {
-                ..
-            } => ReplyError {
+            SvcError::Store { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPersist,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::JsonRpc {
-                ..
-            } => ReplyError {
+            SvcError::JsonRpc { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::JsonGrpc,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::NodeNotFound {
-                ..
-            } => ReplyError {
+            SvcError::NodeNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Node,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::PoolNotFound {
-                ..
-            } => ReplyError {
+            SvcError::PoolNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Pool,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::ReplicaNotFound {
-                ..
-            } => ReplyError {
+            SvcError::ReplicaNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Replica,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::NexusNotFound {
-                ..
-            } => ReplyError {
+            SvcError::NexusNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Nexus,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::VolumeNotFound {
-                ..
-            } => ReplyError {
+            SvcError::VolumeNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::WatchResourceNotFound {
-                kind,
-            } => ReplyError {
+            SvcError::WatchResourceNotFound { kind } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: kind,
                 source: desc.to_string(),
                 extra: error_str,
             },
-            SvcError::WatchNotFound {
-                ..
-            } => ReplyError {
+            SvcError::WatchNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Watch,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::WatchAlreadyExists {
-                ..
-            } => ReplyError {
+            SvcError::WatchAlreadyExists { .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyExists,
                 resource: ResourceKind::Watch,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::InvalidFilter {
-                ..
-            } => ReplyError {
+            SvcError::InvalidFilter { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::Internal {
-                ..
-            } => ReplyError {
+            SvcError::Internal { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::MBusError {
-                source,
-            } => source.into(),
-            SvcError::MultipleNexuses {
-                ..
-            } => ReplyError {
+            SvcError::MBusError { source } => source.into(),
+            SvcError::MultipleNexuses { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),

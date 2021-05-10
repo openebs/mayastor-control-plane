@@ -31,18 +31,12 @@ fn jwk_file() -> String {
 
 // Setup the infrastructure ready for the tests.
 async fn test_setup(auth: &bool) -> (String, ComposeTest) {
-    global::set_text_map_propagator(TraceContextPropagator::new());
-    let (_tracer, _uninstall) = opentelemetry_jaeger::new_pipeline()
-        .with_service_name("rest-client")
-        .install()
-        .unwrap();
-
     let jwk_file = jwk_file();
     let mut rest_args = match auth {
         true => vec!["--jwk", &jwk_file],
         false => vec!["--no-auth"],
     };
-    rest_args.append(&mut vec!["-j", "10.1.0.8:6831", "--dummy-certificates"]);
+    rest_args.append(&mut vec!["-j", "10.1.0.6:6831", "--dummy-certificates"]);
 
     let mayastor = "node-test-name";
     let test = Builder::new()
@@ -142,6 +136,11 @@ fn bearer_token() -> String {
 
 #[actix_rt::test]
 async fn client() {
+    global::set_text_map_propagator(TraceContextPropagator::new());
+    let (_tracer, _uninstall) = opentelemetry_jaeger::new_pipeline()
+        .with_service_name("rest-client")
+        .install()
+        .unwrap();
     // Run the client test both with and without authentication.
     for auth in &[true, false] {
         let (mayastor, test) = test_setup(auth).await;

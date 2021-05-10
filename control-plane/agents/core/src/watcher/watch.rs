@@ -2,13 +2,7 @@ use crate::core::registry::Registry;
 use common::errors::{Store as SvcStoreError, SvcError};
 use mbus_api::{
     v0::{
-        CreateWatch,
-        DeleteWatch,
-        GetWatchers,
-        Watch,
-        WatchCallback,
-        WatchResourceId,
-        WatchType,
+        CreateWatch, DeleteWatch, GetWatchers, Watch, WatchCallback, WatchResourceId, WatchType,
         Watches,
     },
     ResourceKind,
@@ -22,12 +16,7 @@ use std::{
     time::Duration,
 };
 use store::store::{
-    ObjectKey,
-    StorableObject,
-    StorableObjectType,
-    Store,
-    StoreError,
-    StoreWatchReceiver,
+    ObjectKey, StorableObject, StorableObjectType, Store, StoreError, StoreWatchReceiver,
     WatchEvent,
 };
 use tokio::{
@@ -100,9 +89,7 @@ pub(crate) struct WatchCfgId {
 
 impl From<&CreateWatch> for WatchCfgId {
     fn from(req: &CreateWatch) -> Self {
-        WatchCfgId {
-            id: req.id.clone(),
-        }
+        WatchCfgId { id: req.id.clone() }
     }
 }
 impl From<&GetWatchers> for WatchCfgId {
@@ -114,9 +101,7 @@ impl From<&GetWatchers> for WatchCfgId {
 }
 impl From<&DeleteWatch> for WatchCfgId {
     fn from(req: &DeleteWatch) -> Self {
-        WatchCfgId {
-            id: req.id.clone(),
-        }
+        WatchCfgId { id: req.id.clone() }
     }
 }
 
@@ -163,9 +148,7 @@ impl WatchCfg {
             let mut store = store.lock().await;
             match store.get_kv(&self.watch_id.id.key()).await {
                 Ok(_) => Ok(()),
-                Err(StoreError::MissingEntry {
-                    ..
-                }) => Err(SvcError::WatchResourceNotFound {
+                Err(StoreError::MissingEntry { .. }) => Err(SvcError::WatchResourceNotFound {
                     kind: Self::resource_to_kind(&self.watch_id.id),
                 }),
                 Err(error) => Err(error.into()),
@@ -352,9 +335,7 @@ impl WatchCfg {
                 match store.get_kv(&id.key()).await {
                     Ok(obj) => Some((obj, channel)),
                     // deleted, so bail out
-                    Err(StoreError::MissingEntry {
-                        ..
-                    }) => None,
+                    Err(StoreError::MissingEntry { .. }) => None,
                     Err(_) => Some((serde_json::Value::default(), channel)),
                 }
             }

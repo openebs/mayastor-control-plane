@@ -66,11 +66,7 @@ pub trait MessageBusTrait: Sized {
     /// Get pools with filter
     #[tracing::instrument(level = "debug", err)]
     async fn get_pools(filter: Filter) -> BusResult<Vec<Pool>> {
-        let pools = GetPools {
-            filter,
-        }
-        .request()
-        .await?;
+        let pools = GetPools { filter }.request().await?;
         Ok(pools.into_inner())
     }
 
@@ -97,11 +93,7 @@ pub trait MessageBusTrait: Sized {
     /// Get replicas with filter
     #[tracing::instrument(level = "debug", err)]
     async fn get_replicas(filter: Filter) -> BusResult<Vec<Replica>> {
-        let replicas = GetReplicas {
-            filter,
-        }
-        .request()
-        .await?;
+        let replicas = GetReplicas { filter }.request().await?;
         Ok(replicas.into_inner())
     }
 
@@ -134,11 +126,7 @@ pub trait MessageBusTrait: Sized {
     /// Get nexuses with filter
     #[tracing::instrument(level = "debug", err)]
     async fn get_nexuses(filter: Filter) -> BusResult<Vec<Nexus>> {
-        let nexuses = GetNexuses {
-            filter,
-        }
-        .request()
-        .await?;
+        let nexuses = GetNexuses { filter }.request().await?;
         Ok(nexuses.into_inner())
     }
 
@@ -193,11 +181,7 @@ pub trait MessageBusTrait: Sized {
     /// Get volumes with filter
     #[tracing::instrument(level = "debug", err)]
     async fn get_volumes(filter: Filter) -> BusResult<Vec<Volume>> {
-        let volumes = GetVolumes {
-            filter,
-        }
-        .request()
-        .await?;
+        let volumes = GetVolumes { filter }.request().await?;
         Ok(volumes.into_inner())
     }
 

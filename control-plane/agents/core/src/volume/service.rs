@@ -9,9 +9,7 @@ pub(super) struct Service {
 
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
-        Self {
-            registry,
-        }
+        Self { registry }
     }
 
     /// Get volumes
