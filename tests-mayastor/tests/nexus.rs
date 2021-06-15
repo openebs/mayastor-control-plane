@@ -18,9 +18,7 @@ async fn create_nexus_malloc() {
         .unwrap();
 }
 
-// FIXME: CAS-737
 #[actix_rt::test]
-#[allow_fail]
 async fn create_nexus_sizes() {
     let cluster = ClusterBuilder::builder()
         .with_rest_timeout(std::time::Duration::from_secs(1))
