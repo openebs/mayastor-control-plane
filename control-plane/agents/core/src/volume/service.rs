@@ -25,18 +25,14 @@ impl Service {
                     .find(|nexus_spec| nexus_spec.uuid == nexus.uuid)
                     .map(|nexus_spec| nexus_spec.owner.clone())
                     .flatten();
-                if let Some(uuid) = uuid {
-                    Some(Volume {
-                        uuid,
-                        size: nexus.size,
-                        // ANA not supported so derive volume state from the
-                        // single Nexus
-                        state: nexus.state.clone(),
-                        children: vec![nexus.clone()],
-                    })
-                } else {
-                    None
-                }
+                uuid.map(|uuid| Volume {
+                    uuid,
+                    size: nexus.size,
+                    // ANA not supported so derive volume state from the
+                    // single Nexus
+                    state: nexus.state.clone(),
+                    children: vec![nexus.clone()],
+                })
             })
             .flatten()
             .collect::<Vec<_>>();

@@ -365,7 +365,7 @@ impl WatchCfg {
 
             let mut store = store.lock().await;
             if store.online().await {
-                return Self::rewatch(&id, store.deref_mut()).await;
+                return Self::rewatch(id, store.deref_mut()).await;
             }
 
             backoff(&mut tries, Duration::from_secs(5)).await;

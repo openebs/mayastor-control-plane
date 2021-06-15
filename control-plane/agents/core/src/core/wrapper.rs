@@ -182,11 +182,11 @@ impl NodeWrapper {
     /// Add pool with replicas
     fn add_pool_with_replicas(&mut self, pool: &Pool, replicas: &[Replica]) {
         self.pools
-            .insert(pool.id.clone(), PoolWrapper::new(&pool, replicas));
+            .insert(pool.id.clone(), PoolWrapper::new(pool, replicas));
     }
     /// Remove pool from node
     fn remove_pool(&mut self, pool: &PoolId) {
-        self.pools.remove(&pool);
+        self.pools.remove(pool);
     }
     /// Add replica
     fn add_replica(&mut self, replica: &Replica) {

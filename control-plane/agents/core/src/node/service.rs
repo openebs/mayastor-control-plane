@@ -183,9 +183,9 @@ impl Registry {
         node_id: &NodeId,
     ) -> Option<Arc<Mutex<NodeWrapper>>> {
         let nodes = self.nodes.read().await;
-        match nodes.iter().find(|n| n.0 == node_id) {
-            None => None,
-            Some((_, node)) => Some(node.clone()),
-        }
+        nodes
+            .iter()
+            .find(|n| n.0 == node_id)
+            .map(|(_, node)| node.clone())
     }
 }

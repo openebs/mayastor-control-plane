@@ -68,7 +68,7 @@ impl JsonWebKey {
 
     /// Validate a bearer token
     pub(crate) fn validate(&self, token: &str, uri: &str) -> Result<(), AuthError> {
-        let (message, signature) = split_token(&token)?;
+        let (message, signature) = split_token(token)?;
         match crypto::verify(&signature, &message, &self.decoding_key(), self.algorithm()) {
             Ok(true) => Ok(()),
             Ok(false) => Err(AuthError::Unauthorized {

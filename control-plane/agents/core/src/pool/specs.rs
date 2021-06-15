@@ -187,7 +187,7 @@ impl ResourceSpecsLocked {
 
         if let Some(pool_spec) = pool_spec {
             let mut pool_spec = pool_spec.lock().await;
-            let result = node.destroy_pool(&request).await;
+            let result = node.destroy_pool(request).await;
             {
                 // remove the spec from the persistent store
                 // if it fails, then fail the request and let the op retry
@@ -206,7 +206,7 @@ impl ResourceSpecsLocked {
             spec.del_pool(&request.id);
             result
         } else {
-            node.destroy_pool(&request).await
+            node.destroy_pool(request).await
         }
     }
 
@@ -352,7 +352,7 @@ impl ResourceSpecsLocked {
             }
             result
         } else {
-            node.destroy_replica(&request).await
+            node.destroy_replica(request).await
         }
     }
     pub(super) async fn share_replica(

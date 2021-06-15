@@ -237,7 +237,7 @@ impl ResourceSpecsLocked {
         // hold the specs lock while we determine the nodes/pools/replicas
         let mut specs = self.write().await;
         // todo: pick nodes and pools using the Node&Pool Topology
-        let create_replicas = get_node_replicas(&registry, request).await?;
+        let create_replicas = get_node_replicas(registry, request).await?;
         // create the volume spec
         let volume = specs.create_volume_spec(registry, request).await?;
 

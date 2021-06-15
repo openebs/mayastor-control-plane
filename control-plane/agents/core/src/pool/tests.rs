@@ -163,11 +163,11 @@ async fn replica_transaction() {
 
     async fn check_operation(replica: &Replica, protocol: Protocol) {
         // operation in progress
-        assert!(replica_spec(&replica).await.unwrap().operation.is_some());
+        assert!(replica_spec(replica).await.unwrap().operation.is_some());
         tokio::time::delay_for(std::time::Duration::from_millis(500)).await;
         // operation is completed
-        assert!(replica_spec(&replica).await.unwrap().operation.is_none());
-        assert_eq!(replica_spec(&replica).await.unwrap().share, protocol);
+        assert!(replica_spec(replica).await.unwrap().operation.is_none());
+        assert_eq!(replica_spec(replica).await.unwrap().share, protocol);
     }
 
     // pause mayastor
@@ -249,7 +249,7 @@ async fn replica_op_transaction_store<R>(
     tokio::time::delay_for(reconcile_period * 2).await;
 
     // and now we've sync and the pending operation is no more
-    let spec = replica_spec(&replica).await.unwrap();
+    let spec = replica_spec(replica).await.unwrap();
     assert!(spec.operation.is_none() && spec.share == protocol);
 
     request

@@ -167,7 +167,7 @@ fn watch(
                 match event.event_type() {
                     EventType::Put => {
                         if let Some(kv) = event.kv() {
-                            let result = match deserialise_kv(&kv) {
+                            let result = match deserialise_kv(kv) {
                                 Ok((key, value)) => Ok(WatchEvent::Put(key, value)),
                                 Err(e) => Err(e),
                             };
