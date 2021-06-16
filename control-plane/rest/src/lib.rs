@@ -401,7 +401,7 @@ impl std::ops::Deref for RestUri {
 impl Apiv2Schema for RestUri {
     const NAME: Option<&'static str> = None;
     fn raw_schema() -> DefaultSchemaRaw {
-        actix_web::web::Json::<()>::raw_schema()
+        actix_web::web::Json::<String>::raw_schema()
     }
 }
 

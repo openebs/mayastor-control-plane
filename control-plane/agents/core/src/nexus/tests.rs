@@ -131,11 +131,11 @@ async fn nexus_share_transaction() {
 
     async fn check_share_operation(nexus: &Nexus, protocol: Protocol) {
         // operation in progress
-        assert!(nexus_spec(&nexus).await.unwrap().operation.is_some());
+        assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
         tokio::time::delay_for(std::time::Duration::from_millis(500)).await;
         // operation is completed
-        assert!(nexus_spec(&nexus).await.unwrap().operation.is_none());
-        assert_eq!(nexus_spec(&nexus).await.unwrap().share, protocol);
+        assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
+        assert_eq!(nexus_spec(nexus).await.unwrap().share, protocol);
     }
 
     // pause mayastor
@@ -199,7 +199,7 @@ async fn nexus_child_op_transaction_store<R>(
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
     // hopefully we have enough time before the store times out
-    let spec = nexus_spec(&nexus).await.unwrap();
+    let spec = nexus_spec(nexus).await.unwrap();
     assert!(spec.operation.unwrap().result.is_none());
 
     // let the store write time out
@@ -207,7 +207,7 @@ async fn nexus_child_op_transaction_store<R>(
 
     // and now we have a result but the operation is still pending until
     // we can sync the spec
-    let spec = nexus_spec(&nexus).await.unwrap();
+    let spec = nexus_spec(nexus).await.unwrap();
     assert!(spec.operation.unwrap().result.is_some());
 
     // thaw etcd allowing the worker thread to sync the "dirty" spec
@@ -217,7 +217,7 @@ async fn nexus_child_op_transaction_store<R>(
     tokio::time::delay_for(reconcile_period * 2).await;
 
     // and now we're in sync and the pending operation is no more
-    let spec = nexus_spec(&nexus).await.unwrap();
+    let spec = nexus_spec(nexus).await.unwrap();
     assert!(spec.operation.is_none());
     assert_eq!(spec.children.len(), children);
     assert_eq!(spec.share, share);
@@ -323,11 +323,11 @@ async fn nexus_child_transaction() {
 
     async fn check_child_operation(nexus: &Nexus, children: usize) {
         // operation in progress
-        assert!(nexus_spec(&nexus).await.unwrap().operation.is_some());
+        assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
         tokio::time::delay_for(std::time::Duration::from_millis(500)).await;
         // operation is complete
-        assert!(nexus_spec(&nexus).await.unwrap().operation.is_none());
-        assert_eq!(nexus_spec(&nexus).await.unwrap().children.len(), children);
+        assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
+        assert_eq!(nexus_spec(nexus).await.unwrap().children.len(), children);
     }
 
     // pause mayastor

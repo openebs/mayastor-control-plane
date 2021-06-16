@@ -179,7 +179,7 @@ impl Components {
                 .iter()
                 .filter(|c| c.boot_order() == component.boot_order());
             for component in components {
-                component.start(&self.1, &cfg).await?;
+                component.start(&self.1, cfg).await?;
             }
             last_done = Some(component.boot_order());
         }
@@ -200,10 +200,10 @@ impl Components {
                 .collect::<Vec<&Component>>();
 
             for component in &components {
-                component.start(&self.1, &cfg).await?;
+                component.start(&self.1, cfg).await?;
             }
             for component in &components {
-                component.wait_on(&self.1, &cfg).await?;
+                component.wait_on(&self.1, cfg).await?;
             }
             last_done = Some(component.boot_order());
         }

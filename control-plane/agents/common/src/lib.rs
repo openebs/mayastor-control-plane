@@ -297,7 +297,7 @@ impl Service {
             let args = Arguments::new(&context, &message);
             debug!("Processing message: {{ {} }}", args.request);
 
-            if let Err(error) = Self::process_message(args, &subscriptions).await {
+            if let Err(error) = Self::process_message(args, subscriptions).await {
                 error!("Error processing message: {}", error.full_string());
             }
         }

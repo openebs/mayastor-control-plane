@@ -149,7 +149,7 @@ async fn client() {
 }
 
 async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
-    orderly_start(&test).await;
+    orderly_start(test).await;
 
     let client = ActixRestClient::new(
         "https://localhost:8080",
