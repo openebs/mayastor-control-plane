@@ -1,0 +1,162 @@
+#
+# The purpose of this file is to easily create development environments that run
+# all containers needed to run the full stack. Its similar to the deployer tool
+# except that its perhaps, a bit easier to "tweak" settings as they can simply
+# be changed within the file. For example when running multiple mayastors you
+# might want to tweak which mayastor sits on what CPU, how many cores it uses
+# and what disks/files to use for pool configuration.
+#
+#
+# ${MAYASTOR_SRC} should point to your working tree that contains mayastor
+# 
+# The following variables are set implicitly when using shell.nix:
+#
+# ${MCP_SRC} should point to the source of the mayastor control plane 
+# ${ETCD_BIN} the etcd binary used
+# ${NATS_BIN) the nats binary used
+# 
+#
+
+version: '3'
+services:
+  core:
+    container_name: "core"
+    image: rust:latest
+    command: ${MCP_SRC}/target/debug/core --store etcd:2379 -n nats:4222
+    networks:
+      mayastor_net:
+       ipv4_address: 10.0.0.10
+    volumes:
+      - ${MCP_SRC}:${MCP_SRC}
+      - /nix:/nix
+      - /tmp:/tmp
+  rest:
+    container_name: "rest"
+    image: rust:latest
+    command: ${MCP_SRC}/target/debug/rest --dummy-certificates --no-auth --https rest:8080 --http rest:8081 -n nats:4222
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    networks:
+      mayastor_net:
+        ipv4_address: 10.0.0.11
+    volumes:
+      - ${MCP_SRC}:${MCP_SRC}
+      - /nix:/nix
+      - /tmp:/tmp
+  nats:
+    container_name: "nats"
+    image: rust:latest
+    command: ${NATS_BIN} -DV
+    ports:
+      - "4222:4222"
+    networks:
+      mayastor_net:
+        ipv4_address: 10.0.0.12
+    volumes:
+      - ${MCP_SRC}:${MCP_SRC}
+      - /nix:/nix
+      - /tmp:/tmp
+  etcd:
+    container_name: "etcd"
+    image: rust:latest
+    command: ${ETCD_BIN} --data-dir /tmp/etcd-data --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379
+    ports:
+      - "2379-2380:2379-2380"
+    networks:
+      mayastor_net:
+        ipv4_address: 10.0.0.13
+    volumes:
+      - ${MCP_SRC}:${MCP_SRC}
+      - /nix:/nix
+      - /tmp:/tmp
+  ms0:
+    container_name: "ms0"
+    image: rust:latest
+    environment:
+        - MY_POD_IP=10.0.0.2
+    command: ${MAYASTOR_SRC}/target/debug/mayastor -g 10.0.0.2 -N ms0 -n nats -l 1,2 -r /tmp/ms0.sock -p etcd
+    networks:
+      mayastor_net:
+        ipv4_address: 10.0.0.2
+    cap_add:
+      - SYS_ADMIN
+      - SYS_NICE
+      - IPC_LOCK
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ${MAYASTOR_SRC}:${MAYASTOR_SRC}
+      - /nix:/nix
+      - /dev/hugepages:/dev/hugepages
+      - /tmp:/tmp
+  ms1:
+    container_name: "ms1"
+    image: rust:latest
+    environment:
+        - MY_POD_IP=10.0.0.3
+    command: ${MAYASTOR_SRC}/target/debug/mayastor -g 10.0.0.3 -N ms1 -n nats -l 3,4 -r /tmp/ms1.sock -p etcd
+    networks:
+      mayastor_net:
+        ipv4_address: 10.0.0.3
+    cap_add:
+      - SYS_ADMIN
+      - SYS_NICE
+      - IPC_LOCK
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ${MAYASTOR_SRC}:${MAYASTOR_SRC}
+      - /nix:/nix
+      - /dev/hugepages:/dev/hugepages
+      - /tmp:/tmp
+  ms2:
+    container_name: "ms2"
+    image: rust:latest
+    environment:
+        - MY_POD_IP=10.0.0.4
+    command: ${MAYASTOR_SRC}/target/debug/mayastor -g 10.0.0.4 -N ms2 -n nats -l 5,6 -r /tmp/ms2.sock -p etcd
+    networks:
+      mayastor_net:
+        ipv4_address: 10.0.0.4
+    cap_add:
+      - SYS_ADMIN
+      - SYS_NICE
+      - IPC_LOCK
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ${MAYASTOR_SRC}:${MAYASTOR_SRC}
+      - /nix:/nix
+      - /dev/hugepages:/dev/hugepages
+      - /tmp:/tmp
+  ms3:
+    container_name: "ms3"
+    image: rust:latest
+    environment:
+        - MY_POD_IP=10.0.0.5
+        - RUST_BACKTRACE=full
+        - NVME_KATO_MS=1000
+        - RUST_LOG=mayastor=trace
+        - NEXUS_DONT_READ_LABELS=true
+    command: ${MAYASTOR_SRC}/target/debug/mayastor -N ms3 -n nats -g 10.0.0.5 -l 0,7 -r /tmp/ms3.sock -p etcd
+    networks:
+      mayastor_net:
+        ipv4_address: 10.0.0.5
+    cap_add:
+      - SYS_ADMIN
+      - SYS_NICE
+      - IPC_LOCK
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ${MAYASTOR_SRC}:${MAYASTOR_SRC}
+      - /nix:/nix
+      - /dev/hugepages:/dev/hugepages
+      - /tmp:/tmp
+networks:
+  mayastor_net:
+    ipam:
+      driver: default
+      config:
+        - subnet: "10.0.0.0/16"

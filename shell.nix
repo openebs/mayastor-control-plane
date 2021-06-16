@@ -42,6 +42,10 @@ mkShell {
   PROTOC = control-plane.PROTOC;
   PROTOC_INCLUDE = control-plane.PROTOC_INCLUDE;
 
+  # variables used to easily create containers with docker files
+  ETCD_BIN = "${pkgs.etcd}/bin/etcd";
+  NATS_BIN = "${pkgs.nats-server}/bin/nats-server";
+
   shellHook = ''
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo 'Hint: use rustup tool.'"}
@@ -51,5 +55,6 @@ mkShell {
     ${pkgs.lib.optionalString (nomayastor) "echo"}
     pre-commit install
     pre-commit install --hook commit-msg
+    export MCP_SRC=`pwd`
   '';
 }
