@@ -390,6 +390,12 @@ impl OperationModifier for JsonUnit {
 #[derive(Debug, Clone)]
 pub struct RestUri(url::Url);
 
+impl Default for RestUri {
+    fn default() -> Self {
+        Self(url::Url::from_str("https://localhost:8080/test").unwrap())
+    }
+}
+
 impl std::ops::Deref for RestUri {
     type Target = url::Url;
 
@@ -418,5 +424,14 @@ impl<'de> Deserialize<'de> for RestUri {
                 Err(serde::de::Error::custom(error))
             }
         }
+    }
+}
+
+impl Serialize for RestUri {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.as_str().serialize(serializer)
     }
 }

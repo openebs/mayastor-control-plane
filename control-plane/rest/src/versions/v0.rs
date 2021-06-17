@@ -147,7 +147,7 @@ impl CreateVolumeBody {
 
 /// Contains the query parameters that can be passed when calling
 /// get_block_devices
-#[derive(Deserialize, Apiv2Schema)]
+#[derive(Deserialize, Serialize, Default, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetBlockDeviceQueryParams {
     /// specifies whether to list all devices or only usable ones
@@ -155,7 +155,7 @@ pub struct GetBlockDeviceQueryParams {
 }
 
 /// Watch query parameters used by various watch calls
-#[derive(Deserialize, Apiv2Schema)]
+#[derive(Deserialize, Serialize, Default, Apiv2Schema)]
 #[serde(rename_all = "camelCase")]
 pub struct WatchTypeQueryParam {
     /// URL callback
@@ -163,7 +163,7 @@ pub struct WatchTypeQueryParam {
 }
 
 /// Watch Resource in the store
-#[derive(Serialize, Deserialize, Debug, Clone, Apiv2Schema, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Apiv2Schema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RestWatch {
     /// id of the resource to watch on
@@ -597,7 +597,7 @@ impl From<RestError> for RestClusterError {
 }
 
 /// Rest Json Error format
-#[derive(Serialize, Deserialize, Debug, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Default, Apiv2Schema)]
 pub struct RestJsonError {
     /// error kind
     error: RestJsonErrorKind,
@@ -649,6 +649,12 @@ pub enum RestJsonErrorKind {
     Conflict,
     // code=507, description="Insufficient Storage",
     FailedPersist,
+}
+
+impl Default for RestJsonErrorKind {
+    fn default() -> Self {
+        Self::NotFound
+    }
 }
 
 impl RestJsonError {
