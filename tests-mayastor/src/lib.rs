@@ -8,6 +8,7 @@ use opentelemetry::{
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
 
+use crate::v0::PoolDeviceUri;
 use opentelemetry_jaeger::Uninstall;
 pub use rest_client::{
     versions::v0::{self, Message, RestClient},
@@ -425,13 +426,13 @@ impl Pool {
     fn id(&self) -> v0::PoolId {
         format!("{}-pool-{}", self.node, self.index).into()
     }
-    fn disk(&self) -> String {
+    fn disk(&self) -> PoolDeviceUri {
         match &self.disk {
             PoolDisk::Malloc(size) => {
                 let size = size / (1024 * 1024);
-                format!("malloc:///disk{}?size_mb={}", self.index, size)
+                format!("malloc:///disk{}?size_mb={}", self.index, size).into()
             }
-            PoolDisk::Uri(uri) => uri.clone(),
+            PoolDisk::Uri(uri) => uri.into(),
         }
     }
 }

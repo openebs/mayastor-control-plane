@@ -27,7 +27,7 @@ pub struct CreateReplicaBody {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Apiv2Schema)]
 pub struct CreatePoolBody {
     /// disk device paths or URIs to be claimed by the pool
-    pub disks: Vec<String>,
+    pub disks: Vec<PoolDeviceUri>,
 }
 impl From<CreatePool> for CreatePoolBody {
     fn from(create: CreatePool) -> Self {

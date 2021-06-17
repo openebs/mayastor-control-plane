@@ -10,7 +10,7 @@ use paperclip::{
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
-use std::{cmp::Ordering, convert::TryFrom, fmt::Debug};
+use std::{cmp::Ordering, convert::TryFrom, fmt::Debug, ops::Deref};
 use strum_macros::{EnumString, ToString};
 
 pub(super) const VERSION: &str = "v0";
@@ -497,7 +497,7 @@ pub struct Pool {
     /// id of the pool
     pub id: PoolId,
     /// absolute disk paths claimed by the pool
-    pub disks: Vec<String>,
+    pub disks: Vec<PoolDeviceUri>,
     /// current state of the pool
     pub state: PoolState,
     /// size of the pool in bytes
@@ -538,6 +538,39 @@ impl PartialOrd for PoolState {
     }
 }
 
+/// Pool device URI
+/// Can be specified in the form of a file path or a URI
+/// eg: /dev/sda, aio:///dev/sda, malloc:///disk?size_mb=100
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Apiv2Schema)]
+pub struct PoolDeviceUri(String);
+impl Deref for PoolDeviceUri {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl Default for PoolDeviceUri {
+    fn default() -> Self {
+        Self("malloc:///disk?size_mb=100".into())
+    }
+}
+impl From<&str> for PoolDeviceUri {
+    fn from(device: &str) -> Self {
+        Self(device.to_string())
+    }
+}
+impl From<&String> for PoolDeviceUri {
+    fn from(device: &String) -> Self {
+        Self(device.clone())
+    }
+}
+impl From<String> for PoolDeviceUri {
+    fn from(device: String) -> Self {
+        Self(device)
+    }
+}
+
 /// Create Pool Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -547,7 +580,7 @@ pub struct CreatePool {
     /// id of the pool
     pub id: PoolId,
     /// disk device paths or URIs to be claimed by the pool
-    pub disks: Vec<String>,
+    pub disks: Vec<PoolDeviceUri>,
 }
 bus_impl_message_all!(CreatePool, CreatePool, Pool, Pool);
 

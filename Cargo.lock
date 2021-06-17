@@ -2272,7 +2272,7 @@ dependencies = [
 [[package]]
 name = "paperclip"
 version = "0.5.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#1fdb49e912bc7de1734671f6ed865722f28454f0"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
 dependencies = [
  "anyhow",
  "itertools 0.10.1",
@@ -2293,7 +2293,7 @@ dependencies = [
 [[package]]
 name = "paperclip-actix"
 version = "0.3.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#1fdb49e912bc7de1734671f6ed865722f28454f0"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
 dependencies = [
  "actix-service",
  "actix-web",
@@ -2308,7 +2308,7 @@ dependencies = [
 [[package]]
 name = "paperclip-core"
 version = "0.3.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#1fdb49e912bc7de1734671f6ed865722f28454f0"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
 dependencies = [
  "actix-web",
  "mime",
@@ -2326,7 +2326,7 @@ dependencies = [
 [[package]]
 name = "paperclip-macros"
 version = "0.4.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#1fdb49e912bc7de1734671f6ed865722f28454f0"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
 dependencies = [
  "heck",
  "http",
