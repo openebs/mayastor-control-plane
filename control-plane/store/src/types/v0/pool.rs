@@ -4,7 +4,10 @@ use crate::{
     store::{ObjectKey, StorableObject, StorableObjectType},
     types::SpecState,
 };
-use mbus_api::{v0, v0::PoolId};
+use mbus_api::{
+    v0,
+    v0::{PoolDeviceUri, PoolId},
+};
 use serde::{Deserialize, Serialize};
 
 type PoolLabel = String;
@@ -58,7 +61,7 @@ pub struct PoolSpec {
     /// id of the pool
     pub id: v0::PoolId,
     /// absolute disk paths claimed by the pool
-    pub disks: Vec<String>,
+    pub disks: Vec<PoolDeviceUri>,
     /// state of the pool
     pub state: PoolSpecState,
     /// Pool labels.

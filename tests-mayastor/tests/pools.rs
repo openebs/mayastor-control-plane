@@ -191,7 +191,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
         .create_pool(v0::CreatePool {
             node: "mayastor-3".into(),
             id: "pooloop".into(),
-            disks: vec![replica1.uri.clone()],
+            disks: vec![replica1.uri.clone().into()],
         })
         .await
         .unwrap();
@@ -201,7 +201,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
         .create_pool(v0::CreatePool {
             node: "mayastor-3".into(),
             id: "pooloop".into(),
-            disks: vec![replica1.uri],
+            disks: vec![replica1.uri.clone().into()],
         })
         .await
         .expect_err("already exists");
@@ -211,7 +211,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
         .create_pool(v0::CreatePool {
             node: "mayastor-3".into(),
             id: "pooloop".into(),
-            disks: vec![replica2.uri],
+            disks: vec![replica2.uri.into()],
         })
         .await
         .expect_err("Different host!");

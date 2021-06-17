@@ -2,7 +2,7 @@
 
 use mbus_api::{
     v0 as mbus,
-    v0::{ChildState, NexusState, Protocol, ReplicaState},
+    v0::{ChildState, NexusState, PoolDeviceUri, Protocol, ReplicaState},
 };
 use rpc::mayastor as rpc;
 use std::convert::TryFrom;
@@ -80,7 +80,7 @@ impl RpcToMessageBus for rpc::Pool {
         Self::BusMessage {
             node: Default::default(),
             id: self.name.clone().into(),
-            disks: self.disks.clone(),
+            disks: self.disks.iter().map(PoolDeviceUri::from).collect(),
             state: self.state.into(),
             capacity: self.capacity,
             used: self.used,
@@ -188,7 +188,7 @@ impl MessageBusToRpc for mbus::CreatePool {
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
             name: self.id.clone().into(),
-            disks: self.disks.clone(),
+            disks: self.disks.iter().map(|d| d.to_string()).collect(),
         }
     }
 }

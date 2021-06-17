@@ -175,14 +175,14 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         node: mayastor.clone(),
         id: "pooloop".into(),
         disks:
-    vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".to_string()] }).await.unwrap();
+    vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()] }).await.unwrap();
     info!("Pools: {:#?}", pool);
     assert_eq!(
         pool,
         Pool {
             node: "node-test-name".into(),
             id: "pooloop".into(),
-            disks: vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".to_string()],
+            disks: vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
             state: PoolState::Online,
             capacity: 100663296,
             used: 0,
