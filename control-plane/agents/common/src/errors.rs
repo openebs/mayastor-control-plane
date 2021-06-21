@@ -16,6 +16,8 @@ pub enum SvcError {
     BusGetNodes { source: BusError },
     #[snafu(display("Node '{}' is not online", node))]
     NodeNotOnline { node: NodeId },
+    #[snafu(display("No available online nodes"))]
+    NoNodes {},
     #[snafu(display(
         "Timed out after '{:?}' attempting to connect to node '{}' via gRPC endpoint '{}'",
         timeout,
@@ -58,6 +60,19 @@ pub enum SvcError {
     ChildAlreadyExists { nexus: String, child: String },
     #[snafu(display("Volume '{}' not found", vol_id))]
     VolumeNotFound { vol_id: String },
+    #[snafu(display("Volume '{}' not published", vol_id))]
+    VolumeNotPublished { vol_id: String },
+    #[snafu(display(
+        "Volume '{}' is already published on node '{}' with protocol '{}'",
+        vol_id,
+        node,
+        protocol
+    ))]
+    VolumeAlreadyPublished {
+        vol_id: String,
+        node: String,
+        protocol: String,
+    },
     #[snafu(display("Replica '{}' not found", replica_id))]
     ReplicaNotFound { replica_id: ReplicaId },
     #[snafu(display("{} '{}' is already shared over {}", kind.to_string(), id, share))]
@@ -105,6 +120,8 @@ pub enum SvcError {
     WatchAlreadyExists {},
     #[snafu(display("Conflicts with existing operation - please retry"))]
     Conflict {},
+    #[snafu(display("{} Resource id {} needs to be reconciled. Please retry", kind.to_string(), id))]
+    NotReady { kind: ResourceKind, id: String },
     #[snafu(display("{} Resource id {} still in still use", kind.to_string(), id))]
     InUse { kind: ResourceKind, id: String },
     #[snafu(display("{} Resource id {} already exists", kind.to_string(), id))]
@@ -177,6 +194,12 @@ impl From<SvcError> for ReplyError {
                 source: desc.to_string(),
                 extra: format!("id: {}", id),
             },
+            SvcError::NotReady { ref kind, .. } => ReplyError {
+                kind: ReplyErrorKind::Unavailable,
+                resource: kind.clone(),
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
             SvcError::Conflict { .. } => ReplyError {
                 kind: ReplyErrorKind::Conflict,
                 resource: ResourceKind::Unknown,
@@ -203,6 +226,13 @@ impl From<SvcError> for ReplyError {
             },
 
             SvcError::NodeNotOnline { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Node,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+
+            SvcError::NoNodes { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Node,
                 source: desc.to_string(),
@@ -280,6 +310,18 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::VolumeNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::VolumeNotPublished { .. } => ReplyError {
+                kind: ReplyErrorKind::NotPublished,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::VolumeAlreadyPublished { .. } => ReplyError {
+                kind: ReplyErrorKind::AlreadyPublished,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),

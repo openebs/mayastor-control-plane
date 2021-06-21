@@ -222,8 +222,8 @@ impl NodeWrapper {
         };
     }
     /// Unshare a replica by removing its share protocol and uri
-    fn unshare_replica(&mut self, pool: &PoolId, replica: &ReplicaId) {
-        self.share_replica(&Protocol::Off, "", pool, replica);
+    fn unshare_replica(&mut self, pool: &PoolId, replica: &ReplicaId, uri: &str) {
+        self.share_replica(&Protocol::Off, uri, pool, replica);
     }
     /// Add a new nexus to the node
     fn add_nexus(&mut self, nexus: &Nexus) {
@@ -352,7 +352,7 @@ pub trait ClientOps {
     /// Share a replica on the pool via gRPC
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError>;
     /// Unshare a replica on the pool via gRPC
-    async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError>;
+    async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError>;
     /// Destroy a replica on the pool via gRPC
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError>;
 
@@ -506,20 +506,22 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
 
     /// Unshare a replica on the pool via gRPC
-    async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
+    async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let _ = ctx
+        let local_uri = ctx
             .client
             .share_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
                 request: "unshare_replica",
-            })?;
+            })?
+            .into_inner()
+            .uri;
         self.lock()
             .await
-            .unshare_replica(&request.pool, &request.uuid);
-        Ok(())
+            .unshare_replica(&request.pool, &request.uuid, &local_uri);
+        Ok(local_uri)
     }
 
     /// Destroy a replica on the pool via gRPC

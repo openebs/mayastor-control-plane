@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use common::errors::{NodeNotFound, SvcError};
 use mbus_api::{
     v0::{
-        AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState, Protocol,
+        AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState,
         RemoveNexusChild, ShareNexus, UnshareNexus,
     },
     ResourceKind,
@@ -227,28 +227,34 @@ impl ResourceSpecsLocked {
                     return Err(SvcError::NexusNotFound {
                         nexus_id: request.uuid.to_string(),
                     });
-                } else if spec.share == status.share && spec.share != Protocol::Off {
-                    return Err(SvcError::AlreadyShared {
-                        kind: ResourceKind::Nexus,
-                        id: request.uuid.to_string(),
-                        share: spec.share.to_string(),
-                    });
+                } else {
+                    // validate the operation itself against the spec and status
+                    if spec.share != status.share {
+                        return Err(SvcError::NotReady {
+                            kind: ResourceKind::Nexus,
+                            id: request.uuid.to_string(),
+                        });
+                    } else if spec.share.shared() {
+                        return Err(SvcError::AlreadyShared {
+                            kind: ResourceKind::Nexus,
+                            id: spec.uuid.to_string(),
+                            share: spec.share.to_string(),
+                        });
+                    }
                 }
 
-                spec.updating = true;
                 spec.start_op(NexusOperation::Share(request.protocol));
                 spec.clone()
             };
 
             if let Err(error) = registry.store_obj(&spec_clone).await {
                 let mut spec = nexus_spec.lock().await;
-                spec.updating = false;
                 spec.clear_op();
                 return Err(error);
             }
 
             let result = node.share_nexus(request).await;
-            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
+            Self::spec_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.share_nexus(request).await
         }
@@ -281,27 +287,33 @@ impl ResourceSpecsLocked {
                     return Err(SvcError::NexusNotFound {
                         nexus_id: request.uuid.to_string(),
                     });
-                } else if spec.share == status.share && status.share == Protocol::Off {
-                    return Err(SvcError::NotShared {
-                        kind: ResourceKind::Nexus,
-                        id: request.uuid.to_string(),
-                    });
+                } else {
+                    // validate the operation itself against the spec and status
+                    if spec.share != status.share {
+                        return Err(SvcError::NotReady {
+                            kind: ResourceKind::Nexus,
+                            id: request.uuid.to_string(),
+                        });
+                    } else if !spec.share.shared() {
+                        return Err(SvcError::NotShared {
+                            kind: ResourceKind::Nexus,
+                            id: spec.uuid.to_string(),
+                        });
+                    }
                 }
 
-                spec.updating = true;
                 spec.start_op(NexusOperation::Unshare);
                 spec.clone()
             };
 
             if let Err(error) = registry.store_obj(&spec_clone).await {
                 let mut spec = nexus_spec.lock().await;
-                spec.updating = false;
                 spec.clear_op();
                 return Err(error);
             }
 
             let result = node.unshare_nexus(request).await;
-            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
+            Self::spec_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.unshare_nexus(request).await
         }
@@ -343,20 +355,18 @@ impl ResourceSpecsLocked {
                     });
                 }
 
-                spec.updating = true;
                 spec.start_op(NexusOperation::AddChild(request.uri.clone()));
                 spec.clone()
             };
 
             if let Err(error) = registry.store_obj(&spec_clone).await {
                 let mut spec = nexus_spec.lock().await;
-                spec.updating = false;
                 spec.clear_op();
                 return Err(error);
             }
 
             let result = node.add_child(request).await;
-            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
+            Self::spec_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.add_child(request).await
         }
@@ -398,67 +408,20 @@ impl ResourceSpecsLocked {
                     });
                 }
 
-                spec.updating = true;
                 spec.start_op(NexusOperation::RemoveChild(request.uri.clone()));
                 spec.clone()
             };
 
             if let Err(error) = registry.store_obj(&spec_clone).await {
                 let mut spec = nexus_spec.lock().await;
-                spec.updating = false;
                 spec.clear_op();
                 return Err(error);
             }
 
             let result = node.remove_child(request).await;
-            Self::nexus_complete_op(registry, result, nexus_spec, spec_clone).await
+            Self::spec_complete_op(registry, result, nexus_spec, spec_clone).await
         } else {
             node.remove_child(request).await
-        }
-    }
-
-    /// Completes nexus update operations by trying to update the spec in the persistent store.
-    /// If the persistent store operation fails then the spec is marked accordingly and the dirty
-    /// spec reconciler will attempt to update the store when the store is back online.
-    async fn nexus_complete_op<T>(
-        registry: &Registry,
-        result: Result<T, SvcError>,
-        nexus_spec: Arc<Mutex<NexusSpec>>,
-        mut spec_clone: NexusSpec,
-    ) -> Result<T, SvcError> {
-        match result {
-            Ok(val) => {
-                spec_clone.commit_op();
-                let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = nexus_spec.lock().await;
-                spec.updating = false;
-                match stored {
-                    Ok(_) => {
-                        spec.commit_op();
-                        Ok(val)
-                    }
-                    Err(error) => {
-                        spec.set_op_result(true);
-                        Err(error)
-                    }
-                }
-            }
-            Err(error) => {
-                spec_clone.clear_op();
-                let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = nexus_spec.lock().await;
-                spec.updating = false;
-                match stored {
-                    Ok(_) => {
-                        spec.clear_op();
-                        Err(error)
-                    }
-                    Err(error) => {
-                        spec.set_op_result(false);
-                        Err(error)
-                    }
-                }
-            }
         }
     }
 

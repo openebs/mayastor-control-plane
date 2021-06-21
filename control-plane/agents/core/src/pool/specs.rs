@@ -6,8 +6,8 @@ use tokio::sync::Mutex;
 use common::errors::{NodeNotFound, SvcError};
 use mbus_api::{
     v0::{
-        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState, Protocol,
-        Replica, ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
+        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState, Replica,
+        ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
     },
     ResourceKind,
 };
@@ -355,7 +355,7 @@ impl ResourceSpecsLocked {
             node.destroy_replica(request).await
         }
     }
-    pub(super) async fn share_replica(
+    pub(crate) async fn share_replica(
         &self,
         registry: &Registry,
         request: &ShareReplica,
@@ -382,37 +382,43 @@ impl ResourceSpecsLocked {
                     return Err(SvcError::ReplicaNotFound {
                         replica_id: request.uuid.clone(),
                     });
-                } else if spec.share == status.share && spec.share != Protocol::Off {
-                    return Err(SvcError::AlreadyShared {
-                        kind: ResourceKind::Replica,
-                        id: request.uuid.to_string(),
-                        share: spec.share.to_string(),
-                    });
+                } else {
+                    // validate the operation itself against the spec and status
+                    if spec.share != status.share {
+                        return Err(SvcError::NotReady {
+                            kind: ResourceKind::Pool,
+                            id: request.uuid.to_string(),
+                        });
+                    } else if request.protocol == spec.share || spec.share.shared() {
+                        return Err(SvcError::AlreadyShared {
+                            kind: ResourceKind::Replica,
+                            id: spec.uuid.to_string(),
+                            share: spec.share.to_string(),
+                        });
+                    }
                 }
 
-                spec.updating = true;
                 spec.start_op(ReplicaOperation::Share(request.protocol));
                 spec.clone()
             };
 
             if let Err(error) = registry.store_obj(&spec_clone).await {
                 let mut spec = replica_spec.lock().await;
-                spec.updating = false;
                 spec.clear_op();
                 return Err(error);
             }
 
             let result = node.share_replica(request).await;
-            Self::replica_complete_op(registry, result, replica_spec, spec_clone).await
+            Self::spec_complete_op(registry, result, replica_spec, spec_clone).await
         } else {
             node.share_replica(request).await
         }
     }
-    pub(super) async fn unshare_replica(
+    pub(crate) async fn unshare_replica(
         &self,
         registry: &Registry,
         request: &UnshareReplica,
-    ) -> Result<(), SvcError> {
+    ) -> Result<String, SvcError> {
         let node = registry
             .get_node_wrapper(&request.node)
             .await
@@ -435,74 +441,35 @@ impl ResourceSpecsLocked {
                     return Err(SvcError::ReplicaNotFound {
                         replica_id: request.uuid.clone(),
                     });
-                } else if spec.share == Protocol::Off && status.share == Protocol::Off {
-                    return Err(SvcError::NotShared {
-                        kind: ResourceKind::Replica,
-                        id: request.uuid.to_string(),
-                    });
+                } else {
+                    // validate the operation itself against the spec and status
+                    if spec.share != status.share {
+                        return Err(SvcError::NotReady {
+                            kind: ResourceKind::Replica,
+                            id: request.uuid.to_string(),
+                        });
+                    } else if !spec.share.shared() {
+                        return Err(SvcError::NotShared {
+                            kind: ResourceKind::Replica,
+                            id: spec.uuid.to_string(),
+                        });
+                    }
                 }
 
-                spec.updating = true;
                 spec.start_op(ReplicaOperation::Unshare);
                 spec.clone()
             };
 
             if let Err(error) = registry.store_obj(&spec_clone).await {
                 let mut spec = replica_spec.lock().await;
-                spec.updating = false;
                 spec.clear_op();
                 return Err(error);
             }
 
             let result = node.unshare_replica(request).await;
-            Self::replica_complete_op(registry, result, replica_spec, spec_clone).await
+            Self::spec_complete_op(registry, result, replica_spec, spec_clone).await
         } else {
             node.unshare_replica(request).await
-        }
-    }
-
-    /// Completes a replica update operation by trying to update the spec in the persistent store.
-    /// If the persistent store operation fails then the spec is marked accordingly and the dirty
-    /// spec reconciler will attempt to update the store when the store is back online.
-    async fn replica_complete_op<T>(
-        registry: &Registry,
-        result: Result<T, SvcError>,
-        replica_spec: Arc<Mutex<ReplicaSpec>>,
-        mut spec_clone: ReplicaSpec,
-    ) -> Result<T, SvcError> {
-        match result {
-            Ok(val) => {
-                spec_clone.commit_op();
-                let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = replica_spec.lock().await;
-                spec.updating = false;
-                match stored {
-                    Ok(_) => {
-                        spec.commit_op();
-                        Ok(val)
-                    }
-                    Err(error) => {
-                        spec.set_op_result(true);
-                        Err(error)
-                    }
-                }
-            }
-            Err(error) => {
-                spec_clone.clear_op();
-                let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = replica_spec.lock().await;
-                spec.updating = false;
-                match stored {
-                    Ok(_) => {
-                        spec.clear_op();
-                        Err(error)
-                    }
-                    Err(error) => {
-                        spec.set_op_result(false);
-                        Err(error)
-                    }
-                }
-            }
         }
     }
 

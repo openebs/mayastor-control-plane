@@ -10,6 +10,7 @@ use self::nats::bus;
 use super::StartOptions;
 use async_trait::async_trait;
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
+use futures::future::join_all;
 use mbus_api::{
     v0::{ChannelVs, Liveness},
     Message,
@@ -202,9 +203,7 @@ impl Components {
             for component in &components {
                 component.start(&self.1, cfg).await?;
             }
-            for component in &components {
-                component.wait_on(&self.1, cfg).await?;
-            }
+            self.wait_on_components(&components, cfg).await?;
             last_done = Some(component.boot_order());
         }
         Ok(())
@@ -267,11 +266,26 @@ macro_rules! impl_component {
                     }
                 }
             }
-            async fn wait_on_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
-                for component in &self.0 {
-                    component.wait_on(&self.1, cfg).await?;
+            async fn wait_on_components(&self, components: &[&Component], cfg: &ComposeTest) -> Result<(), Error> {
+                let mut futures = vec![];
+                for component in components {
+                    futures.push(async move {
+                        component.wait_on(&self.1, cfg).await
+                    })
                 }
-                Ok(())
+                let result = join_all(futures).await;
+                result.iter().for_each(|result| match result {
+                    Err(error) => println!("Failed to wait for component: {:?}", error),
+                    _ => {}
+                });
+                if let Some(Err(error)) = result.iter().find(|result| result.is_err()) {
+                    Err(std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, error.to_string()).into())
+                } else {
+                    Ok(())
+                }
+            }
+            async fn wait_on_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
+                self.wait_on_components(&self.0.iter().collect::<Vec<_>>(), cfg).await
             }
         }
 

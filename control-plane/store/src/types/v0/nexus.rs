@@ -108,15 +108,17 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                 NexusOperation::AddChild(uri) => self.children.push(uri),
                 NexusOperation::RemoveChild(uri) => self.children.retain(|c| c != &uri),
             }
-            self.clear_op();
         }
+        self.clear_op();
     }
 
     fn clear_op(&mut self) {
         self.operation = None;
+        self.updating = false;
     }
 
     fn start_op(&mut self, operation: NexusOperation) {
+        self.updating = true;
         self.operation = Some(NexusOperationState {
             operation,
             result: None,
@@ -127,6 +129,7 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
+        self.updating = false;
     }
 }
 
