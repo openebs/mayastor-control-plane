@@ -8,7 +8,7 @@ use tokio::sync::mpsc::Receiver;
 
 /// Definition of errors that can be returned from the key-value store.
 #[derive(Debug, Snafu)]
-#[snafu(visibility = "pub(crate)")]
+#[snafu(visibility = "pub")]
 pub enum StoreError {
     /// Failed to connect to the key-value store.
     #[snafu(display("Failed to connect to store. Error {}", source))]
@@ -28,6 +28,9 @@ pub enum StoreError {
     /// Failed to 'get' an entry from the store.
     #[snafu(display("Failed to 'get' entry with key {}. Error {}", key, source))]
     Get { key: String, source: Error },
+    /// Failed to 'get' an entry, with the given prefix, from the store.
+    #[snafu(display("Failed to 'get' entry with prefix {}. Error {}", prefix, source))]
+    GetPrefix { prefix: String, source: Error },
     /// Failed to find an entry with the given key.
     #[snafu(display("Entry with key {} not found.", key))]
     MissingEntry { key: String },
@@ -97,6 +100,11 @@ pub trait Store: Sync + Send + Clone {
 
     async fn get_obj<O: StorableObject>(&mut self, _key: &O::Key) -> Result<O, StoreError>;
 
+    async fn get_values_prefix(
+        &mut self,
+        key_prefix: &str,
+    ) -> Result<Vec<(String, Value)>, StoreError>;
+
     async fn watch_obj<K: ObjectKey>(&mut self, key: &K) -> Result<StoreWatchReceiver, StoreError>;
 
     async fn online(&mut self) -> bool;
@@ -122,7 +130,7 @@ pub trait StorableObject: Serialize + Sync + Send + DeserializeOwned {
 }
 
 /// All types of objects which are storable in our store
-#[derive(Display)]
+#[derive(Display, Copy, Clone, Debug)]
 pub enum StorableObjectType {
     WatchConfig,
     Volume,
@@ -142,8 +150,12 @@ pub enum StorableObjectType {
     ChildState,
 }
 
+pub fn key_prefix(obj_type: StorableObjectType) -> String {
+    format!("control-plane/{}", obj_type.to_string())
+}
+
 /// create a key based on the object's key trait
 /// todo: version properly
 pub fn get_key<K: ObjectKey + ?Sized>(k: &K) -> String {
-    format!("\"r/{}/{}\"", k.key_type().to_string(), k.key_uuid())
+    format!("{}/{}", key_prefix(k.key_type()), k.key_uuid())
 }

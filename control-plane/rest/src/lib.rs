@@ -15,6 +15,7 @@
 /// expose different versions of the client
 pub mod versions;
 
+use actix_http::{encoding::Decoder, Payload, PayloadStream};
 use actix_web::{
     body::Body,
     client::{Client, ClientBuilder, ClientResponse, PayloadError, SendRequestError},
@@ -98,24 +99,38 @@ impl ActixRestClient {
             trace,
         }
     }
+    async fn get<R>(&self, urn: String) -> ClientResult<R>
+    where
+        for<'de> R: Deserialize<'de> + Default,
+    {
+        let uri = format!("{}{}", self.url, urn);
+        let rest_response = self.do_get(&uri).await.context(Send {
+            details: format!("Failed to get uri {}", uri),
+        })?;
+        Self::rest_result(rest_response).await
+    }
     async fn get_vec<R>(&self, urn: String) -> ClientResult<Vec<R>>
     where
         for<'de> R: Deserialize<'de>,
     {
         let uri = format!("{}{}", self.url, urn);
-
-        let result = if self.trace {
-            self.client.get(uri.clone()).trace_request().send().await
-        } else {
-            self.client.get(uri.clone()).send().await
-        };
-
-        let rest_response = result.context(Send {
+        let rest_response = self.do_get(&uri).await.context(Send {
             details: format!("Failed to get_vec uri {}", uri),
         })?;
-
         Self::rest_vec_result(rest_response).await
     }
+
+    async fn do_get(
+        &self,
+        uri: &str,
+    ) -> Result<ClientResponse<Decoder<Payload<PayloadStream>>>, SendRequestError> {
+        if self.trace {
+            self.client.get(uri).trace_request().send().await
+        } else {
+            self.client.get(uri).send().await
+        }
+    }
+
     async fn put<R, B: Into<Body>>(&self, urn: String, body: B) -> Result<R, ClientError>
     where
         for<'de> R: Deserialize<'de> + Default,

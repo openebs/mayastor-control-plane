@@ -5,12 +5,15 @@ pub(crate) mod watchdog;
 use super::{
     core::registry, handler, handler_publish, impl_publish_handler, impl_request_handler, CliArgs,
 };
-use common::{errors::SvcError, v0::GetSpecs, Service};
+use common::{errors::SvcError, Service};
 use mbus_api::{v0::*, *};
 
 use async_trait::async_trait;
 use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
+use types::v0::message_bus::mbus::{
+    ChannelVs, Deregister, GetBlockDevices, GetNodes, GetSpecs, Register,
+};
 
 pub(crate) fn configure(builder: Service) -> Service {
     let node_service = create_node_service(&builder);
@@ -38,6 +41,7 @@ fn create_node_service(builder: &Service) -> service::Service {
 mod tests {
     use super::*;
     use testlib::ClusterBuilder;
+    use types::v0::message_bus::mbus::{Node, NodeState};
 
     #[actix_rt::test]
     async fn node() {

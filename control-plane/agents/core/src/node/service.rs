@@ -2,12 +2,13 @@ use super::*;
 use crate::core::{registry::Registry, wrapper::NodeWrapper};
 use common::{
     errors::{GrpcRequestError, NodeNotFound, SvcError},
-    v0::{msg_translation::RpcToMessageBus, GetSpecs, Specs},
+    v0::msg_translation::RpcToMessageBus,
 };
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::{OptionExt, ResultExt};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use types::v0::message_bus::mbus::{GetSpecs, Node, NodeId, NodeState, Specs};
 
 /// Node's Service
 #[derive(Debug, Clone)]

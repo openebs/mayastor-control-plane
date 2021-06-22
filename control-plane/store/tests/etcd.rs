@@ -7,11 +7,9 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use store::{
-    etcd::Etcd,
-    store::{Store, WatchEvent},
-};
+use store::etcd::Etcd;
 use tokio::task::JoinHandle;
+use types::v0::store::definitions::{Store, WatchEvent};
 
 static ETCD_ENDPOINT: &str = "0.0.0.0:2379";
 

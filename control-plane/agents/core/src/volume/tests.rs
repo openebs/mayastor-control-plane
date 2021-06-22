@@ -1,7 +1,14 @@
 #![cfg(test)]
 
-use mbus_api::{v0::*, *};
-use testlib::{Cluster, ClusterBuilder};
+use mbus_api::Message;
+use testlib::{
+    v0::{Filter, Protocol},
+    Cluster, ClusterBuilder,
+};
+use types::v0::message_bus::mbus::{
+    CreatePool, CreateVolume, DestroyVolume, GetNexuses, GetNodes, GetPools, GetReplicas,
+    GetVolumes, PublishVolume, ShareVolume, UnpublishVolume, UnshareVolume, VolumeShareProtocol,
+};
 
 #[actix_rt::test]
 async fn volume() {

@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, str::FromStr};
 use structopt::StructOpt;
 use tokio::stream::StreamExt;
+use types::v0::message_bus::{
+    mbus,
+    mbus::{Channel, ChannelVs, MessageIdVs},
+};
 
 #[derive(Debug, StructOpt)]
 struct CliArgs {
@@ -68,7 +72,7 @@ async fn main() {
     );
     let cli_args = CliArgs::from_args();
     log::info!("Using args: {:?}", cli_args);
-    log::info!("CH: {}", Channel::v0(v0::ChannelVs::Default).to_string());
+    log::info!("CH: {}", Channel::v0(mbus::ChannelVs::Default).to_string());
 
     message_bus_init(cli_args.url).await;
 

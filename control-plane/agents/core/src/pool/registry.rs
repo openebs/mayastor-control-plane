@@ -1,7 +1,7 @@
 use crate::core::{registry::Registry, wrapper::*};
 use common::errors::{NodeNotFound, PoolNotFound, ReplicaNotFound, SvcError};
-use mbus_api::v0::{NodeId, Pool, PoolId, Replica, ReplicaId};
 use snafu::OptionExt;
+use types::v0::message_bus::mbus::{NodeId, Pool, PoolId, Replica, ReplicaId};
 
 /// Pool helpers
 impl Registry {

@@ -1,5 +1,6 @@
 use super::*;
-use store::{etcd::Etcd as EtcdStore, store::Store};
+use store::etcd::Etcd as EtcdStore;
+use types::v0::store::definitions::Store;
 
 #[async_trait]
 impl ComponentAction for Etcd {

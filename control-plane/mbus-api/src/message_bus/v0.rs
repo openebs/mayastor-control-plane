@@ -3,6 +3,13 @@
 
 pub use crate::{v0::*, *};
 use async_trait::async_trait;
+use types::v0::message_bus::mbus::{
+    AddNexusChild, AddVolumeNexus, Child, CreateNexus, CreatePool, CreateReplica, CreateVolume,
+    DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter, GetBlockDevices, GetNexuses,
+    GetNodes, GetPools, GetReplicas, GetSpecs, GetVolumes, JsonGrpcRequest, Nexus, Node, NodeId,
+    Pool, RemoveNexusChild, RemoveVolumeNexus, Replica, ShareNexus, ShareReplica, Specs,
+    UnshareNexus, UnshareReplica, Volume,
+};
 
 /// Error sending/receiving
 /// Common error type for send/receive
@@ -229,6 +236,12 @@ pub trait MessageBusTrait: Sized {
     async fn get_block_devices(request: GetBlockDevices) -> BusResult<BlockDevices> {
         Ok(request.request().await?)
     }
+
+    /// Get all the specs from the registry
+    #[tracing::instrument(level = "debug", err)]
+    async fn get_specs(request: GetSpecs) -> BusResult<Specs> {
+        Ok(request.request().await?)
+    }
 }
 
 /// Implementation of the bus interface trait
@@ -240,6 +253,7 @@ mod tests {
     use super::*;
     use composer::*;
     use rpc::mayastor::Null;
+    use types::v0::message_bus::mbus::NodeState;
 
     async fn bus_init() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::timeout(std::time::Duration::from_secs(2), async {

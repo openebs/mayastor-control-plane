@@ -1,5 +1,5 @@
 use crate::node::service::Service;
-use mbus_api::v0::NodeId;
+use types::v0::message_bus::mbus::NodeId;
 
 /// Watchdog which must be pet within the deadline, otherwise
 /// it triggers the `on_timeout` callback from the node `Service`

@@ -1,11 +1,11 @@
 //! Converts rpc messages to message bus messages and vice versa.
 
-use mbus_api::{
-    v0 as mbus,
-    v0::{ChildState, NexusState, PoolDeviceUri, Protocol, ReplicaState},
-};
 use rpc::mayastor as rpc;
 use std::convert::TryFrom;
+use types::v0::message_bus::{
+    mbus,
+    mbus::{ChildState, NexusState, Protocol, ReplicaState},
+};
 
 /// Trait for converting rpc messages to message bus messages.
 pub trait RpcToMessageBus {
@@ -80,7 +80,7 @@ impl RpcToMessageBus for rpc::Pool {
         Self::BusMessage {
             node: Default::default(),
             id: self.name.clone().into(),
-            disks: self.disks.iter().map(PoolDeviceUri::from).collect(),
+            disks: self.disks.iter().map(mbus::PoolDeviceUri::from).collect(),
             state: self.state.into(),
             capacity: self.capacity,
             used: self.used,

@@ -1,29 +1,36 @@
 //! Definition of nexus types that can be saved to the persistent store.
 
-use crate::{
-    store::{ObjectKey, StorableObject, StorableObjectType},
-    types::{v0::SpecTransaction, SpecState},
+use crate::v0::{
+    message_bus::{
+        mbus,
+        mbus::{
+            ChildState, ChildUri, CreateNexus, DestroyNexus, NexusId, NexusShareProtocol, NodeId,
+            Protocol, VolumeId,
+        },
+    },
+    store::{
+        definitions::{ObjectKey, StorableObject, StorableObjectType},
+        SpecState, SpecTransaction,
+    },
 };
-use mbus_api::{
-    v0,
-    v0::{ChildUri, NexusId, NexusShareProtocol, Protocol},
-};
+
+use paperclip::actix::Apiv2Schema;
 use serde::{Deserialize, Serialize};
 
 /// Nexus information
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Nexus {
     /// Current state of the nexus.
-    pub state: Option<NexusState>,
+    pub state: Option<mbus::NexusState>,
     /// Desired nexus specification.
     pub spec: NexusSpec,
 }
 
 /// Runtime state of the nexus.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct NexusState {
     /// Nexus information.
-    pub nexus: v0::Nexus,
+    pub nexus: mbus::Nexus,
 }
 
 /// Key used by the store to uniquely identify a NexusState structure.
@@ -54,27 +61,27 @@ impl StorableObject for NexusState {
 }
 
 /// State of the Nexus Spec
-pub type NexusSpecState = SpecState<v0::NexusState>;
+pub type NexusSpecState = SpecState<mbus::NexusState>;
 
 /// User specification of a nexus.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub struct NexusSpec {
     /// Nexus Id
-    pub uuid: v0::NexusId,
+    pub uuid: NexusId,
     /// Node where the nexus should live.
-    pub node: v0::NodeId,
+    pub node: NodeId,
     /// List of children.
-    pub children: Vec<v0::ChildUri>,
+    pub children: Vec<ChildUri>,
     /// Size of the nexus.
     pub size: u64,
     /// The state the nexus should eventually reach.
     pub state: NexusSpecState,
     /// Share Protocol
-    pub share: v0::Protocol,
+    pub share: Protocol,
     /// Managed by our control plane
     pub managed: bool,
     /// Volume which owns this nexus, if any
-    pub owner: Option<v0::VolumeId>,
+    pub owner: Option<VolumeId>,
     /// Update of the state in progress
     #[serde(skip)]
     pub updating: bool,
@@ -83,7 +90,7 @@ pub struct NexusSpec {
 }
 
 /// Operation State for a Nexus spec resource
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub struct NexusOperationState {
     /// Record of the operation
     pub operation: NexusOperation,
@@ -99,6 +106,9 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
+                NexusOperation::Unknown => {
+                    panic!("Unknown operation not supported");
+                }
                 NexusOperation::Share(share) => {
                     self.share = share.into();
                 }
@@ -134,12 +144,19 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
 }
 
 /// Available Nexus Operations
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub enum NexusOperation {
+    Unknown,
     Share(NexusShareProtocol),
     Unshare,
     AddChild(ChildUri),
     RemoveChild(ChildUri),
+}
+
+impl Default for NexusOperation {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 /// Key used by the store to uniquely identify a NexusSpec structure.
@@ -169,15 +186,15 @@ impl StorableObject for NexusSpec {
     }
 }
 
-impl From<&v0::CreateNexus> for NexusSpec {
-    fn from(request: &v0::CreateNexus) -> Self {
+impl From<&CreateNexus> for NexusSpec {
+    fn from(request: &CreateNexus) -> Self {
         Self {
             uuid: request.uuid.clone(),
             node: request.node.clone(),
             children: request.children.clone(),
             size: request.size,
             state: NexusSpecState::Creating,
-            share: v0::Protocol::Off,
+            share: Protocol::Off,
             managed: request.managed,
             owner: request.owner.clone(),
             updating: true,
@@ -186,8 +203,8 @@ impl From<&v0::CreateNexus> for NexusSpec {
     }
 }
 
-impl PartialEq<v0::CreateNexus> for NexusSpec {
-    fn eq(&self, other: &v0::CreateNexus) -> bool {
+impl PartialEq<CreateNexus> for NexusSpec {
+    fn eq(&self, other: &CreateNexus) -> bool {
         let mut other = NexusSpec::from(other);
         other.state = self.state.clone();
         other.updating = self.updating;
@@ -195,19 +212,19 @@ impl PartialEq<v0::CreateNexus> for NexusSpec {
     }
 }
 
-impl From<&NexusSpec> for v0::Nexus {
+impl From<&NexusSpec> for mbus::Nexus {
     fn from(nexus: &NexusSpec) -> Self {
         Self {
             node: nexus.node.clone(),
             uuid: nexus.uuid.clone(),
             size: nexus.size,
-            state: v0::NexusState::Unknown,
+            state: mbus::NexusState::Unknown,
             children: nexus
                 .children
                 .iter()
-                .map(|uri| v0::Child {
+                .map(|uri| mbus::Child {
                     uri: uri.clone(),
-                    state: v0::ChildState::Unknown,
+                    state: ChildState::Unknown,
                     rebuild_progress: None,
                 })
                 .collect(),
@@ -218,7 +235,7 @@ impl From<&NexusSpec> for v0::Nexus {
     }
 }
 
-impl From<NexusSpec> for v0::DestroyNexus {
+impl From<NexusSpec> for DestroyNexus {
     fn from(nexus: NexusSpec) -> Self {
         Self {
             node: nexus.node,

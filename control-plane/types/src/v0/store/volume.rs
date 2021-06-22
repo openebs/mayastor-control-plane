@@ -1,13 +1,16 @@
 //! Definition of volume types that can be saved to the persistent store.
 
-use crate::{
-    store::{ObjectKey, StorableObject, StorableObjectType},
-    types::{v0::SpecTransaction, SpecState},
+use crate::v0::{
+    message_bus::{
+        mbus,
+        mbus::{CreateVolume, NexusId, NodeId, Protocol, VolumeId, VolumeShareProtocol},
+    },
+    store::{
+        definitions::{ObjectKey, StorableObject, StorableObjectType},
+        SpecState, SpecTransaction,
+    },
 };
-use mbus_api::{
-    v0,
-    v0::{NodeId, Protocol, VolumeId, VolumeShareProtocol},
-};
+use paperclip::actix::Apiv2Schema;
 use serde::{Deserialize, Serialize};
 
 type VolumeLabel = String;
@@ -26,7 +29,7 @@ pub struct Volume {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct VolumeState {
     /// Volume Id
-    pub uuid: v0::VolumeId,
+    pub uuid: VolumeId,
     /// Volume size.
     pub size: u64,
     /// Volume labels.
@@ -34,13 +37,13 @@ pub struct VolumeState {
     /// Number of replicas.
     pub num_replicas: u8,
     /// Protocol that the volume is shared over.
-    pub protocol: v0::Protocol,
+    pub protocol: Protocol,
     /// Nexuses that make up the volume.
-    pub nexuses: Vec<v0::NexusId>,
+    pub nexuses: Vec<NexusId>,
     /// Number of front-end paths.
     pub num_paths: u8,
     /// State of the volume.
-    pub state: v0::VolumeState,
+    pub state: mbus::VolumeState,
 }
 
 /// Key used by the store to uniquely identify a VolumeState structure.
@@ -71,10 +74,10 @@ impl StorableObject for VolumeState {
 }
 
 /// User specification of a volume.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub struct VolumeSpec {
     /// Volume Id
-    pub uuid: v0::VolumeId,
+    pub uuid: VolumeId,
     /// Size that the volume should be.
     pub size: u64,
     /// Volume labels.
@@ -82,13 +85,13 @@ pub struct VolumeSpec {
     /// Number of children the volume should have.
     pub num_replicas: u8,
     /// Protocol that the volume should be shared over.
-    pub protocol: v0::Protocol,
+    pub protocol: Protocol,
     /// Number of front-end paths.
     pub num_paths: u8,
     /// State that the volume should eventually achieve.
     pub state: VolumeSpecState,
     /// The node where front-end IO will be sent to
-    pub target_node: Option<v0::NodeId>,
+    pub target_node: Option<NodeId>,
     /// Update of the state in progress
     #[serde(skip)]
     pub updating: bool,
@@ -97,7 +100,7 @@ pub struct VolumeSpec {
 }
 
 /// Operation State for a Nexus spec resource
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub struct VolumeOperationState {
     /// Record of the operation
     pub operation: VolumeOperation,
@@ -113,6 +116,9 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
+                VolumeOperation::Unknown => {
+                    panic!("Unknown operation not supported");
+                }
                 VolumeOperation::Share(share) => {
                     self.protocol = share.into();
                 }
@@ -156,14 +162,21 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
 }
 
 /// Available Volume Operations
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub enum VolumeOperation {
+    Unknown,
     Share(VolumeShareProtocol),
     Unshare,
     AddReplica,
     RemoveReplica,
     Publish((NodeId, Option<VolumeShareProtocol>)),
     Unpublish,
+}
+
+impl Default for VolumeOperation {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 /// Key used by the store to uniquely identify a VolumeSpec structure.
@@ -194,16 +207,16 @@ impl StorableObject for VolumeSpec {
 }
 
 /// State of the Volume Spec
-pub type VolumeSpecState = SpecState<v0::VolumeState>;
+pub type VolumeSpecState = SpecState<mbus::VolumeState>;
 
-impl From<&v0::CreateVolume> for VolumeSpec {
-    fn from(request: &v0::CreateVolume) -> Self {
+impl From<&CreateVolume> for VolumeSpec {
+    fn from(request: &CreateVolume) -> Self {
         Self {
             uuid: request.uuid.clone(),
             size: request.size,
             labels: vec![],
             num_replicas: request.replicas as u8,
-            protocol: v0::Protocol::Off,
+            protocol: Protocol::Off,
             num_paths: 1,
             state: VolumeSpecState::Creating,
             target_node: None,
@@ -212,20 +225,20 @@ impl From<&v0::CreateVolume> for VolumeSpec {
         }
     }
 }
-impl PartialEq<v0::CreateVolume> for VolumeSpec {
-    fn eq(&self, other: &v0::CreateVolume) -> bool {
+impl PartialEq<CreateVolume> for VolumeSpec {
+    fn eq(&self, other: &CreateVolume) -> bool {
         let mut other = VolumeSpec::from(other);
         other.state = self.state.clone();
         other.updating = self.updating;
         &other == self
     }
 }
-impl From<&VolumeSpec> for v0::Volume {
+impl From<&VolumeSpec> for mbus::Volume {
     fn from(spec: &VolumeSpec) -> Self {
         Self {
             uuid: spec.uuid.clone(),
             size: spec.size,
-            state: v0::VolumeState::Unknown,
+            state: mbus::VolumeState::Unknown,
             protocol: spec.protocol.clone(),
             children: vec![],
         }

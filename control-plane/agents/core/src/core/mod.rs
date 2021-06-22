@@ -8,3 +8,7 @@ pub mod registry;
 pub mod specs;
 /// helper wrappers over the resources
 pub mod wrapper;
+
+/// Core tests
+#[cfg(test)]
+mod tests;

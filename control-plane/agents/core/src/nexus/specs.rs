@@ -3,25 +3,24 @@ use std::{ops::Deref, sync::Arc};
 use snafu::OptionExt;
 use tokio::sync::Mutex;
 
-use common::errors::{NodeNotFound, SvcError};
-use mbus_api::{
-    v0::{
-        AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState,
-        RemoveNexusChild, ShareNexus, UnshareNexus,
-    },
-    ResourceKind,
-};
-use store::{
-    store::{ObjectKey, Store, StoreError},
-    types::v0::nexus::{NexusSpec, NexusSpecKey, NexusSpecState},
-};
-
 use crate::core::{
     registry::Registry,
     specs::{ResourceSpecs, ResourceSpecsLocked},
     wrapper::ClientOps,
 };
-use store::types::v0::{nexus::NexusOperation, SpecTransaction};
+use common::errors::{NodeNotFound, SvcError};
+use mbus_api::ResourceKind;
+use types::v0::{
+    message_bus::mbus::{
+        AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState,
+        RemoveNexusChild, ShareNexus, UnshareNexus,
+    },
+    store::{
+        definitions::{ObjectKey, Store, StoreError},
+        nexus::{NexusOperation, NexusSpec, NexusSpecKey, NexusSpecState},
+        SpecTransaction,
+    },
+};
 
 impl ResourceSpecs {
     fn get_nexus(&self, id: &NexusId) -> Option<Arc<Mutex<NexusSpec>>> {

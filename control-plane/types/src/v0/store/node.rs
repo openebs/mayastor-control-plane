@@ -1,7 +1,9 @@
 //! Definition of node types that can be saved to the persistent store.
 
-use crate::store::{ObjectKey, StorableObject, StorableObjectType};
-use mbus_api::{v0, v0::NodeId};
+use crate::v0::{
+    message_bus::{mbus, mbus::NodeId},
+    store::definitions::{ObjectKey, StorableObject, StorableObjectType},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -10,7 +12,7 @@ type NodeLabels = HashMap<String, String>;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Node {
     /// Node information.
-    node: v0::Node,
+    node: mbus::Node,
     /// Node labels.
     labels: NodeLabels,
 }
@@ -18,7 +20,7 @@ pub struct Node {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct NodeSpec {
     /// Node identification.
-    id: v0::NodeId,
+    id: NodeId,
     /// Node labels.
     labels: NodeLabels,
 }

@@ -16,13 +16,13 @@
 use super::{specs::*, wrapper::NodeWrapper};
 use crate::core::wrapper::InternalOps;
 use common::errors::SvcError;
-use mbus_api::v0::NodeId;
-use std::{collections::HashMap, sync::Arc};
-use store::{
-    etcd::Etcd,
-    store::{StorableObject, Store, StoreError},
-};
+use std::{collections::HashMap, ops::DerefMut, sync::Arc};
+use store::etcd::Etcd;
 use tokio::sync::{Mutex, RwLock};
+use types::v0::{
+    message_bus::mbus::NodeId,
+    store::definitions::{StorableObject, Store, StoreError},
+};
 
 /// Registry containing all mayastor instances (aka nodes)
 pub type Registry = RegistryInner<Etcd>;
@@ -68,7 +68,7 @@ impl Registry {
             reconcile_period,
             reconcile_idle_period,
         };
-        registry.start();
+        registry.start().await;
         registry
     }
 
@@ -99,12 +99,19 @@ impl Registry {
     }
 
     /// Start the worker thread which updates the registry
-    fn start(&self) {
+    async fn start(&self) {
+        self.init().await;
         let registry = self.clone();
         tokio::spawn(async move {
             registry.poller().await;
         });
         self.specs.start(self.clone());
+    }
+
+    /// Initialise the registry with the content of the persistent store.
+    async fn init(&self) {
+        let mut store = self.store.lock().await;
+        self.specs.init(store.deref_mut()).await;
     }
 
     /// Poll each node for resource updates

@@ -1,4 +1,11 @@
 use super::*;
+use mbus_api::{
+    message_bus::v0::{MessageBus, MessageBusTrait},
+    ReplyError, ReplyErrorKind, ResourceKind,
+};
+use types::v0::message_bus::mbus::{
+    DestroyVolume, Filter, NexusShareProtocol, NodeId, ShareNexus, UnshareNexus, Volume, VolumeId,
+};
 
 pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     cfg.service(get_volumes)

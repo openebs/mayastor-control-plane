@@ -38,6 +38,7 @@ rpc = "0.1.0"
 http = "0.2.3"
 paste = "1.0.4"
 store = { path = "../store" }
+types = { path = "../types"}
 reqwest = "0.10.0"
 
 [dev-dependencies]

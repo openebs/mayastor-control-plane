@@ -1,8 +1,9 @@
 use crate::core::registry::Registry;
 use common::errors::SvcError;
-use mbus_api::v0::{
+use mbus_api::message_bus::v0::{Pools, Replicas};
+use types::v0::message_bus::mbus::{
     CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas, Pool,
-    Pools, Replica, Replicas, ShareReplica, UnshareReplica,
+    Replica, ShareReplica, UnshareReplica,
 };
 
 #[derive(Debug, Clone)]

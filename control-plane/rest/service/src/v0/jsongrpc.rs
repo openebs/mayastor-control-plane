@@ -2,6 +2,8 @@
 //! These methods are typically used to control SPDK directly.
 
 use super::*;
+use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
+use types::v0::message_bus::mbus::{JsonGrpcMethod, JsonGrpcRequest, NodeId};
 
 /// Configure the functions that this service supports.
 pub(crate) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {

@@ -1,10 +1,16 @@
 #![cfg(test)]
 
-use common::v0::GetSpecs;
-use mbus_api::{v0::*, *};
+use mbus_api::*;
 use std::time::Duration;
-use store::types::v0::nexus::NexusSpec;
 use testlib::{Cluster, ClusterBuilder};
+use types::v0::{
+    message_bus::mbus::{
+        AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, GetNexuses,
+        GetNodes, GetSpecs, Nexus, NexusShareProtocol, Protocol, RemoveNexusChild, ReplicaId,
+        ShareNexus, UnshareNexus,
+    },
+    store::nexus::NexusSpec,
+};
 
 #[actix_rt::test]
 async fn nexus() {
@@ -368,7 +374,7 @@ async fn nexus_child_transaction() {
 async fn nexus_child_transaction_store() {
     let store_timeout = Duration::from_millis(250);
     let reconcile_period = Duration::from_millis(250);
-    let grpc_timeout = Duration::from_millis(350);
+    let grpc_timeout = Duration::from_millis(450);
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_pools(1)
