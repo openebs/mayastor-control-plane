@@ -3,9 +3,14 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use tokio::sync::{Mutex, RwLock};
 
+use common::errors::SvcError;
 use mbus_api::v0::{NexusId, NodeId, PoolId, ReplicaId, VolumeId};
-use store::types::v0::{
-    nexus::NexusSpec, node::NodeSpec, pool::PoolSpec, replica::ReplicaSpec, volume::VolumeSpec,
+use store::{
+    store::StorableObject,
+    types::v0::{
+        nexus::NexusSpec, node::NodeSpec, pool::PoolSpec, replica::ReplicaSpec, volume::VolumeSpec,
+        SpecTransaction,
+    },
 };
 
 /// Locked Resource Specs
@@ -53,6 +58,79 @@ impl ResourceSpecsLocked {
             };
 
             tokio::time::delay_for(period).await;
+        }
+    }
+
+    /// Completes a volume update operation by trying to update the spec in the persistent store.
+    /// If the persistent store operation fails then the spec is marked accordingly and the dirty
+    /// spec reconciler will attempt to update the store when the store is back online.
+    pub(crate) async fn spec_complete_op<R, O, S: SpecTransaction<O> + StorableObject>(
+        registry: &Registry,
+        result: Result<R, SvcError>,
+        spec: Arc<Mutex<S>>,
+        mut spec_clone: S,
+    ) -> Result<R, SvcError> {
+        match result {
+            Ok(val) => {
+                spec_clone.commit_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                let mut spec = spec.lock().await;
+                match stored {
+                    Ok(_) => {
+                        spec.commit_op();
+                        Ok(val)
+                    }
+                    Err(error) => {
+                        spec.set_op_result(true);
+                        Err(error)
+                    }
+                }
+            }
+            Err(error) => {
+                spec_clone.clear_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                let mut spec = spec.lock().await;
+                match stored {
+                    Ok(_) => {
+                        spec.clear_op();
+                        Err(error)
+                    }
+                    Err(error) => {
+                        spec.set_op_result(false);
+                        Err(error)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Validates the outcome of an intermediate step, part of a transaction operation.
+    /// In case of an error, it undoes the changes to the spec.
+    /// If the persistent store is unavailable the spec is marked as dirty and the dirty
+    /// spec reconciler will attempt to update the store when the store is back online.
+    pub(crate) async fn spec_step_op<R, O, S: SpecTransaction<O> + StorableObject>(
+        registry: &Registry,
+        result: Result<R, SvcError>,
+        spec: Arc<Mutex<S>>,
+        mut spec_clone: S,
+    ) -> Result<R, SvcError> {
+        match result {
+            Ok(val) => Ok(val),
+            Err(error) => {
+                spec_clone.clear_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                let mut spec = spec.lock().await;
+                match stored {
+                    Ok(_) => {
+                        spec.clear_op();
+                        Err(error)
+                    }
+                    Err(error) => {
+                        spec.set_op_result(false);
+                        Err(error)
+                    }
+                }
+            }
         }
     }
 }

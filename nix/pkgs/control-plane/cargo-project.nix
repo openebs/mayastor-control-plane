@@ -31,7 +31,7 @@ let
   buildProps = rec {
     name = "control-plane-${version}";
     #cargoSha256 = "0000000000000000000000000000000000000000000000000000";
-    cargoSha256 = "0mhzs01bs4f9vs5m07w1irnswjb9ja7fkgb6x7w4nzfqi59wl6hv";
+    cargoSha256 = "0l54qc4jnb33fw54pjdxfhr96yj9qvx7nw33i9gsvkrql1zgxjml";
     inherit version;
 
     src = whitelistSource ../../../. [

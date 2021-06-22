@@ -1,6 +1,9 @@
 use crate::core::registry::Registry;
 use common::errors::SvcError;
-use mbus_api::v0::{CreateVolume, DestroyVolume, Filter, GetVolumes, Volume, Volumes};
+use mbus_api::v0::{
+    CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, ShareVolume, UnpublishVolume,
+    UnshareVolume, Volume, Volumes,
+};
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -15,27 +18,7 @@ impl Service {
     /// Get volumes
     #[tracing::instrument(level = "debug", err)]
     pub(super) async fn get_volumes(&self, request: &GetVolumes) -> Result<Volumes, SvcError> {
-        let nexuses = self.registry.get_node_opt_nexuses(None).await?;
-        let nexus_specs = self.registry.specs.get_created_nexus_specs().await;
-        let volumes = nexuses
-            .iter()
-            .map(|nexus| {
-                let uuid = nexus_specs
-                    .iter()
-                    .find(|nexus_spec| nexus_spec.uuid == nexus.uuid)
-                    .map(|nexus_spec| nexus_spec.owner.clone())
-                    .flatten();
-                uuid.map(|uuid| Volume {
-                    uuid,
-                    size: nexus.size,
-                    // ANA not supported so derive volume state from the
-                    // single Nexus
-                    state: nexus.state.clone(),
-                    children: vec![nexus.clone()],
-                })
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+        let volumes = self.registry.get_volumes_status().await;
 
         let volumes = match &request.filter {
             Filter::None => volumes,
@@ -76,6 +59,42 @@ impl Service {
         self.registry
             .specs
             .destroy_volume(&self.registry, request)
+            .await
+    }
+
+    /// Share volume
+    #[tracing::instrument(level = "debug", err)]
+    pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
+        self.registry
+            .specs
+            .share_volume(&self.registry, request)
+            .await
+    }
+
+    /// Unshare volume
+    #[tracing::instrument(level = "debug", err)]
+    pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
+        self.registry
+            .specs
+            .unshare_volume(&self.registry, request)
+            .await
+    }
+
+    /// Publish volume
+    #[tracing::instrument(level = "debug", err)]
+    pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<String, SvcError> {
+        self.registry
+            .specs
+            .publish_volume(&self.registry, request)
+            .await
+    }
+
+    /// Unpublish volume
+    #[tracing::instrument(level = "debug", err)]
+    pub(super) async fn unpublish_volume(&self, request: &UnpublishVolume) -> Result<(), SvcError> {
+        self.registry
+            .specs
+            .unpublish_volume(&self.registry, request)
             .await
     }
 }

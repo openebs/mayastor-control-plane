@@ -23,7 +23,8 @@ use ipnetwork::Ipv4Network;
 use tonic::transport::Channel;
 
 use bollard::{
-    image::CreateImageOptions, models::ContainerInspectResponse, network::DisconnectNetworkOptions,
+    container::KillContainerOptions, image::CreateImageOptions, models::ContainerInspectResponse,
+    network::DisconnectNetworkOptions,
 };
 pub use mbus_api::TimeoutOptions;
 use rpc::mayastor::{bdev_rpc_client::BdevRpcClient, mayastor_client::MayastorClient};
@@ -158,7 +159,7 @@ impl Binary {
 }
 
 const RUST_LOG_DEFAULT: &str =
-    "debug,actix_web=debug,actix=debug,h2=info,hyper=info,tower_buffer=info,bollard=info,rustls=info";
+    "debug,actix_web=debug,actix=debug,h2=info,hyper=info,tower_buffer=info,bollard=info,rustls=info,reqwest=info";
 
 /// Specs of the allowed containers include only the binary path
 /// (relative to src) and the required arguments
@@ -767,6 +768,28 @@ impl ComposeTest {
             .await
     }
 
+    /// get the container with the provided name
+    pub async fn get_cluster_container(
+        &self,
+        name: &str,
+    ) -> Result<Option<ContainerSummaryInner>, Error> {
+        let (id, _) = self.containers.get(name).unwrap();
+        let all = self
+            .docker
+            .list_containers(Some(ListContainersOptions {
+                all: true,
+                filters: vec![(
+                    "label",
+                    vec![format!("{}.name={}", self.label_prefix, self.name).as_str()],
+                )]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            }))
+            .await?;
+        Ok(all.iter().find(|c| c.id.as_ref() == Some(id)).cloned())
+    }
+
     /// remove a container from the configuration
     async fn remove_container(&self, name: &str) -> Result<(), Error> {
         self.docker
@@ -808,7 +831,7 @@ impl ComposeTest {
         if self.prune {
             let _ = self
                 .docker
-                .stop_container(&spec.name, Some(StopContainerOptions { t: 0 }))
+                .kill_container(&spec.name, Some(KillContainerOptions { signal: "SIGKILL" }))
                 .await;
             let _ = self
                 .docker

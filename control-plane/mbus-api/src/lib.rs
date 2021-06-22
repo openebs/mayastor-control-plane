@@ -367,6 +367,8 @@ pub enum ReplyErrorKind {
     FailedPersist,
     NotShared,
     AlreadyShared,
+    NotPublished,
+    AlreadyPublished,
 }
 
 impl From<Error> for ReplyError {

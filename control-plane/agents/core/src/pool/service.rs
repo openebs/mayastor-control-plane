@@ -139,6 +139,7 @@ impl Service {
         self.registry
             .specs
             .unshare_replica(&self.registry, request)
-            .await
+            .await?;
+        Ok(())
     }
 }

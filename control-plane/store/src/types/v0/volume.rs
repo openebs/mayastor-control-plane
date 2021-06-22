@@ -2,9 +2,12 @@
 
 use crate::{
     store::{ObjectKey, StorableObject, StorableObjectType},
-    types::SpecState,
+    types::{v0::SpecTransaction, SpecState},
 };
-use mbus_api::{v0, v0::VolumeId};
+use mbus_api::{
+    v0,
+    v0::{NodeId, Protocol, VolumeId, VolumeShareProtocol},
+};
 use serde::{Deserialize, Serialize};
 
 type VolumeLabel = String;
@@ -84,9 +87,83 @@ pub struct VolumeSpec {
     pub num_paths: u8,
     /// State that the volume should eventually achieve.
     pub state: VolumeSpecState,
+    /// The node where front-end IO will be sent to
+    pub target_node: Option<v0::NodeId>,
     /// Update of the state in progress
     #[serde(skip)]
     pub updating: bool,
+    /// Record of the operation in progress
+    pub operation: Option<VolumeOperationState>,
+}
+
+/// Operation State for a Nexus spec resource
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct VolumeOperationState {
+    /// Record of the operation
+    pub operation: VolumeOperation,
+    /// Result of the operation
+    pub result: Option<bool>,
+}
+
+impl SpecTransaction<VolumeOperation> for VolumeSpec {
+    fn pending_op(&self) -> bool {
+        self.operation.is_some()
+    }
+
+    fn commit_op(&mut self) {
+        if let Some(op) = self.operation.clone() {
+            match op.operation {
+                VolumeOperation::Share(share) => {
+                    self.protocol = share.into();
+                }
+                VolumeOperation::Unshare => {
+                    self.protocol = Protocol::Off;
+                }
+                VolumeOperation::AddReplica => self.num_replicas += 1,
+                VolumeOperation::RemoveReplica => self.num_replicas -= 1,
+                VolumeOperation::Publish((node, share)) => {
+                    self.target_node = Some(node);
+                    self.protocol = share.map_or(Protocol::Off, Protocol::from);
+                }
+                VolumeOperation::Unpublish => {
+                    self.target_node = None;
+                    self.protocol = Protocol::Off;
+                }
+            }
+        }
+        self.clear_op();
+    }
+
+    fn clear_op(&mut self) {
+        self.operation = None;
+        self.updating = false;
+    }
+
+    fn start_op(&mut self, operation: VolumeOperation) {
+        self.updating = true;
+        self.operation = Some(VolumeOperationState {
+            operation,
+            result: None,
+        })
+    }
+
+    fn set_op_result(&mut self, result: bool) {
+        if let Some(op) = &mut self.operation {
+            op.result = Some(result);
+        }
+        self.updating = false;
+    }
+}
+
+/// Available Volume Operations
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum VolumeOperation {
+    Share(VolumeShareProtocol),
+    Unshare,
+    AddReplica,
+    RemoveReplica,
+    Publish((NodeId, Option<VolumeShareProtocol>)),
+    Unpublish,
 }
 
 /// Key used by the store to uniquely identify a VolumeSpec structure.
@@ -129,7 +206,9 @@ impl From<&v0::CreateVolume> for VolumeSpec {
             protocol: v0::Protocol::Off,
             num_paths: 1,
             state: VolumeSpecState::Creating,
+            target_node: None,
             updating: true,
+            operation: None,
         }
     }
 }
@@ -147,6 +226,7 @@ impl From<&VolumeSpec> for v0::Volume {
             uuid: spec.uuid.clone(),
             size: spec.size,
             state: v0::VolumeState::Unknown,
+            protocol: spec.protocol.clone(),
             children: vec![],
         }
     }

@@ -632,6 +632,10 @@ pub enum RestJsonErrorKind {
     // code=412, description="Precondition Failed",
     NotShared,
     // code=412, description="Precondition Failed",
+    NotPublished,
+    // code=412, description="Precondition Failed",
+    AlreadyPublished,
+    // code=412, description="Precondition Failed",
     AlreadyShared,
     // code=503, description="Service Unavailable",
     Aborted,
@@ -752,6 +756,14 @@ impl RestError {
             }
             ReplyErrorKind::NotShared => {
                 let error = RestJsonError::new(RestJsonErrorKind::NotShared, &details);
+                HttpResponse::PreconditionFailed().json(error)
+            }
+            ReplyErrorKind::NotPublished => {
+                let error = RestJsonError::new(RestJsonErrorKind::NotPublished, &details);
+                HttpResponse::PreconditionFailed().json(error)
+            }
+            ReplyErrorKind::AlreadyPublished => {
+                let error = RestJsonError::new(RestJsonErrorKind::AlreadyPublished, &details);
                 HttpResponse::PreconditionFailed().json(error)
             }
         }

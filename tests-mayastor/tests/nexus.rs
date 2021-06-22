@@ -21,7 +21,7 @@ async fn create_nexus_malloc() {
 #[actix_rt::test]
 async fn create_nexus_sizes() {
     let cluster = ClusterBuilder::builder()
-        .with_rest_timeout(std::time::Duration::from_secs(1))
+        .with_rest_timeout(std::time::Duration::from_secs(2))
         // don't log whilst we have the allow_fail
         .compose_build(|c| c.with_logs(false))
         .await

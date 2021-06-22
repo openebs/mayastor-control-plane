@@ -94,7 +94,7 @@ impl Cluster {
         jaeger: (Tracer, Uninstall),
     ) -> Result<Cluster, Error> {
         let rest_client = ActixRestClient::new_timeout(
-            "https://localhost:8080",
+            "http://localhost:8081",
             trace_rest,
             bearer_token,
             timeout_rest,

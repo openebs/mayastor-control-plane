@@ -98,15 +98,17 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
                     self.share = Protocol::Off;
                 }
             }
-            self.clear_op();
         }
+        self.clear_op();
     }
 
     fn clear_op(&mut self) {
         self.operation = None;
+        self.updating = false;
     }
 
     fn start_op(&mut self, operation: ReplicaOperation) {
+        self.updating = true;
         self.operation = Some(ReplicaOperationState {
             operation,
             result: None,
@@ -117,6 +119,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
+        self.updating = false;
     }
 }
 

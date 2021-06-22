@@ -111,6 +111,14 @@ pub enum MessageIdVs {
     CreateVolume,
     /// Delete Volume
     DestroyVolume,
+    /// Publish Volume,
+    PublishVolume,
+    /// Unpublish Volume
+    UnpublishVolume,
+    /// Share Volume
+    ShareVolume,
+    /// Unshare Volume
+    UnshareVolume,
     /// Add nexus to volume
     AddVolumeNexus,
     /// Remove nexus from volume
@@ -686,6 +694,10 @@ impl ReplicaOwners {
             nexuses: vec![],
         }
     }
+    /// The replica is no longer part of the volume
+    pub fn disowned_by_volume(&mut self) {
+        let _ = self.volume.take();
+    }
 }
 
 /// Destroy Replica Request
@@ -785,6 +797,12 @@ pub enum Protocol {
     Nbd = 3,
 }
 
+impl Protocol {
+    /// Is the protocol set to be shared
+    pub fn shared(&self) -> bool {
+        self != &Self::Off
+    }
+}
 impl Default for Protocol {
     fn default() -> Self {
         Self::Off
@@ -854,6 +872,11 @@ pub enum NexusShareProtocol {
     Iscsi = 2,
 }
 
+impl std::cmp::PartialEq<Protocol> for NexusShareProtocol {
+    fn eq(&self, other: &Protocol) -> bool {
+        &Protocol::from(*self) == other
+    }
+}
 impl Default for NexusShareProtocol {
     fn default() -> Self {
         Self::Nvmf
@@ -880,6 +903,11 @@ pub enum ReplicaShareProtocol {
     Nvmf = 1,
 }
 
+impl std::cmp::PartialEq<Protocol> for ReplicaShareProtocol {
+    fn eq(&self, other: &Protocol) -> bool {
+        &Protocol::from(*self) == other
+    }
+}
 impl Default for ReplicaShareProtocol {
     fn default() -> Self {
         Self::Nvmf
@@ -1065,6 +1093,15 @@ pub struct DestroyNexus {
 }
 bus_impl_message_all!(DestroyNexus, DestroyNexus, (), Nexus);
 
+impl From<Nexus> for DestroyNexus {
+    fn from(nexus: Nexus) -> Self {
+        Self {
+            node: nexus.node,
+            uuid: nexus.uuid,
+        }
+    }
+}
+
 /// Share Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -1168,9 +1205,41 @@ pub struct Volume {
     pub size: u64,
     /// current state of the volume
     pub state: VolumeState,
+    /// current share protocol
+    pub protocol: Protocol,
     /// array of children nexuses
     pub children: Vec<Nexus>,
 }
+
+impl Volume {
+    /// Get the target node if the volume is published
+    pub fn target_node(&self) -> Option<Option<NodeId>> {
+        if self.children.len() > 1 {
+            return None;
+        }
+        Some(self.children.get(0).map(|n| n.node.clone()))
+    }
+}
+
+/// ANA not supported at the moment, so derive volume state from the
+/// single Nexus instance
+impl From<(&VolumeId, &Nexus)> for Volume {
+    fn from(src: (&VolumeId, &Nexus)) -> Self {
+        let uuid = src.0.clone();
+        let nexus = src.1;
+        Self {
+            uuid,
+            size: nexus.size,
+            state: nexus.state.clone(),
+            protocol: nexus.share.clone(),
+            children: vec![nexus.clone()],
+        }
+    }
+}
+
+/// The protocol used to share the volume
+/// Currently it's the same as the nexus
+pub type VolumeShareProtocol = NexusShareProtocol;
 
 /// Volume State information
 /// Currently it's the same as the nexus
@@ -1300,6 +1369,51 @@ impl CreateVolume {
             .allowed_nodes
     }
 }
+
+/// Share Volume request
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareVolume {
+    /// uuid of the volume
+    pub uuid: VolumeId,
+    /// share protocol
+    pub protocol: VolumeShareProtocol,
+}
+bus_impl_message_all!(ShareVolume, ShareVolume, String, Volume);
+
+/// Unshare Volume request
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnshareVolume {
+    /// uuid of the volume
+    pub uuid: VolumeId,
+}
+bus_impl_message_all!(UnshareVolume, UnshareVolume, (), Volume);
+
+/// Publish a volume on a node
+/// Unpublishes the nexus if it's published somewhere else and creates a nexus on the given node.
+/// Then, share the nexus via the provided share protocol.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishVolume {
+    /// uuid of the volume
+    pub uuid: VolumeId,
+    /// the node where front-end IO will be sent to
+    pub target_node: Option<v0::NodeId>,
+    /// share protocol
+    pub share: Option<VolumeShareProtocol>,
+}
+bus_impl_message_all!(PublishVolume, PublishVolume, String, Volume);
+
+/// Unpublish a volume from any node where it may be published
+/// Unshares the children nexuses from the volume and destroys them.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnpublishVolume {
+    /// uuid of the volume
+    pub uuid: VolumeId,
+}
+bus_impl_message_all!(UnpublishVolume, UnpublishVolume, (), Volume);
 
 /// Delete volume
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]

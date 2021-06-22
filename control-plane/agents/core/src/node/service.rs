@@ -162,7 +162,9 @@ impl Service {
         let registry = self.registry.specs.write().await;
         let nexuses = registry.get_nexuses().await;
         let replicas = registry.get_replicas().await;
+        let volumes = registry.get_volumes().await;
         Ok(Specs {
+            volumes,
             nexuses,
             replicas,
             ..Default::default()
