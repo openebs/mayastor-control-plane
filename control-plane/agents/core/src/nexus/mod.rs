@@ -9,9 +9,11 @@ use super::{core::registry::Registry, handler, impl_request_handler};
 use common::{errors::SvcError, handler::*};
 
 // Nexus Operations
-use mbus_api::v0::{CreateNexus, DestroyNexus, GetNexuses, ShareNexus, UnshareNexus};
+use types::v0::message_bus::mbus::{
+    CreateNexus, DestroyNexus, GetNexuses, ShareNexus, UnshareNexus,
+};
 // Nexus Child Operations
-use mbus_api::v0::{AddNexusChild, RemoveNexusChild};
+use types::v0::message_bus::mbus::{AddNexusChild, RemoveNexusChild};
 
 pub(crate) fn configure(builder: common::Service) -> common::Service {
     let registry = builder.get_shared_state::<Registry>().clone();

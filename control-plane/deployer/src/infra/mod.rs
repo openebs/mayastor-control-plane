@@ -11,15 +11,13 @@ use super::StartOptions;
 use async_trait::async_trait;
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
 use futures::future::join_all;
-use mbus_api::{
-    v0::{ChannelVs, Liveness},
-    Message,
-};
+use mbus_api::Message;
 use paste::paste;
 use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
 use structopt::StructOpt;
 use strum::VariantNames;
 use strum_macros::{EnumVariantNames, ToString};
+use types::v0::message_bus::mbus::{ChannelVs, Liveness};
 
 /// Error type used by the deployer
 pub type Error = Box<dyn std::error::Error>;

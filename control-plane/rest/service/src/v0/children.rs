@@ -1,4 +1,11 @@
 use super::*;
+use mbus_api::{
+    message_bus::v0::{BusError, MessageBus, MessageBusTrait},
+    ReplyErrorKind, ResourceKind,
+};
+use types::v0::message_bus::mbus::{
+    AddNexusChild, Child, ChildUri, Filter, Nexus, NexusId, NodeId, RemoveNexusChild,
+};
 
 pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     cfg.service(get_nexus_children)

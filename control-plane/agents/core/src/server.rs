@@ -7,9 +7,9 @@ pub mod watcher;
 
 use crate::core::registry;
 use common::*;
-use mbus_api::v0::ChannelVs;
 use structopt::StructOpt;
 use tracing::info;
+use types::v0::message_bus::mbus::ChannelVs;
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct CliArgs {

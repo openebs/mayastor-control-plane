@@ -1,14 +1,20 @@
 //! Definition of replica types that can be saved to the persistent store.
 
-use crate::{
-    store::{ObjectKey, StorableObject, StorableObjectType},
-    types::{v0::SpecTransaction, SpecState},
-};
-use mbus_api::{
-    v0,
-    v0::{Protocol, ReplicaId, ReplicaShareProtocol},
+use crate::v0::{
+    message_bus::{
+        mbus,
+        mbus::{
+            CreateReplica, NodeId, PoolId, Protocol, ReplicaId, ReplicaOwners, ReplicaShareProtocol,
+        },
+    },
+    store::{
+        definitions::{ObjectKey, StorableObject, StorableObjectType},
+        SpecState, SpecTransaction,
+    },
 };
 use serde::{Deserialize, Serialize};
+
+use paperclip::actix::Apiv2Schema;
 
 /// Replica information
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -23,9 +29,9 @@ pub struct Replica {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ReplicaState {
     /// Replica information.
-    pub replica: v0::Replica,
+    pub replica: mbus::Replica,
     /// State of the replica.
-    pub state: v0::ReplicaState,
+    pub state: mbus::ReplicaState,
 }
 
 /// Key used by the store to uniquely identify a ReplicaState structure.
@@ -50,16 +56,16 @@ impl StorableObject for ReplicaState {
 }
 
 /// User specification of a replica.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub struct ReplicaSpec {
     /// uuid of the replica
-    pub uuid: v0::ReplicaId,
+    pub uuid: ReplicaId,
     /// The size that the replica should be.
     pub size: u64,
     /// The pool that the replica should live on.
-    pub pool: v0::PoolId,
+    pub pool: PoolId,
     /// Protocol used for exposing the replica.
-    pub share: v0::Protocol,
+    pub share: Protocol,
     /// Thin provisioning.
     pub thin: bool,
     /// The state that the replica should eventually achieve.
@@ -67,7 +73,7 @@ pub struct ReplicaSpec {
     /// Managed by our control plane
     pub managed: bool,
     /// Owner Resource
-    pub owners: v0::ReplicaOwners,
+    pub owners: ReplicaOwners,
     /// Update in progress
     #[serde(skip)]
     pub updating: bool,
@@ -75,7 +81,7 @@ pub struct ReplicaSpec {
     pub operation: Option<ReplicaOperationState>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub struct ReplicaOperationState {
     /// Record of the operation
     pub operation: ReplicaOperation,
@@ -91,6 +97,9 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
+                ReplicaOperation::Unknown => {
+                    panic!("Unknown operation not supported");
+                }
                 ReplicaOperation::Share(share) => {
                     self.share = share.into();
                 }
@@ -124,10 +133,17 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
 }
 
 /// Available Replica Operations
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub enum ReplicaOperation {
+    Unknown,
     Share(ReplicaShareProtocol),
     Unshare,
+}
+
+impl Default for ReplicaOperation {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 /// Key used by the store to uniquely identify a ReplicaSpec structure.
@@ -157,26 +173,26 @@ impl StorableObject for ReplicaSpec {
     }
 }
 
-impl From<&ReplicaSpec> for v0::Replica {
+impl From<&ReplicaSpec> for mbus::Replica {
     fn from(replica: &ReplicaSpec) -> Self {
         Self {
-            node: v0::NodeId::default(),
+            node: NodeId::default(),
             uuid: replica.uuid.clone(),
             pool: replica.pool.clone(),
             thin: replica.thin,
             size: replica.size,
             share: replica.share.clone(),
             uri: "".to_string(),
-            state: v0::ReplicaState::Unknown,
+            state: mbus::ReplicaState::Unknown,
         }
     }
 }
 
 /// State of the Replica Spec
-pub type ReplicaSpecState = SpecState<v0::ReplicaState>;
+pub type ReplicaSpecState = SpecState<mbus::ReplicaState>;
 
-impl From<&v0::CreateReplica> for ReplicaSpec {
-    fn from(request: &v0::CreateReplica) -> Self {
+impl From<&CreateReplica> for ReplicaSpec {
+    fn from(request: &CreateReplica) -> Self {
         Self {
             uuid: request.uuid.clone(),
             size: request.size,
@@ -191,8 +207,8 @@ impl From<&v0::CreateReplica> for ReplicaSpec {
         }
     }
 }
-impl PartialEq<v0::CreateReplica> for ReplicaSpec {
-    fn eq(&self, other: &v0::CreateReplica) -> bool {
+impl PartialEq<CreateReplica> for ReplicaSpec {
+    fn eq(&self, other: &CreateReplica) -> bool {
         let mut other = ReplicaSpec::from(other);
         other.state = self.state.clone();
         other.updating = self.updating;

@@ -333,6 +333,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "types",
  "url",
 ]
 
@@ -881,9 +882,9 @@ checksum = "ea221b5284a47e40033bf9b66f35f984ec0ea2931eb03505246cd27a963f981b"
 
 [[package]]
 name = "cpufeatures"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed00c67cb5d0a7d64a44f6ad2668db7e7530311dd53ea79bcd4fb022c64911c8"
+checksum = "66c99696f6c9dd7f35d486b9d04d7e6e202aa3e8c40d553f2fdf5e7e0c6a71ef"
 dependencies = [
  "libc",
 ]
@@ -992,6 +993,7 @@ dependencies = [
  "rest",
  "tracing",
  "tracing-opentelemetry",
+ "types",
 ]
 
 [[package]]
@@ -1078,6 +1080,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tokio",
+ "types",
 ]
 
 [[package]]
@@ -1932,6 +1935,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "types",
  "url",
  "uuid",
 ]
@@ -2188,9 +2192,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.34"
+version = "0.10.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d7830286ad6a3973c0f1d9b73738f69c76b739301d0229c4b96501695cbe4c8"
+checksum = "549430950c79ae24e6d02e0b7404534ecf311d94cc9f861e9e4020187d13d885"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -2208,9 +2212,9 @@ checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.63"
+version = "0.9.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b0d6fb7d80f877617dfcb014e605e2b5ab2fb0afdf27935219bb6bd984cb98"
+checksum = "7a7907e3bfa08bb85105209cdfcb6c63d109f8f6c1ed6ca318fff5c1853fbc1d"
 dependencies = [
  "autocfg 1.0.1",
  "cc",
@@ -2274,7 +2278,7 @@ dependencies = [
 [[package]]
 name = "paperclip"
 version = "0.5.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#6a0b12e287409ef8402f903de81654ed3f60c1bc"
 dependencies = [
  "anyhow",
  "itertools 0.10.1",
@@ -2295,7 +2299,7 @@ dependencies = [
 [[package]]
 name = "paperclip-actix"
 version = "0.3.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#6a0b12e287409ef8402f903de81654ed3f60c1bc"
 dependencies = [
  "actix-service",
  "actix-web",
@@ -2310,7 +2314,7 @@ dependencies = [
 [[package]]
 name = "paperclip-core"
 version = "0.3.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#6a0b12e287409ef8402f903de81654ed3f60c1bc"
 dependencies = [
  "actix-web",
  "mime",
@@ -2328,7 +2332,7 @@ dependencies = [
 [[package]]
 name = "paperclip-macros"
 version = "0.4.0"
-source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#72fddfecdb56fe248481d8355c49f0fa806467b4"
+source = "git+https://github.com/MayastorControlPlane/paperclip?branch=develop#6a0b12e287409ef8402f903de81654ed3f60c1bc"
 dependencies = [
  "heck",
  "http",
@@ -2924,6 +2928,7 @@ dependencies = [
 name = "rest"
 version = "0.1.0"
 dependencies = [
+ "actix-http",
  "actix-rt",
  "actix-service",
  "actix-web",
@@ -2944,7 +2949,6 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu",
- "store",
  "structopt",
  "strum",
  "strum_macros",
@@ -2954,6 +2958,7 @@ dependencies = [
  "tracing-futures",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "types",
  "url",
 ]
 
@@ -3203,9 +3208,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "1.9.3"
+version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a3b379ba4fd515d3fdccfe8584eb9fcc6f7dd1bbe14636a12c98a36fbbfc850"
+checksum = "1ad9fdbb69badc8916db738c25efd04f0a65297d26c2f8de4b62e57b8c12bc72"
 dependencies = [
  "rustversion",
  "serde",
@@ -3474,7 +3479,6 @@ dependencies = [
  "async-trait",
  "composer",
  "etcd-client",
- "mbus_api",
  "oneshot",
  "serde",
  "serde_json",
@@ -3483,6 +3487,7 @@ dependencies = [
  "strum_macros",
  "tokio",
  "tracing",
+ "types",
 ]
 
 [[package]]
@@ -4231,6 +4236,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f6906492a7cd215bfa4cf595b600146ccfac0c79bcbd1f3000162af5e8b06"
 
 [[package]]
+name = "types"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "etcd-client",
+ "paperclip",
+ "percent-encoding 2.1.0",
+ "serde",
+ "serde_json",
+ "snafu",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "ucd-trie"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4310,9 +4334,9 @@ dependencies = [
 
 [[package]]
 name = "vcpkg"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70455df2fdf4e9bf580a92e443f1eb0303c390d682e2ea817312c9e81f8c3399"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vec_map"

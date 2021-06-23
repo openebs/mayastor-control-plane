@@ -3,15 +3,37 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use tokio::sync::{Mutex, RwLock};
 
-use common::errors::SvcError;
-use mbus_api::v0::{NexusId, NodeId, PoolId, ReplicaId, VolumeId};
-use store::{
-    store::StorableObject,
-    types::v0::{
-        nexus::NexusSpec, node::NodeSpec, pool::PoolSpec, replica::ReplicaSpec, volume::VolumeSpec,
+use snafu::{OptionExt, ResultExt, Snafu};
+use types::v0::{
+    message_bus::mbus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
+    store::{
+        definitions::{key_prefix, StorableObject, StorableObjectType, Store, StoreError},
+        nexus::NexusSpec,
+        node::NodeSpec,
+        pool::PoolSpec,
+        replica::ReplicaSpec,
+        volume::VolumeSpec,
         SpecTransaction,
     },
 };
+
+use common::errors::SvcError;
+
+#[derive(Debug, Snafu)]
+enum SpecError {
+    /// Failed to get entries from the persistent store.
+    #[snafu(display("Failed to get entries from store. Error {}", source))]
+    StoreGet { source: StoreError },
+    /// Failed to get entries from the persistent store.
+    #[snafu(display("Failed to deserialise object type {}", obj_type))]
+    Deserialise {
+        obj_type: StorableObjectType,
+        source: serde_json::Error,
+    },
+    /// Failed to get entries from the persistent store.
+    #[snafu(display("Key does not contain UUID"))]
+    KeyUuid {},
+}
 
 /// Locked Resource Specs
 #[derive(Default, Clone, Debug)]
@@ -38,6 +60,100 @@ impl ResourceSpecsLocked {
     pub(crate) fn new() -> Self {
         ResourceSpecsLocked::default()
     }
+
+    /// Initialise the resource specs with the content from the persistent store.
+    pub(crate) async fn init<S: Store>(&self, store: &mut S) {
+        let spec_types = [
+            StorableObjectType::VolumeSpec,
+            StorableObjectType::NodeSpec,
+            StorableObjectType::NexusSpec,
+            StorableObjectType::PoolSpec,
+            StorableObjectType::ReplicaSpec,
+        ];
+        for spec in &spec_types {
+            if let Err(e) = self.populate_specs(store, *spec).await {
+                panic!(
+                    "Failed to initialise resource specs. Err {}.",
+                    e.to_string()
+                );
+            }
+        }
+    }
+
+    /// Populate the resource specs with data from the persistent store.
+    async fn populate_specs<S: Store>(
+        &self,
+        store: &mut S,
+        spec_type: StorableObjectType,
+    ) -> Result<(), SpecError> {
+        let prefix = key_prefix(spec_type);
+        let store_specs = store.get_values_prefix(&prefix).await.context(StoreGet {});
+        let mut resource_specs = self.0.write().await;
+
+        assert!(store_specs.is_ok());
+        for (key, value) in store_specs.unwrap() {
+            // The uuid is assumed to be the last part of the key.
+            let id = key.split('/').last().context(KeyUuid {})?;
+            match spec_type {
+                StorableObjectType::VolumeSpec => {
+                    resource_specs.volumes.insert(
+                        VolumeId::from(id),
+                        Arc::new(Mutex::new(serde_json::from_value(value).context(
+                            Deserialise {
+                                obj_type: StorableObjectType::VolumeSpec,
+                            },
+                        )?)),
+                    );
+                }
+                StorableObjectType::NodeSpec => {
+                    resource_specs.nodes.insert(
+                        NodeId::from(id),
+                        Arc::new(Mutex::new(serde_json::from_value(value).context(
+                            Deserialise {
+                                obj_type: StorableObjectType::NodeSpec,
+                            },
+                        )?)),
+                    );
+                }
+                StorableObjectType::NexusSpec => {
+                    resource_specs.nexuses.insert(
+                        NexusId::from(id),
+                        Arc::new(Mutex::new(serde_json::from_value(value).context(
+                            Deserialise {
+                                obj_type: StorableObjectType::NexusSpec,
+                            },
+                        )?)),
+                    );
+                }
+                StorableObjectType::PoolSpec => {
+                    resource_specs.pools.insert(
+                        PoolId::from(id),
+                        Arc::new(Mutex::new(serde_json::from_value(value).context(
+                            Deserialise {
+                                obj_type: StorableObjectType::PoolSpec,
+                            },
+                        )?)),
+                    );
+                }
+                StorableObjectType::ReplicaSpec => {
+                    resource_specs.replicas.insert(
+                        ReplicaId::from(id),
+                        Arc::new(Mutex::new(serde_json::from_value(value).context(
+                            Deserialise {
+                                obj_type: StorableObjectType::ReplicaSpec,
+                            },
+                        )?)),
+                    );
+                }
+                _ => {
+                    // Not all spec types are persisted in the store.
+                    unimplemented!("{} not persisted in store", spec_type);
+                }
+            };
+        }
+        Ok(())
+    }
+
     /// Start worker threads
     /// 1. test store connections and commit dirty specs to the store
     pub(crate) fn start(&self, registry: Registry) {

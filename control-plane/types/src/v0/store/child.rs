@@ -1,7 +1,9 @@
 //! Definition of child types that can be saved to the persistent store.
 
-use crate::store::{ObjectKey, StorableObject, StorableObjectType};
-use mbus_api::{v0, v0::ReplicaId};
+use crate::v0::{
+    message_bus::{mbus, mbus::ReplicaId},
+    store::definitions::{ObjectKey, StorableObject, StorableObjectType},
+};
 use serde::{Deserialize, Serialize};
 
 /// Child information
@@ -16,11 +18,11 @@ pub struct Child {
 /// Runtime state of a child.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ChildState {
-    pub child: v0::Child,
+    pub child: mbus::Child,
     /// Size of the child.
     pub size: u64,
     /// UUID of the replica that the child connects to.
-    pub replica_uuid: v0::ReplicaId,
+    pub replica_uuid: ReplicaId,
 }
 
 /// Key used by the store to uniquely identify a ChildState structure.
@@ -57,9 +59,9 @@ pub struct ChildSpec {
     /// The size the child should be.
     pub size: u64,
     /// The UUID of the replica the child should be associated with.
-    pub replica_uuid: v0::ReplicaId,
+    pub replica_uuid: ReplicaId,
     /// The state the child should eventually reach.
-    pub state: v0::ChildState,
+    pub state: mbus::ChildState,
 }
 
 /// Key used by the store to uniquely identify a ChildSpec structure.

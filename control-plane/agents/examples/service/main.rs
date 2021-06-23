@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use common::{errors::SvcError, *};
-use mbus_api::{v0, *};
+use mbus_api::{Message, *};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
+use types::v0::message_bus::mbus::{Channel, ChannelVs, MessageIdVs};
 
 #[derive(Debug, StructOpt)]
 struct CliArgs {
@@ -71,7 +72,7 @@ async fn client() {
 async fn server() {
     let cli_args = CliArgs::from_args();
 
-    Service::builder(cli_args.url, v0::ChannelVs::Default)
+    Service::builder(cli_args.url, ChannelVs::Default)
         .with_subscription(ServiceHandler::<GetSvcName>::default())
         .run()
         .await;

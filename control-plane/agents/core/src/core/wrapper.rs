@@ -3,16 +3,16 @@ use common::{
     errors::{GrpcRequestError, SvcError},
     v0::msg_translation::{MessageBusToRpc, RpcToMessageBus},
 };
-use mbus_api::{
-    v0::{
-        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Node, NodeId, NodeState, Pool,
-        PoolId, PoolState, Protocol, Replica, ReplicaId, ShareReplica, UnshareReplica,
-    },
-    ResourceKind,
-};
+use mbus_api::ResourceKind;
 use rpc::mayastor::Null;
 use snafu::ResultExt;
 use std::{cmp::Ordering, collections::HashMap};
+use types::v0::message_bus::mbus::{
+    AddNexusChild, Child, ChildUri, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
+    DestroyPool, DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId, PoolState,
+    Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica, UnshareNexus,
+    UnshareReplica,
+};
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
 /// all pools and replicas from the node
@@ -334,10 +334,6 @@ use crate::{
     node::service::NodeCommsTimeout,
 };
 use async_trait::async_trait;
-use mbus_api::v0::{
-    AddNexusChild, Child, ChildUri, CreateNexus, DestroyNexus, Nexus, NexusId, RemoveNexusChild,
-    ShareNexus, UnshareNexus,
-};
 use std::{ops::Deref, sync::Arc};
 
 /// CRUD Operations on a locked mayastor `NodeWrapper` such as:

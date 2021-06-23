@@ -3,14 +3,12 @@ use crate::{
     watcher::watch::{StoreWatcher, WatchCfgId},
 };
 pub use common::errors::SvcError;
-use mbus_api::v0::{GetWatchers, Watches};
-pub use mbus_api::{
-    v0::{CreateWatch, DeleteWatch},
-    Message, MessageId, ReceivedMessage,
-};
+use mbus_api::message_bus::v0::Watches;
+pub use mbus_api::{Message, MessageId, ReceivedMessage};
 pub use std::convert::TryInto;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use types::v0::message_bus::mbus::{CreateWatch, DeleteWatch, GetWatchers};
 
 #[derive(Clone, Debug)]
 pub(super) struct Service {

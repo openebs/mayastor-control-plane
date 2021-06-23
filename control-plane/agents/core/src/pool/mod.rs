@@ -9,9 +9,11 @@ use async_trait::async_trait;
 use common::{errors::SvcError, handler::*, Service};
 
 // Pool Operations
-use mbus_api::v0::{CreatePool, DestroyPool, GetPools};
+use types::v0::message_bus::mbus::{CreatePool, DestroyPool, GetPools};
 // Replica Operations
-use mbus_api::v0::{CreateReplica, DestroyReplica, GetReplicas, ShareReplica, UnshareReplica};
+use types::v0::message_bus::mbus::{
+    CreateReplica, DestroyReplica, GetReplicas, ShareReplica, UnshareReplica,
+};
 
 pub(crate) fn configure(builder: Service) -> Service {
     let registry = builder.get_shared_state::<Registry>().clone();

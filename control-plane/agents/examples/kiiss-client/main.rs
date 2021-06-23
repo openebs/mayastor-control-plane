@@ -1,6 +1,7 @@
 use mbus_api::{v0::*, *};
 use structopt::StructOpt;
 use tracing::info;
+use types::v0::message_bus::mbus::{Channel, ChannelVs, Config, ConfigGetCurrent, ConfigUpdate};
 
 #[derive(Debug, StructOpt)]
 struct CliArgs {
@@ -42,7 +43,7 @@ async fn client() {
         &ConfigGetCurrent {
             kind: Config::MayastorConfig,
         },
-        Channel::v0(v0::ChannelVs::Kiiss),
+        Channel::v0(ChannelVs::Kiiss),
         bus(),
     )
     .await

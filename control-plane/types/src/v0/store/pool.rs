@@ -1,13 +1,16 @@
 //! Definition of pool types that can be saved to the persistent store.
 
-use crate::{
-    store::{ObjectKey, StorableObject, StorableObjectType},
-    types::SpecState,
+use crate::v0::{
+    message_bus::{
+        mbus,
+        mbus::{CreatePool, NodeId, PoolDeviceUri, PoolId},
+    },
+    store::{
+        definitions::{ObjectKey, StorableObject, StorableObjectType},
+        SpecState,
+    },
 };
-use mbus_api::{
-    v0,
-    v0::{PoolDeviceUri, PoolId},
-};
+use paperclip::actix::Apiv2Schema;
 use serde::{Deserialize, Serialize};
 
 type PoolLabel = String;
@@ -26,15 +29,15 @@ pub struct Pool {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct PoolState {
     /// Pool information returned by Mayastor.
-    pub pool: v0::Pool,
+    pub pool: mbus::Pool,
     /// Pool labels.
     pub labels: Vec<PoolLabel>,
 }
 
 /// State of the Pool Spec
-pub type PoolSpecState = SpecState<v0::PoolState>;
-impl From<&v0::CreatePool> for PoolSpec {
-    fn from(request: &v0::CreatePool) -> Self {
+pub type PoolSpecState = SpecState<mbus::PoolState>;
+impl From<&CreatePool> for PoolSpec {
+    fn from(request: &CreatePool) -> Self {
         Self {
             node: request.node.clone(),
             id: request.id.clone(),
@@ -45,8 +48,8 @@ impl From<&v0::CreatePool> for PoolSpec {
         }
     }
 }
-impl PartialEq<v0::CreatePool> for PoolSpec {
-    fn eq(&self, other: &v0::CreatePool) -> bool {
+impl PartialEq<CreatePool> for PoolSpec {
+    fn eq(&self, other: &CreatePool) -> bool {
         let mut other = PoolSpec::from(other);
         other.state = self.state.clone();
         &other == self
@@ -54,12 +57,12 @@ impl PartialEq<v0::CreatePool> for PoolSpec {
 }
 
 /// User specification of a pool.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub struct PoolSpec {
     /// id of the mayastor instance
-    pub node: v0::NodeId,
+    pub node: NodeId,
     /// id of the pool
-    pub id: v0::PoolId,
+    pub id: PoolId,
     /// absolute disk paths claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
     /// state of the pool
@@ -98,13 +101,13 @@ impl StorableObject for PoolSpec {
     }
 }
 
-impl From<&PoolSpec> for v0::Pool {
+impl From<&PoolSpec> for mbus::Pool {
     fn from(pool: &PoolSpec) -> Self {
         Self {
             node: pool.node.clone(),
             id: pool.id.clone(),
             disks: pool.disks.clone(),
-            state: v0::PoolState::Unknown,
+            state: mbus::PoolState::Unknown,
             capacity: 0,
             used: 0,
         }

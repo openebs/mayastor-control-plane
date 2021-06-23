@@ -3,29 +3,26 @@ use std::{ops::Deref, sync::Arc};
 use snafu::OptionExt;
 use tokio::sync::Mutex;
 
-use common::errors::{NodeNotFound, SvcError};
-use mbus_api::{
-    v0::{
-        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState, Replica,
-        ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
-    },
-    ResourceKind,
-};
-use store::{
-    store::{ObjectKey, Store, StoreError},
-    types::v0::{
-        pool::{PoolSpec, PoolSpecKey, PoolSpecState},
-        replica::{ReplicaOperation, ReplicaSpec, ReplicaSpecKey, ReplicaSpecState},
-        SpecTransaction,
-    },
-};
-
 use crate::{
     core::{
         specs::{ResourceSpecs, ResourceSpecsLocked},
         wrapper::ClientOps,
     },
     registry::Registry,
+};
+use common::errors::{NodeNotFound, SvcError};
+use mbus_api::ResourceKind;
+use types::v0::{
+    message_bus::mbus::{
+        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState, Replica,
+        ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
+    },
+    store::{
+        definitions::{ObjectKey, Store, StoreError},
+        pool::{PoolSpec, PoolSpecKey, PoolSpecState},
+        replica::{ReplicaOperation, ReplicaSpec, ReplicaSpecKey, ReplicaSpecState},
+        SpecTransaction,
+    },
 };
 
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked

@@ -9,6 +9,7 @@ pub mod nexuses;
 pub mod nodes;
 pub mod pools;
 pub mod replicas;
+pub mod specs;
 pub mod swagger_ui;
 pub mod volumes;
 pub mod watches;
@@ -29,6 +30,7 @@ use std::io::Write;
 use structopt::StructOpt;
 use tracing::info;
 
+use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
 use paperclip::actix::Apiv2Security;
 use serde::Deserialize;
 
@@ -59,6 +61,7 @@ fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     jsongrpc::configure(cfg);
     block_devices::configure(cfg);
     watches::configure(cfg);
+    specs::configure(cfg);
 }
 
 fn json_error(err: impl std::fmt::Display, _req: &actix_web::HttpRequest) -> actix_web::Error {

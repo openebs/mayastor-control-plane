@@ -27,6 +27,7 @@ paperclip = { version = "0.5.0", features = ["actix3"] }
 percent-encoding = "2.1.0"
 uuid = { version = "0.7", features = ["v4"] }
 url = "2.2.0"
+types = { path = "../types" }
 
 [dev-dependencies]
 composer = { path = "../../composer" }

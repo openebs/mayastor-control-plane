@@ -15,7 +15,7 @@ snafu = "0.6"
 tracing = "0.1"
 strum = "0.19"
 strum_macros = "0.19"
-mbus_api = { path = "../mbus-api" }
+types = { path = "../types" }
 
 [dev-dependencies]
 composer = { path = "../../composer" }

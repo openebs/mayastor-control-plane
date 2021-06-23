@@ -6,6 +6,7 @@ use common::errors::{BusGetNode, JsonRpcDeserialise, SvcError};
 use mbus_api::message_bus::v0::{MessageBus, *};
 use rpc::mayastor::json_rpc_client::JsonRpcClient;
 use snafu::ResultExt;
+use types::v0::message_bus::mbus::JsonGrpcRequest;
 
 #[derive(Clone, Default)]
 pub(super) struct JsonGrpcSvc {}

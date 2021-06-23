@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::stream::StreamExt;
+use types::v0::message_bus::mbus::{Channel, ChannelVs, MessageIdVs};
 
 #[derive(Debug, StructOpt)]
 struct CliArgs {
@@ -83,7 +84,7 @@ async fn main() {
     info!("Received reply: {:?}", reply);
 
     // We can also use the following api to specify a different channel and bus
-    let reply = DummyRequest::Request(&DummyRequest {}, Channel::v0(v0::ChannelVs::Default), bus())
+    let reply = DummyRequest::Request(&DummyRequest {}, Channel::v0(ChannelVs::Default), bus())
         .await
         .unwrap();
     info!("Received reply: {:?}", reply);

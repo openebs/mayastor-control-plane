@@ -25,6 +25,7 @@ use smol::io;
 use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, time::Duration};
 use strum_macros::{AsRefStr, ToString};
+use types::v0::message_bus::mbus::{Channel, MessageIdVs, VERSION};
 
 /// Result wrapper for send/receive
 pub type BusResult<T> = Result<T, Error>;
@@ -127,41 +128,6 @@ where
     }
 }
 
-/// Available Message Bus channels
-#[derive(Clone, Debug)]
-#[allow(non_camel_case_types)]
-pub enum Channel {
-    /// Version 0 of the Channels
-    v0(v0::ChannelVs),
-}
-
-impl FromStr for Channel {
-    type Err = strum::ParseError;
-
-    fn from_str(source: &str) -> Result<Self, Self::Err> {
-        match source.split('/').next() {
-            Some(v0::VERSION) => {
-                let c: v0::ChannelVs = source[v0::VERSION.len() + 1 ..].parse()?;
-                Ok(Self::v0(c))
-            }
-            _ => Err(strum::ParseError::VariantNotFound),
-        }
-    }
-}
-impl ToString for Channel {
-    fn to_string(&self) -> String {
-        match self {
-            Self::v0(channel) => format!("v0/{}", channel.to_string()),
-        }
-    }
-}
-
-impl Default for Channel {
-    fn default() -> Self {
-        Channel::v0(v0::ChannelVs::Default)
-    }
-}
-
 /// Message id which uniquely identifies every type of unsolicited message
 /// The solicited (replies) message do not currently carry an id as they
 /// are sent to a specific requested channel
@@ -169,7 +135,7 @@ impl Default for Channel {
 #[allow(non_camel_case_types)]
 pub enum MessageId {
     /// Version 0
-    v0(v0::MessageIdVs),
+    v0(MessageIdVs),
 }
 
 impl Serialize for MessageId {
@@ -201,8 +167,8 @@ impl FromStr for MessageId {
 
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         match source.split('/').next() {
-            Some(v0::VERSION) => {
-                let id: v0::MessageIdVs = source[v0::VERSION.len() + 1 ..].parse()?;
+            Some(VERSION) => {
+                let id: MessageIdVs = source[VERSION.len() + 1 ..].parse()?;
                 Ok(Self::v0(id))
             }
             _ => Err(strum::ParseError::VariantNotFound),
@@ -212,7 +178,7 @@ impl FromStr for MessageId {
 impl ToString for MessageId {
     fn to_string(&self) -> String {
         match self {
-            Self::v0(id) => format!("{}/{}", v0::VERSION, id.to_string()),
+            Self::v0(id) => format!("{}/{}", VERSION, id.to_string()),
         }
     }
 }

@@ -1,8 +1,5 @@
 use composer::{Binary, Builder, ComposeTest, ContainerSpec};
-use mbus_api::{
-    v0::{ChannelVs, Liveness, NodeState, PoolState},
-    Message,
-};
+use mbus_api::Message;
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use rest_client::{versions::v0::*, ActixRestClient};
 use rpc::mayastor::Null;
@@ -11,6 +8,12 @@ use std::{
     net::{SocketAddr, TcpStream},
 };
 use tracing::info;
+use types::v0::message_bus::mbus::{
+    AddNexusChild, ChannelVs, Child, ChildState, CreateNexus, CreatePool, CreateReplica,
+    CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
+    GetBlockDevices, JsonGrpcRequest, Liveness, Nexus, NexusState, Node, NodeId, NodeState, Pool,
+    PoolState, Protocol, Replica, ReplicaState, VolumeId, WatchResourceId,
+};
 
 async fn wait_for_services() {
     Liveness {}.request_on(ChannelVs::Node).await.unwrap();
@@ -261,7 +264,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             }],
             device_uri: "".to_string(),
             rebuilds: 0,
-            share: v0::Protocol::Off
+            share: Protocol::Off
         }
     );
 

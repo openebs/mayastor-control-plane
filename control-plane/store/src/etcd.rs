@@ -1,13 +1,13 @@
-use crate::store::{
-    Connect, Delete, DeserialiseValue, Get, KeyString, ObjectKey, Put, SerialiseValue,
-    StorableObject, Store, StoreError, StoreError::MissingEntry, StoreKey, StoreValue, ValueString,
-    Watch, WatchEvent,
-};
 use async_trait::async_trait;
-use etcd_client::{Client, EventType, KeyValue, WatchStream, Watcher};
+use etcd_client::{Client, EventType, GetOptions, KeyValue, WatchStream, Watcher};
 use serde_json::Value;
 use snafu::ResultExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use types::v0::store::definitions::{
+    Connect, Delete, DeserialiseValue, Get, GetPrefix, KeyString, ObjectKey, Put, SerialiseValue,
+    StorableObject, Store, StoreError, StoreError::MissingEntry, StoreKey, StoreValue, ValueString,
+    Watch, WatchEvent,
+};
 
 /// etcd client
 #[derive(Clone)]
@@ -113,6 +113,29 @@ impl Store for Etcd {
             ),
             None => Err(MissingEntry { key: key.key() }),
         }
+    }
+
+    /// Retrieve objects with the given key prefix
+    async fn get_values_prefix(
+        &mut self,
+        key_prefix: &str,
+    ) -> Result<Vec<(String, Value)>, StoreError> {
+        let resp = self
+            .0
+            .get(key_prefix, Some(GetOptions::new().with_prefix()))
+            .await
+            .context(GetPrefix { prefix: key_prefix })?;
+        let result = resp
+            .kvs()
+            .iter()
+            .map(|kv| {
+                (
+                    kv.key_str().unwrap().to_string(),
+                    serde_json::from_slice(kv.value()).unwrap(),
+                )
+            })
+            .collect();
+        Ok(result)
     }
 
     async fn watch_obj<K: ObjectKey>(

@@ -8,13 +8,13 @@ use opentelemetry::{
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
 
-use crate::v0::PoolDeviceUri;
 use opentelemetry_jaeger::Uninstall;
 pub use rest_client::{
     versions::v0::{self, Message, RestClient},
     ActixRestClient, ClientError,
 };
 use std::time::Duration;
+use types::v0::message_bus::{mbus, mbus::PoolDeviceUri};
 
 #[actix_rt::test]
 #[ignore]
@@ -52,7 +52,7 @@ impl Cluster {
     }
 
     /// node id for `index`
-    pub fn node(&self, index: u32) -> v0::NodeId {
+    pub fn node(&self, index: u32) -> mbus::NodeId {
         Mayastor::name(index, &self.builder.opts).into()
     }
 
@@ -63,13 +63,13 @@ impl Cluster {
     }
 
     /// pool id for `pool` index on `node` index
-    pub fn pool(&self, node: u32, pool: u32) -> v0::PoolId {
+    pub fn pool(&self, node: u32, pool: u32) -> mbus::PoolId {
         format!("{}-pool-{}", self.node(node), pool + 1).into()
     }
 
     /// replica id with index for `pool` index and `replica` index
-    pub fn replica(node: u32, pool: usize, replica: u32) -> v0::ReplicaId {
-        let mut uuid = v0::ReplicaId::default().to_string();
+    pub fn replica(node: u32, pool: usize, replica: u32) -> mbus::ReplicaId {
+        let mut uuid = mbus::ReplicaId::default().to_string();
         let _ = uuid.drain(24 .. uuid.len());
         format!(
             "{}{:01x}{:01x}{:08x}",
@@ -191,7 +191,7 @@ pub struct ClusterBuilder {
 struct Replica {
     count: u32,
     size: u64,
-    share: v0::Protocol,
+    share: mbus::Protocol,
 }
 
 /// default timeout options for every bus request
@@ -246,7 +246,7 @@ impl ClusterBuilder {
         self
     }
     /// Specify `count` replicas to add to each node per pool
-    pub fn with_replicas(mut self, count: u32, size: u64, share: v0::Protocol) -> Self {
+    pub fn with_replicas(mut self, count: u32, size: u64, share: mbus::Protocol) -> Self {
         self.replicas = Replica { count, size, share };
         self
     }
@@ -368,7 +368,7 @@ impl ClusterBuilder {
         }
 
         for pool in &self.pools() {
-            v0::CreatePool {
+            mbus::CreatePool {
                 node: pool.node.clone().into(),
                 id: pool.id(),
                 disks: vec![pool.disk()],
@@ -397,7 +397,7 @@ impl ClusterBuilder {
                     replicas: vec![],
                 };
                 for replica_index in 0 .. self.replicas.count {
-                    pool.replicas.push(v0::CreateReplica {
+                    pool.replicas.push(mbus::CreateReplica {
                         node: pool.node.clone().into(),
                         uuid: Cluster::replica(node, pool_index, replica_index),
                         pool: pool.id(),
@@ -419,11 +419,11 @@ struct Pool {
     node: String,
     disk: PoolDisk,
     index: u32,
-    replicas: Vec<v0::CreateReplica>,
+    replicas: Vec<mbus::CreateReplica>,
 }
 
 impl Pool {
-    fn id(&self) -> v0::PoolId {
+    fn id(&self) -> mbus::PoolId {
         format!("{}-pool-{}", self.node, self.index).into()
     }
     fn disk(&self) -> PoolDeviceUri {

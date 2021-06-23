@@ -2,11 +2,12 @@ pub mod service;
 
 use async_trait::async_trait;
 use common::{errors::SvcError, *};
-use mbus_api::{v0::*, *};
+use mbus_api::*;
 use service::*;
 use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
 use tracing::info;
+use types::v0::message_bus::mbus::{ChannelVs, JsonGrpcRequest};
 
 #[derive(Debug, StructOpt)]
 struct CliArgs {

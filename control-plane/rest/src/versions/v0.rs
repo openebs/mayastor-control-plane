@@ -3,7 +3,7 @@ use super::super::ActixRestClient;
 use crate::{ClientError, ClientResult, JsonGeneric, RestUri};
 use actix_web::{body::Body, http::StatusCode, web::Json, HttpResponse, ResponseError};
 use async_trait::async_trait;
-pub use mbus_api::message_bus::v0::*;
+use mbus_api::{ReplyError, ReplyErrorKind};
 use paperclip::actix::{api_v2_errors, api_v2_errors_overlay, Apiv2Schema};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,6 +12,16 @@ use std::{
     string::ToString,
 };
 use strum_macros::{self, Display};
+pub use types::v0::message_bus::mbus::{
+    AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
+    CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
+    GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri, PoolId,
+    Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol, ShareNexus, ShareReplica,
+    Specs, Topology, UnshareNexus, UnshareReplica, Volume, VolumeHealPolicy, VolumeId, Watch,
+    WatchCallback, WatchResourceId,
+};
+
+pub use mbus_api::message_bus::v0::Message;
 
 /// Create Replica Body JSON
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Apiv2Schema)]
@@ -38,8 +48,8 @@ impl From<CreatePool> for CreatePoolBody {
 }
 impl CreatePoolBody {
     /// convert into message bus type
-    pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId) -> v0::CreatePool {
-        v0::CreatePool {
+    pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId) -> CreatePool {
+        CreatePool {
             node: node_id,
             id: pool_id,
             disks: self.disks.clone(),
@@ -57,13 +67,8 @@ impl From<CreateReplica> for CreateReplicaBody {
 }
 impl CreateReplicaBody {
     /// convert into message bus type
-    pub fn bus_request(
-        &self,
-        node_id: NodeId,
-        pool_id: PoolId,
-        uuid: ReplicaId,
-    ) -> v0::CreateReplica {
-        v0::CreateReplica {
+    pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId, uuid: ReplicaId) -> CreateReplica {
+        CreateReplica {
             node: node_id,
             uuid,
             pool: pool_id,
@@ -97,8 +102,8 @@ impl From<CreateNexus> for CreateNexusBody {
 }
 impl CreateNexusBody {
     /// convert into message bus type
-    pub fn bus_request(&self, node_id: NodeId, nexus_id: NexusId) -> v0::CreateNexus {
-        v0::CreateNexus {
+    pub fn bus_request(&self, node_id: NodeId, nexus_id: NexusId) -> CreateNexus {
+        CreateNexus {
             node: node_id,
             uuid: nexus_id,
             size: self.size,
@@ -241,6 +246,8 @@ pub trait RestClient {
     /// Delete watch
     async fn delete_watch(&self, resource: WatchResourceId, callback: url::Url)
         -> ClientResult<()>;
+    /// Get resource specs
+    async fn get_specs(&self) -> ClientResult<Specs>;
 }
 
 #[derive(Display, Debug)]
@@ -520,6 +527,11 @@ impl RestClient for ActixRestClient {
             callback.to_string()
         );
         self.del(urn).await
+    }
+
+    async fn get_specs(&self) -> ClientResult<Specs> {
+        let urn = "/v0/specs".to_string();
+        self.get(urn).await
     }
 }
 

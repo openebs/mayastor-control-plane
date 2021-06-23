@@ -6,7 +6,8 @@ use std::{convert::TryInto, marker::PhantomData};
 use super::{core::registry::Registry, handler, impl_request_handler};
 use async_trait::async_trait;
 use common::errors::SvcError;
-use mbus_api::{v0::*, *};
+use mbus_api::*;
+use types::v0::message_bus::mbus::{ChannelVs, CreateWatch, DeleteWatch, GetWatchers};
 
 pub(crate) fn configure(builder: common::Service) -> common::Service {
     let registry = builder.get_shared_state::<Registry>().clone();
@@ -23,21 +24,20 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
 mod tests {
     use once_cell::sync::OnceCell;
     use std::{net::SocketAddr, str::FromStr, time::Duration};
-    use store::{
-        etcd::Etcd,
-        store::{ObjectKey, Store},
-    };
+    use store::etcd::Etcd;
     use testlib::*;
     use tokio::net::TcpStream;
+    use types::v0::{
+        message_bus::mbus::{CreateVolume, Volume, VolumeId, WatchResourceId},
+        store::definitions::{ObjectKey, Store},
+    };
 
     static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();
 
-    async fn setup_watcher(
-        client: &impl RestClient,
-    ) -> (v0::Volume, tokio::sync::mpsc::Receiver<()>) {
+    async fn setup_watcher(client: &impl RestClient) -> (Volume, tokio::sync::mpsc::Receiver<()>) {
         let volume = client
-            .create_volume(v0::CreateVolume {
-                uuid: v0::VolumeId::new(),
+            .create_volume(CreateVolume {
+                uuid: VolumeId::new(),
                 size: 10 * 1024 * 1024,
                 replicas: 1,
                 ..Default::default()
@@ -91,7 +91,7 @@ mod tests {
 
         let (volume, mut callback_ch) = setup_watcher(&client).await;
 
-        let watch_volume = v0::WatchResourceId::Volume(volume.uuid);
+        let watch_volume = WatchResourceId::Volume(volume.uuid);
         let callback = url::Url::parse("http://10.1.0.1:8082/test").unwrap();
 
         let watchers = client.get_watches(watch_volume.clone()).await.unwrap();

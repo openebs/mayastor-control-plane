@@ -18,9 +18,10 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use state::Container;
 use tracing::{debug, error};
 
-use mbus_api::{v0::Liveness, *};
+use mbus_api::*;
 
 use crate::errors::SvcError;
+use types::v0::message_bus::mbus::{Channel, Liveness};
 
 /// Agent level errors
 pub mod errors;

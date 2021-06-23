@@ -1,12 +1,6 @@
 use crate::core::registry::Registry;
 use common::errors::{Store as SvcStoreError, SvcError};
-use mbus_api::{
-    v0::{
-        CreateWatch, DeleteWatch, GetWatchers, Watch, WatchCallback, WatchResourceId, WatchType,
-        Watches,
-    },
-    ResourceKind,
-};
+use mbus_api::{message_bus::v0::Watches, ResourceKind};
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
 use std::{
@@ -15,13 +9,18 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use store::store::{
-    ObjectKey, StorableObject, StorableObjectType, Store, StoreError, StoreWatchReceiver,
-    WatchEvent,
-};
 use tokio::{
     sync::{mpsc::error::TryRecvError, Mutex},
     task::JoinHandle,
+};
+use types::v0::{
+    message_bus::mbus::{
+        CreateWatch, DeleteWatch, GetWatchers, Watch, WatchCallback, WatchResourceId, WatchType,
+    },
+    store::definitions::{
+        ObjectKey, StorableObject, StorableObjectType, Store, StoreError, StoreWatchReceiver,
+        WatchEvent,
+    },
 };
 
 impl ObjectKey for WatchCfgId {

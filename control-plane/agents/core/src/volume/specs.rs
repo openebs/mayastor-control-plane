@@ -2,24 +2,6 @@ use std::{convert::From, ops::Deref, sync::Arc};
 
 use tokio::sync::Mutex;
 
-use common::errors::{NotEnough, SvcError};
-use mbus_api::{
-    v0::{
-        ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus, DestroyReplica,
-        DestroyVolume, NexusId, NodeId, PoolState, Protocol, ReplicaId, ReplicaOwners, Volume,
-        VolumeId, VolumeState,
-    },
-    ResourceKind,
-};
-use store::{
-    store::{ObjectKey, Store, StoreError},
-    types::v0::{
-        nexus::NexusSpec,
-        replica::ReplicaSpec,
-        volume::{VolumeSpec, VolumeSpecKey, VolumeSpecState},
-    },
-};
-
 use crate::{
     core::{
         specs::{ResourceSpecs, ResourceSpecsLocked},
@@ -27,12 +9,27 @@ use crate::{
     },
     registry::Registry,
 };
-use common::{errors, errors::NodeNotFound};
-use mbus_api::v0::{
-    Nexus, PublishVolume, ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume,
+use common::{
+    errors,
+    errors::{NodeNotFound, NotEnough, SvcError},
 };
+use mbus_api::ResourceKind;
 use snafu::OptionExt;
-use store::types::v0::{volume::VolumeOperation, SpecTransaction};
+use types::v0::{
+    message_bus::mbus::{
+        ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus, DestroyReplica,
+        DestroyVolume, Nexus, NexusId, NodeId, PoolState, Protocol, PublishVolume, ReplicaId,
+        ReplicaOwners, ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume,
+        Volume, VolumeId, VolumeState,
+    },
+    store::{
+        definitions::{ObjectKey, Store, StoreError},
+        nexus::NexusSpec,
+        replica::ReplicaSpec,
+        volume::{VolumeOperation, VolumeSpec, VolumeSpecKey, VolumeSpecState},
+        SpecTransaction,
+    },
+};
 
 impl ResourceSpecs {
     fn get_volume(&self, id: &VolumeId) -> Option<Arc<Mutex<VolumeSpec>>> {
