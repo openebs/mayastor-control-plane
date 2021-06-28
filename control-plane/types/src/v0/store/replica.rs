@@ -97,8 +97,12 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
-                ReplicaOperation::Unknown => {
-                    panic!("Unknown operation not supported");
+                ReplicaOperation::Unknown => unreachable!(),
+                ReplicaOperation::Create => {
+                    self.state = SpecState::Created(mbus::ReplicaState::Online);
+                }
+                ReplicaOperation::Destroy => {
+                    self.state = SpecState::Deleted;
                 }
                 ReplicaOperation::Share(share) => {
                     self.share = share.into();
@@ -136,6 +140,8 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub enum ReplicaOperation {
     Unknown,
+    Create,
+    Destroy,
     Share(ReplicaShareProtocol),
     Unshare,
 }
@@ -202,7 +208,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             state: ReplicaSpecState::Creating,
             managed: request.managed,
             owners: request.owners.clone(),
-            updating: true,
+            updating: false,
             operation: None,
         }
     }
@@ -213,5 +219,10 @@ impl PartialEq<CreateReplica> for ReplicaSpec {
         other.state = self.state.clone();
         other.updating = self.updating;
         &other == self
+    }
+}
+impl PartialEq<mbus::Replica> for ReplicaSpec {
+    fn eq(&self, _other: &mbus::Replica) -> bool {
+        true
     }
 }
