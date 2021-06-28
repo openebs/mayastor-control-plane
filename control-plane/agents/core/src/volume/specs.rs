@@ -4,7 +4,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     core::{
-        specs::{ResourceSpecs, ResourceSpecsLocked},
+        specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
         wrapper::PoolWrapper,
     },
     registry::Registry,
@@ -23,19 +23,12 @@ use types::v0::{
         Volume, VolumeId, VolumeState,
     },
     store::{
-        definitions::{ObjectKey, Store, StoreError},
         nexus::NexusSpec,
         replica::ReplicaSpec,
-        volume::{VolumeOperation, VolumeSpec, VolumeSpecKey, VolumeSpecState},
-        SpecTransaction,
+        volume::{VolumeOperation, VolumeSpec},
+        SpecState, SpecTransaction,
     },
 };
-
-impl ResourceSpecs {
-    fn get_volume(&self, id: &VolumeId) -> Option<Arc<Mutex<VolumeSpec>>> {
-        self.volumes.get(id).cloned()
-    }
-}
 
 async fn get_node_pools(
     registry: &Registry,
@@ -137,48 +130,6 @@ async fn get_node_replicas(
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
 /// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
-    /// Return a new blank VolumeSpec for the given request which has been committed to the
-    /// persistent store or returns an existing one if the create operation has not
-    /// yet succeeded but is able to be retried.
-    async fn create_volume_spec(
-        &mut self,
-        registry: &Registry,
-        request: &CreateVolume,
-    ) -> Result<Arc<Mutex<VolumeSpec>>, SvcError> {
-        let volume = if let Some(volume) = self.get_volume(&request.uuid) {
-            let mut volume_spec = volume.lock().await;
-            if volume_spec.updating {
-                // already being created
-                return Err(SvcError::Conflict {});
-            } else if volume_spec.state.creating() {
-                // this might be a retry, check if the params are the
-                // same and if so, let's retry!
-                if volume_spec.ne(request) {
-                    // if not then we can't proceed
-                    return Err(SvcError::Conflict {});
-                }
-            } else {
-                return Err(SvcError::AlreadyExists {
-                    kind: ResourceKind::Volume,
-                    id: request.uuid.to_string(),
-                });
-            }
-
-            volume_spec.updating = true;
-            drop(volume_spec);
-            volume
-        } else {
-            let volume_spec = VolumeSpec::from(request);
-            // write the spec to the persistent store
-            registry.store_obj(&volume_spec).await?;
-            // add spec to the internal spec registry
-            let spec = Arc::new(Mutex::new(volume_spec));
-            self.volumes.insert(request.uuid.clone(), spec.clone());
-            spec
-        };
-        Ok(volume)
-    }
-
     /// Gets all VolumeSpec's
     pub(crate) async fn get_volumes(&self) -> Vec<VolumeSpec> {
         let mut vector = vec![];
@@ -252,16 +203,12 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateVolume,
     ) -> Result<Volume, SvcError> {
-        // hold the specs lock while we determine the nodes/pools/replicas
-        let mut specs = self.write().await;
-        // todo: pick nodes and pools using the Node&Pool Topology
-        let create_replicas = get_node_replicas(registry, request).await?;
-        // create the volume spec
-        let volume = specs.create_volume_spec(registry, request).await?;
+        let volume = self.get_or_create_volume(&request).await;
+        SpecOperations::start_create(&volume, registry, request).await?;
 
-        // ok the selection of potential replicas has been made, now we can let
-        // go of the specs and allow others to proceed
-        drop(specs);
+        // todo: pick nodes and pools using the Node&Pool Topology
+        // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
+        let create_replicas = get_node_replicas(registry, request).await?;
 
         let mut replicas = vec![];
         for node_replica in &create_replicas {
@@ -296,13 +243,10 @@ impl ResourceSpecsLocked {
                 };
             }
         }
+
         // we can't fulfil the required replication factor, so let the caller
         // decide what to do next
-        if replicas.len() < request.replicas as usize {
-            {
-                let mut volume_spec = volume.lock().await;
-                volume_spec.state = VolumeSpecState::Deleting;
-            }
+        let result = if replicas.len() < request.replicas as usize {
             for replica in &replicas {
                 if let Err(error) = self
                     .destroy_replica(registry, &replica.clone().into(), true)
@@ -316,31 +260,21 @@ impl ResourceSpecsLocked {
                     );
                 }
             }
-            let mut specs = self.write().await;
-            specs.volumes.remove(&request.uuid);
-            let mut volume_spec = volume.lock().await;
-            volume_spec.updating = false;
-            volume_spec.state = VolumeSpecState::Deleted;
-            return Err(NotEnough::OfReplicas {
+            Err(SvcError::from(NotEnough::OfReplicas {
                 have: replicas.len() as u64,
                 need: request.replicas,
-            }
-            .into());
-        }
+            }))
+        } else {
+            Ok(Volume {
+                uuid: request.uuid.clone(),
+                size: request.size,
+                state: VolumeState::Online,
+                protocol: Protocol::Off,
+                children: vec![],
+            })
+        };
 
-        let mut volume_spec = volume.lock().await;
-        volume_spec.updating = false;
-        volume_spec.state = VolumeSpecState::Created(VolumeState::Online);
-        let mut store = registry.store.lock().await;
-        store.put_obj(volume_spec.deref()).await?;
-
-        Ok(Volume {
-            uuid: request.uuid.clone(),
-            size: request.size,
-            state: VolumeState::Online,
-            protocol: Protocol::Off,
-            children: vec![],
-        })
+        SpecOperations::complete_create(result, &volume, registry).await
     }
 
     pub(crate) async fn destroy_volume(
@@ -350,23 +284,9 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         let volume = self.get_volume(&request.uuid).await;
         if let Some(volume) = &volume {
-            let mut volume = volume.lock().await;
-            if volume.updating {
-                return Err(SvcError::Conflict {});
-            } else if volume.state.deleted() {
-                return Ok(());
-            }
-            if !volume.state.deleting() {
-                volume.state = VolumeSpecState::Deleting;
-                // write it to the store
-                let mut store = registry.store.lock().await;
-                store.put_obj(volume.deref()).await?;
-            }
-            volume.updating = true;
-        }
-        let mut first_error = None;
+            SpecOperations::start_destroy(&volume, registry, false).await?;
 
-        if let Some(volume) = volume {
+            let mut first_error = Ok(());
             let nexuses = self.get_volume_nexuses(&request.uuid).await;
             for nexus in nexuses {
                 let nexus = nexus.lock().await.deref().clone();
@@ -374,11 +294,12 @@ impl ResourceSpecsLocked {
                     .destroy_nexus(registry, &DestroyNexus::from(nexus), true)
                     .await
                 {
-                    if first_error.is_none() {
-                        first_error = Some(error);
+                    if first_error.is_ok() {
+                        first_error = Err(error);
                     }
                 }
             }
+
             let replicas = self.get_volume_replicas(&request.uuid).await;
             for replica in replicas {
                 let spec = replica.lock().await.deref().clone();
@@ -391,8 +312,8 @@ impl ResourceSpecsLocked {
                         )
                         .await
                     {
-                        if first_error.is_none() {
-                            first_error = Some(error);
+                        if first_error.is_ok() {
+                            first_error = Err(error);
                         }
                     }
                 } else {
@@ -401,32 +322,8 @@ impl ResourceSpecsLocked {
                     // unplugged, what do we do? Fake an error ReplicaNotFound?
                 }
             }
-            match first_error {
-                None => {
-                    let mut volume = volume.lock().await;
-                    volume.updating = false;
-                    {
-                        let mut store = registry.store.lock().await;
-                        if let Err(error) = store
-                            .delete_kv(&VolumeSpecKey::from(&request.uuid).key())
-                            .await
-                        {
-                            if !matches!(error, StoreError::MissingEntry { .. }) {
-                                return Err(error.into());
-                            }
-                        }
-                    }
-                    volume.state = VolumeSpecState::Deleted;
-                    drop(volume);
-                    self.del_volume(&request.uuid).await;
-                    Ok(())
-                }
-                Some(error) => {
-                    let mut volume = volume.lock().await;
-                    volume.updating = false;
-                    Err(error)
-                }
-            }
+
+            SpecOperations::complete_destroy(first_error, &volume, registry).await
         } else {
             Err(SvcError::VolumeNotFound {
                 vol_id: request.uuid.to_string(),
@@ -447,52 +344,13 @@ impl ResourceSpecsLocked {
             })?;
         let status = registry.get_volume_status(&request.uuid).await?;
 
-        let spec_clone = {
-            let mut spec = volume_spec.lock().await;
-            if spec.pending_op() {
-                return Err(SvcError::StoreSave {
-                    kind: ResourceKind::Volume,
-                    id: request.uuid.to_string(),
-                });
-            } else if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::VolumeNotFound {
-                    vol_id: request.uuid.to_string(),
-                });
-            } else {
-                // validate the operation itself against the spec and status
-                if spec.protocol != status.protocol {
-                    return Err(SvcError::NotReady {
-                        kind: ResourceKind::Volume,
-                        id: request.uuid.to_string(),
-                    });
-                } else if request.protocol == spec.protocol || spec.protocol.shared() {
-                    return Err(SvcError::AlreadyShared {
-                        kind: ResourceKind::Volume,
-                        id: spec.uuid.to_string(),
-                        share: spec.protocol.to_string(),
-                    });
-                }
-                if status.children.len() != 1 {
-                    return Err(SvcError::NotReady {
-                        kind: ResourceKind::Volume,
-                        id: request.uuid.to_string(),
-                    });
-                }
-            }
-
-            spec.updating = true;
-            spec.start_op(VolumeOperation::Share(request.protocol));
-            spec.clone()
-        };
-
-        if let Err(error) = registry.store_obj(&spec_clone).await {
-            let mut spec = volume_spec.lock().await;
-            spec.updating = false;
-            spec.clear_op();
-            return Err(error);
-        }
+        let spec_clone = SpecOperations::start_update(
+            registry,
+            &volume_spec,
+            &status,
+            VolumeOperation::Share(request.protocol),
+        )
+        .await?;
 
         // Share the first child nexus (no ANA)
         assert_eq!(status.children.len(), 1);
@@ -501,7 +359,7 @@ impl ResourceSpecsLocked {
             .share_nexus(registry, &ShareNexus::from((nexus, None, request.protocol)))
             .await;
 
-        Self::spec_complete_op(registry, result, volume_spec, spec_clone).await
+        SpecOperations::complete_update(registry, result, volume_spec, spec_clone).await
     }
 
     pub(crate) async fn unshare_volume(
@@ -517,51 +375,9 @@ impl ResourceSpecsLocked {
             })?;
         let status = registry.get_volume_status(&request.uuid).await?;
 
-        let spec_clone = {
-            let mut spec = volume_spec.lock().await;
-            if spec.pending_op() {
-                return Err(SvcError::StoreSave {
-                    kind: ResourceKind::Volume,
-                    id: request.uuid.to_string(),
-                });
-            } else if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::VolumeNotFound {
-                    vol_id: request.uuid.to_string(),
-                });
-            } else {
-                // validate the operation itself against the spec and status
-                if spec.protocol != status.protocol {
-                    return Err(SvcError::NotReady {
-                        kind: ResourceKind::Volume,
-                        id: request.uuid.to_string(),
-                    });
-                } else if !spec.protocol.shared() {
-                    return Err(SvcError::NotShared {
-                        kind: ResourceKind::Volume,
-                        id: spec.uuid.to_string(),
-                    });
-                }
-                if status.children.len() != 1 {
-                    return Err(SvcError::NotReady {
-                        kind: ResourceKind::Volume,
-                        id: request.uuid.to_string(),
-                    });
-                }
-            }
-
-            spec.updating = true;
-            spec.start_op(VolumeOperation::Unshare);
-            spec.clone()
-        };
-
-        if let Err(error) = registry.store_obj(&spec_clone).await {
-            let mut spec = volume_spec.lock().await;
-            spec.updating = false;
-            spec.clear_op();
-            return Err(error);
-        }
+        let spec_clone =
+            SpecOperations::start_update(registry, &volume_spec, &status, VolumeOperation::Unshare)
+                .await?;
 
         // Unshare the first child nexus (no ANA)
         assert_eq!(status.children.len(), 1);
@@ -570,7 +386,7 @@ impl ResourceSpecsLocked {
             .unshare_nexus(registry, &UnshareNexus::from(nexus))
             .await;
 
-        Self::spec_complete_op(registry, result, volume_spec, spec_clone).await
+        SpecOperations::complete_update(registry, result, volume_spec, spec_clone).await
     }
 
     pub(crate) async fn publish_volume(
@@ -584,59 +400,24 @@ impl ResourceSpecsLocked {
             .context(errors::VolumeNotFound {
                 vol_id: request.uuid.to_string(),
             })?;
+
         let status = registry.get_volume_status(&request.uuid).await?;
         let nexus_node = get_volume_target_node(registry, &status, request).await?;
 
-        let spec_clone = {
-            let mut spec = spec.lock().await;
-            if spec.pending_op() {
-                return Err(SvcError::StoreSave {
-                    kind: ResourceKind::Volume,
-                    id: request.uuid.to_string(),
-                });
-            } else if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::VolumeNotFound {
-                    vol_id: request.uuid.to_string(),
-                });
-            } else {
-                // validate the operation itself against the spec and status
-                if spec.protocol != status.protocol {
-                    return Err(SvcError::NotReady {
-                        kind: ResourceKind::Volume,
-                        id: request.uuid.to_string(),
-                    });
-                } else if (request.target_node.is_some() && spec.target_node.is_some())
-                    || (request.share.is_some() && spec.protocol.shared())
-                {
-                    return Err(SvcError::VolumeAlreadyPublished {
-                        vol_id: request.uuid.to_string(),
-                        node: spec.target_node.clone().unwrap().to_string(),
-                        protocol: spec.protocol.to_string(),
-                    });
-                }
-            }
-
-            spec.start_op(VolumeOperation::Publish((
-                nexus_node.clone(),
-                request.share,
-            )));
-            spec.clone()
-        };
-
-        // Log the tentative spec update against the persistent store
-        if let Err(error) = registry.store_obj(&spec_clone).await {
-            let mut spec = spec.lock().await;
-            spec.clear_op();
-            return Err(error);
-        }
+        let spec_clone = SpecOperations::start_update(
+            registry,
+            &spec,
+            &status,
+            VolumeOperation::Publish((nexus_node.clone(), request.share)),
+        )
+        .await?;
 
         // Create a Nexus on the requested or auto-selected node
         let result = self
             .volume_create_nexus(registry, &nexus_node, &spec_clone)
             .await;
-        let nexus = Self::spec_step_op(registry, result, spec.clone(), spec_clone.clone()).await?;
+        let nexus =
+            SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
 
         // Share the Nexus if it was requested
         let mut result = Ok(nexus.device_uri.clone());
@@ -645,7 +426,7 @@ impl ResourceSpecsLocked {
                 .share_nexus(registry, &ShareNexus::from((&nexus, None, share)))
                 .await;
         }
-        Self::spec_complete_op(registry, result, spec, spec_clone).await
+        SpecOperations::complete_update(registry, result, spec, spec_clone).await
     }
 
     pub(crate) async fn unpublish_volume(
@@ -661,46 +442,14 @@ impl ResourceSpecsLocked {
             })?;
         let status = registry.get_volume_status(&request.uuid).await?;
 
-        let (nexus, spec_clone) = {
-            let mut spec = spec.lock().await;
-            if spec.pending_op() {
-                return Err(SvcError::StoreSave {
-                    kind: ResourceKind::Volume,
-                    id: request.uuid.to_string(),
-                });
-            } else if spec.updating {
-                return Err(SvcError::Conflict {});
-            } else if !spec.state.created() {
-                return Err(SvcError::VolumeNotFound {
-                    vol_id: request.uuid.to_string(),
-                });
-            } else {
-                // validate the operation itself against the spec and status
-                if spec.protocol != status.protocol
-                    || spec.target_node != status.target_node().flatten()
-                {
-                    return Err(SvcError::NotReady {
-                        kind: ResourceKind::Volume,
-                        id: request.uuid.to_string(),
-                    });
-                }
-            }
-            let nexus = get_volume_nexus(&status)?;
-
-            spec.start_op(VolumeOperation::Unpublish);
-            (nexus, spec.clone())
-        };
-
-        // Log the tentative spec update against the persistent store
-        if let Err(error) = registry.store_obj(&spec_clone).await {
-            let mut spec = spec.lock().await;
-            spec.clear_op();
-            return Err(error);
-        }
+        let spec_clone =
+            SpecOperations::start_update(registry, &spec, &status, VolumeOperation::Unpublish)
+                .await?;
+        let nexus = get_volume_nexus(&status).expect("Already validated");
 
         // Destroy the Nexus
         let result = self.destroy_nexus(registry, &nexus.into(), true).await;
-        Self::spec_complete_op(registry, result, spec, spec_clone).await
+        SpecOperations::complete_update(registry, result, spec, spec_clone).await
     }
 
     async fn volume_create_nexus(
@@ -778,10 +527,24 @@ impl ResourceSpecsLocked {
         .await
     }
 
-    /// Delete volume by its `id`
-    async fn del_volume(&self, id: &VolumeId) {
+    /// Remove volume by its `id`
+    pub(super) async fn remove_volume(&self, id: &VolumeId) {
         let mut specs = self.write().await;
         specs.volumes.remove(id);
+    }
+    /// Get or Create the protected VolumeSpec for the given request
+    async fn get_or_create_volume(&self, request: &CreateVolume) -> Arc<Mutex<VolumeSpec>> {
+        let mut specs = self.write().await;
+        if let Some(volume) = specs.volumes.get(&request.uuid) {
+            volume.clone()
+        } else {
+            let spec = VolumeSpec::from(request);
+            let locked_spec = Arc::new(Mutex::new(spec));
+            specs
+                .volumes
+                .insert(request.uuid.clone(), locked_spec.clone());
+            locked_spec
+        }
     }
 }
 
@@ -843,5 +606,97 @@ async fn get_volume_target_node(
                 })
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl SpecOperations for VolumeSpec {
+    type Create = CreateVolume;
+    type State = VolumeState;
+    type Status = Volume;
+    type UpdateOp = VolumeOperation;
+
+    fn start_update_op(
+        &mut self,
+        status: &Self::Status,
+        operation: Self::UpdateOp,
+    ) -> Result<(), SvcError> {
+        // No ANA support, there can only be more than 1 nexus if we've recreated the nexus
+        // on another node and original nexus reappears.
+        // In this case, the reconciler will destroy one of them.
+        if (self.target_node.is_some() && status.children.len() != 1)
+            || self.target_node.is_none() && !status.children.is_empty()
+        {
+            return Err(SvcError::NotReady {
+                kind: self.kind(),
+                id: self.uuid(),
+            });
+        }
+
+        match &operation {
+            VolumeOperation::Share(_) if self.protocol.shared() => Err(SvcError::AlreadyShared {
+                kind: self.kind(),
+                id: self.uuid(),
+                share: status.protocol.to_string(),
+            }),
+            VolumeOperation::Share(_) => Ok(()),
+            VolumeOperation::Unshare if !self.protocol.shared() => Err(SvcError::NotShared {
+                kind: self.kind(),
+                id: self.uuid(),
+            }),
+            VolumeOperation::Unshare => Ok(()),
+            VolumeOperation::Publish((_, share_option))
+                if self.target_node.is_some()
+                    || (share_option.is_some() && self.protocol.shared()) =>
+            {
+                let target_node = self.target_node.as_ref();
+                Err(SvcError::VolumeAlreadyPublished {
+                    vol_id: self.uuid(),
+                    node: target_node.map_or("".into(), ToString::to_string),
+                    protocol: self.protocol.to_string(),
+                })
+            }
+            VolumeOperation::Publish(_) => Ok(()),
+            VolumeOperation::Unpublish => Ok(()),
+
+            VolumeOperation::AddReplica => unreachable!(),
+            VolumeOperation::RemoveReplica => unreachable!(),
+            VolumeOperation::Create => unreachable!(),
+            VolumeOperation::Destroy => unreachable!(),
+            VolumeOperation::Unknown => unimplemented!(),
+        }?;
+        self.start_op(operation);
+        Ok(())
+    }
+    fn start_create_op(&mut self) {
+        self.start_op(VolumeOperation::Create);
+    }
+    fn start_destroy_op(&mut self) {
+        self.start_op(VolumeOperation::Destroy);
+    }
+    async fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
+        let uuid = locked_spec.lock().await.uuid.clone();
+        registry.specs.remove_volume(&uuid).await;
+    }
+    fn set_updating(&mut self, updating: bool) {
+        self.updating = updating;
+    }
+    fn updating(&self) -> bool {
+        self.updating
+    }
+    fn dirty(&self) -> bool {
+        self.pending_op()
+    }
+    fn kind(&self) -> ResourceKind {
+        ResourceKind::Volume
+    }
+    fn uuid(&self) -> String {
+        self.uuid.to_string()
+    }
+    fn state(&self) -> SpecState<Self::State> {
+        self.state.clone()
+    }
+    fn set_state(&mut self, state: SpecState<Self::State>) {
+        self.state = state;
     }
 }
