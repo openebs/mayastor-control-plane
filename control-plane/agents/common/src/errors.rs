@@ -55,6 +55,10 @@ pub enum SvcError {
     PoolNotFound { pool_id: PoolId },
     #[snafu(display("Nexus '{}' not found", nexus_id))]
     NexusNotFound { nexus_id: String },
+    #[snafu(display("{} '{}' not found", kind.to_string(), id))]
+    NotFound { kind: ResourceKind, id: String },
+    #[snafu(display("{} '{}' is still being created..", kind.to_string(), id))]
+    PendingCreation { kind: ResourceKind, id: String },
     #[snafu(display("Child '{}' not found in Nexus '{}'", child, nexus))]
     ChildNotFound { nexus: String, child: String },
     #[snafu(display("Child '{}' already exists in Nexus '{}'", child, nexus))]
@@ -121,6 +125,14 @@ pub enum SvcError {
     WatchAlreadyExists {},
     #[snafu(display("Conflicts with existing operation - please retry"))]
     Conflict {},
+    #[snafu(display("Pending deletion - please retry"))]
+    Deleting {},
+    #[snafu(display(
+        "Retried creation of resource id {} kind {} with different parameters",
+        id,
+        kind.to_string()
+    ))]
+    ReCreateMismatch { id: String, kind: ResourceKind },
     #[snafu(display("{} Resource id {} needs to be reconciled. Please retry", kind.to_string(), id))]
     NotReady { kind: ResourceKind, id: String },
     #[snafu(display("{} Resource id {} still in still use", kind.to_string(), id))]
@@ -204,6 +216,18 @@ impl From<SvcError> for ReplyError {
             SvcError::Conflict { .. } => ReplyError {
                 kind: ReplyErrorKind::Conflict,
                 resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::Deleting { .. } => ReplyError {
+                kind: ReplyErrorKind::Deleting,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::ReCreateMismatch { id: _, ref kind } => ReplyError {
+                kind: ReplyErrorKind::Conflict,
+                resource: kind.clone(),
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
@@ -306,6 +330,18 @@ impl From<SvcError> for ReplyError {
             SvcError::NexusNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Nexus,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::NotFound { ref kind, .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: kind.clone(),
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::PendingCreation { ref kind, .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: kind.clone(),
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

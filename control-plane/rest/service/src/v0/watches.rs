@@ -11,7 +11,7 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(get_watches);
 }
 
-#[put("/watches/volume/{volume_id}", tags(Watches))]
+#[put("/watches/volumes/{volume_id}", tags(Watches))]
 async fn put_watch(
     web::Path(volume_id): web::Path<VolumeId>,
     web::Query(watch): web::Query<WatchTypeQueryParam>,
@@ -27,7 +27,7 @@ async fn put_watch(
     Ok(Json(()))
 }
 
-#[get("/watches/volume/{volume_id}", tags(Watches))]
+#[get("/watches/volumes/{volume_id}", tags(Watches))]
 async fn get_watches(
     web::Path(volume_id): web::Path<VolumeId>,
 ) -> Result<Json<Vec<RestWatch>>, RestError> {
@@ -43,7 +43,7 @@ async fn get_watches(
     Ok(Json(watches))
 }
 
-#[delete("/watches/volume/{volume_id}", tags(Watches))]
+#[delete("/watches/volumes/{volume_id}", tags(Watches))]
 async fn del_watch(
     web::Path(volume_id): web::Path<VolumeId>,
     web::Query(watch): web::Query<WatchTypeQueryParam>,

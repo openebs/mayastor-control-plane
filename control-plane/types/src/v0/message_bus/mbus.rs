@@ -616,7 +616,7 @@ impl From<Replica> for DestroyReplica {
 }
 
 /// Create Replica Request
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateReplica {
     /// id of the mayastor instance
@@ -1294,7 +1294,7 @@ pub struct GetVolumes {
 }
 
 /// Create volume
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateVolume {
     /// uuid of the volume
@@ -1478,19 +1478,19 @@ impl Default for WatchResourceId {
 impl ToString for WatchResourceId {
     fn to_string(&self) -> String {
         match self {
-            WatchResourceId::Node(id) => format!("node/{}", id.to_string()),
-            WatchResourceId::Pool(id) => format!("pool/{}", id.to_string()),
+            WatchResourceId::Node(id) => format!("nodes/{}", id.to_string()),
+            WatchResourceId::Pool(id) => format!("pools/{}", id.to_string()),
             WatchResourceId::Replica(id) => {
-                format!("replica/{}", id.to_string())
+                format!("replicas/{}", id.to_string())
             }
             WatchResourceId::ReplicaState(id) => {
-                format!("replica_state/{}", id.to_string())
+                format!("replicas_state/{}", id.to_string())
             }
             WatchResourceId::ReplicaSpec(id) => {
-                format!("replica_spec/{}", id.to_string())
+                format!("replicas_spec/{}", id.to_string())
             }
-            WatchResourceId::Nexus(id) => format!("nexus/{}", id.to_string()),
-            WatchResourceId::Volume(id) => format!("volume/{}", id.to_string()),
+            WatchResourceId::Nexus(id) => format!("nexuses/{}", id.to_string()),
+            WatchResourceId::Volume(id) => format!("volumes/{}", id.to_string()),
         }
     }
 }
