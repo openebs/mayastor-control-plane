@@ -665,6 +665,8 @@ pub enum RestJsonErrorKind {
     Conflict,
     // code=507, description="Insufficient Storage",
     FailedPersist,
+    // code=409, description="Conflict",
+    Deleting,
 }
 
 impl Default for RestJsonErrorKind {
@@ -777,6 +779,10 @@ impl RestError {
             ReplyErrorKind::AlreadyPublished => {
                 let error = RestJsonError::new(RestJsonErrorKind::AlreadyPublished, &details);
                 HttpResponse::PreconditionFailed().json(error)
+            }
+            ReplyErrorKind::Deleting => {
+                let error = RestJsonError::new(RestJsonErrorKind::Deleting, &details);
+                HttpResponse::Conflict().json(error)
             }
         }
     }

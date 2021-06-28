@@ -116,8 +116,12 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
-                VolumeOperation::Unknown => {
-                    panic!("Unknown operation not supported");
+                VolumeOperation::Unknown => unreachable!(),
+                VolumeOperation::Destroy => {
+                    self.state = SpecState::Deleted;
+                }
+                VolumeOperation::Create => {
+                    self.state = SpecState::Created(mbus::VolumeState::Online);
                 }
                 VolumeOperation::Share(share) => {
                     self.protocol = share.into();
@@ -165,6 +169,8 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub enum VolumeOperation {
     Unknown,
+    Create,
+    Destroy,
     Share(VolumeShareProtocol),
     Unshare,
     AddReplica,
@@ -220,7 +226,7 @@ impl From<&CreateVolume> for VolumeSpec {
             num_paths: 1,
             state: VolumeSpecState::Creating,
             target_node: None,
-            updating: true,
+            updating: false,
             operation: None,
         }
     }
@@ -242,5 +248,17 @@ impl From<&VolumeSpec> for mbus::Volume {
             protocol: spec.protocol.clone(),
             children: vec![],
         }
+    }
+}
+impl PartialEq<mbus::Volume> for VolumeSpec {
+    fn eq(&self, other: &mbus::Volume) -> bool {
+        self.protocol == other.protocol
+            && match &self.target_node {
+                None => other.target_node().flatten().is_none(),
+                Some(node) => {
+                    self.num_paths as usize == other.children.len()
+                        && Some(node) == other.target_node().flatten().as_ref()
+                }
+            }
     }
 }

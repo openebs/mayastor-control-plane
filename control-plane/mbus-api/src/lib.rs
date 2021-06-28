@@ -335,6 +335,7 @@ pub enum ReplyErrorKind {
     AlreadyShared,
     NotPublished,
     AlreadyPublished,
+    Deleting,
 }
 
 impl From<Error> for ReplyError {
