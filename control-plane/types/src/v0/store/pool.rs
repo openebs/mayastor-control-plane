@@ -7,7 +7,7 @@ use crate::v0::{
     },
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecState,
+        SpecState, SpecTransaction,
     },
 };
 use paperclip::actix::Apiv2Schema;
@@ -44,7 +44,8 @@ impl From<&CreatePool> for PoolSpec {
             disks: request.disks.clone(),
             state: PoolSpecState::Creating,
             labels: vec![],
-            updating: true,
+            updating: false,
+            operation: None,
         }
     }
 }
@@ -72,6 +73,77 @@ pub struct PoolSpec {
     /// Update in progress
     #[serde(skip)]
     pub updating: bool,
+    /// Record of the operation in progress
+    pub operation: Option<PoolOperationState>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+pub struct PoolOperationState {
+    /// Record of the operation
+    pub operation: PoolOperation,
+    /// Result of the operation
+    pub result: Option<bool>,
+}
+
+impl SpecTransaction<PoolOperation> for PoolSpec {
+    fn pending_op(&self) -> bool {
+        self.operation.is_some()
+    }
+
+    fn commit_op(&mut self) {
+        if let Some(op) = self.operation.clone() {
+            match op.operation {
+                PoolOperation::Unknown => unreachable!(),
+                PoolOperation::Destroy => {
+                    self.state = SpecState::Deleted;
+                }
+                PoolOperation::Create => {
+                    self.state = SpecState::Created(mbus::PoolState::Online);
+                }
+            }
+        }
+        self.clear_op();
+    }
+
+    fn clear_op(&mut self) {
+        self.operation = None;
+        self.updating = false;
+    }
+
+    fn start_op(&mut self, operation: PoolOperation) {
+        self.updating = true;
+        self.operation = Some(PoolOperationState {
+            operation,
+            result: None,
+        })
+    }
+
+    fn set_op_result(&mut self, result: bool) {
+        if let Some(op) = &mut self.operation {
+            op.result = Some(result);
+        }
+        self.updating = false;
+    }
+}
+
+/// Available Pool Operations
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+pub enum PoolOperation {
+    Unknown,
+    Create,
+    Destroy,
+}
+
+impl Default for PoolOperation {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+impl PartialEq<mbus::Pool> for PoolSpec {
+    fn eq(&self, other: &mbus::Pool) -> bool {
+        self.node == other.node
+    }
 }
 
 /// Key used by the store to uniquely identify a PoolSpec structure.

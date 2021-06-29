@@ -106,8 +106,12 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
-                NexusOperation::Unknown => {
-                    panic!("Unknown operation not supported");
+                NexusOperation::Unknown => unreachable!(),
+                NexusOperation::Destroy => {
+                    self.state = SpecState::Deleted;
+                }
+                NexusOperation::Create => {
+                    self.state = SpecState::Created(mbus::NexusState::Online);
                 }
                 NexusOperation::Share(share) => {
                     self.share = share.into();
@@ -147,6 +151,8 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
 pub enum NexusOperation {
     Unknown,
+    Create,
+    Destroy,
     Share(NexusShareProtocol),
     Unshare,
     AddChild(ChildUri),
@@ -197,7 +203,7 @@ impl From<&CreateNexus> for NexusSpec {
             share: Protocol::Off,
             managed: request.managed,
             owner: request.owner.clone(),
-            updating: true,
+            updating: false,
             operation: None,
         }
     }
@@ -209,6 +215,11 @@ impl PartialEq<CreateNexus> for NexusSpec {
         other.state = self.state.clone();
         other.updating = self.updating;
         &other == self
+    }
+}
+impl PartialEq<mbus::Nexus> for NexusSpec {
+    fn eq(&self, other: &mbus::Nexus) -> bool {
+        self.share == other.share && self.children == other.children && self.node == other.node
     }
 }
 

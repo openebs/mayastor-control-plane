@@ -21,7 +21,7 @@ use store::etcd::Etcd;
 use tokio::sync::{Mutex, RwLock};
 use types::v0::{
     message_bus::mbus::NodeId,
-    store::definitions::{StorableObject, Store, StoreError},
+    store::definitions::{StorableObject, Store, StoreError, StoreKey},
 };
 
 /// Registry containing all mayastor instances (aka nodes)
@@ -87,6 +87,28 @@ impl Registry {
                 timeout: self.store_timeout,
             }
             .into()),
+        }
+    }
+
+    /// Serialized delete to the persistent store
+    pub async fn delete_kv<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
+        let mut store = self.store.lock().await;
+        match tokio::time::timeout(
+            self.store_timeout,
+            async move { store.delete_kv(key).await },
+        )
+        .await
+        {
+            Ok(result) => match result {
+                Ok(_) => Ok(()),
+                // already deleted, no problem
+                Err(StoreError::MissingEntry { .. }) => Ok(()),
+                Err(error) => Err(SvcError::from(error)),
+            },
+            Err(_) => Err(SvcError::from(StoreError::Timeout {
+                operation: "Delete".to_string(),
+                timeout: self.store_timeout,
+            })),
         }
     }
 
