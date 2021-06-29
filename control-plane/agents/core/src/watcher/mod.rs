@@ -6,8 +6,10 @@ use std::{convert::TryInto, marker::PhantomData};
 use super::{core::registry::Registry, handler, impl_request_handler};
 use async_trait::async_trait;
 use common::errors::SvcError;
-use mbus_api::*;
-use types::v0::message_bus::mbus::{ChannelVs, CreateWatch, DeleteWatch, GetWatchers};
+use common_lib::{
+    mbus_api::*,
+    types::v0::message_bus::mbus::{ChannelVs, CreateWatch, DeleteWatch, GetWatchers},
+};
 
 pub(crate) fn configure(builder: common::Service) -> common::Service {
     let registry = builder.get_shared_state::<Registry>().clone();
@@ -22,15 +24,17 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
 
 #[cfg(test)]
 mod tests {
+    use common_lib::{
+        store::etcd::Etcd,
+        types::v0::{
+            message_bus::mbus::{CreateVolume, Volume, VolumeId, WatchResourceId},
+            store::definitions::{ObjectKey, Store},
+        },
+    };
     use once_cell::sync::OnceCell;
     use std::{net::SocketAddr, str::FromStr, time::Duration};
-    use store::etcd::Etcd;
     use testlib::*;
     use tokio::net::TcpStream;
-    use types::v0::{
-        message_bus::mbus::{CreateVolume, Volume, VolumeId, WatchResourceId},
-        store::definitions::{ObjectKey, Store},
-    };
 
     static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();
 

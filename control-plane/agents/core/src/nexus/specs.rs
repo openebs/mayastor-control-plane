@@ -1,5 +1,6 @@
-use snafu::OptionExt;
 use std::sync::Arc;
+
+use snafu::OptionExt;
 use tokio::sync::Mutex;
 
 use crate::core::{
@@ -8,15 +9,17 @@ use crate::core::{
     wrapper::ClientOps,
 };
 use common::errors::{NodeNotFound, SvcError};
-use mbus_api::ResourceKind;
-use types::v0::{
-    message_bus::mbus::{
-        AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState,
-        RemoveNexusChild, ShareNexus, UnshareNexus,
-    },
-    store::{
-        nexus::{NexusOperation, NexusSpec},
-        SpecState, SpecTransaction,
+use common_lib::{
+    mbus_api::ResourceKind,
+    types::v0::{
+        message_bus::mbus::{
+            AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState,
+            RemoveNexusChild, ShareNexus, UnshareNexus,
+        },
+        store::{
+            nexus::{NexusOperation, NexusSpec},
+            SpecState, SpecTransaction,
+        },
     },
 };
 

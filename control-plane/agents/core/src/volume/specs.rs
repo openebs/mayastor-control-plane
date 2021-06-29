@@ -13,22 +13,24 @@ use common::{
     errors,
     errors::{NodeNotFound, NotEnough, SvcError},
 };
-use mbus_api::ResourceKind;
-use snafu::OptionExt;
-use types::v0::{
-    message_bus::mbus::{
-        ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus, DestroyReplica,
-        DestroyVolume, Nexus, NexusId, NodeId, PoolState, Protocol, PublishVolume, ReplicaId,
-        ReplicaOwners, ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume,
-        Volume, VolumeId, VolumeState,
-    },
-    store::{
-        nexus::NexusSpec,
-        replica::ReplicaSpec,
-        volume::{VolumeOperation, VolumeSpec},
-        SpecState, SpecTransaction,
+use common_lib::{
+    mbus_api::ResourceKind,
+    types::v0::{
+        message_bus::mbus::{
+            ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus, DestroyReplica,
+            DestroyVolume, Nexus, NexusId, NodeId, PoolState, Protocol, PublishVolume, ReplicaId,
+            ReplicaOwners, ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume,
+            Volume, VolumeId, VolumeState,
+        },
+        store::{
+            nexus::NexusSpec,
+            replica::ReplicaSpec,
+            volume::{VolumeOperation, VolumeSpec},
+            SpecState, SpecTransaction,
+        },
     },
 };
+use snafu::OptionExt;
 
 async fn get_node_pools(
     registry: &Registry,

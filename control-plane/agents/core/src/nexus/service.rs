@@ -1,9 +1,11 @@
 use crate::core::registry::Registry;
 use common::errors::SvcError;
-use mbus_api::message_bus::v0::Nexuses;
-use types::v0::message_bus::mbus::{
-    AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus, RemoveNexusChild,
-    ShareNexus, UnshareNexus,
+use common_lib::{
+    mbus_api::message_bus::v0::Nexuses,
+    types::v0::message_bus::mbus::{
+        AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
+        RemoveNexusChild, ShareNexus, UnshareNexus,
+    },
 };
 
 #[derive(Debug, Clone)]

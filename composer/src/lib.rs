@@ -26,7 +26,7 @@ use bollard::{
     container::KillContainerOptions, image::CreateImageOptions, models::ContainerInspectResponse,
     network::DisconnectNetworkOptions,
 };
-pub use mbus_api::TimeoutOptions;
+pub use common_lib::{mbus_api, mbus_api::TimeoutOptions};
 use rpc::mayastor::{bdev_rpc_client::BdevRpcClient, mayastor_client::MayastorClient};
 
 pub const TEST_NET_NAME: &str = "mayastor-testing-network";

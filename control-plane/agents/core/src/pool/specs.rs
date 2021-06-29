@@ -10,16 +10,18 @@ use crate::{
     registry::Registry,
 };
 use common::errors::{NodeNotFound, SvcError};
-use mbus_api::ResourceKind;
-use types::v0::{
-    message_bus::mbus::{
-        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState, Replica,
-        ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
-    },
-    store::{
-        pool::{PoolOperation, PoolSpec},
-        replica::{ReplicaOperation, ReplicaSpec},
-        SpecState, SpecTransaction,
+use common_lib::{
+    mbus_api::ResourceKind,
+    types::v0::{
+        message_bus::mbus::{
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
+            Replica, ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
+        },
+        store::{
+            pool::{PoolOperation, PoolSpec},
+            replica::{ReplicaOperation, ReplicaSpec},
+            SpecState, SpecTransaction,
+        },
     },
 };
 

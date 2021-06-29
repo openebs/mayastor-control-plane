@@ -1,11 +1,11 @@
 use super::*;
+use common_lib::types::v0::message_bus::mbus::{
+    DestroyReplica, Filter, NodeId, PoolId, Replica, ReplicaId, ReplicaShareProtocol, ShareReplica,
+    UnshareReplica,
+};
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
     ReplyErrorKind, ResourceKind,
-};
-use types::v0::message_bus::mbus::{
-    DestroyReplica, Filter, NodeId, PoolId, Replica, ReplicaId, ReplicaShareProtocol, ShareReplica,
-    UnshareReplica,
 };
 
 pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {

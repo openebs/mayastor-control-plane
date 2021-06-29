@@ -1,9 +1,9 @@
 use super::*;
-use mbus_api::Message;
-use std::convert::TryFrom;
-use types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::mbus::{
     CreateWatch, DeleteWatch, GetWatchers, VolumeId, WatchCallback, WatchResourceId, WatchType,
 };
+use mbus_api::Message;
+use std::convert::TryFrom;
 
 pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     cfg.service(put_watch)

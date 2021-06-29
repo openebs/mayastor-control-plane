@@ -1,11 +1,11 @@
 //! Converts rpc messages to message bus messages and vice versa.
 
-use rpc::mayastor as rpc;
-use std::convert::TryFrom;
-use types::v0::message_bus::{
+use common_lib::types::v0::message_bus::{
     mbus,
     mbus::{ChildState, NexusState, Protocol, ReplicaState},
 };
+use rpc::mayastor as rpc;
+use std::convert::TryFrom;
 
 /// Trait for converting rpc messages to message bus messages.
 pub trait RpcToMessageBus {

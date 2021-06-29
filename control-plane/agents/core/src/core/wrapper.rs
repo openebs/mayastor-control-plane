@@ -3,16 +3,18 @@ use common::{
     errors::{GrpcRequestError, SvcError},
     v0::msg_translation::{MessageBusToRpc, RpcToMessageBus},
 };
-use mbus_api::ResourceKind;
+use common_lib::{
+    mbus_api::ResourceKind,
+    types::v0::message_bus::mbus::{
+        AddNexusChild, Child, ChildUri, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
+        DestroyPool, DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId,
+        PoolState, Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica,
+        UnshareNexus, UnshareReplica,
+    },
+};
 use rpc::mayastor::Null;
 use snafu::ResultExt;
 use std::{cmp::Ordering, collections::HashMap};
-use types::v0::message_bus::mbus::{
-    AddNexusChild, Child, ChildUri, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
-    DestroyPool, DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId, PoolState,
-    Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica, UnshareNexus,
-    UnshareReplica,
-};
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
 /// all pools and replicas from the node

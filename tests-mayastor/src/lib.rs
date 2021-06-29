@@ -8,13 +8,16 @@ use opentelemetry::{
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
 
+use common_lib::{
+    mbus_api::Message,
+    types::v0::message_bus::{mbus, mbus::PoolDeviceUri},
+};
 use opentelemetry_jaeger::Uninstall;
 pub use rest_client::{
-    versions::v0::{self, Message, RestClient},
+    versions::v0::{self, RestClient},
     ActixRestClient, ClientError,
 };
 use std::time::Duration;
-use types::v0::message_bus::{mbus, mbus::PoolDeviceUri};
 
 #[actix_rt::test]
 #[ignore]

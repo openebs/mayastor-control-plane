@@ -1,16 +1,18 @@
 #![cfg(test)]
 
-use mbus_api::*;
+use common_lib::{
+    mbus_api::*,
+    types::v0::{
+        message_bus::mbus::{
+            AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, GetNexuses,
+            GetNodes, GetSpecs, Nexus, NexusShareProtocol, Protocol, RemoveNexusChild, ReplicaId,
+            ShareNexus, UnshareNexus,
+        },
+        store::nexus::NexusSpec,
+    },
+};
 use std::time::Duration;
 use testlib::{Cluster, ClusterBuilder};
-use types::v0::{
-    message_bus::mbus::{
-        AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, GetNexuses,
-        GetNodes, GetSpecs, Nexus, NexusShareProtocol, Protocol, RemoveNexusChild, ReplicaId,
-        ShareNexus, UnshareNexus,
-    },
-    store::nexus::NexusSpec,
-};
 
 #[actix_rt::test]
 async fn nexus() {

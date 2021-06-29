@@ -1,5 +1,6 @@
 use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
+use common_lib::types::v0::message_bus::mbus::NodeId;
 use rpc::mayastor::mayastor_client::MayastorClient;
 use snafu::ResultExt;
 use std::{
@@ -8,7 +9,6 @@ use std::{
     sync::Arc,
 };
 use tonic::transport::Channel;
-use types::v0::message_bus::mbus::NodeId;
 
 /// Context with a gRPC client and a lock to serialize mutating gRPC calls
 #[derive(Clone)]

@@ -1,7 +1,6 @@
-use mbus_api::Message;
+use common_lib::{mbus_api, mbus_api::Message, types::v0::message_bus::mbus::GetNodes};
 use structopt::StructOpt;
 use tracing::info;
-use types::v0::message_bus::mbus::GetNodes;
 
 #[derive(Debug, StructOpt)]
 struct CliArgs {

@@ -3,7 +3,18 @@ use super::super::ActixRestClient;
 use crate::{ClientError, ClientResult, JsonGeneric, RestUri};
 use actix_web::{body::Body, http::StatusCode, web::Json, HttpResponse, ResponseError};
 use async_trait::async_trait;
-use mbus_api::{ReplyError, ReplyErrorKind};
+use common_lib::mbus_api::{ReplyError, ReplyErrorKind};
+pub use common_lib::{
+    mbus_api,
+    types::v0::message_bus::mbus::{
+        AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
+        CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
+        GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri,
+        PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol, ShareNexus,
+        ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica, Volume, VolumeHealPolicy,
+        VolumeId, Watch, WatchCallback, WatchResourceId,
+    },
+};
 use paperclip::actix::{api_v2_errors, api_v2_errors_overlay, Apiv2Schema};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,16 +23,6 @@ use std::{
     string::ToString,
 };
 use strum_macros::{self, Display};
-pub use types::v0::message_bus::mbus::{
-    AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
-    CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-    GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri, PoolId,
-    Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol, ShareNexus, ShareReplica,
-    Specs, Topology, UnshareNexus, UnshareReplica, Volume, VolumeHealPolicy, VolumeId, Watch,
-    WatchCallback, WatchResourceId,
-};
-
-pub use mbus_api::message_bus::v0::Message;
 
 /// Create Replica Body JSON
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Apiv2Schema)]

@@ -1,10 +1,10 @@
 use super::*;
+use common_lib::types::v0::message_bus::mbus::{
+    DestroyNexus, Filter, Nexus, NexusId, NexusShareProtocol, NodeId, ShareNexus, UnshareNexus,
+};
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
     ReplyErrorKind, ResourceKind,
-};
-use types::v0::message_bus::mbus::{
-    DestroyNexus, Filter, Nexus, NexusId, NexusShareProtocol, NodeId, ShareNexus, UnshareNexus,
 };
 
 pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {

@@ -1,6 +1,6 @@
 use super::*;
+use common_lib::types::v0::message_bus::mbus::{BlockDevice, GetBlockDevices, NodeId};
 use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
-use types::v0::message_bus::mbus::{BlockDevice, GetBlockDevices, NodeId};
 
 pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     cfg.service(get_block_devices);

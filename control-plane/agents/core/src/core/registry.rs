@@ -16,13 +16,15 @@
 use super::{specs::*, wrapper::NodeWrapper};
 use crate::core::wrapper::InternalOps;
 use common::errors::SvcError;
-use std::{collections::HashMap, ops::DerefMut, sync::Arc};
-use store::etcd::Etcd;
-use tokio::sync::{Mutex, RwLock};
-use types::v0::{
-    message_bus::mbus::NodeId,
-    store::definitions::{StorableObject, Store, StoreError, StoreKey},
+use common_lib::{
+    store::etcd::Etcd,
+    types::v0::{
+        message_bus::mbus::NodeId,
+        store::definitions::{StorableObject, Store, StoreError, StoreKey},
+    },
 };
+use std::{collections::HashMap, ops::DerefMut, sync::Arc};
+use tokio::sync::{Mutex, RwLock};
 
 /// Registry containing all mayastor instances (aka nodes)
 pub type Registry = RegistryInner<Etcd>;

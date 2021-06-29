@@ -1,7 +1,10 @@
-use mbus_api::{v0::*, *};
+use common_lib::{
+    mbus_api,
+    mbus_api::{v0::*, *},
+    types::v0::message_bus::mbus::{Channel, ChannelVs, Config, ConfigGetCurrent, ConfigUpdate},
+};
 use structopt::StructOpt;
 use tracing::info;
-use types::v0::message_bus::mbus::{Channel, ChannelVs, Config, ConfigGetCurrent, ConfigUpdate};
 
 #[derive(Debug, StructOpt)]
 struct CliArgs {

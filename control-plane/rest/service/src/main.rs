@@ -71,7 +71,7 @@ fn parse_dir(src: &str) -> anyhow::Result<std::path::PathBuf> {
 }
 
 use actix_web_opentelemetry::RequestTracing;
-use mbus_api::TimeoutOptions;
+use common_lib::{mbus_api, mbus_api::TimeoutOptions};
 use opentelemetry::{
     global,
     sdk::{propagation::TraceContextPropagator, trace::Tracer},

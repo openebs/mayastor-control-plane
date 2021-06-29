@@ -1,6 +1,9 @@
 use crate::core::registry::Registry;
-use common::errors::SvcError;
-use types::v0::{
+use std::{collections::HashMap, ops::Deref, sync::Arc};
+
+use tokio::sync::{Mutex, RwLock};
+
+use common_lib::types::v0::{
     message_bus::mbus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
     store::{
         definitions::{key_prefix, StorableObject, StorableObjectType, Store, StoreError},
@@ -13,13 +16,14 @@ use types::v0::{
     },
 };
 
-use std::{collections::HashMap, fmt::Debug, ops::Deref, sync::Arc};
-
 use async_trait::async_trait;
-use mbus_api::ResourceKind;
+use common::errors::SvcError;
+use common_lib::{
+    mbus_api::ResourceKind,
+    types::v0::store::{definitions::ObjectKey, SpecState},
+};
 use snafu::{OptionExt, ResultExt, Snafu};
-use tokio::sync::{Mutex, RwLock};
-use types::v0::store::{definitions::ObjectKey, SpecState};
+use std::fmt::Debug;
 
 #[derive(Debug, Snafu)]
 enum SpecError {

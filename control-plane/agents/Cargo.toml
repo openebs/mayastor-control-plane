@@ -17,7 +17,6 @@ name = "common"
 path = "common/src/lib.rs"
 
 [dependencies]
-mbus_api = { path = "../mbus-api" }
 nats = "0.8"
 structopt = "0.3.15"
 tokio = { version = "0.2", features = ["full"] }
@@ -37,8 +36,7 @@ tracing-futures = "0.2.4"
 rpc = "0.1.0"
 http = "0.2.3"
 paste = "1.0.4"
-store = { path = "../store" }
-types = { path = "../types"}
+common-lib = { path = "../../common" }
 reqwest = "0.10.0"
 
 [dev-dependencies]

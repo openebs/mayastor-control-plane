@@ -1,10 +1,13 @@
 #![cfg(test)]
 
-use testlib::*;
-use types::v0::message_bus::{
-    mbus,
-    mbus::{ChannelVs, Liveness},
+use common_lib::{
+    mbus_api::Message,
+    types::v0::message_bus::{
+        mbus,
+        mbus::{ChannelVs, Liveness},
+    },
 };
+use testlib::*;
 
 /// Test that the content of the registry is correctly loaded from the persistent store on start up.
 #[actix_rt::test]
