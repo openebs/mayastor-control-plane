@@ -16,7 +16,7 @@ ipnetwork = "0.17.0"
 bollard = "0.8.0"
 tracing = "0.1"
 tracing-subscriber = "0.2"
-mbus_api = { path = "../control-plane/mbus-api" }
+common-lib = { path = "../common" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["full"] }

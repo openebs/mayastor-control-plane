@@ -1,10 +1,13 @@
-use mbus_api::{message_bus::v0::BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind};
+use common_lib::{
+    mbus_api,
+    mbus_api::{message_bus::v0::BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
+    types::v0::{
+        message_bus::mbus::{Filter, NodeId, PoolId, ReplicaId},
+        store::definitions::StoreError,
+    },
+};
 use snafu::{Error, Snafu};
 use tonic::Code;
-use types::v0::{
-    message_bus::mbus::{Filter, NodeId, PoolId, ReplicaId},
-    store::definitions::StoreError,
-};
 
 /// Common error type for send/receive
 #[derive(Debug, Snafu)]

@@ -1,15 +1,17 @@
 #![cfg(test)]
 
 use super::*;
-use mbus_api::TimeoutOptions;
+use common_lib::{
+    mbus_api::TimeoutOptions,
+    types::v0::{
+        message_bus::mbus::{
+            GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaShareProtocol, ReplicaState,
+        },
+        store::replica::ReplicaSpec,
+    },
+};
 use std::time::Duration;
 use testlib::{Cluster, ClusterBuilder};
-use types::v0::{
-    message_bus::mbus::{
-        GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaShareProtocol, ReplicaState,
-    },
-    store::replica::ReplicaSpec,
-};
 
 #[actix_rt::test]
 async fn pool() {

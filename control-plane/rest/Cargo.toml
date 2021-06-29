@@ -18,7 +18,6 @@ path = "./src/lib.rs"
 rustls = "0.18"
 actix-web = { version = "3.2.0", features = ["rustls"] }
 actix-service = "1.0.6"
-mbus_api = { path = "../mbus-api" }
 async-trait = "=0.1.42"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 structopt = "0.3.15"
@@ -40,7 +39,7 @@ macros = { path = "../macros" }
 http = "0.2.3"
 tinytemplate = { version = "1.2" }
 jsonwebtoken = "7.2.0"
-types = { path = "../types" }
+common-lib = { path = "../../common" }
 actix-http = "2.2.0"
 
 [dev-dependencies]

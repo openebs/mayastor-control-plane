@@ -1,6 +1,6 @@
 use super::*;
+use common_lib::types::v0::message_bus::mbus::{Node, NodeId};
 use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
-use types::v0::message_bus::mbus::{Node, NodeId};
 
 pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
     cfg.service(get_nodes).service(get_node);

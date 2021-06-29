@@ -1,9 +1,11 @@
 use crate::core::registry::Registry;
 use common::errors::SvcError;
-use mbus_api::message_bus::v0::Volumes;
-use types::v0::message_bus::mbus::{
-    CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, ShareVolume, UnpublishVolume,
-    UnshareVolume, Volume,
+use common_lib::{
+    mbus_api::message_bus::v0::Volumes,
+    types::v0::message_bus::mbus::{
+        CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, ShareVolume,
+        UnpublishVolume, UnshareVolume, Volume,
+    },
 };
 
 #[derive(Debug, Clone)]

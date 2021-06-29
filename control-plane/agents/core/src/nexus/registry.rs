@@ -1,7 +1,7 @@
 use crate::core::{registry::Registry, wrapper::*};
 use common::errors::{NexusNotFound, NodeNotFound, SvcError};
+use common_lib::types::v0::message_bus::mbus::{Nexus, NexusId, NodeId};
 use snafu::OptionExt;
-use types::v0::message_bus::mbus::{Nexus, NexusId, NodeId};
 
 /// Nexus helpers
 impl Registry {

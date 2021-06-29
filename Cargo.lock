@@ -308,6 +308,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "async-trait",
+ "common-lib",
  "composer",
  "ctrlp-tests",
  "dyn-clonable",
@@ -315,7 +316,6 @@ dependencies = [
  "http",
  "humantime 2.1.0",
  "lazy_static",
- "mbus_api",
  "nats",
  "once_cell",
  "paste",
@@ -326,14 +326,12 @@ dependencies = [
  "smol",
  "snafu",
  "state",
- "store",
  "structopt",
  "tokio",
  "tonic 0.1.1",
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
- "types",
  "url",
 ]
 
@@ -795,14 +793,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-lib"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "composer",
+ "dyn-clonable",
+ "env_logger",
+ "etcd-client",
+ "log",
+ "nats",
+ "once_cell",
+ "oneshot",
+ "paperclip",
+ "percent-encoding 2.1.0",
+ "rpc",
+ "serde",
+ "serde_json",
+ "smol",
+ "snafu",
+ "structopt",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "composer"
 version = "0.1.0"
 dependencies = [
  "bollard",
+ "common-lib",
  "crossbeam",
  "futures",
  "ipnetwork",
- "mbus_api",
  "rpc",
  "tokio",
  "tonic 0.1.1",
@@ -986,6 +1015,7 @@ dependencies = [
  "actix-rt",
  "actix-web-opentelemetry",
  "anyhow",
+ "common-lib",
  "composer",
  "deployer",
  "opentelemetry",
@@ -993,7 +1023,6 @@ dependencies = [
  "rest",
  "tracing",
  "tracing-opentelemetry",
- "types",
 ]
 
 [[package]]
@@ -1065,22 +1094,20 @@ name = "deployer"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "common-lib",
  "composer",
  "futures",
  "humantime 2.1.0",
- "mbus_api",
  "nats",
  "once_cell",
  "paste",
  "reqwest",
  "rpc",
  "serde_json",
- "store",
  "structopt",
  "strum",
  "strum_macros",
  "tokio",
- "types",
 ]
 
 [[package]]
@@ -1909,36 +1936,6 @@ name = "maybe-uninit"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
-
-[[package]]
-name = "mbus_api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "composer",
- "dyn-clonable",
- "env_logger",
- "log",
- "nats",
- "once_cell",
- "paperclip",
- "percent-encoding 2.1.0",
- "rpc",
- "serde",
- "serde_json",
- "smol",
- "snafu",
- "structopt",
- "strum",
- "strum_macros",
- "tokio",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
- "types",
- "url",
- "uuid",
-]
 
 [[package]]
 name = "memchr"
@@ -2935,12 +2932,12 @@ dependencies = [
  "actix-web-opentelemetry",
  "anyhow",
  "async-trait",
+ "common-lib",
  "composer",
  "futures",
  "http",
  "jsonwebtoken",
  "macros",
- "mbus_api",
  "opentelemetry",
  "opentelemetry-jaeger",
  "paperclip",
@@ -2958,7 +2955,6 @@ dependencies = [
  "tracing-futures",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "types",
  "url",
 ]
 
@@ -3471,24 +3467,6 @@ name = "stdweb-internal-runtime"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
-
-[[package]]
-name = "store"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "composer",
- "etcd-client",
- "oneshot",
- "serde",
- "serde_json",
- "snafu",
- "strum",
- "strum_macros",
- "tokio",
- "tracing",
- "types",
-]
 
 [[package]]
 name = "strsim"
@@ -4234,25 +4212,6 @@ name = "typenum"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f6906492a7cd215bfa4cf595b600146ccfac0c79bcbd1f3000162af5e8b06"
-
-[[package]]
-name = "types"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "etcd-client",
- "paperclip",
- "percent-encoding 2.1.0",
- "serde",
- "serde_json",
- "snafu",
- "strum",
- "strum_macros",
- "tokio",
- "tracing",
- "url",
- "uuid",
-]
 
 [[package]]
 name = "ucd-trie"

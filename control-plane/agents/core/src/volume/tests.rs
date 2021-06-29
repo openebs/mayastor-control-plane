@@ -1,13 +1,16 @@
 #![cfg(test)]
 
-use mbus_api::Message;
+use common_lib::{
+    mbus_api::Message,
+    types::v0::message_bus::mbus::{
+        CreatePool, CreateVolume, DestroyVolume, GetNexuses, GetNodes, GetPools, GetReplicas,
+        GetVolumes, PublishVolume, ShareVolume, UnpublishVolume, UnshareVolume,
+        VolumeShareProtocol,
+    },
+};
 use testlib::{
     v0::{Filter, Protocol},
     Cluster, ClusterBuilder,
-};
-use types::v0::message_bus::mbus::{
-    CreatePool, CreateVolume, DestroyVolume, GetNexuses, GetNodes, GetPools, GetReplicas,
-    GetVolumes, PublishVolume, ShareVolume, UnpublishVolume, UnshareVolume, VolumeShareProtocol,
 };
 
 #[actix_rt::test]

@@ -6,14 +6,14 @@ use super::{
     core::registry, handler, handler_publish, impl_publish_handler, impl_request_handler, CliArgs,
 };
 use common::{errors::SvcError, Service};
-use mbus_api::{v0::*, *};
+use common_lib::mbus_api::{v0::*, *};
 
 use async_trait::async_trait;
-use std::{convert::TryInto, marker::PhantomData};
-use structopt::StructOpt;
-use types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::mbus::{
     ChannelVs, Deregister, GetBlockDevices, GetNodes, GetSpecs, Register,
 };
+use std::{convert::TryInto, marker::PhantomData};
+use structopt::StructOpt;
 
 pub(crate) fn configure(builder: Service) -> Service {
     let node_service = create_node_service(&builder);
@@ -40,8 +40,8 @@ fn create_node_service(builder: &Service) -> service::Service {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common_lib::types::v0::message_bus::mbus::{Node, NodeState};
     use testlib::ClusterBuilder;
-    use types::v0::message_bus::mbus::{Node, NodeState};
 
     #[actix_rt::test]
     async fn node() {

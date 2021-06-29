@@ -1,0 +1,38 @@
+[package]
+name = "common-lib"
+version = "0.1.0"
+authors = ["paul <paul.yoong@mayadata.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+paperclip = { version = "0.5.0", features = ["actix3"] }
+url = "2.2.0"
+uuid = { version = "0.7", features = ["v4"] }
+strum = "0.19"
+strum_macros = "0.19"
+serde_json = "1.0"
+percent-encoding = "2.1.0"
+tracing = "0.1"
+tokio = { version = "0.2", features = ["full"] }
+snafu = "0.6"
+etcd-client = "0.5.5"
+serde = { version = "1.0", features = ["derive"] }
+nats = "0.8"
+structopt = "0.3.15"
+log = "0.4.11"
+env_logger = "0.7"
+# Version is pinned due to incompatibilities with the instrument crate in the newer versions
+# https://github.com/tokio-rs/tracing/issues/1219
+async-trait = "=0.1.42"
+dyn-clonable = "0.9.0"
+smol = "1.0.0"
+once_cell = "1.4.1"
+tracing-futures = "0.2.4"
+tracing-subscriber = "0.2"
+
+[dev-dependencies]
+composer = { path = "../composer" }
+oneshot = "0.1.2"
+rpc = "0.1.0"
