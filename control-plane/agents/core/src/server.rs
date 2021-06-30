@@ -7,7 +7,7 @@ pub mod watcher;
 
 use crate::core::registry;
 use common::*;
-use common_lib::types::v0::message_bus::mbus::ChannelVs;
+use common_lib::types::v0::message_bus::ChannelVs;
 use structopt::StructOpt;
 use tracing::info;
 

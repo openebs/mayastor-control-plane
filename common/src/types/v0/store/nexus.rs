@@ -2,11 +2,8 @@
 
 use crate::types::v0::{
     message_bus::{
-        mbus,
-        mbus::{
-            ChildState, ChildUri, CreateNexus, DestroyNexus, NexusId, NexusShareProtocol, NodeId,
-            Protocol, VolumeId,
-        },
+        self, ChildState, ChildUri, CreateNexus, DestroyNexus, NexusId, NexusShareProtocol, NodeId,
+        Protocol, VolumeId,
     },
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
@@ -14,14 +11,13 @@ use crate::types::v0::{
     },
 };
 
-use paperclip::actix::Apiv2Schema;
 use serde::{Deserialize, Serialize};
 
 /// Nexus information
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Nexus {
     /// Current state of the nexus.
-    pub state: Option<mbus::NexusState>,
+    pub state: Option<message_bus::NexusState>,
     /// Desired nexus specification.
     pub spec: NexusSpec,
 }
@@ -30,7 +26,7 @@ pub struct Nexus {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct NexusState {
     /// Nexus information.
-    pub nexus: mbus::Nexus,
+    pub nexus: message_bus::Nexus,
 }
 
 /// Key used by the store to uniquely identify a NexusState structure.
@@ -61,10 +57,10 @@ impl StorableObject for NexusState {
 }
 
 /// State of the Nexus Spec
-pub type NexusSpecState = SpecState<mbus::NexusState>;
+pub type NexusSpecState = SpecState<message_bus::NexusState>;
 
 /// User specification of a nexus.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NexusSpec {
     /// Nexus Id
     pub uuid: NexusId,
@@ -90,7 +86,7 @@ pub struct NexusSpec {
 }
 
 /// Operation State for a Nexus spec resource
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NexusOperationState {
     /// Record of the operation
     pub operation: NexusOperation,
@@ -106,12 +102,11 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
-                NexusOperation::Unknown => unreachable!(),
                 NexusOperation::Destroy => {
                     self.state = SpecState::Deleted;
                 }
                 NexusOperation::Create => {
-                    self.state = SpecState::Created(mbus::NexusState::Online);
+                    self.state = SpecState::Created(message_bus::NexusState::Online);
                 }
                 NexusOperation::Share(share) => {
                     self.share = share.into();
@@ -148,21 +143,14 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
 }
 
 /// Available Nexus Operations
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum NexusOperation {
-    Unknown,
     Create,
     Destroy,
     Share(NexusShareProtocol),
     Unshare,
     AddChild(ChildUri),
     RemoveChild(ChildUri),
-}
-
-impl Default for NexusOperation {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Key used by the store to uniquely identify a NexusSpec structure.
@@ -217,23 +205,23 @@ impl PartialEq<CreateNexus> for NexusSpec {
         &other == self
     }
 }
-impl PartialEq<mbus::Nexus> for NexusSpec {
-    fn eq(&self, other: &mbus::Nexus) -> bool {
+impl PartialEq<message_bus::Nexus> for NexusSpec {
+    fn eq(&self, other: &message_bus::Nexus) -> bool {
         self.share == other.share && self.children == other.children && self.node == other.node
     }
 }
 
-impl From<&NexusSpec> for mbus::Nexus {
+impl From<&NexusSpec> for message_bus::Nexus {
     fn from(nexus: &NexusSpec) -> Self {
         Self {
             node: nexus.node.clone(),
             uuid: nexus.uuid.clone(),
             size: nexus.size,
-            state: mbus::NexusState::Unknown,
+            state: message_bus::NexusState::Unknown,
             children: nexus
                 .children
                 .iter()
-                .map(|uri| mbus::Child {
+                .map(|uri| message_bus::Child {
                     uri: uri.clone(),
                     state: ChildState::Unknown,
                     rebuild_progress: None,

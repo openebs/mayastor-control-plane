@@ -2,7 +2,7 @@
 
 use common_lib::{
     mbus_api::Message,
-    types::v0::message_bus::mbus::{
+    types::v0::message_bus::{
         CreatePool, CreateVolume, DestroyVolume, GetNexuses, GetNodes, GetPools, GetReplicas,
         GetVolumes, PublishVolume, ShareVolume, UnpublishVolume, UnshareVolume,
         VolumeShareProtocol,

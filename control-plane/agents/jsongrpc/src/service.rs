@@ -5,7 +5,7 @@ use ::rpc::mayastor::{JsonRpcReply, JsonRpcRequest};
 use common::errors::{BusGetNode, JsonRpcDeserialise, SvcError};
 use common_lib::{
     mbus_api::message_bus::v0::{MessageBus, *},
-    types::v0::message_bus::mbus::JsonGrpcRequest,
+    types::v0::message_bus::JsonGrpcRequest,
 };
 use rpc::mayastor::json_rpc_client::JsonRpcClient;
 use snafu::ResultExt;

@@ -4,7 +4,10 @@ use common_lib::{
     bus_impl_all, bus_impl_message, bus_impl_message_all, bus_impl_publish, bus_impl_request,
     impl_channel_id,
     mbus_api::*,
-    types::v0::message_bus::mbus::{Channel, ChannelVs, MessageIdVs},
+    types::{
+        v0::message_bus::{ChannelVs, MessageIdVs},
+        Channel,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, marker::PhantomData};

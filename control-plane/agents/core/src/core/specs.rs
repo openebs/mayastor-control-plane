@@ -4,7 +4,7 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
 use common_lib::types::v0::{
-    message_bus::mbus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
+    message_bus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
     store::{
         definitions::{key_prefix, StorableObject, StorableObjectType, Store, StoreError},
         nexus::NexusSpec,
@@ -282,7 +282,6 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         let _ = self.busy()?;
 
         match self.state() {
-            SpecState::Unknown => unreachable!(),
             SpecState::Creating => Err(SvcError::PendingCreation {
                 id: self.uuid(),
                 kind: self.kind(),

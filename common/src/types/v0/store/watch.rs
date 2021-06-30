@@ -1,5 +1,5 @@
 use crate::types::v0::{
-    message_bus::mbus::WatchResourceId,
+    message_bus::WatchResourceId,
     store::definitions::{ObjectKey, StorableObjectType},
 };
 

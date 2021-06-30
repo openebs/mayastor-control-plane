@@ -4,7 +4,7 @@
 pub use crate::mbus_api::{v0::*, Message};
 use crate::{
     mbus_api::{ReplyError, ReplyErrorKind, ResourceKind},
-    types::v0::message_bus::mbus::{
+    types::v0::message_bus::{
         AddNexusChild, AddVolumeNexus, Child, CreateNexus, CreatePool, CreateReplica, CreateVolume,
         DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter, GetBlockDevices,
         GetNexuses, GetNodes, GetPools, GetReplicas, GetSpecs, GetVolumes, JsonGrpcRequest, Nexus,
@@ -254,7 +254,7 @@ impl MessageBusTrait for MessageBus {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::v0::message_bus::mbus::NodeState;
+    use crate::types::v0::message_bus::NodeState;
     use composer::*;
     use rpc::mayastor::Null;
 

@@ -22,7 +22,7 @@ use crate::errors::SvcError;
 use common_lib::{
     mbus_api,
     mbus_api::*,
-    types::v0::message_bus::mbus::{Channel, Liveness},
+    types::{v0::message_bus::Liveness, Channel},
 };
 
 /// Agent level errors

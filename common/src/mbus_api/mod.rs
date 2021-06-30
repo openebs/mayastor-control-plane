@@ -13,7 +13,10 @@ pub mod send;
 /// Version 0 of the messages
 pub mod v0;
 
-use crate::types::v0::message_bus::mbus::{Channel, MessageIdVs, VERSION};
+use crate::types::{
+    v0::message_bus::{MessageIdVs, VERSION},
+    Channel,
+};
 use async_trait::async_trait;
 use dyn_clonable::clonable;
 pub use mbus_nats::{

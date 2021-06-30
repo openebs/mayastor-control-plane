@@ -4,7 +4,7 @@ use common::{
     errors::{GrpcRequestError, NodeNotFound, SvcError},
     v0::msg_translation::RpcToMessageBus,
 };
-use common_lib::types::v0::message_bus::mbus::{GetSpecs, Node, NodeId, NodeState, Specs};
+use common_lib::types::v0::message_bus::{GetSpecs, Node, NodeId, NodeState, Specs};
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::{OptionExt, ResultExt};
 use std::sync::Arc;

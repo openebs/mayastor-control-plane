@@ -4,7 +4,7 @@ use serde_json::value::Value;
 
 use crate::{
     bus_impl_all, bus_impl_message, bus_impl_message_all, bus_impl_publish, bus_impl_request,
-    bus_impl_vector_request, types::v0::message_bus::mbus::*,
+    bus_impl_vector_request, types::v0::message_bus::*,
 };
 
 // Only V0 should export this macro
@@ -24,16 +24,6 @@ macro_rules! impl_channel_id {
 }
 
 bus_impl_message_all!(Liveness, Liveness, (), Default);
-
-bus_impl_message_all!(ConfigUpdate, ConfigUpdate, (), Kiiss);
-
-bus_impl_message_all!(
-    ConfigGetCurrent,
-    ConfigGetCurrent,
-    ReplyConfig,
-    Kiiss,
-    GetConfig
-);
 
 bus_impl_message_all!(Register, Register, (), Registry);
 

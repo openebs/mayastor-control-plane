@@ -1,5 +1,5 @@
 use super::*;
-use common_lib::types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::{
     DestroyVolume, Filter, NexusShareProtocol, NodeId, ShareNexus, UnshareNexus, Volume, VolumeId,
 };
 use mbus_api::{
@@ -7,7 +7,7 @@ use mbus_api::{
     ReplyError, ReplyErrorKind, ResourceKind,
 };
 
-pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
+pub(super) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(get_volumes)
         .service(get_volume)
         .service(get_node_volumes)
@@ -18,30 +18,30 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(volume_unshare);
 }
 
-#[get("/volumes", tags(Volumes))]
-async fn get_volumes() -> Result<Json<Vec<Volume>>, RestClusterError> {
-    RestRespond::result(MessageBus::get_volumes(Filter::None).await).map_err(RestClusterError::from)
+#[get("/volumes")]
+async fn get_volumes() -> Result<Json<Vec<Volume>>, RestError> {
+    RestRespond::result(MessageBus::get_volumes(Filter::None).await).map_err(RestError::from)
 }
 
-#[get("/volumes/{volume_id}", tags(Volumes))]
+#[get("/volumes/{volume_id}")]
 async fn get_volume(web::Path(volume_id): web::Path<VolumeId>) -> Result<Json<Volume>, RestError> {
     RestRespond::result(MessageBus::get_volume(Filter::Volume(volume_id)).await)
 }
 
-#[get("/nodes/{node_id}/volumes", tags(Volumes))]
+#[get("/nodes/{node_id}/volumes")]
 async fn get_node_volumes(
     web::Path(node_id): web::Path<NodeId>,
 ) -> Result<Json<Vec<Volume>>, RestError> {
     RestRespond::result(MessageBus::get_volumes(Filter::Node(node_id)).await)
 }
-#[get("/nodes/{node_id}/volumes/{volume_id}", tags(Volumes))]
+#[get("/nodes/{node_id}/volumes/{volume_id}")]
 async fn get_node_volume(
     web::Path((node_id, volume_id)): web::Path<(NodeId, VolumeId)>,
 ) -> Result<Json<Volume>, RestError> {
     RestRespond::result(MessageBus::get_volume(Filter::NodeVolume(node_id, volume_id)).await)
 }
 
-#[put("/volumes/{volume_id}", tags(Volumes))]
+#[put("/volumes/{volume_id}")]
 async fn put_volume(
     web::Path(volume_id): web::Path<VolumeId>,
     create: web::Json<CreateVolumeBody>,
@@ -50,13 +50,13 @@ async fn put_volume(
     RestRespond::result(MessageBus::create_volume(create).await)
 }
 
-#[delete("/volumes/{volume_id}", tags(Volumes))]
+#[delete("/volumes/{volume_id}")]
 async fn del_volume(web::Path(volume_id): web::Path<VolumeId>) -> Result<JsonUnit, RestError> {
     let request = DestroyVolume { uuid: volume_id };
     RestRespond::result(MessageBus::delete_volume(request).await).map(JsonUnit::from)
 }
 
-#[put("/volumes/{volume_id}/share/{protocol}", tags(Volumes))]
+#[put("/volumes/{volume_id}/share/{protocol}")]
 async fn volume_share(
     web::Path((volume_id, protocol)): web::Path<(VolumeId, NexusShareProtocol)>,
 ) -> Result<Json<String>, RestError> {
@@ -82,7 +82,7 @@ async fn volume_share(
     }
 }
 
-#[delete("/volumes{volume_id}/share", tags(Volumes))]
+#[delete("/volumes{volume_id}/share")]
 async fn volume_unshare(web::Path(volume_id): web::Path<VolumeId>) -> Result<JsonUnit, RestError> {
     let volume = MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
 

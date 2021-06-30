@@ -1,17 +1,17 @@
 use super::*;
-use common_lib::types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::{
     CreateWatch, DeleteWatch, GetWatchers, VolumeId, WatchCallback, WatchResourceId, WatchType,
 };
 use mbus_api::Message;
 use std::convert::TryFrom;
 
-pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
+pub(super) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(put_watch)
         .service(del_watch)
         .service(get_watches);
 }
 
-#[put("/watches/volumes/{volume_id}", tags(Watches))]
+#[put("/watches/volumes/{volume_id}")]
 async fn put_watch(
     web::Path(volume_id): web::Path<VolumeId>,
     web::Query(watch): web::Query<WatchTypeQueryParam>,
@@ -27,7 +27,7 @@ async fn put_watch(
     Ok(Json(()))
 }
 
-#[get("/watches/volumes/{volume_id}", tags(Watches))]
+#[get("/watches/volumes/{volume_id}")]
 async fn get_watches(
     web::Path(volume_id): web::Path<VolumeId>,
 ) -> Result<Json<Vec<RestWatch>>, RestError> {
@@ -43,7 +43,7 @@ async fn get_watches(
     Ok(Json(watches))
 }
 
-#[delete("/watches/volumes/{volume_id}", tags(Watches))]
+#[delete("/watches/volumes/{volume_id}")]
 async fn del_watch(
     web::Path(volume_id): web::Path<VolumeId>,
     web::Query(watch): web::Query<WatchTypeQueryParam>,

@@ -7,23 +7,15 @@ pub mod replica;
 pub mod volume;
 pub mod watch;
 
-use paperclip::actix::Apiv2Schema;
 use serde::{Deserialize, Serialize};
 
 /// Enum defining the various states that a resource spec can be in.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SpecState<T> {
-    Unknown,
     Creating,
     Created(T),
     Deleting,
     Deleted,
-}
-
-impl<T: Default> SpecState<T> {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl<T: std::cmp::PartialEq> SpecState<T> {

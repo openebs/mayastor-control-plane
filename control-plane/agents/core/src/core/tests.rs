@@ -2,10 +2,7 @@
 
 use common_lib::{
     mbus_api::Message,
-    types::v0::message_bus::{
-        mbus,
-        mbus::{ChannelVs, Liveness},
-    },
+    types::v0::message_bus::{self, ChannelVs, Liveness},
 };
 use testlib::*;
 
@@ -16,7 +13,7 @@ async fn bootstrap_registry() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_pools(1)
-        .with_replicas(1, size, mbus::Protocol::Off)
+        .with_replicas(1, size, message_bus::Protocol::Off)
         .with_agents(vec!["core"])
         .build()
         .await
@@ -25,9 +22,9 @@ async fn bootstrap_registry() {
     let replica = format!("loopback:///{}", Cluster::replica(0, 0, 0));
     cluster
         .rest_v0()
-        .create_nexus(mbus::CreateNexus {
+        .create_nexus(message_bus::CreateNexus {
             node: cluster.node(0),
-            uuid: mbus::NexusId::new(),
+            uuid: message_bus::NexusId::new(),
             size,
             children: vec![replica.into()],
             ..Default::default()

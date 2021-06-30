@@ -2,11 +2,11 @@
 //! These methods are typically used to control SPDK directly.
 
 use super::*;
-use common_lib::types::v0::message_bus::mbus::{JsonGrpcMethod, JsonGrpcRequest, NodeId};
+use common_lib::types::v0::message_bus::{JsonGrpcMethod, JsonGrpcRequest, NodeId};
 use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
 
 /// Configure the functions that this service supports.
-pub(crate) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
+pub(crate) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(json_grpc_call);
 }
 
@@ -20,7 +20,7 @@ pub(crate) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 //  -H "accept: application/json" -H "Content-Type: application/json" \
 //  -d '{"block_size": 512, "num_blocks": 64, "name": "Malloc0"}'
 // ```
-#[put("/nodes/{node}/jsongrpc/{method}", tags(JsonGrpc))]
+#[put("/nodes/{node}/jsongrpc/{method}")]
 async fn json_grpc_call(
     web::Path((node, method)): web::Path<(NodeId, JsonGrpcMethod)>,
     body: web::Json<JsonGeneric>,

@@ -1,6 +1,6 @@
 use crate::core::registry::Registry;
 use common::errors::{SvcError, VolumeNotFound};
-use common_lib::types::v0::message_bus::mbus::{Volume, VolumeId, VolumeState};
+use common_lib::types::v0::message_bus::{Volume, VolumeId, VolumeState};
 use snafu::OptionExt;
 
 impl Registry {

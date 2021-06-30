@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use common_lib::mbus_api::{ReplyError, ReplyErrorKind};
 pub use common_lib::{
     mbus_api,
-    types::v0::message_bus::mbus::{
+    types::v0::message_bus::{
         AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
         CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
         GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri,
@@ -15,7 +15,7 @@ pub use common_lib::{
         VolumeId, Watch, WatchCallback, WatchResourceId,
     },
 };
-use paperclip::actix::{api_v2_errors, api_v2_errors_overlay, Apiv2Schema};
+
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
@@ -25,7 +25,7 @@ use std::{
 use strum_macros::{self, Display};
 
 /// Create Replica Body JSON
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CreateReplicaBody {
     /// size of the replica in bytes
     pub size: u64,
@@ -35,7 +35,7 @@ pub struct CreateReplicaBody {
     pub share: Protocol,
 }
 /// Create Pool Body JSON
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CreatePoolBody {
     /// disk device paths or URIs to be claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
@@ -83,7 +83,7 @@ impl CreateReplicaBody {
 }
 
 /// Create Nexus Body JSON
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CreateNexusBody {
     /// size of the device in bytes
     pub size: u64,
@@ -116,7 +116,7 @@ impl CreateNexusBody {
 }
 
 /// Create Volume Body JSON
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CreateVolumeBody {
     /// size of the volume in bytes
     pub size: u64,
@@ -153,7 +153,7 @@ impl CreateVolumeBody {
 
 /// Contains the query parameters that can be passed when calling
 /// get_block_devices
-#[derive(Deserialize, Serialize, Default, Apiv2Schema)]
+#[derive(Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetBlockDeviceQueryParams {
     /// specifies whether to list all devices or only usable ones
@@ -161,7 +161,7 @@ pub struct GetBlockDeviceQueryParams {
 }
 
 /// Watch query parameters used by various watch calls
-#[derive(Deserialize, Serialize, Default, Apiv2Schema)]
+#[derive(Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WatchTypeQueryParam {
     /// URL callback
@@ -169,7 +169,7 @@ pub struct WatchTypeQueryParam {
 }
 
 /// Watch Resource in the store
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Apiv2Schema, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RestWatch {
     /// id of the resource to watch on
@@ -565,52 +565,13 @@ impl ActixRestClient {
 }
 
 /// Rest Error
-#[api_v2_errors(
-    code = 400,
-    description = "Request Timeout",
-    code = 401,
-    description = "Unauthorized",
-    code = 404,
-    description = "Not Found",
-    code = 408,
-    description = "Bad Request",
-    code = 416,
-    description = "Range Not satisfiable",
-    code = 412,
-    description = "Precondition Failed",
-    code = 422,
-    description = "Unprocessable entity",
-    code = 500,
-    description = "Internal Server Error",
-    code = 501,
-    description = "Not Implemented",
-    code = 503,
-    description = "Service Unavailable",
-    code = 504,
-    description = "Gateway Timeout",
-    code = 507,
-    description = "Insufficient Storage",
-    default_schema = "RestJsonError"
-)]
 #[derive(Debug)]
 pub struct RestError {
     inner: ReplyError,
 }
 
-/// Rest Cluster Error
-/// (RestError without 404 NotFound) used for Get /$resources handlers
-#[api_v2_errors_overlay(404)]
-#[derive(Debug)]
-pub struct RestClusterError(pub RestError);
-
-impl From<RestError> for RestClusterError {
-    fn from(error: RestError) -> Self {
-        RestClusterError(error)
-    }
-}
-
 /// Rest Json Error format
-#[derive(Serialize, Deserialize, Debug, Default, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct RestJsonError {
     /// error kind
     error: RestJsonErrorKind,
@@ -619,7 +580,7 @@ pub struct RestJsonError {
 }
 
 /// RestJson error kind
-#[derive(Serialize, Deserialize, Debug, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(missing_docs)]
 pub enum RestJsonErrorKind {
     // code=400, description="Request Timeout",

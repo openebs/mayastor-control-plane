@@ -12,7 +12,7 @@ use common::errors::{NodeNotFound, SvcError};
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
-        message_bus::mbus::{
+        message_bus::{
             AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState,
             RemoveNexusChild, ShareNexus, UnshareNexus,
         },

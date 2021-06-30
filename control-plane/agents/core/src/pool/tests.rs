@@ -4,7 +4,7 @@ use super::*;
 use common_lib::{
     mbus_api::TimeoutOptions,
     types::v0::{
-        message_bus::mbus::{
+        message_bus::{
             GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaShareProtocol, ReplicaState,
         },
         store::replica::ReplicaSpec,
