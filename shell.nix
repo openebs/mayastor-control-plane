@@ -15,6 +15,7 @@ let
   norust_moth = "You have requested an environment without rust, you should provide it!";
   nomayastor_moth = "You have requested an environment without mayastor, you should provide it!";
   channel = import ./nix/lib/rust.nix { inherit sources; };
+  openapi-generator = callPackage ./nix/lib/openapi-generator.nix { };
   mayastor = import pkgs.mayastor-src { };
 in
 mkShell {
@@ -34,6 +35,7 @@ mkShell {
     which
     docker
     etcd
+    openapi-generator
   ]
   ++ pkgs.lib.optional (!norust) channel.nightly.rust
   ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
