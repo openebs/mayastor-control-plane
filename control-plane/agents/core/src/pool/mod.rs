@@ -9,9 +9,9 @@ use async_trait::async_trait;
 use common::{errors::SvcError, handler::*, Service};
 
 // Pool Operations
-use common_lib::types::v0::message_bus::mbus::{CreatePool, DestroyPool, GetPools};
+use common_lib::types::v0::message_bus::{CreatePool, DestroyPool, GetPools};
 // Replica Operations
-use common_lib::types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::{
     CreateReplica, DestroyReplica, GetReplicas, ShareReplica, UnshareReplica,
 };
 

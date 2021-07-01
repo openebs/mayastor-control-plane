@@ -1,6 +1,6 @@
 use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
-use common_lib::types::v0::message_bus::mbus::NodeId;
+use common_lib::types::v0::message_bus::NodeId;
 use rpc::mayastor::mayastor_client::MayastorClient;
 use snafu::ResultExt;
 use std::{

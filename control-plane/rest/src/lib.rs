@@ -25,13 +25,7 @@ use actix_web::{
 };
 use actix_web_opentelemetry::ClientExt;
 use futures::{future::Ready, Stream};
-use paperclip::{
-    actix::{Apiv2Schema, OperationModifier},
-    v2::{
-        models::{DefaultOperationRaw, DefaultSchemaRaw, Either, Response},
-        schema::Apiv2Schema,
-    },
-};
+
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use std::{io::BufReader, str::FromStr, string::ToString};
@@ -320,7 +314,7 @@ impl ClientError {
 }
 
 /// Generic JSON value eg: { "size": 1024 }
-#[derive(Debug, Default, Clone, Apiv2Schema)]
+#[derive(Debug, Default, Clone)]
 pub struct JsonGeneric {
     inner: serde_json::Value,
 }
@@ -381,25 +375,6 @@ impl actix_web::Responder for JsonUnit {
         futures::future::ok(HttpResponse::build(actix_web::http::StatusCode::NO_CONTENT).finish())
     }
 }
-impl Apiv2Schema for JsonUnit {
-    const NAME: Option<&'static str> = None;
-    fn raw_schema() -> DefaultSchemaRaw {
-        actix_web::web::Json::<()>::raw_schema()
-    }
-}
-impl OperationModifier for JsonUnit {
-    fn update_response(op: &mut DefaultOperationRaw) {
-        op.responses.remove("200");
-        op.responses.insert(
-            "204".into(),
-            Either::Right(Response {
-                description: Some("OK".into()),
-                schema: None,
-                ..Default::default()
-            }),
-        );
-    }
-}
 
 /// URL value, eg: https://localhost:8080/test
 #[derive(Debug, Clone)]
@@ -416,13 +391,6 @@ impl std::ops::Deref for RestUri {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Apiv2Schema for RestUri {
-    const NAME: Option<&'static str> = None;
-    fn raw_schema() -> DefaultSchemaRaw {
-        actix_web::web::Json::<String>::raw_schema()
     }
 }
 

@@ -1,5 +1,5 @@
 use super::*;
-use common_lib::types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::{
     DestroyReplica, Filter, NodeId, PoolId, Replica, ReplicaId, ReplicaShareProtocol, ShareReplica,
     UnshareReplica,
 };
@@ -8,7 +8,7 @@ use mbus_api::{
     ReplyErrorKind, ResourceKind,
 };
 
-pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
+pub(super) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(get_replicas)
         .service(get_replica)
         .service(get_node_replicas)
@@ -24,35 +24,31 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(del_pool_replica_share);
 }
 
-#[get("/replicas", tags(Replicas))]
-async fn get_replicas() -> Result<Json<Vec<Replica>>, RestClusterError> {
-    RestRespond::result(MessageBus::get_replicas(Filter::None).await)
-        .map_err(RestClusterError::from)
+#[get("/replicas")]
+async fn get_replicas() -> Result<Json<Vec<Replica>>, RestError> {
+    RestRespond::result(MessageBus::get_replicas(Filter::None).await).map_err(RestError::from)
 }
-#[get("/replicas/{id}", tags(Replicas))]
+#[get("/replicas/{id}")]
 async fn get_replica(
     web::Path(replica_id): web::Path<ReplicaId>,
 ) -> Result<Json<Replica>, RestError> {
     RestRespond::result(MessageBus::get_replica(Filter::Replica(replica_id)).await)
 }
 
-#[get("/nodes/{id}/replicas", tags(Replicas))]
+#[get("/nodes/{id}/replicas")]
 async fn get_node_replicas(
     web::Path(node_id): web::Path<NodeId>,
 ) -> Result<Json<Vec<Replica>>, RestError> {
     RestRespond::result(MessageBus::get_replicas(Filter::Node(node_id)).await)
 }
 
-#[get("/nodes/{node_id}/pools/{pool_id}/replicas", tags(Replicas))]
+#[get("/nodes/{node_id}/pools/{pool_id}/replicas")]
 async fn get_node_pool_replicas(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
 ) -> Result<Json<Vec<Replica>>, RestError> {
     RestRespond::result(MessageBus::get_replicas(Filter::NodePool(node_id, pool_id)).await)
 }
-#[get(
-    "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}",
-    tags(Replicas)
-)]
+#[get("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}")]
 async fn get_node_pool_replica(
     web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
 ) -> Result<Json<Replica>, RestError> {
@@ -61,10 +57,7 @@ async fn get_node_pool_replica(
     )
 }
 
-#[put(
-    "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}",
-    tags(Replicas)
-)]
+#[put("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}")]
 async fn put_node_pool_replica(
     web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
     create: web::Json<CreateReplicaBody>,
@@ -75,7 +68,7 @@ async fn put_node_pool_replica(
     )
     .await
 }
-#[put("/pools/{pool_id}/replicas/{replica_id}", tags(Replicas))]
+#[put("/pools/{pool_id}/replicas/{replica_id}")]
 async fn put_pool_replica(
     web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
     create: web::Json<CreateReplicaBody>,
@@ -87,26 +80,20 @@ async fn put_pool_replica(
     .await
 }
 
-#[delete(
-    "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}",
-    tags(Replicas)
-)]
+#[delete("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}")]
 async fn del_node_pool_replica(
     web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
 ) -> Result<JsonUnit, RestError> {
     destroy_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await
 }
-#[delete("/pools/{pool_id}/replicas/{replica_id}", tags(Replicas))]
+#[delete("/pools/{pool_id}/replicas/{replica_id}")]
 async fn del_pool_replica(
     web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
 ) -> Result<JsonUnit, RestError> {
     destroy_replica(Filter::PoolReplica(pool_id, replica_id)).await
 }
 
-#[put(
-    "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol}",
-    tags(Replicas)
-)]
+#[put("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol}")]
 async fn put_node_pool_replica_share(
     web::Path((node_id, pool_id, replica_id, protocol)): web::Path<(
         NodeId,
@@ -121,10 +108,7 @@ async fn put_node_pool_replica_share(
     )
     .await
 }
-#[put(
-    "/pools/{pool_id}/replicas/{replica_id}/share/{protocol}",
-    tags(Replicas)
-)]
+#[put("/pools/{pool_id}/replicas/{replica_id}/share/{protocol}")]
 async fn put_pool_replica_share(
     web::Path((pool_id, replica_id, protocol)): web::Path<(
         PoolId,
@@ -135,16 +119,13 @@ async fn put_pool_replica_share(
     share_replica(Filter::PoolReplica(pool_id, replica_id), protocol).await
 }
 
-#[delete(
-    "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share",
-    tags(Replicas)
-)]
+#[delete("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share")]
 async fn del_node_pool_replica_share(
     web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
 ) -> Result<JsonUnit, RestError> {
     unshare_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await
 }
-#[delete("/pools/{pool_id}/replicas/{replica_id}/share", tags(Replicas))]
+#[delete("/pools/{pool_id}/replicas/{replica_id}/share")]
 async fn del_pool_replica_share(
     web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
 ) -> Result<JsonUnit, RestError> {

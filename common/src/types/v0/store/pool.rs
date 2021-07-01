@@ -1,16 +1,13 @@
 //! Definition of pool types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{
-        mbus,
-        mbus::{CreatePool, NodeId, PoolDeviceUri, PoolId},
-    },
+    message_bus::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         SpecState, SpecTransaction,
     },
 };
-use paperclip::actix::Apiv2Schema;
+
 use serde::{Deserialize, Serialize};
 
 type PoolLabel = String;
@@ -29,13 +26,13 @@ pub struct Pool {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct PoolState {
     /// Pool information returned by Mayastor.
-    pub pool: mbus::Pool,
+    pub pool: message_bus::Pool,
     /// Pool labels.
     pub labels: Vec<PoolLabel>,
 }
 
 /// State of the Pool Spec
-pub type PoolSpecState = SpecState<mbus::PoolState>;
+pub type PoolSpecState = SpecState<message_bus::PoolState>;
 impl From<&CreatePool> for PoolSpec {
     fn from(request: &CreatePool) -> Self {
         Self {
@@ -58,7 +55,7 @@ impl PartialEq<CreatePool> for PoolSpec {
 }
 
 /// User specification of a pool.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PoolSpec {
     /// id of the mayastor instance
     pub node: NodeId,
@@ -77,7 +74,7 @@ pub struct PoolSpec {
     pub operation: Option<PoolOperationState>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PoolOperationState {
     /// Record of the operation
     pub operation: PoolOperation,
@@ -93,12 +90,11 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
-                PoolOperation::Unknown => unreachable!(),
                 PoolOperation::Destroy => {
                     self.state = SpecState::Deleted;
                 }
                 PoolOperation::Create => {
-                    self.state = SpecState::Created(mbus::PoolState::Online);
+                    self.state = SpecState::Created(message_bus::PoolState::Online);
                 }
             }
         }
@@ -127,21 +123,14 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
 }
 
 /// Available Pool Operations
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum PoolOperation {
-    Unknown,
     Create,
     Destroy,
 }
 
-impl Default for PoolOperation {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
-
-impl PartialEq<mbus::Pool> for PoolSpec {
-    fn eq(&self, other: &mbus::Pool) -> bool {
+impl PartialEq<message_bus::Pool> for PoolSpec {
+    fn eq(&self, other: &message_bus::Pool) -> bool {
         self.node == other.node
     }
 }
@@ -173,13 +162,13 @@ impl StorableObject for PoolSpec {
     }
 }
 
-impl From<&PoolSpec> for mbus::Pool {
+impl From<&PoolSpec> for message_bus::Pool {
     fn from(pool: &PoolSpec) -> Self {
         Self {
             node: pool.node.clone(),
             id: pool.id.clone(),
             disks: pool.disks.clone(),
-            state: mbus::PoolState::Unknown,
+            state: message_bus::PoolState::Unknown,
             capacity: 0,
             used: 0,
         }

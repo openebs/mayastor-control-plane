@@ -13,7 +13,7 @@ use common::errors::{NodeNotFound, SvcError};
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
-        message_bus::mbus::{
+        message_bus::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
             Replica, ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
         },

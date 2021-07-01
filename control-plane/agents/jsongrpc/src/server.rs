@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use common::{errors::SvcError, *};
 use common_lib::{
     mbus_api::*,
-    types::v0::message_bus::mbus::{ChannelVs, JsonGrpcRequest},
+    types::v0::message_bus::{ChannelVs, JsonGrpcRequest},
 };
 use service::*;
 use std::{convert::TryInto, marker::PhantomData};

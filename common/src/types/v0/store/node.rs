@@ -1,7 +1,7 @@
 //! Definition of node types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{mbus, mbus::NodeId},
+    message_bus::{self, NodeId},
     store::definitions::{ObjectKey, StorableObject, StorableObjectType},
 };
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ type NodeLabels = HashMap<String, String>;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Node {
     /// Node information.
-    node: mbus::Node,
+    node: message_bus::Node,
     /// Node labels.
     labels: NodeLabels,
 }

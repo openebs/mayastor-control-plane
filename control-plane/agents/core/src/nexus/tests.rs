@@ -3,7 +3,7 @@
 use common_lib::{
     mbus_api::*,
     types::v0::{
-        message_bus::mbus::{
+        message_bus::{
             AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, GetNexuses,
             GetNodes, GetSpecs, Nexus, NexusShareProtocol, Protocol, RemoveNexusChild, ReplicaId,
             ShareNexus, UnshareNexus,

@@ -1,8 +1,8 @@
 use super::*;
-use common_lib::types::v0::message_bus::mbus::{BlockDevice, GetBlockDevices, NodeId};
+use common_lib::types::v0::message_bus::{BlockDevice, GetBlockDevices, NodeId};
 use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
 
-pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
+pub(super) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(get_block_devices);
 }
 
@@ -23,7 +23,7 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
 //      curl -X GET "https://localhost:8080/v0/nodes/mayastor/block_devices" \
 //      -H  "accept: application/json" -k
 //
-#[get("/nodes/{node}/block_devices", tags(BlockDevices))]
+#[get("/nodes/{node}/block_devices")]
 async fn get_block_devices(
     web::Query(info): web::Query<GetBlockDeviceQueryParams>,
     web::Path(node): web::Path<NodeId>,

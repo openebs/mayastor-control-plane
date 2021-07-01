@@ -3,7 +3,7 @@ use std::{convert::TryInto, marker::PhantomData};
 
 use super::{core::registry::Registry, handler, impl_request_handler};
 use common::{errors::SvcError, handler::*};
-use common_lib::types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::{
     CreateVolume, DestroyVolume, GetVolumes, PublishVolume, ShareVolume, UnpublishVolume,
     UnshareVolume,
 };

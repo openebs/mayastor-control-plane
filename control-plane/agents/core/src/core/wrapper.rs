@@ -5,7 +5,7 @@ use common::{
 };
 use common_lib::{
     mbus_api::ResourceKind,
-    types::v0::message_bus::mbus::{
+    types::v0::message_bus::{
         AddNexusChild, Child, ChildUri, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
         DestroyPool, DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId,
         PoolState, Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica,

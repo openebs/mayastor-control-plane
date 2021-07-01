@@ -11,7 +11,7 @@ use super::StartOptions;
 use async_trait::async_trait;
 use common_lib::{
     mbus_api::Message,
-    types::v0::message_bus::mbus::{ChannelVs, Liveness},
+    types::v0::message_bus::{ChannelVs, Liveness},
 };
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
 use futures::future::join_all;

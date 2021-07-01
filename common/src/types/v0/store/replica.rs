@@ -2,10 +2,8 @@
 
 use crate::types::v0::{
     message_bus::{
-        mbus,
-        mbus::{
-            CreateReplica, NodeId, PoolId, Protocol, ReplicaId, ReplicaOwners, ReplicaShareProtocol,
-        },
+        self, CreateReplica, NodeId, PoolId, Protocol, ReplicaId, ReplicaOwners,
+        ReplicaShareProtocol,
     },
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
@@ -13,8 +11,6 @@ use crate::types::v0::{
     },
 };
 use serde::{Deserialize, Serialize};
-
-use paperclip::actix::Apiv2Schema;
 
 /// Replica information
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -29,9 +25,9 @@ pub struct Replica {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ReplicaState {
     /// Replica information.
-    pub replica: mbus::Replica,
+    pub replica: message_bus::Replica,
     /// State of the replica.
-    pub state: mbus::ReplicaState,
+    pub state: message_bus::ReplicaState,
 }
 
 /// Key used by the store to uniquely identify a ReplicaState structure.
@@ -56,7 +52,7 @@ impl StorableObject for ReplicaState {
 }
 
 /// User specification of a replica.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ReplicaSpec {
     /// uuid of the replica
     pub uuid: ReplicaId,
@@ -81,7 +77,7 @@ pub struct ReplicaSpec {
     pub operation: Option<ReplicaOperationState>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ReplicaOperationState {
     /// Record of the operation
     pub operation: ReplicaOperation,
@@ -97,9 +93,8 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
     fn commit_op(&mut self) {
         if let Some(op) = self.operation.clone() {
             match op.operation {
-                ReplicaOperation::Unknown => unreachable!(),
                 ReplicaOperation::Create => {
-                    self.state = SpecState::Created(mbus::ReplicaState::Online);
+                    self.state = SpecState::Created(message_bus::ReplicaState::Online);
                 }
                 ReplicaOperation::Destroy => {
                     self.state = SpecState::Deleted;
@@ -137,19 +132,12 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
 }
 
 /// Available Replica Operations
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Apiv2Schema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ReplicaOperation {
-    Unknown,
     Create,
     Destroy,
     Share(ReplicaShareProtocol),
     Unshare,
-}
-
-impl Default for ReplicaOperation {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Key used by the store to uniquely identify a ReplicaSpec structure.
@@ -179,7 +167,7 @@ impl StorableObject for ReplicaSpec {
     }
 }
 
-impl From<&ReplicaSpec> for mbus::Replica {
+impl From<&ReplicaSpec> for message_bus::Replica {
     fn from(replica: &ReplicaSpec) -> Self {
         Self {
             node: NodeId::default(),
@@ -189,13 +177,13 @@ impl From<&ReplicaSpec> for mbus::Replica {
             size: replica.size,
             share: replica.share.clone(),
             uri: "".to_string(),
-            state: mbus::ReplicaState::Unknown,
+            state: message_bus::ReplicaState::Unknown,
         }
     }
 }
 
 /// State of the Replica Spec
-pub type ReplicaSpecState = SpecState<mbus::ReplicaState>;
+pub type ReplicaSpecState = SpecState<message_bus::ReplicaState>;
 
 impl From<&CreateReplica> for ReplicaSpec {
     fn from(request: &CreateReplica) -> Self {
@@ -221,8 +209,8 @@ impl PartialEq<CreateReplica> for ReplicaSpec {
         &other == self
     }
 }
-impl PartialEq<mbus::Replica> for ReplicaSpec {
-    fn eq(&self, other: &mbus::Replica) -> bool {
+impl PartialEq<message_bus::Replica> for ReplicaSpec {
+    fn eq(&self, other: &message_bus::Replica) -> bool {
         self.share == other.share && self.pool == other.pool
     }
 }

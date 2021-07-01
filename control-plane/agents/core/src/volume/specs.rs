@@ -16,7 +16,7 @@ use common::{
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
-        message_bus::mbus::{
+        message_bus::{
             ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus, DestroyReplica,
             DestroyVolume, Nexus, NexusId, NodeId, PoolState, Protocol, PublishVolume, ReplicaId,
             ReplicaOwners, ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume,
@@ -665,7 +665,6 @@ impl SpecOperations for VolumeSpec {
             VolumeOperation::RemoveReplica => unreachable!(),
             VolumeOperation::Create => unreachable!(),
             VolumeOperation::Destroy => unreachable!(),
-            VolumeOperation::Unknown => unreachable!(),
         }?;
         self.start_op(operation);
         Ok(())

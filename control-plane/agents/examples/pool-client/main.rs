@@ -1,7 +1,7 @@
 use common_lib::{
     mbus_api,
     mbus_api::Message,
-    types::v0::message_bus::mbus::{CreatePool, DestroyPool, GetPools},
+    types::v0::message_bus::{CreatePool, DestroyPool, GetPools},
 };
 use structopt::StructOpt;
 use tracing::info;

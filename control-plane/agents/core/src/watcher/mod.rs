@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use common::errors::SvcError;
 use common_lib::{
     mbus_api::*,
-    types::v0::message_bus::mbus::{ChannelVs, CreateWatch, DeleteWatch, GetWatchers},
+    types::v0::message_bus::{ChannelVs, CreateWatch, DeleteWatch, GetWatchers},
 };
 
 pub(crate) fn configure(builder: common::Service) -> common::Service {
@@ -27,7 +27,7 @@ mod tests {
     use common_lib::{
         store::etcd::Etcd,
         types::v0::{
-            message_bus::mbus::{CreateVolume, Volume, VolumeId, WatchResourceId},
+            message_bus::{CreateVolume, Volume, VolumeId, WatchResourceId},
             store::definitions::{ObjectKey, Store},
         },
     };

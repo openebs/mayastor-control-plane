@@ -1,11 +1,11 @@
 use super::*;
-use common_lib::types::v0::message_bus::mbus::{DestroyPool, Filter, NodeId, Pool, PoolId};
+use common_lib::types::v0::message_bus::{DestroyPool, Filter, NodeId, Pool, PoolId};
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
     ReplyErrorKind, ResourceKind,
 };
 
-pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
+pub(super) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(get_pools)
         .service(get_pool)
         .service(get_node_pools)
@@ -15,30 +15,30 @@ pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
         .service(del_pool);
 }
 
-#[get("/pools", tags(Pools))]
-async fn get_pools() -> Result<Json<Vec<Pool>>, RestClusterError> {
-    RestRespond::result(MessageBus::get_pools(Filter::None).await).map_err(RestClusterError::from)
+#[get("/pools")]
+async fn get_pools() -> Result<Json<Vec<Pool>>, RestError> {
+    RestRespond::result(MessageBus::get_pools(Filter::None).await).map_err(RestError::from)
 }
-#[get("/pools/{pool_id}", tags(Pools))]
+#[get("/pools/{pool_id}")]
 async fn get_pool(web::Path(pool_id): web::Path<PoolId>) -> Result<Json<Pool>, RestError> {
     RestRespond::result(MessageBus::get_pool(Filter::Pool(pool_id)).await)
 }
 
-#[get("/nodes/{id}/pools", tags(Pools))]
+#[get("/nodes/{id}/pools")]
 async fn get_node_pools(
     web::Path(node_id): web::Path<NodeId>,
 ) -> Result<Json<Vec<Pool>>, RestError> {
     RestRespond::result(MessageBus::get_pools(Filter::Node(node_id)).await)
 }
 
-#[get("/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
+#[get("/nodes/{node_id}/pools/{pool_id}")]
 async fn get_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
 ) -> Result<Json<Pool>, RestError> {
     RestRespond::result(MessageBus::get_pool(Filter::NodePool(node_id, pool_id)).await)
 }
 
-#[put("/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
+#[put("/nodes/{node_id}/pools/{pool_id}")]
 async fn put_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
     create: web::Json<CreatePoolBody>,
@@ -47,13 +47,13 @@ async fn put_node_pool(
     RestRespond::result(MessageBus::create_pool(create).await)
 }
 
-#[delete("/nodes/{node_id}/pools/{pool_id}", tags(Pools))]
+#[delete("/nodes/{node_id}/pools/{pool_id}")]
 async fn del_node_pool(
     web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
 ) -> Result<JsonUnit, RestError> {
     destroy_pool(Filter::NodePool(node_id, pool_id)).await
 }
-#[delete("/pools/{pool_id}", tags(Pools))]
+#[delete("/pools/{pool_id}")]
 async fn del_pool(web::Path(pool_id): web::Path<PoolId>) -> Result<JsonUnit, RestError> {
     destroy_pool(Filter::Pool(pool_id)).await
 }

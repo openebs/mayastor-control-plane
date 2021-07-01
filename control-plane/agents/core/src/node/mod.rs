@@ -9,7 +9,7 @@ use common::{errors::SvcError, Service};
 use common_lib::mbus_api::{v0::*, *};
 
 use async_trait::async_trait;
-use common_lib::types::v0::message_bus::mbus::{
+use common_lib::types::v0::message_bus::{
     ChannelVs, Deregister, GetBlockDevices, GetNodes, GetSpecs, Register,
 };
 use std::{convert::TryInto, marker::PhantomData};
@@ -40,7 +40,7 @@ fn create_node_service(builder: &Service) -> service::Service {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_lib::types::v0::message_bus::mbus::{Node, NodeState};
+    use common_lib::types::v0::message_bus::{Node, NodeState};
     use testlib::ClusterBuilder;
 
     #[actix_rt::test]

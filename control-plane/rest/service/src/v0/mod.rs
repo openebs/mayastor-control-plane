@@ -19,39 +19,25 @@ use rest_client::{versions::v0::*, JsonGeneric, JsonUnit};
 use crate::authentication::authenticate;
 use actix_service::ServiceFactory;
 use actix_web::{
+    delete,
     dev::{MessageBody, ServiceRequest, ServiceResponse},
+    get, put,
     web::{self, Json},
     FromRequest, HttpRequest,
 };
 use futures::future::Ready;
-use macros::actix::{delete, get, put};
-use paperclip::actix::OpenApiExt;
-use std::io::Write;
-use structopt::StructOpt;
-use tracing::info;
 
 use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
-use paperclip::actix::Apiv2Security;
 use serde::Deserialize;
 
 fn version() -> String {
     "v0".into()
 }
-fn base_path() -> String {
-    format!("/{}", version())
-}
 fn spec_uri() -> String {
     format!("/{}/api/spec", version())
 }
-fn get_api() -> paperclip::v2::models::DefaultApiRaw {
-    let mut api = paperclip::v2::models::DefaultApiRaw::default();
-    api.info.version = version();
-    api.info.title = "Mayastor RESTful API".into();
-    api.base_path = Some(base_path());
-    api
-}
 
-fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
+fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     nodes::configure(cfg);
     pools::configure(cfg);
     replicas::configure(cfg);
@@ -85,46 +71,18 @@ where
         InitError = (),
     >,
 {
-    api.configure(swagger_ui::configure)
-        .wrap_api_with_spec(get_api())
-        .with_json_spec_at(&spec_uri())
-        .service(
-            // any /v0 services must either live within this scope or be
-            // declared beforehand
-            paperclip::actix::web::scope("/v0")
-                .app_data(
-                    actix_web::web::PathConfig::default().error_handler(|e, r| json_error(e, r)),
-                )
-                .app_data(
-                    actix_web::web::JsonConfig::default().error_handler(|e, r| json_error(e, r)),
-                )
-                .app_data(
-                    actix_web::web::QueryConfig::default().error_handler(|e, r| json_error(e, r)),
-                )
-                .configure(configure),
-        )
-        .trim_base_path()
-        .with_raw_json_spec(|app, spec| {
-            if let Some(dir) = super::CliArgs::from_args().output_specs {
-                let file = dir.join(&format!("{}_api_spec.json", version()));
-                info!("Writing {} to {}", spec_uri(), file.to_string_lossy());
-                let mut file = std::fs::File::create(file).expect("Should create the spec file");
-                file.write_all(spec.to_string().as_ref())
-                    .expect("Should write the spec to file");
-            }
-            app
-        })
-        .build()
+    api.configure(swagger_ui::configure).service(
+        // any /v0 services must either live within this scope or be
+        // declared beforehand
+        web::scope("/v0")
+            .app_data(web::PathConfig::default().error_handler(|e, r| json_error(e, r)))
+            .app_data(web::JsonConfig::default().error_handler(|e, r| json_error(e, r)))
+            .app_data(web::QueryConfig::default().error_handler(|e, r| json_error(e, r)))
+            .configure(configure),
+    )
 }
 
-#[derive(Apiv2Security, Deserialize)]
-#[openapi(
-    apiKey,
-    alias = "JWT",
-    in = "header",
-    name = "Authorization",
-    description = "Use format 'Bearer TOKEN'"
-)]
+#[derive(Deserialize)]
 pub struct BearerToken;
 
 impl FromRequest for BearerToken {

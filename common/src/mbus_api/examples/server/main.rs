@@ -1,7 +1,4 @@
-use common_lib::types::v0::message_bus::{
-    mbus,
-    mbus::{Channel, ChannelVs, MessageIdVs},
-};
+use common_lib::types::v0::message_bus::{Channel, ChannelVs, MessageIdVs};
 use mbus_api::*;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, str::FromStr};
@@ -72,7 +69,7 @@ async fn main() {
     );
     let cli_args = CliArgs::from_args();
     log::info!("Using args: {:?}", cli_args);
-    log::info!("CH: {}", Channel::v0(mbus::ChannelVs::Default).to_string());
+    log::info!("CH: {}", Channel::v0(ChannelVs::Default).to_string());
 
     message_bus_init(cli_args.url).await;
 

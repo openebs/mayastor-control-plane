@@ -19,7 +19,7 @@ use common::errors::SvcError;
 use common_lib::{
     store::etcd::Etcd,
     types::v0::{
-        message_bus::mbus::NodeId,
+        message_bus::NodeId,
         store::definitions::{StorableObject, Store, StoreError, StoreKey},
     },
 };

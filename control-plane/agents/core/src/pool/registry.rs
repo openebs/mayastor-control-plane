@@ -1,6 +1,6 @@
 use crate::core::{registry::Registry, wrapper::*};
 use common::errors::{NodeNotFound, PoolNotFound, ReplicaNotFound, SvcError};
-use common_lib::types::v0::message_bus::mbus::{NodeId, Pool, PoolId, Replica, ReplicaId};
+use common_lib::types::v0::message_bus::{NodeId, Pool, PoolId, Replica, ReplicaId};
 use snafu::OptionExt;
 
 /// Pool helpers

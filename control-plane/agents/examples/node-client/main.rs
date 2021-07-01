@@ -1,4 +1,4 @@
-use common_lib::{mbus_api, mbus_api::Message, types::v0::message_bus::mbus::GetNodes};
+use common_lib::{mbus_api, mbus_api::Message, types::v0::message_bus::GetNodes};
 use structopt::StructOpt;
 use tracing::info;
 

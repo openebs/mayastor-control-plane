@@ -1,4 +1,4 @@
-use common_lib::types::v0::message_bus::mbus::{Channel, ChannelVs, MessageIdVs};
+use common_lib::types::v0::message_bus::{Channel, ChannelVs, MessageIdVs};
 use log::info;
 use mbus_api::{Message, *};
 use serde::{Deserialize, Serialize};
