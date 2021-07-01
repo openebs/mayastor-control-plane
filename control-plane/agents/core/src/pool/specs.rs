@@ -169,6 +169,15 @@ impl ResourceSpecs {
         }
         vector
     }
+
+    /// Get all PoolSpecs
+    pub(crate) async fn get_pools(&self) -> Vec<PoolSpec> {
+        let mut specs = vec![];
+        for pool_spec in self.pools.values() {
+            specs.push(pool_spec.lock().await.clone());
+        }
+        specs
+    }
 }
 
 impl ResourceSpecsLocked {

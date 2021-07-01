@@ -164,11 +164,12 @@ impl Service {
         let nexuses = registry.get_nexuses().await;
         let replicas = registry.get_replicas().await;
         let volumes = registry.get_volumes().await;
+        let pools = registry.get_pools().await;
         Ok(Specs {
             volumes,
             nexuses,
             replicas,
-            ..Default::default()
+            pools,
         })
     }
 }
