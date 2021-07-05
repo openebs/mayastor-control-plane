@@ -90,6 +90,7 @@ pipeline {
         sh 'printenv'
         sh 'nix-shell --run "cargo fmt --all -- --check"'
         sh 'nix-shell --run "cargo clippy --all-targets -- -D warnings"'
+        sh 'nix-shell --run "./scripts/generate-openapi-bindings.sh"'
       }
     }
     stage('test') {

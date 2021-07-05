@@ -3,3 +3,4 @@
 /package-lock.json
 /.idea
 /result*
+/openapi/Cargo.lock
