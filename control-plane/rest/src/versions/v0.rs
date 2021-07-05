@@ -1,6 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
 use super::super::ActixRestClient;
-use crate::{ClientError, ClientResult, JsonGeneric, RestUri};
+use crate::{ClientError, ClientResult};
 use actix_web::body::Body;
 use async_trait::async_trait;
 pub use common_lib::{
@@ -186,23 +186,6 @@ impl CreateVolumeBody {
     }
 }
 
-/// Contains the query parameters that can be passed when calling
-/// get_block_devices
-#[derive(Deserialize, Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct GetBlockDeviceQueryParams {
-    /// specifies whether to list all devices or only usable ones
-    pub all: Option<bool>,
-}
-
-/// Watch query parameters used by various watch calls
-#[derive(Deserialize, Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct WatchTypeQueryParam {
-    /// URL callback
-    pub callback: RestUri,
-}
-
 /// Watch Resource in the store
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -279,7 +262,7 @@ pub trait RestClient {
     /// Destroy volume
     async fn destroy_volume(&self, args: DestroyVolume) -> ClientResult<()>;
     /// Generic JSON gRPC call
-    async fn json_grpc(&self, args: JsonGrpcRequest) -> ClientResult<JsonGeneric>;
+    async fn json_grpc(&self, args: JsonGrpcRequest) -> ClientResult<serde_json::Value>;
     /// Get block devices
     async fn get_block_devices(&self, args: GetBlockDevices) -> ClientResult<Vec<BlockDevice>>;
     /// Get all watches for resource
@@ -534,7 +517,7 @@ impl RestClient for ActixRestClient {
         Ok(())
     }
 
-    async fn json_grpc(&self, args: JsonGrpcRequest) -> ClientResult<JsonGeneric> {
+    async fn json_grpc(&self, args: JsonGrpcRequest) -> ClientResult<serde_json::Value> {
         let urn = format!("/v0/nodes/{}/jsongrpc/{}", args.node, args.method);
         self.put(urn, Body::from(args.params.to_string())).await
     }
