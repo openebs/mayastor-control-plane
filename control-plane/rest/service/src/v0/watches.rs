@@ -1,60 +1,55 @@
 use super::*;
+use actix_web::web::Path;
 use common_lib::types::v0::message_bus::{
-    CreateWatch, DeleteWatch, GetWatchers, VolumeId, WatchCallback, WatchResourceId, WatchType,
+    CreateWatch, DeleteWatch, GetWatchers, WatchCallback, WatchResourceId, WatchType,
 };
 use mbus_api::Message;
 use std::convert::TryFrom;
 
-pub(super) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
-    cfg.service(put_watch)
-        .service(del_watch)
-        .service(get_watches);
-}
+#[async_trait::async_trait]
+impl apis::WatchesApi for RestApi {
+    async fn del_watch_volume(
+        web::Path(volume_id): Path<String>,
+        callback: url::Url,
+    ) -> Result<(), RestError<RestJsonError>> {
+        DeleteWatch {
+            id: WatchResourceId::Volume(volume_id.into()),
+            callback: WatchCallback::Uri(callback.to_string()),
+            watch_type: WatchType::Actual,
+        }
+        .request()
+        .await?;
 
-#[put("/watches/volumes/{volume_id}")]
-async fn put_watch(
-    web::Path(volume_id): web::Path<VolumeId>,
-    web::Query(watch): web::Query<WatchTypeQueryParam>,
-) -> Result<Json<()>, RestError> {
-    CreateWatch {
-        id: WatchResourceId::Volume(volume_id),
-        callback: WatchCallback::Uri(watch.callback.to_string()),
-        watch_type: WatchType::Actual,
+        Ok(())
     }
-    .request()
-    .await?;
 
-    Ok(Json(()))
-}
-
-#[get("/watches/volumes/{volume_id}")]
-async fn get_watches(
-    web::Path(volume_id): web::Path<VolumeId>,
-) -> Result<Json<Vec<RestWatch>>, RestError> {
-    let watches = GetWatchers {
-        resource: WatchResourceId::Volume(volume_id),
+    async fn get_watch_volume(
+        web::Path(volume_id): Path<String>,
+    ) -> Result<Json<Vec<models::RestWatch>>, RestError<RestJsonError>> {
+        let watches = GetWatchers {
+            resource: WatchResourceId::Volume(volume_id.into()),
+        }
+        .request()
+        .await?;
+        let watches = watches.0.iter();
+        let watches = watches
+            .filter_map(|w| models::RestWatch::try_from(w).ok())
+            .collect();
+        Ok(Json(watches))
     }
-    .request()
-    .await?;
-    let watches = watches.0.iter();
-    let watches = watches
-        .filter_map(|w| RestWatch::try_from(w).ok())
-        .collect();
-    Ok(Json(watches))
-}
 
-#[delete("/watches/volumes/{volume_id}")]
-async fn del_watch(
-    web::Path(volume_id): web::Path<VolumeId>,
-    web::Query(watch): web::Query<WatchTypeQueryParam>,
-) -> Result<JsonUnit, RestError> {
-    DeleteWatch {
-        id: WatchResourceId::Volume(volume_id),
-        callback: WatchCallback::Uri(watch.callback.to_string()),
-        watch_type: WatchType::Actual,
+    async fn put_watch_volume(
+        web::Path(volume_id): Path<String>,
+        callback: url::Url,
+    ) -> Result<(), RestError<RestJsonError>> {
+        CreateWatch {
+            id: WatchResourceId::Volume(volume_id.into()),
+            callback: WatchCallback::Uri(callback.to_string()),
+            watch_type: WatchType::Actual,
+        }
+        .request()
+        .await?;
+
+        Ok(())
     }
-    .request()
-    .await?;
-
-    Ok(JsonUnit::default())
 }

@@ -15,21 +15,19 @@ pub mod swagger_ui;
 pub mod volumes;
 pub mod watches;
 
-use rest_client::{versions::v0::*, JsonGeneric, JsonUnit};
-
-use crate::authentication::authenticate;
 use actix_service::ServiceFactory;
 use actix_web::{
-    delete,
     dev::{MessageBody, ServiceRequest, ServiceResponse},
-    get, put,
     web::{self, Json},
     FromRequest, HttpRequest,
 };
 use futures::future::Ready;
-
-use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
 use serde::Deserialize;
+
+use crate::authentication::authenticate;
+pub use common_lib::types::v0::openapi::{apis::RestError, models::RestJsonError};
+use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
+use rest_client::versions::v0::*;
 
 fn version() -> String {
     "v0".into()
@@ -38,17 +36,11 @@ fn spec_uri() -> String {
     format!("/{}/api/spec", version())
 }
 
+pub(crate) struct RestApi {}
+
 fn configure(cfg: &mut actix_web::web::ServiceConfig) {
-    nodes::configure(cfg);
-    pools::configure(cfg);
-    replicas::configure(cfg);
-    nexuses::configure(cfg);
-    children::configure(cfg);
-    volumes::configure(cfg);
-    jsongrpc::configure(cfg);
-    block_devices::configure(cfg);
-    watches::configure(cfg);
-    specs::configure(cfg);
+    apis::configure::<RestApi, BearerToken>(cfg);
+    // todo: remove when the /states is added to the spec
     states::configure(cfg);
 }
 
@@ -88,7 +80,7 @@ where
 pub struct BearerToken;
 
 impl FromRequest for BearerToken {
-    type Error = RestError;
+    type Error = RestError<RestJsonError>;
     type Future = Ready<Result<Self, Self::Error>>;
     type Config = ();
 
