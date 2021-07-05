@@ -234,7 +234,7 @@ impl NodeWrapper {
     }
     /// Unshare a replica by removing its share protocol and uri
     fn unshare_replica(&mut self, pool: &PoolId, replica: &ReplicaId, uri: &str) {
-        self.share_replica(&Protocol::Off, uri, pool, replica);
+        self.share_replica(&Protocol::None, uri, pool, replica);
     }
     /// Add a new nexus to the node
     fn add_nexus(&mut self, nexus: &Nexus) {
@@ -256,7 +256,7 @@ impl NodeWrapper {
     }
     /// Unshare a nexus by removing its share uri
     fn unshare_nexus(&mut self, nexus: &NexusId) {
-        self.share_nexus("", Protocol::Off, nexus);
+        self.share_nexus("", Protocol::None, nexus);
     }
     /// Add a Child to the nexus
     fn add_child(&mut self, nexus: &NexusId, child: &Child) {

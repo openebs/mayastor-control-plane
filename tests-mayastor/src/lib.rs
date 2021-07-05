@@ -75,7 +75,7 @@ impl Cluster {
         let mut uuid = message_bus::ReplicaId::default().to_string();
         let _ = uuid.drain(24 .. uuid.len());
         format!(
-            "{}{:01x}{:01x}{:08x}",
+            "{}{:02x}{:02x}{:08x}",
             uuid, node as u8, pool as u8, replica
         )
         .into()

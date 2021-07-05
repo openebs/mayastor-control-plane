@@ -18,7 +18,7 @@ async fn create_replica() {
         pool: cluster.pool(0, 0),
         size: 5 * 1024 * 1024,
         thin: true,
-        share: v0::Protocol::Off,
+        share: v0::Protocol::None,
         ..Default::default()
     };
     let created_replica = cluster
@@ -49,7 +49,7 @@ async fn create_replica_protocols() {
         Err(v0::Protocol::Nbd),
         Err(v0::Protocol::Iscsi),
         Ok(v0::Protocol::Nvmf),
-        Ok(v0::Protocol::Off),
+        Ok(v0::Protocol::None),
     ];
 
     for test in protocols {
@@ -142,7 +142,7 @@ async fn create_replica_idempotent_different_sizes() {
             pool: cluster.pool(0, 0),
             size,
             thin: false,
-            share: v0::Protocol::Off,
+            share: v0::Protocol::None,
             ..Default::default()
         })
         .await
@@ -157,7 +157,7 @@ async fn create_replica_idempotent_different_sizes() {
             pool: cluster.pool(0, 0),
             size,
             thin: replica.thin,
-            share: v0::Protocol::Off,
+            share: v0::Protocol::None,
             ..Default::default()
         })
         .await
@@ -174,7 +174,7 @@ async fn create_replica_idempotent_different_sizes() {
                 pool: cluster.pool(0, 0),
                 size,
                 thin: replica.thin,
-                share: v0::Protocol::Off,
+                share: v0::Protocol::None,
                 ..Default::default()
             }),
         )
@@ -204,7 +204,7 @@ async fn create_replica_idempotent_different_protocols() {
             pool: cluster.pool(0, 0),
             size,
             thin: false,
-            share: v0::Protocol::Off,
+            share: v0::Protocol::None,
             ..Default::default()
         })
         .await
@@ -212,7 +212,7 @@ async fn create_replica_idempotent_different_protocols() {
     assert_eq!(&replica.uuid, &uuid);
 
     let protocols = vec![
-        Ok(v0::Protocol::Off),
+        Ok(v0::Protocol::None),
         Err(v0::Protocol::Iscsi),
         Err(v0::Protocol::Nvmf),
     ];

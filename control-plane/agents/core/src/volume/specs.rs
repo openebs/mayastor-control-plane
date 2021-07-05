@@ -221,7 +221,7 @@ impl ResourceSpecsLocked {
                 let replica = if replicas.is_empty() {
                     let mut replica = pool_replica.clone();
                     // the local replica needs to be connected via "bdev:///"
-                    replica.share = Protocol::Off;
+                    replica.share = Protocol::None;
                     replica
                 } else {
                     pool_replica.clone()
@@ -271,7 +271,7 @@ impl ResourceSpecsLocked {
                 uuid: request.uuid.clone(),
                 size: request.size,
                 state: VolumeState::Online,
-                protocol: Protocol::Off,
+                protocol: Protocol::None,
                 children: vec![],
             })
         };

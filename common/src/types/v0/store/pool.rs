@@ -8,7 +8,9 @@ use crate::types::v0::{
     },
 };
 
+use crate::types::v0::openapi::models;
 use serde::{Deserialize, Serialize};
+use std::convert::From;
 
 type PoolLabel = String;
 
@@ -81,6 +83,22 @@ pub struct PoolSpec {
     pub updating: bool,
     /// Record of the operation in progress
     pub operation: Option<PoolOperationState>,
+}
+
+impl From<PoolSpec> for models::PoolSpec {
+    fn from(src: PoolSpec) -> Self {
+        Self::new(
+            src.disks
+                .iter()
+                .map(std::ops::Deref::deref)
+                .cloned()
+                .collect(),
+            src.id.to_string(),
+            src.labels,
+            src.node.into(),
+            src.state.into(),
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

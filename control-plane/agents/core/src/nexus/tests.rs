@@ -154,7 +154,7 @@ async fn nexus_share_transaction() {
         .await
         .expect_err("mayastor is down");
 
-    check_share_operation(&nexus, Protocol::Off).await;
+    check_share_operation(&nexus, Protocol::None).await;
 
     // unpause mayastor
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
@@ -176,7 +176,7 @@ async fn nexus_share_transaction() {
 
     UnshareNexus::from(&nexus).request().await.unwrap();
 
-    assert_eq!(nexus_spec(&nexus).await.unwrap().share, Protocol::Off);
+    assert_eq!(nexus_spec(&nexus).await.unwrap().share, Protocol::None);
 }
 
 /// Tests Store Write Failures for Nexus Child Operations
@@ -283,7 +283,7 @@ async fn nexus_share_transaction_store() {
         &nexus,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (unshare, 1, Protocol::Off),
+        (unshare, 1, Protocol::None),
     )
     .await;
 }
@@ -412,7 +412,7 @@ async fn nexus_child_transaction_store() {
         &nexus,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (add_child, 2, Protocol::Off),
+        (add_child, 2, Protocol::None),
     )
     .await;
 
@@ -425,7 +425,7 @@ async fn nexus_child_transaction_store() {
         &nexus,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (del_child, 1, Protocol::Off),
+        (del_child, 1, Protocol::None),
     )
     .await;
 }

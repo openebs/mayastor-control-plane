@@ -61,4 +61,45 @@ pub struct Node {
     pub state: NodeState,
 }
 
+impl From<models::Node> for Node {
+    fn from(src: models::Node) -> Self {
+        Self {
+            id: src.id.into(),
+            grpc_endpoint: src.grpc_endpoint,
+            state: src.state.into(),
+        }
+    }
+}
+
 bus_impl_string_id!(NodeId, "ID of a mayastor node");
+
+impl From<Node> for models::Node {
+    fn from(src: Node) -> Self {
+        Self::new(src.grpc_endpoint, src.id.into(), src.state.into())
+    }
+}
+impl From<&Node> for models::Node {
+    fn from(src: &Node) -> Self {
+        let src = src.clone();
+        Self::new(src.grpc_endpoint, src.id.into(), src.state.into())
+    }
+}
+
+impl From<NodeState> for models::NodeState {
+    fn from(src: NodeState) -> Self {
+        match src {
+            NodeState::Unknown => Self::Unknown,
+            NodeState::Online => Self::Online,
+            NodeState::Offline => Self::Offline,
+        }
+    }
+}
+impl From<models::NodeState> for NodeState {
+    fn from(src: models::NodeState) -> Self {
+        match src {
+            models::NodeState::Unknown => Self::Unknown,
+            models::NodeState::Online => Self::Online,
+            models::NodeState::Offline => Self::Offline,
+        }
+    }
+}

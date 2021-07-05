@@ -136,6 +136,18 @@ macro_rules! bus_impl_string_uuid {
                 $Name(uuid::Uuid::new_v4().to_string())
             }
         }
+        impl std::convert::TryFrom<&$Name> for uuid::Uuid {
+            type Error = uuid::Error;
+            fn try_from(value: &$Name) -> Result<Self, Self::Error> {
+                value.as_str().parse()
+            }
+        }
+        impl std::convert::TryFrom<$Name> for uuid::Uuid {
+            type Error = uuid::Error;
+            fn try_from(value: $Name) -> Result<Self, Self::Error> {
+                std::convert::TryFrom::try_from(&value)
+            }
+        }
     };
 }
 
@@ -168,7 +180,7 @@ macro_rules! bus_impl_string_id_percent_decoding {
 #[serde(rename_all = "camelCase")]
 pub enum Protocol {
     /// not shared by any of the variants
-    Off = 0,
+    None = 0,
     /// shared as NVMe-oF TCP
     Nvmf = 1,
     /// shared as iSCSI
@@ -180,21 +192,21 @@ pub enum Protocol {
 impl Protocol {
     /// Is the protocol set to be shared
     pub fn shared(&self) -> bool {
-        self != &Self::Off
+        self != &Self::None
     }
 }
 impl Default for Protocol {
     fn default() -> Self {
-        Self::Off
+        Self::None
     }
 }
 impl From<i32> for Protocol {
     fn from(src: i32) -> Self {
         match src {
-            0 => Self::Off,
+            0 => Self::None,
             1 => Self::Nvmf,
             2 => Self::Iscsi,
-            _ => Self::Off,
+            _ => Self::None,
         }
     }
 }
@@ -207,7 +219,7 @@ impl TryFrom<&str> for Protocol {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(if value.is_empty() {
-            Protocol::Off
+            Protocol::None
         } else {
             match url::Url::from_str(value) {
                 Ok(url) => match url.scheme() {
@@ -222,6 +234,27 @@ impl TryFrom<&str> for Protocol {
                 }
             }
         })
+    }
+}
+
+impl From<Protocol> for models::Protocol {
+    fn from(src: Protocol) -> Self {
+        match src {
+            Protocol::None => Self::None,
+            Protocol::Nvmf => Self::Nvmf,
+            Protocol::Iscsi => Self::Iscsi,
+            Protocol::Nbd => Self::Nbd,
+        }
+    }
+}
+impl From<models::Protocol> for Protocol {
+    fn from(src: models::Protocol) -> Self {
+        match src {
+            models::Protocol::None => Self::None,
+            models::Protocol::Nvmf => Self::Nvmf,
+            models::Protocol::Iscsi => Self::Iscsi,
+            models::Protocol::Nbd => Self::Nbd,
+        }
     }
 }
 

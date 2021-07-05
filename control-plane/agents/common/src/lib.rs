@@ -329,7 +329,7 @@ impl Service {
                 let result = ServiceError::HandleMessage {
                     channel,
                     id: id.clone(),
-                    details: error.to_string(),
+                    details: error.full_string(),
                 };
                 // respond back to the sender with an error, ignore the outcome
                 arguments

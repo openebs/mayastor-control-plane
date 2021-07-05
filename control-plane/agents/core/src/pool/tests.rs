@@ -45,7 +45,7 @@ async fn pool() {
         size: 12582912, /* actual size will be a multiple of 4MB so just
                          * create it like so */
         thin: true,
-        share: Protocol::Off,
+        share: Protocol::None,
         ..Default::default()
     }
     .request()
@@ -63,7 +63,7 @@ async fn pool() {
             pool: "pooloop".into(),
             thin: false,
             size: 12582912,
-            share: Protocol::Off,
+            share: Protocol::None,
             uri: "bdev:///replica1".into(),
             state: ReplicaState::Online
         }
@@ -157,7 +157,7 @@ async fn replica_transaction() {
         pool: cluster.pool(0, 0),
         size: 12582912,
         thin: false,
-        share: Protocol::Off,
+        share: Protocol::None,
         ..Default::default()
     }
     .request()
@@ -181,7 +181,7 @@ async fn replica_transaction() {
         .await
         .expect_err("mayastor down");
 
-    check_operation(&replica, Protocol::Off).await;
+    check_operation(&replica, Protocol::None).await;
 
     // unpause mayastor
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
@@ -203,7 +203,7 @@ async fn replica_transaction() {
 
     UnshareReplica::from(&replica).request().await.unwrap();
 
-    assert_eq!(replica_spec(&replica).await.unwrap().share, Protocol::Off);
+    assert_eq!(replica_spec(&replica).await.unwrap().share, Protocol::None);
 }
 
 /// Tests Store Write Failures for Replica Operations
@@ -286,7 +286,7 @@ async fn replica_transaction_store() {
         pool: cluster.pool(0, 0),
         size: 12582912,
         thin: false,
-        share: Protocol::Off,
+        share: Protocol::None,
         ..Default::default()
     }
     .request()
@@ -305,7 +305,7 @@ async fn replica_transaction_store() {
         &replica,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (UnshareReplica::from(&replica), Protocol::Off),
+        (UnshareReplica::from(&replica), Protocol::None),
     )
     .await;
 }

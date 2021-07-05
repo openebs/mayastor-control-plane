@@ -7,6 +7,7 @@ pub mod replica;
 pub mod volume;
 pub mod watch;
 
+use crate::types::v0::openapi::models;
 use serde::{Deserialize, Serialize};
 
 /// Enum defining the various states that a resource spec can be in.
@@ -16,6 +17,18 @@ pub enum SpecState<T> {
     Created(T),
     Deleting,
     Deleted,
+}
+
+// todo: change openapi spec to support enum variants
+impl<T> From<SpecState<T>> for models::SpecState {
+    fn from(src: SpecState<T>) -> Self {
+        match src {
+            SpecState::Creating => Self::Creating,
+            SpecState::Created(_) => Self::Created,
+            SpecState::Deleting => Self::Deleting,
+            SpecState::Deleted => Self::Deleted,
+        }
+    }
 }
 
 impl<T: std::cmp::PartialEq> SpecState<T> {

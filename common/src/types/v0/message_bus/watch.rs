@@ -1,7 +1,7 @@
 use super::*;
 
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{convert::TryFrom, fmt::Debug};
 
 ///
 /// Watcher Agent
@@ -20,6 +20,20 @@ pub struct Watch {
     pub callback: WatchCallback,
     /// type of watch
     pub watch_type: WatchType,
+}
+
+impl TryFrom<&Watch> for models::RestWatch {
+    type Error = ();
+    fn try_from(value: &Watch) -> Result<Self, Self::Error> {
+        match &value.callback {
+            WatchCallback::Uri(uri) => Ok(Self {
+                resource: value.id.to_string(),
+                callback: uri.to_string(),
+            }),
+            /* other types are not implemented yet and should map to an error
+             * _ => Err(()), */
+        }
+    }
 }
 
 /// Get Resource Watches
@@ -118,5 +132,13 @@ pub enum WatchCallback {
 impl Default for WatchCallback {
     fn default() -> Self {
         Self::Uri(Default::default())
+    }
+}
+
+impl From<models::WatchCallback> for WatchCallback {
+    fn from(src: models::WatchCallback) -> Self {
+        match src {
+            models::WatchCallback::uri(uri) => Self::Uri(uri),
+        }
     }
 }

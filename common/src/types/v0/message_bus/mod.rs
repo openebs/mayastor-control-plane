@@ -1,5 +1,3 @@
-pub mod openapi;
-
 pub mod blockdevice;
 pub mod child;
 pub mod jsongrpc;
@@ -28,6 +26,7 @@ pub use watch::*;
 
 use crate::types::Channel;
 
+use crate::types::v0::openapi::*;
 use std::fmt::Debug;
 use strum_macros::{EnumString, ToString};
 

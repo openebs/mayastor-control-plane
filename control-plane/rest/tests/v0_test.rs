@@ -200,7 +200,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         .create_replica(CreateReplica {
             node: pool.node.clone(),
             pool: pool.id.clone(),
-            uuid: "replica1".into(),
+            uuid: "e6e7d39d-e343-42f7-936a-1ab05f1839db".into(),
             size: 12582912, /* actual size will be a multiple of 4MB so just
                              * create it like so */
             thin: true,
@@ -214,12 +214,13 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         replica,
         Replica {
             node: pool.node.clone(),
-            uuid: "replica1".into(),
+            uuid: "e6e7d39d-e343-42f7-936a-1ab05f1839db".into(),
             pool: pool.id.clone(),
             thin: false,
             size: 12582912,
             share: Protocol::Nvmf,
-            uri: "nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:replica1".to_string(),
+            uri: "nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:e6e7d39d-e343-42f7-936a-1ab05f1839db"
+                .to_string(),
             state: ReplicaState::Online
         }
     );
@@ -264,7 +265,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             }],
             device_uri: "".to_string(),
             rebuilds: 0,
-            share: Protocol::Off
+            share: Protocol::None
         }
     );
 

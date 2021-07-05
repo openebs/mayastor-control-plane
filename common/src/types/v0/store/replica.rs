@@ -5,12 +5,14 @@ use crate::types::v0::{
         self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
         ReplicaOwners, ReplicaShareProtocol,
     },
+    openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         SpecState, SpecTransaction,
     },
 };
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 /// Replica information
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -81,6 +83,21 @@ pub struct ReplicaSpec {
     pub operation: Option<ReplicaOperationState>,
 }
 
+impl From<ReplicaSpec> for models::ReplicaSpec {
+    fn from(src: ReplicaSpec) -> Self {
+        Self::new(
+            src.managed,
+            src.owners.into(),
+            src.pool.into(),
+            src.share.into(),
+            src.size as i64,
+            src.state.into(),
+            src.thin,
+            openapi::apis::Uuid::try_from(src.uuid).unwrap(),
+        )
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ReplicaOperationState {
     /// Record of the operation
@@ -107,7 +124,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
                     self.share = share.into();
                 }
                 ReplicaOperation::Unshare => {
-                    self.share = Protocol::Off;
+                    self.share = Protocol::None;
                 }
             }
         }
