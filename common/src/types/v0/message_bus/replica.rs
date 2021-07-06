@@ -35,6 +35,12 @@ pub struct Replica {
     pub state: ReplicaState,
 }
 
+impl UuidString for Replica {
+    fn uuid_as_string(&self) -> String {
+        self.uuid.clone().into()
+    }
+}
+
 bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
 
 impl From<Replica> for DestroyReplica {

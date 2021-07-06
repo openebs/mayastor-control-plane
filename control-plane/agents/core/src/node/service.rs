@@ -4,7 +4,7 @@ use common::{
     errors::{GrpcRequestError, NodeNotFound, SvcError},
     v0::msg_translation::RpcToMessageBus,
 };
-use common_lib::types::v0::message_bus::{GetSpecs, Node, NodeId, NodeState, Specs};
+use common_lib::types::v0::message_bus::{GetSpecs, Node, NodeId, NodeState, Specs, States};
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::{OptionExt, ResultExt};
 use std::sync::Arc;
@@ -160,16 +160,29 @@ impl Service {
 
     /// Get specs from the registry
     pub(crate) async fn get_specs(&self, _request: &GetSpecs) -> Result<Specs, SvcError> {
-        let registry = self.registry.specs.write().await;
-        let nexuses = registry.get_nexuses().await;
-        let replicas = registry.get_replicas().await;
-        let volumes = registry.get_volumes().await;
-        let pools = registry.get_pools().await;
+        let specs = self.registry.specs.write().await;
+        let nexuses = specs.get_nexuses().await;
+        let replicas = specs.get_replicas().await;
+        let volumes = specs.get_volumes().await;
+        let pools = specs.get_pools().await;
         Ok(Specs {
             volumes,
             nexuses,
             replicas,
             pools,
+        })
+    }
+
+    /// Get states from the registry
+    pub(crate) async fn get_states(&self, _request: &GetStates) -> Result<States, SvcError> {
+        let states = self.registry.states.write().await;
+        let nexuses = states.get_nexus_states().await;
+        let replicas = states.get_replica_states().await;
+        let pools = states.get_pool_states().await;
+        Ok(States {
+            nexuses,
+            pools,
+            replicas,
         })
     }
 }

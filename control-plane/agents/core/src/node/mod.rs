@@ -10,7 +10,7 @@ use common_lib::mbus_api::{v0::*, *};
 
 use async_trait::async_trait;
 use common_lib::types::v0::message_bus::{
-    ChannelVs, Deregister, GetBlockDevices, GetNodes, GetSpecs, Register,
+    ChannelVs, Deregister, GetBlockDevices, GetNodes, GetSpecs, GetStates, Register,
 };
 use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
@@ -23,6 +23,7 @@ pub(crate) fn configure(builder: Service) -> Service {
         .with_subscription(handler_publish!(Register))
         .with_subscription(handler_publish!(Deregister))
         .with_subscription(handler!(GetSpecs))
+        .with_subscription(handler!(GetStates))
         .with_channel(ChannelVs::Node)
         .with_subscription(handler!(GetNodes))
         .with_subscription(handler!(GetBlockDevices))

@@ -9,6 +9,7 @@ pub mod node;
 pub mod pool;
 pub mod replica;
 pub mod spec;
+pub mod state;
 pub mod volume;
 pub mod watch;
 
@@ -21,6 +22,7 @@ pub use node::*;
 pub use pool::*;
 pub use replica::*;
 pub use spec::*;
+pub use state::*;
 pub use volume::*;
 pub use watch::*;
 
@@ -156,4 +158,10 @@ pub enum MessageIdVs {
     DeleteWatch,
     /// Get Specs
     GetSpecs,
+    /// Get States
+    GetStates,
+}
+
+pub trait UuidString {
+    fn uuid_as_string(&self) -> String;
 }

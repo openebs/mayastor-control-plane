@@ -7,9 +7,9 @@ use crate::{
     types::v0::message_bus::{
         AddNexusChild, AddVolumeNexus, Child, CreateNexus, CreatePool, CreateReplica, CreateVolume,
         DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter, GetBlockDevices,
-        GetNexuses, GetNodes, GetPools, GetReplicas, GetSpecs, GetVolumes, JsonGrpcRequest, Nexus,
-        Node, NodeId, Pool, RemoveNexusChild, RemoveVolumeNexus, Replica, ShareNexus, ShareReplica,
-        Specs, UnshareNexus, UnshareReplica, Volume,
+        GetNexuses, GetNodes, GetPools, GetReplicas, GetSpecs, GetStates, GetVolumes,
+        JsonGrpcRequest, Nexus, Node, NodeId, Pool, RemoveNexusChild, RemoveVolumeNexus, Replica,
+        ShareNexus, ShareReplica, Specs, States, UnshareNexus, UnshareReplica, Volume,
     },
 };
 use async_trait::async_trait;
@@ -243,6 +243,12 @@ pub trait MessageBusTrait: Sized {
     /// Get all the specs from the registry
     #[tracing::instrument(level = "debug", err)]
     async fn get_specs(request: GetSpecs) -> BusResult<Specs> {
+        Ok(request.request().await?)
+    }
+
+    /// Get all the states from the registry
+    #[tracing::instrument(level = "debug", err)]
+    async fn get_states(request: GetStates) -> BusResult<States> {
         Ok(request.request().await?)
     }
 }

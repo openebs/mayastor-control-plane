@@ -16,6 +16,7 @@ pub use common_lib::{
     },
 };
 
+use common_lib::types::v0::message_bus::States;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
@@ -249,6 +250,8 @@ pub trait RestClient {
         -> ClientResult<()>;
     /// Get resource specs
     async fn get_specs(&self) -> ClientResult<Specs>;
+    /// Get resource states
+    async fn get_states(&self) -> ClientResult<States>;
 }
 
 #[derive(Display, Debug)]
@@ -532,6 +535,11 @@ impl RestClient for ActixRestClient {
 
     async fn get_specs(&self) -> ClientResult<Specs> {
         let urn = "/v0/specs".to_string();
+        self.get(urn).await
+    }
+
+    async fn get_states(&self) -> ClientResult<States> {
+        let urn = "/v0/states".to_string();
         self.get(urn).await
     }
 }

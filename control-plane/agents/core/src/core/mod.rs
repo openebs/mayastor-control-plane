@@ -6,6 +6,8 @@ pub mod grpc;
 pub mod registry;
 /// registry with all the resource specs
 pub mod specs;
+/// registry with all the resource states
+pub mod states;
 /// helper wrappers over the resources
 pub mod wrapper;
 

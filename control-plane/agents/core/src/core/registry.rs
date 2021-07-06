@@ -13,7 +13,7 @@
 //!
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
-use super::{specs::*, wrapper::NodeWrapper};
+use super::{specs::*, states::ResourceStatesLocked, wrapper::NodeWrapper};
 use crate::core::wrapper::InternalOps;
 use common::errors::SvcError;
 use common_lib::{
@@ -34,8 +34,10 @@ pub type Registry = RegistryInner<Etcd>;
 pub struct RegistryInner<S: Store> {
     /// the actual state of the node
     pub(crate) nodes: Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>,
-    /// spec (aka desired state) for the various resources
+    /// spec (aka desired state) of the various resources
     pub(crate) specs: ResourceSpecsLocked,
+    /// state (aka actual state) of the various resources
+    pub(crate) states: ResourceStatesLocked,
     /// period to refresh the cache
     cache_period: std::time::Duration,
     pub(crate) store: Arc<Mutex<S>>,
@@ -64,6 +66,7 @@ impl Registry {
         let registry = Self {
             nodes: Default::default(),
             specs: ResourceSpecsLocked::new(),
+            states: ResourceStatesLocked::new(),
             cache_period,
             store: Arc::new(Mutex::new(store)),
             store_timeout,
@@ -147,7 +150,7 @@ impl Registry {
                 let _guard = lock.lock().await;
 
                 let mut node_clone = node.lock().await.clone();
-                if node_clone.reload().await.is_ok() {
+                if node_clone.reload(&self).await.is_ok() {
                     // update node in the registry
                     *node.lock().await = node_clone;
                 }

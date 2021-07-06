@@ -17,6 +17,11 @@ pub struct Node {
     labels: NodeLabels,
 }
 
+pub struct NodeState {
+    /// Node information
+    pub node: message_bus::Node,
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct NodeSpec {
     /// Node identification.

@@ -37,6 +37,12 @@ pub struct Nexus {
     pub share: Protocol,
 }
 
+impl UuidString for Nexus {
+    fn uuid_as_string(&self) -> String {
+        self.uuid.clone().into()
+    }
+}
+
 bus_impl_string_uuid!(NexusId, "UUID of a mayastor nexus");
 
 /// Nexus State information
