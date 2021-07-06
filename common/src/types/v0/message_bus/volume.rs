@@ -1,7 +1,7 @@
 use super::*;
 
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{convert::TryFrom, fmt::Debug};
 
 bus_impl_string_uuid!(VolumeId, "UUID of a mayastor volume");
 
@@ -21,6 +21,29 @@ pub struct Volume {
     pub protocol: Protocol,
     /// array of children nexuses
     pub children: Vec<Nexus>,
+}
+
+impl From<Volume> for models::Volume {
+    fn from(src: Volume) -> Self {
+        Self::new(
+            src.children.into_iter().map(From::from).collect(),
+            src.protocol.into(),
+            src.size as i64,
+            src.state.into(),
+            apis::Uuid::try_from(src.uuid).unwrap(),
+        )
+    }
+}
+impl From<models::Volume> for Volume {
+    fn from(src: models::Volume) -> Self {
+        Self {
+            uuid: src.uuid.to_string().into(),
+            size: src.size as u64,
+            state: src.state.into(),
+            protocol: src.protocol.into(),
+            children: src.children.into_iter().map(From::from).collect(),
+        }
+    }
 }
 
 impl Volume {
@@ -53,17 +76,56 @@ impl From<(&VolumeId, &Nexus)> for Volume {
 /// Currently it's the same as the nexus
 pub type VolumeShareProtocol = NexusShareProtocol;
 
+impl From<models::VolumeShareProtocol> for VolumeShareProtocol {
+    fn from(src: models::VolumeShareProtocol) -> Self {
+        match src {
+            models::VolumeShareProtocol::Nvmf => Self::Nvmf,
+            models::VolumeShareProtocol::Iscsi => Self::Iscsi,
+        }
+    }
+}
+
 /// Volume State information
 /// Currently it's the same as the nexus
 pub type VolumeState = NexusState;
 
+impl From<VolumeState> for models::VolumeState {
+    fn from(src: VolumeState) -> Self {
+        match src {
+            VolumeState::Unknown => Self::Unknown,
+            VolumeState::Online => Self::Online,
+            VolumeState::Degraded => Self::Degraded,
+            VolumeState::Faulted => Self::Faulted,
+        }
+    }
+}
+impl From<models::VolumeState> for VolumeState {
+    fn from(src: models::VolumeState) -> Self {
+        match src {
+            models::VolumeState::Online => Self::Online,
+            models::VolumeState::Degraded => Self::Degraded,
+            models::VolumeState::Faulted => Self::Faulted,
+            models::VolumeState::Unknown => Self::Unknown,
+        }
+    }
+}
+
 /// Volume topology using labels to determine how to place/distribute the data
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct LabelTopology {
+pub struct LabelledTopology {
     /// node topology
     node_topology: NodeTopology,
     /// pool topology
     pool_topology: PoolTopology,
+}
+
+impl From<models::LabelledTopology> for LabelledTopology {
+    fn from(src: models::LabelledTopology) -> Self {
+        Self {
+            node_topology: src.node_topology.into(),
+            pool_topology: src.pool_topology.into(),
+        }
+    }
 }
 
 /// Volume topology used to determine how to place/distribute the data
@@ -72,9 +134,18 @@ pub struct LabelTopology {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct Topology {
     /// volume topology using labels
-    pub labelled: Option<LabelTopology>,
+    pub labelled: Option<LabelledTopology>,
     /// volume topology, explicitly selected
     pub explicit: Option<ExplicitTopology>,
+}
+
+impl From<models::Topology> for Topology {
+    fn from(src: models::Topology) -> Self {
+        Self {
+            labelled: src.labelled.map(From::from),
+            explicit: src.explicit.map(From::from),
+        }
+    }
 }
 
 /// Excludes resources with the same $label name, eg:
@@ -88,6 +159,12 @@ pub struct ExclusiveLabel(
     /// inner label
     pub String,
 );
+
+impl From<String> for ExclusiveLabel {
+    fn from(src: String) -> Self {
+        Self(src)
+    }
+}
 
 /// Includes resources with the same $label or $label:$value eg:
 /// if label is "Zone: A":
@@ -103,6 +180,12 @@ pub struct InclusiveLabel(
     pub String,
 );
 
+impl From<String> for InclusiveLabel {
+    fn from(src: String) -> Self {
+        Self(src)
+    }
+}
+
 /// Placement node topology used by volume operations
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct NodeTopology {
@@ -114,12 +197,29 @@ pub struct NodeTopology {
     pub inclusion: Vec<InclusiveLabel>,
 }
 
+impl From<models::NodeTopology> for NodeTopology {
+    fn from(src: models::NodeTopology) -> Self {
+        Self {
+            exclusion: src.exclusion.into_iter().map(From::from).collect(),
+            inclusion: src.inclusion.into_iter().map(From::from).collect(),
+        }
+    }
+}
+
 /// Placement pool topology used by volume operations
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct PoolTopology {
     /// inclusive labels
     #[serde(default)]
     pub inclusion: Vec<InclusiveLabel>,
+}
+
+impl From<models::PoolTopology> for PoolTopology {
+    fn from(src: models::PoolTopology) -> Self {
+        Self {
+            inclusion: src.inclusion.into_iter().map(From::from).collect(),
+        }
+    }
 }
 
 /// Explicit node placement Selection for a volume
@@ -133,6 +233,15 @@ pub struct ExplicitTopology {
     pub preferred_nodes: Vec<NodeId>,
 }
 
+impl From<models::ExplicitTopology> for ExplicitTopology {
+    fn from(src: models::ExplicitTopology) -> Self {
+        Self {
+            allowed_nodes: src.allowed_nodes.into_iter().map(From::from).collect(),
+            preferred_nodes: src.preferred_nodes.into_iter().map(From::from).collect(),
+        }
+    }
+}
+
 /// Volume Healing policy used to determine if and how to replace a replica
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct VolumeHealPolicy {
@@ -142,6 +251,15 @@ pub struct VolumeHealPolicy {
     /// topology to choose a replacement replica for self healing
     /// (overrides the initial creation topology)
     pub topology: Option<Topology>,
+}
+
+impl From<models::VolumeHealPolicy> for VolumeHealPolicy {
+    fn from(src: models::VolumeHealPolicy) -> Self {
+        Self {
+            self_heal: src.self_heal,
+            topology: src.topology.map(From::from),
+        }
+    }
 }
 
 /// Get volumes

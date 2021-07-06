@@ -19,6 +19,30 @@ pub struct Partition {
     /// UUID identifying partition
     pub uuid: String,
 }
+impl From<Partition> for models::BlockDevicePartition {
+    fn from(src: Partition) -> Self {
+        models::BlockDevicePartition::new(
+            src.parent,
+            src.number as i32,
+            src.name,
+            src.scheme,
+            src.typeid,
+            src.uuid,
+        )
+    }
+}
+impl From<models::BlockDevicePartition> for Partition {
+    fn from(src: models::BlockDevicePartition) -> Self {
+        Self {
+            parent: src.parent,
+            number: src.number as u32,
+            name: src.name,
+            scheme: src.scheme,
+            typeid: src.typeid,
+            uuid: src.uuid,
+        }
+    }
+}
 
 /// Filesystem information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -31,6 +55,21 @@ pub struct Filesystem {
     pub uuid: String,
     /// path where filesystem is currently mounted
     pub mountpoint: String,
+}
+impl From<Filesystem> for models::BlockDeviceFilesystem {
+    fn from(src: Filesystem) -> Self {
+        models::BlockDeviceFilesystem::new(src.fstype, src.mountpoint, src.label, src.uuid)
+    }
+}
+impl From<models::BlockDeviceFilesystem> for Filesystem {
+    fn from(src: models::BlockDeviceFilesystem) -> Self {
+        Self {
+            fstype: src.fstype,
+            label: src.label,
+            uuid: src.uuid,
+            mountpoint: src.mountpoint,
+        }
+    }
 }
 
 /// Block device information
@@ -61,6 +100,42 @@ pub struct BlockDevice {
     /// use)
     pub available: bool,
 }
+
+impl From<BlockDevice> for models::BlockDevice {
+    fn from(src: BlockDevice) -> Self {
+        models::BlockDevice::new(
+            src.available,
+            src.devlinks,
+            src.devmajor as i32,
+            src.devminor as i32,
+            src.devname,
+            src.devpath,
+            src.devtype,
+            src.filesystem.into(),
+            src.model,
+            src.partition.into(),
+            src.size as i64,
+        )
+    }
+}
+impl From<models::BlockDevice> for BlockDevice {
+    fn from(src: models::BlockDevice) -> Self {
+        Self {
+            devname: src.devname,
+            devtype: src.devtype,
+            devmajor: src.devmajor as u32,
+            devminor: src.devminor as u32,
+            model: src.model,
+            devpath: src.devpath,
+            devlinks: src.devlinks,
+            size: src.size as u64,
+            partition: src.partition.into(),
+            filesystem: src.filesystem.into(),
+            available: src.available,
+        }
+    }
+}
+
 /// Get block devices
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -1,9 +1,7 @@
 use super::*;
 
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, fmt::Debug};
-
-use std::ops::Deref;
+use std::{cmp::Ordering, fmt::Debug, ops::Deref};
 use strum_macros::{EnumString, ToString};
 
 /// Pool Service
@@ -42,6 +40,26 @@ impl From<i32> for PoolState {
         }
     }
 }
+impl From<PoolState> for models::PoolState {
+    fn from(src: PoolState) -> Self {
+        match src {
+            PoolState::Unknown => Self::Unknown,
+            PoolState::Online => Self::Online,
+            PoolState::Degraded => Self::Degraded,
+            PoolState::Faulted => Self::Faulted,
+        }
+    }
+}
+impl From<models::PoolState> for PoolState {
+    fn from(src: models::PoolState) -> Self {
+        match src {
+            models::PoolState::Unknown => Self::Unknown,
+            models::PoolState::Online => Self::Online,
+            models::PoolState::Degraded => Self::Degraded,
+            models::PoolState::Faulted => Self::Faulted,
+        }
+    }
+}
 
 /// Pool information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -64,6 +82,31 @@ pub struct Pool {
 impl UuidString for Pool {
     fn uuid_as_string(&self) -> String {
         self.id.clone().into()
+    }
+}
+
+impl From<Pool> for models::Pool {
+    fn from(src: Pool) -> Self {
+        Self::new(
+            src.capacity as i64,
+            src.disks.iter().map(ToString::to_string).collect(),
+            src.id.into(),
+            src.node.into(),
+            src.state.into(),
+            src.used as i64,
+        )
+    }
+}
+impl From<models::Pool> for Pool {
+    fn from(src: models::Pool) -> Self {
+        Self {
+            node: src.node.into(),
+            id: src.id.into(),
+            disks: src.disks.iter().map(From::from).collect(),
+            state: src.state.into(),
+            capacity: src.capacity as u64,
+            used: src.used as u64,
+        }
     }
 }
 
@@ -131,6 +174,11 @@ impl From<&String> for PoolDeviceUri {
 impl From<String> for PoolDeviceUri {
     fn from(device: String) -> Self {
         Self(device)
+    }
+}
+impl ToString for PoolDeviceUri {
+    fn to_string(&self) -> String {
+        self.deref().to_string()
     }
 }
 

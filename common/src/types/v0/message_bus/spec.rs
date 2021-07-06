@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
+use super::*;
 use crate::types::v0::store::{nexus, pool, replica, volume};
 
 /// Retrieve all specs from core agent
@@ -21,3 +22,30 @@ pub struct Specs {
     /// replica specs
     pub replicas: Vec<replica::ReplicaSpec>,
 }
+
+impl From<Specs> for models::Specs {
+    fn from(src: Specs) -> Self {
+        fn vec_to_vec<F: Clone, T: From<F>>(from: Vec<F>) -> Vec<T> {
+            from.iter().cloned().map(From::from).collect()
+        }
+        Self::new(
+            vec_to_vec(src.nexuses),
+            vec_to_vec(src.pools),
+            vec_to_vec(src.replicas),
+            vec_to_vec(src.volumes),
+        )
+    }
+}
+// impl From<models::Specs> for Specs {
+//     fn from(src: models::Specs) -> Self {
+//         fn vec_to_vec<F: Clone, T: From<F>>(from: Vec<F>) -> Vec<T> {
+//             from.iter().cloned().map(From::from).collect()
+//         }
+//         Self {
+//             nexuses: vec_to_vec(src.nexuses),
+//             pools: vec_to_vec(src.pools),
+//             replicas: vec_to_vec(src.replicas),
+//             volumes: vec_to_vec(src.volumes),
+//         }
+//     }
+// }

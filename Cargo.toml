@@ -11,6 +11,7 @@ members = [
     "control-plane/agents",
     "composer",
     "control-plane/rest",
+    "openapi",
     "deployer",
     "common",
 # Test mayastor through the rest api

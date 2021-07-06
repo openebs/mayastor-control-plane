@@ -8,7 +8,9 @@ use crate::types::v0::{
     },
 };
 
+use crate::types::v0::openapi::models;
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 type VolumeLabel = String;
 
@@ -123,17 +125,17 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.protocol = share.into();
                 }
                 VolumeOperation::Unshare => {
-                    self.protocol = Protocol::Off;
+                    self.protocol = Protocol::None;
                 }
                 VolumeOperation::AddReplica => self.num_replicas += 1,
                 VolumeOperation::RemoveReplica => self.num_replicas -= 1,
                 VolumeOperation::Publish((node, share)) => {
                     self.target_node = Some(node);
-                    self.protocol = share.map_or(Protocol::Off, Protocol::from);
+                    self.protocol = share.map_or(Protocol::None, Protocol::from);
                 }
                 VolumeOperation::Unpublish => {
                     self.target_node = None;
-                    self.protocol = Protocol::Off;
+                    self.protocol = Protocol::None;
                 }
             }
         }
@@ -211,7 +213,7 @@ impl From<&CreateVolume> for VolumeSpec {
             size: request.size,
             labels: vec![],
             num_replicas: request.replicas as u8,
-            protocol: Protocol::Off,
+            protocol: Protocol::None,
             num_paths: 1,
             state: VolumeSpecState::Creating,
             target_node: None,
@@ -249,5 +251,19 @@ impl PartialEq<message_bus::Volume> for VolumeSpec {
                         && Some(node) == other.target_node().flatten().as_ref()
                 }
             }
+    }
+}
+
+impl From<VolumeSpec> for models::VolumeSpec {
+    fn from(src: VolumeSpec) -> Self {
+        Self::new(
+            src.labels,
+            src.num_paths as i32,
+            src.num_replicas as i32,
+            src.protocol.into(),
+            src.size as i64,
+            src.state.into(),
+            openapi::apis::Uuid::try_from(src.uuid).unwrap(),
+        )
     }
 }

@@ -1,138 +1,16 @@
 use super::*;
 use common_lib::types::v0::message_bus::{
-    DestroyReplica, Filter, NodeId, PoolId, Replica, ReplicaId, ReplicaShareProtocol, ShareReplica,
-    UnshareReplica,
+    DestroyReplica, Filter, ReplicaShareProtocol, ShareReplica, UnshareReplica,
 };
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
     ReplyErrorKind, ResourceKind,
 };
 
-pub(super) fn configure(cfg: &mut actix_web::web::ServiceConfig) {
-    cfg.service(get_replicas)
-        .service(get_replica)
-        .service(get_node_replicas)
-        .service(get_node_pool_replicas)
-        .service(get_node_pool_replica)
-        .service(put_node_pool_replica)
-        .service(put_pool_replica)
-        .service(del_node_pool_replica)
-        .service(del_pool_replica)
-        .service(put_node_pool_replica_share)
-        .service(put_pool_replica_share)
-        .service(del_node_pool_replica_share)
-        .service(del_pool_replica_share);
-}
-
-#[get("/replicas")]
-async fn get_replicas() -> Result<Json<Vec<Replica>>, RestError> {
-    RestRespond::result(MessageBus::get_replicas(Filter::None).await).map_err(RestError::from)
-}
-#[get("/replicas/{id}")]
-async fn get_replica(
-    web::Path(replica_id): web::Path<ReplicaId>,
-) -> Result<Json<Replica>, RestError> {
-    RestRespond::result(MessageBus::get_replica(Filter::Replica(replica_id)).await)
-}
-
-#[get("/nodes/{id}/replicas")]
-async fn get_node_replicas(
-    web::Path(node_id): web::Path<NodeId>,
-) -> Result<Json<Vec<Replica>>, RestError> {
-    RestRespond::result(MessageBus::get_replicas(Filter::Node(node_id)).await)
-}
-
-#[get("/nodes/{node_id}/pools/{pool_id}/replicas")]
-async fn get_node_pool_replicas(
-    web::Path((node_id, pool_id)): web::Path<(NodeId, PoolId)>,
-) -> Result<Json<Vec<Replica>>, RestError> {
-    RestRespond::result(MessageBus::get_replicas(Filter::NodePool(node_id, pool_id)).await)
-}
-#[get("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}")]
-async fn get_node_pool_replica(
-    web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
-) -> Result<Json<Replica>, RestError> {
-    RestRespond::result(
-        MessageBus::get_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await,
-    )
-}
-
-#[put("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}")]
-async fn put_node_pool_replica(
-    web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
-    create: web::Json<CreateReplicaBody>,
-) -> Result<Json<Replica>, RestError> {
-    put_replica(
-        Filter::NodePoolReplica(node_id, pool_id, replica_id),
-        create.into_inner(),
-    )
-    .await
-}
-#[put("/pools/{pool_id}/replicas/{replica_id}")]
-async fn put_pool_replica(
-    web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
-    create: web::Json<CreateReplicaBody>,
-) -> Result<Json<Replica>, RestError> {
-    put_replica(
-        Filter::PoolReplica(pool_id, replica_id),
-        create.into_inner(),
-    )
-    .await
-}
-
-#[delete("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}")]
-async fn del_node_pool_replica(
-    web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
-) -> Result<JsonUnit, RestError> {
-    destroy_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await
-}
-#[delete("/pools/{pool_id}/replicas/{replica_id}")]
-async fn del_pool_replica(
-    web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
-) -> Result<JsonUnit, RestError> {
-    destroy_replica(Filter::PoolReplica(pool_id, replica_id)).await
-}
-
-#[put("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol}")]
-async fn put_node_pool_replica_share(
-    web::Path((node_id, pool_id, replica_id, protocol)): web::Path<(
-        NodeId,
-        PoolId,
-        ReplicaId,
-        ReplicaShareProtocol,
-    )>,
-) -> Result<Json<String>, RestError> {
-    share_replica(
-        Filter::NodePoolReplica(node_id, pool_id, replica_id),
-        protocol,
-    )
-    .await
-}
-#[put("/pools/{pool_id}/replicas/{replica_id}/share/{protocol}")]
-async fn put_pool_replica_share(
-    web::Path((pool_id, replica_id, protocol)): web::Path<(
-        PoolId,
-        ReplicaId,
-        ReplicaShareProtocol,
-    )>,
-) -> Result<Json<String>, RestError> {
-    share_replica(Filter::PoolReplica(pool_id, replica_id), protocol).await
-}
-
-#[delete("/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share")]
-async fn del_node_pool_replica_share(
-    web::Path((node_id, pool_id, replica_id)): web::Path<(NodeId, PoolId, ReplicaId)>,
-) -> Result<JsonUnit, RestError> {
-    unshare_replica(Filter::NodePoolReplica(node_id, pool_id, replica_id)).await
-}
-#[delete("/pools/{pool_id}/replicas/{replica_id}/share")]
-async fn del_pool_replica_share(
-    web::Path((pool_id, replica_id)): web::Path<(PoolId, ReplicaId)>,
-) -> Result<JsonUnit, RestError> {
-    unshare_replica(Filter::PoolReplica(pool_id, replica_id)).await
-}
-
-async fn put_replica(filter: Filter, body: CreateReplicaBody) -> Result<Json<Replica>, RestError> {
+async fn put_replica(
+    filter: Filter,
+    body: CreateReplicaBody,
+) -> Result<models::Replica, RestError<RestJsonError>> {
     let create = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
             body.bus_request(node_id, pool_id, replica_id)
@@ -154,10 +32,11 @@ async fn put_replica(filter: Filter, body: CreateReplicaBody) -> Result<Json<Rep
         }
     };
 
-    RestRespond::result(MessageBus::create_replica(create).await)
+    let replica = MessageBus::create_replica(create).await?;
+    Ok(replica.into())
 }
 
-async fn destroy_replica(filter: Filter) -> Result<JsonUnit, RestError> {
+async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>> {
     let destroy = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => DestroyReplica {
             node: node_id,
@@ -186,13 +65,14 @@ async fn destroy_replica(filter: Filter) -> Result<JsonUnit, RestError> {
         }
     };
 
-    RestRespond::result(MessageBus::destroy_replica(destroy).await).map(JsonUnit::from)
+    MessageBus::destroy_replica(destroy).await?;
+    Ok(())
 }
 
 async fn share_replica(
     filter: Filter,
     protocol: ReplicaShareProtocol,
-) -> Result<Json<String>, RestError> {
+) -> Result<String, RestError<RestJsonError>> {
     let share = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => ShareReplica {
             node: node_id,
@@ -223,10 +103,11 @@ async fn share_replica(
         }
     };
 
-    RestRespond::result(MessageBus::share_replica(share).await)
+    let share_uri = MessageBus::share_replica(share).await?;
+    Ok(share_uri)
 }
 
-async fn unshare_replica(filter: Filter) -> Result<JsonUnit, RestError> {
+async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>> {
     let unshare = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => UnshareReplica {
             node: node_id,
@@ -255,5 +136,129 @@ async fn unshare_replica(filter: Filter) -> Result<JsonUnit, RestError> {
         }
     };
 
-    RestRespond::result(MessageBus::unshare_replica(unshare).await).map(JsonUnit::from)
+    MessageBus::unshare_replica(unshare).await?;
+    Ok(())
+}
+
+#[async_trait::async_trait]
+impl apis::Replicas for RestApi {
+    async fn del_node_pool_replica(
+        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        destroy_replica(Filter::NodePoolReplica(
+            node_id.into(),
+            pool_id.into(),
+            replica_id.into(),
+        ))
+        .await
+    }
+
+    async fn del_node_pool_replica_share(
+        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        unshare_replica(Filter::NodePoolReplica(
+            node_id.into(),
+            pool_id.into(),
+            replica_id.into(),
+        ))
+        .await
+    }
+
+    async fn del_pool_replica(
+        Path((pool_id, replica_id)): Path<(String, String)>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        destroy_replica(Filter::PoolReplica(pool_id.into(), replica_id.into())).await
+    }
+
+    async fn del_pool_replica_share(
+        Path((pool_id, replica_id)): Path<(String, String)>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        unshare_replica(Filter::PoolReplica(pool_id.into(), replica_id.into())).await
+    }
+
+    async fn get_node_pool_replica(
+        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+    ) -> Result<models::Replica, RestError<RestJsonError>> {
+        let replica = MessageBus::get_replica(Filter::NodePoolReplica(
+            node_id.into(),
+            pool_id.into(),
+            replica_id.into(),
+        ))
+        .await?;
+        Ok(replica.into())
+    }
+
+    async fn get_node_pool_replicas(
+        Path((node_id, pool_id)): Path<(String, String)>,
+    ) -> Result<Vec<models::Replica>, RestError<RestJsonError>> {
+        let replicas =
+            MessageBus::get_replicas(Filter::NodePool(node_id.into(), pool_id.into())).await?;
+        Ok(replicas.into_iter().map(From::from).collect())
+    }
+
+    async fn get_node_replicas(
+        Path(id): Path<String>,
+    ) -> Result<Vec<models::Replica>, RestError<RestJsonError>> {
+        let replicas = MessageBus::get_replicas(Filter::Node(id.into())).await?;
+        Ok(replicas.into_iter().map(From::from).collect())
+    }
+
+    async fn get_replica(
+        Path(id): Path<String>,
+    ) -> Result<models::Replica, RestError<RestJsonError>> {
+        let replica = MessageBus::get_replica(Filter::Replica(id.into())).await?;
+        Ok(replica.into())
+    }
+
+    async fn get_replicas() -> Result<Vec<models::Replica>, RestError<RestJsonError>> {
+        let replicas = MessageBus::get_replicas(Filter::None).await?;
+        Ok(replicas.into_iter().map(From::from).collect())
+    }
+
+    async fn put_node_pool_replica(
+        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+        Body(create_replica_body): Body<models::CreateReplicaBody>,
+    ) -> Result<models::Replica, RestError<RestJsonError>> {
+        put_replica(
+            Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
+            CreateReplicaBody::from(create_replica_body),
+        )
+        .await
+    }
+
+    async fn put_node_pool_replica_share(
+        Path((node_id, pool_id, replica_id, protocol)): Path<(
+            String,
+            String,
+            String,
+            models::ReplicaShareProtocol,
+        )>,
+    ) -> Result<String, RestError<RestJsonError>> {
+        share_replica(
+            Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
+            protocol.into(),
+        )
+        .await
+    }
+
+    async fn put_pool_replica(
+        Path((pool_id, replica_id)): Path<(String, String)>,
+        Body(create_replica_body): Body<models::CreateReplicaBody>,
+    ) -> Result<models::Replica, RestError<RestJsonError>> {
+        put_replica(
+            Filter::PoolReplica(pool_id.into(), replica_id.into()),
+            CreateReplicaBody::from(create_replica_body),
+        )
+        .await
+    }
+
+    async fn put_pool_replica_share(
+        Path((pool_id, replica_id, protocol)): Path<(String, String, models::ReplicaShareProtocol)>,
+    ) -> Result<String, RestError<RestJsonError>> {
+        share_replica(
+            Filter::PoolReplica(pool_id.into(), replica_id.into()),
+            protocol.into(),
+        )
+        .await
+    }
 }

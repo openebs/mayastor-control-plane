@@ -11,7 +11,9 @@ use crate::types::v0::{
     },
 };
 
+use crate::types::v0::openapi::models;
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 /// Nexus information
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -91,6 +93,20 @@ pub struct NexusSpec {
     pub operation: Option<NexusOperationState>,
 }
 
+impl From<NexusSpec> for models::NexusSpec {
+    fn from(src: NexusSpec) -> Self {
+        Self::new(
+            src.children.iter().map(ToString::to_string).collect(),
+            src.managed,
+            src.node.into(),
+            src.share.into(),
+            src.size as i64,
+            src.state.into(),
+            openapi::apis::Uuid::try_from(src.uuid).unwrap(),
+        )
+    }
+}
+
 /// Operation State for a Nexus spec resource
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NexusOperationState {
@@ -118,7 +134,7 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                     self.share = share.into();
                 }
                 NexusOperation::Unshare => {
-                    self.share = Protocol::Off;
+                    self.share = Protocol::None;
                 }
                 NexusOperation::AddChild(uri) => self.children.push(uri),
                 NexusOperation::RemoveChild(uri) => self.children.retain(|c| c != &uri),
@@ -194,7 +210,7 @@ impl From<&CreateNexus> for NexusSpec {
             children: request.children.clone(),
             size: request.size,
             state: NexusSpecState::Creating,
-            share: Protocol::Off,
+            share: Protocol::None,
             managed: request.managed,
             owner: request.owner.clone(),
             updating: false,

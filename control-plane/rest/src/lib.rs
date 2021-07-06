@@ -21,14 +21,13 @@ use actix_web::{
     client::{Client, ClientBuilder, ClientResponse, PayloadError, SendRequestError},
     dev::ResponseHead,
     web::Bytes,
-    HttpResponse,
 };
 use actix_web_opentelemetry::ClientExt;
-use futures::{future::Ready, Stream};
+use futures::Stream;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
-use std::{io::BufReader, str::FromStr, string::ToString};
+use std::{io::BufReader, string::ToString};
 
 /// Actix Rest Client
 #[derive(Clone)]
@@ -310,111 +309,5 @@ impl ClientError {
         ClientError::InvalidFilter {
             details: message.to_string(),
         }
-    }
-}
-
-/// Generic JSON value eg: { "size": 1024 }
-#[derive(Debug, Default, Clone)]
-pub struct JsonGeneric {
-    inner: serde_json::Value,
-}
-impl Serialize for JsonGeneric {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.inner.serialize(serializer)
-    }
-}
-impl<'de> Deserialize<'de> for JsonGeneric {
-    fn deserialize<D>(deserializer: D) -> Result<JsonGeneric, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        Ok(JsonGeneric::from(value))
-    }
-}
-impl std::fmt::Display for JsonGeneric {
-    /// Get inner JSON value as a string
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.inner.to_string())
-    }
-}
-impl JsonGeneric {
-    /// New JsonGeneric from a JSON value
-    pub fn from(value: serde_json::Value) -> Self {
-        Self { inner: value }
-    }
-
-    /// Get inner value
-    pub fn into_inner(self) -> serde_json::Value {
-        self.inner
-    }
-}
-
-/// Rest Unit JSON
-#[derive(Default)]
-pub struct JsonUnit;
-
-impl From<actix_web::web::Json<()>> for JsonUnit {
-    fn from(_: actix_web::web::Json<()>) -> Self {
-        JsonUnit {}
-    }
-}
-impl From<()> for JsonUnit {
-    fn from(_: ()) -> Self {
-        JsonUnit {}
-    }
-}
-impl actix_web::Responder for JsonUnit {
-    type Error = actix_web::Error;
-    type Future = Ready<Result<actix_web::HttpResponse, actix_web::Error>>;
-
-    fn respond_to(self, _: &actix_web::HttpRequest) -> Self::Future {
-        futures::future::ok(HttpResponse::build(actix_web::http::StatusCode::NO_CONTENT).finish())
-    }
-}
-
-/// URL value, eg: https://localhost:8080/test
-#[derive(Debug, Clone)]
-pub struct RestUri(url::Url);
-
-impl Default for RestUri {
-    fn default() -> Self {
-        Self(url::Url::from_str("https://localhost:8080/test").unwrap())
-    }
-}
-
-impl std::ops::Deref for RestUri {
-    type Target = url::Url;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'de> Deserialize<'de> for RestUri {
-    fn deserialize<D>(deserializer: D) -> Result<RestUri, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let string = String::deserialize(deserializer)?;
-        match url::Url::from_str(&string) {
-            Ok(url) => Ok(RestUri(url)),
-            Err(error) => {
-                let error = format!("Failed to parse into a URL, error: {}", error);
-                Err(serde::de::Error::custom(error))
-            }
-        }
-    }
-}
-
-impl Serialize for RestUri {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.as_str().serialize(serializer)
     }
 }

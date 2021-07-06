@@ -120,7 +120,7 @@ impl RpcToMessageBus for rpc::Nexus {
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
-            share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::Off),
+            share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::None),
         }
     }
 }
@@ -179,7 +179,7 @@ impl MessageBusToRpc for message_bus::UnshareReplica {
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
             uuid: self.uuid.clone().into(),
-            share: Protocol::Off as i32,
+            share: Protocol::None as i32,
         }
     }
 }

@@ -13,7 +13,7 @@ async fn bootstrap_registry() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_pools(1)
-        .with_replicas(1, size, message_bus::Protocol::Off)
+        .with_replicas(1, size, message_bus::Protocol::None)
         .with_agents(vec!["core"])
         .build()
         .await

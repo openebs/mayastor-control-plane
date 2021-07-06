@@ -1,16 +1,8 @@
-{ lib, stdenv, fetchFromGitHub, maven, jdk, jre, makeWrapper }:
+{ pkgs, lib, stdenv, fetchFromGitHub, maven, jdk, jre, makeWrapper }:
 
 let
-  rev = "1373a9a";
-  version = "5.2.0-${rev}";
-
-  src = fetchFromGitHub {
-    owner = "openebs";
-    repo = "openapi-generator";
-    rev = "${rev}";
-    #sha256 = lib.fakeSha256;
-    sha256 = "07yd4llvjyaczpa51v9zbpban4cv8zd3f0mgwbz9h6wyq3rlzxxn";
-  };
+  src = fetchFromGitHub (lib.importJSON ./source.json);
+  version = "5.2.0-${src.rev}";
 
   # perform fake build to make a fixed-output derivation out of the files downloaded from maven central
   deps = stdenv.mkDerivation {

@@ -1,8 +1,7 @@
 use super::*;
 
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-
+use std::{convert::TryFrom, fmt::Debug};
 use strum_macros::{EnumString, ToString};
 
 /// Get all the replicas from specific node and pool
@@ -38,6 +37,35 @@ pub struct Replica {
 impl UuidString for Replica {
     fn uuid_as_string(&self) -> String {
         self.uuid.clone().into()
+    }
+}
+
+impl From<Replica> for models::Replica {
+    fn from(src: Replica) -> Self {
+        Self::new(
+            src.node.into(),
+            src.pool.into(),
+            src.share.into(),
+            src.size as i64,
+            src.state.into(),
+            src.thin,
+            src.uri,
+            apis::Uuid::try_from(src.uuid).unwrap(),
+        )
+    }
+}
+impl From<models::Replica> for Replica {
+    fn from(src: models::Replica) -> Self {
+        Self {
+            node: src.node.into(),
+            uuid: src.uuid.to_string().into(),
+            pool: src.pool.into(),
+            thin: src.thin,
+            size: src.size as u64,
+            share: src.share.into(),
+            uri: src.uri,
+            state: src.state.into(),
+        }
     }
 }
 
@@ -100,6 +128,19 @@ impl ReplicaOwners {
     /// The replica is no longer part of the volume
     pub fn disowned_by_volume(&mut self) {
         let _ = self.volume.take();
+    }
+}
+
+impl From<ReplicaOwners> for models::ReplicaSpecOwners {
+    fn from(src: ReplicaOwners) -> Self {
+        Self {
+            nexuses: src
+                .nexuses
+                .iter()
+                .map(|n| apis::Uuid::try_from(n).unwrap())
+                .collect(),
+            volume: src.volume.map(|n| apis::Uuid::try_from(n).unwrap()),
+        }
     }
 }
 
@@ -214,6 +255,13 @@ impl From<ReplicaShareProtocol> for Protocol {
         }
     }
 }
+impl From<models::ReplicaShareProtocol> for ReplicaShareProtocol {
+    fn from(src: models::ReplicaShareProtocol) -> Self {
+        match src {
+            models::ReplicaShareProtocol::Nvmf => Self::Nvmf,
+        }
+    }
+}
 
 /// State of the Replica
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
@@ -242,6 +290,26 @@ impl From<i32> for ReplicaState {
             2 => Self::Degraded,
             3 => Self::Faulted,
             _ => Self::Unknown,
+        }
+    }
+}
+impl From<ReplicaState> for models::ReplicaState {
+    fn from(src: ReplicaState) -> Self {
+        match src {
+            ReplicaState::Unknown => Self::Unknown,
+            ReplicaState::Online => Self::Online,
+            ReplicaState::Degraded => Self::Degraded,
+            ReplicaState::Faulted => Self::Faulted,
+        }
+    }
+}
+impl From<models::ReplicaState> for ReplicaState {
+    fn from(src: models::ReplicaState) -> Self {
+        match src {
+            models::ReplicaState::Unknown => Self::Unknown,
+            models::ReplicaState::Online => Self::Online,
+            models::ReplicaState::Degraded => Self::Degraded,
+            models::ReplicaState::Faulted => Self::Faulted,
         }
     }
 }

@@ -1,8 +1,7 @@
 use super::*;
 
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-
+use std::{convert::TryFrom, fmt::Debug};
 use strum_macros::{EnumString, ToString};
 
 /// Volume Nexuses
@@ -43,6 +42,35 @@ impl UuidString for Nexus {
     }
 }
 
+impl From<Nexus> for models::Nexus {
+    fn from(src: Nexus) -> Self {
+        models::Nexus::new(
+            src.children.into_iter().map(From::from).collect(),
+            src.device_uri,
+            src.node.into(),
+            src.rebuilds as i32,
+            src.share.into(),
+            src.size as i64,
+            src.state.into(),
+            apis::Uuid::try_from(src.uuid).unwrap(),
+        )
+    }
+}
+impl From<models::Nexus> for Nexus {
+    fn from(src: models::Nexus) -> Self {
+        Self {
+            node: src.node.into(),
+            uuid: src.uuid.to_string().into(),
+            state: src.state.into(),
+            children: src.children.into_iter().map(From::from).collect(),
+            device_uri: src.device_uri,
+            rebuilds: src.rebuilds as u32,
+            size: src.size as u64,
+            share: src.share.into(),
+        }
+    }
+}
+
 bus_impl_string_uuid!(NexusId, "UUID of a mayastor nexus");
 
 /// Nexus State information
@@ -69,6 +97,26 @@ impl From<i32> for NexusState {
             2 => Self::Degraded,
             3 => Self::Faulted,
             _ => Self::Unknown,
+        }
+    }
+}
+impl From<NexusState> for models::NexusState {
+    fn from(src: NexusState) -> Self {
+        match src {
+            NexusState::Unknown => Self::Unknown,
+            NexusState::Online => Self::Online,
+            NexusState::Degraded => Self::Degraded,
+            NexusState::Faulted => Self::Faulted,
+        }
+    }
+}
+impl From<models::NexusState> for NexusState {
+    fn from(src: models::NexusState) -> Self {
+        match src {
+            models::NexusState::Unknown => Self::Unknown,
+            models::NexusState::Online => Self::Online,
+            models::NexusState::Degraded => Self::Degraded,
+            models::NexusState::Faulted => Self::Faulted,
         }
     }
 }
@@ -109,6 +157,14 @@ impl From<NexusShareProtocol> for Protocol {
         match src {
             NexusShareProtocol::Nvmf => Self::Nvmf,
             NexusShareProtocol::Iscsi => Self::Iscsi,
+        }
+    }
+}
+impl From<models::NexusShareProtocol> for NexusShareProtocol {
+    fn from(src: models::NexusShareProtocol) -> Self {
+        match src {
+            models::NexusShareProtocol::Nvmf => Self::Nvmf,
+            models::NexusShareProtocol::Iscsi => Self::Iscsi,
         }
     }
 }

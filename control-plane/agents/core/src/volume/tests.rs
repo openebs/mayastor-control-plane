@@ -185,7 +185,7 @@ async fn test_volume(cluster: &Cluster) {
 
     assert_eq!(
         volumes.0.first().unwrap().protocol,
-        Protocol::Off,
+        Protocol::None,
         "Was published but not shared"
     );
     assert_eq!(
