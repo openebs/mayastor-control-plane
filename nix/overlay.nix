@@ -9,4 +9,5 @@ self: super: {
     sha256 = "1qdr9aj3z5jpbdrzqdxkh3ga98wq9ivsr5qrc1g6n0j9w5pjk2ry";
   };
   control-plane = super.callPackage ./pkgs/control-plane { };
+  openapi-generator = super.callPackage ./pkgs/openapi-generator { };
 }
