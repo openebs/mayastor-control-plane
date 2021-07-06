@@ -8,10 +8,11 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait ChildrenApi {
+pub trait Children {
     async fn del_nexus_child(
         query: &str,
         Path((nexus_id, child_id_)): Path<(String, String)>,
@@ -23,23 +24,23 @@ pub trait ChildrenApi {
     async fn get_nexus_child(
         query: &str,
         Path((nexus_id, child_id_)): Path<(String, String)>,
-    ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Child, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_nexus_children(
         Path(nexus_id): Path<String>,
-    ) -> Result<Json<Vec<crate::models::Child>>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<Vec<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_nexus_child(
         query: &str,
         Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
-    ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Child, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_nexus_children(
         Path((node_id, nexus_id)): Path<(String, String)>,
-    ) -> Result<Json<Vec<crate::models::Child>>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<Vec<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_nexus_child(
         query: &str,
         Path((nexus_id, child_id_)): Path<(String, String)>,
-    ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Child, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_node_nexus_child(
         query: &str,
         Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
-    ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Child, crate::apis::RestError<crate::models::RestJsonError>>;
 }

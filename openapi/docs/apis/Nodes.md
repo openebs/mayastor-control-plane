@@ -1,11 +1,11 @@
-# \NodesApi
+# Nodes
 
 All URIs are relative to *http://localhost/v0*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**get_node**](NodesApi.md#get_node) | **Get** /nodes/{id} | 
-[**get_nodes**](NodesApi.md#get_nodes) | **Get** /nodes | 
+[**get_node**](Nodes.md#get_node) | **Get** /nodes/{id} | 
+[**get_nodes**](Nodes.md#get_nodes) | **Get** /nodes | 
 
 
 

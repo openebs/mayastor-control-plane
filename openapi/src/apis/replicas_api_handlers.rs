@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
+use crate::apis::Body;
 use actix_web::{
-    web::{self, Json, Path, Query, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
 };
 
-/// Configure handlers for the ReplicasApi resource
-pub fn configure<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+/// Configure handlers for the Replicas resource
+pub fn configure<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     cfg: &mut ServiceConfig,
 ) {
     cfg.service(
@@ -99,96 +100,101 @@ pub fn configure<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static
     );
 }
 
-async fn del_node_pool_replica<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn del_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_pool_replica(Path((node_id, pool_id, replica_id)))
+    T::del_node_pool_replica(crate::apis::Path((node_id, pool_id, replica_id)))
         .await
-        .map(|_| Json(()))
+        .map(Json)
 }
 
 async fn del_node_pool_replica_share<
-    T: crate::apis::ReplicasApi + 'static,
+    T: crate::apis::Replicas + 'static,
     A: FromRequest + 'static,
 >(
     _token: A,
     Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_pool_replica_share(Path((node_id, pool_id, replica_id)))
+    T::del_node_pool_replica_share(crate::apis::Path((node_id, pool_id, replica_id)))
         .await
-        .map(|_| Json(()))
+        .map(Json)
 }
 
-async fn del_pool_replica<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn del_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((pool_id, replica_id)): Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_pool_replica(Path((pool_id, replica_id)))
+    T::del_pool_replica(crate::apis::Path((pool_id, replica_id)))
         .await
-        .map(|_| Json(()))
+        .map(Json)
 }
 
-async fn del_pool_replica_share<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn del_pool_replica_share<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((pool_id, replica_id)): Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_pool_replica_share(Path((pool_id, replica_id)))
+    T::del_pool_replica_share(crate::apis::Path((pool_id, replica_id)))
         .await
-        .map(|_| Json(()))
+        .map(Json)
 }
 
-async fn get_node_pool_replica<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn get_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_pool_replica(Path((node_id, pool_id, replica_id))).await
+    T::get_node_pool_replica(crate::apis::Path((node_id, pool_id, replica_id)))
+        .await
+        .map(Json)
 }
 
-async fn get_node_pool_replicas<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn get_node_pool_replicas<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((node_id, pool_id)): Path<(String, String)>,
 ) -> Result<Json<Vec<crate::models::Replica>>, crate::apis::RestError<crate::models::RestJsonError>>
 {
-    T::get_node_pool_replicas(Path((node_id, pool_id))).await
+    T::get_node_pool_replicas(crate::apis::Path((node_id, pool_id)))
+        .await
+        .map(Json)
 }
 
-async fn get_node_replicas<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn get_node_replicas<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path(id): Path<String>,
 ) -> Result<Json<Vec<crate::models::Replica>>, crate::apis::RestError<crate::models::RestJsonError>>
 {
-    T::get_node_replicas(Path(id)).await
+    T::get_node_replicas(crate::apis::Path(id)).await.map(Json)
 }
 
-async fn get_replica<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn get_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path(id): Path<String>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_replica(Path(id)).await
+    T::get_replica(crate::apis::Path(id)).await.map(Json)
 }
 
-async fn get_replicas<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn get_replicas<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
 ) -> Result<Json<Vec<crate::models::Replica>>, crate::apis::RestError<crate::models::RestJsonError>>
 {
-    T::get_replicas().await
+    T::get_replicas().await.map(Json)
 }
 
-async fn put_node_pool_replica<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn put_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
     Json(create_replica_body): Json<crate::models::CreateReplicaBody>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_node_pool_replica(
-        Path((node_id, pool_id, replica_id)),
-        Json(create_replica_body),
+        crate::apis::Path((node_id, pool_id, replica_id)),
+        Body(create_replica_body),
     )
     .await
+    .map(Json)
 }
 
 async fn put_node_pool_replica_share<
-    T: crate::apis::ReplicasApi + 'static,
+    T: crate::apis::Replicas + 'static,
     A: FromRequest + 'static,
 >(
     _token: A,
@@ -199,18 +205,25 @@ async fn put_node_pool_replica_share<
         crate::models::ReplicaShareProtocol,
     )>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_node_pool_replica_share(Path((node_id, pool_id, replica_id, protocol))).await
+    T::put_node_pool_replica_share(crate::apis::Path((node_id, pool_id, replica_id, protocol)))
+        .await
+        .map(Json)
 }
 
-async fn put_pool_replica<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn put_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((pool_id, replica_id)): Path<(String, String)>,
     Json(create_replica_body): Json<crate::models::CreateReplicaBody>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_pool_replica(Path((pool_id, replica_id)), Json(create_replica_body)).await
+    T::put_pool_replica(
+        crate::apis::Path((pool_id, replica_id)),
+        Body(create_replica_body),
+    )
+    .await
+    .map(Json)
 }
 
-async fn put_pool_replica_share<T: crate::apis::ReplicasApi + 'static, A: FromRequest + 'static>(
+async fn put_pool_replica_share<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((pool_id, replica_id, protocol)): Path<(
         String,
@@ -218,5 +231,7 @@ async fn put_pool_replica_share<T: crate::apis::ReplicasApi + 'static, A: FromRe
         crate::models::ReplicaShareProtocol,
     )>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_pool_replica_share(Path((pool_id, replica_id, protocol))).await
+    T::put_pool_replica_share(crate::apis::Path((pool_id, replica_id, protocol)))
+        .await
+        .map(Json)
 }

@@ -1,10 +1,10 @@
-# \SpecsApi
+# Specs
 
 All URIs are relative to *http://localhost/v0*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**get_specs**](SpecsApi.md#get_specs) | **Get** /specs | 
+[**get_specs**](Specs.md#get_specs) | **Get** /specs | 
 
 
 

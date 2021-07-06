@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait NodesApi {
+pub trait Nodes {
     async fn get_node(
         Path(id): Path<String>,
-    ) -> Result<Json<crate::models::Node>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Node, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_nodes(
-    ) -> Result<Json<Vec<crate::models::Node>>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<Vec<crate::models::Node>, crate::apis::RestError<crate::models::RestJsonError>>;
 }

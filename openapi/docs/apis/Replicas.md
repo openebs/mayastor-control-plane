@@ -1,22 +1,22 @@
-# \ReplicasApi
+# Replicas
 
 All URIs are relative to *http://localhost/v0*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**del_node_pool_replica**](ReplicasApi.md#del_node_pool_replica) | **Delete** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
-[**del_node_pool_replica_share**](ReplicasApi.md#del_node_pool_replica_share) | **Delete** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share | 
-[**del_pool_replica**](ReplicasApi.md#del_pool_replica) | **Delete** /pools/{pool_id}/replicas/{replica_id} | 
-[**del_pool_replica_share**](ReplicasApi.md#del_pool_replica_share) | **Delete** /pools/{pool_id}/replicas/{replica_id}/share | 
-[**get_node_pool_replica**](ReplicasApi.md#get_node_pool_replica) | **Get** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
-[**get_node_pool_replicas**](ReplicasApi.md#get_node_pool_replicas) | **Get** /nodes/{node_id}/pools/{pool_id}/replicas | 
-[**get_node_replicas**](ReplicasApi.md#get_node_replicas) | **Get** /nodes/{id}/replicas | 
-[**get_replica**](ReplicasApi.md#get_replica) | **Get** /replicas/{id} | 
-[**get_replicas**](ReplicasApi.md#get_replicas) | **Get** /replicas | 
-[**put_node_pool_replica**](ReplicasApi.md#put_node_pool_replica) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
-[**put_node_pool_replica_share**](ReplicasApi.md#put_node_pool_replica_share) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
-[**put_pool_replica**](ReplicasApi.md#put_pool_replica) | **Put** /pools/{pool_id}/replicas/{replica_id} | 
-[**put_pool_replica_share**](ReplicasApi.md#put_pool_replica_share) | **Put** /pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
+[**del_node_pool_replica**](Replicas.md#del_node_pool_replica) | **Delete** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
+[**del_node_pool_replica_share**](Replicas.md#del_node_pool_replica_share) | **Delete** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share | 
+[**del_pool_replica**](Replicas.md#del_pool_replica) | **Delete** /pools/{pool_id}/replicas/{replica_id} | 
+[**del_pool_replica_share**](Replicas.md#del_pool_replica_share) | **Delete** /pools/{pool_id}/replicas/{replica_id}/share | 
+[**get_node_pool_replica**](Replicas.md#get_node_pool_replica) | **Get** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
+[**get_node_pool_replicas**](Replicas.md#get_node_pool_replicas) | **Get** /nodes/{node_id}/pools/{pool_id}/replicas | 
+[**get_node_replicas**](Replicas.md#get_node_replicas) | **Get** /nodes/{id}/replicas | 
+[**get_replica**](Replicas.md#get_replica) | **Get** /replicas/{id} | 
+[**get_replicas**](Replicas.md#get_replicas) | **Get** /replicas | 
+[**put_node_pool_replica**](Replicas.md#put_node_pool_replica) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
+[**put_node_pool_replica_share**](Replicas.md#put_node_pool_replica_share) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
+[**put_pool_replica**](Replicas.md#put_pool_replica) | **Put** /pools/{pool_id}/replicas/{replica_id} | 
+[**put_pool_replica_share**](Replicas.md#put_pool_replica_share) | **Put** /pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
 
 
 

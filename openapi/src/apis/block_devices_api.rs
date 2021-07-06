@@ -8,15 +8,13 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait BlockDevicesApi {
+pub trait BlockDevices {
     async fn get_node_block_devices(
         Path(node): Path<String>,
-        all: Option<bool>,
-    ) -> Result<
-        Json<Vec<crate::models::BlockDevice>>,
-        crate::apis::RestError<crate::models::RestJsonError>,
-    >;
+        Query(all): Query<Option<bool>>,
+    ) -> Result<Vec<crate::models::BlockDevice>, crate::apis::RestError<crate::models::RestJsonError>>;
 }

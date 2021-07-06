@@ -1,16 +1,16 @@
-# \JsonGrpcApi
+# BlockDevices
 
 All URIs are relative to *http://localhost/v0*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**put_node_jsongrpc**](JsonGrpcApi.md#put_node_jsongrpc) | **Put** /nodes/{node}/jsongrpc/{method} | 
+[**get_node_block_devices**](BlockDevices.md#get_node_block_devices) | **Get** /nodes/{node}/block_devices | 
 
 
 
-## put_node_jsongrpc
+## get_node_block_devices
 
-> serde_json::Value put_node_jsongrpc(node, method, body)
+> Vec<crate::models::BlockDevice> get_node_block_devices(node, all)
 
 
 ### Parameters
@@ -19,12 +19,11 @@ Method | HTTP request | Description
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **node** | **String** |  | [required] |
-**method** | **String** |  | [required] |
-**body** | **serde_json::Value** |  | [required] |
+**all** | Option<**bool**> | specifies whether to list all devices or only usable ones |  |
 
 ### Return type
 
-[**serde_json::Value**](serde_json::Value.md)
+[**Vec<crate::models::BlockDevice>**](BlockDevice.md)
 
 ### Authorization
 
@@ -32,7 +31,7 @@ Name | Type | Description  | Required | Notes
 
 ### HTTP request headers
 
-- **Content-Type**: application/json
+- **Content-Type**: Not defined
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

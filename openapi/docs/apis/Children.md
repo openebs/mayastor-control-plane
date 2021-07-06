@@ -1,23 +1,23 @@
-# \VolumesApi
+# Children
 
 All URIs are relative to *http://localhost/v0*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**del_share**](VolumesApi.md#del_share) | **Delete** /volumes{volume_id}/share | 
-[**del_volume**](VolumesApi.md#del_volume) | **Delete** /volumes/{volume_id} | 
-[**get_node_volume**](VolumesApi.md#get_node_volume) | **Get** /nodes/{node_id}/volumes/{volume_id} | 
-[**get_node_volumes**](VolumesApi.md#get_node_volumes) | **Get** /nodes/{node_id}/volumes | 
-[**get_volume**](VolumesApi.md#get_volume) | **Get** /volumes/{volume_id} | 
-[**get_volumes**](VolumesApi.md#get_volumes) | **Get** /volumes | 
-[**put_volume**](VolumesApi.md#put_volume) | **Put** /volumes/{volume_id} | 
-[**put_volume_share**](VolumesApi.md#put_volume_share) | **Put** /volumes/{volume_id}/share/{protocol} | 
+[**del_nexus_child**](Children.md#del_nexus_child) | **Delete** /nexuses/{nexus_id}/children/{child_id:.*} | 
+[**del_node_nexus_child**](Children.md#del_node_nexus_child) | **Delete** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
+[**get_nexus_child**](Children.md#get_nexus_child) | **Get** /nexuses/{nexus_id}/children/{child_id:.*} | 
+[**get_nexus_children**](Children.md#get_nexus_children) | **Get** /nexuses/{nexus_id}/children | 
+[**get_node_nexus_child**](Children.md#get_node_nexus_child) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
+[**get_node_nexus_children**](Children.md#get_node_nexus_children) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children | 
+[**put_nexus_child**](Children.md#put_nexus_child) | **Put** /nexuses/{nexus_id}/children/{child_id:.*} | 
+[**put_node_nexus_child**](Children.md#put_node_nexus_child) | **Put** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
 
 
 
-## del_share
+## del_nexus_child
 
-> del_share(volume_id)
+> del_nexus_child(nexus_id, child_id_)
 
 
 ### Parameters
@@ -25,7 +25,8 @@ Method | HTTP request | Description
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
+**child_id_** | **String** |  | [required] |
 
 ### Return type
 
@@ -43,9 +44,9 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## del_volume
+## del_node_nexus_child
 
-> del_volume(volume_id)
+> del_node_nexus_child(node_id, nexus_id, child_id_)
 
 
 ### Parameters
@@ -53,7 +54,9 @@ Name | Type | Description  | Required | Notes
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+**node_id** | **String** |  | [required] |
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
+**child_id_** | **String** |  | [required] |
 
 ### Return type
 
@@ -71,9 +74,66 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## get_node_volume
+## get_nexus_child
 
-> crate::models::Volume get_node_volume(node_id, volume_id)
+> crate::models::Child get_nexus_child(nexus_id, child_id_)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
+**child_id_** | **String** |  | [required] |
+
+### Return type
+
+[**crate::models::Child**](Child.md)
+
+### Authorization
+
+[JWT](../README.md#JWT)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## get_nexus_children
+
+> Vec<crate::models::Child> get_nexus_children(nexus_id)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
+
+### Return type
+
+[**Vec<crate::models::Child>**](Child.md)
+
+### Authorization
+
+[JWT](../README.md#JWT)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## get_node_nexus_child
+
+> crate::models::Child get_node_nexus_child(node_id, nexus_id, child_id_)
 
 
 ### Parameters
@@ -82,11 +142,12 @@ Name | Type | Description  | Required | Notes
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **node_id** | **String** |  | [required] |
-**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
+**child_id_** | **String** |  | [required] |
 
 ### Return type
 
-[**crate::models::Volume**](Volume.md)
+[**crate::models::Child**](Child.md)
 
 ### Authorization
 
@@ -100,9 +161,9 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## get_node_volumes
+## get_node_nexus_children
 
-> Vec<crate::models::Volume> get_node_volumes(node_id)
+> Vec<crate::models::Child> get_node_nexus_children(node_id, nexus_id)
 
 
 ### Parameters
@@ -111,10 +172,11 @@ Name | Type | Description  | Required | Notes
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **node_id** | **String** |  | [required] |
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
 
 ### Return type
 
-[**Vec<crate::models::Volume>**](Volume.md)
+[**Vec<crate::models::Child>**](Child.md)
 
 ### Authorization
 
@@ -128,9 +190,9 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## get_volume
+## put_nexus_child
 
-> crate::models::Volume get_volume(volume_id)
+> crate::models::Child put_nexus_child(nexus_id, child_id_)
 
 
 ### Parameters
@@ -138,11 +200,12 @@ Name | Type | Description  | Required | Notes
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
+**child_id_** | **String** |  | [required] |
 
 ### Return type
 
-[**crate::models::Volume**](Volume.md)
+[**crate::models::Child**](Child.md)
 
 ### Authorization
 
@@ -156,34 +219,9 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## get_volumes
+## put_node_nexus_child
 
-> Vec<crate::models::Volume> get_volumes()
-
-
-### Parameters
-
-This endpoint does not need any parameter.
-
-### Return type
-
-[**Vec<crate::models::Volume>**](Volume.md)
-
-### Authorization
-
-[JWT](../README.md#JWT)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## put_volume
-
-> crate::models::Volume put_volume(volume_id, create_volume_body)
+> crate::models::Child put_node_nexus_child(node_id, nexus_id, child_id_)
 
 
 ### Parameters
@@ -191,41 +229,13 @@ This endpoint does not need any parameter.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
-**create_volume_body** | [**CreateVolumeBody**](CreateVolumeBody.md) |  | [required] |
+**node_id** | **String** |  | [required] |
+**nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
+**child_id_** | **String** |  | [required] |
 
 ### Return type
 
-[**crate::models::Volume**](Volume.md)
-
-### Authorization
-
-[JWT](../README.md#JWT)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## put_volume_share
-
-> String put_volume_share(volume_id, protocol)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
-**protocol** | [**crate::models::VolumeShareProtocol**](.md) |  | [required] |
-
-### Return type
-
-**String**
+[**crate::models::Child**](Child.md)
 
 ### Authorization
 

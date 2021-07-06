@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
+use crate::apis::Body;
 use actix_web::{
-    web::{self, Json, Path, Query, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
 };
 
-/// Configure handlers for the NodesApi resource
-pub fn configure<T: crate::apis::NodesApi + 'static, A: FromRequest + 'static>(
+/// Configure handlers for the Nodes resource
+pub fn configure<T: crate::apis::Nodes + 'static, A: FromRequest + 'static>(
     cfg: &mut ServiceConfig,
 ) {
     cfg.service(
@@ -31,15 +32,15 @@ pub fn configure<T: crate::apis::NodesApi + 'static, A: FromRequest + 'static>(
     );
 }
 
-async fn get_node<T: crate::apis::NodesApi + 'static, A: FromRequest + 'static>(
+async fn get_node<T: crate::apis::Nodes + 'static, A: FromRequest + 'static>(
     _token: A,
     Path(id): Path<String>,
 ) -> Result<Json<crate::models::Node>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node(Path(id)).await
+    T::get_node(crate::apis::Path(id)).await.map(Json)
 }
 
-async fn get_nodes<T: crate::apis::NodesApi + 'static, A: FromRequest + 'static>(
+async fn get_nodes<T: crate::apis::Nodes + 'static, A: FromRequest + 'static>(
     _token: A,
 ) -> Result<Json<Vec<crate::models::Node>>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_nodes().await
+    T::get_nodes().await.map(Json)
 }

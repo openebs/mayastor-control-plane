@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
+use crate::apis::Body;
 use actix_web::{
-    web::{self, Json, Path, Query, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
 };
 
-/// Configure handlers for the ChildrenApi resource
-pub fn configure<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+/// Configure handlers for the Children resource
+pub fn configure<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     cfg: &mut ServiceConfig,
 ) {
     cfg.service(
@@ -67,71 +68,98 @@ pub fn configure<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static
     );
 }
 
-async fn del_nexus_child<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+async fn del_nexus_child<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     request: HttpRequest,
     _token: A,
     Path((nexus_id, child_id_)): Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_nexus_child(request.query_string(), Path((nexus_id, child_id_)))
-        .await
-        .map(|_| Json(()))
+    T::del_nexus_child(
+        request.query_string(),
+        crate::apis::Path((nexus_id, child_id_)),
+    )
+    .await
+    .map(Json)
 }
 
-async fn del_node_nexus_child<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+async fn del_node_nexus_child<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     request: HttpRequest,
     _token: A,
     Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_nexus_child(request.query_string(), Path((node_id, nexus_id, child_id_)))
-        .await
-        .map(|_| Json(()))
+    T::del_node_nexus_child(
+        request.query_string(),
+        crate::apis::Path((node_id, nexus_id, child_id_)),
+    )
+    .await
+    .map(Json)
 }
 
-async fn get_nexus_child<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+async fn get_nexus_child<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     request: HttpRequest,
     _token: A,
     Path((nexus_id, child_id_)): Path<(String, String)>,
 ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_nexus_child(request.query_string(), Path((nexus_id, child_id_))).await
+    T::get_nexus_child(
+        request.query_string(),
+        crate::apis::Path((nexus_id, child_id_)),
+    )
+    .await
+    .map(Json)
 }
 
-async fn get_nexus_children<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+async fn get_nexus_children<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     _token: A,
     Path(nexus_id): Path<String>,
 ) -> Result<Json<Vec<crate::models::Child>>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_nexus_children(Path(nexus_id)).await
+    T::get_nexus_children(crate::apis::Path(nexus_id))
+        .await
+        .map(Json)
 }
 
-async fn get_node_nexus_child<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+async fn get_node_nexus_child<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     request: HttpRequest,
     _token: A,
     Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
 ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_nexus_child(request.query_string(), Path((node_id, nexus_id, child_id_))).await
+    T::get_node_nexus_child(
+        request.query_string(),
+        crate::apis::Path((node_id, nexus_id, child_id_)),
+    )
+    .await
+    .map(Json)
 }
 
-async fn get_node_nexus_children<
-    T: crate::apis::ChildrenApi + 'static,
-    A: FromRequest + 'static,
->(
+async fn get_node_nexus_children<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((node_id, nexus_id)): Path<(String, String)>,
 ) -> Result<Json<Vec<crate::models::Child>>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_nexus_children(Path((node_id, nexus_id))).await
+    T::get_node_nexus_children(crate::apis::Path((node_id, nexus_id)))
+        .await
+        .map(Json)
 }
 
-async fn put_nexus_child<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+async fn put_nexus_child<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     request: HttpRequest,
     _token: A,
     Path((nexus_id, child_id_)): Path<(String, String)>,
 ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_nexus_child(request.query_string(), Path((nexus_id, child_id_))).await
+    T::put_nexus_child(
+        request.query_string(),
+        crate::apis::Path((nexus_id, child_id_)),
+    )
+    .await
+    .map(Json)
 }
 
-async fn put_node_nexus_child<T: crate::apis::ChildrenApi + 'static, A: FromRequest + 'static>(
+async fn put_node_nexus_child<T: crate::apis::Children + 'static, A: FromRequest + 'static>(
     request: HttpRequest,
     _token: A,
     Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
 ) -> Result<Json<crate::models::Child>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_node_nexus_child(request.query_string(), Path((node_id, nexus_id, child_id_))).await
+    T::put_node_nexus_child(
+        request.query_string(),
+        crate::apis::Path((node_id, nexus_id, child_id_)),
+    )
+    .await
+    .map(Json)
 }

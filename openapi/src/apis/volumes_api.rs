@@ -8,10 +8,11 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait VolumesApi {
+pub trait Volumes {
     async fn del_share(
         Path(volume_id): Path<String>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
@@ -20,25 +21,20 @@ pub trait VolumesApi {
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_volume(
         Path((node_id, volume_id)): Path<(String, String)>,
-    ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Volume, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_volumes(
         Path(node_id): Path<String>,
-    ) -> Result<
-        Json<Vec<crate::models::Volume>>,
-        crate::apis::RestError<crate::models::RestJsonError>,
-    >;
+    ) -> Result<Vec<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_volume(
         Path(volume_id): Path<String>,
-    ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>>;
-    async fn get_volumes() -> Result<
-        Json<Vec<crate::models::Volume>>,
-        crate::apis::RestError<crate::models::RestJsonError>,
-    >;
+    ) -> Result<crate::models::Volume, crate::apis::RestError<crate::models::RestJsonError>>;
+    async fn get_volumes(
+    ) -> Result<Vec<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_volume(
         Path(volume_id): Path<String>,
-        Json(create_volume_body): Json<crate::models::CreateVolumeBody>,
-    ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>>;
+        Body(create_volume_body): Body<crate::models::CreateVolumeBody>,
+    ) -> Result<crate::models::Volume, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_volume_share(
         Path((volume_id, protocol)): Path<(String, crate::models::VolumeShareProtocol)>,
-    ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<String, crate::apis::RestError<crate::models::RestJsonError>>;
 }

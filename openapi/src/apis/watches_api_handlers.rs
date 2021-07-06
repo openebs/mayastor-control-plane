@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
+use crate::apis::Body;
 use actix_web::{
-    web::{self, Json, Path, Query, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
 };
 
-/// Configure handlers for the WatchesApi resource
-pub fn configure<T: crate::apis::WatchesApi + 'static, A: FromRequest + 'static>(
+/// Configure handlers for the Watches resource
+pub fn configure<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
     cfg: &mut ServiceConfig,
 ) {
     cfg.service(
@@ -50,30 +51,38 @@ struct put_watch_volumeQueryParams {
     pub callback: url::Url,
 }
 
-async fn del_watch_volume<T: crate::apis::WatchesApi + 'static, A: FromRequest + 'static>(
+async fn del_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
     _token: A,
     Path(volume_id): Path<String>,
     Query(query): Query<del_watch_volumeQueryParams>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_watch_volume(Path(volume_id), query.callback)
-        .await
-        .map(|_| Json(()))
+    T::del_watch_volume(
+        crate::apis::Path(volume_id),
+        crate::apis::Query(query.callback),
+    )
+    .await
+    .map(Json)
 }
 
-async fn get_watch_volume<T: crate::apis::WatchesApi + 'static, A: FromRequest + 'static>(
+async fn get_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
     _token: A,
     Path(volume_id): Path<String>,
 ) -> Result<Json<Vec<crate::models::RestWatch>>, crate::apis::RestError<crate::models::RestJsonError>>
 {
-    T::get_watch_volume(Path(volume_id)).await
+    T::get_watch_volume(crate::apis::Path(volume_id))
+        .await
+        .map(Json)
 }
 
-async fn put_watch_volume<T: crate::apis::WatchesApi + 'static, A: FromRequest + 'static>(
+async fn put_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
     _token: A,
     Path(volume_id): Path<String>,
     Query(query): Query<put_watch_volumeQueryParams>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_watch_volume(Path(volume_id), query.callback)
-        .await
-        .map(|_| Json(()))
+    T::put_watch_volume(
+        crate::apis::Path(volume_id),
+        crate::apis::Query(query.callback),
+    )
+    .await
+    .map(Json)
 }

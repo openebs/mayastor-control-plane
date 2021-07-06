@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
+use crate::apis::Body;
 use actix_web::{
-    web::{self, Json, Path, Query, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
 };
 
-/// Configure handlers for the SpecsApi resource
-pub fn configure<T: crate::apis::SpecsApi + 'static, A: FromRequest + 'static>(
+/// Configure handlers for the Specs resource
+pub fn configure<T: crate::apis::Specs + 'static, A: FromRequest + 'static>(
     cfg: &mut ServiceConfig,
 ) {
     cfg.service(
@@ -25,8 +26,8 @@ pub fn configure<T: crate::apis::SpecsApi + 'static, A: FromRequest + 'static>(
     );
 }
 
-async fn get_specs<T: crate::apis::SpecsApi + 'static, A: FromRequest + 'static>(
+async fn get_specs<T: crate::apis::Specs + 'static, A: FromRequest + 'static>(
     _token: A,
 ) -> Result<Json<crate::models::Specs>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_specs().await
+    T::get_specs().await.map(Json)
 }

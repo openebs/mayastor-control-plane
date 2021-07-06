@@ -8,22 +8,20 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait WatchesApi {
+pub trait Watches {
     async fn del_watch_volume(
         Path(volume_id): Path<String>,
-        callback: url::Url,
+        Query(callback): Query<url::Url>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_watch_volume(
         Path(volume_id): Path<String>,
-    ) -> Result<
-        Json<Vec<crate::models::RestWatch>>,
-        crate::apis::RestError<crate::models::RestJsonError>,
-    >;
+    ) -> Result<Vec<crate::models::RestWatch>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_watch_volume(
         Path(volume_id): Path<String>,
-        callback: url::Url,
+        Query(callback): Query<url::Url>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
 }

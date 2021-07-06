@@ -8,10 +8,11 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait PoolsApi {
+pub trait Pools {
     async fn del_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
@@ -20,17 +21,17 @@ pub trait PoolsApi {
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
-    ) -> Result<Json<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Pool, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_pools(
         Path(id): Path<String>,
-    ) -> Result<Json<Vec<crate::models::Pool>>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<Vec<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_pool(
         Path(pool_id): Path<String>,
-    ) -> Result<Json<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Pool, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_pools(
-    ) -> Result<Json<Vec<crate::models::Pool>>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<Vec<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
-        Json(create_pool_body): Json<crate::models::CreatePoolBody>,
-    ) -> Result<Json<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>>;
+        Body(create_pool_body): Body<crate::models::CreatePoolBody>,
+    ) -> Result<crate::models::Pool, crate::apis::RestError<crate::models::RestJsonError>>;
 }

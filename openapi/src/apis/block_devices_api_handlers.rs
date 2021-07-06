@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
+use crate::apis::Body;
 use actix_web::{
-    web::{self, Json, Path, Query, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
 };
 
-/// Configure handlers for the BlockDevicesApi resource
-pub fn configure<T: crate::apis::BlockDevicesApi + 'static, A: FromRequest + 'static>(
+/// Configure handlers for the BlockDevices resource
+pub fn configure<T: crate::apis::BlockDevices + 'static, A: FromRequest + 'static>(
     cfg: &mut ServiceConfig,
 ) {
     cfg.service(
@@ -33,7 +34,7 @@ struct get_node_block_devicesQueryParams {
 }
 
 async fn get_node_block_devices<
-    T: crate::apis::BlockDevicesApi + 'static,
+    T: crate::apis::BlockDevices + 'static,
     A: FromRequest + 'static,
 >(
     _token: A,
@@ -43,5 +44,7 @@ async fn get_node_block_devices<
     Json<Vec<crate::models::BlockDevice>>,
     crate::apis::RestError<crate::models::RestJsonError>,
 > {
-    T::get_node_block_devices(Path(node), query.all).await
+    T::get_node_block_devices(crate::apis::Path(node), crate::apis::Query(query.all))
+        .await
+        .map(Json)
 }

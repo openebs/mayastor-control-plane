@@ -8,13 +8,14 @@
     non_camel_case_types
 )]
 
+use crate::apis::Body;
 use actix_web::{
-    web::{self, Json, Path, Query, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
 };
 
-/// Configure handlers for the JsonGrpcApi resource
-pub fn configure<T: crate::apis::JsonGrpcApi + 'static, A: FromRequest + 'static>(
+/// Configure handlers for the JsonGrpc resource
+pub fn configure<T: crate::apis::JsonGrpc + 'static, A: FromRequest + 'static>(
     cfg: &mut ServiceConfig,
 ) {
     cfg.service(
@@ -25,10 +26,12 @@ pub fn configure<T: crate::apis::JsonGrpcApi + 'static, A: FromRequest + 'static
     );
 }
 
-async fn put_node_jsongrpc<T: crate::apis::JsonGrpcApi + 'static, A: FromRequest + 'static>(
+async fn put_node_jsongrpc<T: crate::apis::JsonGrpc + 'static, A: FromRequest + 'static>(
     _token: A,
     Path((node, method)): Path<(String, String)>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_node_jsongrpc(Path((node, method)), Json(body)).await
+    T::put_node_jsongrpc(crate::apis::Path((node, method)), Body(body))
+        .await
+        .map(Json)
 }

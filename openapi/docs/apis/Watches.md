@@ -1,12 +1,12 @@
-# \WatchesApi
+# Watches
 
 All URIs are relative to *http://localhost/v0*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**del_watch_volume**](WatchesApi.md#del_watch_volume) | **Delete** /watches/volumes/{volume_id} | 
-[**get_watch_volume**](WatchesApi.md#get_watch_volume) | **Get** /watches/volumes/{volume_id} | 
-[**put_watch_volume**](WatchesApi.md#put_watch_volume) | **Put** /watches/volumes/{volume_id} | 
+[**del_watch_volume**](Watches.md#del_watch_volume) | **Delete** /watches/volumes/{volume_id} | 
+[**get_watch_volume**](Watches.md#get_watch_volume) | **Get** /watches/volumes/{volume_id} | 
+[**put_watch_volume**](Watches.md#put_watch_volume) | **Put** /watches/volumes/{volume_id} | 
 
 
 

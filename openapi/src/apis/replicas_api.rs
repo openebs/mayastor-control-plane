@@ -8,10 +8,11 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait ReplicasApi {
+pub trait Replicas {
     async fn del_node_pool_replica(
         Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
@@ -26,30 +27,22 @@ pub trait ReplicasApi {
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_pool_replica(
         Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
-    ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Replica, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_pool_replicas(
         Path((node_id, pool_id)): Path<(String, String)>,
-    ) -> Result<
-        Json<Vec<crate::models::Replica>>,
-        crate::apis::RestError<crate::models::RestJsonError>,
-    >;
+    ) -> Result<Vec<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_replicas(
         Path(id): Path<String>,
-    ) -> Result<
-        Json<Vec<crate::models::Replica>>,
-        crate::apis::RestError<crate::models::RestJsonError>,
-    >;
+    ) -> Result<Vec<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_replica(
         Path(id): Path<String>,
-    ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>>;
-    async fn get_replicas() -> Result<
-        Json<Vec<crate::models::Replica>>,
-        crate::apis::RestError<crate::models::RestJsonError>,
-    >;
+    ) -> Result<crate::models::Replica, crate::apis::RestError<crate::models::RestJsonError>>;
+    async fn get_replicas(
+    ) -> Result<Vec<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_node_pool_replica(
         Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
-        Json(create_replica_body): Json<crate::models::CreateReplicaBody>,
-    ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>>;
+        Body(create_replica_body): Body<crate::models::CreateReplicaBody>,
+    ) -> Result<crate::models::Replica, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_node_pool_replica_share(
         Path((node_id, pool_id, replica_id, protocol)): Path<(
             String,
@@ -57,16 +50,16 @@ pub trait ReplicasApi {
             String,
             crate::models::ReplicaShareProtocol,
         )>,
-    ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<String, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_pool_replica(
         Path((pool_id, replica_id)): Path<(String, String)>,
-        Json(create_replica_body): Json<crate::models::CreateReplicaBody>,
-    ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>>;
+        Body(create_replica_body): Body<crate::models::CreateReplicaBody>,
+    ) -> Result<crate::models::Replica, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_pool_replica_share(
         Path((pool_id, replica_id, protocol)): Path<(
             String,
             String,
             crate::models::ReplicaShareProtocol,
         )>,
-    ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<String, crate::apis::RestError<crate::models::RestJsonError>>;
 }

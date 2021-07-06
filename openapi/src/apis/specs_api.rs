@@ -8,10 +8,11 @@
     non_camel_case_types
 )]
 
-use actix_web::web::{self, Json, Path, Query};
+use crate::apis::{Body, Path, Query};
+use actix_web::web::Json;
 
 #[async_trait::async_trait]
-pub trait SpecsApi {
+pub trait Specs {
     async fn get_specs(
-    ) -> Result<Json<crate::models::Specs>, crate::apis::RestError<crate::models::RestJsonError>>;
+    ) -> Result<crate::models::Specs, crate::apis::RestError<crate::models::RestJsonError>>;
 }
