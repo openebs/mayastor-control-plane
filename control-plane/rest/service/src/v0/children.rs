@@ -1,5 +1,4 @@
 use super::*;
-use actix_web::web::Path;
 use common_lib::types::v0::message_bus::{
     AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild,
 };
@@ -10,20 +9,20 @@ use mbus_api::{
 
 async fn get_children_response(
     filter: Filter,
-) -> Result<web::Json<Vec<models::Child>>, RestError<RestJsonError>> {
+) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
     let nexus = MessageBus::get_nexus(filter).await?;
-    Ok(Json(nexus.children.into_iter().map(From::from).collect()))
+    Ok(nexus.children.into_iter().map(From::from).collect())
 }
 
 async fn get_child_response(
     child_id: ChildUri,
     query: &str,
     filter: Filter,
-) -> Result<web::Json<models::Child>, RestError<RestJsonError>> {
+) -> Result<models::Child, RestError<RestJsonError>> {
     let child_id = build_child_uri(child_id, query);
     let nexus = MessageBus::get_nexus(filter).await?;
     let child = find_nexus_child(&nexus, &child_id)?;
-    Ok(Json(child.into()))
+    Ok(child.into())
 }
 
 fn find_nexus_child(nexus: &Nexus, child_uri: &ChildUri) -> Result<Child, BusError> {
@@ -43,7 +42,7 @@ async fn add_child_filtered(
     child_id: ChildUri,
     query: &str,
     filter: Filter,
-) -> Result<web::Json<models::Child>, RestError<RestJsonError>> {
+) -> Result<models::Child, RestError<RestJsonError>> {
     let child_uri = build_child_uri(child_id, query);
 
     let nexus = match MessageBus::get_nexus(filter).await {
@@ -58,7 +57,7 @@ async fn add_child_filtered(
         auto_rebuild: true,
     };
     let child = MessageBus::add_nexus_child(create).await?;
-    Ok(Json(child.into()))
+    Ok(child.into())
 }
 
 async fn delete_child_filtered(
@@ -102,7 +101,7 @@ fn build_child_uri(child_id: ChildUri, query: &str) -> ChildUri {
 }
 
 #[async_trait::async_trait]
-impl apis::ChildrenApi for RestApi {
+impl apis::Children for RestApi {
     async fn del_nexus_child(
         query: &str,
         Path((nexus_id, child_id_)): Path<(String, String)>,
@@ -125,20 +124,20 @@ impl apis::ChildrenApi for RestApi {
     async fn get_nexus_child(
         query: &str,
         Path((nexus_id, child_id_)): Path<(String, String)>,
-    ) -> Result<Json<models::Child>, RestError<RestJsonError>> {
+    ) -> Result<models::Child, RestError<RestJsonError>> {
         get_child_response(child_id_.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn get_nexus_children(
         Path(nexus_id): Path<String>,
-    ) -> Result<Json<Vec<models::Child>>, RestError<RestJsonError>> {
+    ) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
         get_children_response(Filter::Nexus(nexus_id.into())).await
     }
 
     async fn get_node_nexus_child(
         query: &str,
         Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
-    ) -> Result<Json<models::Child>, RestError<RestJsonError>> {
+    ) -> Result<models::Child, RestError<RestJsonError>> {
         get_child_response(
             child_id_.into(),
             query,
@@ -149,21 +148,21 @@ impl apis::ChildrenApi for RestApi {
 
     async fn get_node_nexus_children(
         Path((node_id, nexus_id)): Path<(String, String)>,
-    ) -> Result<Json<Vec<models::Child>>, RestError<RestJsonError>> {
+    ) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
         get_children_response(Filter::NodeNexus(node_id.into(), nexus_id.into())).await
     }
 
     async fn put_nexus_child(
         query: &str,
         Path((nexus_id, child_id_)): Path<(String, String)>,
-    ) -> Result<Json<models::Child>, RestError<RestJsonError>> {
+    ) -> Result<models::Child, RestError<RestJsonError>> {
         add_child_filtered(child_id_.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn put_node_nexus_child(
         query: &str,
         Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
-    ) -> Result<Json<models::Child>, RestError<RestJsonError>> {
+    ) -> Result<models::Child, RestError<RestJsonError>> {
         add_child_filtered(
             child_id_.into(),
             query,

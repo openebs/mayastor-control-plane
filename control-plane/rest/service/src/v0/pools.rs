@@ -1,5 +1,4 @@
 use super::*;
-use actix_web::web::Path;
 use common_lib::types::v0::message_bus::{DestroyPool, Filter};
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
@@ -37,7 +36,7 @@ async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
 }
 
 #[async_trait::async_trait]
-impl apis::PoolsApi for RestApi {
+impl apis::Pools for RestApi {
     async fn del_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
     ) -> Result<(), RestError<RestJsonError>> {
@@ -50,37 +49,37 @@ impl apis::PoolsApi for RestApi {
 
     async fn get_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
-    ) -> Result<Json<models::Pool>, RestError<RestJsonError>> {
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
         let pool = MessageBus::get_pool(Filter::NodePool(node_id.into(), pool_id.into())).await?;
-        Ok(Json(pool.into()))
+        Ok(pool.into())
     }
 
     async fn get_node_pools(
         Path(id): Path<String>,
-    ) -> Result<Json<Vec<models::Pool>>, RestError<RestJsonError>> {
+    ) -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
         let pools = MessageBus::get_pools(Filter::Node(id.into())).await?;
-        Ok(Json(pools.into_iter().map(From::from).collect()))
+        Ok(pools.into_iter().map(From::from).collect())
     }
 
     async fn get_pool(
         Path(pool_id): Path<String>,
-    ) -> Result<Json<models::Pool>, RestError<RestJsonError>> {
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
         let pool = MessageBus::get_pool(Filter::Pool(pool_id.into())).await?;
-        Ok(Json(pool.into()))
+        Ok(pool.into())
     }
 
-    async fn get_pools() -> Result<Json<Vec<models::Pool>>, RestError<RestJsonError>> {
+    async fn get_pools() -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
         let pools = MessageBus::get_pools(Filter::None).await?;
-        Ok(Json(pools.into_iter().map(From::from).collect()))
+        Ok(pools.into_iter().map(From::from).collect())
     }
 
     async fn put_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
-        Json(create_pool_body): Json<models::CreatePoolBody>,
-    ) -> Result<Json<models::Pool>, RestError<RestJsonError>> {
+        Body(create_pool_body): Body<models::CreatePoolBody>,
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
         let create =
             CreatePoolBody::from(create_pool_body).bus_request(node_id.into(), pool_id.into());
         let pool = MessageBus::create_pool(create).await?;
-        Ok(Json(pool.into()))
+        Ok(pool.into())
     }
 }

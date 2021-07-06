@@ -6142,6 +6142,7 @@ components:
       - Online
       - Degraded
       - Faulted
+      - Unknown
       type: string
     VolumeShareProtocol:
       description: Volume Share Protocol

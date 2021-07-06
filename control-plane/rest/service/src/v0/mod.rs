@@ -18,14 +18,16 @@ pub mod watches;
 use actix_service::ServiceFactory;
 use actix_web::{
     dev::{MessageBody, ServiceRequest, ServiceResponse},
-    web::{self, Json},
-    FromRequest, HttpRequest,
+    web, FromRequest, HttpRequest,
 };
 use futures::future::Ready;
 use serde::Deserialize;
 
 use crate::authentication::authenticate;
-pub use common_lib::types::v0::openapi::{apis::RestError, models::RestJsonError};
+pub use common_lib::types::v0::openapi::{
+    apis::{Body, Path, Query, RestError},
+    models::RestJsonError,
+};
 use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
 use rest_client::versions::v0::*;
 

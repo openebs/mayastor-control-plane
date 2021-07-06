@@ -22,6 +22,8 @@ pub enum VolumeState {
     Degraded,
     #[serde(rename = "Faulted")]
     Faulted,
+    #[serde(rename = "Unknown")]
+    Unknown,
 }
 
 impl ToString for VolumeState {
@@ -30,6 +32,7 @@ impl ToString for VolumeState {
             Self::Online => String::from("Online"),
             Self::Degraded => String::from("Degraded"),
             Self::Faulted => String::from("Faulted"),
+            Self::Unknown => String::from("Unknown"),
         }
     }
 }

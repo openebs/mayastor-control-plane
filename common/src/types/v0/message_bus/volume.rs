@@ -92,7 +92,7 @@ pub type VolumeState = NexusState;
 impl From<VolumeState> for models::VolumeState {
     fn from(src: VolumeState) -> Self {
         match src {
-            VolumeState::Unknown => Self::Faulted,
+            VolumeState::Unknown => Self::Unknown,
             VolumeState::Online => Self::Online,
             VolumeState::Degraded => Self::Degraded,
             VolumeState::Faulted => Self::Faulted,
@@ -105,20 +105,21 @@ impl From<models::VolumeState> for VolumeState {
             models::VolumeState::Online => Self::Online,
             models::VolumeState::Degraded => Self::Degraded,
             models::VolumeState::Faulted => Self::Faulted,
+            models::VolumeState::Unknown => Self::Unknown,
         }
     }
 }
 
 /// Volume topology using labels to determine how to place/distribute the data
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct LabelTopology {
+pub struct LabelledTopology {
     /// node topology
     node_topology: NodeTopology,
     /// pool topology
     pool_topology: PoolTopology,
 }
 
-impl From<models::LabelledTopology> for LabelTopology {
+impl From<models::LabelledTopology> for LabelledTopology {
     fn from(src: models::LabelledTopology) -> Self {
         Self {
             node_topology: src.node_topology.into(),
@@ -133,7 +134,7 @@ impl From<models::LabelledTopology> for LabelTopology {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct Topology {
     /// volume topology using labels
-    pub labelled: Option<LabelTopology>,
+    pub labelled: Option<LabelledTopology>,
     /// volume topology, explicitly selected
     pub explicit: Option<ExplicitTopology>,
 }

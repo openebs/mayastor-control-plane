@@ -1,5 +1,4 @@
 use super::*;
-use actix_web::web::Path;
 use common_lib::types::v0::message_bus::{
     CreateWatch, DeleteWatch, GetWatchers, WatchCallback, WatchResourceId, WatchType,
 };
@@ -7,10 +6,10 @@ use mbus_api::Message;
 use std::convert::TryFrom;
 
 #[async_trait::async_trait]
-impl apis::WatchesApi for RestApi {
+impl apis::Watches for RestApi {
     async fn del_watch_volume(
-        web::Path(volume_id): Path<String>,
-        callback: url::Url,
+        Path(volume_id): Path<String>,
+        Query(callback): Query<url::Url>,
     ) -> Result<(), RestError<RestJsonError>> {
         DeleteWatch {
             id: WatchResourceId::Volume(volume_id.into()),
@@ -24,8 +23,8 @@ impl apis::WatchesApi for RestApi {
     }
 
     async fn get_watch_volume(
-        web::Path(volume_id): Path<String>,
-    ) -> Result<Json<Vec<models::RestWatch>>, RestError<RestJsonError>> {
+        Path(volume_id): Path<String>,
+    ) -> Result<Vec<models::RestWatch>, RestError<RestJsonError>> {
         let watches = GetWatchers {
             resource: WatchResourceId::Volume(volume_id.into()),
         }
@@ -35,12 +34,12 @@ impl apis::WatchesApi for RestApi {
         let watches = watches
             .filter_map(|w| models::RestWatch::try_from(w).ok())
             .collect();
-        Ok(Json(watches))
+        Ok(watches)
     }
 
     async fn put_watch_volume(
-        web::Path(volume_id): Path<String>,
-        callback: url::Url,
+        Path(volume_id): Path<String>,
+        Query(callback): Query<url::Url>,
     ) -> Result<(), RestError<RestJsonError>> {
         CreateWatch {
             id: WatchResourceId::Volume(volume_id.into()),

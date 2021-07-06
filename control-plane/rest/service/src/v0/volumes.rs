@@ -1,5 +1,4 @@
 use super::*;
-use actix_web::web::Path;
 use common_lib::types::v0::message_bus::{
     DestroyVolume, Filter, NexusShareProtocol, ShareNexus, UnshareNexus, VolumeId,
 };
@@ -54,7 +53,7 @@ async fn volume_unshare(volume_id: VolumeId) -> Result<(), RestError<RestJsonErr
 }
 
 #[async_trait::async_trait]
-impl apis::VolumesApi for RestApi {
+impl apis::Volumes for RestApi {
     async fn del_share(Path(volume_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
         volume_unshare(volume_id.into()).await
     }
@@ -69,45 +68,43 @@ impl apis::VolumesApi for RestApi {
 
     async fn get_node_volume(
         Path((node_id, volume_id)): Path<(String, String)>,
-    ) -> Result<Json<models::Volume>, RestError<RestJsonError>> {
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
         let volume =
             MessageBus::get_volume(Filter::NodeVolume(node_id.into(), volume_id.into())).await?;
-        Ok(Json(volume.into()))
+        Ok(volume.into())
     }
 
     async fn get_node_volumes(
         Path(node_id): Path<String>,
-    ) -> Result<Json<Vec<models::Volume>>, RestError<RestJsonError>> {
+    ) -> Result<Vec<models::Volume>, RestError<RestJsonError>> {
         let volumes = MessageBus::get_volumes(Filter::Node(node_id.into())).await?;
-        Ok(Json(volumes.into_iter().map(From::from).collect()))
+        Ok(volumes.into_iter().map(From::from).collect())
     }
 
     async fn get_volume(
         Path(volume_id): Path<String>,
-    ) -> Result<Json<models::Volume>, RestError<RestJsonError>> {
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
         let volume = MessageBus::get_volume(Filter::Volume(volume_id.into())).await?;
-        Ok(Json(volume.into()))
+        Ok(volume.into())
     }
 
-    async fn get_volumes() -> Result<Json<Vec<models::Volume>>, RestError<RestJsonError>> {
+    async fn get_volumes() -> Result<Vec<models::Volume>, RestError<RestJsonError>> {
         let volumes = MessageBus::get_volumes(Filter::None).await?;
-        Ok(Json(volumes.into_iter().map(From::from).collect()))
+        Ok(volumes.into_iter().map(From::from).collect())
     }
 
     async fn put_volume(
         Path(volume_id): Path<String>,
-        Json(create_volume_body): Json<models::CreateVolumeBody>,
-    ) -> Result<Json<models::Volume>, RestError<RestJsonError>> {
+        Body(create_volume_body): Body<models::CreateVolumeBody>,
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
         let create = CreateVolumeBody::from(create_volume_body).bus_request(volume_id.into());
         let volume = MessageBus::create_volume(create).await?;
-        Ok(Json(volume.into()))
+        Ok(volume.into())
     }
 
     async fn put_volume_share(
         Path((volume_id, protocol)): Path<(String, models::VolumeShareProtocol)>,
-    ) -> Result<Json<String>, RestError<RestJsonError>> {
-        volume_share(volume_id.into(), protocol.into())
-            .await
-            .map(Json)
+    ) -> Result<String, RestError<RestJsonError>> {
+        volume_share(volume_id.into(), protocol.into()).await
     }
 }
