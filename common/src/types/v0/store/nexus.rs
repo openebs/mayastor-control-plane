@@ -2,8 +2,8 @@
 
 use crate::types::v0::{
     message_bus::{
-        self, ChildState, ChildUri, CreateNexus, DestroyNexus, NexusId, NexusShareProtocol, NodeId,
-        Protocol, VolumeId,
+        self, ChildState, ChildUri, CreateNexus, DestroyNexus, Nexus as MbusNexus, NexusId,
+        NexusShareProtocol, NodeId, Protocol, VolumeId,
     },
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
@@ -27,6 +27,12 @@ pub struct Nexus {
 pub struct NexusState {
     /// Nexus information.
     pub nexus: message_bus::Nexus,
+}
+
+impl From<MbusNexus> for NexusState {
+    fn from(nexus: MbusNexus) -> Self {
+        Self { nexus }
+    }
 }
 
 /// Key used by the store to uniquely identify a NexusState structure.

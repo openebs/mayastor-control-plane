@@ -2,8 +2,8 @@
 
 use crate::types::v0::{
     message_bus::{
-        self, CreateReplica, NodeId, PoolId, Protocol, ReplicaId, ReplicaOwners,
-        ReplicaShareProtocol,
+        self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
+        ReplicaOwners, ReplicaShareProtocol,
     },
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
@@ -22,12 +22,16 @@ pub struct Replica {
 }
 
 /// Runtime state of a replica.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct ReplicaState {
     /// Replica information.
     pub replica: message_bus::Replica,
-    /// State of the replica.
-    pub state: message_bus::ReplicaState,
+}
+
+impl From<MbusReplica> for ReplicaState {
+    fn from(replica: MbusReplica) -> Self {
+        Self { replica }
+    }
 }
 
 /// Key used by the store to uniquely identify a ReplicaState structure.

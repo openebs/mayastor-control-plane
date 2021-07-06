@@ -97,3 +97,5 @@ bus_impl_message_all!(GetWatchers, GetWatches, Watches, Watcher);
 bus_impl_message_all!(DeleteWatch, DeleteWatch, (), Watcher);
 
 bus_impl_message_all!(GetSpecs, GetSpecs, Specs, Registry);
+
+bus_impl_message_all!(GetStates, GetStates, States, Registry);

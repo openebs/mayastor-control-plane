@@ -147,13 +147,21 @@ impl NodeWrapper {
     }
 
     /// Reload the node by fetching information from mayastor
-    pub(crate) async fn reload(&mut self) -> Result<(), SvcError> {
+    pub(crate) async fn reload(&mut self, registry: &Registry) -> Result<(), SvcError> {
         if self.is_online() {
             tracing::trace!("Reloading node '{}'", self.id);
 
             let replicas = self.fetch_replicas().await?;
             let pools = self.fetch_pools().await?;
             let nexuses = self.fetch_nexuses().await?;
+
+            {
+                // Update resource states in the registry.
+                let mut states = registry.states.write().await;
+                states
+                    .update(pools.clone(), replicas.clone(), nexuses.clone())
+                    .await;
+            }
 
             self.pools.clear();
             for pool in &pools {
@@ -164,6 +172,7 @@ impl NodeWrapper {
                     .collect::<Vec<_>>();
                 self.add_pool_with_replicas(pool, &replicas);
             }
+
             self.nexuses.clear();
             for nexus in &nexuses {
                 self.add_nexus(nexus);
@@ -332,7 +341,10 @@ impl std::ops::Deref for NodeWrapper {
 }
 
 use crate::{
-    core::grpc::{GrpcClient, GrpcClientLocked},
+    core::{
+        grpc::{GrpcClient, GrpcClientLocked},
+        registry::Registry,
+    },
     node::service::NodeCommsTimeout,
 };
 use async_trait::async_trait;

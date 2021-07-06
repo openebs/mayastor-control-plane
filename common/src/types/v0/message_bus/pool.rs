@@ -61,6 +61,12 @@ pub struct Pool {
     pub used: u64,
 }
 
+impl UuidString for Pool {
+    fn uuid_as_string(&self) -> String {
+        self.id.clone().into()
+    }
+}
+
 bus_impl_string_id!(PoolId, "ID of a mayastor pool");
 
 // online > degraded > unknown/faulted

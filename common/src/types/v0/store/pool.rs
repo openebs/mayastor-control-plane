@@ -1,7 +1,7 @@
 //! Definition of pool types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
+    message_bus::{self, CreatePool, NodeId, Pool as MbusPool, PoolDeviceUri, PoolId},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         SpecState, SpecTransaction,
@@ -23,12 +23,21 @@ pub struct Pool {
 
 /// Runtime state of the pool.
 /// This should eventually satisfy the PoolSpec.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]
 pub struct PoolState {
     /// Pool information returned by Mayastor.
     pub pool: message_bus::Pool,
     /// Pool labels.
     pub labels: Vec<PoolLabel>,
+}
+
+impl From<MbusPool> for PoolState {
+    fn from(pool: MbusPool) -> Self {
+        Self {
+            pool,
+            labels: vec![],
+        }
+    }
 }
 
 /// State of the Pool Spec
