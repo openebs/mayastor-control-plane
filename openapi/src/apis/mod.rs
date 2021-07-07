@@ -2,10 +2,7 @@ pub use actix_web::http::StatusCode;
 pub use url::Url;
 pub use uuid::Uuid;
 
-use actix_web::{
-    web::{HttpResponse, ServiceConfig},
-    FromRequest, ResponseError,
-};
+use actix_web::{web::ServiceConfig, FromRequest, HttpResponse, ResponseError};
 use serde::Serialize;
 use std::{
     fmt::{self, Debug, Display, Formatter},
@@ -60,7 +57,7 @@ impl<T: Debug + Serialize> ResponseError for RestError<T> {
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code).json2(&self.error_response)
+        HttpResponse::build(self.status_code).json(&self.error_response)
     }
 }
 

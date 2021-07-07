@@ -76,34 +76,38 @@ pub fn configure<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
 
 async fn del_nexus<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(nexus_id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_nexus(crate::apis::Path(nexus_id)).await.map(Json)
+    T::del_nexus(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn del_node_nexus<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, nexus_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_nexus(crate::apis::Path((node_id, nexus_id)))
+    T::del_node_nexus(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn del_node_nexus_share<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, nexus_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_nexus_share(crate::apis::Path((node_id, nexus_id)))
+    T::del_node_nexus_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn get_nexus<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(nexus_id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<crate::models::Nexus>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_nexus(crate::apis::Path(nexus_id)).await.map(Json)
+    T::get_nexus(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn get_nexuses<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
@@ -114,27 +118,29 @@ async fn get_nexuses<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static
 
 async fn get_node_nexus<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, nexus_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<crate::models::Nexus>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_nexus(crate::apis::Path((node_id, nexus_id)))
+    T::get_node_nexus(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn get_node_nexuses<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<Vec<crate::models::Nexus>>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_nexuses(crate::apis::Path(id)).await.map(Json)
+    T::get_node_nexuses(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn put_node_nexus<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, nexus_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
     Json(create_nexus_body): Json<crate::models::CreateNexusBody>,
 ) -> Result<Json<crate::models::Nexus>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_node_nexus(
-        crate::apis::Path((node_id, nexus_id)),
+        crate::apis::Path(path.into_inner()),
         Body(create_nexus_body),
     )
     .await
@@ -143,9 +149,9 @@ async fn put_node_nexus<T: crate::apis::Nexuses + 'static, A: FromRequest + 'sta
 
 async fn put_node_nexus_share<T: crate::apis::Nexuses + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, nexus_id, protocol)): Path<(String, String, crate::models::NexusShareProtocol)>,
+    path: Path<(String, String, crate::models::NexusShareProtocol)>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_node_nexus_share(crate::apis::Path((node_id, nexus_id, protocol)))
+    T::put_node_nexus_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }

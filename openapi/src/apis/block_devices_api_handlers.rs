@@ -38,13 +38,16 @@ async fn get_node_block_devices<
     A: FromRequest + 'static,
 >(
     _token: A,
-    Path(node): Path<String>,
-    Query(query): Query<get_node_block_devicesQueryParams>,
+    path: Path<String>,
+    query: Query<get_node_block_devicesQueryParams>,
 ) -> Result<
     Json<Vec<crate::models::BlockDevice>>,
     crate::apis::RestError<crate::models::RestJsonError>,
 > {
-    T::get_node_block_devices(crate::apis::Path(node), crate::apis::Query(query.all))
-        .await
-        .map(Json)
+    T::get_node_block_devices(
+        crate::apis::Path(path.into_inner()),
+        crate::apis::Query(query.into_inner().all),
+    )
+    .await
+    .map(Json)
 }

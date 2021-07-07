@@ -28,10 +28,10 @@ pub fn configure<T: crate::apis::JsonGrpc + 'static, A: FromRequest + 'static>(
 
 async fn put_node_jsongrpc<T: crate::apis::JsonGrpc + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node, method)): Path<(String, String)>,
+    path: Path<(String, String)>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_node_jsongrpc(crate::apis::Path((node, method)), Body(body))
+    T::put_node_jsongrpc(crate::apis::Path(path.into_inner()), Body(body))
         .await
         .map(Json)
 }

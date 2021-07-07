@@ -64,41 +64,47 @@ pub fn configure<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
 
 async fn del_node_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, pool_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_pool(crate::apis::Path((node_id, pool_id)))
+    T::del_node_pool(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn del_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(pool_id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_pool(crate::apis::Path(pool_id)).await.map(Json)
+    T::del_pool(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn get_node_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, pool_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_pool(crate::apis::Path((node_id, pool_id)))
+    T::get_node_pool(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn get_node_pools<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<Vec<crate::models::Pool>>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_pools(crate::apis::Path(id)).await.map(Json)
+    T::get_node_pools(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn get_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(pool_id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_pool(crate::apis::Path(pool_id)).await.map(Json)
+    T::get_pool(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn get_pools<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
@@ -109,13 +115,10 @@ async fn get_pools<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
 
 async fn put_node_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, pool_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
     Json(create_pool_body): Json<crate::models::CreatePoolBody>,
 ) -> Result<Json<crate::models::Pool>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_node_pool(
-        crate::apis::Path((node_id, pool_id)),
-        Body(create_pool_body),
-    )
-    .await
-    .map(Json)
+    T::put_node_pool(crate::apis::Path(path.into_inner()), Body(create_pool_body))
+        .await
+        .map(Json)
 }

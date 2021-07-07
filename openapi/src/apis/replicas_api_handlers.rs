@@ -102,9 +102,9 @@ pub fn configure<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
 
 async fn del_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+    path: Path<(String, String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_pool_replica(crate::apis::Path((node_id, pool_id, replica_id)))
+    T::del_node_pool_replica(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
@@ -114,63 +114,67 @@ async fn del_node_pool_replica_share<
     A: FromRequest + 'static,
 >(
     _token: A,
-    Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+    path: Path<(String, String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_node_pool_replica_share(crate::apis::Path((node_id, pool_id, replica_id)))
+    T::del_node_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn del_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((pool_id, replica_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_pool_replica(crate::apis::Path((pool_id, replica_id)))
+    T::del_pool_replica(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn del_pool_replica_share<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((pool_id, replica_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_pool_replica_share(crate::apis::Path((pool_id, replica_id)))
+    T::del_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn get_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+    path: Path<(String, String, String)>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_pool_replica(crate::apis::Path((node_id, pool_id, replica_id)))
+    T::get_node_pool_replica(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn get_node_pool_replicas<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, pool_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<Vec<crate::models::Replica>>, crate::apis::RestError<crate::models::RestJsonError>>
 {
-    T::get_node_pool_replicas(crate::apis::Path((node_id, pool_id)))
+    T::get_node_pool_replicas(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn get_node_replicas<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<Vec<crate::models::Replica>>, crate::apis::RestError<crate::models::RestJsonError>>
 {
-    T::get_node_replicas(crate::apis::Path(id)).await.map(Json)
+    T::get_node_replicas(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn get_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_replica(crate::apis::Path(id)).await.map(Json)
+    T::get_replica(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn get_replicas<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
@@ -182,11 +186,11 @@ async fn get_replicas<T: crate::apis::Replicas + 'static, A: FromRequest + 'stat
 
 async fn put_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+    path: Path<(String, String, String)>,
     Json(create_replica_body): Json<crate::models::CreateReplicaBody>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_node_pool_replica(
-        crate::apis::Path((node_id, pool_id, replica_id)),
+        crate::apis::Path(path.into_inner()),
         Body(create_replica_body),
     )
     .await
@@ -198,25 +202,20 @@ async fn put_node_pool_replica_share<
     A: FromRequest + 'static,
 >(
     _token: A,
-    Path((node_id, pool_id, replica_id, protocol)): Path<(
-        String,
-        String,
-        String,
-        crate::models::ReplicaShareProtocol,
-    )>,
+    path: Path<(String, String, String, crate::models::ReplicaShareProtocol)>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_node_pool_replica_share(crate::apis::Path((node_id, pool_id, replica_id, protocol)))
+    T::put_node_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn put_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((pool_id, replica_id)): Path<(String, String)>,
+    path: Path<(String, String)>,
     Json(create_replica_body): Json<crate::models::CreateReplicaBody>,
 ) -> Result<Json<crate::models::Replica>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_pool_replica(
-        crate::apis::Path((pool_id, replica_id)),
+        crate::apis::Path(path.into_inner()),
         Body(create_replica_body),
     )
     .await
@@ -225,13 +224,9 @@ async fn put_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + '
 
 async fn put_pool_replica_share<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path((pool_id, replica_id, protocol)): Path<(
-        String,
-        String,
-        crate::models::ReplicaShareProtocol,
-    )>,
+    path: Path<(String, String, crate::models::ReplicaShareProtocol)>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::put_pool_replica_share(crate::apis::Path((pool_id, replica_id, protocol)))
+    T::put_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
