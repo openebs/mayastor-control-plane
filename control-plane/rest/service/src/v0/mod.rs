@@ -60,8 +60,8 @@ pub(super) fn configure_api<T, B>(api: actix_web::App<T, B>) -> actix_web::App<T
 where
     B: MessageBody,
     T: ServiceFactory<
+        ServiceRequest,
         Config = (),
-        Request = ServiceRequest,
         Response = ServiceResponse<B>,
         Error = actix_web::Error,
         InitError = (),
@@ -82,9 +82,9 @@ where
 pub struct BearerToken;
 
 impl FromRequest for BearerToken {
+    type Config = ();
     type Error = RestError<RestJsonError>;
     type Future = Ready<Result<Self, Self::Error>>;
-    type Config = ();
 
     fn from_request(req: &HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
         futures::future::ready(authenticate(req).map(|_| Self {}).map_err(|auth_error| {

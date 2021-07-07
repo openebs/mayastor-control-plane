@@ -140,12 +140,12 @@ fn bearer_token() -> String {
 #[actix_rt::test]
 async fn client() {
     global::set_text_map_propagator(TraceContextPropagator::new());
-    let (_tracer, _uninstall) = opentelemetry_jaeger::new_pipeline()
+    let _tracer = opentelemetry_jaeger::new_pipeline()
         .with_service_name("rest-client")
-        .install()
+        .install_simple()
         .unwrap();
     // Run the client test both with and without authentication.
-    for auth in &[/* true, */ false] {
+    for auth in &[true, false] {
         let (mayastor, test) = test_setup(auth).await;
         client_test(&mayastor.into(), &test, auth).await;
     }
@@ -210,6 +210,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         .await
         .unwrap();
     info!("Replica: {:#?}", replica);
+    let uri = replica.uri.clone();
     assert_eq!(
         replica,
         Replica {
@@ -219,8 +220,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             thin: false,
             size: 12582912,
             share: Protocol::Nvmf,
-            uri: "nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:e6e7d39d-e343-42f7-936a-1ab05f1839db"
-                .to_string(),
+            uri,
             state: ReplicaState::Online
         }
     );
@@ -371,13 +371,12 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         .expect("Failed to get block devices");
 
     test.stop("mayastor").await.unwrap();
-    tokio::time::delay_for(std::time::Duration::from_millis(250)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     node.state = NodeState::Unknown;
     assert_eq!(client.get_nodes().await.unwrap(), vec![node]);
 }
 
 #[actix_rt::test]
-#[ignore]
 async fn client_invalid_token() {
     let (_, test) = test_setup(&true).await;
     orderly_start(&test).await;

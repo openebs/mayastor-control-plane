@@ -65,10 +65,9 @@ use opentelemetry::{
     global,
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
-use opentelemetry_jaeger::Uninstall;
 use std::time::Duration;
 
-fn init_tracing() -> Option<(Tracer, Uninstall)> {
+fn init_tracing() -> Option<Tracer> {
     if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
         tracing_subscriber::fmt().with_env_filter(filter).init();
     } else {
@@ -78,12 +77,12 @@ fn init_tracing() -> Option<(Tracer, Uninstall)> {
         tracing::info!("Starting jaeger trace pipeline at {}...", agent);
         // Start a new jaeger trace pipeline
         global::set_text_map_propagator(TraceContextPropagator::new());
-        let (_tracer, _uninstall) = opentelemetry_jaeger::new_pipeline()
+        let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(agent)
             .with_service_name("rest-server")
-            .install()
+            .install_simple()
             .expect("Jaeger pipeline install error");
-        Some((_tracer, _uninstall))
+        Some(tracer)
     } else {
         None
     }
@@ -102,8 +101,8 @@ impl<T, B> OpenApiExt<T, B> for actix_web::App<T, B>
 where
     B: MessageBody,
     T: ServiceFactory<
+        ServiceRequest,
         Config = (),
-        Request = ServiceRequest,
         Response = ServiceResponse<B>,
         Error = actix_web::Error,
         InitError = (),
