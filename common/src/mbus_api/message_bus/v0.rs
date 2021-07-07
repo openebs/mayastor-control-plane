@@ -351,7 +351,7 @@ mod tests {
 
         test.stop("mayastor").await?;
 
-        tokio::time::delay_for(std::time::Duration::from_millis(250)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         assert!(MessageBus::get_nodes().await?.is_empty());
 
         Ok(())

@@ -156,7 +156,7 @@ impl Registry {
                 }
             }
             self.trace_all().await;
-            tokio::time::delay_for(self.cache_period).await;
+            tokio::time::sleep(self.cache_period).await;
         }
     }
     async fn trace_all(&self) {

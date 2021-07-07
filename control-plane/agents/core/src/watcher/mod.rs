@@ -82,7 +82,7 @@ mod tests {
             if TcpStream::connect(&sa).await.is_ok() {
                 return;
             }
-            tokio::time::delay_for(std::time::Duration::from_millis(10)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
         TcpStream::connect(&sa).await.unwrap();
     }

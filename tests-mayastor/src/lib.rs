@@ -12,7 +12,6 @@ use common_lib::{
     mbus_api::Message,
     types::v0::message_bus::{self, PoolDeviceUri},
 };
-use opentelemetry_jaeger::Uninstall;
 pub use rest_client::{
     versions::v0::{self, RestClient},
     ActixRestClient, ClientError,
@@ -44,7 +43,7 @@ pub fn default_options() -> StartOptions {
 pub struct Cluster {
     composer: ComposeTest,
     rest_client: ActixRestClient,
-    jaeger: (Tracer, Uninstall),
+    jaeger: Tracer,
     builder: ClusterBuilder,
 }
 
@@ -94,7 +93,7 @@ impl Cluster {
         bearer_token: Option<String>,
         components: Components,
         composer: ComposeTest,
-        jaeger: (Tracer, Uninstall),
+        jaeger: Tracer,
     ) -> Result<Cluster, Error> {
         let rest_client = ActixRestClient::new_timeout(
             "http://localhost:8081",
@@ -200,7 +199,7 @@ struct Replica {
 /// default timeout options for every bus request
 fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
-        .with_timeout(Duration::from_millis(500))
+        .with_timeout(Duration::from_secs(2))
         .with_timeout_backoff(Duration::from_millis(500))
         .with_max_retries(2)
 }
@@ -337,7 +336,7 @@ impl ClusterBuilder {
         global::set_text_map_propagator(TraceContextPropagator::new());
         let jaeger = opentelemetry_jaeger::new_pipeline()
             .with_service_name("tests-client")
-            .install()
+            .install_simple()
             .unwrap();
 
         let composer = compose_builder.build().await?;

@@ -21,7 +21,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    sync::{mpsc::error::TryRecvError, Mutex},
+    sync::{broadcast::error::TryRecvError, Mutex},
     task::JoinHandle,
 };
 
@@ -71,7 +71,7 @@ struct WatchParamsCfg {
 }
 
 /// Watch Handle to a watch thread with a cancellation channel
-type WatchHandle = Arc<(tokio::sync::mpsc::Sender<()>, JoinHandle<()>)>;
+type WatchHandle = Arc<(tokio::sync::broadcast::Sender<()>, JoinHandle<()>)>;
 
 impl Deref for WatchParamsCfg {
     type Target = WatchParams;
@@ -202,7 +202,7 @@ impl WatchCfg {
             let watch = watch.clone();
             let id = self.watch_id.id.clone();
             let store = store_arc.clone();
-            let (cancel_sender, cancel) = tokio::sync::mpsc::channel(1);
+            let (cancel_sender, cancel) = tokio::sync::broadcast::channel(1);
             let thread = tokio::spawn(async move {
                 Self::watcher_worker(cancel, channel, watch, id, store).await;
             });
@@ -217,7 +217,7 @@ impl WatchCfg {
     /// Worker thread which listens for events from the store (etcd) for a
     /// specific watcher which is created through `create_watcher`.
     async fn watcher_worker(
-        mut cancel: tokio::sync::mpsc::Receiver<()>,
+        mut cancel: tokio::sync::broadcast::Receiver<()>,
         mut channel: StoreWatchReceiver,
         params: WatchParams,
         id: WatchResourceId,
@@ -271,7 +271,7 @@ impl WatchCfg {
     }
 
     /// Notify the watcher using its callback
-    async fn notify(cancel: &mut tokio::sync::mpsc::Receiver<()>, callback: &WatchCallback) {
+    async fn notify(cancel: &mut tokio::sync::broadcast::Receiver<()>, callback: &WatchCallback) {
         let mut tries = 0;
         let mut log_failure = true;
         loop {
@@ -351,7 +351,7 @@ impl WatchCfg {
     /// the connection is lost which means we need to reissue the watch.
     /// todo: this should probably be addressed in the store itself
     async fn reconnect_watch(
-        cancel: &mut tokio::sync::mpsc::Receiver<()>,
+        cancel: &mut tokio::sync::broadcast::Receiver<()>,
         id: &WatchResourceId,
         store: &Arc<Mutex<impl Store + 'static>>,
     ) -> Option<(serde_json::Value, StoreWatchReceiver)> {
@@ -383,7 +383,7 @@ async fn backoff(tries: &mut u32, max: Duration) {
     } else {
         min((*tries - cutoff - 1) * Duration::from_millis(250), max)
     };
-    tokio::time::delay_for(backoff).await;
+    tokio::time::sleep(backoff).await;
 }
 
 impl StoreWatcher {

@@ -35,7 +35,7 @@ fn create_node_service(builder: &Service) -> service::Service {
     let deadline = CliArgs::from_args().deadline.into();
     let request = CliArgs::from_args().request.into();
     let connect = CliArgs::from_args().connect.into();
-    service::Service::new(registry, deadline, connect, request)
+    service::Service::new(registry, deadline, request, connect)
 }
 
 #[cfg(test)]
@@ -68,7 +68,7 @@ mod tests {
                 state: NodeState::Online,
             }
         );
-        tokio::time::delay_for(std::time::Duration::from_secs(2)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         let nodes = GetNodes {}.request().await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), 1);

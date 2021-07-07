@@ -611,7 +611,7 @@ impl ResourceSpecsLocked {
                 registry.reconcile_idle_period
             };
 
-            tokio::time::delay_for(period).await;
+            tokio::time::sleep(period).await;
         }
     }
 }
