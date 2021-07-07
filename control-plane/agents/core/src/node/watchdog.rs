@@ -74,9 +74,6 @@ impl Watchdog {
     /// stop the watchdog
     pub(crate) fn disarm(&mut self) {
         tracing::debug!("Disarming the watchdog for node '{}'", self.node_id);
-        if let Some(chan) = &mut self.pet_chan {
-            let _ = chan.disarm();
-        }
-        self.pet_chan = None;
+        let _ = self.pet_chan.take();
     }
 }

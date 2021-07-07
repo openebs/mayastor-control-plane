@@ -30,18 +30,27 @@ let
   PROTOC_INCLUDE = "${protobuf}/include";
   buildProps = rec {
     name = "control-plane-${version}";
-    #cargoSha256 = "0000000000000000000000000000000000000000000000000000";
-    cargoSha256 = "0l54qc4jnb33fw54pjdxfhr96yj9qvx7nw33i9gsvkrql1zgxjml";
     inherit version;
 
     src = whitelistSource ../../../. [
       "Cargo.lock"
       "Cargo.toml"
-      "control-plane"
+      "common"
       "composer"
+      "control-plane"
+      "openapi"
       "tests-mayastor"
+      "deployer"
     ];
-    cargoBuildFlags = [ "-p mbus_api" "-p agents" "-p rest" ];
+    cargoBuildFlags = [ "-p agents" "-p rest" ];
+
+    cargoLock = {
+      lockFile = ../../../Cargo.lock;
+      outputHashes = {
+        "rpc-0.1.0" = "0ghiqlc4qz63znn13iibb90k77j9jm03vcgjqgq17jsw4dhswsvb";
+        "actix-web-opentelemetry-0.11.0-beta.4" = "1irqffny9yy82fkx6g1253hcfd9330369bpigxrx8w737yll3q53";
+      };
+    };
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [
@@ -53,7 +62,6 @@ let
       protobuf
       openssl
     ];
-    verifyCargoDeps = false;
     doCheck = false;
   };
 in

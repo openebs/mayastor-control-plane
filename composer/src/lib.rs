@@ -159,7 +159,7 @@ impl Binary {
 }
 
 const RUST_LOG_DEFAULT: &str =
-    "debug,actix_web=debug,actix=debug,h2=info,hyper=info,tower_buffer=info,bollard=info,rustls=info,reqwest=info";
+    "debug,actix_web=debug,actix=debug,h2=info,hyper=info,tower_buffer=info,tower=info,bollard=info,rustls=info,reqwest=info";
 
 /// Specs of the allowed containers include only the binary path
 /// (relative to src) and the required arguments
@@ -708,7 +708,7 @@ impl ComposeTest {
             let name = k.id.clone().unwrap();
             self.remove_container(&name).await?;
             while let Ok(_c) = self.docker.inspect_container(&name, None).await {
-                tokio::time::delay_for(Duration::from_millis(500)).await;
+                tokio::time::sleep(Duration::from_millis(500)).await;
             }
         }
         Ok(())
@@ -812,7 +812,7 @@ impl ComposeTest {
             self.stop(k.0).await?;
             self.remove_container(k.0).await?;
             while let Ok(_c) = self.docker.inspect_container(k.0, None).await {
-                tokio::time::delay_for(Duration::from_millis(500)).await;
+                tokio::time::sleep(Duration::from_millis(500)).await;
             }
         }
         self.network_remove(&self.name).await?;

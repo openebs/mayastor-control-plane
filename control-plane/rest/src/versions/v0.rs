@@ -573,22 +573,22 @@ impl RestClient for ActixRestClient {
 
 impl From<CreatePoolBody> for Body {
     fn from(src: CreatePoolBody) -> Self {
-        Body::from(serde_json::to_value(src).unwrap())
+        Body::from(serde_json::to_value(src).unwrap().to_string())
     }
 }
 impl From<CreateReplicaBody> for Body {
     fn from(src: CreateReplicaBody) -> Self {
-        Body::from(serde_json::to_value(src).unwrap())
+        Body::from(serde_json::to_value(src).unwrap().to_string())
     }
 }
 impl From<CreateNexusBody> for Body {
     fn from(src: CreateNexusBody) -> Self {
-        Body::from(serde_json::to_value(src).unwrap())
+        Body::from(serde_json::to_value(src).unwrap().to_string())
     }
 }
 impl From<CreateVolumeBody> for Body {
     fn from(src: CreateVolumeBody) -> Self {
-        Body::from(serde_json::to_value(src).unwrap())
+        Body::from(serde_json::to_value(src).unwrap().to_string())
     }
 }
 

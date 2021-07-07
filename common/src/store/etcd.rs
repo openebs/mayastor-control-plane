@@ -163,7 +163,7 @@ impl Store for Etcd {
 fn watch(
     _watcher: Watcher,
     mut stream: WatchStream,
-    mut sender: Sender<Result<WatchEvent, StoreError>>,
+    sender: Sender<Result<WatchEvent, StoreError>>,
 ) {
     // For now we spawn a thread for each value that is watched.
     // If we find that we are watching lots of events, this can be optimised.

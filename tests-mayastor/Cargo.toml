@@ -15,11 +15,11 @@ path = "src/lib.rs"
 composer = { path = "../composer" }
 deployer = { path = "../deployer" }
 rest = { path = "../control-plane/rest" }
-actix-rt = "1.1.1"
-opentelemetry-jaeger = { version = "0.10", features = ["tokio"] }
-tracing-opentelemetry = "0.10.0"
+actix-rt = "2.2.0"
+opentelemetry-jaeger = { version = "0.14", features = ["tokio"] }
+tracing-opentelemetry = "0.13.0"
+opentelemetry = "0.15.0"
+actix-web-opentelemetry = { git = "https://github.com/fourbs-net/actix-web-opentelemetry" }
 tracing = "0.1"
-opentelemetry = "0.11.2"
-actix-web-opentelemetry = "0.9.0"
 anyhow = "1.0.32"
 common-lib = { path = "../common" }

@@ -1,4 +1,4 @@
-use actix_web::{dev::Factory, web, Error, HttpResponse};
+use actix_web::{dev::Handler, web, Error, HttpResponse};
 use futures::future::{ok as fut_ok, Ready};
 use tinytemplate::TinyTemplate;
 
@@ -34,14 +34,14 @@ fn get_swagger_html(spec_uri: &str) -> Result<String, String> {
 #[derive(Clone)]
 struct GetSwaggerUi(Result<String, String>);
 
-impl Factory<(), Ready<Result<HttpResponse, Error>>, Result<HttpResponse, Error>> for GetSwaggerUi {
+impl Handler<(), Ready<Result<HttpResponse, Error>>> for GetSwaggerUi {
     fn call(&self, _: ()) -> Ready<Result<HttpResponse, Error>> {
         match &self.0 {
             Ok(html) => fut_ok(HttpResponse::Ok().content_type("text/html").body(html)),
             Err(error) => fut_ok(
                 HttpResponse::NotFound()
                     .content_type("application/json")
-                    .body(serde_json::json!({ "error_message": error })),
+                    .body(serde_json::json!({ "error_message": error }).to_string()),
             ),
         }
     }

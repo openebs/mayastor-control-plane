@@ -53,12 +53,12 @@ struct put_watch_volumeQueryParams {
 
 async fn del_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(volume_id): Path<String>,
-    Query(query): Query<del_watch_volumeQueryParams>,
+    path: Path<String>,
+    query: Query<del_watch_volumeQueryParams>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_watch_volume(
-        crate::apis::Path(volume_id),
-        crate::apis::Query(query.callback),
+        crate::apis::Path(path.into_inner()),
+        crate::apis::Query(query.into_inner().callback),
     )
     .await
     .map(Json)
@@ -66,22 +66,22 @@ async fn del_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 's
 
 async fn get_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(volume_id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<Vec<crate::models::RestWatch>>, crate::apis::RestError<crate::models::RestJsonError>>
 {
-    T::get_watch_volume(crate::apis::Path(volume_id))
+    T::get_watch_volume(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }
 
 async fn put_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(volume_id): Path<String>,
-    Query(query): Query<put_watch_volumeQueryParams>,
+    path: Path<String>,
+    query: Query<put_watch_volumeQueryParams>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_watch_volume(
-        crate::apis::Path(volume_id),
-        crate::apis::Query(query.callback),
+        crate::apis::Path(path.into_inner()),
+        crate::apis::Query(query.into_inner().callback),
     )
     .await
     .map(Json)

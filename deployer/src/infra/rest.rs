@@ -61,7 +61,7 @@ impl ComponentAction for Rest {
                     break;
                 }
             }
-            tokio::time::delay_for(std::time::Duration::from_millis(200)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
 
         let max_tries = 20;
@@ -80,7 +80,7 @@ impl ComponentAction for Rest {
                         )
                         .into());
                     }
-                    tokio::time::delay_for(std::time::Duration::from_millis(100)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
             }
         }

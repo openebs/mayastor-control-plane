@@ -15,9 +15,17 @@ name = "rest_client"
 path = "./src/lib.rs"
 
 [dependencies]
-rustls = "0.18"
-actix-web = { version = "3.2.0", features = ["rustls"] }
-actix-service = "1.0.6"
+# Actix Server, Client and telemetry
+rustls = "0.19.1"
+actix-web = { version = "4.0.0-beta.8", features = ["rustls"] }
+actix-service = "2.0.0"
+opentelemetry-jaeger = { version = "0.14", features = ["tokio"] }
+tracing-opentelemetry = "0.13.0"
+opentelemetry = "0.15.0"
+actix-web-opentelemetry = "0.11.0-beta.3"
+actix-http = "3.0.0-beta.8"
+awc = "3.0.0-beta.7"
+
 async-trait = "=0.1.42"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde_yaml = "0.8.17"
@@ -31,21 +39,16 @@ strum_macros = "0.19"
 anyhow = "1.0.32"
 snafu = "0.6"
 url = "2.2.0"
-opentelemetry-jaeger = { version = "0.10", features = ["tokio"] }
-tracing-opentelemetry = "0.10.0"
-opentelemetry = "0.11.2"
-actix-web-opentelemetry = "0.9.0"
 http = "0.2.3"
 tinytemplate = { version = "1.2" }
 jsonwebtoken = "7.2.0"
+composer = { path = "../../composer" }
 common-lib = { path = "../../common" }
-actix-http = "2.2.0"
 
 [dev-dependencies]
-composer = { path = "../../composer" }
 rpc = "0.1.0"
-tokio = { version = "0.2", features = ["full"] }
-actix-rt = "1.1.1"
+tokio = { version = "1", features = ["full"] }
+actix-rt = "2.2.0"
 
 [dependencies.serde]
 features = ["derive"]

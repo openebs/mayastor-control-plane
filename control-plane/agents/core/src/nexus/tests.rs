@@ -140,7 +140,7 @@ async fn nexus_share_transaction() {
     async fn check_share_operation(nexus: &Nexus, protocol: Protocol) {
         // operation in progress
         assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
-        tokio::time::delay_for(std::time::Duration::from_millis(500)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is completed
         assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
         assert_eq!(nexus_spec(nexus).await.unwrap().share, protocol);
@@ -211,7 +211,7 @@ async fn nexus_child_op_transaction_store<R>(
     assert!(spec.operation.unwrap().result.is_none());
 
     // let the store write time out
-    tokio::time::delay_for(grpc_timeout + store_timeout).await;
+    tokio::time::sleep(grpc_timeout + store_timeout).await;
 
     // and now we have a result but the operation is still pending until
     // we can sync the spec
@@ -222,7 +222,7 @@ async fn nexus_child_op_transaction_store<R>(
     cluster.composer().thaw("etcd").await.unwrap();
 
     // wait for the reconciler to do its thing
-    tokio::time::delay_for(reconcile_period * 2).await;
+    tokio::time::sleep(reconcile_period * 2).await;
 
     // and now we're in sync and the pending operation is no more
     let spec = nexus_spec(nexus).await.unwrap();
@@ -332,7 +332,7 @@ async fn nexus_child_transaction() {
     async fn check_child_operation(nexus: &Nexus, children: usize) {
         // operation in progress
         assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
-        tokio::time::delay_for(std::time::Duration::from_millis(500)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is complete
         assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
         assert_eq!(nexus_spec(nexus).await.unwrap().children.len(), children);

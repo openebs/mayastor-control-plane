@@ -40,7 +40,7 @@ async fn pool() {
 
     let replica = CreateReplica {
         node: mayastor.clone(),
-        uuid: "replica1".into(),
+        uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
         pool: "pooloop".into(),
         size: 12582912, /* actual size will be a multiple of 4MB so just
                          * create it like so */
@@ -55,23 +55,24 @@ async fn pool() {
     let replicas = GetReplicas::default().request().await.unwrap();
     tracing::info!("Replicas: {:?}", replicas);
 
+    let uri = replica.uri.clone();
     assert_eq!(
         replica,
         Replica {
             node: mayastor.clone(),
-            uuid: "replica1".into(),
+            uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
             pool: "pooloop".into(),
             thin: false,
             size: 12582912,
             share: Protocol::None,
-            uri: "bdev:///replica1".into(),
+            uri,
             state: ReplicaState::Online
         }
     );
 
     let uri = ShareReplica {
         node: mayastor.clone(),
-        uuid: "replica1".into(),
+        uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
         pool: "pooloop".into(),
         protocol: ReplicaShareProtocol::Nvmf,
     }
@@ -88,7 +89,7 @@ async fn pool() {
 
     DestroyReplica {
         node: mayastor.clone(),
-        uuid: "replica1".into(),
+        uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
         pool: "pooloop".into(),
     }
     .request()
@@ -167,7 +168,7 @@ async fn replica_transaction() {
     async fn check_operation(replica: &Replica, protocol: Protocol) {
         // operation in progress
         assert!(replica_spec(replica).await.unwrap().operation.is_some());
-        tokio::time::delay_for(std::time::Duration::from_millis(500)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is completed
         assert!(replica_spec(replica).await.unwrap().operation.is_none());
         assert_eq!(replica_spec(replica).await.unwrap().share, protocol);
@@ -238,7 +239,7 @@ async fn replica_op_transaction_store<R>(
     assert!(spec.operation.unwrap().result.is_none());
 
     // let the store write time out
-    tokio::time::delay_for(grpc_timeout + store_timeout).await;
+    tokio::time::sleep(grpc_timeout + store_timeout).await;
 
     // and now we have a result but the operation is still pending until
     // we can sync the spec
@@ -249,7 +250,7 @@ async fn replica_op_transaction_store<R>(
     cluster.composer().thaw("etcd").await.unwrap();
 
     // wait for the reconciler to do its thing
-    tokio::time::delay_for(reconcile_period * 2).await;
+    tokio::time::sleep(reconcile_period * 2).await;
 
     // and now we've sync and the pending operation is no more
     let spec = replica_spec(replica).await.unwrap();

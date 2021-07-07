@@ -15,16 +15,18 @@
 /// expose different versions of the client
 pub mod versions;
 
-use actix_http::{encoding::Decoder, Payload, PayloadStream};
-use actix_web::{
-    body::Body,
-    client::{Client, ClientBuilder, ClientResponse, PayloadError, SendRequestError},
-    dev::ResponseHead,
-    web::Bytes,
+use actix_http::{
+    client::{SendRequestError, TcpConnect, TcpConnectError, TcpConnection},
+    encoding::Decoder,
+    error::PayloadError,
+    Payload, PayloadStream,
 };
+use actix_service::Service;
+use actix_web::{body::Body, dev::ResponseHead, rt::net::TcpStream, web::Bytes};
 use actix_web_opentelemetry::ClientExt;
-use futures::Stream;
+use awc::{http::Uri, Client, ClientBuilder, ClientResponse};
 
+use futures::Stream;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use std::{io::BufReader, string::ToString};
@@ -32,7 +34,7 @@ use std::{io::BufReader, string::ToString};
 /// Actix Rest Client
 #[derive(Clone)]
 pub struct ActixRestClient {
-    client: actix_web::client::Client,
+    client: awc::Client,
     url: String,
     trace: bool,
 }
@@ -67,7 +69,18 @@ impl ActixRestClient {
         }
     }
     /// creates a new secure client
-    fn new_https(client: ClientBuilder, url: &url::Url, trace: bool) -> anyhow::Result<Self> {
+    fn new_https(
+        client: ClientBuilder<
+            impl Service<
+                    TcpConnect<Uri>,
+                    Response = TcpConnection<Uri, TcpStream>,
+                    Error = TcpConnectError,
+                > + Clone
+                + 'static,
+        >,
+        url: &url::Url,
+        trace: bool,
+    ) -> anyhow::Result<Self> {
         let cert_file = &mut BufReader::new(&std::include_bytes!("../certs/rsa/ca.cert")[..]);
 
         let mut config = rustls::ClientConfig::new();
@@ -75,8 +88,9 @@ impl ActixRestClient {
             .root_store
             .add_pem_file(cert_file)
             .map_err(|_| anyhow::anyhow!("Add pem file to the root store!"))?;
-        let connector = actix_web::client::Connector::new().rustls(std::sync::Arc::new(config));
-        let rest_client = client.connector(connector.finish()).finish();
+        let connector = awc::Connector::new().rustls(std::sync::Arc::new(config));
+
+        let rest_client = client.connector(connector).finish();
 
         Ok(Self {
             client: rest_client,
@@ -85,7 +99,18 @@ impl ActixRestClient {
         })
     }
     /// creates a new client
-    fn new_http(client: ClientBuilder, url: &url::Url, trace: bool) -> Self {
+    fn new_http(
+        client: ClientBuilder<
+            impl Service<
+                    TcpConnect<Uri>,
+                    Response = TcpConnection<Uri, TcpStream>,
+                    Error = TcpConnectError,
+                > + Clone
+                + 'static,
+        >,
+        url: &url::Url,
+        trace: bool,
+    ) -> Self {
         Self {
             client: client.finish(),
             url: url.to_string().trim_end_matches('/').into(),

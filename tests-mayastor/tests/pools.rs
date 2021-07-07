@@ -148,16 +148,12 @@ async fn create_pool_idempotent_different_nvmf_host() {
         .await
         .unwrap();
 
-    let replica1 = cluster
+    cluster
         .rest_v0()
-        .create_replica(v0::CreateReplica {
-            node: "mayastor-1".into(),
-            uuid: "0aa4a830-a971-4e96-a97c-15c39dd8f162".into(),
-            pool: "pooloop-1".into(),
-            size: 10 * 1024 * 1024,
-            thin: true,
-            share: v0::Protocol::Nvmf,
-            ..Default::default()
+        .create_pool(v0::CreatePool {
+            node: "mayastor-2".into(),
+            id: "pooloop-2".into(),
+            disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
         .unwrap();
@@ -170,49 +166,15 @@ async fn create_pool_idempotent_different_nvmf_host() {
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
-        .unwrap();
+        .expect_err("Pool Already exists!");
 
-    let replica2 = cluster
+    cluster
         .rest_v0()
-        .create_replica(v0::CreateReplica {
+        .create_pool(v0::CreatePool {
             node: "mayastor-2".into(),
-            uuid: "0aa4a830-a971-4e96-a97c-15c39dd8f163".into(),
-            pool: "pooloop-2".into(),
-            size: 10 * 1024 * 1024,
-            thin: true,
-            share: v0::Protocol::Nvmf,
-            ..Default::default()
+            id: "pooloop-x".into(),
+            disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
-        .unwrap();
-
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: "mayastor-3".into(),
-            id: "pooloop".into(),
-            disks: vec![replica1.uri.clone().into()],
-        })
-        .await
-        .unwrap();
-
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: "mayastor-3".into(),
-            id: "pooloop".into(),
-            disks: vec![replica1.uri.clone().into()],
-        })
-        .await
-        .expect_err("already exists");
-
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: "mayastor-3".into(),
-            id: "pooloop".into(),
-            disks: vec![replica2.uri.into()],
-        })
-        .await
-        .expect_err("Different host!");
+        .expect_err("Pool disk already used by another pool!");
 }

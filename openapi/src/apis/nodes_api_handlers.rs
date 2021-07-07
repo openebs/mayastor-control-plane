@@ -34,9 +34,11 @@ pub fn configure<T: crate::apis::Nodes + 'static, A: FromRequest + 'static>(
 
 async fn get_node<T: crate::apis::Nodes + 'static, A: FromRequest + 'static>(
     _token: A,
-    Path(id): Path<String>,
+    path: Path<String>,
 ) -> Result<Json<crate::models::Node>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node(crate::apis::Path(id)).await.map(Json)
+    T::get_node(crate::apis::Path(path.into_inner()))
+        .await
+        .map(Json)
 }
 
 async fn get_nodes<T: crate::apis::Nodes + 'static, A: FromRequest + 'static>(
