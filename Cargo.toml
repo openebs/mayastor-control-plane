@@ -1,7 +1,9 @@
 [patch.crates-io]
 # Update nix/overlay.nix with the sha256:
 # nix-prefetch-url https://github.com/openebs/Mayastor/tarball/$rev --print-path --unpack
-rpc = { git = "https://github.com/openebs/mayastor", rev = "2868e83704177e439d7bfb4cbd94cff5a371db91" }
+rpc = { git = "https://github.com/openebs/mayastor", rev = "a8b2e244ce5bbe386862fc3c8048cf8154a186a6" }
+# Patched to support the actix 4 beta
+actix-web-opentelemetry = { git = "https://github.com/fourbs-net/actix-web-opentelemetry" }
 
 [profile.dev]
 panic = "abort"

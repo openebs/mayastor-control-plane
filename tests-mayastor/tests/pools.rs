@@ -166,7 +166,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
-        .expect("Pool Already exists!");
+        .expect_err("Pool Already exists!");
 
     cluster
         .rest_v0()
@@ -176,5 +176,5 @@ async fn create_pool_idempotent_different_nvmf_host() {
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
-        .expect("Pool disk already used by another pool!");
+        .expect_err("Pool disk already used by another pool!");
 }
