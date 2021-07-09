@@ -104,17 +104,17 @@ fn build_child_uri(child_id: ChildUri, query: &str) -> ChildUri {
 impl apis::Children for RestApi {
     async fn del_nexus_child(
         query: &str,
-        Path((nexus_id, child_id_)): Path<(String, String)>,
+        Path((nexus_id, child_id)): Path<(String, String)>,
     ) -> Result<(), RestError<RestJsonError>> {
-        delete_child_filtered(child_id_.into(), query, Filter::Nexus(nexus_id.into())).await
+        delete_child_filtered(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn del_node_nexus_child(
         query: &str,
-        Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
+        Path((node_id, nexus_id, child_id)): Path<(String, String, String)>,
     ) -> Result<(), RestError<RestJsonError>> {
         delete_child_filtered(
-            child_id_.into(),
+            child_id.into(),
             query,
             Filter::NodeNexus(node_id.into(), nexus_id.into()),
         )
@@ -123,9 +123,9 @@ impl apis::Children for RestApi {
 
     async fn get_nexus_child(
         query: &str,
-        Path((nexus_id, child_id_)): Path<(String, String)>,
+        Path((nexus_id, child_id)): Path<(String, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
-        get_child_response(child_id_.into(), query, Filter::Nexus(nexus_id.into())).await
+        get_child_response(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn get_nexus_children(
@@ -136,10 +136,10 @@ impl apis::Children for RestApi {
 
     async fn get_node_nexus_child(
         query: &str,
-        Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
+        Path((node_id, nexus_id, child_id)): Path<(String, String, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
         get_child_response(
-            child_id_.into(),
+            child_id.into(),
             query,
             Filter::NodeNexus(node_id.into(), nexus_id.into()),
         )
@@ -154,17 +154,17 @@ impl apis::Children for RestApi {
 
     async fn put_nexus_child(
         query: &str,
-        Path((nexus_id, child_id_)): Path<(String, String)>,
+        Path((nexus_id, child_id)): Path<(String, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
-        add_child_filtered(child_id_.into(), query, Filter::Nexus(nexus_id.into())).await
+        add_child_filtered(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn put_node_nexus_child(
         query: &str,
-        Path((node_id, nexus_id, child_id_)): Path<(String, String, String)>,
+        Path((node_id, nexus_id, child_id)): Path<(String, String, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
         add_child_filtered(
-            child_id_.into(),
+            child_id.into(),
             query,
             Filter::NodeNexus(node_id.into(), nexus_id.into()),
         )

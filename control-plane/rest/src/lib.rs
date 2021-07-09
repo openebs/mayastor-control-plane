@@ -26,6 +26,7 @@ use actix_web::{body::Body, dev::ResponseHead, rt::net::TcpStream, web::Bytes};
 use actix_web_opentelemetry::ClientExt;
 use awc::{http::Uri, Client, ClientBuilder, ClientResponse};
 
+use common_lib::types::v0::openapi::apis::{client, configuration};
 use futures::Stream;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
@@ -34,6 +35,7 @@ use std::{io::BufReader, string::ToString};
 /// Actix Rest Client
 #[derive(Clone)]
 pub struct ActixRestClient {
+    openapi_client: client::ApiClient,
     client: awc::Client,
     url: String,
     trace: bool,
@@ -55,13 +57,23 @@ impl ActixRestClient {
     ) -> anyhow::Result<Self> {
         let url: url::Url = url.parse()?;
         let mut builder = Client::builder().timeout(timeout);
-        if let Some(token) = bearer_token {
+        if let Some(token) = &bearer_token {
             builder = builder.bearer_auth(token);
         }
 
         match url.scheme() {
-            "https" => Self::new_https(builder, &url, trace),
-            "http" => Ok(Self::new_http(builder, &url, trace)),
+            "https" => Self::new_https(
+                builder,
+                url.as_str().trim_end_matches('/'),
+                bearer_token,
+                trace,
+            ),
+            "http" => Ok(Self::new_http(
+                builder,
+                url.as_str().trim_end_matches('/'),
+                bearer_token,
+                trace,
+            )),
             invalid => {
                 let msg = format!("Invalid url scheme: {}", invalid);
                 Err(anyhow::Error::msg(msg))
@@ -78,7 +90,8 @@ impl ActixRestClient {
                 > + Clone
                 + 'static,
         >,
-        url: &url::Url,
+        url: &str,
+        bearer_token: Option<String>,
         trace: bool,
     ) -> anyhow::Result<Self> {
         let cert_file = &mut BufReader::new(&std::include_bytes!("../certs/rsa/ca.cert")[..]);
@@ -92,9 +105,18 @@ impl ActixRestClient {
 
         let rest_client = client.connector(connector).finish();
 
+        let openapi_client_config = configuration::Configuration::new_with_client(
+            &format!("{}/v0", url),
+            rest_client.clone(),
+            bearer_token,
+            trace,
+        );
+        let openapi_client = client::ApiClient::new(openapi_client_config);
+
         Ok(Self {
+            openapi_client,
             client: rest_client,
-            url: url.to_string().trim_end_matches('/').into(),
+            url: url.to_string(),
             trace,
         })
     }
@@ -108,12 +130,22 @@ impl ActixRestClient {
                 > + Clone
                 + 'static,
         >,
-        url: &url::Url,
+        url: &str,
+        bearer_token: Option<String>,
         trace: bool,
     ) -> Self {
+        let client = client.finish();
+        let openapi_client_config = configuration::Configuration::new_with_client(
+            &format!("{}/v0", url),
+            client.clone(),
+            bearer_token,
+            trace,
+        );
+        let openapi_client = client::ApiClient::new(openapi_client_config);
         Self {
-            client: client.finish(),
-            url: url.to_string().trim_end_matches('/').into(),
+            openapi_client,
+            client,
+            url: url.to_string(),
             trace,
         }
     }

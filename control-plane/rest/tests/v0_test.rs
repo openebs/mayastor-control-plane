@@ -1,17 +1,16 @@
-use common_lib::types::v0::message_bus::{
-    AddNexusChild, ChannelVs, Child, ChildState, CreateNexus, CreatePool, CreateReplica,
-    CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-    GetBlockDevices, JsonGrpcRequest, Liveness, Nexus, NexusState, Node, NodeId, NodeState, Pool,
-    PoolState, Protocol, Replica, ReplicaState, VolumeId, WatchResourceId,
+use common_lib::{
+    mbus_api::Message,
+    types::v0::message_bus::{ChannelVs, Liveness, NodeId, WatchResourceId},
 };
 use composer::{Binary, Builder, ComposeTest, ContainerSpec};
-use mbus_api::Message;
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use rest_client::{versions::v0::*, ActixRestClient};
 use rpc::mayastor::Null;
 use std::{
     io,
     net::{SocketAddr, TcpStream},
+    str::FromStr,
+    time::Duration,
 };
 use tracing::info;
 
@@ -103,7 +102,6 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
 /// Wait to establish a connection to etcd.
 /// Returns 'Ok' if connected otherwise 'Err' is returned.
 fn wait_for_etcd_ready(endpoint: &str) -> io::Result<TcpStream> {
-    use std::{str::FromStr, time::Duration};
     let sa = SocketAddr::from_str(endpoint).unwrap();
     TcpStream::connect_timeout(&sa, Duration::from_secs(3))
 }
@@ -163,217 +161,236 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         },
     )
     .unwrap()
-    .v0();
-    let nodes = client.get_nodes().await.unwrap();
-    let mut node = Node {
-        id: mayastor.clone(),
+    .v00();
+
+    let nodes = client.nodes_api().get_nodes().await.unwrap();
+    let mut node = models::Node {
+        id: mayastor.to_string(),
         grpc_endpoint: "10.1.0.5:10124".to_string(),
-        state: NodeState::Online,
+        state: models::NodeState::Online,
     };
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes.first().unwrap(), &node);
     info!("Nodes: {:#?}", nodes);
-    let _ = client.get_pools(Filter::None).await.unwrap();
-    let pool = client.create_pool(CreatePool {
-        node: mayastor.clone(),
-        id: "pooloop".into(),
-        disks:
-    vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()] }).await.unwrap();
+    let _ = client.pools_api().get_pools().await.unwrap();
+    let pool = client
+        .pools_api()
+        .put_node_pool(
+            mayastor.as_str(),
+            "pooloop",
+            models::CreatePoolBody::new(vec![
+            "malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"
+                .into(),
+        ]),
+        )
+        .await
+        .unwrap();
+
     info!("Pools: {:#?}", pool);
     assert_eq!(
         pool,
-        Pool {
+        models::Pool {
             node: "node-test-name".into(),
             id: "pooloop".into(),
             disks: vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
-            state: PoolState::Online,
+            state: models::PoolState::Online,
             capacity: 100663296,
             used: 0,
         }
     );
+
     assert_eq!(
         Some(&pool),
-        client.get_pools(Filter::None).await.unwrap().first()
+        client.pools_api().get_pools().await.unwrap().first()
     );
-    let _ = client.get_replicas(Filter::None).await.unwrap();
+
+    let _ = client.replicas_api().get_replicas().await.unwrap();
     let replica = client
-        .create_replica(CreateReplica {
-            node: pool.node.clone(),
-            pool: pool.id.clone(),
-            uuid: "e6e7d39d-e343-42f7-936a-1ab05f1839db".into(),
-            size: 12582912, /* actual size will be a multiple of 4MB so just
-                             * create it like so */
-            thin: true,
-            share: Protocol::Nvmf,
-            ..Default::default()
-        })
+        .replicas_api()
+        .put_node_pool_replica(
+            &pool.node,
+            &pool.id,
+            "e6e7d39d-e343-42f7-936a-1ab05f1839db",
+            /* actual size will be a multiple of 4MB so just
+             * create it like so */
+            models::CreateReplicaBody::new(models::Protocol::Nvmf, 12582912, true),
+        )
         .await
         .unwrap();
     info!("Replica: {:#?}", replica);
+
     let uri = replica.uri.clone();
     assert_eq!(
         replica,
-        Replica {
+        models::Replica {
             node: pool.node.clone(),
-            uuid: "e6e7d39d-e343-42f7-936a-1ab05f1839db".into(),
+            uuid: FromStr::from_str("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
             pool: pool.id.clone(),
             thin: false,
             size: 12582912,
-            share: Protocol::Nvmf,
+            share: models::Protocol::Nvmf,
             uri,
-            state: ReplicaState::Online
+            state: models::ReplicaState::Online
         }
     );
     assert_eq!(
         Some(&replica),
-        client.get_replicas(Filter::None).await.unwrap().first()
+        client.replicas_api().get_replicas().await.unwrap().first()
     );
     client
-        .destroy_replica(DestroyReplica {
-            node: replica.node.clone(),
-            pool: replica.pool.clone(),
-            uuid: replica.uuid,
-        })
+        .replicas_api()
+        .del_node_pool_replica(&replica.node, &replica.pool, &replica.uuid.to_string())
         .await
         .unwrap();
-    assert!(client.get_replicas(Filter::None).await.unwrap().is_empty());
 
-    let nexuses = client.get_nexuses(Filter::None).await.unwrap();
+    let replicas = client.replicas_api().get_replicas().await.unwrap();
+    assert!(replicas.is_empty());
+
+    let nexuses = client.nexuses_api().get_nexuses().await.unwrap();
     assert_eq!(nexuses.len(), 0);
     let nexus = client
-        .create_nexus(CreateNexus {
-            node: "node-test-name".into(),
-            uuid: "058a95e5-cee6-4e81-b682-fe864ca99b9c".into(),
-            size: 12582912,
-            children: vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
-            ..Default::default()
-        })
-        .await.unwrap();
+        .nexuses_api()
+        .put_node_nexus(
+            "node-test-name",
+            "058a95e5-cee6-4e81-b682-fe864ca99b9c",
+            models::CreateNexusBody::new(
+                vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
+                12582912
+            ),
+        )
+        .await
+        .unwrap();
     info!("Nexus: {:#?}", nexus);
 
     assert_eq!(
         nexus,
-        Nexus {
+        models::Nexus {
             node: "node-test-name".into(),
-            uuid: "058a95e5-cee6-4e81-b682-fe864ca99b9c".into(),
+            uuid: FromStr::from_str("058a95e5-cee6-4e81-b682-fe864ca99b9c").unwrap(),
             size: 12582912,
-            state: NexusState::Online,
-            children: vec![Child {
+            state: models::NexusState::Online,
+            children: vec![models::Child {
                 uri: "malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into(),
-                state: ChildState::Online,
+                state: models::ChildState::Online,
                 rebuild_progress: None
             }],
             device_uri: "".to_string(),
             rebuilds: 0,
-            share: Protocol::None
+            share: models::Protocol::None
         }
     );
 
-    let child = client.add_nexus_child(AddNexusChild {
-        node: nexus.node.clone(),
-        nexus: nexus.uuid.clone(),
-        uri: "malloc:///malloc2?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b1".into(),
-        auto_rebuild: true,
-    }).await.unwrap();
-
-    assert_eq!(
-        Some(&child),
-        client
-            .get_nexus_children(Filter::Nexus(nexus.uuid.clone()))
-            .await
-            .unwrap()
-            .last()
-    );
-
-    client
-        .destroy_nexus(DestroyNexus {
-            node: nexus.node.clone(),
-            uuid: nexus.uuid.clone(),
-        })
+    let child = client
+        .children_api()
+        .put_node_nexus_child(
+            &nexus.node,
+            &nexus.uuid.to_string(),
+            "malloc:///malloc2?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b1",
+        )
         .await
         .unwrap();
-    assert!(client.get_nexuses(Filter::None).await.unwrap().is_empty());
+
+    let children = client
+        .children_api()
+        .get_nexus_children(&nexus.uuid.to_string())
+        .await
+        .unwrap();
+    assert_eq!(Some(&child), children.last());
+
+    client
+        .nexuses_api()
+        .del_node_nexus(&nexus.node, &nexus.uuid.to_string())
+        .await
+        .unwrap();
+    let nexuses = client.nexuses_api().get_nexuses().await.unwrap();
+    assert!(nexuses.is_empty());
 
     let volume = client
-        .create_volume(CreateVolume {
-            uuid: "058a95e5-cee6-4e81-b682-fe864ca99b9c".into(),
-            size: 12582912,
-            replicas: 1,
-            ..Default::default()
-        })
+        .volumes_api()
+        .put_volume(
+            "058a95e5-cee6-4e81-b682-fe864ca99b9c",
+            models::CreateVolumeBody::new(
+                models::VolumeHealPolicy::default(),
+                1,
+                12582912,
+                models::Topology::default(),
+            ),
+        )
         .await
         .unwrap();
 
     tracing::info!("Volume: {:#?}", volume);
     assert_eq!(
-        Some(&volume),
+        volume,
         client
-            .get_volumes(Filter::Volume(VolumeId::from(
-                "058a95e5-cee6-4e81-b682-fe864ca99b9c"
-            )))
+            .volumes_api()
+            .get_volume("058a95e5-cee6-4e81-b682-fe864ca99b9c")
             .await
             .unwrap()
-            .first()
     );
 
-    let watch_volume = WatchResourceId::Volume(volume.uuid);
+    let _watch_volume = WatchResourceId::Volume(volume.uuid.to_string().into());
     let callback = url::Url::parse("http://lala/test").unwrap();
 
-    let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+    let watchers = client
+        .watches_api()
+        .get_watch_volume(&volume.uuid.to_string())
+        .await
+        .unwrap();
     assert!(watchers.is_empty());
 
     client
-        .create_watch(watch_volume.clone(), callback.clone())
+        .watches_api()
+        .put_watch_volume(&volume.uuid.to_string(), &callback.to_string())
         .await
         .expect_err("volume does not exist in the store");
 
     client
-        .delete_watch(watch_volume.clone(), callback.clone())
+        .watches_api()
+        .del_watch_volume(&volume.uuid.to_string(), &callback.to_string())
         .await
         .expect_err("Does not exist");
 
-    let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+    let watchers = client
+        .watches_api()
+        .get_watch_volume(&volume.uuid.to_string())
+        .await
+        .unwrap();
     assert!(watchers.is_empty());
 
     client
-        .destroy_volume(DestroyVolume {
-            uuid: "058a95e5-cee6-4e81-b682-fe864ca99b9c".into(),
-        })
+        .volumes_api()
+        .del_volume("058a95e5-cee6-4e81-b682-fe864ca99b9c")
         .await
         .unwrap();
 
-    assert!(client.get_volumes(Filter::None).await.unwrap().is_empty());
+    let volumes = client.volumes_api().get_volumes().await.unwrap();
+    assert!(volumes.is_empty());
 
     client
-        .destroy_pool(DestroyPool {
-            node: pool.node.clone(),
-            id: pool.id,
-        })
+        .pools_api()
+        .del_node_pool(&pool.node, &pool.id)
         .await
         .unwrap();
-    assert!(client.get_pools(Filter::None).await.unwrap().is_empty());
+    let pools = client.pools_api().get_pools().await.unwrap();
+    assert!(pools.is_empty());
 
     client
-        .json_grpc(JsonGrpcRequest {
-            node: mayastor.into(),
-            method: "rpc_get_methods".into(),
-            params: serde_json::json!({}).to_string().into(),
-        })
+        .json_grpc_api()
+        .put_node_jsongrpc(mayastor.as_str(), "rpc_get_methods", serde_json::json!({}))
         .await
         .expect("Failed to call JSON gRPC method");
 
     client
-        .get_block_devices(GetBlockDevices {
-            node: mayastor.into(),
-            all: true,
-        })
+        .block_devices_api()
+        .get_node_block_devices(mayastor.as_str(), Some(true))
         .await
         .expect("Failed to get block devices");
 
     test.stop("mayastor").await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-    node.state = NodeState::Unknown;
-    assert_eq!(client.get_nodes().await.unwrap(), vec![node]);
+    node.state = models::NodeState::Unknown;
+    assert_eq!(client.nodes_api().get_nodes().await.unwrap(), vec![node]);
 }
 
 #[actix_rt::test]
@@ -387,9 +404,19 @@ async fn client_invalid_token() {
 
     let client = ActixRestClient::new("https://localhost:8080", true, Some(token))
         .unwrap()
-        .v0();
-    client
+        .v00();
+
+    let error = client
+        .nodes_api()
         .get_nodes()
         .await
         .expect_err("Request should fail with invalid token");
+
+    assert!(matches!(
+        error,
+        apis::client::Error::ResponseError(apis::client::ResponseContent {
+            status: apis::StatusCode::UNAUTHORIZED,
+            ..
+        })
+    ));
 }
