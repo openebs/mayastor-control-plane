@@ -25,14 +25,14 @@ All URIs are relative to *http://localhost/v0*
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *BlockDevices* | [**get_node_block_devices**](docs/apis/BlockDevices.md#get_node_block_devices) | **Get** /nodes/{node}/block_devices | 
-*Children* | [**del_nexus_child**](docs/apis/Children.md#del_nexus_child) | **Delete** /nexuses/{nexus_id}/children/{child_id:.*} | 
-*Children* | [**del_node_nexus_child**](docs/apis/Children.md#del_node_nexus_child) | **Delete** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
-*Children* | [**get_nexus_child**](docs/apis/Children.md#get_nexus_child) | **Get** /nexuses/{nexus_id}/children/{child_id:.*} | 
+*Children* | [**del_nexus_child**](docs/apis/Children.md#del_nexus_child) | **Delete** /nexuses/{nexus_id}/children/{child_id} | 
+*Children* | [**del_node_nexus_child**](docs/apis/Children.md#del_node_nexus_child) | **Delete** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id} | 
+*Children* | [**get_nexus_child**](docs/apis/Children.md#get_nexus_child) | **Get** /nexuses/{nexus_id}/children/{child_id} | 
 *Children* | [**get_nexus_children**](docs/apis/Children.md#get_nexus_children) | **Get** /nexuses/{nexus_id}/children | 
-*Children* | [**get_node_nexus_child**](docs/apis/Children.md#get_node_nexus_child) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
+*Children* | [**get_node_nexus_child**](docs/apis/Children.md#get_node_nexus_child) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id} | 
 *Children* | [**get_node_nexus_children**](docs/apis/Children.md#get_node_nexus_children) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children | 
-*Children* | [**put_nexus_child**](docs/apis/Children.md#put_nexus_child) | **Put** /nexuses/{nexus_id}/children/{child_id:.*} | 
-*Children* | [**put_node_nexus_child**](docs/apis/Children.md#put_node_nexus_child) | **Put** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
+*Children* | [**put_nexus_child**](docs/apis/Children.md#put_nexus_child) | **Put** /nexuses/{nexus_id}/children/{child_id} | 
+*Children* | [**put_node_nexus_child**](docs/apis/Children.md#put_node_nexus_child) | **Put** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id} | 
 *JsonGrpc* | [**put_node_jsongrpc**](docs/apis/JsonGrpc.md#put_node_jsongrpc) | **Put** /nodes/{node}/jsongrpc/{method} | 
 *Nexuses* | [**del_nexus**](docs/apis/Nexuses.md#del_nexus) | **Delete** /nexuses/{nexus_id} | 
 *Nexuses* | [**del_node_nexus**](docs/apis/Nexuses.md#del_node_nexus) | **Delete** /nodes/{node_id}/nexuses/{nexus_id} | 

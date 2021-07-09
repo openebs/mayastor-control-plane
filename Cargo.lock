@@ -1940,10 +1940,15 @@ name = "openapi"
 version = "1.0.0"
 dependencies = [
  "actix-web",
+ "actix-web-opentelemetry",
  "async-trait",
+ "awc",
+ "dyn-clonable",
+ "rustls 0.19.1",
  "serde",
  "serde_derive",
  "serde_json",
+ "serde_urlencoded",
  "url",
  "uuid",
 ]

@@ -209,3 +209,16 @@ mod volumes_api;
 pub use self::volumes_api::Volumes;
 mod watches_api;
 pub use self::watches_api::Watches;
+
+pub mod block_devices_api_client;
+pub mod children_api_client;
+pub mod client;
+pub mod configuration;
+pub mod json_grpc_api_client;
+pub mod nexuses_api_client;
+pub mod nodes_api_client;
+pub mod pools_api_client;
+pub mod replicas_api_client;
+pub mod specs_api_client;
+pub mod volumes_api_client;
+pub mod watches_api_client;
