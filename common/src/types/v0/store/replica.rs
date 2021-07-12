@@ -87,11 +87,11 @@ impl From<ReplicaSpec> for models::ReplicaSpec {
     fn from(src: ReplicaSpec) -> Self {
         Self::new(
             src.managed,
-            src.owners.into(),
-            src.pool.into(),
-            src.share.into(),
+            src.owners,
+            src.pool,
+            src.share,
             src.size as i64,
-            src.state.into(),
+            src.state,
             src.thin,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )

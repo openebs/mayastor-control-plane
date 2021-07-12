@@ -111,9 +111,9 @@ impl From<BlockDevice> for models::BlockDevice {
             src.devname,
             src.devpath,
             src.devtype,
-            src.filesystem.into(),
+            src.filesystem,
             src.model,
-            src.partition.into(),
+            src.partition,
             src.size as i64,
         )
     }

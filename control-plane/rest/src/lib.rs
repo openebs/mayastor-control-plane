@@ -35,8 +35,8 @@ use std::{io::BufReader, string::ToString};
 /// Actix Rest Client
 #[derive(Clone)]
 pub struct ActixRestClient {
-    openapi_client: client::ApiClient,
-    client: awc::Client,
+    openapi_client_v0: client::ApiClient,
+    client_v0: awc::Client,
     url: String,
     trace: bool,
 }
@@ -114,8 +114,8 @@ impl ActixRestClient {
         let openapi_client = client::ApiClient::new(openapi_client_config);
 
         Ok(Self {
-            openapi_client,
-            client: rest_client,
+            openapi_client_v0: openapi_client,
+            client_v0: rest_client,
             url: url.to_string(),
             trace,
         })
@@ -143,8 +143,8 @@ impl ActixRestClient {
         );
         let openapi_client = client::ApiClient::new(openapi_client_config);
         Self {
-            openapi_client,
-            client,
+            openapi_client_v0: openapi_client,
+            client_v0: client,
             url: url.to_string(),
             trace,
         }
@@ -175,9 +175,9 @@ impl ActixRestClient {
         uri: &str,
     ) -> Result<ClientResponse<Decoder<Payload<PayloadStream>>>, SendRequestError> {
         if self.trace {
-            self.client.get(uri).trace_request().send().await
+            self.client_v0.get(uri).trace_request().send().await
         } else {
-            self.client.get(uri).send().await
+            self.client_v0.get(uri).send().await
         }
     }
 
@@ -188,14 +188,14 @@ impl ActixRestClient {
         let uri = format!("{}{}", self.url, urn);
 
         let result = if self.trace {
-            self.client
+            self.client_v0
                 .put(uri.clone())
                 .content_type("application/json")
                 .trace_request()
                 .send_body(body)
                 .await
         } else {
-            self.client
+            self.client_v0
                 .put(uri.clone())
                 .content_type("application/json")
                 .send_body(body)
@@ -215,9 +215,13 @@ impl ActixRestClient {
         let uri = format!("{}{}", self.url, urn);
 
         let result = if self.trace {
-            self.client.delete(uri.clone()).trace_request().send().await
+            self.client_v0
+                .delete(uri.clone())
+                .trace_request()
+                .send()
+                .await
         } else {
-            self.client.delete(uri.clone()).send().await
+            self.client_v0.delete(uri.clone()).send().await
         };
 
         let rest_response = result.context(Send {

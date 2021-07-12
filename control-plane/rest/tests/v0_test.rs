@@ -179,9 +179,8 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             mayastor.as_str(),
             "pooloop",
             models::CreatePoolBody::new(vec![
-            "malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"
-                .into(),
-        ]),
+                "malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0",
+            ]),
         )
         .await
         .unwrap();
@@ -254,7 +253,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             "node-test-name",
             "058a95e5-cee6-4e81-b682-fe864ca99b9c",
             models::CreateNexusBody::new(
-                vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
+                vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"],
                 12582912
             ),
         )

@@ -26,10 +26,10 @@ pub struct Volume {
 impl From<Volume> for models::Volume {
     fn from(src: Volume) -> Self {
         Self::new(
-            src.children.into_iter().map(From::from).collect(),
-            src.protocol.into(),
+            src.children,
+            src.protocol,
             src.size as i64,
-            src.state.into(),
+            src.state,
             apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }

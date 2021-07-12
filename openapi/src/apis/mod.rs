@@ -222,3 +222,15 @@ pub mod replicas_api_client;
 pub mod specs_api_client;
 pub mod volumes_api_client;
 pub mod watches_api_client;
+
+/// Helper to convert from Vec<F> into Vec<T>
+pub trait IntoVec<T>: Sized {
+    /// Performs the conversion.
+    fn into_vec(self) -> Vec<T>;
+}
+
+impl<F: Into<T>, T> IntoVec<T> for Vec<F> {
+    fn into_vec(self) -> Vec<T> {
+        self.into_iter().map(Into::into).collect()
+    }
+}

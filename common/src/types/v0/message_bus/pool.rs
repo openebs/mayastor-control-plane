@@ -89,10 +89,10 @@ impl From<Pool> for models::Pool {
     fn from(src: Pool) -> Self {
         Self::new(
             src.capacity as i64,
-            src.disks.iter().map(ToString::to_string).collect(),
-            src.id.into(),
-            src.node.into(),
-            src.state.into(),
+            src.disks,
+            src.id,
+            src.node,
+            src.state,
             src.used as i64,
         )
     }
@@ -179,6 +179,11 @@ impl From<String> for PoolDeviceUri {
 impl ToString for PoolDeviceUri {
     fn to_string(&self) -> String {
         self.deref().to_string()
+    }
+}
+impl From<PoolDeviceUri> for String {
+    fn from(device: PoolDeviceUri) -> Self {
+        device.to_string()
     }
 }
 

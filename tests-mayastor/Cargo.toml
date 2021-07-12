@@ -19,7 +19,7 @@ actix-rt = "2.2.0"
 opentelemetry-jaeger = { version = "0.14", features = ["tokio"] }
 tracing-opentelemetry = "0.13.0"
 opentelemetry = "0.15.0"
-actix-web-opentelemetry = { git = "https://github.com/fourbs-net/actix-web-opentelemetry" }
+actix-web-opentelemetry = "0.11.0-beta.4"
 tracing = "0.1"
 anyhow = "1.0.32"
 common-lib = { path = "../common" }

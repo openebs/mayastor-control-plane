@@ -75,13 +75,13 @@ bus_impl_string_id!(NodeId, "ID of a mayastor node");
 
 impl From<Node> for models::Node {
     fn from(src: Node) -> Self {
-        Self::new(src.grpc_endpoint, src.id.into(), src.state.into())
+        Self::new(src.grpc_endpoint, src.id, src.state)
     }
 }
 impl From<&Node> for models::Node {
     fn from(src: &Node) -> Self {
         let src = src.clone();
-        Self::new(src.grpc_endpoint, src.id.into(), src.state.into())
+        Self::new(src.grpc_endpoint, src.id, src.state)
     }
 }
 

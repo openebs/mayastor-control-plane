@@ -25,27 +25,6 @@ pub struct Specs {
 
 impl From<Specs> for models::Specs {
     fn from(src: Specs) -> Self {
-        fn vec_to_vec<F: Clone, T: From<F>>(from: Vec<F>) -> Vec<T> {
-            from.iter().cloned().map(From::from).collect()
-        }
-        Self::new(
-            vec_to_vec(src.nexuses),
-            vec_to_vec(src.pools),
-            vec_to_vec(src.replicas),
-            vec_to_vec(src.volumes),
-        )
+        Self::new(src.nexuses, src.pools, src.replicas, src.volumes)
     }
 }
-// impl From<models::Specs> for Specs {
-//     fn from(src: models::Specs) -> Self {
-//         fn vec_to_vec<F: Clone, T: From<F>>(from: Vec<F>) -> Vec<T> {
-//             from.iter().cloned().map(From::from).collect()
-//         }
-//         Self {
-//             nexuses: vec_to_vec(src.nexuses),
-//             pools: vec_to_vec(src.pools),
-//             replicas: vec_to_vec(src.replicas),
-//             volumes: vec_to_vec(src.volumes),
-//         }
-//     }
-// }
