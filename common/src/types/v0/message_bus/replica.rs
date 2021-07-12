@@ -43,11 +43,11 @@ impl UuidString for Replica {
 impl From<Replica> for models::Replica {
     fn from(src: Replica) -> Self {
         Self::new(
-            src.node.into(),
-            src.pool.into(),
-            src.share.into(),
+            src.node,
+            src.pool,
+            src.share,
             src.size as i64,
-            src.state.into(),
+            src.state,
             src.thin,
             src.uri,
             apis::Uuid::try_from(src.uuid).unwrap(),

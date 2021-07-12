@@ -48,7 +48,6 @@ let
       lockFile = ../../../Cargo.lock;
       outputHashes = {
         "rpc-0.1.0" = "0ghiqlc4qz63znn13iibb90k77j9jm03vcgjqgq17jsw4dhswsvb";
-        "actix-web-opentelemetry-0.11.0-beta.4" = "1irqffny9yy82fkx6g1253hcfd9330369bpigxrx8w737yll3q53";
       };
     };
 

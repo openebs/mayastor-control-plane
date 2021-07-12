@@ -209,7 +209,8 @@ dependencies = [
 [[package]]
 name = "actix-web-opentelemetry"
 version = "0.11.0-beta.4"
-source = "git+https://github.com/fourbs-net/actix-web-opentelemetry#10bee3e84a9747422d66b93298b7e8849e605625"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3da9973a56ad884f87290014a13567b02a463fbd17dd40c1c637298eabf156e"
 dependencies = [
  "actix-http",
  "actix-web",
@@ -1940,10 +1941,15 @@ name = "openapi"
 version = "1.0.0"
 dependencies = [
  "actix-web",
+ "actix-web-opentelemetry",
  "async-trait",
+ "awc",
+ "dyn-clonable",
+ "rustls 0.19.1",
  "serde",
  "serde_derive",
  "serde_json",
+ "serde_urlencoded",
  "url",
  "uuid",
 ]

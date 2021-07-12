@@ -260,9 +260,9 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.labels,
             src.num_paths as i32,
             src.num_replicas as i32,
-            src.protocol.into(),
+            src.protocol,
             src.size as i64,
-            src.state.into(),
+            src.state,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }

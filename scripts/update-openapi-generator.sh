@@ -35,7 +35,10 @@ if [ "$sha256" == "" ]; then
   exit 2
 fi
 source_file="$SCRIPTDIR/../nix/pkgs/openapi-generator/source.json"
-echo "Content of source file (``$source_file``) written."
+
+echo "Previous Content of source file (``$source_file``):"
+cat "$source_file"
+echo "New Content of source file (``$source_file``) written."
 cat <<REPO | tee "$source_file"
 {
   "owner": "${owner}",

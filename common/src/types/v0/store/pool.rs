@@ -87,17 +87,7 @@ pub struct PoolSpec {
 
 impl From<PoolSpec> for models::PoolSpec {
     fn from(src: PoolSpec) -> Self {
-        Self::new(
-            src.disks
-                .iter()
-                .map(std::ops::Deref::deref)
-                .cloned()
-                .collect(),
-            src.id.to_string(),
-            src.labels,
-            src.node.into(),
-            src.state.into(),
-        )
+        Self::new(src.disks, src.id, src.labels, src.node, src.state)
     }
 }
 

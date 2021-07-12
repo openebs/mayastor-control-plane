@@ -85,6 +85,11 @@ impl Cluster {
         self.rest_client.v0()
     }
 
+    /// openapi rest client v0
+    pub fn rest_v00(&self) -> common_lib::types::v0::openapi::ApiClient {
+        self.rest_client.v00()
+    }
+
     /// New cluster
     async fn new(
         trace_rest: bool,

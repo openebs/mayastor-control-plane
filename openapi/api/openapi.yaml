@@ -369,7 +369,7 @@ paths:
       - JWT: []
       tags:
       - Children
-  /nexuses/{nexus_id}/children/{child_id:.*}:
+  /nexuses/{nexus_id}/children/{child_id}:
     delete:
       operationId: del_nexus_child
       parameters:
@@ -383,9 +383,10 @@ paths:
         style: simple
       - explode: false
         in: path
-        name: child_id:.*
+        name: child_id
         required: true
         schema:
+          format: url
           type: string
         style: simple
       responses:
@@ -467,7 +468,6 @@ paths:
       - JWT: []
       tags:
       - Children
-      x-actix-query-string: true
     get:
       operationId: get_nexus_child
       parameters:
@@ -481,9 +481,10 @@ paths:
         style: simple
       - explode: false
         in: path
-        name: child_id:.*
+        name: child_id
         required: true
         schema:
+          format: url
           type: string
         style: simple
       responses:
@@ -569,7 +570,6 @@ paths:
       - JWT: []
       tags:
       - Children
-      x-actix-query-string: true
     put:
       operationId: put_nexus_child
       parameters:
@@ -583,9 +583,10 @@ paths:
         style: simple
       - explode: false
         in: path
-        name: child_id:.*
+        name: child_id
         required: true
         schema:
+          format: url
           type: string
         style: simple
       responses:
@@ -671,7 +672,6 @@ paths:
       - JWT: []
       tags:
       - Children
-      x-actix-query-string: true
   /nodes:
     get:
       operationId: get_nodes
@@ -1546,7 +1546,7 @@ paths:
       - JWT: []
       tags:
       - Children
-  /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*}:
+  /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id}:
     delete:
       operationId: del_node_nexus_child
       parameters:
@@ -1567,9 +1567,10 @@ paths:
         style: simple
       - explode: false
         in: path
-        name: child_id:.*
+        name: child_id
         required: true
         schema:
+          format: url
           type: string
         style: simple
       responses:
@@ -1651,7 +1652,6 @@ paths:
       - JWT: []
       tags:
       - Children
-      x-actix-query-string: true
     get:
       operationId: get_node_nexus_child
       parameters:
@@ -1672,9 +1672,10 @@ paths:
         style: simple
       - explode: false
         in: path
-        name: child_id:.*
+        name: child_id
         required: true
         schema:
+          format: url
           type: string
         style: simple
       responses:
@@ -1760,7 +1761,6 @@ paths:
       - JWT: []
       tags:
       - Children
-      x-actix-query-string: true
     put:
       operationId: put_node_nexus_child
       parameters:
@@ -1781,9 +1781,10 @@ paths:
         style: simple
       - explode: false
         in: path
-        name: child_id:.*
+        name: child_id
         required: true
         schema:
+          format: url
           type: string
         style: simple
       responses:
@@ -1869,7 +1870,6 @@ paths:
       - JWT: []
       tags:
       - Children
-      x-actix-query-string: true
   /nodes/{node_id}/nexuses/{nexus_id}/share:
     delete:
       operationId: del_node_nexus_share
@@ -5240,7 +5240,6 @@ components:
     NodeId:
       example: ksnode-1
       type: string
-      x-rust-wrap: true
     BlockDevice:
       description: Block device information
       example:

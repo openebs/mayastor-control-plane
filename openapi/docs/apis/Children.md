@@ -4,20 +4,20 @@ All URIs are relative to *http://localhost/v0*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**del_nexus_child**](Children.md#del_nexus_child) | **Delete** /nexuses/{nexus_id}/children/{child_id:.*} | 
-[**del_node_nexus_child**](Children.md#del_node_nexus_child) | **Delete** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
-[**get_nexus_child**](Children.md#get_nexus_child) | **Get** /nexuses/{nexus_id}/children/{child_id:.*} | 
+[**del_nexus_child**](Children.md#del_nexus_child) | **Delete** /nexuses/{nexus_id}/children/{child_id} | 
+[**del_node_nexus_child**](Children.md#del_node_nexus_child) | **Delete** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id} | 
+[**get_nexus_child**](Children.md#get_nexus_child) | **Get** /nexuses/{nexus_id}/children/{child_id} | 
 [**get_nexus_children**](Children.md#get_nexus_children) | **Get** /nexuses/{nexus_id}/children | 
-[**get_node_nexus_child**](Children.md#get_node_nexus_child) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
+[**get_node_nexus_child**](Children.md#get_node_nexus_child) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id} | 
 [**get_node_nexus_children**](Children.md#get_node_nexus_children) | **Get** /nodes/{node_id}/nexuses/{nexus_id}/children | 
-[**put_nexus_child**](Children.md#put_nexus_child) | **Put** /nexuses/{nexus_id}/children/{child_id:.*} | 
-[**put_node_nexus_child**](Children.md#put_node_nexus_child) | **Put** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*} | 
+[**put_nexus_child**](Children.md#put_nexus_child) | **Put** /nexuses/{nexus_id}/children/{child_id} | 
+[**put_node_nexus_child**](Children.md#put_node_nexus_child) | **Put** /nodes/{node_id}/nexuses/{nexus_id}/children/{child_id} | 
 
 
 
 ## del_nexus_child
 
-> del_nexus_child(nexus_id, child_id_)
+> del_nexus_child(nexus_id, child_id)
 
 
 ### Parameters
@@ -26,7 +26,7 @@ Method | HTTP request | Description
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
-**child_id_** | **String** |  | [required] |
+**child_id** | **String** |  | [required] |
 
 ### Return type
 
@@ -46,7 +46,7 @@ Name | Type | Description  | Required | Notes
 
 ## del_node_nexus_child
 
-> del_node_nexus_child(node_id, nexus_id, child_id_)
+> del_node_nexus_child(node_id, nexus_id, child_id)
 
 
 ### Parameters
@@ -56,7 +56,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **node_id** | **String** |  | [required] |
 **nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
-**child_id_** | **String** |  | [required] |
+**child_id** | **String** |  | [required] |
 
 ### Return type
 
@@ -76,7 +76,7 @@ Name | Type | Description  | Required | Notes
 
 ## get_nexus_child
 
-> crate::models::Child get_nexus_child(nexus_id, child_id_)
+> crate::models::Child get_nexus_child(nexus_id, child_id)
 
 
 ### Parameters
@@ -85,7 +85,7 @@ Name | Type | Description  | Required | Notes
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
-**child_id_** | **String** |  | [required] |
+**child_id** | **String** |  | [required] |
 
 ### Return type
 
@@ -133,7 +133,7 @@ Name | Type | Description  | Required | Notes
 
 ## get_node_nexus_child
 
-> crate::models::Child get_node_nexus_child(node_id, nexus_id, child_id_)
+> crate::models::Child get_node_nexus_child(node_id, nexus_id, child_id)
 
 
 ### Parameters
@@ -143,7 +143,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **node_id** | **String** |  | [required] |
 **nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
-**child_id_** | **String** |  | [required] |
+**child_id** | **String** |  | [required] |
 
 ### Return type
 
@@ -192,7 +192,7 @@ Name | Type | Description  | Required | Notes
 
 ## put_nexus_child
 
-> crate::models::Child put_nexus_child(nexus_id, child_id_)
+> crate::models::Child put_nexus_child(nexus_id, child_id)
 
 
 ### Parameters
@@ -201,7 +201,7 @@ Name | Type | Description  | Required | Notes
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
-**child_id_** | **String** |  | [required] |
+**child_id** | **String** |  | [required] |
 
 ### Return type
 
@@ -221,7 +221,7 @@ Name | Type | Description  | Required | Notes
 
 ## put_node_nexus_child
 
-> crate::models::Child put_node_nexus_child(node_id, nexus_id, child_id_)
+> crate::models::Child put_node_nexus_child(node_id, nexus_id, child_id)
 
 
 ### Parameters
@@ -231,7 +231,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **node_id** | **String** |  | [required] |
 **nexus_id** | [**uuid::Uuid**](.md) |  | [required] |
-**child_id_** | **String** |  | [required] |
+**child_id** | **String** |  | [required] |
 
 ### Return type
 

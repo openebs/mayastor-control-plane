@@ -96,12 +96,12 @@ pub struct NexusSpec {
 impl From<NexusSpec> for models::NexusSpec {
     fn from(src: NexusSpec) -> Self {
         Self::new(
-            src.children.iter().map(ToString::to_string).collect(),
+            src.children,
             src.managed,
-            src.node.into(),
-            src.share.into(),
+            src.node,
+            src.share,
             src.size as i64,
-            src.state.into(),
+            src.state,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }

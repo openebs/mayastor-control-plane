@@ -26,6 +26,7 @@ use actix_web::{body::Body, dev::ResponseHead, rt::net::TcpStream, web::Bytes};
 use actix_web_opentelemetry::ClientExt;
 use awc::{http::Uri, Client, ClientBuilder, ClientResponse};
 
+use common_lib::types::v0::openapi::apis::{client, configuration};
 use futures::Stream;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
@@ -34,7 +35,8 @@ use std::{io::BufReader, string::ToString};
 /// Actix Rest Client
 #[derive(Clone)]
 pub struct ActixRestClient {
-    client: awc::Client,
+    openapi_client_v0: client::ApiClient,
+    client_v0: awc::Client,
     url: String,
     trace: bool,
 }
@@ -55,13 +57,23 @@ impl ActixRestClient {
     ) -> anyhow::Result<Self> {
         let url: url::Url = url.parse()?;
         let mut builder = Client::builder().timeout(timeout);
-        if let Some(token) = bearer_token {
+        if let Some(token) = &bearer_token {
             builder = builder.bearer_auth(token);
         }
 
         match url.scheme() {
-            "https" => Self::new_https(builder, &url, trace),
-            "http" => Ok(Self::new_http(builder, &url, trace)),
+            "https" => Self::new_https(
+                builder,
+                url.as_str().trim_end_matches('/'),
+                bearer_token,
+                trace,
+            ),
+            "http" => Ok(Self::new_http(
+                builder,
+                url.as_str().trim_end_matches('/'),
+                bearer_token,
+                trace,
+            )),
             invalid => {
                 let msg = format!("Invalid url scheme: {}", invalid);
                 Err(anyhow::Error::msg(msg))
@@ -78,7 +90,8 @@ impl ActixRestClient {
                 > + Clone
                 + 'static,
         >,
-        url: &url::Url,
+        url: &str,
+        bearer_token: Option<String>,
         trace: bool,
     ) -> anyhow::Result<Self> {
         let cert_file = &mut BufReader::new(&std::include_bytes!("../certs/rsa/ca.cert")[..]);
@@ -92,9 +105,18 @@ impl ActixRestClient {
 
         let rest_client = client.connector(connector).finish();
 
+        let openapi_client_config = configuration::Configuration::new_with_client(
+            &format!("{}/v0", url),
+            rest_client.clone(),
+            bearer_token,
+            trace,
+        );
+        let openapi_client = client::ApiClient::new(openapi_client_config);
+
         Ok(Self {
-            client: rest_client,
-            url: url.to_string().trim_end_matches('/').into(),
+            openapi_client_v0: openapi_client,
+            client_v0: rest_client,
+            url: url.to_string(),
             trace,
         })
     }
@@ -108,12 +130,22 @@ impl ActixRestClient {
                 > + Clone
                 + 'static,
         >,
-        url: &url::Url,
+        url: &str,
+        bearer_token: Option<String>,
         trace: bool,
     ) -> Self {
+        let client = client.finish();
+        let openapi_client_config = configuration::Configuration::new_with_client(
+            &format!("{}/v0", url),
+            client.clone(),
+            bearer_token,
+            trace,
+        );
+        let openapi_client = client::ApiClient::new(openapi_client_config);
         Self {
-            client: client.finish(),
-            url: url.to_string().trim_end_matches('/').into(),
+            openapi_client_v0: openapi_client,
+            client_v0: client,
+            url: url.to_string(),
             trace,
         }
     }
@@ -143,9 +175,9 @@ impl ActixRestClient {
         uri: &str,
     ) -> Result<ClientResponse<Decoder<Payload<PayloadStream>>>, SendRequestError> {
         if self.trace {
-            self.client.get(uri).trace_request().send().await
+            self.client_v0.get(uri).trace_request().send().await
         } else {
-            self.client.get(uri).send().await
+            self.client_v0.get(uri).send().await
         }
     }
 
@@ -156,14 +188,14 @@ impl ActixRestClient {
         let uri = format!("{}{}", self.url, urn);
 
         let result = if self.trace {
-            self.client
+            self.client_v0
                 .put(uri.clone())
                 .content_type("application/json")
                 .trace_request()
                 .send_body(body)
                 .await
         } else {
-            self.client
+            self.client_v0
                 .put(uri.clone())
                 .content_type("application/json")
                 .send_body(body)
@@ -183,9 +215,13 @@ impl ActixRestClient {
         let uri = format!("{}{}", self.url, urn);
 
         let result = if self.trace {
-            self.client.delete(uri.clone()).trace_request().send().await
+            self.client_v0
+                .delete(uri.clone())
+                .trace_request()
+                .send()
+                .await
         } else {
-            self.client.delete(uri.clone()).send().await
+            self.client_v0.delete(uri.clone()).send().await
         };
 
         let rest_response = result.context(Send {

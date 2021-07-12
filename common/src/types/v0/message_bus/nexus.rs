@@ -45,13 +45,13 @@ impl UuidString for Nexus {
 impl From<Nexus> for models::Nexus {
     fn from(src: Nexus) -> Self {
         models::Nexus::new(
-            src.children.into_iter().map(From::from).collect(),
+            src.children,
             src.device_uri,
-            src.node.into(),
+            src.node,
             src.rebuilds as i32,
-            src.share.into(),
+            src.share,
             src.size as i64,
-            src.state.into(),
+            src.state,
             apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }
