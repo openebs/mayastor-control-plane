@@ -1,7 +1,7 @@
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use snafu::OptionExt;
-use tokio::sync::Mutex;
 
 use crate::core::{
     registry::Registry,
@@ -72,9 +72,9 @@ impl SpecOperations for NexusSpec {
     fn start_destroy_op(&mut self) {
         self.start_op(NexusOperation::Destroy);
     }
-    async fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
-        let uuid = locked_spec.lock().await.uuid.clone();
-        registry.specs.remove_nexus(&uuid).await;
+    fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
+        let uuid = locked_spec.lock().uuid.clone();
+        registry.specs.remove_nexus(&uuid);
     }
     fn set_updating(&mut self, updating: bool) {
         self.updating = updating;
@@ -106,19 +106,19 @@ impl SpecOperations for NexusSpec {
 /// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
     /// Get all NexusSpec's
-    pub async fn get_nexuses(&self) -> Vec<NexusSpec> {
+    pub fn get_nexuses(&self) -> Vec<NexusSpec> {
         let mut vector = vec![];
-        for object in self.nexuses.values() {
-            let object = object.lock().await;
+        for object in self.nexuses.to_vec() {
+            let object = object.lock();
             vector.push(object.clone());
         }
         vector
     }
     /// Get all NexusSpec's which are in a created state
-    pub async fn get_created_nexuses(&self) -> Vec<NexusSpec> {
+    pub fn get_created_nexuses(&self) -> Vec<NexusSpec> {
         let mut nexuses = vec![];
-        for nexus in self.nexuses.values() {
-            let nexus = nexus.lock().await;
+        for nexus in self.nexuses.to_vec() {
+            let nexus = nexus.lock();
             if nexus.state.created() || nexus.state.deleting() {
                 nexuses.push(nexus.clone());
             }
@@ -129,18 +129,18 @@ impl ResourceSpecs {
 
 impl ResourceSpecsLocked {
     /// Get a list of created NexusSpec's
-    pub async fn get_created_nexus_specs(&self) -> Vec<NexusSpec> {
-        let specs = self.read().await;
-        specs.get_created_nexuses().await
+    pub fn get_created_nexus_specs(&self) -> Vec<NexusSpec> {
+        let specs = self.read();
+        specs.get_created_nexuses()
     }
     /// Get the protected NexusSpec for the given nexus `id`, if any exists
-    async fn get_nexus(&self, id: &NexusId) -> Option<Arc<Mutex<NexusSpec>>> {
-        let specs = self.read().await;
+    fn get_nexus(&self, id: &NexusId) -> Option<Arc<Mutex<NexusSpec>>> {
+        let specs = self.read();
         specs.nexuses.get(id).cloned()
     }
     /// Get or Create the protected NexusSpec for the given request
-    async fn get_or_create_nexus(&self, request: &CreateNexus) -> Arc<Mutex<NexusSpec>> {
-        let mut specs = self.write().await;
+    fn get_or_create_nexus(&self, request: &CreateNexus) -> Arc<Mutex<NexusSpec>> {
+        let mut specs = self.write();
         if let Some(nexus) = specs.nexuses.get(&request.uuid) {
             nexus.clone()
         } else {
@@ -165,7 +165,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let nexus_spec = self.get_or_create_nexus(&request).await;
+        let nexus_spec = self.get_or_create_nexus(&request);
         SpecOperations::start_create(&nexus_spec, registry, request).await?;
 
         let result = node.create_nexus(request).await;
@@ -185,7 +185,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        if let Some(nexus) = self.get_nexus(&request.uuid).await {
+        if let Some(nexus) = self.get_nexus(&request.uuid) {
             SpecOperations::start_destroy(&nexus, registry, delete_owned).await?;
 
             let result = node.destroy_nexus(request).await;
@@ -207,7 +207,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.uuid).await {
+        if let Some(nexus_spec) = self.get_nexus(&request.uuid) {
             let status = registry.get_nexus(&request.uuid).await?;
             let spec_clone = SpecOperations::start_update(
                 registry,
@@ -236,7 +236,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.uuid).await {
+        if let Some(nexus_spec) = self.get_nexus(&request.uuid) {
             let status = registry.get_nexus(&request.uuid).await?;
             let spec_clone = SpecOperations::start_update(
                 registry,
@@ -265,7 +265,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
+        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
             let status = registry.get_nexus(&request.nexus).await?;
             let spec_clone = SpecOperations::start_update(
                 registry,
@@ -294,7 +294,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.nexus).await {
+        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
             let status = registry.get_nexus(&request.nexus).await?;
             let spec_clone = SpecOperations::start_update(
                 registry,
@@ -312,14 +312,14 @@ impl ResourceSpecsLocked {
     }
 
     /// Remove nexus by its `id`
-    pub(super) async fn remove_nexus(&self, id: &NexusId) {
-        let mut specs = self.write().await;
+    pub(super) fn remove_nexus(&self, id: &NexusId) {
+        let mut specs = self.write();
         specs.nexuses.remove(id);
     }
     /// Get a vector of protected NexusSpec's
-    pub async fn get_nexuses(&self) -> Vec<Arc<Mutex<NexusSpec>>> {
-        let specs = self.read().await;
-        specs.nexuses.values().cloned().collect()
+    pub fn get_nexuses(&self) -> Vec<Arc<Mutex<NexusSpec>>> {
+        let specs = self.read();
+        specs.nexuses.to_vec()
     }
 
     /// Worker that reconciles dirty NexusSpecs's with the persistent store.
@@ -329,20 +329,24 @@ impl ResourceSpecsLocked {
         if registry.store_online().await {
             let mut pending_count = 0;
 
-            let nexuses = self.get_nexuses().await;
+            let nexuses = self.get_nexuses();
             for nexus_spec in nexuses {
-                let mut nexus = nexus_spec.lock().await;
-                if nexus.updating || !nexus.state.created() {
-                    continue;
-                }
-                if let Some(op) = nexus.operation.clone() {
-                    let mut nexus_clone = nexus.clone();
+                let mut nexus_clone = {
+                    let mut nexus = nexus_spec.lock();
+                    if nexus.updating || !nexus.state.created() {
+                        continue;
+                    }
+                    nexus.updating = true;
+                    nexus.clone()
+                };
 
+                if let Some(op) = nexus_clone.operation.clone() {
                     let fail = !match op.result {
                         Some(true) => {
                             nexus_clone.commit_op();
                             let result = registry.store_obj(&nexus_clone).await;
                             if result.is_ok() {
+                                let mut nexus = nexus_spec.lock();
                                 nexus.commit_op();
                             }
                             result.is_ok()
@@ -351,6 +355,7 @@ impl ResourceSpecsLocked {
                             nexus_clone.clear_op();
                             let result = registry.store_obj(&nexus_clone).await;
                             if result.is_ok() {
+                                let mut nexus = nexus_spec.lock();
                                 nexus.clear_op();
                             }
                             result.is_ok()
@@ -361,6 +366,7 @@ impl ResourceSpecsLocked {
                             nexus_clone.clear_op();
                             let result = registry.store_obj(&nexus_clone).await;
                             if result.is_ok() {
+                                let mut nexus = nexus_spec.lock();
                                 nexus.clear_op();
                             }
                             result.is_ok()
@@ -369,6 +375,10 @@ impl ResourceSpecsLocked {
                     if fail {
                         pending_count += 1;
                     }
+                } else {
+                    // No operation to reconcile.
+                    let mut spec = nexus_spec.lock();
+                    spec.updating = false;
                 }
             }
             pending_count > 0

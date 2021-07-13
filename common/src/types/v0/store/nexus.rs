@@ -11,7 +11,7 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::openapi::models;
+use crate::types::v0::{openapi::models, store::UuidString};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -25,7 +25,7 @@ pub struct Nexus {
 }
 
 /// Runtime state of the nexus.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
 pub struct NexusState {
     /// Nexus information.
     pub nexus: message_bus::Nexus,
@@ -34,6 +34,12 @@ pub struct NexusState {
 impl From<MbusNexus> for NexusState {
     fn from(nexus: MbusNexus) -> Self {
         Self { nexus }
+    }
+}
+
+impl UuidString for NexusState {
+    fn uuid_as_string(&self) -> String {
+        self.nexus.uuid.clone().into()
     }
 }
 
@@ -68,7 +74,7 @@ impl StorableObject for NexusState {
 pub type NexusSpecState = SpecState<message_bus::NexusState>;
 
 /// User specification of a nexus.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct NexusSpec {
     /// Nexus Id
     pub uuid: NexusId,
@@ -91,6 +97,12 @@ pub struct NexusSpec {
     pub updating: bool,
     /// Record of the operation in progress
     pub operation: Option<NexusOperationState>,
+}
+
+impl UuidString for NexusSpec {
+    fn uuid_as_string(&self) -> String {
+        self.uuid.clone().into()
+    }
 }
 
 impl From<NexusSpec> for models::NexusSpec {

@@ -1,12 +1,13 @@
 use crate::core::registry::Registry;
-use std::{collections::HashMap, ops::Deref, sync::Arc};
-
-use tokio::sync::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock};
+use std::{ops::Deref, sync::Arc};
 
 use common_lib::types::v0::{
     message_bus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
     store::{
-        definitions::{key_prefix, StorableObject, StorableObjectType, Store, StoreError},
+        definitions::{
+            key_prefix, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
+        },
         nexus::NexusSpec,
         node::NodeSpec,
         pool::PoolSpec,
@@ -16,13 +17,12 @@ use common_lib::types::v0::{
     },
 };
 
+use crate::core::resource_map::ResourceMap;
 use async_trait::async_trait;
 use common::errors::SvcError;
-use common_lib::{
-    mbus_api::ResourceKind,
-    types::v0::store::{definitions::ObjectKey, SpecState},
-};
-use snafu::{OptionExt, ResultExt, Snafu};
+use common_lib::{mbus_api::ResourceKind, types::v0::store::SpecState};
+use serde::de::DeserializeOwned;
+use snafu::{ResultExt, Snafu};
 use std::fmt::Debug;
 
 #[derive(Debug, Snafu)]
@@ -62,13 +62,12 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
-        let mut spec = locked_spec.lock().await;
-        spec.start_create_inner(request)?;
-        let spec_clone = spec.clone();
-        drop(spec);
-
-        Self::store_operation_log(registry, &locked_spec, &spec_clone).await?;
-        Ok(())
+        let spec_clone = {
+            let mut spec = locked_spec.lock();
+            spec.start_create_inner(request)?;
+            spec.clone()
+        };
+        Self::store_operation_log(registry, &locked_spec, &spec_clone).await
     }
 
     /// When a create request is issued we need to validate by verifying that:
@@ -117,10 +116,10 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     {
         match result {
             Ok(val) => {
-                let mut spec_clone = locked_spec.lock().await.clone();
+                let mut spec_clone = locked_spec.lock().clone();
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock().await;
+                let mut spec = locked_spec.lock();
                 match stored {
                     Ok(_) => {
                         spec.commit_op();
@@ -133,10 +132,10 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
                 }
             }
             Err(error) => {
-                let mut spec_clone = locked_spec.lock().await.clone();
+                let mut spec_clone = locked_spec.lock().clone();
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock().await;
+                let mut spec = locked_spec.lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -162,38 +161,39 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
-        let mut spec = locked_spec.lock().await;
-        // we're busy with another request, try again later
-        let _ = spec.busy()?;
-        if spec.state().deleted() {
-            Ok(())
-        } else if !del_owned && spec.owned() {
-            Err(SvcError::InUse {
-                kind: spec.kind(),
-                id: spec.uuid(),
-            })
-        } else {
-            spec.set_updating(true);
-            drop(spec);
-
-            // resource specific validation rules
-            if let Err(error) = Self::validate_destroy(&locked_spec, registry).await {
-                let mut spec = locked_spec.lock().await;
-                spec.set_updating(false);
-                return Err(error);
+        {
+            let mut spec = locked_spec.lock();
+            let _ = spec.busy()?;
+            if spec.state().deleted() {
+                return Ok(());
+            } else if !del_owned && spec.owned() {
+                return Err(SvcError::InUse {
+                    kind: spec.kind(),
+                    id: spec.uuid(),
+                });
             }
-            let mut spec = locked_spec.lock().await;
+
+            spec.set_updating(true);
+        }
+
+        // resource specific validation rules
+        if let Err(error) = Self::validate_destroy(&locked_spec, registry) {
+            let mut spec = locked_spec.lock();
+            spec.set_updating(false);
+            return Err(error);
+        }
+
+        let spec_clone = {
+            let mut spec = locked_spec.lock();
 
             // once we've started, there's no going back...
             spec.set_state(SpecState::Deleting);
 
             spec.start_destroy_op();
-            let spec_clone = spec.clone();
-            drop(spec);
+            spec.clone()
+        };
 
-            Self::store_operation_log(registry, &locked_spec, &spec_clone).await?;
-            Ok(())
-        }
+        Self::store_operation_log(registry, &locked_spec, &spec_clone).await
     }
 
     /// Completes a destroy operation by trying to delete the spec from the persistent store.
@@ -208,31 +208,31 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
-        let key = locked_spec.lock().await.key();
+        let key = locked_spec.lock().key();
         match result {
             Ok(val) => {
-                let mut spec_clone = locked_spec.lock().await.clone();
+                let mut spec_clone = locked_spec.lock().clone();
                 spec_clone.commit_op();
                 let deleted = registry.delete_kv(&key.key()).await;
                 match deleted {
                     Ok(_) => {
-                        Self::remove_spec(locked_spec, registry).await;
-                        let mut spec = locked_spec.lock().await;
+                        Self::remove_spec(locked_spec, registry);
+                        let mut spec = locked_spec.lock();
                         spec.commit_op();
                         Ok(val)
                     }
                     Err(error) => {
-                        let mut spec = locked_spec.lock().await;
+                        let mut spec = locked_spec.lock();
                         spec.set_op_result(true);
                         Err(error)
                     }
                 }
             }
             Err(error) => {
-                let mut spec_clone = locked_spec.lock().await.clone();
+                let mut spec_clone = locked_spec.lock().clone();
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock().await;
+                let mut spec = locked_spec.lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -260,9 +260,10 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         Self: SpecTransaction<Self::UpdateOp>,
         Self: StorableObject,
     {
-        let mut spec = locked_spec.lock().await;
-        let spec_clone = spec.start_update_inner(status, update_operation, false)?;
-        drop(spec);
+        let spec_clone = {
+            let mut spec = locked_spec.lock();
+            spec.start_update_inner(status, update_operation, false)?
+        };
 
         Self::store_operation_log(registry, &locked_spec, &spec_clone).await?;
         Ok(spec_clone)
@@ -326,7 +327,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             Ok(val) => {
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock().await;
+                let mut spec = locked_spec.lock();
                 match stored {
                     Ok(_) => {
                         spec.commit_op();
@@ -341,7 +342,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             Err(error) => {
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock().await;
+                let mut spec = locked_spec.lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -376,7 +377,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
                 let mut spec_clone = spec_clone.clone();
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock().await;
+                let mut spec = locked_spec.lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -416,7 +417,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         Self: StorableObject,
     {
         if let Err(error) = registry.store_obj(spec_clone).await {
-            let mut spec = locked_spec.lock().await;
+            let mut spec = locked_spec.lock();
             spec.clear_op();
             Err(error)
         } else {
@@ -433,7 +434,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         unimplemented!();
     }
     /// Used for resource specific validation rules
-    async fn validate_destroy(
+    fn validate_destroy(
         _locked_spec: &Arc<Mutex<Self>>,
         _registry: &Registry,
     ) -> Result<(), SvcError> {
@@ -452,7 +453,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     /// Start a destroy transaction
     fn start_destroy_op(&mut self);
     /// Remove the object from the global Spec List
-    async fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry);
+    fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry);
     /// Set the updating flag
     fn set_updating(&mut self, updating: bool);
     /// Check if the object is currently being updated
@@ -487,11 +488,11 @@ impl Deref for ResourceSpecsLocked {
 /// Resource Specs
 #[derive(Default, Debug)]
 pub(crate) struct ResourceSpecs {
-    pub(crate) volumes: HashMap<VolumeId, Arc<Mutex<VolumeSpec>>>,
-    pub(crate) nodes: HashMap<NodeId, Arc<Mutex<NodeSpec>>>,
-    pub(crate) nexuses: HashMap<NexusId, Arc<Mutex<NexusSpec>>>,
-    pub(crate) pools: HashMap<PoolId, Arc<Mutex<PoolSpec>>>,
-    pub(crate) replicas: HashMap<ReplicaId, Arc<Mutex<ReplicaSpec>>>,
+    pub(crate) volumes: ResourceMap<VolumeId, VolumeSpec>,
+    pub(crate) nodes: ResourceMap<NodeId, NodeSpec>,
+    pub(crate) nexuses: ResourceMap<NexusId, NexusSpec>,
+    pub(crate) pools: ResourceMap<PoolId, PoolSpec>,
+    pub(crate) replicas: ResourceMap<ReplicaId, ReplicaSpec>,
 }
 
 impl ResourceSpecsLocked {
@@ -518,6 +519,31 @@ impl ResourceSpecsLocked {
         }
     }
 
+    /// Deserialise a vector of serde_json values into specific spec types.
+    /// If deserialisation fails for any object, return an error.
+    fn deserialise_specs<T>(values: Vec<serde_json::Value>) -> Result<Vec<T>, serde_json::Error>
+    where
+        T: DeserializeOwned,
+    {
+        let specs: Vec<Result<T, serde_json::Error>> = values
+            .iter()
+            .map(|v| serde_json::from_value(v.clone()))
+            .collect();
+
+        let mut result = vec![];
+        for spec in specs {
+            match spec {
+                Ok(s) => {
+                    result.push(s);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+        Ok(result)
+    }
+
     /// Populate the resource specs with data from the persistent store.
     async fn populate_specs<S: Store>(
         &self,
@@ -525,70 +551,54 @@ impl ResourceSpecsLocked {
         spec_type: StorableObjectType,
     ) -> Result<(), SpecError> {
         let prefix = key_prefix(spec_type);
-        let store_specs = store.get_values_prefix(&prefix).await.context(StoreGet {});
-        let mut resource_specs = self.0.write().await;
+        let store_entries = store
+            .get_values_prefix(&prefix)
+            .await
+            .context(StoreGet {})?;
+        let store_values = store_entries.iter().map(|e| e.1.clone()).collect();
 
-        assert!(store_specs.is_ok());
-        for (key, value) in store_specs.unwrap() {
-            // The uuid is assumed to be the last part of the key.
-            let id = key.split('/').last().context(KeyUuid {})?;
-            match spec_type {
-                StorableObjectType::VolumeSpec => {
-                    resource_specs.volumes.insert(
-                        VolumeId::from(id),
-                        Arc::new(Mutex::new(serde_json::from_value(value).context(
-                            Deserialise {
-                                obj_type: StorableObjectType::VolumeSpec,
-                            },
-                        )?)),
-                    );
-                }
-                StorableObjectType::NodeSpec => {
-                    resource_specs.nodes.insert(
-                        NodeId::from(id),
-                        Arc::new(Mutex::new(serde_json::from_value(value).context(
-                            Deserialise {
-                                obj_type: StorableObjectType::NodeSpec,
-                            },
-                        )?)),
-                    );
-                }
-                StorableObjectType::NexusSpec => {
-                    resource_specs.nexuses.insert(
-                        NexusId::from(id),
-                        Arc::new(Mutex::new(serde_json::from_value(value).context(
-                            Deserialise {
-                                obj_type: StorableObjectType::NexusSpec,
-                            },
-                        )?)),
-                    );
-                }
-                StorableObjectType::PoolSpec => {
-                    resource_specs.pools.insert(
-                        PoolId::from(id),
-                        Arc::new(Mutex::new(serde_json::from_value(value).context(
-                            Deserialise {
-                                obj_type: StorableObjectType::PoolSpec,
-                            },
-                        )?)),
-                    );
-                }
-                StorableObjectType::ReplicaSpec => {
-                    resource_specs.replicas.insert(
-                        ReplicaId::from(id),
-                        Arc::new(Mutex::new(serde_json::from_value(value).context(
-                            Deserialise {
-                                obj_type: StorableObjectType::ReplicaSpec,
-                            },
-                        )?)),
-                    );
-                }
-                _ => {
-                    // Not all spec types are persisted in the store.
-                    unimplemented!("{} not persisted in store", spec_type);
-                }
-            };
-        }
+        let mut resource_specs = self.0.write();
+        match spec_type {
+            StorableObjectType::VolumeSpec => {
+                let specs =
+                    Self::deserialise_specs::<VolumeSpec>(store_values).context(Deserialise {
+                        obj_type: StorableObjectType::VolumeSpec,
+                    })?;
+                resource_specs.volumes.populate(specs);
+            }
+            StorableObjectType::NodeSpec => {
+                let specs =
+                    Self::deserialise_specs::<NodeSpec>(store_values).context(Deserialise {
+                        obj_type: StorableObjectType::NodeSpec,
+                    })?;
+                resource_specs.nodes.populate(specs);
+            }
+            StorableObjectType::NexusSpec => {
+                let specs =
+                    Self::deserialise_specs::<NexusSpec>(store_values).context(Deserialise {
+                        obj_type: StorableObjectType::NexusSpec,
+                    })?;
+                resource_specs.nexuses.populate(specs);
+            }
+            StorableObjectType::PoolSpec => {
+                let specs =
+                    Self::deserialise_specs::<PoolSpec>(store_values).context(Deserialise {
+                        obj_type: StorableObjectType::PoolSpec,
+                    })?;
+                resource_specs.pools.populate(specs);
+            }
+            StorableObjectType::ReplicaSpec => {
+                let specs =
+                    Self::deserialise_specs::<ReplicaSpec>(store_values).context(Deserialise {
+                        obj_type: StorableObjectType::ReplicaSpec,
+                    })?;
+                resource_specs.replicas.populate(specs);
+            }
+            _ => {
+                // Not all spec types are persisted in the store.
+                unimplemented!("{} not persisted in store", spec_type);
+            }
+        };
         Ok(())
     }
 

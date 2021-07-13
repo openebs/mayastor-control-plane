@@ -34,12 +34,6 @@ pub struct Replica {
     pub state: ReplicaState,
 }
 
-impl UuidString for Replica {
-    fn uuid_as_string(&self) -> String {
-        self.uuid.clone().into()
-    }
-}
-
 impl From<Replica> for models::Replica {
     fn from(src: Replica) -> Self {
         Self::new(

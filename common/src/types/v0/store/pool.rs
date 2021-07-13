@@ -8,7 +8,7 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::openapi::models;
+use crate::types::v0::{openapi::models, store::UuidString};
 use serde::{Deserialize, Serialize};
 use std::convert::From;
 
@@ -42,6 +42,12 @@ impl From<MbusPool> for PoolState {
     }
 }
 
+impl UuidString for PoolState {
+    fn uuid_as_string(&self) -> String {
+        self.pool.id.clone().into()
+    }
+}
+
 /// State of the Pool Spec
 pub type PoolSpecState = SpecState<message_bus::PoolState>;
 impl From<&CreatePool> for PoolSpec {
@@ -66,7 +72,7 @@ impl PartialEq<CreatePool> for PoolSpec {
 }
 
 /// User specification of a pool.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PoolSpec {
     /// id of the mayastor instance
     pub node: NodeId,
@@ -83,6 +89,12 @@ pub struct PoolSpec {
     pub updating: bool,
     /// Record of the operation in progress
     pub operation: Option<PoolOperationState>,
+}
+
+impl UuidString for PoolSpec {
+    fn uuid_as_string(&self) -> String {
+        self.id.clone().into()
+    }
 }
 
 impl From<PoolSpec> for models::PoolSpec {

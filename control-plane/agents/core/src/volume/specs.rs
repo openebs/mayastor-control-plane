@@ -1,6 +1,6 @@
 use std::{convert::From, ops::Deref, sync::Arc};
 
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
 use crate::{
     core::{
@@ -133,40 +133,32 @@ async fn get_node_replicas(
 /// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
     /// Gets all VolumeSpec's
-    pub(crate) async fn get_volumes(&self) -> Vec<VolumeSpec> {
-        let mut vector = vec![];
-        for object in self.volumes.values() {
-            let object = object.lock().await;
-            vector.push(object.clone());
-        }
-        vector
+    pub(crate) fn get_volumes(&self) -> Vec<VolumeSpec> {
+        self.volumes.values().map(|v| v.lock().clone()).collect()
     }
 }
 impl ResourceSpecsLocked {
     /// Get the protected VolumeSpec for the given volume `id`, if any exists
-    pub(crate) async fn get_volume(&self, id: &VolumeId) -> Option<Arc<Mutex<VolumeSpec>>> {
-        let specs = self.read().await;
+    pub(crate) fn get_volume(&self, id: &VolumeId) -> Option<Arc<Mutex<VolumeSpec>>> {
+        let specs = self.read();
         specs.volumes.get(id).cloned()
     }
 
     /// Gets all VolumeSpec's
-    pub(crate) async fn get_volumes(&self) -> Vec<VolumeSpec> {
-        let specs = self.read().await;
-        specs.get_volumes().await
+    pub(crate) fn get_volumes(&self) -> Vec<VolumeSpec> {
+        let specs = self.read();
+        specs.get_volumes()
     }
 
     /// Get a list of protected ReplicaSpec's for the given `id`
     /// todo: we could also get the replicas from the volume nexuses?
-    async fn get_volume_replicas(&self, id: &VolumeId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
-        let mut replicas = vec![];
-        let specs = self.read().await;
-        for replica in specs.replicas.values() {
-            let spec = replica.lock().await;
-            if spec.owners.owned_by(id) {
-                replicas.push(replica.clone());
-            }
-        }
-        replicas
+    fn get_volume_replicas(&self, id: &VolumeId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+        self.read()
+            .replicas
+            .values()
+            .filter(|r| r.lock().owners.owned_by(id))
+            .cloned()
+            .collect()
     }
     /// Get the `NodeId` where `replica` lives
     async fn get_replica_node(registry: &Registry, replica: &ReplicaSpec) -> Option<NodeId> {
@@ -180,16 +172,13 @@ impl ResourceSpecsLocked {
         })
     }
     /// Get a list of protected NexusSpecs's for the given volume `id`
-    async fn get_volume_nexuses(&self, id: &VolumeId) -> Vec<Arc<Mutex<NexusSpec>>> {
-        let mut nexuses = vec![];
-        let specs = self.read().await;
-        for nexus in specs.nexuses.values() {
-            let spec = nexus.lock().await;
-            if spec.owner.as_ref() == Some(id) {
-                nexuses.push(nexus.clone());
-            }
-        }
-        nexuses
+    fn get_volume_nexuses(&self, id: &VolumeId) -> Vec<Arc<Mutex<NexusSpec>>> {
+        self.read()
+            .nexuses
+            .values()
+            .filter(|n| n.lock().owner.as_ref() == Some(id))
+            .cloned()
+            .collect()
     }
 
     fn destroy_replica_request(spec: ReplicaSpec, node: &NodeId) -> DestroyReplica {
@@ -205,7 +194,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateVolume,
     ) -> Result<Volume, SvcError> {
-        let volume = self.get_or_create_volume(&request).await;
+        let volume = self.get_or_create_volume(&request);
         SpecOperations::start_create(&volume, registry, request).await?;
 
         // todo: pick nodes and pools using the Node&Pool Topology
@@ -284,14 +273,14 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &DestroyVolume,
     ) -> Result<(), SvcError> {
-        let volume = self.get_volume(&request.uuid).await;
+        let volume = self.get_volume(&request.uuid);
         if let Some(volume) = &volume {
             SpecOperations::start_destroy(&volume, registry, false).await?;
 
             let mut first_error = Ok(());
-            let nexuses = self.get_volume_nexuses(&request.uuid).await;
+            let nexuses = self.get_volume_nexuses(&request.uuid);
             for nexus in nexuses {
-                let nexus = nexus.lock().await.deref().clone();
+                let nexus = nexus.lock().deref().clone();
                 if let Err(error) = self
                     .destroy_nexus(registry, &DestroyNexus::from(nexus), true)
                     .await
@@ -302,9 +291,9 @@ impl ResourceSpecsLocked {
                 }
             }
 
-            let replicas = self.get_volume_replicas(&request.uuid).await;
+            let replicas = self.get_volume_replicas(&request.uuid);
             for replica in replicas {
-                let spec = replica.lock().await.deref().clone();
+                let spec = replica.lock().deref().clone();
                 if let Some(node) = Self::get_replica_node(registry, &spec).await {
                     if let Err(error) = self
                         .destroy_replica(
@@ -340,7 +329,6 @@ impl ResourceSpecsLocked {
     ) -> Result<String, SvcError> {
         let volume_spec = self
             .get_volume(&request.uuid)
-            .await
             .context(errors::VolumeNotFound {
                 vol_id: request.uuid.to_string(),
             })?;
@@ -371,7 +359,6 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         let volume_spec = self
             .get_volume(&request.uuid)
-            .await
             .context(errors::VolumeNotFound {
                 vol_id: request.uuid.to_string(),
             })?;
@@ -398,7 +385,6 @@ impl ResourceSpecsLocked {
     ) -> Result<String, SvcError> {
         let spec = self
             .get_volume(&request.uuid)
-            .await
             .context(errors::VolumeNotFound {
                 vol_id: request.uuid.to_string(),
             })?;
@@ -438,7 +424,6 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         let spec = self
             .get_volume(&request.uuid)
-            .await
             .context(errors::VolumeNotFound {
                 vol_id: request.uuid.to_string(),
             })?;
@@ -463,12 +448,12 @@ impl ResourceSpecsLocked {
         // find all replica status
         let status_replicas = registry.get_replicas().await.unwrap();
         // find all replica specs for this volume
-        let spec_replicas = self.get_volume_replicas(&vol_spec.uuid).await;
+        let spec_replicas = self.get_volume_replicas(&vol_spec.uuid);
 
         let mut spec_status_pair = vec![];
         for status_replica in status_replicas.iter() {
             for locked_replica in spec_replicas.iter() {
-                let mut spec_replica = locked_replica.lock().await;
+                let mut spec_replica = locked_replica.lock();
                 if spec_replica.uuid == status_replica.uuid {
                     // todo: also check the health from etcd
                     // and that we don't have multiple replicas on the same node?
@@ -492,7 +477,7 @@ impl ResourceSpecsLocked {
                 break;
             }
             let (share, unshare) = {
-                let spec = spec.lock().await;
+                let spec = spec.lock();
                 let local = &status.node == target_node;
                 (
                     local && (spec.share.shared() | status.share.shared()),
@@ -530,13 +515,13 @@ impl ResourceSpecsLocked {
     }
 
     /// Remove volume by its `id`
-    pub(super) async fn remove_volume(&self, id: &VolumeId) {
-        let mut specs = self.write().await;
+    pub(super) fn remove_volume(&self, id: &VolumeId) {
+        let mut specs = self.write();
         specs.volumes.remove(id);
     }
     /// Get or Create the protected VolumeSpec for the given request
-    async fn get_or_create_volume(&self, request: &CreateVolume) -> Arc<Mutex<VolumeSpec>> {
-        let mut specs = self.write().await;
+    fn get_or_create_volume(&self, request: &CreateVolume) -> Arc<Mutex<VolumeSpec>> {
+        let mut specs = self.write();
         if let Some(volume) = specs.volumes.get(&request.uuid) {
             volume.clone()
         } else {
@@ -675,9 +660,9 @@ impl SpecOperations for VolumeSpec {
     fn start_destroy_op(&mut self) {
         self.start_op(VolumeOperation::Destroy);
     }
-    async fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
-        let uuid = locked_spec.lock().await.uuid.clone();
-        registry.specs.remove_volume(&uuid).await;
+    fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
+        let uuid = locked_spec.lock().uuid.clone();
+        registry.specs.remove_volume(&uuid);
     }
     fn set_updating(&mut self, updating: bool) {
         self.updating = updating;

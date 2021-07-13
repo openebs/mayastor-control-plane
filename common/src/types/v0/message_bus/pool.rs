@@ -79,12 +79,6 @@ pub struct Pool {
     pub used: u64,
 }
 
-impl UuidString for Pool {
-    fn uuid_as_string(&self) -> String {
-        self.id.clone().into()
-    }
-}
-
 impl From<Pool> for models::Pool {
     fn from(src: Pool) -> Self {
         Self::new(

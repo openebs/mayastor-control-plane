@@ -160,7 +160,3 @@ pub enum MessageIdVs {
     /// Get States
     GetStates,
 }
-
-pub trait UuidString {
-    fn uuid_as_string(&self) -> String;
-}

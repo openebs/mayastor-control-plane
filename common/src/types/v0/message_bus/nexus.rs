@@ -36,12 +36,6 @@ pub struct Nexus {
     pub share: Protocol,
 }
 
-impl UuidString for Nexus {
-    fn uuid_as_string(&self) -> String {
-        self.uuid.clone().into()
-    }
-}
-
 impl From<Nexus> for models::Nexus {
     fn from(src: Nexus) -> Self {
         models::Nexus::new(

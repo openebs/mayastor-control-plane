@@ -2,7 +2,10 @@
 
 use crate::types::v0::{
     message_bus::{self, NodeId},
-    store::definitions::{ObjectKey, StorableObject, StorableObjectType},
+    store::{
+        definitions::{ObjectKey, StorableObject, StorableObjectType},
+        UuidString,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,12 +25,18 @@ pub struct NodeState {
     pub node: message_bus::Node,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]
 pub struct NodeSpec {
     /// Node identification.
     id: NodeId,
     /// Node labels.
     labels: NodeLabels,
+}
+
+impl UuidString for NodeSpec {
+    fn uuid_as_string(&self) -> String {
+        self.id.clone().into()
+    }
 }
 
 /// Key used by the store to uniquely identify a NodeSpec structure.

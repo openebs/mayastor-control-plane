@@ -100,6 +100,7 @@ pub trait Store: Sync + Send + Clone {
 
     async fn get_obj<O: StorableObject>(&mut self, _key: &O::Key) -> Result<O, StoreError>;
 
+    /// Returns a vector of tuples. Each tuple represents a key-value pair.
     async fn get_values_prefix(
         &mut self,
         key_prefix: &str,

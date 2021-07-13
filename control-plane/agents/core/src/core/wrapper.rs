@@ -157,10 +157,8 @@ impl NodeWrapper {
 
             {
                 // Update resource states in the registry.
-                let mut states = registry.states.write().await;
-                states
-                    .update(pools.clone(), replicas.clone(), nexuses.clone())
-                    .await;
+                let mut states = registry.states.write();
+                states.update(pools.clone(), replicas.clone(), nexuses.clone());
             }
 
             self.pools.clear();
@@ -278,7 +276,7 @@ impl NodeWrapper {
     }
 
     /// Fetch all replicas from this node via gRPC
-    async fn fetch_replicas(&self) -> Result<Vec<Replica>, SvcError> {
+    pub(crate) async fn fetch_replicas(&self) -> Result<Vec<Replica>, SvcError> {
         let mut ctx = self.grpc_client().await?;
         let rpc_replicas = ctx
             .client
@@ -296,7 +294,7 @@ impl NodeWrapper {
         Ok(pools)
     }
     /// Fetch all pools from this node via gRPC
-    async fn fetch_pools(&self) -> Result<Vec<Pool>, SvcError> {
+    pub(crate) async fn fetch_pools(&self) -> Result<Vec<Pool>, SvcError> {
         let mut ctx = self.grpc_client().await?;
         let rpc_pools = ctx
             .client
@@ -314,7 +312,7 @@ impl NodeWrapper {
         Ok(pools)
     }
     /// Fetch all nexuses from the node via gRPC
-    async fn fetch_nexuses(&self) -> Result<Vec<Nexus>, SvcError> {
+    pub(crate) async fn fetch_nexuses(&self) -> Result<Vec<Nexus>, SvcError> {
         let mut ctx = self.grpc_client().await?;
         let rpc_nexuses = ctx
             .client

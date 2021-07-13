@@ -19,6 +19,12 @@ pub enum SpecState<T> {
     Deleted,
 }
 
+impl<T> Default for SpecState<T> {
+    fn default() -> Self {
+        Self::Creating
+    }
+}
+
 // todo: change openapi spec to support enum variants
 impl<T> From<SpecState<T>> for models::SpecState {
     fn from(src: SpecState<T>) -> Self {
@@ -58,4 +64,9 @@ pub trait SpecTransaction<Operation> {
     fn start_op(&mut self, operation: Operation);
     /// Sets the result of the operation
     fn set_op_result(&mut self, result: bool);
+}
+
+/// Trait which allows a UUID to be returned as a string.
+pub trait UuidString {
+    fn uuid_as_string(&self) -> String;
 }

@@ -160,29 +160,22 @@ impl Service {
 
     /// Get specs from the registry
     pub(crate) async fn get_specs(&self, _request: &GetSpecs) -> Result<Specs, SvcError> {
-        let specs = self.registry.specs.write().await;
-        let nexuses = specs.get_nexuses().await;
-        let replicas = specs.get_replicas().await;
-        let volumes = specs.get_volumes().await;
-        let pools = specs.get_pools().await;
+        let specs = self.registry.specs.write();
         Ok(Specs {
-            volumes,
-            nexuses,
-            replicas,
-            pools,
+            volumes: specs.get_volumes(),
+            nexuses: specs.get_nexuses(),
+            replicas: specs.get_replicas(),
+            pools: specs.get_pools(),
         })
     }
 
     /// Get states from the registry
     pub(crate) async fn get_states(&self, _request: &GetStates) -> Result<States, SvcError> {
-        let states = self.registry.states.write().await;
-        let nexuses = states.get_nexus_states().await;
-        let replicas = states.get_replica_states().await;
-        let pools = states.get_pool_states().await;
+        let states = &*self.registry.states.read();
         Ok(States {
-            nexuses,
-            pools,
-            replicas,
+            nexuses: states.get_nexus_states(),
+            pools: states.get_pool_states(),
+            replicas: states.get_replica_states(),
         })
     }
 }
