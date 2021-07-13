@@ -10,21 +10,17 @@ impl Registry {
         volume_uuid: &VolumeId,
     ) -> Result<Volume, SvcError> {
         let nexuses = self.get_node_opt_nexuses(None).await?;
-        let nexus_specs = self.specs.get_created_nexus_specs().await;
+        let nexus_specs = self.specs.get_created_nexus_specs();
         let nexus_status = nexus_specs
             .iter()
             .filter(|n| n.owner.as_ref() == Some(volume_uuid))
             .map(|n| nexuses.iter().find(|nexus| nexus.uuid == n.uuid))
             .flatten()
             .collect::<Vec<_>>();
-        let volume_spec = self
-            .specs
-            .get_volume(volume_uuid)
-            .await
-            .context(VolumeNotFound {
-                vol_id: volume_uuid.to_string(),
-            })?;
-        let volume_spec = volume_spec.lock().await;
+        let volume_spec = self.specs.get_volume(volume_uuid).context(VolumeNotFound {
+            vol_id: volume_uuid.to_string(),
+        })?;
+        let volume_spec = volume_spec.lock();
 
         Ok(if let Some(first_nexus_status) = nexus_status.get(0) {
             Volume {
@@ -52,7 +48,7 @@ impl Registry {
     /// Get all volume status
     pub(super) async fn get_volumes_status(&self) -> Vec<Volume> {
         let mut volumes = vec![];
-        let volume_specs = self.specs.get_volumes().await;
+        let volume_specs = self.specs.get_volumes();
         for volume in volume_specs {
             if let Ok(status) = self.get_volume_status(&volume.uuid).await {
                 volumes.push(status)

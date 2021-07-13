@@ -244,6 +244,7 @@ dependencies = [
  "lazy_static",
  "nats",
  "once_cell",
+ "parking_lot",
  "paste",
  "reqwest",
  "rpc",

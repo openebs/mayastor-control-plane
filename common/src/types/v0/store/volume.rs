@@ -8,7 +8,7 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::openapi::models;
+use crate::types::v0::{openapi::models, store::UuidString};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -73,7 +73,7 @@ impl StorableObject for VolumeState {
 }
 
 /// User specification of a volume.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeSpec {
     /// Volume Id
     pub uuid: VolumeId,
@@ -96,6 +96,12 @@ pub struct VolumeSpec {
     pub updating: bool,
     /// Record of the operation in progress
     pub operation: Option<VolumeOperationState>,
+}
+
+impl UuidString for VolumeSpec {
+    fn uuid_as_string(&self) -> String {
+        self.uuid.clone().into()
+    }
 }
 
 /// Operation State for a Nexus spec resource

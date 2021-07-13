@@ -1,6 +1,6 @@
+use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::{
     core::{
@@ -25,19 +25,18 @@ use common_lib::{
     },
 };
 
-#[async_trait::async_trait]
 impl SpecOperations for PoolSpec {
     type Create = CreatePool;
     type State = PoolState;
     type Status = Pool;
     type UpdateOp = ();
 
-    async fn validate_destroy(
+    fn validate_destroy(
         locked_spec: &Arc<Mutex<Self>>,
         registry: &Registry,
     ) -> Result<(), SvcError> {
-        let id = locked_spec.lock().await.id.clone();
-        let pool_in_use = registry.specs.pool_has_replicas(&id).await;
+        let id = locked_spec.lock().id.clone();
+        let pool_in_use = registry.specs.pool_has_replicas(&id);
         if pool_in_use {
             Err(SvcError::InUse {
                 kind: ResourceKind::Pool,
@@ -53,9 +52,9 @@ impl SpecOperations for PoolSpec {
     fn start_destroy_op(&mut self) {
         self.start_op(PoolOperation::Destroy);
     }
-    async fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
-        let id = locked_spec.lock().await.id.clone();
-        registry.specs.remove_pool(&id).await;
+    fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
+        let id = locked_spec.lock().id.clone();
+        registry.specs.remove_pool(&id);
     }
     fn set_updating(&mut self, updating: bool) {
         self.updating = updating;
@@ -82,7 +81,6 @@ impl SpecOperations for PoolSpec {
     }
 }
 
-#[async_trait::async_trait]
 impl SpecOperations for ReplicaSpec {
     type Create = CreateReplica;
     type State = ReplicaState;
@@ -117,9 +115,9 @@ impl SpecOperations for ReplicaSpec {
     fn start_destroy_op(&mut self) {
         self.start_op(ReplicaOperation::Destroy);
     }
-    async fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
-        let uuid = locked_spec.lock().await.uuid.clone();
-        registry.specs.remove_replica(&uuid).await;
+    fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
+        let uuid = locked_spec.lock().uuid.clone();
+        registry.specs.remove_replica(&uuid);
     }
     fn set_updating(&mut self, updating: bool) {
         self.updating = updating;
@@ -151,30 +149,30 @@ impl SpecOperations for ReplicaSpec {
 /// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
     /// Gets list of protected ReplicaSpec's for a given pool `id`
-    async fn get_pool_replicas(&self, id: &PoolId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+    fn get_pool_replicas(&self, id: &PoolId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         let mut replicas = vec![];
-        for replica in self.replicas.values() {
-            if id == &replica.lock().await.pool {
+        for replica in self.replicas.to_vec() {
+            if id == &replica.lock().pool {
                 replicas.push(replica.clone())
             }
         }
         replicas
     }
     /// Gets all ReplicaSpec's
-    pub(crate) async fn get_replicas(&self) -> Vec<ReplicaSpec> {
+    pub(crate) fn get_replicas(&self) -> Vec<ReplicaSpec> {
         let mut vector = vec![];
-        for object in self.replicas.values() {
-            let object = object.lock().await;
+        for object in self.replicas.to_vec() {
+            let object = object.lock();
             vector.push(object.clone());
         }
         vector
     }
 
     /// Get all PoolSpecs
-    pub(crate) async fn get_pools(&self) -> Vec<PoolSpec> {
+    pub(crate) fn get_pools(&self) -> Vec<PoolSpec> {
         let mut specs = vec![];
-        for pool_spec in self.pools.values() {
-            specs.push(pool_spec.lock().await.clone());
+        for pool_spec in self.pools.to_vec() {
+            specs.push(pool_spec.lock().clone());
         }
         specs
     }
@@ -193,7 +191,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let pool_spec = self.get_or_create_pool(&request).await;
+        let pool_spec = self.get_or_create_pool(&request);
         SpecOperations::start_create(&pool_spec, registry, request).await?;
 
         let result = node.create_pool(request).await;
@@ -214,7 +212,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let pool_spec = self.get_pool(&request.id).await;
+        let pool_spec = self.get_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
             SpecOperations::start_destroy(&pool_spec, registry, false).await?;
 
@@ -237,7 +235,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let replica_spec = self.get_or_create_replica(&request).await;
+        let replica_spec = self.get_or_create_replica(&request);
         SpecOperations::start_create(&replica_spec, registry, request).await?;
 
         let result = node.create_replica(request).await;
@@ -257,7 +255,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let replica = self.get_replica(&request.uuid).await;
+        let replica = self.get_replica(&request.uuid);
         if let Some(replica) = &replica {
             SpecOperations::start_destroy(&replica, registry, delete_owned).await?;
 
@@ -279,7 +277,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        if let Some(replica_spec) = self.get_replica(&request.uuid).await {
+        if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;
             let spec_clone = SpecOperations::start_update(
                 registry,
@@ -307,7 +305,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        if let Some(replica_spec) = self.get_replica(&request.uuid).await {
+        if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;
             let spec_clone = SpecOperations::start_update(
                 registry,
@@ -325,8 +323,8 @@ impl ResourceSpecsLocked {
     }
 
     /// Get or Create the protected ReplicaSpec for the given request
-    async fn get_or_create_replica(&self, request: &CreateReplica) -> Arc<Mutex<ReplicaSpec>> {
-        let mut specs = self.write().await;
+    fn get_or_create_replica(&self, request: &CreateReplica) -> Arc<Mutex<ReplicaSpec>> {
+        let mut specs = self.write();
         if let Some(replica) = specs.replicas.get(&request.uuid) {
             replica.clone()
         } else {
@@ -339,14 +337,14 @@ impl ResourceSpecsLocked {
         }
     }
     /// Get a protected ReplicaSpec for the given replica `id`, if it exists
-    async fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
-        let specs = self.read().await;
+    fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
+        let specs = self.read();
         specs.replicas.get(id).cloned()
     }
 
     /// Get or Create the protected PoolSpec for the given request
-    async fn get_or_create_pool(&self, request: &CreatePool) -> Arc<Mutex<PoolSpec>> {
-        let mut specs = self.write().await;
+    fn get_or_create_pool(&self, request: &CreatePool) -> Arc<Mutex<PoolSpec>> {
+        let mut specs = self.write();
         if let Some(pool) = specs.pools.get(&request.id) {
             pool.clone()
         } else {
@@ -357,30 +355,30 @@ impl ResourceSpecsLocked {
         }
     }
     /// Get a protected PoolSpec for the given pool `id`, if it exists
-    async fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
-        let specs = self.read().await;
+    fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
+        let specs = self.read();
         specs.pools.get(id).cloned()
     }
     /// Check if the given pool `id` has any replicas
-    async fn pool_has_replicas(&self, id: &PoolId) -> bool {
-        let specs = self.read().await;
-        !specs.get_pool_replicas(id).await.is_empty()
+    fn pool_has_replicas(&self, id: &PoolId) -> bool {
+        let specs = self.read();
+        !specs.get_pool_replicas(id).is_empty()
     }
     /// Remove the replica `id` from the spec list
-    async fn remove_replica(&self, id: &ReplicaId) {
-        let mut specs = self.write().await;
+    fn remove_replica(&self, id: &ReplicaId) {
+        let mut specs = self.write();
         specs.replicas.remove(id);
     }
     /// Remove the Pool `id` from the spec list
-    async fn remove_pool(&self, id: &PoolId) {
-        let mut specs = self.write().await;
+    fn remove_pool(&self, id: &PoolId) {
+        let mut specs = self.write();
         specs.pools.remove(id);
     }
 
     /// Get a vector of protected ReplicaSpec's
-    pub(crate) async fn get_replicas(&self) -> Vec<Arc<Mutex<ReplicaSpec>>> {
-        let specs = self.read().await;
-        specs.replicas.values().cloned().collect()
+    pub(crate) fn get_replicas(&self) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+        let specs = self.read();
+        specs.replicas.to_vec()
     }
 
     /// Worker that reconciles dirty ReplicaSpec's with the persistent store.
@@ -390,20 +388,24 @@ impl ResourceSpecsLocked {
         if registry.store_online().await {
             let mut pending_count = 0;
 
-            let replicas = self.get_replicas().await;
+            let replicas = self.get_replicas();
             for replica_spec in replicas {
-                let mut replica = replica_spec.lock().await;
-                if replica.updating || !replica.state.created() {
-                    continue;
-                }
-                if let Some(op) = replica.operation.clone() {
-                    let mut replica_clone = replica.clone();
+                let mut replica_clone = {
+                    let mut replica = replica_spec.lock();
+                    if replica.updating || !replica.state.created() {
+                        continue;
+                    }
+                    replica.updating = true;
+                    replica.clone()
+                };
 
+                if let Some(op) = replica_clone.operation.clone() {
                     let fail = !match op.result {
                         Some(true) => {
                             replica_clone.commit_op();
                             let result = registry.store_obj(&replica_clone).await;
                             if result.is_ok() {
+                                let mut replica = replica_spec.lock();
                                 replica.commit_op();
                             }
                             result.is_ok()
@@ -412,6 +414,7 @@ impl ResourceSpecsLocked {
                             replica_clone.clear_op();
                             let result = registry.store_obj(&replica_clone).await;
                             if result.is_ok() {
+                                let mut replica = replica_spec.lock();
                                 replica.clear_op();
                             }
                             result.is_ok()
@@ -422,6 +425,7 @@ impl ResourceSpecsLocked {
                             replica_clone.clear_op();
                             let result = registry.store_obj(&replica_clone).await;
                             if result.is_ok() {
+                                let mut replica = replica_spec.lock();
                                 replica.clear_op();
                             }
                             result.is_ok()
@@ -430,6 +434,10 @@ impl ResourceSpecsLocked {
                     if fail {
                         pending_count += 1;
                     }
+                } else {
+                    // No operation to reconcile.
+                    let mut spec = replica_spec.lock();
+                    spec.updating = false;
                 }
             }
             pending_count > 0

@@ -8,7 +8,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecState, SpecTransaction,
+        SpecState, SpecTransaction, UuidString,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ pub struct Replica {
 }
 
 /// Runtime state of a replica.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
 pub struct ReplicaState {
     /// Replica information.
     pub replica: message_bus::Replica,
@@ -33,6 +33,12 @@ pub struct ReplicaState {
 impl From<MbusReplica> for ReplicaState {
     fn from(replica: MbusReplica) -> Self {
         Self { replica }
+    }
+}
+
+impl UuidString for ReplicaState {
+    fn uuid_as_string(&self) -> String {
+        self.replica.uuid.clone().into()
     }
 }
 
@@ -58,7 +64,7 @@ impl StorableObject for ReplicaState {
 }
 
 /// User specification of a replica.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ReplicaSpec {
     /// uuid of the replica
     pub uuid: ReplicaId,
@@ -81,6 +87,12 @@ pub struct ReplicaSpec {
     pub updating: bool,
     /// Record of the operation in progress
     pub operation: Option<ReplicaOperationState>,
+}
+
+impl UuidString for ReplicaSpec {
+    fn uuid_as_string(&self) -> String {
+        self.uuid.clone().into()
+    }
 }
 
 impl From<ReplicaSpec> for models::ReplicaSpec {

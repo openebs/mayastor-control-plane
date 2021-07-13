@@ -4,6 +4,8 @@
 pub mod grpc;
 /// registry with node and all its resources
 pub mod registry;
+/// generic resources
+mod resource_map;
 /// registry with all the resource specs
 pub mod specs;
 /// registry with all the resource states
