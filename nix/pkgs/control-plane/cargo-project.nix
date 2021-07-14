@@ -14,8 +14,8 @@
 let
   channel = import ../../lib/rust.nix { inherit sources; };
   rustPlatform = makeRustPlatform {
-    rustc = channel.stable.rust;
-    cargo = channel.stable.cargo;
+    rustc = channel.stable;
+    cargo = channel.stable;
   };
   whitelistSource = src: allowedPrefixes:
     builtins.filterSource
@@ -47,7 +47,8 @@ let
     cargoLock = {
       lockFile = ../../../Cargo.lock;
       outputHashes = {
-        "rpc-0.1.0" = "0ghiqlc4qz63znn13iibb90k77j9jm03vcgjqgq17jsw4dhswsvb";
+        "rpc-0.1.0" = "uLdGaHuHRV3QEcnBgMmzYtXLXur+BgAdzVbGLe6vX4M=";
+
       };
     };
 

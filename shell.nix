@@ -18,6 +18,7 @@ let
   mayastor = import pkgs.mayastor-src { };
 in
 mkShell {
+  name = "mayastor-control-plane-shell";
   buildInputs = [
     clang
     cowsay
@@ -36,7 +37,7 @@ mkShell {
     etcd
     pkgs.openapi-generator
   ]
-  ++ pkgs.lib.optional (!norust) channel.nightly.rust
+  ++ pkgs.lib.optional (!norust) channel.nightly
   ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
 
   LIBCLANG_PATH = control-plane.LIBCLANG_PATH;
