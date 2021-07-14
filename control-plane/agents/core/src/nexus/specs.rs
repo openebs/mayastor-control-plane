@@ -47,14 +47,14 @@ impl SpecOperations for NexusSpec {
                 id: self.uuid(),
             }),
             NexusOperation::Unshare => Ok(()),
-            NexusOperation::AddChild(child) if self.children.contains(&child) => {
+            NexusOperation::AddChild(child) if self.children.contains(child) => {
                 Err(SvcError::ChildAlreadyExists {
                     nexus: self.uuid(),
                     child: child.to_string(),
                 })
             }
             NexusOperation::AddChild(_) => Ok(()),
-            NexusOperation::RemoveChild(child) if !self.children.contains(&child) => {
+            NexusOperation::RemoveChild(child) if !self.children.contains(child) => {
                 Err(SvcError::ChildNotFound {
                     nexus: self.uuid(),
                     child: child.to_string(),
@@ -165,7 +165,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let nexus_spec = self.get_or_create_nexus(&request);
+        let nexus_spec = self.get_or_create_nexus(request);
         SpecOperations::start_create(&nexus_spec, registry, request).await?;
 
         let result = node.create_nexus(request).await;

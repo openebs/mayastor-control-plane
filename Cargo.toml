@@ -1,7 +1,7 @@
 [patch.crates-io]
 # Update nix/overlay.nix with the sha256:
 # nix-prefetch-url https://github.com/openebs/Mayastor/tarball/$rev --print-path --unpack
-rpc = { git = "https://github.com/openebs/mayastor", rev = "a8b2e244ce5bbe386862fc3c8048cf8154a186a6" }
+rpc = { git = "https://github.com/openebs/mayastor", rev = "ebe0c03e5f472e94c74889d0a1797949f7e28166"}
 
 [profile.dev]
 panic = "abort"

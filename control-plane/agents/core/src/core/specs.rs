@@ -67,7 +67,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             spec.start_create_inner(request)?;
             spec.clone()
         };
-        Self::store_operation_log(registry, &locked_spec, &spec_clone).await
+        Self::store_operation_log(registry, locked_spec, &spec_clone).await
     }
 
     /// When a create request is issued we need to validate by verifying that:
@@ -177,7 +177,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         }
 
         // resource specific validation rules
-        if let Err(error) = Self::validate_destroy(&locked_spec, registry) {
+        if let Err(error) = Self::validate_destroy(locked_spec, registry) {
             let mut spec = locked_spec.lock();
             spec.set_updating(false);
             return Err(error);
@@ -193,7 +193,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             spec.clone()
         };
 
-        Self::store_operation_log(registry, &locked_spec, &spec_clone).await
+        Self::store_operation_log(registry, locked_spec, &spec_clone).await
     }
 
     /// Completes a destroy operation by trying to delete the spec from the persistent store.
@@ -265,7 +265,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             spec.start_update_inner(status, update_operation, false)?
         };
 
-        Self::store_operation_log(registry, &locked_spec, &spec_clone).await?;
+        Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
         Ok(spec_clone)
     }
 
