@@ -150,7 +150,7 @@ impl Registry {
                 let _guard = lock.lock().await;
 
                 let mut node_clone = node.lock().await.clone();
-                if node_clone.reload(&self).await.is_ok() {
+                if node_clone.reload(self).await.is_ok() {
                     // update node in the registry
                     *node.lock().await = node_clone;
                 }

@@ -191,7 +191,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let pool_spec = self.get_or_create_pool(&request);
+        let pool_spec = self.get_or_create_pool(request);
         SpecOperations::start_create(&pool_spec, registry, request).await?;
 
         let result = node.create_pool(request).await;
@@ -214,10 +214,10 @@ impl ResourceSpecsLocked {
 
         let pool_spec = self.get_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
-            SpecOperations::start_destroy(&pool_spec, registry, false).await?;
+            SpecOperations::start_destroy(pool_spec, registry, false).await?;
 
             let result = node.destroy_pool(request).await;
-            SpecOperations::complete_destroy(result, &pool_spec, registry).await
+            SpecOperations::complete_destroy(result, pool_spec, registry).await
         } else {
             node.destroy_pool(request).await
         }
@@ -235,7 +235,7 @@ impl ResourceSpecsLocked {
                 node_id: request.node.clone(),
             })?;
 
-        let replica_spec = self.get_or_create_replica(&request);
+        let replica_spec = self.get_or_create_replica(request);
         SpecOperations::start_create(&replica_spec, registry, request).await?;
 
         let result = node.create_replica(request).await;
@@ -257,10 +257,10 @@ impl ResourceSpecsLocked {
 
         let replica = self.get_replica(&request.uuid);
         if let Some(replica) = &replica {
-            SpecOperations::start_destroy(&replica, registry, delete_owned).await?;
+            SpecOperations::start_destroy(replica, registry, delete_owned).await?;
 
             let result = node.destroy_replica(request).await;
-            SpecOperations::complete_destroy(result, &replica, registry).await
+            SpecOperations::complete_destroy(result, replica, registry).await
         } else {
             node.destroy_replica(request).await
         }
