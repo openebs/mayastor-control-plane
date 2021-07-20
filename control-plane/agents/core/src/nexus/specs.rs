@@ -18,6 +18,7 @@ use common_lib::{
         },
         store::{
             nexus::{NexusOperation, NexusSpec},
+            nexus_child::NexusChild,
             SpecState, SpecTransaction,
         },
     },
@@ -266,7 +267,7 @@ impl ResourceSpecsLocked {
                 registry,
                 &nexus_spec,
                 &status,
-                NexusOperation::AddChild(request.uri.clone()),
+                NexusOperation::AddChild(NexusChild::from(&request.uri)),
             )
             .await?;
 
@@ -295,7 +296,7 @@ impl ResourceSpecsLocked {
                 registry,
                 &nexus_spec,
                 &status,
-                NexusOperation::RemoveChild(request.uri.clone()),
+                NexusOperation::RemoveChild(NexusChild::from(&request.uri)),
             )
             .await?;
 

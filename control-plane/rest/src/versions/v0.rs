@@ -2,7 +2,7 @@
 use super::super::ActixRestClient;
 use crate::{ClientError, ClientResult};
 use actix_web::body::Body;
-use async_trait::async_trait;
+
 pub use common_lib::{
     mbus_api,
     types::v0::{
@@ -17,9 +17,10 @@ pub use common_lib::{
         openapi::{apis, models},
     },
 };
+use common_lib::{types::v0::message_bus::States, IntoVec};
 pub use models::rest_json_error::Kind as RestJsonErrorKind;
 
-use common_lib::types::v0::message_bus::States;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, string::ToString};
 use strum_macros::{self, Display};
@@ -114,7 +115,7 @@ impl From<CreateNexus> for CreateNexusBody {
     fn from(create: CreateNexus) -> Self {
         Self {
             size: create.size,
-            children: create.children,
+            children: create.children.into_vec(),
         }
     }
 }
@@ -133,7 +134,7 @@ impl CreateNexusBody {
             node: node_id,
             uuid: nexus_id,
             size: self.size,
-            children: self.children.clone(),
+            children: self.children.clone().into_vec(),
             managed: false,
             owner: None,
         }

@@ -1,7 +1,3 @@
-use std::{convert::From, ops::Deref, sync::Arc};
-
-use parking_lot::Mutex;
-
 use crate::{
     core::{
         specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
@@ -113,7 +109,7 @@ async fn get_node_replicas(
                     thin: false,
                     share: Protocol::Nvmf,
                     managed: true,
-                    owners: ReplicaOwners::new(&request.uuid),
+                    owners: ReplicaOwners::new(Some(request.uuid.clone()), vec![]),
                 })
                 .collect()
         })
@@ -186,6 +182,7 @@ impl ResourceSpecsLocked {
             node: node.clone(),
             pool: spec.pool,
             uuid: spec.uuid,
+            ..Default::default()
         }
     }
 
@@ -506,7 +503,7 @@ impl ResourceSpecsLocked {
                 node: target_node.clone(),
                 uuid: NexusId::new(),
                 size: vol_spec.size,
-                children: nexus_replicas,
+                children: nexus_replicas.into_vec(),
                 managed: true,
                 owner: Some(vol_spec.uuid.clone()),
             },

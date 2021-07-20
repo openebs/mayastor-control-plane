@@ -1,6 +1,9 @@
 //! Converts rpc messages to message bus messages and vice versa.
 
-use common_lib::types::v0::message_bus::{self, ChildState, NexusState, Protocol, ReplicaState};
+use common_lib::types::v0::{
+    message_bus::{self, ChildState, NexusState, Protocol, ReplicaState},
+    openapi::apis::IntoVec,
+};
 use rpc::mayastor as rpc;
 use std::convert::TryFrom;
 
@@ -220,7 +223,7 @@ impl MessageBusToRpc for message_bus::CreateNexus {
         Self::RpcMessage {
             uuid: self.uuid.clone().into(),
             size: self.size,
-            children: self.children.iter().map(|c| c.to_string()).collect(),
+            children: self.children.clone().into_vec(),
         }
     }
 }
