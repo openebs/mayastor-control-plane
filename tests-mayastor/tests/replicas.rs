@@ -110,6 +110,7 @@ async fn create_replica_sizes() {
                         node: replica.node.clone(),
                         pool: replica.pool.clone(),
                         uuid: replica.uuid.clone(),
+                        ..Default::default()
                     })
                     .await
                     .unwrap();

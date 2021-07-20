@@ -15,7 +15,7 @@ use common_lib::{
     types::v0::{
         message_bus::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
-            Replica, ReplicaId, ReplicaState, ShareReplica, UnshareReplica,
+            Replica, ReplicaId, ReplicaOwners, ReplicaState, ShareReplica, UnshareReplica,
         },
         store::{
             pool::{PoolOperation, PoolSpec},
@@ -27,6 +27,7 @@ use common_lib::{
 
 impl SpecOperations for PoolSpec {
     type Create = CreatePool;
+    type Owners = ();
     type State = PoolState;
     type Status = Pool;
     type UpdateOp = ();
@@ -83,6 +84,7 @@ impl SpecOperations for PoolSpec {
 
 impl SpecOperations for ReplicaSpec {
     type Create = CreateReplica;
+    type Owners = ReplicaOwners;
     type State = ReplicaState;
     type Status = Replica;
     type UpdateOp = ReplicaOperation;
@@ -142,6 +144,9 @@ impl SpecOperations for ReplicaSpec {
     }
     fn owned(&self) -> bool {
         self.owners.is_owned()
+    }
+    fn disowned_by(&mut self, by: &Self::Owners) {
+        self.owners.disowned_by(by)
     }
 }
 
@@ -242,6 +247,29 @@ impl ResourceSpecsLocked {
         SpecOperations::complete_create(result, &replica_spec, registry).await
     }
 
+    pub(crate) async fn destroy_replica_spec(
+        &self,
+        registry: &Registry,
+        replica: &ReplicaSpec,
+        destroy_by: ReplicaOwners,
+        delete_owned: bool,
+    ) -> Result<(), SvcError> {
+        match Self::get_replica_node(registry, replica).await {
+            // Should never happen, but just in case...
+            None => Err(SvcError::Internal {
+                details: "Failed to find the node where a replica lives".to_string(),
+            }),
+            Some(node) => {
+                self.destroy_replica(
+                    registry,
+                    &Self::destroy_replica_request(replica.clone(), destroy_by, &node),
+                    delete_owned,
+                )
+                .await
+            }
+        }
+    }
+
     pub(crate) async fn destroy_replica(
         &self,
         registry: &Registry,
@@ -257,7 +285,7 @@ impl ResourceSpecsLocked {
 
         let replica = self.get_replica(&request.uuid);
         if let Some(replica) = &replica {
-            SpecOperations::start_destroy(replica, registry, delete_owned).await?;
+            SpecOperations::start_destroy_by(replica, registry, &request.by, delete_owned).await?;
 
             let result = node.destroy_replica(request).await;
             SpecOperations::complete_destroy(result, replica, registry).await
@@ -332,7 +360,7 @@ impl ResourceSpecsLocked {
         }
     }
     /// Get a protected ReplicaSpec for the given replica `id`, if it exists
-    fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
+    pub(crate) fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
         let specs = self.read();
         specs.replicas.get(id).cloned()
     }

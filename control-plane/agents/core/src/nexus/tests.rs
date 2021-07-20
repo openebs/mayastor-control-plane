@@ -82,6 +82,7 @@ async fn nexus() {
         node: replica.node,
         pool: replica.pool,
         uuid: replica.uuid,
+        ..Default::default()
     }
     .request()
     .await
