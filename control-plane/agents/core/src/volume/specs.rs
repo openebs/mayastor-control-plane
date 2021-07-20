@@ -525,12 +525,7 @@ impl ResourceSpecsLocked {
         if let Some(volume) = specs.volumes.get(&request.uuid) {
             volume.clone()
         } else {
-            let spec = VolumeSpec::from(request);
-            let locked_spec = Arc::new(Mutex::new(spec));
-            specs
-                .volumes
-                .insert(request.uuid.clone(), locked_spec.clone());
-            locked_spec
+            specs.volumes.insert(VolumeSpec::from(request))
         }
     }
 }

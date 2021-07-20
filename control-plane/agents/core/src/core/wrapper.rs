@@ -6,15 +6,15 @@ use common::{
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::message_bus::{
-        AddNexusChild, Child, ChildUri, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
-        DestroyPool, DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId,
-        PoolState, Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica,
-        UnshareNexus, UnshareReplica,
+        AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
+        DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId, PoolState, Protocol,
+        RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica, UnshareNexus,
+        UnshareReplica,
     },
 };
 use rpc::mayastor::Null;
 use snafu::ResultExt;
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
 /// all pools and replicas from the node
@@ -30,10 +30,8 @@ pub(crate) struct NodeWrapper {
     lock: Arc<tokio::sync::Mutex<()>>,
     /// node communication timeouts
     comms_timeouts: NodeCommsTimeout,
-    /// pools part of the node
-    pools: HashMap<PoolId, PoolWrapper>,
-    /// nexuses part of the node
-    nexuses: HashMap<NexusId, Nexus>,
+    /// runtime state information
+    states: ResourceStatesLocked,
 }
 
 impl NodeWrapper {
@@ -47,10 +45,9 @@ impl NodeWrapper {
         Self {
             node: node.clone(),
             watchdog: Watchdog::new(&node.id, deadline),
-            pools: Default::default(),
-            nexuses: Default::default(),
             lock: Default::default(),
             comms_timeouts,
+            states: ResourceStatesLocked::new(),
         }
     }
 
@@ -100,9 +97,6 @@ impl NodeWrapper {
             if self.node.state == NodeState::Unknown {
                 self.watchdog.disarm()
             }
-            for (_, pool) in self.pools.iter_mut() {
-                pool.set_unknown();
-            }
         }
     }
 
@@ -115,67 +109,90 @@ impl NodeWrapper {
         &self.node
     }
     /// Get all pools
-    pub(crate) fn pools(&self) -> Vec<PoolWrapper> {
-        self.pools.values().cloned().collect()
+    pub(crate) fn pools(&self) -> Vec<Pool> {
+        self.states
+            .read()
+            .get_pool_states()
+            .iter()
+            .map(|p| p.pool.clone())
+            .collect()
     }
     /// Get pool from `pool_id` or None
-    pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<&PoolWrapper> {
-        self.pools.get(pool_id)
+    pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<Pool> {
+        self.states.read().get_pool_state(pool_id).map(|p| p.pool)
+    }
+    /// Get a PoolWrapper for the pool ID.
+    pub(crate) fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
+        let r = self.states.read();
+        match r.get_pool_states().iter().find(|p| &p.pool.id == pool_id) {
+            Some(pool_state) => {
+                let replicas: Vec<Replica> = self
+                    .replicas()
+                    .into_iter()
+                    .filter(|r| &r.pool == pool_id)
+                    .collect();
+                Some(PoolWrapper::new(&pool_state.pool, &replicas))
+            }
+            None => None,
+        }
     }
     /// Get all replicas
     pub(crate) fn replicas(&self) -> Vec<Replica> {
-        let replicas = self.pools.iter().map(|p| p.1.replicas());
-        replicas.flatten().collect()
+        self.states
+            .read()
+            .get_replica_states()
+            .iter()
+            .map(|r| r.replica.clone())
+            .collect()
     }
     /// Get all nexuses
     fn nexuses(&self) -> Vec<Nexus> {
-        self.nexuses.values().cloned().collect()
+        self.states
+            .read()
+            .get_nexus_states()
+            .iter()
+            .map(|nexus_state| nexus_state.nexus.clone())
+            .collect()
     }
     /// Get nexus
-    fn nexus(&self, nexus_id: &NexusId) -> Option<&Nexus> {
-        self.nexuses.get(nexus_id)
+    fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
+        self.states
+            .read()
+            .get_nexus_state(nexus_id)
+            .map(|s| s.nexus)
     }
     /// Get replica from `replica_id`
-    pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<&Replica> {
-        self.pools
-            .iter()
-            .find_map(|p| p.1.replicas.iter().find(|r| &r.uuid == replica_id))
+    pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
+        self.states
+            .read()
+            .get_replica_state(replica_id)
+            .map(|r| r.replica)
     }
     /// Is the node online
     pub(crate) fn is_online(&self) -> bool {
         self.node.state == NodeState::Online
     }
 
-    /// Reload the node by fetching information from mayastor
+    //// Reload the node by fetching information from mayastor
     pub(crate) async fn reload(&mut self, registry: &Registry) -> Result<(), SvcError> {
         if self.is_online() {
             tracing::trace!("Reloading node '{}'", self.id);
 
-            let replicas = self.fetch_replicas().await?;
-            let pools = self.fetch_pools().await?;
-            let nexuses = self.fetch_nexuses().await?;
-
-            {
-                // Update resource states in the registry.
-                let mut states = registry.states.write();
-                states.update(pools.clone(), replicas.clone(), nexuses.clone());
+            match self.fetch_resources().await {
+                Ok((replicas, pools, nexuses)) => {
+                    let mut states = registry.states.write();
+                    states.update(pools, replicas, nexuses);
+                    Ok(())
+                }
+                Err(e) => {
+                    // We failed to fetch all resources from Mayastor so clear all state
+                    // information. We take the approach that no information is better than
+                    // inconsistent information.
+                    let mut states = registry.states.write();
+                    states.clear_all();
+                    Err(e)
+                }
             }
-
-            self.pools.clear();
-            for pool in &pools {
-                let replicas = replicas
-                    .iter()
-                    .filter(|r| r.pool == pool.id)
-                    .cloned()
-                    .collect::<Vec<_>>();
-                self.add_pool_with_replicas(pool, &replicas);
-            }
-
-            self.nexuses.clear();
-            for nexus in &nexuses {
-                self.add_nexus(nexus);
-            }
-            Ok(())
         } else {
             tracing::trace!(
                 "Skipping reload of node '{}' since it's '{:?}'",
@@ -188,91 +205,12 @@ impl NodeWrapper {
         }
     }
 
-    /// Add pool with replicas
-    fn add_pool_with_replicas(&mut self, pool: &Pool, replicas: &[Replica]) {
-        self.pools
-            .insert(pool.id.clone(), PoolWrapper::new(pool, replicas));
-    }
-    /// Remove pool from node
-    fn remove_pool(&mut self, pool: &PoolId) {
-        self.pools.remove(pool);
-    }
-    /// Add replica
-    fn add_replica(&mut self, replica: &Replica) {
-        match self.pools.iter_mut().find(|(id, _)| id == &&replica.pool) {
-            None => {
-                tracing::error!(
-                    "Can't add replica '{} to pool '{}' because the pool does not exist",
-                    replica.uuid,
-                    replica.pool
-                );
-            }
-            Some((_, pool)) => {
-                pool.add_replica(replica);
-            }
-        };
-    }
-    /// Remove replica from pool
-    fn remove_replica(&mut self, pool: &PoolId, replica: &ReplicaId) {
-        match self.pools.iter_mut().find(|(id, _)| id == &pool) {
-            None => (),
-            Some((_, pool)) => {
-                pool.remove_replica(replica);
-            }
-        };
-    }
-    /// Update a replica's share uri and protocol
-    fn share_replica(&mut self, share: &Protocol, uri: &str, pool: &PoolId, replica: &ReplicaId) {
-        match self.pools.iter_mut().find(|(id, _)| id == &pool) {
-            None => (),
-            Some((_, pool)) => {
-                pool.update_replica(replica, share, uri);
-            }
-        };
-    }
-    /// Unshare a replica by removing its share protocol and uri
-    fn unshare_replica(&mut self, pool: &PoolId, replica: &ReplicaId, uri: &str) {
-        self.share_replica(&Protocol::None, uri, pool, replica);
-    }
-    /// Add a new nexus to the node
-    fn add_nexus(&mut self, nexus: &Nexus) {
-        self.nexuses.insert(nexus.uuid.clone(), nexus.clone());
-    }
-    /// Remove nexus from the node
-    fn remove_nexus(&mut self, nexus: &NexusId) {
-        self.nexuses.remove(nexus);
-    }
-    /// Update a nexus share uri
-    fn share_nexus(&mut self, uri: &str, protocol: Protocol, nexus: &NexusId) {
-        match self.nexuses.get_mut(nexus) {
-            None => (),
-            Some(nexus) => {
-                nexus.device_uri = uri.to_string();
-                nexus.share = protocol;
-            }
-        }
-    }
-    /// Unshare a nexus by removing its share uri
-    fn unshare_nexus(&mut self, nexus: &NexusId) {
-        self.share_nexus("", Protocol::None, nexus);
-    }
-    /// Add a Child to the nexus
-    fn add_child(&mut self, nexus: &NexusId, child: &Child) {
-        match self.nexuses.get_mut(nexus) {
-            None => (),
-            Some(nexus) => {
-                nexus.children.push(child.clone());
-            }
-        }
-    }
-    /// Remove child from the nexus
-    fn remove_child(&mut self, nexus: &NexusId, child: &ChildUri) {
-        match self.nexuses.get_mut(nexus) {
-            None => (),
-            Some(nexus) => {
-                nexus.children.retain(|c| &c.uri == child);
-            }
-        }
+    /// Fetch the various resources from Mayastor.
+    async fn fetch_resources(&self) -> Result<(Vec<Replica>, Vec<Pool>, Vec<Nexus>), SvcError> {
+        let replicas = self.fetch_replicas().await?;
+        let pools = self.fetch_pools().await?;
+        let nexuses = self.fetch_nexuses().await?;
+        Ok((replicas, pools, nexuses))
     }
 
     /// Fetch all replicas from this node via gRPC
@@ -329,6 +267,25 @@ impl NodeWrapper {
             .collect();
         Ok(nexuses)
     }
+
+    /// Update all the nexus states.
+    async fn update_nexus_states(&self) -> Result<(), SvcError> {
+        let nexuses = self.fetch_nexuses().await?;
+        self.states.write().update_nexuses(nexuses);
+        Ok(())
+    }
+
+    async fn update_pool_states(&self) -> Result<(), SvcError> {
+        let pools = self.fetch_pools().await?;
+        self.states.write().update_pools(pools);
+        Ok(())
+    }
+
+    async fn update_replica_states(&self) -> Result<(), SvcError> {
+        let replicas = self.fetch_replicas().await?;
+        self.states.write().update_replicas(replicas);
+        Ok(())
+    }
 }
 
 impl std::ops::Deref for NodeWrapper {
@@ -342,6 +299,7 @@ use crate::{
     core::{
         grpc::{GrpcClient, GrpcClientLocked},
         registry::Registry,
+        states::ResourceStatesLocked,
     },
     node::service::NodeCommsTimeout,
 };
@@ -392,8 +350,9 @@ pub(crate) trait InternalOps {
 /// resources, such as pools, replicas and nexuses
 #[async_trait]
 pub(crate) trait GetterOps {
-    async fn pools(&self) -> Vec<PoolWrapper>;
-    async fn pool(&self, pool_id: &PoolId) -> Option<PoolWrapper>;
+    async fn pools(&self) -> Vec<Pool>;
+    async fn pool(&self, pool_id: &PoolId) -> Option<Pool>;
+    async fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper>;
 
     async fn replicas(&self) -> Vec<Replica>;
     async fn replica(&self, replica: &ReplicaId) -> Option<Replica>;
@@ -404,13 +363,17 @@ pub(crate) trait GetterOps {
 
 #[async_trait]
 impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
-    async fn pools(&self) -> Vec<PoolWrapper> {
+    async fn pools(&self) -> Vec<Pool> {
         let node = self.lock().await;
         node.pools()
     }
-    async fn pool(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
+    async fn pool(&self, pool_id: &PoolId) -> Option<Pool> {
         let node = self.lock().await;
-        node.pool(pool_id).cloned()
+        node.pool(pool_id)
+    }
+    async fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
+        let node = self.lock().await;
+        node.pool_wrapper(pool_id)
     }
     async fn replicas(&self) -> Vec<Replica> {
         let node = self.lock().await;
@@ -418,7 +381,7 @@ impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
     async fn replica(&self, replica: &ReplicaId) -> Option<Replica> {
         let node = self.lock().await;
-        node.replica(replica).cloned()
+        node.replica(replica)
     }
     async fn nexuses(&self) -> Vec<Nexus> {
         let node = self.lock().await;
@@ -426,7 +389,7 @@ impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
     async fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
         let node = self.lock().await;
-        node.nexus(nexus_id).cloned()
+        node.nexus(nexus_id)
     }
 }
 
@@ -455,8 +418,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                     request: "create_pool",
                 })?;
         let pool = rpc_pool_to_bus(&rpc_pool.into_inner(), &request.node);
-
-        self.lock().await.add_pool_with_replicas(&pool, &[]);
+        self.lock().await.update_pool_states().await?;
         Ok(pool)
     }
     /// Destroy a pool on the node via gRPC
@@ -470,7 +432,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Pool,
                 request: "destroy_pool",
             })?;
-        self.lock().await.remove_pool(&request.id);
+        self.lock().await.update_pool_states().await?;
         Ok(())
     }
 
@@ -487,7 +449,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 })?;
 
         let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node);
-        self.lock().await.add_replica(&replica);
+        self.lock().await.update_replica_states().await?;
         Ok(replica)
     }
 
@@ -504,12 +466,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
             })?
             .into_inner()
             .uri;
-        self.lock().await.share_replica(
-            &request.protocol.into(),
-            &share,
-            &request.pool,
-            &request.uuid,
-        );
+        self.lock().await.update_replica_states().await?;
         Ok(share)
     }
 
@@ -526,9 +483,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
             })?
             .into_inner()
             .uri;
-        self.lock()
-            .await
-            .unshare_replica(&request.pool, &request.uuid, &local_uri);
+        self.lock().await.update_replica_states().await?;
         Ok(local_uri)
     }
 
@@ -543,9 +498,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Replica,
                 request: "destroy_replica",
             })?;
-        self.lock()
-            .await
-            .remove_replica(&request.pool, &request.uuid);
+        self.lock().await.update_replica_states().await?;
         Ok(())
     }
 
@@ -561,7 +514,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                     request: "create_nexus",
                 })?;
         let nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node);
-        self.lock().await.add_nexus(&nexus);
+        self.lock().await.update_nexus_states().await?;
         Ok(nexus)
     }
 
@@ -576,7 +529,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Nexus,
                 request: "destroy_nexus",
             })?;
-        self.lock().await.remove_nexus(&request.uuid);
+        self.lock().await.update_nexus_states().await?;
         Ok(())
     }
 
@@ -592,9 +545,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 request: "publish_nexus",
             })?;
         let share = share.into_inner().device_uri;
-        self.lock()
-            .await
-            .share_nexus(&share, request.protocol.into(), &request.uuid);
+        self.lock().await.update_nexus_states().await?;
         Ok(share)
     }
 
@@ -609,7 +560,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Nexus,
                 request: "unpublish_nexus",
             })?;
-        self.lock().await.unshare_nexus(&request.uuid);
+        self.lock().await.update_nexus_states().await?;
         Ok(())
     }
 
@@ -625,7 +576,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                     request: "add_child_nexus",
                 })?;
         let child = rpc_child.into_inner().to_mbus();
-        self.lock().await.add_child(&request.nexus, &child);
+        self.lock().await.update_nexus_states().await?;
         Ok(child)
     }
 
@@ -640,7 +591,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Child,
                 request: "remove_child_nexus",
             })?;
-        self.lock().await.remove_child(&request.nexus, &request.uri);
+        self.lock().await.update_nexus_states().await?;
         Ok(())
     }
 }
@@ -743,20 +694,6 @@ impl PoolWrapper {
 impl From<&NodeWrapper> for Node {
     fn from(node: &NodeWrapper) -> Self {
         node.node.clone()
-    }
-}
-impl From<NodeWrapper> for Vec<Replica> {
-    fn from(node: NodeWrapper) -> Self {
-        node.pools
-            .values()
-            .map(Vec::<Replica>::from)
-            .flatten()
-            .collect()
-    }
-}
-impl From<NodeWrapper> for Vec<PoolWrapper> {
-    fn from(node: NodeWrapper) -> Self {
-        node.pools.values().cloned().collect()
     }
 }
 

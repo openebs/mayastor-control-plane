@@ -150,10 +150,11 @@ impl Registry {
                 let _guard = lock.lock().await;
 
                 let mut node_clone = node.lock().await.clone();
-                if node_clone.reload(self).await.is_ok() {
-                    // update node in the registry
-                    *node.lock().await = node_clone;
+                if let Err(e) = node_clone.reload(self).await {
+                    tracing::trace!("Failed to reload node {}. Error {:?}.", node_clone.id, e);
                 }
+                // update node in the registry
+                *node.lock().await = node_clone;
             }
             self.trace_all().await;
             tokio::time::sleep(self.cache_period).await;
