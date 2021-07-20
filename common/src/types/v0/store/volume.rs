@@ -8,7 +8,11 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::{openapi::models, store::UuidString};
+use crate::types::v0::{
+    message_bus::{Topology, VolumeHealPolicy},
+    openapi::models,
+    store::UuidString,
+};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -91,11 +95,26 @@ pub struct VolumeSpec {
     pub state: VolumeSpecState,
     /// The node where front-end IO will be sent to
     pub target_node: Option<NodeId>,
+    /// volume healing policy
+    pub policy: VolumeHealPolicy,
+    /// replica placement topology
+    pub topology: Topology,
     /// Update of the state in progress
     #[serde(skip)]
     pub updating: bool,
     /// Record of the operation in progress
     pub operation: Option<VolumeOperationState>,
+}
+
+impl VolumeSpec {
+    /// explicitly selected allowed_nodes
+    pub fn allowed_nodes(&self) -> Vec<NodeId> {
+        self.topology
+            .explicit
+            .clone()
+            .unwrap_or_default()
+            .allowed_nodes
+    }
 }
 
 impl UuidString for VolumeSpec {
@@ -133,8 +152,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::Unshare => {
                     self.protocol = Protocol::None;
                 }
-                VolumeOperation::AddReplica => self.num_replicas += 1,
-                VolumeOperation::RemoveReplica => self.num_replicas -= 1,
+                VolumeOperation::SetReplica(count) => self.num_replicas = count,
                 VolumeOperation::Publish((node, share)) => {
                     self.target_node = Some(node);
                     self.protocol = share.map_or(Protocol::None, Protocol::from);
@@ -176,8 +194,7 @@ pub enum VolumeOperation {
     Destroy,
     Share(VolumeShareProtocol),
     Unshare,
-    AddReplica,
-    RemoveReplica,
+    SetReplica(u8),
     Publish((NodeId, Option<VolumeShareProtocol>)),
     Unpublish,
 }
@@ -223,6 +240,8 @@ impl From<&CreateVolume> for VolumeSpec {
             num_paths: 1,
             state: VolumeSpecState::Creating,
             target_node: None,
+            policy: request.policy.clone(),
+            topology: request.topology.clone(),
             updating: false,
             operation: None,
         }

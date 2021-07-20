@@ -151,6 +151,23 @@ pub enum SvcError {
     InUse { kind: ResourceKind, id: String },
     #[snafu(display("{} Resource id {} already exists", kind.to_string(), id))]
     AlreadyExists { kind: ResourceKind, id: String },
+    #[snafu(display("Cannot remove the last replica of volume '{}'", id))]
+    LastReplica { id: String },
+    #[snafu(display("Replica count of Volume '{}' is already '{}'", id, count))]
+    ReplicaCountAchieved { id: String, count: u8 },
+    #[snafu(display("Replica count only allowed to change by a maximum of one at a time"))]
+    ReplicaChangeCount {},
+    #[snafu(display(
+        "Unable to increase replica count due to volume '{}' in state '{}'",
+        volume_id,
+        volume_state
+    ))]
+    ReplicaIncrease {
+        volume_id: String,
+        volume_state: String,
+    },
+    #[snafu(display("No suitable replica removal candidates found for Volume '{}'", id))]
+    ReplicaRemovalNoCandidates { id: String },
 }
 
 impl From<StoreError> for SvcError {
@@ -299,9 +316,13 @@ impl From<SvcError> for ReplyError {
                 extra: source.to_string(),
             },
 
-            SvcError::NotEnoughResources { .. } => ReplyError {
+            SvcError::NotEnoughResources { ref source } => ReplyError {
                 kind: ReplyErrorKind::ResourceExhausted,
-                resource: ResourceKind::Unknown,
+                resource: match source {
+                    NotEnough::OfPools { .. } => ResourceKind::Pool,
+                    NotEnough::OfReplicas { .. } => ResourceKind::Replica,
+                    NotEnough::OfNexuses { .. } => ResourceKind::Nexus,
+                },
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
@@ -417,6 +438,36 @@ impl From<SvcError> for ReplyError {
             SvcError::MultipleNexuses { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::LastReplica { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::ReplicaCountAchieved { .. } => ReplyError {
+                kind: ReplyErrorKind::ReplicaCountAchieved,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::ReplicaChangeCount { .. } => ReplyError {
+                kind: ReplyErrorKind::ReplicaChangeCount,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::ReplicaIncrease { .. } => ReplyError {
+                kind: ReplyErrorKind::ReplicaIncrease,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::ReplicaRemovalNoCandidates { .. } => ReplyError {
+                kind: ReplyErrorKind::ReplicaIncrease,
+                resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

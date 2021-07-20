@@ -80,8 +80,9 @@ bus_impl_message_all!(UnpublishVolume, UnpublishVolume, (), Volume);
 bus_impl_message_all!(DestroyVolume, DestroyVolume, (), Volume);
 
 bus_impl_message_all!(AddVolumeNexus, AddVolumeNexus, Nexus, Volume);
-
 bus_impl_message_all!(RemoveVolumeNexus, RemoveVolumeNexus, (), Volume);
+
+bus_impl_message_all!(SetVolumeReplica, SetVolumeReplica, Volume, Volume);
 
 bus_impl_message_all!(JsonGrpcRequest, JsonGrpc, Value, JsonGrpc);
 

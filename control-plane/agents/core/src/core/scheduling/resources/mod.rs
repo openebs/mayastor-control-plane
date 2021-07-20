@@ -38,7 +38,7 @@ impl PoolItemLister {
             .await
             .iter()
             .map(|n| {
-                n.pools()
+                n.pool_wrappers()
                     .iter()
                     .map(|p| PoolItem::new(n.clone(), p.clone()))
                     .collect::<Vec<_>>()
@@ -84,6 +84,7 @@ impl ReplicaItemLister {
         state: &Volume,
     ) -> Vec<ReplicaItem> {
         let replicas = registry.specs.get_volume_replicas(&spec.uuid);
+        let nexuses = registry.specs.get_volume_nexuses(&spec.uuid);
         let replicas = replicas.iter().map(|r| r.lock().clone());
 
         // no error is actually ever returned, fixup:
@@ -96,12 +97,11 @@ impl ReplicaItemLister {
                         .iter()
                         .find(|rs| rs.uuid == r.uuid)
                         .map(|rs| {
-                            registry
-                                .specs
-                                .get_created_nexus_specs()
+                            nexuses
                                 .iter()
                                 .filter_map(|n| {
-                                    n.children
+                                    n.lock()
+                                        .children
                                         .iter()
                                         .find(|c| c.uri() == rs.uri)
                                         .map(|n| n.uri())

@@ -3,8 +3,8 @@ use common::errors::SvcError;
 use common_lib::{
     mbus_api::message_bus::v0::Volumes,
     types::v0::message_bus::{
-        CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, ShareVolume,
-        UnpublishVolume, UnshareVolume, Volume,
+        CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
+        ShareVolume, UnpublishVolume, UnshareVolume, Volume,
     },
 };
 
@@ -98,6 +98,18 @@ impl Service {
         self.registry
             .specs
             .unpublish_volume(&self.registry, request)
+            .await
+    }
+
+    /// Set volume replica
+    #[tracing::instrument(level = "debug", err)]
+    pub(super) async fn set_volume_replica(
+        &self,
+        request: &SetVolumeReplica,
+    ) -> Result<Volume, SvcError> {
+        self.registry
+            .specs
+            .set_volume_replica(&self.registry, request)
             .await
     }
 }

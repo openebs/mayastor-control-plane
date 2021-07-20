@@ -72,7 +72,7 @@ impl From<Replica> for DestroyReplica {
             node: replica.node,
             pool: replica.pool,
             uuid: replica.uuid,
-            by: Default::default(),
+            disowners: Default::default(),
         }
     }
 }
@@ -134,14 +134,14 @@ impl ReplicaOwners {
         let _ = self.volume.take();
     }
     /// The replica is no longer part of the provided owners
-    pub fn disowned_by(&mut self, by: &Self) {
-        if self.volume == by.volume {
+    pub fn disown(&mut self, disowner: &Self) {
+        if self.volume == disowner.volume {
             self.volume = None;
         }
         self.nexuses = self
             .nexuses
             .iter()
-            .filter(|n| !by.owned_by_nexus(n))
+            .filter(|n| !disowner.owned_by_nexus(n))
             .cloned()
             .collect();
     }
@@ -178,7 +178,7 @@ pub struct DestroyReplica {
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// delete by owners
-    pub by: ReplicaOwners,
+    pub disowners: ReplicaOwners,
 }
 
 /// Share Replica Request
@@ -339,7 +339,7 @@ impl From<models::ReplicaState> for ReplicaState {
     }
 }
 
-/// Add replica to Nexus Request
+/// Add Replica to Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AddNexusReplica {
@@ -365,7 +365,7 @@ impl From<&AddNexusReplica> for AddNexusChild {
     }
 }
 
-/// Remove Child from Nexus Request
+/// Remove Replica from Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveNexusReplica {

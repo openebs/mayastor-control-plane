@@ -16,27 +16,6 @@ impl Registry {
         }
     }
 
-    /// Get pool wrappers per node
-    pub(crate) async fn get_node_pools_wrapper(&self) -> Result<Vec<Vec<PoolWrapper>>, SvcError> {
-        let nodes = self.get_nodes_wrapper().await;
-        let mut pools = vec![];
-        for node in nodes {
-            let mut pool_wrappers = vec![];
-            for pool in node.pools().await {
-                let replicas: Vec<Replica> = node
-                    .replicas()
-                    .await
-                    .iter()
-                    .filter(|r| r.pool == pool.id)
-                    .map(Clone::clone)
-                    .collect();
-                pool_wrappers.push(PoolWrapper::new(&pool, &replicas));
-            }
-            pools.push(pool_wrappers)
-        }
-        Ok(pools)
-    }
-
     /// Get pool wrappers for the pool ID.
     pub(crate) async fn get_node_pool_wrapper(
         &self,

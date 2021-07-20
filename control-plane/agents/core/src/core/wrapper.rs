@@ -117,6 +117,23 @@ impl NodeWrapper {
             .map(|p| p.pool.clone())
             .collect()
     }
+    /// Get all pool wrappers
+    pub(crate) fn pool_wrappers(&self) -> Vec<PoolWrapper> {
+        let state = self.states.read();
+        let pools = state.get_pool_states();
+        let replicas = state.get_replica_states();
+        pools
+            .into_iter()
+            .map(|p| {
+                let replicas = replicas
+                    .iter()
+                    .filter(|r| r.replica.pool == p.pool.id)
+                    .map(|r| r.replica.clone())
+                    .collect::<Vec<Replica>>();
+                PoolWrapper::new(&p.pool, &replicas)
+            })
+            .collect()
+    }
     /// Get pool from `pool_id` or None
     pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<Pool> {
         self.states.read().get_pool_state(pool_id).map(|p| p.pool)
@@ -174,13 +191,13 @@ impl NodeWrapper {
     }
 
     //// Reload the node by fetching information from mayastor
-    pub(crate) async fn reload(&mut self, registry: &Registry) -> Result<(), SvcError> {
+    pub(crate) async fn reload(&mut self) -> Result<(), SvcError> {
         if self.is_online() {
             tracing::trace!("Reloading node '{}'", self.id);
 
             match self.fetch_resources().await {
                 Ok((replicas, pools, nexuses)) => {
-                    let mut states = registry.states.write();
+                    let mut states = self.states.write();
                     states.update(pools, replicas, nexuses);
                     Ok(())
                 }
@@ -188,7 +205,7 @@ impl NodeWrapper {
                     // We failed to fetch all resources from Mayastor so clear all state
                     // information. We take the approach that no information is better than
                     // inconsistent information.
-                    let mut states = registry.states.write();
+                    let mut states = self.states.write();
                     states.clear_all();
                     Err(e)
                 }
@@ -298,7 +315,6 @@ impl std::ops::Deref for NodeWrapper {
 use crate::{
     core::{
         grpc::{GrpcClient, GrpcClientLocked},
-        registry::Registry,
         states::ResourceStatesLocked,
     },
     node::service::NodeCommsTimeout,
@@ -351,6 +367,7 @@ pub(crate) trait InternalOps {
 #[async_trait]
 pub(crate) trait GetterOps {
     async fn pools(&self) -> Vec<Pool>;
+    async fn pool_wrappers(&self) -> Vec<PoolWrapper>;
     async fn pool(&self, pool_id: &PoolId) -> Option<Pool>;
     async fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper>;
 
@@ -366,6 +383,10 @@ impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     async fn pools(&self) -> Vec<Pool> {
         let node = self.lock().await;
         node.pools()
+    }
+    async fn pool_wrappers(&self) -> Vec<PoolWrapper> {
+        let node = self.lock().await;
+        node.pool_wrappers()
     }
     async fn pool(&self, pool_id: &PoolId) -> Option<Pool> {
         let node = self.lock().await;

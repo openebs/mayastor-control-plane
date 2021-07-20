@@ -111,6 +111,11 @@ pub struct StartOptions {
     #[structopt(long)]
     pub no_etcd: bool,
 
+    /// The period at which the registry updates its cache of all
+    /// resources from all nodes
+    #[structopt(long)]
+    pub cache_period: Option<humantime::Duration>,
+
     /// Override the node's deadline for the Core Agent
     #[structopt(long)]
     pub node_deadline: Option<humantime::Duration>,
@@ -140,6 +145,10 @@ impl StartOptions {
     pub fn with_agents(mut self, agents: Vec<&str>) -> Self {
         let agents: ControlPlaneAgents = agents.try_into().unwrap();
         self.agents = agents.into_inner();
+        self
+    }
+    pub fn with_cache_period(mut self, period: &str) -> Self {
+        self.cache_period = Some(humantime::Duration::from_str(period).unwrap());
         self
     }
     pub fn with_node_deadline(mut self, deadline: &str) -> Self {

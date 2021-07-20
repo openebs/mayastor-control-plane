@@ -16,10 +16,6 @@ pub enum NexusChild {
 }
 
 impl NexusChild {
-    /// Check if Self is of type ReplicaUri
-    pub fn is_replica(&self) -> bool {
-        matches!(&self, &Self::Replica(_))
-    }
     /// Return Self as ReplicaUri
     pub fn as_replica(&self) -> Option<ReplicaUri> {
         match &self {

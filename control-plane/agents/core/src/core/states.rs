@@ -27,7 +27,6 @@ impl Deref for ResourceStatesLocked {
 /// Resource States
 #[derive(Default, Debug)]
 pub(crate) struct ResourceStates {
-    /// Todo: Add runtime state information for nodes.
     nexuses: ResourceMap<NexusId, NexusState>,
     pools: ResourceMap<PoolId, PoolState>,
     replicas: ResourceMap<ReplicaId, ReplicaState>,

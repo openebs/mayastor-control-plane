@@ -29,16 +29,11 @@ pub struct Pool {
 pub struct PoolState {
     /// Pool information returned by Mayastor.
     pub pool: message_bus::Pool,
-    /// Pool labels.
-    pub labels: Vec<PoolLabel>,
 }
 
 impl From<MbusPool> for PoolState {
     fn from(pool: MbusPool) -> Self {
-        Self {
-            pool,
-            labels: vec![],
-        }
+        Self { pool }
     }
 }
 

@@ -145,8 +145,11 @@ impl SpecOperations for ReplicaSpec {
     fn owned(&self) -> bool {
         self.owners.is_owned()
     }
-    fn disowned_by(&mut self, by: &Self::Owners) {
-        self.owners.disowned_by(by)
+    fn owners(&self) -> Option<String> {
+        Some(format!("{:?}", self.owners))
+    }
+    fn disown(&mut self, owner: &Self::Owners) {
+        self.owners.disown(owner)
     }
 }
 
@@ -285,7 +288,8 @@ impl ResourceSpecsLocked {
 
         let replica = self.get_replica(&request.uuid);
         if let Some(replica) = &replica {
-            SpecOperations::start_destroy_by(replica, registry, &request.by, delete_owned).await?;
+            SpecOperations::start_destroy_by(replica, registry, &request.disowners, delete_owned)
+                .await?;
 
             let result = node.destroy_replica(request).await;
             SpecOperations::complete_destroy(result, replica, registry).await

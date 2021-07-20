@@ -150,7 +150,7 @@ impl Registry {
                 let _guard = lock.lock().await;
 
                 let mut node_clone = node.lock().await.clone();
-                if let Err(e) = node_clone.reload(self).await {
+                if let Err(e) = node_clone.reload().await {
                     tracing::trace!("Failed to reload node {}. Error {:?}.", node_clone.id, e);
                 }
                 // update node in the registry
@@ -162,6 +162,6 @@ impl Registry {
     }
     async fn trace_all(&self) {
         let registry = self.nodes.read().await;
-        tracing::debug!("Registry update: {:?}", registry);
+        tracing::trace!("Registry update: {:?}", registry);
     }
 }

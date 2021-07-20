@@ -64,10 +64,10 @@ impl PartialOrd for ChildState {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match &self {
             ChildState::Unknown => match &other {
-                ChildState::Unknown => None,
+                ChildState::Unknown => Some(Ordering::Equal),
                 ChildState::Online => Some(Ordering::Less),
-                ChildState::Degraded => None,
-                ChildState::Faulted => None,
+                ChildState::Degraded => Some(Ordering::Less),
+                ChildState::Faulted => Some(Ordering::Greater),
             },
             ChildState::Online => match &other {
                 ChildState::Unknown => Some(Ordering::Greater),
@@ -76,13 +76,13 @@ impl PartialOrd for ChildState {
                 ChildState::Faulted => Some(Ordering::Greater),
             },
             ChildState::Degraded => match &other {
-                ChildState::Unknown => None,
+                ChildState::Unknown => Some(Ordering::Greater),
                 ChildState::Online => Some(Ordering::Less),
                 ChildState::Degraded => Some(Ordering::Equal),
                 ChildState::Faulted => Some(Ordering::Greater),
             },
             ChildState::Faulted => match &other {
-                ChildState::Unknown => None,
+                ChildState::Unknown => Some(Ordering::Less),
                 ChildState::Online => Some(Ordering::Less),
                 ChildState::Degraded => Some(Ordering::Less),
                 ChildState::Faulted => Some(Ordering::Equal),

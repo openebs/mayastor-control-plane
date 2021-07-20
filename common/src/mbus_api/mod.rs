@@ -339,6 +339,10 @@ pub enum ReplyErrorKind {
     NotPublished,
     AlreadyPublished,
     Deleting,
+    ReplicaCountAchieved,
+    ReplicaChangeCount,
+    ReplicaIncrease,
+    VolumeNoReplicas,
 }
 
 impl From<Error> for ReplyError {

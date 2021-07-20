@@ -154,7 +154,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     /// Start a destroy operation and attempt to log the transaction to the store.
     /// In case of error, the log is undone and an error is returned.
     /// If the del_owned flag is set, then we skip the check for owners.
-    /// Otherwise, if the spec is still owned then we cannot proceed with deletion.   
+    /// Otherwise, if the spec is still owned then we cannot proceed with deletion.
     async fn start_destroy<O>(
         locked_spec: &Arc<Mutex<Self>>,
         registry: &Registry,
@@ -175,8 +175,8 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     async fn start_destroy_by<O>(
         locked_spec: &Arc<Mutex<Self>>,
         registry: &Registry,
-        del_by: &Self::Owners,
-        del_owned: bool,
+        owners: &Self::Owners,
+        ignore_owners: bool,
     ) -> Result<(), SvcError>
     where
         Self: SpecTransaction<O>,
@@ -187,9 +187,15 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             let _ = spec.busy()?;
             if spec.state().deleted() {
                 return Ok(());
-            } else if !del_owned {
-                spec.disowned_by(del_by);
+            } else if !ignore_owners {
+                spec.disown(owners);
                 if spec.owned() {
+                    tracing::error!(
+                        "{:?} id '{:?}' cannot be deleted because it's owned by: '{:?}'",
+                        spec.kind(),
+                        spec.uuid(),
+                        spec.owners()
+                    );
                     return Err(SvcError::InUse {
                         kind: spec.kind(),
                         id: spec.uuid(),
@@ -496,8 +502,12 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     fn owned(&self) -> bool {
         false
     }
+    /// Get a human readable list of owners
+    fn owners(&self) -> Option<String> {
+        None
+    }
     /// Disown resource by owners
-    fn disowned_by(&mut self, _by: &Self::Owners) {}
+    fn disown(&mut self, _owner: &Self::Owners) {}
 }
 
 /// Locked Resource Specs

@@ -231,7 +231,7 @@ impl ResourceSpecsLocked {
         replicas.for_each(|replica| {
             if let Some(replica) = self.get_replica(replica.uuid()) {
                 let mut replica = replica.lock();
-                replica.disowned_by(&ReplicaOwners::new(None, vec![nexus.uuid.clone()]));
+                replica.disown(&ReplicaOwners::new(None, vec![nexus.uuid.clone()]));
             }
         });
     }
@@ -429,7 +429,7 @@ impl ResourceSpecsLocked {
     fn on_remove_disown_replica(&self, request: &RemoveNexusReplica) {
         if let Some(replica) = self.get_replica(request.replica.uuid()) {
             let mut replica = replica.lock();
-            replica.disowned_by(&ReplicaOwners::new(None, vec![request.nexus.clone()]));
+            replica.disown(&ReplicaOwners::new(None, vec![request.nexus.clone()]));
         }
     }
 

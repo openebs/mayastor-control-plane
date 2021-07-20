@@ -273,6 +273,13 @@ impl ClusterBuilder {
         self.opts = self.opts.with_node_deadline(deadline);
         self
     }
+    /// The period at which the registry updates its cache of all
+    /// resources from all nodes
+    pub fn with_cache_period(mut self, period: &str) -> Self {
+        self.opts = self.opts.with_cache_period(period);
+        self
+    }
+
     /// With reconcile periods:
     /// `busy` for when there's work that needs to be retried on the next poll
     /// `idle` when there's no work pending

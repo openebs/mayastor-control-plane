@@ -22,7 +22,7 @@ pub(crate) async fn get_volume_pool_candidates(
         .collect()
 }
 
-/// Select a nexus child to be removed from a nexus
+/// Return a nexus child candidate to be removed from a nexus
 pub(crate) async fn get_nexus_child_remove_candidate(
     request: &GetChildForRemoval,
     registry: &Registry,

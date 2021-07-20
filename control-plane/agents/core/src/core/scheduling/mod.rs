@@ -49,7 +49,7 @@ impl NodeFilters {
         request.allowed_nodes().is_empty() || request.allowed_nodes().contains(&item.pool.node)
     }
     /// Should only attempt to use nodes not currently used by the volume
-    pub(crate) fn used_nodes(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(crate) fn unused_nodes(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let registry = &request.registry;
         let used_nodes = registry.specs.get_volume_data_nodes(&request.uuid);
         !used_nodes.contains(&item.pool.node)
@@ -62,8 +62,8 @@ impl PoolFilters {
     pub(crate) fn enough_free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.free_space() > request.size
     }
-    /// Should only attempt to use healthy pools
-    pub(crate) fn healthy_pools(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    /// Should only attempt to use usable (not faulted) pools
+    pub(crate) fn usable_pools(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.state != PoolState::Faulted && item.pool.state != PoolState::Unknown
     }
 }
