@@ -204,7 +204,7 @@ struct Replica {
 /// default timeout options for every bus request
 fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
-        .with_timeout(Duration::from_secs(2))
+        .with_timeout(Duration::from_secs(5))
         .with_timeout_backoff(Duration::from_millis(500))
         .with_max_retries(2)
 }
@@ -218,7 +218,7 @@ impl ClusterBuilder {
             replicas: Default::default(),
             trace: true,
             bearer_token: None,
-            rest_timeout: std::time::Duration::from_secs(3),
+            rest_timeout: std::time::Duration::from_secs(5),
             bus_timeout: bus_timeout_opts(),
         }
     }
