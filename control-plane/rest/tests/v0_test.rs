@@ -279,7 +279,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         }
     );
 
-    let child = client
+    let mut child = client
         .children_api()
         .put_node_nexus_child(
             &nexus.node,
@@ -294,6 +294,13 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         .get_nexus_children(&nexus.uuid.to_string())
         .await
         .unwrap();
+
+    // It's possible that the rebuild progress will change between putting a child and getting the
+    // list of children. Just check that they are both rebuilding and then set them to the same
+    // thing so that we can compare them in subsequent asserts.
+    assert!(child.rebuild_progress.is_some());
+    assert!(children.last().unwrap().rebuild_progress.is_some());
+    child.rebuild_progress = children.last().unwrap().rebuild_progress;
     assert_eq!(Some(&child), children.last());
 
     client

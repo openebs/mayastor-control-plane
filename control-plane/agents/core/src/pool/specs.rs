@@ -328,12 +328,7 @@ impl ResourceSpecsLocked {
         if let Some(replica) = specs.replicas.get(&request.uuid) {
             replica.clone()
         } else {
-            let spec = ReplicaSpec::from(request);
-            let locked_spec = Arc::new(Mutex::new(spec));
-            specs
-                .replicas
-                .insert(request.uuid.clone(), locked_spec.clone());
-            locked_spec
+            specs.replicas.insert(ReplicaSpec::from(request))
         }
     }
     /// Get a protected ReplicaSpec for the given replica `id`, if it exists
@@ -348,10 +343,7 @@ impl ResourceSpecsLocked {
         if let Some(pool) = specs.pools.get(&request.id) {
             pool.clone()
         } else {
-            let spec = PoolSpec::from(request);
-            let locked_spec = Arc::new(Mutex::new(spec));
-            specs.pools.insert(request.id.clone(), locked_spec.clone());
-            locked_spec
+            specs.pools.insert(PoolSpec::from(request))
         }
     }
     /// Get a protected PoolSpec for the given pool `id`, if it exists

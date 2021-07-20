@@ -27,8 +27,20 @@ where
     }
 
     /// Insert an element or update an existing entry in the map.
-    pub fn insert(&mut self, key: I, value: Arc<Mutex<S>>) {
-        self.map.insert(key, value);
+    pub fn insert(&mut self, value: S) -> Arc<Mutex<S>> {
+        let key = value.uuid_as_string().into();
+        match self.map.get(&key) {
+            Some(entry) => {
+                let mut e = entry.lock();
+                *e = value;
+                entry.clone()
+            }
+            None => {
+                let v = Arc::new(Mutex::new(value));
+                self.map.insert(key, v.clone());
+                v
+            }
+        }
     }
 
     /// Remove an element from the map.

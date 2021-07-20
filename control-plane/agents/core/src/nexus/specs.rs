@@ -144,12 +144,7 @@ impl ResourceSpecsLocked {
         if let Some(nexus) = specs.nexuses.get(&request.uuid) {
             nexus.clone()
         } else {
-            let spec = NexusSpec::from(request);
-            let locked_spec = Arc::new(Mutex::new(spec));
-            specs
-                .nexuses
-                .insert(request.uuid.clone(), locked_spec.clone());
-            locked_spec
+            specs.nexuses.insert(NexusSpec::from(request))
         }
     }
 

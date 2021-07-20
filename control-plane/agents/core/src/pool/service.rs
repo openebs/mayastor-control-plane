@@ -1,12 +1,13 @@
-use crate::core::registry::Registry;
-use common::errors::SvcError;
+use crate::core::{registry::Registry, wrapper::GetterOps};
+use common::errors::{NodeNotFound, PoolNotFound, ReplicaNotFound, SvcError};
 use common_lib::{
     mbus_api::message_bus::v0::{Pools, Replicas},
     types::v0::message_bus::{
         CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-        Pool, Replica, ShareReplica, UnshareReplica,
+        NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,
     },
 };
+use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -22,70 +23,101 @@ impl Service {
     #[tracing::instrument(level = "debug", err)]
     pub(super) async fn get_pools(&self, request: &GetPools) -> Result<Pools, SvcError> {
         let filter = request.filter.clone();
-        let pools = match filter {
-            Filter::None => self.registry.get_node_opt_pools(None).await?,
-            Filter::Node(node_id) => self.registry.get_node_pools(&node_id).await?,
+        match filter {
+            Filter::None => self.node_pools(None, None).await,
+            Filter::Node(node_id) => self.node_pools(Some(node_id), None).await,
             Filter::NodePool(node_id, pool_id) => {
-                let pool = self
-                    .registry
-                    .get_node_pool_wrapper(&node_id, &pool_id)
-                    .await?;
-                vec![pool.into()]
+                self.node_pools(Some(node_id), Some(pool_id)).await
             }
-            Filter::Pool(pool_id) => {
-                let pool = self.registry.get_pool_wrapper(&pool_id).await?;
-                vec![pool.into()]
+            Filter::Pool(pool_id) => self.node_pools(None, Some(pool_id)).await,
+            _ => Err(SvcError::InvalidFilter { filter }),
+        }
+    }
+
+    /// Get pools from nodes.
+    async fn node_pools(
+        &self,
+        node_id: Option<NodeId>,
+        pool_id: Option<PoolId>,
+    ) -> Result<Pools, SvcError> {
+        let pools = self.registry.get_node_opt_pools(node_id).await?;
+        match pool_id {
+            Some(id) => {
+                let p: Vec<Pool> = pools.iter().filter(|p| p.id == id).cloned().collect();
+                if p.is_empty() {
+                    Err(SvcError::PoolNotFound { pool_id: id })
+                } else {
+                    Ok(Pools(p))
+                }
             }
-            _ => return Err(SvcError::InvalidFilter { filter }),
-        };
-        Ok(Pools(pools))
+            None => Ok(Pools(pools)),
+        }
     }
 
     /// Get replicas according to the filter
     #[tracing::instrument(level = "debug", err)]
     pub(super) async fn get_replicas(&self, request: &GetReplicas) -> Result<Replicas, SvcError> {
         let filter = request.filter.clone();
-        let replicas = match filter {
-            Filter::None => self.registry.get_node_opt_replicas(None).await?,
-            Filter::Node(node_id) => self.registry.get_node_opt_replicas(Some(node_id)).await?,
+        match filter {
+            Filter::None => self.registry.get_replicas().await,
+            Filter::Node(node_id) => self.registry.get_node_replicas(&node_id).await,
             Filter::NodePool(node_id, pool_id) => {
-                let pool = self
+                let node = self
                     .registry
-                    .get_node_pool_wrapper(&node_id, &pool_id)
-                    .await?;
-                pool.into()
+                    .get_node_wrapper(&node_id)
+                    .await
+                    .context(NodeNotFound { node_id })?;
+                let pool_wrapper = node
+                    .pool_wrapper(&pool_id)
+                    .await
+                    .context(PoolNotFound { pool_id })?;
+                Ok(pool_wrapper.replicas())
             }
             Filter::Pool(pool_id) => {
-                let pool = self.registry.get_pool_wrapper(&pool_id).await?;
-                pool.into()
+                let pool_wrapper = self.registry.get_node_pool_wrapper(pool_id).await?;
+                Ok(pool_wrapper.replicas())
             }
             Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
-                vec![
-                    self.registry
-                        .get_node_pool_replica(&node_id, &pool_id, &replica_id)
-                        .await?,
-                ]
+                let node = self
+                    .registry
+                    .get_node_wrapper(&node_id)
+                    .await
+                    .context(NodeNotFound { node_id })?;
+                let pool_wrapper = node
+                    .pool_wrapper(&pool_id)
+                    .await
+                    .context(PoolNotFound { pool_id })?;
+                let replica = pool_wrapper
+                    .replica(&replica_id)
+                    .context(ReplicaNotFound { replica_id })?;
+                Ok(vec![replica.clone()])
             }
             Filter::NodeReplica(node_id, replica_id) => {
-                vec![
-                    self.registry
-                        .get_node_replica(&node_id, &replica_id)
-                        .await?,
-                ]
+                let node = self
+                    .registry
+                    .get_node_wrapper(&node_id)
+                    .await
+                    .context(NodeNotFound { node_id })?;
+                let replica = node
+                    .replica(&replica_id)
+                    .await
+                    .context(ReplicaNotFound { replica_id })?;
+                Ok(vec![replica])
             }
             Filter::PoolReplica(pool_id, replica_id) => {
-                vec![
-                    self.registry
-                        .get_pool_replica(&pool_id, &replica_id)
-                        .await?,
-                ]
+                let pool_wrapper = self.registry.get_node_pool_wrapper(pool_id).await?;
+                let replica = pool_wrapper
+                    .replica(&replica_id)
+                    .context(ReplicaNotFound { replica_id })?;
+                Ok(vec![replica.clone()])
             }
             Filter::Replica(replica_id) => {
-                vec![self.registry.get_replica(&replica_id).await?]
+                let replica = self.registry.get_replica(&replica_id).await?;
+                Ok(vec![replica])
             }
-            _ => return Err(SvcError::InvalidFilter { filter }),
-        };
-        Ok(Replicas(replicas))
+            _ => Err(SvcError::InvalidFilter { filter }),
+        }
+        .map(Replicas)
     }
 
     /// Create pool
