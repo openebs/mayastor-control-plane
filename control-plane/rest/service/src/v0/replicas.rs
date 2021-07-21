@@ -42,6 +42,7 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
             node: node_id,
             pool: pool_id,
             uuid: replica_id,
+            ..Default::default()
         },
         Filter::PoolReplica(pool_id, replica_id) => {
             let node_id = match MessageBus::get_replica(filter).await {
@@ -53,6 +54,7 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
                 node: node_id,
                 pool: pool_id,
                 uuid: replica_id,
+                ..Default::default()
             }
         }
         _ => {

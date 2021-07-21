@@ -1,6 +1,7 @@
 pub mod child;
 pub mod definitions;
 pub mod nexus;
+pub mod nexus_child;
 pub mod node;
 pub mod pool;
 pub mod replica;
@@ -9,9 +10,10 @@ pub mod watch;
 
 use crate::types::v0::openapi::models;
 use serde::{Deserialize, Serialize};
+use strum_macros::ToString;
 
 /// Enum defining the various states that a resource spec can be in.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToString, PartialEq)]
 pub enum SpecState<T> {
     Creating,
     Created(T),

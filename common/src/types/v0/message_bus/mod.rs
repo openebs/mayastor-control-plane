@@ -145,6 +145,8 @@ pub enum MessageIdVs {
     AddVolumeNexus,
     /// Remove nexus from volume
     RemoveVolumeNexus,
+    /// Set replica count
+    SetVolumeReplica,
     /// Generic JSON gRPC message
     JsonGrpc,
     /// Get block devices

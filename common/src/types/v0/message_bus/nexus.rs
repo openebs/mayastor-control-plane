@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::types::v0::store::nexus_child::NexusChild;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug};
 use strum_macros::{EnumString, ToString};
@@ -177,7 +178,7 @@ pub struct CreateNexus {
     /// (i.e. bdev:///name-of-the-bdev).
     ///
     /// uris to the targets we connect to
-    pub children: Vec<ChildUri>,
+    pub children: Vec<NexusChild>,
     /// Managed by our control plane
     pub managed: bool,
     /// Volume which owns this nexus, if any

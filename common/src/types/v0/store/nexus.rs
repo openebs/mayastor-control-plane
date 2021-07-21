@@ -3,15 +3,16 @@
 use crate::types::v0::{
     message_bus::{
         self, ChildState, ChildUri, CreateNexus, DestroyNexus, Nexus as MbusNexus, NexusId,
-        NexusShareProtocol, NodeId, Protocol, VolumeId,
+        NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
     },
+    openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecState, SpecTransaction,
+        nexus_child::NexusChild,
+        SpecState, SpecTransaction, UuidString,
     },
 };
 
-use crate::types::v0::{openapi::models, store::UuidString};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -81,7 +82,7 @@ pub struct NexusSpec {
     /// Node where the nexus should live.
     pub node: NodeId,
     /// List of children.
-    pub children: Vec<ChildUri>,
+    pub children: Vec<NexusChild>,
     /// Size of the nexus.
     pub size: u64,
     /// The state the nexus should eventually reach.
@@ -116,6 +117,32 @@ impl From<NexusSpec> for models::NexusSpec {
             src.state,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
+    }
+}
+
+/// ReplicaUri used by managed nexus creation
+/// Includes the ReplicaId which is unique and allows us to pinpoint the exact replica
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub struct ReplicaUri {
+    uuid: ReplicaId,
+    share_uri: ChildUri,
+}
+
+impl ReplicaUri {
+    /// Create a new ReplicaUri from a replicaId and a share nvmf URI
+    pub fn new(uuid: &ReplicaId, share_uri: &ChildUri) -> Self {
+        Self {
+            uuid: uuid.clone(),
+            share_uri: share_uri.clone(),
+        }
+    }
+    /// Get the replica uuid
+    pub fn uuid(&self) -> &ReplicaId {
+        &self.uuid
+    }
+    /// Get the replica uri
+    pub fn uri(&self) -> &ChildUri {
+        &self.share_uri
     }
 }
 
@@ -183,8 +210,8 @@ pub enum NexusOperation {
     Destroy,
     Share(NexusShareProtocol),
     Unshare,
-    AddChild(ChildUri),
-    RemoveChild(ChildUri),
+    AddChild(NexusChild),
+    RemoveChild(NexusChild),
 }
 
 /// Key used by the store to uniquely identify a NexusSpec structure.
@@ -240,8 +267,8 @@ impl PartialEq<CreateNexus> for NexusSpec {
     }
 }
 impl PartialEq<message_bus::Nexus> for NexusSpec {
-    fn eq(&self, other: &message_bus::Nexus) -> bool {
-        self.share == other.share && self.children == other.children && self.node == other.node
+    fn eq(&self, status: &message_bus::Nexus) -> bool {
+        self.share == status.share && self.children == status.children && self.node == status.node
     }
 }
 
@@ -255,8 +282,8 @@ impl From<&NexusSpec> for message_bus::Nexus {
             children: nexus
                 .children
                 .iter()
-                .map(|uri| message_bus::Child {
-                    uri: uri.clone(),
+                .map(|child| message_bus::Child {
+                    uri: child.uri(),
                     state: ChildState::Unknown,
                     rebuild_progress: None,
                 })

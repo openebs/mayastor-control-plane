@@ -46,6 +46,7 @@ enum SpecError {
 #[async_trait]
 pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     type Create: Debug + PartialEq + Sync + Send;
+    type Owners: Default + Sync + Send;
     type State: PartialEq;
     type Status: PartialEq + Sync + Send;
     type UpdateOp: Sync + Send;
@@ -152,10 +153,30 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
 
     /// Start a destroy operation and attempt to log the transaction to the store.
     /// In case of error, the log is undone and an error is returned.
+    /// If the del_owned flag is set, then we skip the check for owners.
+    /// Otherwise, if the spec is still owned then we cannot proceed with deletion.
     async fn start_destroy<O>(
         locked_spec: &Arc<Mutex<Self>>,
         registry: &Registry,
         del_owned: bool,
+    ) -> Result<(), SvcError>
+    where
+        Self: SpecTransaction<O>,
+        Self: StorableObject,
+    {
+        Self::start_destroy_by(locked_spec, registry, &Self::Owners::default(), del_owned).await
+    }
+
+    /// Start a destroy operation by spec owners and attempt to log the transaction to the store.
+    /// In case of error, the log is undone and an error is returned.
+    /// If the del_owned flag is set, then we skip the check for owners.
+    /// The del_by parameter specifies who is trying to delete the resource. If the resource has any
+    /// other owners then we cannot proceed with deletion but we disown the resource from del_by.
+    async fn start_destroy_by<O>(
+        locked_spec: &Arc<Mutex<Self>>,
+        registry: &Registry,
+        owners: &Self::Owners,
+        ignore_owners: bool,
     ) -> Result<(), SvcError>
     where
         Self: SpecTransaction<O>,
@@ -166,11 +187,20 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             let _ = spec.busy()?;
             if spec.state().deleted() {
                 return Ok(());
-            } else if !del_owned && spec.owned() {
-                return Err(SvcError::InUse {
-                    kind: spec.kind(),
-                    id: spec.uuid(),
-                });
+            } else if !ignore_owners {
+                spec.disown(owners);
+                if spec.owned() {
+                    tracing::error!(
+                        "{:?} id '{:?}' cannot be deleted because it's owned by: '{:?}'",
+                        spec.kind(),
+                        spec.uuid(),
+                        spec.owners()
+                    );
+                    return Err(SvcError::InUse {
+                        kind: spec.kind(),
+                        id: spec.uuid(),
+                    });
+                }
             }
 
             spec.set_updating(true);
@@ -472,6 +502,12 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     fn owned(&self) -> bool {
         false
     }
+    /// Get a human readable list of owners
+    fn owners(&self) -> Option<String> {
+        None
+    }
+    /// Disown resource by owners
+    fn disown(&mut self, _owner: &Self::Owners) {}
 }
 
 /// Locked Resource Specs

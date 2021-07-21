@@ -1,11 +1,12 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::Message,
+    mbus_api,
+    mbus_api::{Message, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::message_bus::{
-        CreatePool, CreateVolume, DestroyVolume, GetNexuses, GetNodes, GetPools, GetReplicas,
-        GetVolumes, PublishVolume, ShareVolume, UnpublishVolume, UnshareVolume,
-        VolumeShareProtocol,
+        ChildState, CreateVolume, DestroyVolume, GetNexuses, GetNodes, GetReplicas, GetVolumes,
+        PublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+        VolumeShareProtocol, VolumeState,
     },
 };
 use testlib::{
@@ -18,44 +19,17 @@ async fn volume() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_agents(vec!["core"])
-        .with_mayastors(2)
+        .with_mayastors(3)
+        .with_pools(1)
+        .with_cache_period("1s")
         .build()
         .await
         .unwrap();
 
-    let mayastor = cluster.node(0).to_string();
-    let mayastor2 = cluster.node(1).to_string();
-
     let nodes = GetNodes {}.request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
-    prepare_pools(&mayastor, &mayastor2).await;
     test_volume(&cluster).await;
-
-    assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
-}
-
-async fn prepare_pools(mayastor: &str, mayastor2: &str) {
-    CreatePool {
-        node: mayastor.into(),
-        id: "pooloop".into(),
-        disks: vec!["malloc:///disk0?size_mb=100".into()],
-    }
-    .request()
-    .await
-    .unwrap();
-
-    CreatePool {
-        node: mayastor2.into(),
-        id: "pooloop2".into(),
-        disks: vec!["malloc:///disk0?size_mb=100".into()],
-    }
-    .request()
-    .await
-    .unwrap();
-
-    let pools = GetPools::default().request().await.unwrap();
-    tracing::info!("Pools: {:?}", pools);
 }
 
 async fn test_volume(cluster: &Cluster) {
@@ -72,6 +46,22 @@ async fn test_volume(cluster: &Cluster) {
 
     assert_eq!(Some(&volume), volumes.first());
 
+    publishing_test(cluster, &volume).await;
+    replica_count_test(cluster, &volume).await;
+
+    DestroyVolume {
+        uuid: "359b7e1a-b724-443b-98b4-e6d97fabbb40".into(),
+    }
+    .request()
+    .await
+    .expect("Should be able to destroy the volume");
+
+    assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
+    assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
+    assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+}
+
+async fn publishing_test(cluster: &Cluster, volume: &Volume) {
     PublishVolume {
         uuid: volume.uuid.clone(),
         target_node: None,
@@ -129,7 +119,7 @@ async fn test_volume(cluster: &Cluster) {
     .await
     .unwrap();
 
-    PublishVolume {
+    let uri = PublishVolume {
         uuid: volume.uuid.clone(),
         target_node: Some(cluster.node(0)),
         share: Some(VolumeShareProtocol::Iscsi),
@@ -137,6 +127,7 @@ async fn test_volume(cluster: &Cluster) {
     .request()
     .await
     .expect("The volume is unpublished so we should be able to publish again");
+    tracing::info!("Published to: {}", uri);
 
     let volumes = GetVolumes {
         filter: Filter::Volume(volume.uuid.clone()),
@@ -192,15 +183,150 @@ async fn test_volume(cluster: &Cluster) {
         volumes.0.first().unwrap().target_node(),
         Some(Some(cluster.node(1)))
     );
+}
 
-    DestroyVolume {
-        uuid: "359b7e1a-b724-443b-98b4-e6d97fabbb40".into(),
+async fn get_volume(volume: &Volume) -> Volume {
+    let request = GetVolumes {
+        filter: Filter::Volume(volume.uuid.clone()),
     }
     .request()
     .await
-    .expect("Should be able to destroy the volume");
+    .unwrap();
+    request.into_inner().first().cloned().unwrap()
+}
 
-    assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
-    assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
-    assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+async fn wait_for_volume_online(volume: &Volume) -> Result<Volume, ()> {
+    let mut volume = get_volume(volume).await;
+    let mut tries = 0;
+    while volume.state != VolumeState::Online && tries < 20 {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        volume = get_volume(&volume).await;
+        tries += 1;
+    }
+    if volume.state == VolumeState::Online {
+        Ok(volume)
+    } else {
+        Err(())
+    }
+}
+
+async fn replica_count_test(_cluster: &Cluster, volume: &Volume) {
+    let volume = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 3,
+    }
+    .request()
+    .await
+    .expect("Should have enough nodes/pools to increase replica count");
+    tracing::info!("Volume: {:?}", volume);
+
+    let error = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 4,
+    }
+    .request()
+    .await
+    .expect_err("The volume is degraded (rebuild in progress)");
+    tracing::error!("error: {:?}", error);
+    assert!(matches!(
+        error,
+        mbus_api::Error::ReplyWithError {
+            source: ReplyError {
+                kind: ReplyErrorKind::ReplicaIncrease,
+                resource: ResourceKind::Volume,
+                ..
+            },
+        }
+    ));
+
+    let volume = wait_for_volume_online(&volume).await.unwrap();
+
+    let error = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 4,
+    }
+    .request()
+    .await
+    .expect_err("Not enough pools available");
+    tracing::error!("error: {:?}", error);
+
+    assert!(matches!(
+        error,
+        mbus_api::Error::ReplyWithError {
+            source: ReplyError {
+                kind: ReplyErrorKind::ResourceExhausted,
+                resource: ResourceKind::Pool,
+                ..
+            },
+        }
+    ));
+
+    let volume = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 2,
+    }
+    .request()
+    .await
+    .expect("Should be able to bring the replica count back down");
+    tracing::info!("Volume: {:?}", volume);
+
+    let volume = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 1,
+    }
+    .request()
+    .await
+    .expect("Should be able to bring the replica to 1");
+    tracing::info!("Volume: {:?}", volume);
+
+    assert_eq!(volume.state, VolumeState::Online);
+    assert!(!volume
+        .children
+        .iter()
+        .any(|n| n.children.iter().any(|c| c.state != ChildState::Online)));
+
+    let error = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 0,
+    }
+    .request()
+    .await
+    .expect_err("Can't bring the replica count down to 0");
+    tracing::error!("error: {:?}", error);
+
+    assert!(matches!(
+        error,
+        mbus_api::Error::ReplyWithError {
+            source: ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
+                ..
+            },
+        }
+    ));
+
+    let volume = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 2,
+    }
+    .request()
+    .await
+    .expect("Should be able to bring the replica count back to 2");
+    tracing::info!("Volume: {:?}", volume);
+
+    UnpublishVolume {
+        uuid: volume.uuid.clone(),
+    }
+    .request()
+    .await
+    .unwrap();
+
+    let volume = SetVolumeReplica {
+        uuid: volume.uuid.clone(),
+        replicas: 3,
+    }
+    .request()
+    .await
+    .expect("Should be able to bring the replica count back to 3");
+    tracing::info!("Volume: {:?}", volume);
 }

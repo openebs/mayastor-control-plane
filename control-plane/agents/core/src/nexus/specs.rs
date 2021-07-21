@@ -13,11 +13,13 @@ use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
         message_bus::{
-            AddNexusChild, Child, CreateNexus, DestroyNexus, Nexus, NexusId, NexusState,
-            RemoveNexusChild, ShareNexus, UnshareNexus,
+            AddNexusChild, AddNexusReplica, Child, CreateNexus, DestroyNexus, Nexus, NexusId,
+            NexusState, RemoveNexusChild, RemoveNexusReplica, ReplicaOwners, ShareNexus,
+            UnshareNexus,
         },
         store::{
             nexus::{NexusOperation, NexusSpec},
+            nexus_child::NexusChild,
             SpecState, SpecTransaction,
         },
     },
@@ -26,6 +28,7 @@ use common_lib::{
 #[async_trait::async_trait]
 impl SpecOperations for NexusSpec {
     type Create = CreateNexus;
+    type Owners = ();
     type State = NexusState;
     type Status = Nexus;
     type UpdateOp = NexusOperation;
@@ -100,6 +103,9 @@ impl SpecOperations for NexusSpec {
     fn owned(&self) -> bool {
         self.owner.is_some()
     }
+    fn owners(&self) -> Option<String> {
+        self.owner.clone().map(|o| format!("{:?}", o))
+    }
 }
 
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
@@ -164,7 +170,34 @@ impl ResourceSpecsLocked {
         SpecOperations::start_create(&nexus_spec, registry, request).await?;
 
         let result = node.create_nexus(request).await;
+        self.on_create_set_owners(request, &nexus_spec, &result);
+
         SpecOperations::complete_create(result, &nexus_spec, registry).await
+    }
+
+    fn on_create_set_owners(
+        &self,
+        request: &CreateNexus,
+        spec: &Arc<Mutex<NexusSpec>>,
+        result: &Result<Nexus, SvcError>,
+    ) {
+        if let Ok(nexus) = result {
+            if let Some(uuid) = &request.owner {
+                let nexus_replicas = spec
+                    .lock()
+                    .children
+                    .iter()
+                    .filter_map(|r| r.as_replica())
+                    .collect::<Vec<_>>();
+                let replicas = self.get_volume_replicas(uuid);
+                replicas.into_iter().for_each(|replica_spec| {
+                    let mut spec = replica_spec.lock();
+                    if nexus_replicas.iter().any(|r| r.uuid() == &spec.uuid) {
+                        spec.owners.add_owner(&nexus.uuid);
+                    }
+                });
+            }
+        }
     }
 
     pub async fn destroy_nexus(
@@ -184,10 +217,23 @@ impl ResourceSpecsLocked {
             SpecOperations::start_destroy(&nexus, registry, delete_owned).await?;
 
             let result = node.destroy_nexus(request).await;
+            self.on_delete_disown_replicas(&nexus);
             SpecOperations::complete_destroy(result, &nexus, registry).await
         } else {
             node.destroy_nexus(request).await
         }
+    }
+
+    fn on_delete_disown_replicas(&self, spec: &Arc<Mutex<NexusSpec>>) {
+        let nexus = spec.lock().clone();
+        let children = &nexus.children;
+        let replicas = children.iter().filter_map(|r| r.as_replica());
+        replicas.for_each(|replica| {
+            if let Some(replica) = self.get_replica(replica.uuid()) {
+                let mut replica = replica.lock();
+                replica.disown(&ReplicaOwners::new(None, vec![nexus.uuid.clone()]));
+            }
+        });
     }
 
     pub async fn share_nexus(
@@ -266,7 +312,7 @@ impl ResourceSpecsLocked {
                 registry,
                 &nexus_spec,
                 &status,
-                NexusOperation::AddChild(request.uri.clone()),
+                NexusOperation::AddChild(NexusChild::from(&request.uri)),
             )
             .await?;
 
@@ -274,6 +320,47 @@ impl ResourceSpecsLocked {
             SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
         } else {
             node.add_child(request).await
+        }
+    }
+
+    pub async fn add_nexus_replica(
+        &self,
+        registry: &Registry,
+        request: &AddNexusReplica,
+    ) -> Result<Child, SvcError> {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
+                node_id: request.node.clone(),
+            })?;
+
+        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
+            let status = registry.get_nexus(&request.nexus).await?;
+            let spec_clone = SpecOperations::start_update(
+                registry,
+                &nexus_spec,
+                &status,
+                NexusOperation::AddChild(NexusChild::from(&request.replica)),
+            )
+            .await?;
+
+            let result = node.add_child(&request.into()).await;
+            self.on_add_own_replica(request, &result);
+            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+        } else {
+            Err(SvcError::NexusNotFound {
+                nexus_id: request.nexus.to_string(),
+            })
+        }
+    }
+
+    fn on_add_own_replica(&self, request: &AddNexusReplica, result: &Result<Child, SvcError>) {
+        if result.is_ok() {
+            if let Some(replica) = self.get_replica(request.replica.uuid()) {
+                let mut replica = replica.lock();
+                replica.owners.add_owner(&request.nexus);
+            }
         }
     }
 
@@ -295,7 +382,7 @@ impl ResourceSpecsLocked {
                 registry,
                 &nexus_spec,
                 &status,
-                NexusOperation::RemoveChild(request.uri.clone()),
+                NexusOperation::RemoveChild(NexusChild::from(&request.uri)),
             )
             .await?;
 
@@ -303,6 +390,46 @@ impl ResourceSpecsLocked {
             SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
         } else {
             node.remove_child(request).await
+        }
+    }
+
+    pub async fn remove_nexus_replica(
+        &self,
+        registry: &Registry,
+        request: &RemoveNexusReplica,
+    ) -> Result<(), SvcError> {
+        let node = registry
+            .get_node_wrapper(&request.node)
+            .await
+            .context(NodeNotFound {
+                node_id: request.node.clone(),
+            })?;
+
+        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
+            let status = registry.get_nexus(&request.nexus).await?;
+            let spec_clone = SpecOperations::start_update(
+                registry,
+                &nexus_spec,
+                &status,
+                NexusOperation::RemoveChild(NexusChild::from(&request.replica)),
+            )
+            .await?;
+
+            let result = node.remove_child(&request.into()).await;
+            self.on_remove_disown_replica(request);
+
+            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+        } else {
+            Err(SvcError::NexusNotFound {
+                nexus_id: request.nexus.to_string(),
+            })
+        }
+    }
+
+    fn on_remove_disown_replica(&self, request: &RemoveNexusReplica) {
+        if let Some(replica) = self.get_replica(request.replica.uuid()) {
+            let mut replica = replica.lock();
+            replica.disown(&ReplicaOwners::new(None, vec![request.nexus.clone()]));
         }
     }
 

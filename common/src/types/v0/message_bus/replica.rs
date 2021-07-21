@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::types::v0::store::nexus::ReplicaUri;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug};
 use strum_macros::{EnumString, ToString};
@@ -71,6 +72,7 @@ impl From<Replica> for DestroyReplica {
             node: replica.node,
             pool: replica.pool,
             uuid: replica.uuid,
+            disowners: Default::default(),
         }
     }
 }
@@ -104,16 +106,24 @@ pub struct ReplicaOwners {
     nexuses: Vec<NexusId>,
 }
 impl ReplicaOwners {
+    /// Create new owners from the given volume and nexus id's
+    pub fn new(volume: Option<VolumeId>, nexuses: Vec<NexusId>) -> Self {
+        Self { volume, nexuses }
+    }
     /// Check if this replica is owned by any nexuses or a volume
     pub fn is_owned(&self) -> bool {
         self.volume.is_some() || !self.nexuses.is_empty()
     }
-    /// Check if this replica is owned by this volume
+    /// Check if this replica is owned by the volume
     pub fn owned_by(&self, id: &VolumeId) -> bool {
         self.volume.as_ref() == Some(id)
     }
+    /// Check if this replica is owned by the nexus
+    pub fn owned_by_nexus(&self, id: &NexusId) -> bool {
+        self.nexuses.iter().any(|n| n == id)
+    }
     /// Create new owners from the volume Id
-    pub fn new(volume: &VolumeId) -> Self {
+    pub fn from_volume(volume: &VolumeId) -> Self {
         Self {
             volume: Some(volume.clone()),
             nexuses: vec![],
@@ -122,6 +132,25 @@ impl ReplicaOwners {
     /// The replica is no longer part of the volume
     pub fn disowned_by_volume(&mut self) {
         let _ = self.volume.take();
+    }
+    /// The replica is no longer part of the provided owners
+    pub fn disown(&mut self, disowner: &Self) {
+        if self.volume == disowner.volume {
+            self.volume = None;
+        }
+        self.nexuses = self
+            .nexuses
+            .iter()
+            .filter(|n| !disowner.owned_by_nexus(n))
+            .cloned()
+            .collect();
+    }
+    /// Add new nexus owner
+    pub fn add_owner(&mut self, new: &NexusId) {
+        match self.nexuses.iter().find(|nexus| nexus == &new) {
+            None => self.nexuses.push(new.clone()),
+            Some(_) => {}
+        }
     }
 }
 
@@ -148,6 +177,8 @@ pub struct DestroyReplica {
     pub pool: PoolId,
     /// uuid of the replica
     pub uuid: ReplicaId,
+    /// delete by owners
+    pub disowners: ReplicaOwners,
 }
 
 /// Share Replica Request
@@ -304,6 +335,54 @@ impl From<models::ReplicaState> for ReplicaState {
             models::ReplicaState::Online => Self::Online,
             models::ReplicaState::Degraded => Self::Degraded,
             models::ReplicaState::Faulted => Self::Faulted,
+        }
+    }
+}
+
+/// Add Replica to Nexus Request
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AddNexusReplica {
+    /// id of the mayastor instance
+    pub node: NodeId,
+    /// uuid of the nexus
+    pub nexus: NexusId,
+    /// UUID and URI of the replica to be added
+    pub replica: ReplicaUri,
+    /// auto start rebuilding
+    pub auto_rebuild: bool,
+}
+
+impl From<&AddNexusReplica> for AddNexusChild {
+    fn from(add: &AddNexusReplica) -> Self {
+        let add = add.clone();
+        Self {
+            node: add.node,
+            nexus: add.nexus,
+            uri: add.replica.uri().clone(),
+            auto_rebuild: add.auto_rebuild,
+        }
+    }
+}
+
+/// Remove Replica from Nexus Request
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveNexusReplica {
+    /// id of the mayastor instance
+    pub node: NodeId,
+    /// uuid of the nexus
+    pub nexus: NexusId,
+    /// UUID and URI of the replica to be added
+    pub replica: ReplicaUri,
+}
+
+impl From<&RemoveNexusReplica> for RemoveNexusChild {
+    fn from(rm: &RemoveNexusReplica) -> Self {
+        Self {
+            node: rm.node.clone(),
+            nexus: rm.nexus.clone(),
+            uri: rm.replica.uri().clone(),
         }
     }
 }

@@ -358,6 +358,16 @@ pub struct UnshareVolume {
     pub uuid: VolumeId,
 }
 
+/// Set the volume replica count
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SetVolumeReplica {
+    /// uuid of the volume
+    pub uuid: VolumeId,
+    /// replica count
+    pub replicas: u8,
+}
+
 /// Delete volume
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

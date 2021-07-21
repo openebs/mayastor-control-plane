@@ -39,6 +39,12 @@ paste = "1.0.4"
 common-lib = { path = "../../common" }
 reqwest = "0.11.4"
 parking_lot = "0.11.1"
+itertools = "0.10.0"
+
+# todo: tracing
+#opentelemetry-jaeger = { version = "0.14", features = ["tokio"] }
+#tracing-opentelemetry = "0.14.0"
+#opentelemetry = "0.15.0"
 
 [dev-dependencies]
 composer = { path = "../../composer" }

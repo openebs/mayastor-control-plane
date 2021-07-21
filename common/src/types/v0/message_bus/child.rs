@@ -2,7 +2,7 @@ use super::*;
 
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{cmp::Ordering, fmt::Debug};
 
 /// Child information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -42,6 +42,11 @@ impl PartialEq<Child> for ChildUri {
         self == &other.uri
     }
 }
+impl PartialEq<String> for ChildUri {
+    fn eq(&self, other: &String) -> bool {
+        &self.0 == other
+    }
+}
 
 /// Child State information
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -55,6 +60,37 @@ pub enum ChildState {
     /// unrecoverable error (control plane must act)
     Faulted = 3,
 }
+impl PartialOrd for ChildState {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match &self {
+            ChildState::Unknown => match &other {
+                ChildState::Unknown => Some(Ordering::Equal),
+                ChildState::Online => Some(Ordering::Less),
+                ChildState::Degraded => Some(Ordering::Less),
+                ChildState::Faulted => Some(Ordering::Greater),
+            },
+            ChildState::Online => match &other {
+                ChildState::Unknown => Some(Ordering::Greater),
+                ChildState::Online => Some(Ordering::Equal),
+                ChildState::Degraded => Some(Ordering::Greater),
+                ChildState::Faulted => Some(Ordering::Greater),
+            },
+            ChildState::Degraded => match &other {
+                ChildState::Unknown => Some(Ordering::Greater),
+                ChildState::Online => Some(Ordering::Less),
+                ChildState::Degraded => Some(Ordering::Equal),
+                ChildState::Faulted => Some(Ordering::Greater),
+            },
+            ChildState::Faulted => match &other {
+                ChildState::Unknown => Some(Ordering::Less),
+                ChildState::Online => Some(Ordering::Less),
+                ChildState::Degraded => Some(Ordering::Less),
+                ChildState::Faulted => Some(Ordering::Equal),
+            },
+        }
+    }
+}
+
 impl Default for ChildState {
     fn default() -> Self {
         Self::Unknown

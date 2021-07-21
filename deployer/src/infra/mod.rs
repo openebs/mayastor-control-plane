@@ -101,6 +101,9 @@ macro_rules! impl_ctrlp_agents {
                 if name == "core" {
                     let etcd = format!("etcd.{}:2379", options.cluster_name);
                     binary = binary.with_args(vec!["--store", &etcd]);
+                    if let Some(cache_period) = &options.cache_period {
+                        binary = binary.with_args(vec!["-c", &cache_period.to_string()]);
+                    }
                     if let Some(deadline) = &options.node_deadline {
                         binary = binary.with_args(vec!["-d", &deadline.to_string()]);
                     }

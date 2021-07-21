@@ -204,7 +204,7 @@ struct Replica {
 /// default timeout options for every bus request
 fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
-        .with_timeout(Duration::from_secs(2))
+        .with_timeout(Duration::from_secs(5))
         .with_timeout_backoff(Duration::from_millis(500))
         .with_max_retries(2)
 }
@@ -218,7 +218,7 @@ impl ClusterBuilder {
             replicas: Default::default(),
             trace: true,
             bearer_token: None,
-            rest_timeout: std::time::Duration::from_secs(3),
+            rest_timeout: std::time::Duration::from_secs(5),
             bus_timeout: bus_timeout_opts(),
         }
     }
@@ -273,6 +273,13 @@ impl ClusterBuilder {
         self.opts = self.opts.with_node_deadline(deadline);
         self
     }
+    /// The period at which the registry updates its cache of all
+    /// resources from all nodes
+    pub fn with_cache_period(mut self, period: &str) -> Self {
+        self.opts = self.opts.with_cache_period(period);
+        self
+    }
+
     /// With reconcile periods:
     /// `busy` for when there's work that needs to be retried on the next poll
     /// `idle` when there's no work pending

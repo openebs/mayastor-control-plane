@@ -155,6 +155,22 @@ impl From<ReplyError> for RestError<RestJsonError> {
                 let error = RestJsonError::new(details, Kind::Deleting);
                 (StatusCode::CONFLICT, error)
             }
+            ReplyErrorKind::ReplicaCountAchieved => {
+                let error = RestJsonError::new(details, Kind::FailedPrecondition);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::ReplicaChangeCount => {
+                let error = RestJsonError::new(details, Kind::FailedPrecondition);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::ReplicaIncrease => {
+                let error = RestJsonError::new(details, Kind::FailedPrecondition);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::VolumeNoReplicas => {
+                let error = RestJsonError::new(details, Kind::FailedPrecondition);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
         };
 
         RestError::new(status, error)

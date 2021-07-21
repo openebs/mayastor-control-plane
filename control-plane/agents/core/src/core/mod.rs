@@ -6,6 +6,8 @@ pub mod grpc;
 pub mod registry;
 /// generic resources
 mod resource_map;
+/// helpers for node/pool/replica scheduling
+pub(crate) mod scheduling;
 /// registry with all the resource specs
 pub mod specs;
 /// registry with all the resource states

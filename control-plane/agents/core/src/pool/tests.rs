@@ -91,6 +91,7 @@ async fn pool() {
         node: mayastor.clone(),
         uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
         pool: "pooloop".into(),
+        ..Default::default()
     }
     .request()
     .await
