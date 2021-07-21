@@ -9,7 +9,7 @@ Name | Type | Description | Notes
 **owners** | [**crate::models::ReplicaSpecOwners**](ReplicaSpec_owners.md) |  | 
 **pool** | **String** | The pool that the replica should live on. | 
 **share** | [**crate::models::Protocol**](Protocol.md) |  | 
-**size** | **i64** | The size that the replica should be. | 
+**size** | **u64** | The size that the replica should be. | 
 **state** | [**crate::models::SpecState**](SpecState.md) |  | 
 **thin** | **bool** | Thin provisioning. | 
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | uuid of the replica | 

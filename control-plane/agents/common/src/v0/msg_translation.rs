@@ -135,11 +135,7 @@ impl RpcToMessageBus for rpc::Child {
         Self::BusMessage {
             uri: self.uri.clone().into(),
             state: ChildState::from(self.state),
-            rebuild_progress: if self.rebuild_progress >= 0 {
-                Some(self.rebuild_progress)
-            } else {
-                None
-            },
+            rebuild_progress: u8::try_from(self.rebuild_progress).ok(),
         }
     }
 }

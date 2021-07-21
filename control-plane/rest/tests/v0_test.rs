@@ -212,7 +212,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             "e6e7d39d-e343-42f7-936a-1ab05f1839db",
             /* actual size will be a multiple of 4MB so just
              * create it like so */
-            models::CreateReplicaBody::new(models::Protocol::Nvmf, 12582912, true),
+            models::CreateReplicaBody::new(models::Protocol::Nvmf, 12582912u64, true),
         )
         .await
         .unwrap();
@@ -254,7 +254,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             "058a95e5-cee6-4e81-b682-fe864ca99b9c",
             models::CreateNexusBody::new(
                 vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"],
-                12582912
+                12582912u64
             ),
         )
         .await
@@ -318,7 +318,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             models::CreateVolumeBody::new(
                 models::VolumeHealPolicy::default(),
                 1,
-                12582912,
+                12582912u64,
                 models::Topology::default(),
             ),
         )

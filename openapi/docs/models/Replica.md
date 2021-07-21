@@ -7,7 +7,7 @@ Name | Type | Description | Notes
 **node** | **String** | id of the mayastor instance | 
 **pool** | **String** | id of the pool | 
 **share** | [**crate::models::Protocol**](Protocol.md) |  | 
-**size** | **i64** | size of the replica in bytes | 
+**size** | **u64** | size of the replica in bytes | 
 **state** | [**crate::models::ReplicaState**](ReplicaState.md) |  | 
 **thin** | **bool** | thin provisioning | 
 **uri** | **String** | uri usable by nexus to access it | 

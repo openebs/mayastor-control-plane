@@ -10,7 +10,7 @@ Name | Type | Description | Notes
 **operation** | Option<[**crate::models::NexusSpecOperation**](NexusSpec_operation.md)> |  | [optional]
 **owner** | Option<[**uuid::Uuid**](uuid::Uuid.md)> | Volume which owns this nexus, if any | [optional]
 **share** | [**crate::models::Protocol**](Protocol.md) |  | 
-**size** | **i64** | Size of the nexus. | 
+**size** | **u64** | Size of the nexus. | 
 **state** | [**crate::models::SpecState**](SpecState.md) |  | 
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | Nexus Id | 
 

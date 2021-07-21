@@ -33,7 +33,7 @@ pub struct ReplicaSpec {
     pub share: crate::models::Protocol,
     /// The size that the replica should be.
     #[serde(rename = "size")]
-    pub size: i64,
+    pub size: u64,
     #[serde(rename = "state")]
     pub state: crate::models::SpecState,
     /// Thin provisioning.
@@ -51,7 +51,7 @@ impl ReplicaSpec {
         owners: impl Into<crate::models::ReplicaSpecOwners>,
         pool: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::SpecState>,
         thin: impl Into<bool>,
         uuid: impl Into<uuid::Uuid>,
@@ -75,7 +75,7 @@ impl ReplicaSpec {
         owners: impl Into<crate::models::ReplicaSpecOwners>,
         pool: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::SpecState>,
         thin: impl Into<bool>,
         uuid: impl Into<uuid::Uuid>,

@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**rebuild_progress** | Option<**i32**> | current rebuild progress (%) | [optional]
+**rebuild_progress** | Option<**u8**> | current rebuild progress (%) | [optional]
 **state** | [**crate::models::ChildState**](ChildState.md) | state of the child | 
 **uri** | **String** | uri of the child device | 
 

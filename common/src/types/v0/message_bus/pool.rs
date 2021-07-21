@@ -82,12 +82,12 @@ pub struct Pool {
 impl From<Pool> for models::Pool {
     fn from(src: Pool) -> Self {
         Self::new(
-            src.capacity as i64,
+            src.capacity,
             src.disks,
             src.id,
             src.node,
             src.state,
-            src.used as i64,
+            src.used,
         )
     }
 }
@@ -98,8 +98,8 @@ impl From<models::Pool> for Pool {
             id: src.id.into(),
             disks: src.disks.iter().map(From::from).collect(),
             state: src.state.into(),
-            capacity: src.capacity as u64,
-            used: src.used as u64,
+            capacity: src.capacity,
+            used: src.used,
         }
     }
 }

@@ -4584,6 +4584,107 @@ paths:
                 $ref: '#/components/schemas/RestJsonError'
       security:
         - JWT: []
+#  '/volumes/{volume_id}/replica_count/{replica_count}':
+#    put:
+#      tags:
+#        - Volumes
+#      operationId: put_volume_replica_count
+#      parameters:
+#        - in: path
+#          name: volume_id
+#          required: true
+#          schema:
+#            type: string
+#            format: uuid
+#        - in: path
+#          name: replica_count
+#          required: true
+#          schema:
+#            type: integer
+#            format: uint8
+#            minimum: 1
+#            maximum: 255
+#      responses:
+#        '200':
+#          description: OK
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/Volume'
+#        '400':
+#          description: Request Timeout
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '401':
+#          description: Unauthorized
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '404':
+#          description: Not Found
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '408':
+#          description: Bad Request
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '412':
+#          description: Precondition Failed
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '416':
+#          description: Range Not satisfiable
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '422':
+#          description: Unprocessable entity
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '500':
+#          description: Internal Server Error
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '501':
+#          description: Not Implemented
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '503':
+#          description: Service Unavailable
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '504':
+#          description: Gateway Timeout
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#        '507':
+#          description: Insufficient Storage
+#          content:
+#            application/json:
+#              schema:
+#                $ref: '#/components/schemas/RestJsonError'
+#      security:
+#        - JWT: []
   '/volumes/{volume_id}/share/{protocol}':
     put:
       tags:
@@ -5223,6 +5324,7 @@ components:
           description: current rebuild progress (%)
           type: integer
           minimum: 0
+          maximum: 100
         state:
           description: state of the child
           allOf:
@@ -5456,7 +5558,9 @@ components:
         replicas:
           description: number of storage replicas
           type: integer
+          format: uint8
           minimum: 0
+          maximum: 255
         size:
           description: size of the volume in bytes
           type: integer
@@ -5517,6 +5621,7 @@ components:
         rebuilds:
           description: total number of rebuild tasks
           type: integer
+          format: int32
           minimum: 0
         share:
           $ref: '#/components/schemas/Protocol'
@@ -6049,11 +6154,15 @@ components:
         num_paths:
           description: Number of front-end paths.
           type: integer
+          format: uint8
           minimum: 0
+          maximum: 255
         num_replicas:
           description: Number of children the volume should have.
           type: integer
+          format: uint8
           minimum: 0
+          maximum: 255
         operation:
           example:
             operation: Create

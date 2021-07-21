@@ -26,7 +26,7 @@ pub struct Volume {
     pub protocol: crate::models::Protocol,
     /// size of the volume in bytes
     #[serde(rename = "size")]
-    pub size: i64,
+    pub size: u64,
     #[serde(rename = "state")]
     pub state: crate::models::VolumeState,
     /// name of the volume
@@ -39,7 +39,7 @@ impl Volume {
     pub fn new(
         children: impl IntoVec<crate::models::Nexus>,
         protocol: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::VolumeState>,
         uuid: impl Into<uuid::Uuid>,
     ) -> Volume {
@@ -55,7 +55,7 @@ impl Volume {
     pub fn new_all(
         children: impl IntoVec<crate::models::Nexus>,
         protocol: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::VolumeState>,
         uuid: impl Into<uuid::Uuid>,
     ) -> Volume {

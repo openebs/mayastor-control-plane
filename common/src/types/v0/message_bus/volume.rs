@@ -28,7 +28,7 @@ impl From<Volume> for models::Volume {
         Self::new(
             src.children,
             src.protocol,
-            src.size as i64,
+            src.size,
             src.state,
             apis::Uuid::try_from(src.uuid).unwrap(),
         )
@@ -38,7 +38,7 @@ impl From<models::Volume> for Volume {
     fn from(src: models::Volume) -> Self {
         Self {
             uuid: src.uuid.to_string().into(),
-            size: src.size as u64,
+            size: src.size,
             state: src.state.into(),
             protocol: src.protocol.into(),
             children: src.children.into_iter().map(From::from).collect(),

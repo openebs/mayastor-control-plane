@@ -5335,6 +5335,7 @@ components:
       properties:
         rebuildProgress:
           description: current rebuild progress (%)
+          maximum: 100
           minimum: 0
           type: integer
         state:
@@ -5571,6 +5572,8 @@ components:
             a replica
         replicas:
           description: number of storage replicas
+          format: uint8
+          maximum: 255
           minimum: 0
           type: integer
         size:
@@ -5632,6 +5635,7 @@ components:
           type: string
         rebuilds:
           description: total number of rebuild tasks
+          format: int32
           minimum: 0
           type: integer
         share:
@@ -6094,10 +6098,14 @@ components:
           type: array
         num_paths:
           description: Number of front-end paths.
+          format: uint8
+          maximum: 255
           minimum: 0
           type: integer
         num_replicas:
           description: Number of children the volume should have.
+          format: uint8
+          maximum: 255
           minimum: 0
           type: integer
         operation:

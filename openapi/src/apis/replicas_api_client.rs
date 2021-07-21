@@ -1,3 +1,5 @@
+#![allow(clippy::vec_init_then_push)]
+
 use crate::apis::{
     client::{Error, ResponseContent, ResponseContentUnexpected},
     configuration,
