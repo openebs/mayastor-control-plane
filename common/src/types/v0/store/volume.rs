@@ -283,10 +283,10 @@ impl From<VolumeSpec> for models::VolumeSpec {
     fn from(src: VolumeSpec) -> Self {
         Self::new(
             src.labels,
-            src.num_paths as i32,
-            src.num_replicas as i32,
+            src.num_paths,
+            src.num_replicas,
             src.protocol,
-            src.size as i64,
+            src.size,
             src.state,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )

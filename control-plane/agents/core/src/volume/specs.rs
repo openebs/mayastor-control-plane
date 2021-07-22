@@ -401,7 +401,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &PublishVolume,
-    ) -> Result<String, SvcError> {
+    ) -> Result<Volume, SvcError> {
         let spec = self
             .get_volume(&request.uuid)
             .context(errors::VolumeNotFound {
@@ -434,7 +434,8 @@ impl ResourceSpecsLocked {
                 .share_nexus(registry, &ShareNexus::from((&nexus, None, share)))
                 .await;
         }
-        SpecOperations::complete_update(registry, result, spec, spec_clone).await
+        SpecOperations::complete_update(registry, result, spec, spec_clone).await?;
+        registry.get_volume_status(&status.uuid).await
     }
 
     /// Unpublish a volume based on the given `UnpublishVolume` request
@@ -442,7 +443,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &UnpublishVolume,
-    ) -> Result<(), SvcError> {
+    ) -> Result<Volume, SvcError> {
         let spec = self
             .get_volume(&request.uuid)
             .context(errors::VolumeNotFound {
@@ -457,7 +458,8 @@ impl ResourceSpecsLocked {
 
         // Destroy the Nexus
         let result = self.destroy_nexus(registry, &nexus.into(), true).await;
-        SpecOperations::complete_update(registry, result, spec.clone(), spec_clone).await
+        SpecOperations::complete_update(registry, result, spec.clone(), spec_clone).await?;
+        registry.get_volume_status(&status.uuid).await
     }
 
     /// Create a replica for the given volume using the provided list of candidates in order

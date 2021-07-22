@@ -37,7 +37,7 @@ pub struct NexusSpec {
     pub share: crate::models::Protocol,
     /// Size of the nexus.
     #[serde(rename = "size")]
-    pub size: i64,
+    pub size: u64,
     #[serde(rename = "state")]
     pub state: crate::models::SpecState,
     /// Nexus Id
@@ -52,7 +52,7 @@ impl NexusSpec {
         managed: impl Into<bool>,
         node: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::SpecState>,
         uuid: impl Into<uuid::Uuid>,
     ) -> NexusSpec {
@@ -76,7 +76,7 @@ impl NexusSpec {
         operation: impl Into<Option<crate::models::NexusSpecOperation>>,
         owner: impl Into<Option<uuid::Uuid>>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::SpecState>,
         uuid: impl Into<uuid::Uuid>,
     ) -> NexusSpec {

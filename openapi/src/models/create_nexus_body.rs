@@ -19,24 +19,25 @@ use crate::apis::IntoVec;
 /// Create Nexus Body JSON
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreateNexusBody {
-    /// replica can be iscsi and nvmf remote targets or a local spdk bdev  (i.e. bdev:///name-of-the-bdev).   uris to the targets we connect to
+    /// replica can be iscsi and nvmf remote targets or a local spdk bdev  (i.e.
+    /// bdev:///name-of-the-bdev).   uris to the targets we connect to
     #[serde(rename = "children")]
     pub children: Vec<String>,
     /// size of the device in bytes
     #[serde(rename = "size")]
-    pub size: i64,
+    pub size: u64,
 }
 
 impl CreateNexusBody {
     /// CreateNexusBody using only the required fields
-    pub fn new(children: impl IntoVec<String>, size: impl Into<i64>) -> CreateNexusBody {
+    pub fn new(children: impl IntoVec<String>, size: impl Into<u64>) -> CreateNexusBody {
         CreateNexusBody {
             children: children.into_vec(),
             size: size.into(),
         }
     }
     /// CreateNexusBody using all fields
-    pub fn new_all(children: impl IntoVec<String>, size: impl Into<i64>) -> CreateNexusBody {
+    pub fn new_all(children: impl IntoVec<String>, size: impl Into<u64>) -> CreateNexusBody {
         CreateNexusBody {
             children: children.into_vec(),
             size: size.into(),

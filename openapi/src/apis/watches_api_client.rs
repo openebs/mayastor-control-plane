@@ -1,3 +1,5 @@
+#![allow(clippy::vec_init_then_push)]
+
 use crate::apis::{
     client::{Error, ResponseContent, ResponseContentUnexpected},
     configuration,
@@ -53,8 +55,9 @@ impl Watches for WatchesClient {
         let mut local_var_req_builder =
             local_var_client.request(awc::http::Method::DELETE, local_var_uri_str.as_str());
 
-        local_var_req_builder =
-            local_var_req_builder.query(&[("callback", &callback.to_string())])?;
+        let mut query_params = vec![];
+        query_params.push(("callback", callback.to_string()));
+        local_var_req_builder = local_var_req_builder.query(&query_params)?;
         if let Some(ref local_var_user_agent) = configuration.user_agent {
             local_var_req_builder = local_var_req_builder
                 .insert_header((awc::http::header::USER_AGENT, local_var_user_agent.clone()));
@@ -149,8 +152,9 @@ impl Watches for WatchesClient {
         let mut local_var_req_builder =
             local_var_client.request(awc::http::Method::PUT, local_var_uri_str.as_str());
 
-        local_var_req_builder =
-            local_var_req_builder.query(&[("callback", &callback.to_string())])?;
+        let mut query_params = vec![];
+        query_params.push(("callback", callback.to_string()));
+        local_var_req_builder = local_var_req_builder.query(&query_params)?;
         if let Some(ref local_var_user_agent) = configuration.user_agent {
             local_var_req_builder = local_var_req_builder
                 .insert_header((awc::http::header::USER_AGENT, local_var_user_agent.clone()));

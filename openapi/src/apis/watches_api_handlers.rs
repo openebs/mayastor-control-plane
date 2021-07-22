@@ -56,9 +56,10 @@ async fn del_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 's
     path: Path<String>,
     query: Query<del_watch_volumeQueryParams>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+    let query = query.into_inner();
     T::del_watch_volume(
         crate::apis::Path(path.into_inner()),
-        crate::apis::Query(query.into_inner().callback),
+        crate::apis::Query(query.callback),
     )
     .await
     .map(Json)
@@ -79,9 +80,10 @@ async fn put_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 's
     path: Path<String>,
     query: Query<put_watch_volumeQueryParams>,
 ) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+    let query = query.into_inner();
     T::put_watch_volume(
         crate::apis::Path(path.into_inner()),
-        crate::apis::Query(query.into_inner().callback),
+        crate::apis::Query(query.callback),
     )
     .await
     .map(Json)

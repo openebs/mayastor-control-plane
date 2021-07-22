@@ -21,7 +21,7 @@ use crate::apis::IntoVec;
 pub struct Child {
     /// current rebuild progress (%)
     #[serde(rename = "rebuildProgress", skip_serializing_if = "Option::is_none")]
-    pub rebuild_progress: Option<i32>,
+    pub rebuild_progress: Option<u8>,
     /// state of the child
     #[serde(rename = "state")]
     pub state: crate::models::ChildState,
@@ -41,7 +41,7 @@ impl Child {
     }
     /// Child using all fields
     pub fn new_all(
-        rebuild_progress: impl Into<Option<i32>>,
+        rebuild_progress: impl Into<Option<u8>>,
         state: impl Into<crate::models::ChildState>,
         uri: impl Into<String>,
     ) -> Child {

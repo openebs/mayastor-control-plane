@@ -19,10 +19,12 @@ use crate::apis::IntoVec;
 /// Volume Healing policy used to determine if and how to replace a replica
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct VolumeHealPolicy {
-    /// the server will attempt to heal the volume by itself  the client should not attempt to do the same if this is enabled
+    /// the server will attempt to heal the volume by itself  the client should not attempt to do
+    /// the same if this is enabled
     #[serde(rename = "self_heal")]
     pub self_heal: bool,
-    /// topology to choose a replacement replica for self healing  (overrides the initial creation topology)
+    /// topology to choose a replacement replica for self healing  (overrides the initial creation
+    /// topology)
     #[serde(rename = "topology", skip_serializing_if = "Option::is_none")]
     pub topology: Option<crate::models::Topology>,
 }

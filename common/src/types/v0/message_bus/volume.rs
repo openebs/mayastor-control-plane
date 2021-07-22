@@ -28,7 +28,7 @@ impl From<Volume> for models::Volume {
         Self::new(
             src.children,
             src.protocol,
-            src.size as i64,
+            src.size,
             src.state,
             apis::Uuid::try_from(src.uuid).unwrap(),
         )
@@ -38,7 +38,7 @@ impl From<models::Volume> for Volume {
     fn from(src: models::Volume) -> Self {
         Self {
             uuid: src.uuid.to_string().into(),
-            size: src.size as u64,
+            size: src.size,
             state: src.state.into(),
             protocol: src.protocol.into(),
             children: src.children.into_iter().map(From::from).collect(),
@@ -330,6 +330,20 @@ pub struct PublishVolume {
     /// share protocol
     pub share: Option<VolumeShareProtocol>,
 }
+impl PublishVolume {
+    /// Create new `PublishVolume` based on the provided arguments
+    pub fn new(
+        uuid: VolumeId,
+        target_node: Option<NodeId>,
+        share: Option<VolumeShareProtocol>,
+    ) -> Self {
+        Self {
+            uuid,
+            target_node,
+            share,
+        }
+    }
+}
 
 /// Unpublish a volume from any node where it may be published
 /// Unshares the children nexuses from the volume and destroys them.
@@ -338,6 +352,12 @@ pub struct PublishVolume {
 pub struct UnpublishVolume {
     /// uuid of the volume
     pub uuid: VolumeId,
+}
+impl UnpublishVolume {
+    /// Create a new `UnpublishVolume` for the given uuid
+    pub fn new(uuid: VolumeId) -> Self {
+        Self { uuid }
+    }
 }
 
 /// Share Volume request
@@ -366,6 +386,12 @@ pub struct SetVolumeReplica {
     pub uuid: VolumeId,
     /// replica count
     pub replicas: u8,
+}
+impl SetVolumeReplica {
+    /// Create new `SetVolumeReplica` based on the provided arguments
+    pub fn new(uuid: VolumeId, replicas: u8) -> Self {
+        Self { uuid, replicas }
+    }
 }
 
 /// Delete volume

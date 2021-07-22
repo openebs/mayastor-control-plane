@@ -13,7 +13,7 @@ pub struct Child {
     /// state of the child
     pub state: ChildState,
     /// current rebuild progress (%)
-    pub rebuild_progress: Option<i32>,
+    pub rebuild_progress: Option<u8>,
 }
 
 impl From<Child> for models::Child {

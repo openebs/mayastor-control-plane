@@ -29,7 +29,7 @@ pub struct Replica {
     pub share: crate::models::Protocol,
     /// size of the replica in bytes
     #[serde(rename = "size")]
-    pub size: i64,
+    pub size: u64,
     #[serde(rename = "state")]
     pub state: crate::models::ReplicaState,
     /// thin provisioning
@@ -49,7 +49,7 @@ impl Replica {
         node: impl Into<String>,
         pool: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::ReplicaState>,
         thin: impl Into<bool>,
         uri: impl Into<String>,
@@ -71,7 +71,7 @@ impl Replica {
         node: impl Into<String>,
         pool: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::ReplicaState>,
         thin: impl Into<bool>,
         uri: impl Into<String>,

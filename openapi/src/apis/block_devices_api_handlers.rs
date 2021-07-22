@@ -44,9 +44,10 @@ async fn get_node_block_devices<
     Json<Vec<crate::models::BlockDevice>>,
     crate::apis::RestError<crate::models::RestJsonError>,
 > {
+    let query = query.into_inner();
     T::get_node_block_devices(
         crate::apis::Path(path.into_inner()),
-        crate::apis::Query(query.into_inner().all),
+        crate::apis::Query(query.all),
     )
     .await
     .map(Json)

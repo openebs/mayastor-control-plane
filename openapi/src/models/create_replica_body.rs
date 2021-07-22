@@ -23,7 +23,7 @@ pub struct CreateReplicaBody {
     pub share: crate::models::Protocol,
     /// size of the replica in bytes
     #[serde(rename = "size")]
-    pub size: i64,
+    pub size: u64,
     /// thin provisioning
     #[serde(rename = "thin")]
     pub thin: bool,
@@ -33,7 +33,7 @@ impl CreateReplicaBody {
     /// CreateReplicaBody using only the required fields
     pub fn new(
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         thin: impl Into<bool>,
     ) -> CreateReplicaBody {
         CreateReplicaBody {
@@ -45,7 +45,7 @@ impl CreateReplicaBody {
     /// CreateReplicaBody using all fields
     pub fn new_all(
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         thin: impl Into<bool>,
     ) -> CreateReplicaBody {
         CreateReplicaBody {

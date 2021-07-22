@@ -3017,13 +3017,12 @@ paths:
           name: node_id
           required: true
           schema:
-            type: string
+            $ref: '#/components/schemas/NodeId'
         - in: path
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
       responses:
         '200':
           description: OK
@@ -4315,8 +4314,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
       responses:
         '200':
           description: OK
@@ -4407,8 +4405,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
       requestBody:
         content:
           application/json:
@@ -4505,8 +4502,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
       responses:
         '204':
           description: OK
@@ -4584,6 +4580,306 @@ paths:
                 $ref: '#/components/schemas/RestJsonError'
       security:
         - JWT: []
+  '/volumes/{volume_id}/replica_count/{replica_count}':
+    put:
+      tags:
+        - Volumes
+      operationId: put_volume_replica_count
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+        - in: path
+          name: replica_count
+          required: true
+          schema:
+            type: integer
+            format: uint8
+            minimum: 1
+            maximum: 255
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '400':
+          description: Request Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '408':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '412':
+          description: Precondition Failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '416':
+          description: Range Not satisfiable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '422':
+          description: Unprocessable entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '501':
+          description: Not Implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '504':
+          description: Gateway Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '507':
+          description: Insufficient Storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+      security:
+        - JWT: []
+  '/volumes/{volume_id}/target':
+    put:
+      tags:
+        - Volumes
+      operationId: put_volume_target
+      description: |-
+        Create a volume target connectable for front-end IO from the specified node.
+        Due to a limitation, this must currently be a mayastor storage node.
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+        - in: query
+          description: |-
+            The node where the front-end workload resides.
+            If the workload moves then the volume must be republished.
+          name: node
+          required: true
+          schema:
+            $ref: '#/components/schemas/NodeId'
+        - in: query
+          description: The protocol used to connect to the front-end node.
+          name: protocol
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeShareProtocol'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '400':
+          description: Request Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '408':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '412':
+          description: Precondition Failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '416':
+          description: Range Not satisfiable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '422':
+          description: Unprocessable entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '501':
+          description: Not Implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '504':
+          description: Gateway Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '507':
+          description: Insufficient Storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+      security:
+        - JWT: []
+    delete:
+      tags:
+        - Volumes
+      operationId: del_volume_target
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '400':
+          description: Request Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '408':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '412':
+          description: Precondition Failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '416':
+          description: Range Not satisfiable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '422':
+          description: Unprocessable entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '501':
+          description: Not Implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '504':
+          description: Gateway Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+        '507':
+          description: Insufficient Storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestJsonError'
+      security:
+        - JWT: [ ]
   '/volumes/{volume_id}/share/{protocol}':
     put:
       tags:
@@ -4594,8 +4890,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
         - in: path
           name: protocol
           required: true
@@ -4692,8 +4987,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
       responses:
         '204':
           description: OK
@@ -4781,8 +5075,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
       responses:
         '200':
           description: OK
@@ -4875,8 +5168,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
         - in: query
           name: callback
           description: URL callback
@@ -4970,8 +5262,7 @@ paths:
           name: volume_id
           required: true
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/VolumeId'
         - in: query
           name: callback
           description: URL callback
@@ -5063,7 +5354,12 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    VolumeId:
+      example: ec4e66fd-3b33-4439-b504-d49aba53da26
+      type: string
+      format: uuid
     NodeId:
+      description: storage node identifier
       example: ksnode-1
       type: string
     BlockDevice:
@@ -5223,6 +5519,7 @@ components:
           description: current rebuild progress (%)
           type: integer
           minimum: 0
+          maximum: 100
         state:
           description: state of the child
           allOf:
@@ -5456,7 +5753,9 @@ components:
         replicas:
           description: number of storage replicas
           type: integer
+          format: uint8
           minimum: 0
+          maximum: 255
         size:
           description: size of the volume in bytes
           type: integer
@@ -5517,6 +5816,7 @@ components:
         rebuilds:
           description: total number of rebuild tasks
           type: integer
+          format: int32
           minimum: 0
         share:
           $ref: '#/components/schemas/Protocol'
@@ -5552,15 +5852,14 @@ components:
         grpcEndpoint: '10.1.0.5:10124'
         id: ksnode-1
         state: Online
-      description: Node information
+      description: mayastor storage node information
       type: object
       properties:
         grpcEndpoint:
           description: grpc_endpoint of the mayastor instance
           type: string
         id:
-          description: id of the mayastor instance
-          type: string
+          $ref: '#/components/schemas/NodeId'
         state:
           $ref: '#/components/schemas/NodeState'
       required:
@@ -6049,11 +6348,15 @@ components:
         num_paths:
           description: Number of front-end paths.
           type: integer
+          format: uint8
           minimum: 0
+          maximum: 255
         num_replicas:
           description: Number of children the volume should have.
           type: integer
+          format: uint8
           minimum: 0
+          maximum: 255
         operation:
           example:
             operation: Create

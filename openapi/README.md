@@ -68,12 +68,15 @@ Class | Method | HTTP request | Description
 *Specs* | [**get_specs**](docs/apis/Specs.md#get_specs) | **Get** /specs | 
 *Volumes* | [**del_share**](docs/apis/Volumes.md#del_share) | **Delete** /volumes{volume_id}/share | 
 *Volumes* | [**del_volume**](docs/apis/Volumes.md#del_volume) | **Delete** /volumes/{volume_id} | 
+*Volumes* | [**del_volume_target**](docs/apis/Volumes.md#del_volume_target) | **Delete** /volumes/{volume_id}/target | 
 *Volumes* | [**get_node_volume**](docs/apis/Volumes.md#get_node_volume) | **Get** /nodes/{node_id}/volumes/{volume_id} | 
 *Volumes* | [**get_node_volumes**](docs/apis/Volumes.md#get_node_volumes) | **Get** /nodes/{node_id}/volumes | 
 *Volumes* | [**get_volume**](docs/apis/Volumes.md#get_volume) | **Get** /volumes/{volume_id} | 
 *Volumes* | [**get_volumes**](docs/apis/Volumes.md#get_volumes) | **Get** /volumes | 
 *Volumes* | [**put_volume**](docs/apis/Volumes.md#put_volume) | **Put** /volumes/{volume_id} | 
+*Volumes* | [**put_volume_replica_count**](docs/apis/Volumes.md#put_volume_replica_count) | **Put** /volumes/{volume_id}/replica_count/{replica_count} | 
 *Volumes* | [**put_volume_share**](docs/apis/Volumes.md#put_volume_share) | **Put** /volumes/{volume_id}/share/{protocol} | 
+*Volumes* | [**put_volume_target**](docs/apis/Volumes.md#put_volume_target) | **Put** /volumes/{volume_id}/target | 
 *Watches* | [**del_watch_volume**](docs/apis/Watches.md#del_watch_volume) | **Delete** /watches/volumes/{volume_id} | 
 *Watches* | [**get_watch_volume**](docs/apis/Watches.md#get_watch_volume) | **Get** /watches/volumes/{volume_id} | 
 *Watches* | [**put_watch_volume**](docs/apis/Watches.md#put_watch_volume) | **Put** /watches/volumes/{volume_id} | 

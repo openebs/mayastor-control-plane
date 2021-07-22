@@ -21,7 +21,7 @@ use crate::apis::IntoVec;
 pub struct Pool {
     /// size of the pool in bytes
     #[serde(rename = "capacity")]
-    pub capacity: i64,
+    pub capacity: u64,
     /// absolute disk paths claimed by the pool
     #[serde(rename = "disks")]
     pub disks: Vec<String>,
@@ -35,18 +35,18 @@ pub struct Pool {
     pub state: crate::models::PoolState,
     /// used bytes from the pool
     #[serde(rename = "used")]
-    pub used: i64,
+    pub used: u64,
 }
 
 impl Pool {
     /// Pool using only the required fields
     pub fn new(
-        capacity: impl Into<i64>,
+        capacity: impl Into<u64>,
         disks: impl IntoVec<String>,
         id: impl Into<String>,
         node: impl Into<String>,
         state: impl Into<crate::models::PoolState>,
-        used: impl Into<i64>,
+        used: impl Into<u64>,
     ) -> Pool {
         Pool {
             capacity: capacity.into(),
@@ -59,12 +59,12 @@ impl Pool {
     }
     /// Pool using all fields
     pub fn new_all(
-        capacity: impl Into<i64>,
+        capacity: impl Into<u64>,
         disks: impl IntoVec<String>,
         id: impl Into<String>,
         node: impl Into<String>,
         state: impl Into<crate::models::PoolState>,
-        used: impl Into<i64>,
+        used: impl Into<u64>,
     ) -> Pool {
         Pool {
             capacity: capacity.into(),

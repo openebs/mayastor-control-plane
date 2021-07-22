@@ -102,7 +102,7 @@ impl From<ReplicaSpec> for models::ReplicaSpec {
             src.owners,
             src.pool,
             src.share,
-            src.size as i64,
+            src.size,
             src.state,
             src.thin,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),

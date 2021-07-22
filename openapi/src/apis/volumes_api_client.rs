@@ -1,3 +1,5 @@
+#![allow(clippy::vec_init_then_push)]
+
 use crate::apis::{
     client::{Error, ResponseContent, ResponseContentUnexpected},
     configuration,
@@ -21,6 +23,10 @@ impl VolumesClient {
 pub trait Volumes: Clone {
     async fn del_share(&self, volume_id: &str) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_volume(&self, volume_id: &str) -> Result<(), Error<crate::models::RestJsonError>>;
+    async fn del_volume_target(
+        &self,
+        volume_id: &str,
+    ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
     async fn get_node_volume(
         &self,
         node_id: &str,
@@ -42,11 +48,24 @@ pub trait Volumes: Clone {
         volume_id: &str,
         create_volume_body: crate::models::CreateVolumeBody,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
+    async fn put_volume_replica_count(
+        &self,
+        volume_id: &str,
+        replica_count: u8,
+    ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
     async fn put_volume_share(
         &self,
         volume_id: &str,
         protocol: crate::models::VolumeShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>>;
+    /// Create a volume target connectable for front-end IO from the specified node. Due to a
+    /// limitation, this must currently be a mayastor storage node.
+    async fn put_volume_target(
+        &self,
+        volume_id: &str,
+        node: &str,
+        protocol: crate::models::VolumeShareProtocol,
+    ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
 }
 
 #[async_trait::async_trait(?Send)]
@@ -122,6 +141,52 @@ impl Volumes for VolumesClient {
 
         if local_var_status.is_success() {
             Ok(())
+        } else {
+            match local_var_resp.json::<crate::models::RestJsonError>().await {
+                Ok(error) => Err(Error::ResponseError(ResponseContent {
+                    status: local_var_status,
+                    error,
+                })),
+                Err(_) => Err(Error::ResponseUnexpected(ResponseContentUnexpected {
+                    status: local_var_status,
+                    text: local_var_resp.json().await?,
+                })),
+            }
+        }
+    }
+    async fn del_volume_target(
+        &self,
+        volume_id: &str,
+    ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
+        let configuration = &self.configuration;
+        let local_var_client = &configuration.client;
+
+        let local_var_uri_str = format!(
+            "{}/volumes/{volume_id}/target",
+            configuration.base_path,
+            volume_id = volume_id.to_string()
+        );
+        let mut local_var_req_builder =
+            local_var_client.request(awc::http::Method::DELETE, local_var_uri_str.as_str());
+
+        if let Some(ref local_var_user_agent) = configuration.user_agent {
+            local_var_req_builder = local_var_req_builder
+                .insert_header((awc::http::header::USER_AGENT, local_var_user_agent.clone()));
+        }
+        if let Some(ref local_var_token) = configuration.bearer_access_token {
+            local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+        };
+        let mut local_var_resp = if configuration.trace_requests {
+            local_var_req_builder.trace_request().send().await
+        } else {
+            local_var_req_builder.send().await
+        }?;
+
+        let local_var_status = local_var_resp.status();
+
+        if local_var_status.is_success() {
+            let local_var_content = local_var_resp.json::<crate::models::Volume>().await?;
+            Ok(local_var_content)
         } else {
             match local_var_resp.json::<crate::models::RestJsonError>().await {
                 Ok(error) => Err(Error::ResponseError(ResponseContent {
@@ -366,6 +431,54 @@ impl Volumes for VolumesClient {
             }
         }
     }
+    async fn put_volume_replica_count(
+        &self,
+        volume_id: &str,
+        replica_count: u8,
+    ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
+        let configuration = &self.configuration;
+        let local_var_client = &configuration.client;
+
+        let local_var_uri_str = format!(
+            "{}/volumes/{volume_id}/replica_count/{replica_count}",
+            configuration.base_path,
+            volume_id = volume_id.to_string(),
+            replica_count = replica_count.to_string()
+        );
+        let mut local_var_req_builder =
+            local_var_client.request(awc::http::Method::PUT, local_var_uri_str.as_str());
+
+        if let Some(ref local_var_user_agent) = configuration.user_agent {
+            local_var_req_builder = local_var_req_builder
+                .insert_header((awc::http::header::USER_AGENT, local_var_user_agent.clone()));
+        }
+        if let Some(ref local_var_token) = configuration.bearer_access_token {
+            local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+        };
+        let mut local_var_resp = if configuration.trace_requests {
+            local_var_req_builder.trace_request().send().await
+        } else {
+            local_var_req_builder.send().await
+        }?;
+
+        let local_var_status = local_var_resp.status();
+
+        if local_var_status.is_success() {
+            let local_var_content = local_var_resp.json::<crate::models::Volume>().await?;
+            Ok(local_var_content)
+        } else {
+            match local_var_resp.json::<crate::models::RestJsonError>().await {
+                Ok(error) => Err(Error::ResponseError(ResponseContent {
+                    status: local_var_status,
+                    error,
+                })),
+                Err(_) => Err(Error::ResponseUnexpected(ResponseContentUnexpected {
+                    status: local_var_status,
+                    text: local_var_resp.json().await?,
+                })),
+            }
+        }
+    }
     async fn put_volume_share(
         &self,
         volume_id: &str,
@@ -400,6 +513,58 @@ impl Volumes for VolumesClient {
 
         if local_var_status.is_success() {
             let local_var_content = local_var_resp.json::<String>().await?;
+            Ok(local_var_content)
+        } else {
+            match local_var_resp.json::<crate::models::RestJsonError>().await {
+                Ok(error) => Err(Error::ResponseError(ResponseContent {
+                    status: local_var_status,
+                    error,
+                })),
+                Err(_) => Err(Error::ResponseUnexpected(ResponseContentUnexpected {
+                    status: local_var_status,
+                    text: local_var_resp.json().await?,
+                })),
+            }
+        }
+    }
+    async fn put_volume_target(
+        &self,
+        volume_id: &str,
+        node: &str,
+        protocol: crate::models::VolumeShareProtocol,
+    ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
+        let configuration = &self.configuration;
+        let local_var_client = &configuration.client;
+
+        let local_var_uri_str = format!(
+            "{}/volumes/{volume_id}/target",
+            configuration.base_path,
+            volume_id = volume_id.to_string()
+        );
+        let mut local_var_req_builder =
+            local_var_client.request(awc::http::Method::PUT, local_var_uri_str.as_str());
+
+        let mut query_params = vec![];
+        query_params.push(("node", node.to_string()));
+        query_params.push(("protocol", protocol.to_string()));
+        local_var_req_builder = local_var_req_builder.query(&query_params)?;
+        if let Some(ref local_var_user_agent) = configuration.user_agent {
+            local_var_req_builder = local_var_req_builder
+                .insert_header((awc::http::header::USER_AGENT, local_var_user_agent.clone()));
+        }
+        if let Some(ref local_var_token) = configuration.bearer_access_token {
+            local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+        };
+        let mut local_var_resp = if configuration.trace_requests {
+            local_var_req_builder.trace_request().send().await
+        } else {
+            local_var_req_builder.send().await
+        }?;
+
+        let local_var_status = local_var_resp.status();
+
+        if local_var_status.is_success() {
+            let local_var_content = local_var_resp.json::<crate::models::Volume>().await?;
             Ok(local_var_content)
         } else {
             match local_var_resp.json::<crate::models::RestJsonError>().await {

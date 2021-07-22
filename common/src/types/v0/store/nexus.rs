@@ -113,7 +113,7 @@ impl From<NexusSpec> for models::NexusSpec {
             src.managed,
             src.node,
             src.share,
-            src.size as i64,
+            src.size,
             src.state,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )

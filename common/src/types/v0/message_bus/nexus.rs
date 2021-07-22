@@ -43,9 +43,9 @@ impl From<Nexus> for models::Nexus {
             src.children,
             src.device_uri,
             src.node,
-            src.rebuilds as i32,
+            src.rebuilds,
             src.share,
-            src.size as i64,
+            src.size,
             src.state,
             apis::Uuid::try_from(src.uuid).unwrap(),
         )
@@ -59,8 +59,8 @@ impl From<models::Nexus> for Nexus {
             state: src.state.into(),
             children: src.children.into_iter().map(From::from).collect(),
             device_uri: src.device_uri,
-            rebuilds: src.rebuilds as u32,
-            size: src.size as u64,
+            rebuilds: src.rebuilds,
+            size: src.size,
             share: src.share.into(),
         }
     }

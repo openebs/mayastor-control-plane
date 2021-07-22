@@ -14,15 +14,15 @@
 
 use crate::apis::IntoVec;
 
-/// Node : Node information
+/// Node : mayastor storage node information
 
-/// Node information
+/// mayastor storage node information
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     /// grpc_endpoint of the mayastor instance
     #[serde(rename = "grpcEndpoint")]
     pub grpc_endpoint: String,
-    /// id of the mayastor instance
+    /// storage node identifier
     #[serde(rename = "id")]
     pub id: String,
     #[serde(rename = "state")]

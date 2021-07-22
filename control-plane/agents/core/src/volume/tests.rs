@@ -62,7 +62,7 @@ async fn test_volume(cluster: &Cluster) {
 }
 
 async fn publishing_test(cluster: &Cluster, volume: &Volume) {
-    PublishVolume {
+    let volume = PublishVolume {
         uuid: volume.uuid.clone(),
         target_node: None,
         share: None,
@@ -70,6 +70,7 @@ async fn publishing_test(cluster: &Cluster, volume: &Volume) {
     .request()
     .await
     .expect("Should be able to publish a newly created volume");
+    tracing::info!("Published on: {}", volume.children.first().unwrap().node);
 
     let share = ShareVolume {
         uuid: volume.uuid.clone(),
@@ -119,7 +120,7 @@ async fn publishing_test(cluster: &Cluster, volume: &Volume) {
     .await
     .unwrap();
 
-    let uri = PublishVolume {
+    let volume = PublishVolume {
         uuid: volume.uuid.clone(),
         target_node: Some(cluster.node(0)),
         share: Some(VolumeShareProtocol::Iscsi),
@@ -127,7 +128,8 @@ async fn publishing_test(cluster: &Cluster, volume: &Volume) {
     .request()
     .await
     .expect("The volume is unpublished so we should be able to publish again");
-    tracing::info!("Published to: {}", uri);
+    let nx = volume.children.first().unwrap();
+    tracing::info!("Published on '{}' with share '{}'", nx.node, nx.device_uri);
 
     let volumes = GetVolumes {
         filter: Filter::Volume(volume.uuid.clone()),
@@ -158,7 +160,7 @@ async fn publishing_test(cluster: &Cluster, volume: &Volume) {
     .await
     .unwrap();
 
-    PublishVolume {
+    let volume = PublishVolume {
         uuid: volume.uuid.clone(),
         target_node: Some(cluster.node(1)),
         share: None,
@@ -166,6 +168,7 @@ async fn publishing_test(cluster: &Cluster, volume: &Volume) {
     .request()
     .await
     .expect("The volume is unpublished so we should be able to publish again");
+    tracing::info!("Published on: {}", volume.children.first().unwrap().node);
 
     let volumes = GetVolumes {
         filter: Filter::Volume(volume.uuid.clone()),

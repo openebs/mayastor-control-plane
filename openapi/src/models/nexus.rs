@@ -22,7 +22,8 @@ pub struct Nexus {
     /// Array of Nexus Children
     #[serde(rename = "children")]
     pub children: Vec<crate::models::Child>,
-    /// URI of the device for the volume (missing if not published).  Missing property and empty string are treated the same.
+    /// URI of the device for the volume (missing if not published).  Missing property and empty
+    /// string are treated the same.
     #[serde(rename = "deviceUri")]
     pub device_uri: String,
     /// id of the mayastor instance
@@ -30,12 +31,12 @@ pub struct Nexus {
     pub node: String,
     /// total number of rebuild tasks
     #[serde(rename = "rebuilds")]
-    pub rebuilds: i32,
+    pub rebuilds: u32,
     #[serde(rename = "share")]
     pub share: crate::models::Protocol,
     /// size of the volume in bytes
     #[serde(rename = "size")]
-    pub size: i64,
+    pub size: u64,
     #[serde(rename = "state")]
     pub state: crate::models::NexusState,
     /// uuid of the nexus
@@ -49,9 +50,9 @@ impl Nexus {
         children: impl IntoVec<crate::models::Child>,
         device_uri: impl Into<String>,
         node: impl Into<String>,
-        rebuilds: impl Into<i32>,
+        rebuilds: impl Into<u32>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::NexusState>,
         uuid: impl Into<uuid::Uuid>,
     ) -> Nexus {
@@ -71,9 +72,9 @@ impl Nexus {
         children: impl IntoVec<crate::models::Child>,
         device_uri: impl Into<String>,
         node: impl Into<String>,
-        rebuilds: impl Into<i32>,
+        rebuilds: impl Into<u32>,
         share: impl Into<crate::models::Protocol>,
-        size: impl Into<i64>,
+        size: impl Into<u64>,
         state: impl Into<crate::models::NexusState>,
         uuid: impl Into<uuid::Uuid>,
     ) -> Nexus {

@@ -1,6 +1,7 @@
 use super::*;
-use common_lib::types::v0::message_bus::{
-    DestroyVolume, Filter, NexusShareProtocol, ShareNexus, UnshareNexus, VolumeId,
+use common_lib::types::v0::{
+    message_bus::{DestroyVolume, Filter, NexusShareProtocol, ShareNexus, UnshareNexus, VolumeId},
+    openapi::models::VolumeShareProtocol,
 };
 use mbus_api::{
     message_bus::v0::{MessageBus, MessageBusTrait},
@@ -66,6 +67,13 @@ impl apis::Volumes for RestApi {
         Ok(())
     }
 
+    async fn del_volume_target(
+        Path(volume_id): Path<String>,
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
+        let volume = MessageBus::unpublish_volume(volume_id.into()).await?;
+        Ok(volume.into())
+    }
+
     async fn get_node_volume(
         Path((node_id, volume_id)): Path<(String, String)>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
@@ -102,9 +110,26 @@ impl apis::Volumes for RestApi {
         Ok(volume.into())
     }
 
+    async fn put_volume_replica_count(
+        Path((volume_id, replica_count)): Path<(String, u8)>,
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
+        let volume = MessageBus::set_volume_replica(volume_id.into(), replica_count).await?;
+        Ok(volume.into())
+    }
+
     async fn put_volume_share(
         Path((volume_id, protocol)): Path<(String, models::VolumeShareProtocol)>,
     ) -> Result<String, RestError<RestJsonError>> {
         volume_share(volume_id.into(), protocol.into()).await
+    }
+
+    async fn put_volume_target(
+        Path(volume_id): Path<String>,
+        Query((node, protocol)): Query<(String, VolumeShareProtocol)>,
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
+        let volume =
+            MessageBus::publish_volume(volume_id.into(), Some(node.into()), Some(protocol.into()))
+                .await?;
+        Ok(volume.into())
     }
 }
