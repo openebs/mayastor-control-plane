@@ -22,7 +22,8 @@ pub struct Nexus {
     /// Array of Nexus Children
     #[serde(rename = "children")]
     pub children: Vec<crate::models::Child>,
-    /// URI of the device for the volume (missing if not published).  Missing property and empty string are treated the same.
+    /// URI of the device for the volume (missing if not published).  Missing property and empty
+    /// string are treated the same.
     #[serde(rename = "deviceUri")]
     pub device_uri: String,
     /// id of the mayastor instance

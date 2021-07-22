@@ -14,9 +14,11 @@
 
 use crate::apis::IntoVec;
 
-/// Topology : topology to choose a replacement replica for self healing  (overrides the initial creation topology)
+/// Topology : topology to choose a replacement replica for self healing  (overrides the initial
+/// creation topology)
 
-/// topology to choose a replacement replica for self healing  (overrides the initial creation topology)
+/// topology to choose a replacement replica for self healing  (overrides the initial creation
+/// topology)
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Topology {
     /// volume topology, explicitly selected

@@ -6,12 +6,15 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**del_share**](Volumes.md#del_share) | **Delete** /volumes{volume_id}/share | 
 [**del_volume**](Volumes.md#del_volume) | **Delete** /volumes/{volume_id} | 
+[**del_volume_target**](Volumes.md#del_volume_target) | **Delete** /volumes/{volume_id}/target | 
 [**get_node_volume**](Volumes.md#get_node_volume) | **Get** /nodes/{node_id}/volumes/{volume_id} | 
 [**get_node_volumes**](Volumes.md#get_node_volumes) | **Get** /nodes/{node_id}/volumes | 
 [**get_volume**](Volumes.md#get_volume) | **Get** /volumes/{volume_id} | 
 [**get_volumes**](Volumes.md#get_volumes) | **Get** /volumes | 
 [**put_volume**](Volumes.md#put_volume) | **Put** /volumes/{volume_id} | 
+[**put_volume_replica_count**](Volumes.md#put_volume_replica_count) | **Put** /volumes/{volume_id}/replica_count/{replica_count} | 
 [**put_volume_share**](Volumes.md#put_volume_share) | **Put** /volumes/{volume_id}/share/{protocol} | 
+[**put_volume_target**](Volumes.md#put_volume_target) | **Put** /volumes/{volume_id}/target | 
 
 
 
@@ -58,6 +61,34 @@ Name | Type | Description  | Required | Notes
 ### Return type
 
  (empty response body)
+
+### Authorization
+
+[JWT](../README.md#JWT)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## del_volume_target
+
+> crate::models::Volume del_volume_target(volume_id)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+
+### Return type
+
+[**crate::models::Volume**](Volume.md)
 
 ### Authorization
 
@@ -210,6 +241,35 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
+## put_volume_replica_count
+
+> crate::models::Volume put_volume_replica_count(volume_id, replica_count)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+**replica_count** | **u8** |  | [required] |
+
+### Return type
+
+[**crate::models::Volume**](Volume.md)
+
+### Authorization
+
+[JWT](../README.md#JWT)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
 ## put_volume_share
 
 > String put_volume_share(volume_id, protocol)
@@ -226,6 +286,38 @@ Name | Type | Description  | Required | Notes
 ### Return type
 
 **String**
+
+### Authorization
+
+[JWT](../README.md#JWT)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## put_volume_target
+
+> crate::models::Volume put_volume_target(volume_id, node, protocol)
+
+
+Create a volume target connectable for front-end IO from the specified node. Due to a limitation, this must currently be a mayastor storage node.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+**node** | **String** | The node where the front-end workload resides. If the workload moves then the volume must be republished. | [required] |
+**protocol** | [**crate::models::VolumeShareProtocol**](.md) | The protocol used to connect to the front-end node. | [required] |
+
+### Return type
+
+[**crate::models::Volume**](Volume.md)
 
 ### Authorization
 
