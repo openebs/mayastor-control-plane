@@ -134,6 +134,10 @@ impl NodeWrapper {
             })
             .collect()
     }
+    /// Get all pool states
+    pub(crate) fn pool_states(&self) -> Vec<store::pool::PoolState> {
+        self.states.read().get_pool_states()
+    }
     /// Get pool from `pool_id` or None
     pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<Pool> {
         self.states.read().get_pool_state(pool_id).map(|p| p.pool)
@@ -162,6 +166,10 @@ impl NodeWrapper {
             .map(|r| r.replica.clone())
             .collect()
     }
+    /// Get all replica states
+    pub(crate) fn replica_states(&self) -> Vec<ReplicaState> {
+        self.states.read().get_replica_states()
+    }
     /// Get all nexuses
     fn nexuses(&self) -> Vec<Nexus> {
         self.states
@@ -170,6 +178,10 @@ impl NodeWrapper {
             .iter()
             .map(|nexus_state| nexus_state.nexus.clone())
             .collect()
+    }
+    /// Get all nexus states
+    pub(crate) fn nexus_states(&self) -> Vec<NexusState> {
+        self.states.read().get_nexus_states()
     }
     /// Get nexus
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
@@ -320,6 +332,10 @@ use crate::{
     node::service::NodeCommsTimeout,
 };
 use async_trait::async_trait;
+use common_lib::types::v0::{
+    store,
+    store::{nexus::NexusState, replica::ReplicaState},
+};
 use std::{ops::Deref, sync::Arc};
 
 /// CRUD Operations on a locked mayastor `NodeWrapper` such as:

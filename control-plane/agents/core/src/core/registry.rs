@@ -13,7 +13,7 @@
 //!
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
-use super::{specs::*, states::ResourceStatesLocked, wrapper::NodeWrapper};
+use super::{specs::*, wrapper::NodeWrapper};
 use crate::core::wrapper::InternalOps;
 use common::errors::SvcError;
 use common_lib::{
@@ -36,8 +36,6 @@ pub struct RegistryInner<S: Store> {
     pub(crate) nodes: Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>,
     /// spec (aka desired state) of the various resources
     pub(crate) specs: ResourceSpecsLocked,
-    /// state (aka actual state) of the various resources
-    pub(crate) states: ResourceStatesLocked,
     /// period to refresh the cache
     cache_period: std::time::Duration,
     pub(crate) store: Arc<Mutex<S>>,
@@ -66,7 +64,6 @@ impl Registry {
         let registry = Self {
             nodes: Default::default(),
             specs: ResourceSpecsLocked::new(),
-            states: ResourceStatesLocked::new(),
             cache_period,
             store: Arc::new(Mutex::new(store)),
             store_timeout,
