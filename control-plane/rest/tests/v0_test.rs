@@ -32,7 +32,7 @@ fn jwk_file() -> String {
 }
 
 // Setup the infrastructure ready for the tests.
-async fn test_setup(auth: &bool) -> (String, ComposeTest) {
+async fn test_setup(auth: &bool) -> ((String, String), ComposeTest) {
     let jwk_file = jwk_file();
     let mut rest_args = match auth {
         true => vec!["--jwk", &jwk_file],
@@ -40,7 +40,8 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
     };
     rest_args.append(&mut vec!["-j", "10.1.0.6:6831", "--dummy-certificates"]);
 
-    let mayastor = "node-test-name";
+    let mayastor1 = "node-test-name-1";
+    let mayastor2 = "node-test-name-2";
     let test = Builder::new()
         .name("rest")
         .add_container_spec(
@@ -64,11 +65,18 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
             .with_portmap("8081", "8081"),
         )
         .add_container_bin(
-            "mayastor",
+            "mayastor-1",
             Binary::from_nix("mayastor")
                 .with_nats("-n")
-                .with_args(vec!["-N", mayastor])
+                .with_args(vec!["-N", mayastor1])
                 .with_args(vec!["-g", "10.1.0.5:10124"]),
+        )
+        .add_container_bin(
+            "mayastor-2",
+            Binary::from_nix("mayastor")
+                .with_nats("-n")
+                .with_args(vec!["-N", mayastor2])
+                .with_args(vec!["-g", "10.1.0.6:10124"]),
         )
         .add_container_spec(
             ContainerSpec::from_image("jaeger", "jaegertracing/all-in-one:latest")
@@ -96,7 +104,7 @@ async fn test_setup(auth: &bool) -> (String, ComposeTest) {
         .build()
         .await
         .unwrap();
-    (mayastor.into(), test)
+    ((mayastor1.into(), mayastor2.into()), test)
 }
 
 /// Wait to establish a connection to etcd.
@@ -120,9 +128,12 @@ async fn orderly_start(test: &ComposeTest) {
     test.start("core").await.unwrap();
     wait_for_services().await;
 
-    test.start("mayastor").await.unwrap();
+    test.start("mayastor-1").await.unwrap();
+    test.start("mayastor-2").await.unwrap();
 
-    let mut hdl = test.grpc_handle("mayastor").await.unwrap();
+    let mut hdl = test.grpc_handle("mayastor-1").await.unwrap();
+    hdl.mayastor.list_nexus(Null {}).await.unwrap();
+    let mut hdl = test.grpc_handle("mayastor-2").await.unwrap();
     hdl.mayastor.list_nexus(Null {}).await.unwrap();
 }
 
@@ -145,11 +156,11 @@ async fn client() {
     // Run the client test both with and without authentication.
     for auth in &[true, false] {
         let (mayastor, test) = test_setup(auth).await;
-        client_test(&mayastor.into(), &test, auth).await;
+        client_test(&mayastor.0.into(), &mayastor.1.into(), &test, auth).await;
     }
 }
 
-async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
+async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest, auth: &bool) {
     orderly_start(test).await;
 
     let client = ActixRestClient::new(
@@ -164,19 +175,22 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
     .v00();
 
     let nodes = client.nodes_api().get_nodes().await.unwrap();
+    info!("Nodes: {:#?}", nodes);
+    assert_eq!(nodes.len(), 2);
+
+    let listed_node = client.nodes_api().get_node(mayastor1.as_str()).await;
     let mut node = models::Node {
-        id: mayastor.to_string(),
+        id: mayastor1.to_string(),
         grpc_endpoint: "10.1.0.5:10124".to_string(),
         state: models::NodeState::Online,
     };
-    assert_eq!(nodes.len(), 1);
-    assert_eq!(nodes.first().unwrap(), &node);
-    info!("Nodes: {:#?}", nodes);
+    assert_eq!(listed_node.unwrap(), node);
+
     let _ = client.pools_api().get_pools().await.unwrap();
     let pool = client
         .pools_api()
         .put_node_pool(
-            mayastor.as_str(),
+            mayastor1.as_str(),
             "pooloop",
             models::CreatePoolBody::new(vec![
                 "malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0",
@@ -189,7 +203,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
     assert_eq!(
         pool,
         models::Pool {
-            node: "node-test-name".into(),
+            node: mayastor1.to_string(),
             id: "pooloop".into(),
             disks: vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
             state: models::PoolState::Online,
@@ -202,6 +216,20 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         Some(&pool),
         client.pools_api().get_pools().await.unwrap().first()
     );
+
+    let pool = client
+        .pools_api()
+        .put_node_pool(
+            mayastor2.as_str(),
+            "pooloop2",
+            models::CreatePoolBody::new(vec![
+                "malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b1",
+            ]),
+        )
+        .await
+        .unwrap();
+
+    info!("Pools: {:#?}", pool);
 
     let _ = client.replicas_api().get_replicas().await.unwrap();
     let replica = client
@@ -250,7 +278,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
     let nexus = client
         .nexuses_api()
         .put_node_nexus(
-            "node-test-name",
+            mayastor1.as_str(),
             "058a95e5-cee6-4e81-b682-fe864ca99b9c",
             models::CreateNexusBody::new(
                 vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"],
@@ -264,7 +292,7 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
     assert_eq!(
         nexus,
         models::Nexus {
-            node: "node-test-name".into(),
+            node: mayastor1.to_string(),
             uuid: FromStr::from_str("058a95e5-cee6-4e81-b682-fe864ca99b9c").unwrap(),
             size: 12582912,
             state: models::NexusState::Online,
@@ -335,6 +363,44 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
             .unwrap()
     );
 
+    let volume = client
+        .volumes_api()
+        .put_volume_target(
+            &volume.uuid.to_string(),
+            mayastor1.as_str(),
+            models::VolumeShareProtocol::Nvmf,
+        )
+        .await
+        .unwrap();
+    let nexus = volume.children.first().unwrap();
+    tracing::info!("Published on '{}'", nexus.node);
+
+    let volume = client
+        .volumes_api()
+        .put_volume_replica_count(&volume.uuid.to_string(), 2)
+        .await
+        .expect("We have 2 nodes with a pool each");
+    tracing::info!("Volume: {:#?}", volume);
+    let nexus = volume.children.first().unwrap();
+    assert_eq!(nexus.children.len(), 2);
+
+    let volume = client
+        .volumes_api()
+        .put_volume_replica_count(&volume.uuid.to_string(), 1)
+        .await
+        .expect("Should be able to reduce back to 1");
+    tracing::info!("Volume: {:#?}", volume);
+    let nexus = volume.children.first().unwrap();
+    assert_eq!(nexus.children.len(), 1);
+
+    let volume = client
+        .volumes_api()
+        .del_volume_target(&volume.uuid.to_string())
+        .await
+        .unwrap();
+    tracing::info!("Volume: {:#?}", volume);
+    assert!(volume.children.is_empty());
+
     let _watch_volume = WatchResourceId::Volume(volume.uuid.to_string().into());
     let callback = url::Url::parse("http://lala/test").unwrap();
 
@@ -378,25 +444,32 @@ async fn client_test(mayastor: &NodeId, test: &ComposeTest, auth: &bool) {
         .del_node_pool(&pool.node, &pool.id)
         .await
         .unwrap();
-    let pools = client.pools_api().get_pools().await.unwrap();
+    let pools = client.pools_api().get_node_pools(&pool.node).await.unwrap();
     assert!(pools.is_empty());
 
     client
         .json_grpc_api()
-        .put_node_jsongrpc(mayastor.as_str(), "rpc_get_methods", serde_json::json!({}))
+        .put_node_jsongrpc(mayastor1.as_str(), "rpc_get_methods", serde_json::json!({}))
         .await
         .expect("Failed to call JSON gRPC method");
 
     client
         .block_devices_api()
-        .get_node_block_devices(mayastor.as_str(), Some(true))
+        .get_node_block_devices(mayastor1.as_str(), Some(true))
         .await
         .expect("Failed to get block devices");
 
-    test.stop("mayastor").await.unwrap();
+    test.stop("mayastor-1").await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     node.state = models::NodeState::Unknown;
-    assert_eq!(client.nodes_api().get_nodes().await.unwrap(), vec![node]);
+    assert_eq!(
+        client
+            .nodes_api()
+            .get_node(mayastor1.as_str())
+            .await
+            .unwrap(),
+        node
+    );
 }
 
 #[actix_rt::test]

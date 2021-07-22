@@ -85,7 +85,7 @@ impl Service {
 
     /// Publish volume
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<String, SvcError> {
+    pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
         self.registry
             .specs
             .publish_volume(&self.registry, request)
@@ -94,7 +94,10 @@ impl Service {
 
     /// Unpublish volume
     #[tracing::instrument(level = "debug", err)]
-    pub(super) async fn unpublish_volume(&self, request: &UnpublishVolume) -> Result<(), SvcError> {
+    pub(super) async fn unpublish_volume(
+        &self,
+        request: &UnpublishVolume,
+    ) -> Result<Volume, SvcError> {
         self.registry
             .specs
             .unpublish_volume(&self.registry, request)

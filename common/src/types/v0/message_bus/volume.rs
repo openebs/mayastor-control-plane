@@ -330,6 +330,20 @@ pub struct PublishVolume {
     /// share protocol
     pub share: Option<VolumeShareProtocol>,
 }
+impl PublishVolume {
+    /// Create new `PublishVolume` based on the provided arguments
+    pub fn new(
+        uuid: VolumeId,
+        target_node: Option<NodeId>,
+        share: Option<VolumeShareProtocol>,
+    ) -> Self {
+        Self {
+            uuid,
+            target_node,
+            share,
+        }
+    }
+}
 
 /// Unpublish a volume from any node where it may be published
 /// Unshares the children nexuses from the volume and destroys them.
@@ -338,6 +352,12 @@ pub struct PublishVolume {
 pub struct UnpublishVolume {
     /// uuid of the volume
     pub uuid: VolumeId,
+}
+impl UnpublishVolume {
+    /// Create a new `UnpublishVolume` for the given uuid
+    pub fn new(uuid: VolumeId) -> Self {
+        Self { uuid }
+    }
 }
 
 /// Share Volume request
@@ -366,6 +386,12 @@ pub struct SetVolumeReplica {
     pub uuid: VolumeId,
     /// replica count
     pub replicas: u8,
+}
+impl SetVolumeReplica {
+    /// Create new `SetVolumeReplica` based on the provided arguments
+    pub fn new(uuid: VolumeId, replicas: u8) -> Self {
+        Self { uuid, replicas }
+    }
 }
 
 /// Delete volume

@@ -73,9 +73,9 @@ bus_impl_message_all!(ShareVolume, ShareVolume, String, Volume);
 
 bus_impl_message_all!(UnshareVolume, UnshareVolume, (), Volume);
 
-bus_impl_message_all!(PublishVolume, PublishVolume, String, Volume);
+bus_impl_message_all!(PublishVolume, PublishVolume, Volume, Volume);
 
-bus_impl_message_all!(UnpublishVolume, UnpublishVolume, (), Volume);
+bus_impl_message_all!(UnpublishVolume, UnpublishVolume, Volume, Volume);
 
 bus_impl_message_all!(DestroyVolume, DestroyVolume, (), Volume);
 

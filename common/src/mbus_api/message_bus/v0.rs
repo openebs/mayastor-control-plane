@@ -8,8 +8,9 @@ use crate::{
         AddNexusChild, AddVolumeNexus, Child, CreateNexus, CreatePool, CreateReplica, CreateVolume,
         DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter, GetBlockDevices,
         GetNexuses, GetNodes, GetPools, GetReplicas, GetSpecs, GetStates, GetVolumes,
-        JsonGrpcRequest, Nexus, Node, NodeId, Pool, RemoveNexusChild, RemoveVolumeNexus, Replica,
-        ShareNexus, ShareReplica, Specs, States, UnshareNexus, UnshareReplica, Volume,
+        JsonGrpcRequest, Nexus, Node, NodeId, Pool, PublishVolume, RemoveNexusChild,
+        RemoveVolumeNexus, Replica, SetVolumeReplica, ShareNexus, ShareReplica, Specs, States,
+        UnpublishVolume, UnshareNexus, UnshareReplica, Volume, VolumeId, VolumeShareProtocol,
     },
 };
 use async_trait::async_trait;
@@ -226,6 +227,32 @@ pub trait MessageBusTrait: Sized {
     async fn remove_volume_nexus(request: RemoveVolumeNexus) -> BusResult<()> {
         request.request().await?;
         Ok(())
+    }
+
+    /// publish volume on the given node and optionally make it available for IO through the
+    /// specified protocol
+    #[tracing::instrument(level = "debug", err)]
+    async fn publish_volume(
+        uuid: VolumeId,
+        node: Option<NodeId>,
+        protocol: Option<VolumeShareProtocol>,
+    ) -> BusResult<Volume> {
+        let request = PublishVolume::new(uuid, node, protocol);
+        Ok(request.request().await?)
+    }
+
+    /// unpublish the given volume uuid
+    #[tracing::instrument(level = "debug", err)]
+    async fn unpublish_volume(uuid: VolumeId) -> BusResult<Volume> {
+        let request = UnpublishVolume::new(uuid);
+        Ok(request.request().await?)
+    }
+
+    /// set volume replica count
+    #[tracing::instrument(level = "debug", err)]
+    async fn set_volume_replica(uuid: VolumeId, replica: u8) -> BusResult<Volume> {
+        let request = SetVolumeReplica::new(uuid, replica);
+        Ok(request.request().await?)
     }
 
     /// Generic JSON gRPC call
