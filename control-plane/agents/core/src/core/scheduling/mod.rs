@@ -1,8 +1,10 @@
+pub(crate) mod nexus;
 pub(crate) mod resources;
 pub(crate) mod volume;
 
 use crate::core::scheduling::{
-    resources::{PoolItem, ReplicaItem},
+    nexus::GetPersistedNexusChildrenCtx,
+    resources::{ChildItem, PoolItem, ReplicaItem},
     volume::GetSuitablePoolsContext,
 };
 use common_lib::types::v0::message_bus::PoolState;
@@ -24,11 +26,13 @@ pub(crate) trait ResourceFilter: Sized {
         filter(self).await
     }
     fn filter<F: FnMut(&Self::Request, &Self::Item) -> bool>(self, filter: F) -> Self;
-    async fn filter_async<Fn, Fut>(self, filter: Fn) -> Self
-    where
-        Fn: FnMut(&Self::Request, &Self::Item) -> Fut,
-        Fut: Future<Output = bool>;
     fn sort<F: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(self, sort: F) -> Self;
+    fn sort_ctx<F: FnMut(&Self::Request, &Self::Item, &Self::Item) -> std::cmp::Ordering>(
+        self,
+        _sort: F,
+    ) -> Self {
+        unimplemented!();
+    }
     fn collect(self) -> Vec<Self::Item>;
     fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
         self,
@@ -41,15 +45,15 @@ pub(crate) trait ResourceFilter: Sized {
 pub(crate) struct NodeFilters {}
 impl NodeFilters {
     /// Should only attempt to use online nodes
-    pub(crate) fn online_nodes(_request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(crate) fn online(_request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.node.is_online()
     }
     /// Should only attempt to use allowed nodes (by the topology)
-    pub(crate) fn allowed_nodes(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(crate) fn allowed(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         request.allowed_nodes().is_empty() || request.allowed_nodes().contains(&item.pool.node)
     }
     /// Should only attempt to use nodes not currently used by the volume
-    pub(crate) fn unused_nodes(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(crate) fn unused(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let registry = &request.registry;
         let used_nodes = registry.specs.get_volume_data_nodes(&request.uuid);
         !used_nodes.contains(&item.pool.node)
@@ -59,11 +63,11 @@ impl NodeFilters {
 pub(crate) struct PoolFilters {}
 impl PoolFilters {
     /// Should only attempt to use pools with sufficient free space
-    pub(crate) fn enough_free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(crate) fn free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.free_space() > request.size
     }
     /// Should only attempt to use usable (not faulted) pools
-    pub(crate) fn usable_pools(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.state != PoolState::Faulted && item.pool.state != PoolState::Unknown
     }
 }
@@ -119,6 +123,48 @@ impl ChildSorters {
                     },
                 }
             }
+        }
+    }
+}
+
+pub(crate) struct ChildInfoFilters {}
+impl ChildInfoFilters {
+    /// Should only allow healthy children
+    pub(crate) fn healthy(request: &GetPersistedNexusChildrenCtx, item: &ChildItem) -> bool {
+        // on first creation there is no nexus_info/child_info so all children are deemed healthy
+        let first_create = request.nexus_info().is_none();
+        first_create || item.info().as_ref().map(|i| i.healthy).unwrap_or(false)
+    }
+}
+
+pub(crate) struct ReplicaFilters {}
+impl ReplicaFilters {
+    /// Should only allow children with corresponding online replicas
+    pub(crate) fn online(_request: &GetPersistedNexusChildrenCtx, item: &ChildItem) -> bool {
+        item.state().online()
+    }
+
+    /// Should only allow children with corresponding replicas with enough size
+    pub(crate) fn size(request: &GetPersistedNexusChildrenCtx, item: &ChildItem) -> bool {
+        item.state().size >= request.spec().size
+    }
+}
+
+pub(crate) struct ChildItemSorters {}
+impl ChildItemSorters {
+    /// Sort ChildItem's for volume nexus creation
+    /// Prefer children local to where the nexus will be created
+    pub(crate) fn sort_by_locality(
+        request: &GetPersistedNexusChildrenCtx,
+        a: &ChildItem,
+        b: &ChildItem,
+    ) -> std::cmp::Ordering {
+        let a_is_local = &a.state().node == request.target_node();
+        let b_is_local = &b.state().node == request.target_node();
+        match (a_is_local, b_is_local) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            (_, _) => std::cmp::Ordering::Equal,
         }
     }
 }

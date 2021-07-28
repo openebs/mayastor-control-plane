@@ -2,6 +2,7 @@ pub mod child;
 pub mod definitions;
 pub mod nexus;
 pub mod nexus_child;
+pub mod nexus_persistence;
 pub mod node;
 pub mod pool;
 pub mod replica;

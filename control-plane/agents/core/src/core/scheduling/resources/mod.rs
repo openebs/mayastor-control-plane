@@ -3,8 +3,8 @@ use crate::core::{
     wrapper::{NodeWrapper, PoolWrapper},
 };
 use common_lib::types::v0::{
-    message_bus::{Child, ChildUri, Volume},
-    store::{replica::ReplicaSpec, volume::VolumeSpec},
+    message_bus::{Child, ChildUri, Replica, Volume},
+    store::{nexus_persistence::ChildInfo, replica::ReplicaSpec, volume::VolumeSpec},
 };
 
 #[derive(Debug, Clone)]
@@ -87,8 +87,7 @@ impl ReplicaItemLister {
         let nexuses = registry.specs.get_volume_nexuses(&spec.uuid);
         let replicas = replicas.iter().map(|r| r.lock().clone());
 
-        // no error is actually ever returned, fixup:
-        let replica_states = registry.get_replicas().await.unwrap();
+        let replica_states = registry.get_replicas().await;
         replicas
             .map(|r| {
                 ReplicaItem::new(
@@ -126,5 +125,59 @@ impl ReplicaItemLister {
                 )
             })
             .collect::<Vec<_>>()
+    }
+}
+
+/// Individual nexus child (replicas) which can be used for nexus creation
+#[derive(Debug, Clone)]
+pub(crate) struct ChildItem {
+    replica_spec: ReplicaSpec,
+    replica_state: Replica,
+    child_info: Option<ChildInfo>,
+}
+
+/// If the nexus is shutdown uncleanly, only one child/replica may be used and it must be healthy
+/// This is to avoid inconsistent data between the healthy replicas
+#[derive(Debug, Clone)]
+pub(crate) enum HealthyChildItems {
+    /// One with multiple healthy candidates
+    One(Vec<ChildItem>),
+    /// All the healthy replicas can be used
+    All(Vec<ChildItem>),
+}
+impl HealthyChildItems {
+    /// Check if there are no healthy children
+    pub(crate) fn is_empty(&self) -> bool {
+        match self {
+            HealthyChildItems::One(items) => items.is_empty(),
+            HealthyChildItems::All(items) => items.is_empty(),
+        }
+    }
+}
+
+impl ChildItem {
+    /// Create a new `Self` from the replica and the persistent child information
+    pub(crate) fn new(
+        replica_spec: ReplicaSpec,
+        replica_state: Replica,
+        child_info: Option<ChildInfo>,
+    ) -> Self {
+        Self {
+            replica_spec,
+            replica_state,
+            child_info,
+        }
+    }
+    /// Get the replica spec
+    pub(crate) fn spec(&self) -> &ReplicaSpec {
+        &self.replica_spec
+    }
+    /// Get the replica state
+    pub(crate) fn state(&self) -> &Replica {
+        &self.replica_state
+    }
+    /// Get the persisted nexus child information
+    pub(crate) fn info(&self) -> &Option<ChildInfo> {
+        &self.child_info
     }
 }

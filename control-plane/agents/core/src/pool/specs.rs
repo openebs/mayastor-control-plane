@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use snafu::OptionExt;
+
 use std::sync::Arc;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     },
     registry::Registry,
 };
-use common::errors::{NodeNotFound, SvcError};
+use common::errors::SvcError;
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
@@ -192,12 +192,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreatePool,
     ) -> Result<Pool, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         let pool_spec = self.get_or_create_pool(request);
         SpecOperations::start_create(&pool_spec, registry, request).await?;
@@ -213,12 +208,7 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         // what if the node is never coming back?
         // do we need a way to forcefully "delete" things?
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         let pool_spec = self.get_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
@@ -236,12 +226,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateReplica,
     ) -> Result<Replica, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         let replica_spec = self.get_or_create_replica(request);
         SpecOperations::start_create(&replica_spec, registry, request).await?;
@@ -279,12 +264,7 @@ impl ResourceSpecsLocked {
         request: &DestroyReplica,
         delete_owned: bool,
     ) -> Result<(), SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         let replica = self.get_replica(&request.uuid);
         if let Some(replica) = &replica {
@@ -302,12 +282,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &ShareReplica,
     ) -> Result<String, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;
@@ -330,12 +305,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &UnshareReplica,
     ) -> Result<String, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;

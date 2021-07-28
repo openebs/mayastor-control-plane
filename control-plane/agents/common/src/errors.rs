@@ -168,6 +168,8 @@ pub enum SvcError {
     },
     #[snafu(display("No suitable replica removal candidates found for Volume '{}'", id))]
     ReplicaRemovalNoCandidates { id: String },
+    #[snafu(display("No online replicas are available for Volume '{}'", id))]
+    NoOnlineReplicas { id: String },
 }
 
 impl From<StoreError> for SvcError {
@@ -467,6 +469,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::ReplicaRemovalNoCandidates { .. } => ReplyError {
                 kind: ReplyErrorKind::ReplicaIncrease,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::NoOnlineReplicas { .. } => ReplyError {
+                kind: ReplyErrorKind::VolumeNoReplicas,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),

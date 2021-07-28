@@ -1,5 +1,5 @@
 use crate::core::{registry::Registry, wrapper::*};
-use common::errors::{NexusNotFound, NodeNotFound, SvcError};
+use common::errors::{NexusNotFound, SvcError};
 use common_lib::types::v0::message_bus::{Nexus, NexusId, NodeId};
 use snafu::OptionExt;
 
@@ -18,9 +18,7 @@ impl Registry {
 
     /// Get all nexuses from node `node_id`
     pub(crate) async fn get_node_nexuses(&self, node_id: &NodeId) -> Result<Vec<Nexus>, SvcError> {
-        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
-            node_id: node_id.clone(),
-        })?;
+        let node = self.get_node_wrapper(node_id).await?;
         Ok(node.nexuses().await)
     }
 
@@ -30,9 +28,7 @@ impl Registry {
         node_id: &NodeId,
         nexus_id: &NexusId,
     ) -> Result<Nexus, SvcError> {
-        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
-            node_id: node_id.clone(),
-        })?;
+        let node = self.get_node_wrapper(node_id).await?;
         let nexus = node.nexus(nexus_id).await.context(NexusNotFound {
             nexus_id: nexus_id.clone(),
         })?;

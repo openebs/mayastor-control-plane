@@ -92,6 +92,21 @@ impl Registry {
         }
     }
 
+    /// Serialized read from the persistent store
+    pub async fn load_obj<O: StorableObject>(&self, key: &O::Key) -> Result<O, SvcError> {
+        let mut store = self.store.lock().await;
+        match tokio::time::timeout(self.store_timeout, async move { store.get_obj(key).await })
+            .await
+        {
+            Ok(obj) => Ok(obj?),
+            Err(_) => Err(StoreError::Timeout {
+                operation: "Get".to_string(),
+                timeout: self.store_timeout,
+            }
+            .into()),
+        }
+    }
+
     /// Serialized delete to the persistent store
     pub async fn delete_kv<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;

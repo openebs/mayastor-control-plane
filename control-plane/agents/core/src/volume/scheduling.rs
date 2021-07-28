@@ -1,13 +1,16 @@
 use crate::core::{
     registry::Registry,
     scheduling::{
-        resources::ReplicaItem,
+        nexus,
+        nexus::GetPersistedNexusChildren,
+        resources::{HealthyChildItems, ReplicaItem},
         volume,
         volume::{GetChildForRemoval, GetSuitablePools},
         ResourceFilter,
     },
     wrapper::PoolWrapper,
 };
+use common::errors::SvcError;
 
 /// Return a list of pre sorted pools to be used by a volume
 pub(crate) async fn get_volume_pool_candidates(
@@ -30,4 +33,21 @@ pub(crate) async fn get_nexus_child_remove_candidate(
     volume::DecreaseVolumeReplica::builder_with_defaults(request, registry)
         .await
         .collect()
+}
+
+/// Return healthy replicas for volume nexus creation
+pub(crate) async fn get_healthy_volume_replicas(
+    request: &GetPersistedNexusChildren,
+    registry: &Registry,
+) -> Result<HealthyChildItems, SvcError> {
+    let builder = nexus::CreateVolumeNexus::builder_with_defaults(request, registry).await?;
+
+    if let Some(info) = &builder.context().nexus_info() {
+        if !info.clean_shutdown {
+            let items = builder.collect();
+            return Ok(HealthyChildItems::One(items));
+        }
+    }
+    let items = builder.collect();
+    Ok(HealthyChildItems::All(items))
 }

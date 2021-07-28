@@ -11,7 +11,9 @@ async fn create_nexus_malloc() {
             node: cluster.node(0),
             uuid: v0::NexusId::new(),
             size: 10 * 1024 * 1024,
-            children: vec!["malloc:///disk?size_mb=100".into()],
+            children: vec![
+                "malloc:///disk?size_mb=100&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into(),
+            ],
             ..Default::default()
         })
         .await
@@ -29,7 +31,12 @@ async fn create_nexus_sizes() {
 
     for size_mb in &vec![6, 10, 100] {
         let size = size_mb * 1024 * 1024;
-        let disk = || format!("malloc:///disk?size_mb={}", size_mb);
+        let disk = || {
+            format!(
+                "malloc:///disk?size_mb={}&uuid=281b87d3-0401-459c-a594-60f76d0ce0da",
+                size_mb
+            )
+        };
         let sizes = vec![Ok(size / 2), Ok(size), Err(size + 512)];
         for test in sizes {
             let size = result_either!(test);
@@ -63,7 +70,12 @@ async fn create_nexus_sizes() {
 
     for size_mb in &vec![1, 2, 4] {
         let size = size_mb * 1024 * 1024;
-        let disk = || format!("malloc:///disk?size_mb={}", size_mb);
+        let disk = || {
+            format!(
+                "malloc:///disk?size_mb={}&uuid=281b87d3-0401-459c-a594-60f76d0ce0da",
+                size_mb
+            )
+        };
         let sizes = vec![Err(size / 2), Err(size), Err(size + 512)];
         for test in sizes {
             let size = result_either!(test);
@@ -106,14 +118,19 @@ async fn create_nexus_local_replica() {
         .await
         .unwrap();
 
-    let replica = format!("loopback:///{}", Cluster::replica(0, 0, 0));
+    let replica = cluster
+        .rest_v00()
+        .replicas_api()
+        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .await
+        .unwrap();
     cluster
         .rest_v0()
         .create_nexus(v0::CreateNexus {
             node: cluster.node(0),
             uuid: v0::NexusId::new(),
             size,
-            children: vec![replica.into()],
+            children: vec![replica.uri.into()],
             ..Default::default()
         })
         .await
@@ -131,7 +148,12 @@ async fn create_nexus_replicas() {
         .await
         .unwrap();
 
-    let local = format!("loopback:///{}", Cluster::replica(0, 0, 0));
+    let local = cluster
+        .rest_v00()
+        .replicas_api()
+        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .await
+        .unwrap();
     let remote = cluster
         .rest_v0()
         .share_replica(v0::ShareReplica {
@@ -149,7 +171,7 @@ async fn create_nexus_replicas() {
             node: cluster.node(0),
             uuid: v0::NexusId::new(),
             size,
-            children: vec![local.into(), remote.into()],
+            children: vec![local.uri.into(), remote.into()],
             ..Default::default()
         })
         .await
@@ -167,7 +189,12 @@ async fn create_nexus_replica_not_available() {
         .await
         .unwrap();
 
-    let local = format!("loopback:///{}", Cluster::replica(0, 0, 0));
+    let local = cluster
+        .rest_v00()
+        .replicas_api()
+        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .await
+        .unwrap();
     let remote = cluster
         .rest_v0()
         .share_replica(v0::ShareReplica {
@@ -194,7 +221,7 @@ async fn create_nexus_replica_not_available() {
             node: cluster.node(0),
             uuid: v0::NexusId::new(),
             size,
-            children: vec![local.into(), remote.into()],
+            children: vec![local.uri.into(), remote.into()],
             ..Default::default()
         })
         .await

@@ -43,7 +43,7 @@ async fn nexus() {
     .await
     .unwrap();
 
-    let local = "malloc:///local?size_mb=12".into();
+    let local = "malloc:///local?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b".into();
 
     let nexus = CreateNexus {
         node: mayastor.clone(),
@@ -125,7 +125,7 @@ async fn nexus_share_transaction() {
     let nodes = GetNodes {}.request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
-    let local = "malloc:///local?size_mb=12".into();
+    let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
     let nexus = CreateNexus {
         node: mayastor.clone(),
         uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
@@ -256,7 +256,7 @@ async fn nexus_share_transaction_store() {
         .unwrap();
     let mayastor = cluster.node(0);
 
-    let local = "malloc:///local?size_mb=12".into();
+    let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
     let nexus = CreateNexus {
         node: mayastor.clone(),
         uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
@@ -307,12 +307,12 @@ async fn nexus_child_transaction() {
     let nodes = GetNodes {}.request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
-    let child2 = "malloc:///ch2?size_mb=12";
+    let child2 = "malloc:///ch2?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b";
     let nexus = CreateNexus {
         node: mayastor.clone(),
         uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
         size: 5242880,
-        children: vec!["malloc:///ch1?size_mb=12".into()],
+        children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
         ..Default::default()
     }
     .request()
@@ -395,14 +395,14 @@ async fn nexus_child_transaction_store() {
         node: mayastor.clone(),
         uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
         size: 5242880,
-        children: vec!["malloc:///ch1?size_mb=12".into()],
+        children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
         ..Default::default()
     }
     .request()
     .await
     .unwrap();
 
-    let child2 = "malloc:///ch2?size_mb=12";
+    let child2 = "malloc:///ch2?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0db";
     let add_child = AddNexusChild {
         node: mayastor.clone(),
         nexus: nexus.uuid.clone(),

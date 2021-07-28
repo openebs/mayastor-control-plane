@@ -1,0 +1,61 @@
+use crate::types::v0::{
+    message_bus::NexusId,
+    store::definitions::{ObjectKey, StorableObject, StorableObjectType},
+};
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+
+/// Definition of the nexus information that gets saved in the persistent
+/// store.
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct NexusInfo {
+    #[serde(skip)]
+    /// uuid of the Nexus
+    pub uuid: NexusId,
+    /// Nexus destroyed successfully.
+    pub clean_shutdown: bool,
+    /// Information about children.
+    pub children: Vec<ChildInfo>,
+}
+
+/// Definition of the child information that gets saved in the persistent
+/// store.
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct ChildInfo {
+    /// UUID of the child.
+    pub uuid: String,
+    /// Child's state of health.
+    pub healthy: bool,
+}
+
+/// Key used by the store to uniquely identify a NexusInfo structure.
+pub struct NexusInfoKey(NexusId);
+
+impl From<&NexusId> for NexusInfoKey {
+    fn from(id: &NexusId) -> Self {
+        Self(id.clone())
+    }
+}
+
+impl ObjectKey for NexusInfoKey {
+    fn key(&self) -> String {
+        // no key prefix (as it's written by mayastor)
+        self.key_uuid()
+    }
+
+    fn key_type(&self) -> StorableObjectType {
+        StorableObjectType::NexusInfo
+    }
+
+    fn key_uuid(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+impl StorableObject for NexusInfo {
+    type Key = NexusInfoKey;
+
+    fn key(&self) -> Self::Key {
+        NexusInfoKey(self.uuid.clone())
+    }
+}
