@@ -69,7 +69,6 @@ Class | Method | HTTP request | Description
 *Volumes* | [**del_share**](docs/apis/Volumes.md#del_share) | **Delete** /volumes{volume_id}/share | 
 *Volumes* | [**del_volume**](docs/apis/Volumes.md#del_volume) | **Delete** /volumes/{volume_id} | 
 *Volumes* | [**del_volume_target**](docs/apis/Volumes.md#del_volume_target) | **Delete** /volumes/{volume_id}/target | 
-*Volumes* | [**get_node_volume**](docs/apis/Volumes.md#get_node_volume) | **Get** /nodes/{node_id}/volumes/{volume_id} | 
 *Volumes* | [**get_node_volumes**](docs/apis/Volumes.md#get_node_volumes) | **Get** /nodes/{node_id}/volumes | 
 *Volumes* | [**get_volume**](docs/apis/Volumes.md#get_volume) | **Get** /volumes/{volume_id} | 
 *Volumes* | [**get_volumes**](docs/apis/Volumes.md#get_volumes) | **Get** /volumes | 
@@ -126,6 +125,7 @@ Class | Method | HTTP request | Description
  - [VolumeSpec](docs/models/VolumeSpec.md)
  - [VolumeSpecOperation](docs/models/VolumeSpecOperation.md)
  - [VolumeState](docs/models/VolumeState.md)
+ - [VolumeStatus](docs/models/VolumeStatus.md)
  - [WatchCallback](docs/models/WatchCallback.md)
 
 

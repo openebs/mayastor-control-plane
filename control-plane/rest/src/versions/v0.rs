@@ -11,7 +11,7 @@ pub use common_lib::{
             CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
             GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri,
             PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol,
-            ShareNexus, ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica, Volume,
+            ShareNexus, ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica,
             VolumeHealPolicy, VolumeId, Watch, WatchCallback, WatchResourceId,
         },
         openapi::{apis, models},
@@ -21,6 +21,7 @@ use common_lib::{types::v0::message_bus::States, IntoVec};
 pub use models::rest_json_error::Kind as RestJsonErrorKind;
 
 use async_trait::async_trait;
+use common_lib::types::v0::message_bus::Volume;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, string::ToString};
 use strum_macros::{self, Display};
@@ -294,7 +295,7 @@ enum RestUrns {
     #[strum(serialize = "children")]
     GetChildren(Child),
     #[strum(serialize = "volumes")]
-    GetVolumes(Volume),
+    GetVolumes(Box<Volume>),
     /* does not work as expect as format! only takes literals...
      * #[strum(serialize = "nodes/{}/pools/{}")]
      * PutPool(Pool), */

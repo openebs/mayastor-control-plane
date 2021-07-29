@@ -13,9 +13,10 @@ async fn volume_share(
     protocol: NexusShareProtocol,
 ) -> Result<String, RestError<RestJsonError>> {
     let volume = MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
+    assert!(volume.get_state().is_some());
 
     // TODO: For ANA we will want to share all nexuses not just the first.
-    match volume.children.first() {
+    match volume.get_state().unwrap().children.first() {
         Some(nexus) => MessageBus::share_nexus(ShareNexus {
             node: nexus.node.clone(),
             uuid: nexus.uuid.clone(),
@@ -35,8 +36,9 @@ async fn volume_share(
 
 async fn volume_unshare(volume_id: VolumeId) -> Result<(), RestError<RestJsonError>> {
     let volume = MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
+    assert!(volume.get_state().is_some());
 
-    match volume.children.first() {
+    match volume.get_state().unwrap().children.first() {
         Some(nexus) => MessageBus::unshare_nexus(UnshareNexus {
             node: nexus.node.clone(),
             uuid: nexus.uuid.clone(),
@@ -71,14 +73,6 @@ impl apis::Volumes for RestApi {
         Path(volume_id): Path<String>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
         let volume = MessageBus::unpublish_volume(volume_id.into()).await?;
-        Ok(volume.into())
-    }
-
-    async fn get_node_volume(
-        Path((node_id, volume_id)): Path<(String, String)>,
-    ) -> Result<models::Volume, RestError<RestJsonError>> {
-        let volume =
-            MessageBus::get_volume(Filter::NodeVolume(node_id.into(), volume_id.into())).await?;
         Ok(volume.into())
     }
 

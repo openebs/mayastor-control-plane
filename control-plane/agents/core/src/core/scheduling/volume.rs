@@ -6,7 +6,7 @@ use crate::core::{
     },
 };
 use common_lib::types::v0::{
-    message_bus::{CreateVolume, Volume},
+    message_bus::{CreateVolume, VolumeState},
     store::volume::VolumeSpec,
 };
 use itertools::Itertools;
@@ -132,14 +132,14 @@ pub(crate) struct DecreaseVolumeReplica {
 #[derive(Clone)]
 pub(crate) struct GetChildForRemoval {
     spec: VolumeSpec,
-    status: Volume,
+    state: VolumeState,
 }
 
 impl GetChildForRemoval {
-    pub(crate) fn new(spec: &VolumeSpec, status: &Volume) -> Self {
+    pub(crate) fn new(spec: &VolumeSpec, state: &VolumeState) -> Self {
         Self {
             spec: spec.clone(),
-            status: status.clone(),
+            state: state.clone(),
         }
     }
 }
@@ -157,7 +157,7 @@ impl DecreaseVolumeReplica {
                 registry: registry.clone(),
                 spec: request.spec.clone(),
             },
-            list: ReplicaItemLister::list(registry, &request.spec, &request.status).await,
+            list: ReplicaItemLister::list(registry, &request.spec, &request.state).await,
         }
     }
     pub(crate) async fn builder_with_defaults(

@@ -9,7 +9,7 @@ use common_lib::{
             Child, ChildState, CreateVolume, DestroyVolume, ExplicitTopology, Filter, GetNexuses,
             GetNodes, GetReplicas, GetVolumes, Nexus, NodeId, Protocol, PublishVolume,
             SetVolumeReplica, ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume,
-            VolumeShareProtocol, VolumeState,
+            VolumeShareProtocol, VolumeState, VolumeStatus,
         },
         store::{
             definitions::Store,
@@ -86,7 +86,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     tracing::info!("Volume: {:?}", volume);
 
     let volume = PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume.get_spec().uuid.clone(),
         // publish it on the remote first, to complicate things
         target_node: Some(remote.clone()),
         share: None,
@@ -95,12 +95,13 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     .await
     .unwrap();
 
-    let nexus = volume.children.first().unwrap().clone();
+    let volume_state = volume.get_state().unwrap();
+    let nexus = volume_state.children.first().unwrap().clone();
     tracing::info!("Nexus: {:?}", nexus);
     let nexus_uuid = nexus.uuid.clone();
 
     UnpublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
     }
     .request()
     .await
@@ -117,7 +118,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     tracing::info!("NexusInfo: {:?}", nexus_info);
 
     let replicas = GetReplicas {
-        filter: Filter::Volume(volume.uuid.clone()),
+        filter: Filter::Volume(volume_state.uuid.clone()),
     }
     .request()
     .await
@@ -161,7 +162,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     tracing::info!("NexusInfo: {:?}", nexus_info);
 
     let volume = PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         target_node: Some(local.clone()),
         share: None,
     }
@@ -169,12 +170,14 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     .await
     .unwrap();
     tracing::info!("Volume: {:?}", volume);
-    let nexus = volume.children.first().unwrap().clone();
+
+    let volume_state = volume.get_state().unwrap();
+    let nexus = volume_state.children.first().unwrap().clone();
     tracing::info!("Nexus: {:?}", nexus);
     assert_eq!(nexus.children.len(), 1);
 
     let replicas = GetReplicas {
-        filter: Filter::Volume(volume.uuid.clone()),
+        filter: Filter::Volume(volume_state.uuid.clone()),
     }
     .request()
     .await
@@ -197,10 +200,12 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
         }
     }
 
-    DestroyVolume { uuid: volume.uuid }
-        .request()
-        .await
-        .expect("Should be able to destroy the volume");
+    DestroyVolume {
+        uuid: volume_state.uuid,
+    }
+    .request()
+    .await
+    .expect("Should be able to destroy the volume");
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
@@ -221,17 +226,23 @@ async fn publishing_test(cluster: &Cluster) {
     assert_eq!(Some(&volume), volumes.first());
 
     let volume = PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume.get_spec().uuid.clone(),
         target_node: None,
         share: None,
     }
     .request()
     .await
     .expect("Should be able to publish a newly created volume");
-    tracing::info!("Published on: {}", volume.children.first().unwrap().node);
+
+    let volume_state = volume.get_state().unwrap();
+
+    tracing::info!(
+        "Published on: {}",
+        volume_state.children.first().unwrap().node
+    );
 
     let share = ShareVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         protocol: Default::default(),
     }
     .request()
@@ -241,7 +252,7 @@ async fn publishing_test(cluster: &Cluster) {
     tracing::info!("Share: {}", share);
 
     ShareVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         protocol: Default::default(),
     }
     .request()
@@ -249,21 +260,21 @@ async fn publishing_test(cluster: &Cluster) {
     .expect_err("Can't share a shared volume");
 
     UnshareVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
     }
     .request()
     .await
     .expect("Should be able to unshare a shared volume");
 
     UnshareVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
     }
     .request()
     .await
     .expect_err("Can't unshare an unshared volume");
 
     PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         target_node: None,
         share: None,
     }
@@ -272,38 +283,41 @@ async fn publishing_test(cluster: &Cluster) {
     .expect_err("The Volume cannot be published again because it's already published");
 
     UnpublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
     }
     .request()
     .await
     .unwrap();
 
     let volume = PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         target_node: Some(cluster.node(0)),
         share: Some(VolumeShareProtocol::Iscsi),
     }
     .request()
     .await
     .expect("The volume is unpublished so we should be able to publish again");
-    let nx = volume.children.first().unwrap();
+
+    let volume_state = volume.get_state().unwrap();
+    let nx = volume_state.children.first().unwrap();
     tracing::info!("Published on '{}' with share '{}'", nx.node, nx.device_uri);
 
     let volumes = GetVolumes {
-        filter: Filter::Volume(volume.uuid.clone()),
+        filter: Filter::Volume(volume_state.uuid.clone()),
     }
     .request()
     .await
     .unwrap();
 
-    assert_eq!(volumes.0.first().unwrap().protocol, Protocol::Iscsi);
+    let first_volume_state = volumes.0.first().unwrap().get_state().unwrap();
+    assert_eq!(first_volume_state.protocol, Protocol::Iscsi);
     assert_eq!(
-        volumes.0.first().unwrap().target_node(),
+        first_volume_state.target_node(),
         Some(Some(cluster.node(0)))
     );
 
     PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         target_node: None,
         share: Some(VolumeShareProtocol::Iscsi),
     }
@@ -312,50 +326,58 @@ async fn publishing_test(cluster: &Cluster) {
     .expect_err("The volume is already published");
 
     UnpublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
     }
     .request()
     .await
     .unwrap();
 
     let volume = PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         target_node: Some(cluster.node(1)),
         share: None,
     }
     .request()
     .await
     .expect("The volume is unpublished so we should be able to publish again");
-    tracing::info!("Published on: {}", volume.children.first().unwrap().node);
+
+    let volume_state = volume.get_state().unwrap();
+    tracing::info!(
+        "Published on: {}",
+        volume_state.children.first().unwrap().node
+    );
 
     let volumes = GetVolumes {
-        filter: Filter::Volume(volume.uuid.clone()),
+        filter: Filter::Volume(volume_state.uuid.clone()),
     }
     .request()
     .await
     .unwrap();
 
+    let first_volume_state = volumes.0.first().unwrap().get_state().unwrap();
     assert_eq!(
-        volumes.0.first().unwrap().protocol,
+        first_volume_state.protocol,
         Protocol::None,
         "Was published but not shared"
     );
     assert_eq!(
-        volumes.0.first().unwrap().target_node(),
+        first_volume_state.target_node(),
         Some(Some(cluster.node(1)))
     );
 
-    DestroyVolume { uuid: volume.uuid }
-        .request()
-        .await
-        .expect("Should be able to destroy the volume");
+    DestroyVolume {
+        uuid: volume_state.uuid,
+    }
+    .request()
+    .await
+    .expect("Should be able to destroy the volume");
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
 }
 
-async fn get_volume(volume: &Volume) -> Volume {
+async fn get_volume(volume: &VolumeState) -> Volume {
     let request = GetVolumes {
         filter: Filter::Volume(volume.uuid.clone()),
     }
@@ -365,16 +387,18 @@ async fn get_volume(volume: &Volume) -> Volume {
     request.into_inner().first().cloned().unwrap()
 }
 
-async fn wait_for_volume_online(volume: &Volume) -> Result<Volume, ()> {
+async fn wait_for_volume_online(volume: &VolumeState) -> Result<VolumeState, ()> {
     let mut volume = get_volume(volume).await;
+    let mut volume_state = volume.get_state().unwrap();
     let mut tries = 0;
-    while volume.state != VolumeState::Online && tries < 20 {
+    while volume_state.status != VolumeStatus::Online && tries < 20 {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        volume = get_volume(&volume).await;
+        volume = get_volume(&volume_state).await;
+        volume_state = volume.get_state().unwrap();
         tries += 1;
     }
-    if volume.state == VolumeState::Online {
-        Ok(volume)
+    if volume_state.status == VolumeStatus::Online {
+        Ok(volume_state)
     } else {
         Err(())
     }
@@ -394,7 +418,7 @@ async fn replica_count_test() {
     assert_eq!(Some(&volume), volumes.first());
 
     let volume = PublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume.get_spec().uuid.clone(),
         ..Default::default()
     }
     .request()
@@ -402,7 +426,7 @@ async fn replica_count_test() {
     .unwrap();
 
     let volume = SetVolumeReplica {
-        uuid: volume.uuid.clone(),
+        uuid: volume.get_spec().uuid.clone(),
         replicas: 3,
     }
     .request()
@@ -410,8 +434,9 @@ async fn replica_count_test() {
     .expect("Should have enough nodes/pools to increase replica count");
     tracing::info!("Volume: {:?}", volume);
 
+    let volume_state = volume.get_state().unwrap();
     let error = SetVolumeReplica {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         replicas: 4,
     }
     .request()
@@ -429,7 +454,7 @@ async fn replica_count_test() {
         }
     ));
 
-    let volume = wait_for_volume_online(&volume).await.unwrap();
+    let volume = wait_for_volume_online(&volume_state).await.unwrap();
 
     let error = SetVolumeReplica {
         uuid: volume.uuid.clone(),
@@ -460,8 +485,9 @@ async fn replica_count_test() {
     .expect("Should be able to bring the replica count back down");
     tracing::info!("Volume: {:?}", volume);
 
+    let volume_state = volume.get_state().unwrap();
     let volume = SetVolumeReplica {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         replicas: 1,
     }
     .request()
@@ -469,14 +495,15 @@ async fn replica_count_test() {
     .expect("Should be able to bring the replica to 1");
     tracing::info!("Volume: {:?}", volume);
 
-    assert_eq!(volume.state, VolumeState::Online);
-    assert!(!volume
+    let volume_state = volume.get_state().unwrap();
+    assert_eq!(volume_state.status, VolumeStatus::Online);
+    assert!(!volume_state
         .children
         .iter()
         .any(|n| n.children.iter().any(|c| c.state != ChildState::Online)));
 
     let error = SetVolumeReplica {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         replicas: 0,
     }
     .request()
@@ -496,7 +523,7 @@ async fn replica_count_test() {
     ));
 
     let volume = SetVolumeReplica {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         replicas: 2,
     }
     .request()
@@ -504,15 +531,16 @@ async fn replica_count_test() {
     .expect("Should be able to bring the replica count back to 2");
     tracing::info!("Volume: {:?}", volume);
 
+    let volume_state = volume.get_state().unwrap();
     UnpublishVolume {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
     }
     .request()
     .await
     .unwrap();
 
     let volume = SetVolumeReplica {
-        uuid: volume.uuid.clone(),
+        uuid: volume_state.uuid.clone(),
         replicas: 3,
     }
     .request()
@@ -520,10 +548,12 @@ async fn replica_count_test() {
     .expect("Should be able to bring the replica count back to 3");
     tracing::info!("Volume: {:?}", volume);
 
-    DestroyVolume { uuid: volume.uuid }
-        .request()
-        .await
-        .expect("Should be able to destroy the volume");
+    DestroyVolume {
+        uuid: volume.get_spec().uuid,
+    }
+    .request()
+    .await
+    .expect("Should be able to destroy the volume");
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
@@ -544,10 +574,12 @@ async fn smoke_test() {
 
     assert_eq!(Some(&volume), volumes.first());
 
-    DestroyVolume { uuid: volume.uuid }
-        .request()
-        .await
-        .expect("Should be able to destroy the volume");
+    DestroyVolume {
+        uuid: volume.get_spec().uuid,
+    }
+    .request()
+    .await
+    .expect("Should be able to destroy the volume");
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());

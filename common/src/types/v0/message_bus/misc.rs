@@ -37,8 +37,6 @@ pub enum Filter {
     NodeNexus(NodeId, NexusId),
     /// Filter by Nexus
     Nexus(NexusId),
-    /// Filter by Node and Volume
-    NodeVolume(NodeId, VolumeId),
     /// Filter by Volume
     Volume(VolumeId),
 }

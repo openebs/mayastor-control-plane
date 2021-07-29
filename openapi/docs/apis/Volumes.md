@@ -7,7 +7,6 @@ Method | HTTP request | Description
 [**del_share**](Volumes.md#del_share) | **Delete** /volumes{volume_id}/share | 
 [**del_volume**](Volumes.md#del_volume) | **Delete** /volumes/{volume_id} | 
 [**del_volume_target**](Volumes.md#del_volume_target) | **Delete** /volumes/{volume_id}/target | 
-[**get_node_volume**](Volumes.md#get_node_volume) | **Get** /nodes/{node_id}/volumes/{volume_id} | 
 [**get_node_volumes**](Volumes.md#get_node_volumes) | **Get** /nodes/{node_id}/volumes | 
 [**get_volume**](Volumes.md#get_volume) | **Get** /volumes/{volume_id} | 
 [**get_volumes**](Volumes.md#get_volumes) | **Get** /volumes | 
@@ -84,35 +83,6 @@ Name | Type | Description  | Required | Notes
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**volume_id** | [**uuid::Uuid**](.md) |  | [required] |
-
-### Return type
-
-[**crate::models::Volume**](Volume.md)
-
-### Authorization
-
-[JWT](../README.md#JWT)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## get_node_volume
-
-> crate::models::Volume get_node_volume(node_id, volume_id)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**node_id** | **String** |  | [required] |
 **volume_id** | [**uuid::Uuid**](.md) |  | [required] |
 
 ### Return type

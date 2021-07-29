@@ -104,7 +104,7 @@ impl Service {
                 Ok(vec![replica])
             }
             Filter::Volume(volume_id) => {
-                let volume = self.registry.get_volume_status(&volume_id).await?;
+                let volume = self.registry.get_volume_state(&volume_id).await?;
                 let replicas = self.registry.get_replicas().await.into_iter();
                 let replicas = replicas
                     .filter(|r| {

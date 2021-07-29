@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::{types::v0::store::volume::VolumeSpec, IntoVec};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug};
 
@@ -8,45 +9,94 @@ bus_impl_string_uuid!(VolumeId, "UUID of a mayastor volume");
 /// Volumes
 ///
 /// Volume information
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Volume {
+    /// Desired specification of the volume.
+    spec: VolumeSpec,
+    /// Runtime state of the volume.
+    state: Option<VolumeState>,
+}
+
+impl Volume {
+    /// Construct a new volume.
+    pub fn new(spec: &VolumeSpec, state: &Option<VolumeState>) -> Self {
+        Self {
+            spec: spec.clone(),
+            state: state.clone(),
+        }
+    }
+
+    /// Get the volume spec.
+    pub fn get_spec(&self) -> VolumeSpec {
+        self.spec.clone()
+    }
+
+    /// Get the volume state.
+    pub fn get_state(&self) -> Option<VolumeState> {
+        self.state.clone()
+    }
+}
+
+impl From<Volume> for models::Volume {
+    fn from(volume: Volume) -> Self {
+        Self {
+            spec: volume.get_spec().into(),
+            state: volume.state.map(|state| state.into()),
+        }
+    }
+}
+
+impl From<models::Volume> for Volume {
+    fn from(volume: models::Volume) -> Self {
+        Self {
+            spec: volume.spec.into(),
+            state: volume.state.map(From::from),
+        }
+    }
+}
+
+/// Runtime volume state information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeState {
     /// name of the volume
     pub uuid: VolumeId,
     /// size of the volume in bytes
     pub size: u64,
-    /// current state of the volume
-    pub state: VolumeState,
+    /// current status of the volume
+    pub status: VolumeStatus,
     /// current share protocol
     pub protocol: Protocol,
     /// array of children nexuses
     pub children: Vec<Nexus>,
 }
 
-impl From<Volume> for models::Volume {
-    fn from(src: Volume) -> Self {
-        Self::new(
-            src.children,
-            src.protocol,
-            src.size,
-            src.state,
-            apis::Uuid::try_from(src.uuid).unwrap(),
-        )
-    }
-}
-impl From<models::Volume> for Volume {
-    fn from(src: models::Volume) -> Self {
+impl From<VolumeState> for models::VolumeState {
+    fn from(volume: VolumeState) -> Self {
         Self {
-            uuid: src.uuid.to_string().into(),
-            size: src.size,
-            state: src.state.into(),
-            protocol: src.protocol.into(),
-            children: src.children.into_iter().map(From::from).collect(),
+            children: volume.children.into_vec(),
+            protocol: volume.protocol.into(),
+            size: volume.size,
+            status: Some(volume.status.into()),
+            uuid: apis::Uuid::try_from(volume.uuid).unwrap(),
         }
     }
 }
 
-impl Volume {
+impl From<models::VolumeState> for VolumeState {
+    fn from(state: models::VolumeState) -> Self {
+        Self {
+            uuid: state.uuid.to_string().into(),
+            size: state.size,
+            status: state.status.unwrap_or(models::VolumeStatus::Unknown).into(),
+            protocol: state.protocol.into(),
+            children: state.children.into_vec(),
+        }
+    }
+}
+
+impl VolumeState {
     /// Get the target node if the volume is published
     pub fn target_node(&self) -> Option<Option<NodeId>> {
         if self.children.len() > 1 {
@@ -58,14 +108,14 @@ impl Volume {
 
 /// ANA not supported at the moment, so derive volume state from the
 /// single Nexus instance
-impl From<(&VolumeId, &Nexus)> for Volume {
+impl From<(&VolumeId, &Nexus)> for VolumeState {
     fn from(src: (&VolumeId, &Nexus)) -> Self {
         let uuid = src.0.clone();
         let nexus = src.1;
         Self {
             uuid,
             size: nexus.size,
-            state: nexus.state.clone(),
+            status: nexus.status.clone(),
             protocol: nexus.share.clone(),
             children: vec![nexus.clone()],
         }
@@ -87,25 +137,26 @@ impl From<models::VolumeShareProtocol> for VolumeShareProtocol {
 
 /// Volume State information
 /// Currently it's the same as the nexus
-pub type VolumeState = NexusState;
+pub type VolumeStatus = NexusStatus;
 
-impl From<VolumeState> for models::VolumeState {
-    fn from(src: VolumeState) -> Self {
+impl From<VolumeStatus> for models::VolumeStatus {
+    fn from(src: VolumeStatus) -> Self {
         match src {
-            VolumeState::Unknown => Self::Unknown,
-            VolumeState::Online => Self::Online,
-            VolumeState::Degraded => Self::Degraded,
-            VolumeState::Faulted => Self::Faulted,
+            VolumeStatus::Unknown => models::VolumeStatus::Unknown,
+            VolumeStatus::Online => models::VolumeStatus::Online,
+            VolumeStatus::Degraded => models::VolumeStatus::Degraded,
+            VolumeStatus::Faulted => models::VolumeStatus::Faulted,
         }
     }
 }
-impl From<models::VolumeState> for VolumeState {
-    fn from(src: models::VolumeState) -> Self {
+
+impl From<models::VolumeStatus> for VolumeStatus {
+    fn from(src: models::VolumeStatus) -> Self {
         match src {
-            models::VolumeState::Online => Self::Online,
-            models::VolumeState::Degraded => Self::Degraded,
-            models::VolumeState::Faulted => Self::Faulted,
-            models::VolumeState::Unknown => Self::Unknown,
+            models::VolumeStatus::Online => VolumeStatus::Online,
+            models::VolumeStatus::Degraded => VolumeStatus::Degraded,
+            models::VolumeStatus::Faulted => VolumeStatus::Faulted,
+            models::VolumeStatus::Unknown => VolumeStatus::Unknown,
         }
     }
 }

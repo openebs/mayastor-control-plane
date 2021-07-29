@@ -24,8 +24,8 @@ pub struct Nexus {
     pub uuid: NexusId,
     /// size of the volume in bytes
     pub size: u64,
-    /// current state of the nexus
-    pub state: NexusState,
+    /// current status of the nexus
+    pub status: NexusStatus,
     /// array of children
     pub children: Vec<Child>,
     /// URI of the device for the volume (missing if not published).
@@ -46,7 +46,7 @@ impl From<Nexus> for models::Nexus {
             src.rebuilds,
             src.share,
             src.size,
-            src.state,
+            src.status,
             apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }
@@ -56,7 +56,7 @@ impl From<models::Nexus> for Nexus {
         Self {
             node: src.node.into(),
             uuid: src.uuid.to_string().into(),
-            state: src.state.into(),
+            status: src.state.into(),
             children: src.children.into_iter().map(From::from).collect(),
             device_uri: src.device_uri,
             rebuilds: src.rebuilds,
@@ -70,7 +70,7 @@ bus_impl_string_uuid!(NexusId, "UUID of a mayastor nexus");
 
 /// Nexus State information
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
-pub enum NexusState {
+pub enum NexusStatus {
     /// Default Unknown state
     Unknown = 0,
     /// healthy and working
@@ -80,12 +80,12 @@ pub enum NexusState {
     /// broken and unable to serve IO
     Faulted = 3,
 }
-impl Default for NexusState {
+impl Default for NexusStatus {
     fn default() -> Self {
         Self::Unknown
     }
 }
-impl From<i32> for NexusState {
+impl From<i32> for NexusStatus {
     fn from(src: i32) -> Self {
         match src {
             1 => Self::Online,
@@ -95,17 +95,17 @@ impl From<i32> for NexusState {
         }
     }
 }
-impl From<NexusState> for models::NexusState {
-    fn from(src: NexusState) -> Self {
+impl From<NexusStatus> for models::NexusState {
+    fn from(src: NexusStatus) -> Self {
         match src {
-            NexusState::Unknown => Self::Unknown,
-            NexusState::Online => Self::Online,
-            NexusState::Degraded => Self::Degraded,
-            NexusState::Faulted => Self::Faulted,
+            NexusStatus::Unknown => Self::Unknown,
+            NexusStatus::Online => Self::Online,
+            NexusStatus::Degraded => Self::Degraded,
+            NexusStatus::Faulted => Self::Faulted,
         }
     }
 }
-impl From<models::NexusState> for NexusState {
+impl From<models::NexusState> for NexusStatus {
     fn from(src: models::NexusState) -> Self {
         match src {
             models::NexusState::Unknown => Self::Unknown,
