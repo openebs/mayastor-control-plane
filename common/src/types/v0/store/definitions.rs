@@ -138,6 +138,7 @@ pub enum StorableObjectType {
     Nexus,
     NexusSpec,
     NexusState,
+    NexusInfo,
     Node,
     NodeSpec,
     Pool,

@@ -6,14 +6,15 @@ impl ComponentAction for Mayastor {
         let mut cfg = cfg;
         for i in 0 .. options.mayastors {
             let mayastor_socket = format!("{}:10124", cfg.next_container_ip()?);
-
-            cfg = cfg.add_container_bin(
-                &Self::name(i, options),
-                Binary::from_nix("mayastor")
-                    .with_nats("-n")
-                    .with_args(vec!["-N", &Self::name(i, options)])
-                    .with_args(vec!["-g", &mayastor_socket]),
-            )
+            let mut bin = Binary::from_nix("mayastor")
+                .with_nats("-n")
+                .with_args(vec!["-N", &Self::name(i, options)])
+                .with_args(vec!["-g", &mayastor_socket]);
+            if !options.no_etcd {
+                let etcd = format!("etcd.{}:2379", options.cluster_name);
+                bin = bin.with_args(vec!["-p", &etcd]);
+            }
+            cfg = cfg.add_container_bin(&Self::name(i, options), bin)
         }
         Ok(cfg)
     }

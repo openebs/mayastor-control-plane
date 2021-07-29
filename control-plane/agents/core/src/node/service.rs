@@ -88,6 +88,7 @@ impl Service {
         match nodes.get_mut(&node.id) {
             None => {
                 let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
+                node.reload().await.ok();
                 node.watchdog_mut().arm(self.clone());
                 nodes.insert(node.id.clone(), Arc::new(Mutex::new(node)));
             }
@@ -127,13 +128,7 @@ impl Service {
         &self,
         request: &GetBlockDevices,
     ) -> Result<BlockDevices, SvcError> {
-        let node = self
-            .registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = self.registry.get_node_wrapper(&request.node).await?;
 
         let grpc = node.lock().await.grpc_context()?;
         let mut client = grpc.connect().await?;
@@ -203,11 +198,14 @@ impl Registry {
     pub(crate) async fn get_node_wrapper(
         &self,
         node_id: &NodeId,
-    ) -> Option<Arc<Mutex<NodeWrapper>>> {
+    ) -> Result<Arc<Mutex<NodeWrapper>>, SvcError> {
         let nodes = self.nodes.read().await;
         nodes
             .iter()
             .find(|n| n.0 == node_id)
             .map(|(_, node)| node.clone())
+            .context(NodeNotFound {
+                node_id: node_id.to_owned(),
+            })
     }
 }

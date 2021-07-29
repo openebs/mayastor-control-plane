@@ -1,7 +1,8 @@
 use crate::{
     core::{
         scheduling::{
-            resources::ReplicaItem,
+            nexus::GetPersistedNexusChildren,
+            resources::{HealthyChildItems, ReplicaItem},
             volume::{GetChildForRemoval, GetSuitablePools},
         },
         specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
@@ -11,7 +12,7 @@ use crate::{
 };
 use common::{
     errors,
-    errors::{NodeNotFound, NotEnough, SvcError},
+    errors::{NotEnough, SvcError},
 };
 use common_lib::{
     mbus_api::ResourceKind,
@@ -116,6 +117,32 @@ async fn get_create_volume_replicas(
         }))
     } else {
         Ok(node_replicas)
+    }
+}
+
+/// Get all usable healthy replicas for volume nexus creation
+/// If no usable replica is available, return an error
+pub(crate) async fn get_healthy_volume_replicas(
+    spec: &VolumeSpec,
+    target_node: &NodeId,
+    registry: &Registry,
+) -> Result<HealthyChildItems, SvcError> {
+    let children = scheduling::get_healthy_volume_replicas(
+        &GetPersistedNexusChildren::new(spec, target_node),
+        registry,
+    )
+    .await?;
+
+    tracing::debug!(
+        "Healthy volume nexus replicas for volume '{}': {:?}",
+        spec.uuid,
+        children
+    );
+
+    if children.is_empty() {
+        Err(SvcError::NoOnlineReplicas { id: spec.uuid() })
+    } else {
+        Ok(children)
     }
 }
 
@@ -410,29 +437,27 @@ impl ResourceSpecsLocked {
 
         let status = registry.get_volume_status(&request.uuid).await?;
         let nexus_node = get_volume_target_node(registry, &status, request).await?;
+        let nexus_id = NexusId::new();
 
-        let spec_clone = SpecOperations::start_update(
-            registry,
-            &spec,
-            &status,
-            VolumeOperation::Publish((nexus_node.clone(), request.share)),
-        )
-        .await?;
+        let operation =
+            VolumeOperation::Publish((nexus_node.clone(), nexus_id.clone(), request.share));
+        let spec_clone = SpecOperations::start_update(registry, &spec, &status, operation).await?;
 
         // Create a Nexus on the requested or auto-selected node
         let result = self
-            .volume_create_nexus(registry, &nexus_node, &spec_clone)
+            .volume_create_nexus(registry, &nexus_node, &nexus_id, &spec_clone)
             .await;
 
         let nexus =
             SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
 
         // Share the Nexus if it was requested
-        let mut result = Ok(nexus.device_uri.clone());
+        let mut result = Ok(nexus.clone());
         if let Some(share) = request.share {
             result = self
                 .share_nexus(registry, &ShareNexus::from((&nexus, None, share)))
-                .await;
+                .await
+                .map(|_| nexus);
         }
         SpecOperations::complete_update(registry, result, spec, spec_clone).await?;
         registry.get_volume_status(&status.uuid).await
@@ -656,79 +681,77 @@ impl ResourceSpecsLocked {
         }
     }
 
+    /// Make the replica accessible on the specified `NodeId`
+    /// This means the replica might have to be shared/unshared so it can be open through
+    /// the correct protocol (loopback locally, and nvmf remotely)
+    async fn make_replica_accessible(
+        &self,
+        registry: &Registry,
+        replica_state: &Replica,
+        nexus_node: &NodeId,
+    ) -> Result<ChildUri, SvcError> {
+        if nexus_node == &replica_state.node {
+            // on the same node, so connect via the loopback bdev
+            match self.unshare_replica(registry, &replica_state.into()).await {
+                Ok(uri) => Ok(uri.into()),
+                Err(SvcError::NotShared { .. }) => Ok(replica_state.uri.clone().into()),
+                Err(error) => Err(error),
+            }
+        } else {
+            // on a different node, so connect via an nvmf target
+            match self.share_replica(registry, &replica_state.into()).await {
+                Ok(uri) => Ok(uri.into()),
+                Err(SvcError::AlreadyShared { .. }) => Ok(replica_state.uri.clone().into()),
+                Err(error) => Err(error),
+            }
+        }
+    }
+
     /// Create a nexus for the given volume on the specified target_node
     /// Existing replicas may be shared/unshared so we can connect to them
     async fn volume_create_nexus(
         &self,
         registry: &Registry,
         target_node: &NodeId,
+        nexus_id: &NexusId,
         vol_spec: &VolumeSpec,
     ) -> Result<Nexus, SvcError> {
-        // find all replica status
-        let status_replicas = registry.get_replicas().await.unwrap();
-        // find all replica specs for this volume
-        let spec_replicas = self.get_volume_replicas(&vol_spec.uuid);
+        let children = get_healthy_volume_replicas(vol_spec, target_node, registry).await?;
+        let (count, items) = match children {
+            HealthyChildItems::One(candidates) => (1, candidates),
+            HealthyChildItems::All(candidates) => (candidates.len(), candidates),
+        };
 
-        let mut spec_status_pair = vec![];
-        for status_replica in status_replicas.iter() {
-            for locked_replica in spec_replicas.iter() {
-                let mut spec_replica = locked_replica.lock();
-                if spec_replica.uuid == status_replica.uuid {
-                    // todo: also check the health from etcd
-                    // and that we don't have multiple replicas on the same node?
-                    if spec_replica.size >= vol_spec.size && spec_replica.managed {
-                        spec_status_pair.push((locked_replica.clone(), status_replica.clone()));
-                        break;
-                    } else {
-                        // this replica is no longer valid
-                        // todo: do it now, or let the reconcile do it?
-                        spec_replica.owners.disowned_by_volume();
-                    }
-                }
-            }
-        }
         let mut nexus_replicas = vec![];
-        // now reduce the replicas
-        // one replica per node, with the right share protocol
-        for (spec, status) in spec_status_pair.iter() {
-            if nexus_replicas.len() > vol_spec.num_replicas as usize {
-                // we have enough replicas as per the volume spec
+        let mut nodes = vec![];
+        for item in items {
+            if nexus_replicas.len() >= count {
                 break;
+            } else if nodes.contains(&item.state().node) {
+                // spread the children across the nodes
+                continue;
             }
-            let (share, unshare) = {
-                let spec = spec.lock();
-                let local = &status.node == target_node;
-                (
-                    local && (spec.share.shared() | status.share.shared()),
-                    !local && (!spec.share.shared() | !status.share.shared()),
-                )
-            };
-            if share {
-                // unshare the replica
-                if let Ok(uri) = self.unshare_replica(registry, &status.into()).await {
-                    nexus_replicas.push((spec, ChildUri::from(uri)));
-                }
-            } else if unshare {
-                // share the replica
-                if let Ok(uri) = self.share_replica(registry, &status.into()).await {
-                    nexus_replicas.push((spec, ChildUri::from(uri)));
-                }
-            } else {
-                nexus_replicas.push((spec, ChildUri::from(&status.uri)));
+
+            if let Ok(uri) = self
+                .make_replica_accessible(registry, item.state(), target_node)
+                .await
+            {
+                nexus_replicas.push(NexusChild::Replica(ReplicaUri::new(
+                    &item.spec().uuid,
+                    &uri,
+                )));
+                nodes.push(item.state().node.clone());
             }
         }
 
-        // Create the nexus on the request.node
+        // Create the nexus on the requested node
         self.create_nexus(
             registry,
             &CreateNexus {
                 node: target_node.clone(),
-                uuid: NexusId::new(),
+                uuid: nexus_id.clone(),
                 size: vol_spec.size,
-                children: nexus_replicas
-                    .iter()
-                    .map(|(spec, uri)| NexusChild::from(&ReplicaUri::new(&spec.lock().uuid, uri)))
-                    .collect(),
+                children: nexus_replicas,
                 managed: true,
                 owner: Some(vol_spec.uuid.clone()),
             },
@@ -795,12 +818,7 @@ async fn get_volume_target_node(
         Some(node) => {
             // make sure the requested node is available
             // todo: check the max number of nexuses per node is respected
-            let node = registry
-                .get_node_wrapper(node)
-                .await
-                .context(NodeNotFound {
-                    node_id: node.clone(),
-                })?;
+            let node = registry.get_node_wrapper(node).await?;
             let node = node.lock().await;
             if node.is_online() {
                 Ok(node.id.clone())
@@ -850,7 +868,7 @@ impl SpecOperations for VolumeSpec {
                 id: self.uuid(),
             }),
             VolumeOperation::Unshare => Ok(()),
-            VolumeOperation::Publish((_, share_option))
+            VolumeOperation::Publish((_, _, share_option))
                 if self.target_node.is_some()
                     || (share_option.is_some() && self.protocol.shared()) =>
             {
@@ -863,7 +881,7 @@ impl SpecOperations for VolumeSpec {
             }
 
             VolumeOperation::Publish(_) => Ok(()),
-            VolumeOperation::Unpublish => Ok(()),
+            VolumeOperation::Unpublish => get_volume_nexus(status).map(|_| ()),
 
             VolumeOperation::SetReplica(replica_count) => {
                 if *replica_count == self.num_replicas {

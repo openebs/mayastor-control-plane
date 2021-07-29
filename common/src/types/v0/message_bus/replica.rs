@@ -34,6 +34,12 @@ pub struct Replica {
     /// state of the replica
     pub state: ReplicaState,
 }
+impl Replica {
+    /// check if the replica is online
+    pub fn online(&self) -> bool {
+        self.state.online()
+    }
+}
 
 impl From<Replica> for models::Replica {
     fn from(src: Replica) -> Self {
@@ -301,6 +307,12 @@ pub enum ReplicaState {
     Degraded = 2,
     /// the replica is completely inaccessible
     Faulted = 3,
+}
+impl ReplicaState {
+    /// check if the state is online
+    pub fn online(&self) -> bool {
+        self == &Self::Online
+    }
 }
 
 impl Default for ReplicaState {

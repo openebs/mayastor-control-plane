@@ -2,7 +2,7 @@ use super::*;
 
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, fmt::Debug};
+use std::{cmp::Ordering, fmt::Debug, str::FromStr};
 
 /// Child information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -37,6 +37,18 @@ impl From<models::Child> for Child {
 
 bus_impl_string_id_percent_decoding!(ChildUri, "URI of a mayastor nexus child");
 
+impl ChildUri {
+    /// Get the mayastor bdev uuid from the ChildUri
+    pub fn uuid_str(&self) -> Option<String> {
+        match url::Url::from_str(self.as_str()) {
+            Ok(url) => {
+                let uuid = url.query_pairs().find(|(name, _)| name == "uuid");
+                uuid.map(|(_, uuid)| uuid.to_string())
+            }
+            Err(_) => None,
+        }
+    }
+}
 impl PartialEq<Child> for ChildUri {
     fn eq(&self, other: &Child) -> bool {
         self == &other.uri

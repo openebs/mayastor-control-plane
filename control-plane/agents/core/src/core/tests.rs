@@ -19,14 +19,19 @@ async fn bootstrap_registry() {
         .await
         .unwrap();
 
-    let replica = format!("loopback:///{}", Cluster::replica(0, 0, 0));
+    let replica = cluster
+        .rest_v00()
+        .replicas_api()
+        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .await
+        .unwrap();
     cluster
         .rest_v0()
         .create_nexus(message_bus::CreateNexus {
             node: cluster.node(0),
             uuid: message_bus::NexusId::new(),
             size,
-            children: vec![replica.into()],
+            children: vec![replica.uri.into()],
             ..Default::default()
         })
         .await

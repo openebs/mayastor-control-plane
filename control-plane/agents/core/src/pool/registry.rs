@@ -1,5 +1,5 @@
 use crate::core::{registry::Registry, wrapper::*};
-use common::errors::{NodeNotFound, ReplicaNotFound, SvcError, SvcError::PoolNotFound};
+use common::errors::{ReplicaNotFound, SvcError, SvcError::PoolNotFound};
 use common_lib::types::v0::message_bus::{NodeId, Pool, PoolId, Replica, ReplicaId};
 use snafu::OptionExt;
 
@@ -42,9 +42,7 @@ impl Registry {
 
     /// Get all pools from node `node_id`
     pub(crate) async fn get_node_pools(&self, node_id: &NodeId) -> Result<Vec<Pool>, SvcError> {
-        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
-            node_id: node_id.clone(),
-        })?;
+        let node = self.get_node_wrapper(node_id).await?;
         Ok(node.pools().await)
     }
 }
@@ -52,18 +50,18 @@ impl Registry {
 /// Replica helpers
 impl Registry {
     /// Get all replicas
-    pub(crate) async fn get_replicas(&self) -> Result<Vec<Replica>, SvcError> {
+    pub(crate) async fn get_replicas(&self) -> Vec<Replica> {
         let nodes = self.get_nodes_wrapper().await;
         let mut replicas = vec![];
         for node in nodes {
             replicas.append(&mut node.replicas().await);
         }
-        Ok(replicas)
+        replicas
     }
 
     /// Get replica `replica_id`
     pub(crate) async fn get_replica(&self, replica_id: &ReplicaId) -> Result<Replica, SvcError> {
-        let replicas = self.get_replicas().await?;
+        let replicas = self.get_replicas().await;
         let replica = replicas
             .iter()
             .find(|r| &r.uuid == replica_id)
@@ -78,9 +76,7 @@ impl Registry {
         &self,
         node_id: &NodeId,
     ) -> Result<Vec<Replica>, SvcError> {
-        let node = self.get_node_wrapper(node_id).await.context(NodeNotFound {
-            node_id: node_id.clone(),
-        })?;
+        let node = self.get_node_wrapper(node_id).await?;
         Ok(node.replicas().await)
     }
 }

@@ -1,14 +1,12 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-use snafu::OptionExt;
-
 use crate::core::{
     registry::Registry,
     specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     wrapper::ClientOps,
 };
-use common::errors::{NodeNotFound, SvcError};
+use common::errors::SvcError;
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
@@ -159,12 +157,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateNexus,
     ) -> Result<Nexus, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         let nexus_spec = self.get_or_create_nexus(request);
         SpecOperations::start_create(&nexus_spec, registry, request).await?;
@@ -206,12 +199,7 @@ impl ResourceSpecsLocked {
         request: &DestroyNexus,
         delete_owned: bool,
     ) -> Result<(), SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self.get_nexus(&request.uuid) {
             SpecOperations::start_destroy(&nexus, registry, delete_owned).await?;
@@ -241,12 +229,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &ShareNexus,
     ) -> Result<String, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.uuid) {
             let status = registry.get_nexus(&request.uuid).await?;
@@ -270,12 +253,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &UnshareNexus,
     ) -> Result<(), SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.uuid) {
             let status = registry.get_nexus(&request.uuid).await?;
@@ -299,12 +277,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &AddNexusChild,
     ) -> Result<Child, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
             let status = registry.get_nexus(&request.nexus).await?;
@@ -328,12 +301,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &AddNexusReplica,
     ) -> Result<Child, SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
             let status = registry.get_nexus(&request.nexus).await?;
@@ -369,12 +337,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &RemoveNexusChild,
     ) -> Result<(), SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
             let status = registry.get_nexus(&request.nexus).await?;
@@ -398,12 +361,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &RemoveNexusReplica,
     ) -> Result<(), SvcError> {
-        let node = registry
-            .get_node_wrapper(&request.node)
-            .await
-            .context(NodeNotFound {
-                node_id: request.node.clone(),
-            })?;
+        let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
             let status = registry.get_nexus(&request.nexus).await?;

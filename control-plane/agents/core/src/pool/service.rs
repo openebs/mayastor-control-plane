@@ -1,5 +1,5 @@
 use crate::core::{registry::Registry, wrapper::GetterOps};
-use common::errors::{NodeNotFound, PoolNotFound, ReplicaNotFound, SvcError};
+use common::errors::{PoolNotFound, ReplicaNotFound, SvcError};
 use common_lib::{
     mbus_api::message_bus::v0::{Pools, Replicas},
     types::v0::message_bus::{
@@ -59,14 +59,10 @@ impl Service {
     pub(super) async fn get_replicas(&self, request: &GetReplicas) -> Result<Replicas, SvcError> {
         let filter = request.filter.clone();
         match filter {
-            Filter::None => self.registry.get_replicas().await,
+            Filter::None => Ok(self.registry.get_replicas().await),
             Filter::Node(node_id) => self.registry.get_node_replicas(&node_id).await,
             Filter::NodePool(node_id, pool_id) => {
-                let node = self
-                    .registry
-                    .get_node_wrapper(&node_id)
-                    .await
-                    .context(NodeNotFound { node_id })?;
+                let node = self.registry.get_node_wrapper(&node_id).await?;
                 let pool_wrapper = node
                     .pool_wrapper(&pool_id)
                     .await
@@ -78,11 +74,7 @@ impl Service {
                 Ok(pool_wrapper.replicas())
             }
             Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
-                let node = self
-                    .registry
-                    .get_node_wrapper(&node_id)
-                    .await
-                    .context(NodeNotFound { node_id })?;
+                let node = self.registry.get_node_wrapper(&node_id).await?;
                 let pool_wrapper = node
                     .pool_wrapper(&pool_id)
                     .await
@@ -93,11 +85,7 @@ impl Service {
                 Ok(vec![replica.clone()])
             }
             Filter::NodeReplica(node_id, replica_id) => {
-                let node = self
-                    .registry
-                    .get_node_wrapper(&node_id)
-                    .await
-                    .context(NodeNotFound { node_id })?;
+                let node = self.registry.get_node_wrapper(&node_id).await?;
                 let replica = node
                     .replica(&replica_id)
                     .await
@@ -114,6 +102,21 @@ impl Service {
             Filter::Replica(replica_id) => {
                 let replica = self.registry.get_replica(&replica_id).await?;
                 Ok(vec![replica])
+            }
+            Filter::Volume(volume_id) => {
+                let volume = self.registry.get_volume_status(&volume_id).await?;
+                let replicas = self.registry.get_replicas().await.into_iter();
+                let replicas = replicas
+                    .filter(|r| {
+                        if let Some(spec) = self.registry.specs.get_replica(&r.uuid) {
+                            let spec = spec.lock().clone();
+                            spec.owners.owned_by(&volume.uuid)
+                        } else {
+                            false
+                        }
+                    })
+                    .collect();
+                Ok(replicas)
             }
             _ => Err(SvcError::InvalidFilter { filter }),
         }

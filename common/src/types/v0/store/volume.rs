@@ -102,6 +102,8 @@ pub struct VolumeSpec {
     /// Update of the state in progress
     #[serde(skip)]
     pub updating: bool,
+    /// Id of the last Nexus used by the volume
+    pub last_nexus_id: Option<NexusId>,
     /// Record of the operation in progress
     pub operation: Option<VolumeOperationState>,
 }
@@ -153,8 +155,9 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.protocol = Protocol::None;
                 }
                 VolumeOperation::SetReplica(count) => self.num_replicas = count,
-                VolumeOperation::Publish((node, share)) => {
+                VolumeOperation::Publish((node, nexus, share)) => {
                     self.target_node = Some(node);
+                    self.last_nexus_id = Some(nexus);
                     self.protocol = share.map_or(Protocol::None, Protocol::from);
                 }
                 VolumeOperation::Unpublish => {
@@ -195,7 +198,7 @@ pub enum VolumeOperation {
     Share(VolumeShareProtocol),
     Unshare,
     SetReplica(u8),
-    Publish((NodeId, Option<VolumeShareProtocol>)),
+    Publish((NodeId, NexusId, Option<VolumeShareProtocol>)),
     Unpublish,
 }
 
@@ -243,6 +246,7 @@ impl From<&CreateVolume> for VolumeSpec {
             policy: request.policy.clone(),
             topology: request.topology.clone(),
             updating: false,
+            last_nexus_id: None,
             operation: None,
         }
     }

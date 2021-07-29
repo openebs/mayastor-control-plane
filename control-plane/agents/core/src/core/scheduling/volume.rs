@@ -10,7 +10,7 @@ use common_lib::types::v0::{
     store::volume::VolumeSpec,
 };
 use itertools::Itertools;
-use std::{collections::HashMap, future::Future, ops::Deref};
+use std::{collections::HashMap, ops::Deref};
 
 #[derive(Clone)]
 pub(crate) struct GetSuitablePools {
@@ -81,11 +81,11 @@ impl IncreaseVolumeReplica {
             // 3. ideally use only healthy(online) pools with degraded pools as a
             // fallback
             // 4. only one replica per node
-            .filter(NodeFilters::online_nodes)
-            .filter(NodeFilters::allowed_nodes)
-            .filter(NodeFilters::unused_nodes)
-            .filter(PoolFilters::usable_pools)
-            .filter(PoolFilters::enough_free_space)
+            .filter(NodeFilters::online)
+            .filter(NodeFilters::allowed)
+            .filter(NodeFilters::unused)
+            .filter(PoolFilters::usable)
+            .filter(PoolFilters::free_space)
             // sort pools in order of preference (from least to most number of replicas)
             .sort(PoolSorters::sort_by_replica_count)
     }
@@ -104,22 +104,6 @@ impl ResourceFilter for IncreaseVolumeReplica {
             .filter(|v| filter(&request, v))
             .collect();
         self
-    }
-    async fn filter_async<Fn, Fut>(mut self, mut filter: Fn) -> Self
-    where
-        Fn: FnMut(&Self::Request, &Self::Item) -> Fut,
-        Fut: Future<Output = bool>,
-    {
-        let mut self_clone = self.clone();
-        self.list.clear();
-
-        for i in self.list {
-            if filter(&self_clone.context, &i).await {
-                self_clone.list.push(i);
-            }
-        }
-
-        self_clone
     }
 
     fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
@@ -199,22 +183,6 @@ impl ResourceFilter for DecreaseVolumeReplica {
             .filter(|v| filter(&request, v))
             .collect();
         self
-    }
-    async fn filter_async<Fn, Fut>(mut self, mut filter: Fn) -> Self
-    where
-        Fn: FnMut(&Self::Request, &Self::Item) -> Fut,
-        Fut: Future<Output = bool>,
-    {
-        let mut self_clone = self.clone();
-        self.list.clear();
-
-        for i in self.list {
-            if filter(&self_clone.context, &i).await {
-                self_clone.list.push(i);
-            }
-        }
-
-        self_clone
     }
 
     fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
