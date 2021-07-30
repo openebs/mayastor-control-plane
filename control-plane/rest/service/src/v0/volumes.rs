@@ -1,64 +1,15 @@
 use super::*;
 use common_lib::types::v0::{
-    message_bus::{DestroyVolume, Filter, NexusShareProtocol, ShareNexus, UnshareNexus, VolumeId},
+    message_bus::{DestroyVolume, Filter},
     openapi::models::VolumeShareProtocol,
 };
-use mbus_api::{
-    message_bus::v0::{MessageBus, MessageBusTrait},
-    ReplyError, ReplyErrorKind, ResourceKind,
-};
-
-async fn volume_share(
-    volume_id: VolumeId,
-    protocol: NexusShareProtocol,
-) -> Result<String, RestError<RestJsonError>> {
-    let volume = MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
-    assert!(volume.get_state().is_some());
-
-    // TODO: For ANA we will want to share all nexuses not just the first.
-    match volume.get_state().unwrap().children.first() {
-        Some(nexus) => MessageBus::share_nexus(ShareNexus {
-            node: nexus.node.clone(),
-            uuid: nexus.uuid.clone(),
-            key: None,
-            protocol,
-        })
-        .await
-        .map_err(From::from),
-        None => Err(RestError::from(ReplyError {
-            kind: ReplyErrorKind::NotFound,
-            resource: ResourceKind::Nexus,
-            source: "".to_string(),
-            extra: format!("No nexuses found for volume {}", volume_id),
-        })),
-    }
-}
-
-async fn volume_unshare(volume_id: VolumeId) -> Result<(), RestError<RestJsonError>> {
-    let volume = MessageBus::get_volume(Filter::Volume(volume_id.clone())).await?;
-    assert!(volume.get_state().is_some());
-
-    match volume.get_state().unwrap().children.first() {
-        Some(nexus) => MessageBus::unshare_nexus(UnshareNexus {
-            node: nexus.node.clone(),
-            uuid: nexus.uuid.clone(),
-        })
-        .await
-        .map_err(RestError::from),
-        None => Err(RestError::from(ReplyError {
-            kind: ReplyErrorKind::NotFound,
-            resource: ResourceKind::Nexus,
-            source: "".to_string(),
-            extra: format!("No nexuses found for volume {}", volume_id),
-        })),
-    }?;
-    Ok(())
-}
+use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
 
 #[async_trait::async_trait]
 impl apis::Volumes for RestApi {
     async fn del_share(Path(volume_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
-        volume_unshare(volume_id.into()).await
+        MessageBus::unshare_volume(volume_id.into()).await?;
+        Ok(())
     }
 
     async fn del_volume(Path(volume_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
@@ -114,7 +65,8 @@ impl apis::Volumes for RestApi {
     async fn put_volume_share(
         Path((volume_id, protocol)): Path<(String, models::VolumeShareProtocol)>,
     ) -> Result<String, RestError<RestJsonError>> {
-        volume_share(volume_id.into(), protocol.into()).await
+        let share_uri = MessageBus::share_volume(volume_id.into(), protocol.into()).await?;
+        Ok(share_uri)
     }
 
     async fn put_volume_target(

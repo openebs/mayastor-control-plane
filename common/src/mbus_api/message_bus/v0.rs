@@ -9,8 +9,9 @@ use crate::{
         DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter, GetBlockDevices,
         GetNexuses, GetNodes, GetPools, GetReplicas, GetSpecs, GetStates, GetVolumes,
         JsonGrpcRequest, Nexus, Node, NodeId, Pool, PublishVolume, RemoveNexusChild,
-        RemoveVolumeNexus, Replica, SetVolumeReplica, ShareNexus, ShareReplica, Specs, States,
-        UnpublishVolume, UnshareNexus, UnshareReplica, Volume, VolumeId, VolumeShareProtocol,
+        RemoveVolumeNexus, Replica, SetVolumeReplica, ShareNexus, ShareReplica, ShareVolume, Specs,
+        States, UnpublishVolume, UnshareNexus, UnshareReplica, UnshareVolume, Volume, VolumeId,
+        VolumeShareProtocol,
     },
 };
 use async_trait::async_trait;
@@ -253,6 +254,21 @@ pub trait MessageBusTrait: Sized {
     async fn set_volume_replica(uuid: VolumeId, replica: u8) -> BusResult<Volume> {
         let request = SetVolumeReplica::new(uuid, replica);
         Ok(request.request().await?)
+    }
+
+    /// share volume
+    #[tracing::instrument(level = "debug", err)]
+    async fn share_volume(id: VolumeId, protocol: VolumeShareProtocol) -> BusResult<String> {
+        let request = ShareVolume::new(id, protocol);
+        Ok(request.request().await?)
+    }
+
+    /// unshare volume
+    #[tracing::instrument(level = "debug", err)]
+    async fn unshare_volume(id: VolumeId) -> BusResult<()> {
+        let request = UnshareVolume::new(id);
+        request.request().await?;
+        Ok(())
     }
 
     /// Generic JSON gRPC call

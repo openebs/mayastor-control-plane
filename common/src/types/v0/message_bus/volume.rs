@@ -420,6 +420,12 @@ pub struct ShareVolume {
     /// share protocol
     pub protocol: VolumeShareProtocol,
 }
+impl ShareVolume {
+    /// Create a new `ShareVolume` request
+    pub(crate) fn new(uuid: VolumeId, protocol: VolumeShareProtocol) -> Self {
+        Self { uuid, protocol }
+    }
+}
 
 /// Unshare Volume request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -428,7 +434,12 @@ pub struct UnshareVolume {
     /// uuid of the volume
     pub uuid: VolumeId,
 }
-
+impl UnshareVolume {
+    /// Create a new `UnshareVolume` request
+    pub(crate) fn new(uuid: VolumeId) -> Self {
+        Self { uuid }
+    }
+}
 /// Set the volume replica count
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
