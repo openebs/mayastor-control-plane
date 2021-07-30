@@ -37,12 +37,6 @@ pub fn configure<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
             .route(actix_web::web::delete().to(del_volume_target::<T, A>)),
     )
     .service(
-        actix_web::web::resource("/nodes/{node_id}/volumes/{volume_id}")
-            .name("get_node_volume")
-            .guard(actix_web::guard::Get())
-            .route(actix_web::web::get().to(get_node_volume::<T, A>)),
-    )
-    .service(
         actix_web::web::resource("/nodes/{node_id}/volumes")
             .name("get_node_volumes")
             .guard(actix_web::guard::Get())
@@ -120,15 +114,6 @@ async fn del_volume_target<T: crate::apis::Volumes + 'static, A: FromRequest + '
     path: Path<String>,
 ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_volume_target(crate::apis::Path(path.into_inner()))
-        .await
-        .map(Json)
-}
-
-async fn get_node_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
-    _token: A,
-    path: Path<(String, String)>,
-) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::get_node_volume(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
 }

@@ -366,66 +366,72 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
     let volume = client
         .volumes_api()
         .put_volume_target(
-            &volume.uuid.to_string(),
+            &volume.state.unwrap().uuid.to_string(),
             mayastor1.as_str(),
             models::VolumeShareProtocol::Nvmf,
         )
         .await
         .unwrap();
-    let nexus = volume.children.first().unwrap();
+    let volume_state = volume.state.expect("Volume state not found.");
+    let nexus = volume_state.children.first().unwrap();
     tracing::info!("Published on '{}'", nexus.node);
 
     let volume = client
         .volumes_api()
-        .put_volume_replica_count(&volume.uuid.to_string(), 2)
+        .put_volume_replica_count(&volume_state.uuid.to_string(), 2)
         .await
         .expect("We have 2 nodes with a pool each");
     tracing::info!("Volume: {:#?}", volume);
-    let nexus = volume.children.first().unwrap();
+    let volume_state = volume.state.expect("No volume state");
+    let nexus = volume_state.children.first().unwrap();
     assert_eq!(nexus.children.len(), 2);
 
     let volume = client
         .volumes_api()
-        .put_volume_replica_count(&volume.uuid.to_string(), 1)
+        .put_volume_replica_count(&volume_state.uuid.to_string(), 1)
         .await
         .expect("Should be able to reduce back to 1");
     tracing::info!("Volume: {:#?}", volume);
-    let nexus = volume.children.first().unwrap();
+    let volume_state = volume.state.expect("No volume state");
+    let nexus = volume_state.children.first().unwrap();
     assert_eq!(nexus.children.len(), 1);
 
     let volume = client
         .volumes_api()
-        .del_volume_target(&volume.uuid.to_string())
+        .del_volume_target(&volume_state.uuid.to_string())
         .await
         .unwrap();
     tracing::info!("Volume: {:#?}", volume);
-    assert!(volume.children.is_empty());
+    let volume_state = volume.state.expect("No volume state");
+    assert!(volume_state.children.is_empty());
 
-    let _watch_volume = WatchResourceId::Volume(volume.uuid.to_string().into());
+    let volume_uuid = volume_state.uuid.to_string();
+
+    let _watch_volume = WatchResourceId::Volume(volume_uuid.clone().into());
     let callback = url::Url::parse("http://lala/test").unwrap();
 
     let watchers = client
         .watches_api()
-        .get_watch_volume(&volume.uuid.to_string())
+        .get_watch_volume(&volume_uuid)
         .await
         .unwrap();
     assert!(watchers.is_empty());
 
     client
         .watches_api()
-        .put_watch_volume(&volume.uuid.to_string(), &callback.to_string())
+        .put_watch_volume(&volume_uuid, &callback.to_string())
         .await
         .expect_err("volume does not exist in the store");
 
     client
         .watches_api()
-        .del_watch_volume(&volume.uuid.to_string(), &callback.to_string())
+        .del_watch_volume(&volume_uuid, &callback.to_string())
         .await
         .expect_err("Does not exist");
 
     let watchers = client
         .watches_api()
-        .get_watch_volume(&volume.uuid.to_string())
+        .get_watch_volume(&volume_uuid)
         .await
         .unwrap();
     assert!(watchers.is_empty());

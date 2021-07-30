@@ -12,7 +12,7 @@ use common_lib::{
     types::v0::{
         message_bus::{
             AddNexusChild, AddNexusReplica, Child, CreateNexus, DestroyNexus, Nexus, NexusId,
-            NexusState, RemoveNexusChild, RemoveNexusReplica, ReplicaOwners, ShareNexus,
+            NexusStatus, RemoveNexusChild, RemoveNexusReplica, ReplicaOwners, ShareNexus,
             UnshareNexus,
         },
         store::{
@@ -27,7 +27,7 @@ use common_lib::{
 impl SpecOperations for NexusSpec {
     type Create = CreateNexus;
     type Owners = ();
-    type State = NexusState;
+    type State = NexusStatus;
     type Status = Nexus;
     type UpdateOp = NexusOperation;
 
@@ -92,11 +92,11 @@ impl SpecOperations for NexusSpec {
     fn uuid(&self) -> String {
         self.uuid.to_string()
     }
-    fn state(&self) -> SpecState<NexusState> {
-        self.state.clone()
+    fn state(&self) -> SpecState<NexusStatus> {
+        self.spec_status.clone()
     }
     fn set_state(&mut self, state: SpecState<Self::State>) {
-        self.state = state;
+        self.spec_status = state;
     }
     fn owned(&self) -> bool {
         self.owner.is_some()
@@ -123,7 +123,7 @@ impl ResourceSpecs {
         let mut nexuses = vec![];
         for nexus in self.nexuses.to_vec() {
             let nexus = nexus.lock();
-            if nexus.state.created() || nexus.state.deleting() {
+            if nexus.spec_status.created() || nexus.spec_status.deleting() {
                 nexuses.push(nexus.clone());
             }
         }
@@ -413,7 +413,7 @@ impl ResourceSpecsLocked {
             for nexus_spec in nexuses {
                 let mut nexus_clone = {
                     let mut nexus = nexus_spec.lock();
-                    if nexus.updating || !nexus.state.created() {
+                    if nexus.updating || !nexus.spec_status.created() {
                         continue;
                     }
                     nexus.updating = true;

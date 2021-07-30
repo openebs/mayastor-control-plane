@@ -21,30 +21,20 @@ impl Service {
     /// Get volumes
     #[tracing::instrument(level = "debug", err)]
     pub(super) async fn get_volumes(&self, request: &GetVolumes) -> Result<Volumes, SvcError> {
-        let volumes = self.registry.get_volumes_status().await;
+        let volumes = self.registry.get_volumes().await;
 
-        let volumes = match &request.filter {
+        // The filter criteria is matched against the volume state.
+        let filtered_volumes = match &request.filter {
             Filter::None => volumes,
-            Filter::NodeVolume(node, volume) => volumes
-                .iter()
-                .filter(|volume_iter| {
-                    volume_iter.children.iter().any(|c| &c.node == node)
-                        && &volume_iter.uuid == volume
-                })
-                .cloned()
-                .collect(),
-            Filter::Volume(volume) => volumes
-                .iter()
-                .filter(|volume_iter| &volume_iter.uuid == volume)
-                .cloned()
-                .collect(),
+            Filter::Volume(volume_id) => vec![self.registry.get_volume(volume_id).await?],
             filter => {
                 return Err(SvcError::InvalidFilter {
                     filter: filter.clone(),
                 })
             }
         };
-        Ok(Volumes(volumes))
+
+        Ok(Volumes(filtered_volumes))
     }
 
     /// Create volume

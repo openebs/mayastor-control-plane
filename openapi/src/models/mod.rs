@@ -82,5 +82,7 @@ pub mod volume_spec_operation;
 pub use self::volume_spec_operation::VolumeSpecOperation;
 pub mod volume_state;
 pub use self::volume_state::VolumeState;
+pub mod volume_status;
+pub use self::volume_status::VolumeStatus;
 pub mod watch_callback;
 pub use self::watch_callback::WatchCallback;

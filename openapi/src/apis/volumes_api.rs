@@ -22,9 +22,6 @@ pub trait Volumes {
     async fn del_volume_target(
         Path(volume_id): Path<String>,
     ) -> Result<crate::models::Volume, crate::apis::RestError<crate::models::RestJsonError>>;
-    async fn get_node_volume(
-        Path((node_id, volume_id)): Path<(String, String)>,
-    ) -> Result<crate::models::Volume, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_volumes(
         Path(node_id): Path<String>,
     ) -> Result<Vec<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>>;

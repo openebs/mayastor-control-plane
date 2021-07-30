@@ -20,7 +20,7 @@ use std::convert::TryFrom;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Nexus {
     /// Current state of the nexus.
-    pub state: Option<message_bus::NexusState>,
+    pub status: Option<message_bus::NexusStatus>,
     /// Desired nexus specification.
     pub spec: NexusSpec,
 }
@@ -72,7 +72,7 @@ impl StorableObject for NexusState {
 }
 
 /// State of the Nexus Spec
-pub type NexusSpecState = SpecState<message_bus::NexusState>;
+pub type NexusSpecStatus = SpecState<message_bus::NexusStatus>;
 
 /// User specification of a nexus.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -85,8 +85,8 @@ pub struct NexusSpec {
     pub children: Vec<NexusChild>,
     /// Size of the nexus.
     pub size: u64,
-    /// The state the nexus should eventually reach.
-    pub state: NexusSpecState,
+    /// The status the nexus spec.
+    pub spec_status: NexusSpecStatus,
     /// Share Protocol
     pub share: Protocol,
     /// Managed by our control plane
@@ -114,7 +114,7 @@ impl From<NexusSpec> for models::NexusSpec {
             src.node,
             src.share,
             src.size,
-            src.state,
+            src.spec_status,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }
@@ -164,10 +164,10 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
         if let Some(op) = self.operation.clone() {
             match op.operation {
                 NexusOperation::Destroy => {
-                    self.state = SpecState::Deleted;
+                    self.spec_status = SpecState::Deleted;
                 }
                 NexusOperation::Create => {
-                    self.state = SpecState::Created(message_bus::NexusState::Online);
+                    self.spec_status = SpecState::Created(message_bus::NexusStatus::Online);
                 }
                 NexusOperation::Share(share) => {
                     self.share = share.into();
@@ -248,7 +248,7 @@ impl From<&CreateNexus> for NexusSpec {
             node: request.node.clone(),
             children: request.children.clone(),
             size: request.size,
-            state: NexusSpecState::Creating,
+            spec_status: NexusSpecStatus::Creating,
             share: Protocol::None,
             managed: request.managed,
             owner: request.owner.clone(),
@@ -261,7 +261,7 @@ impl From<&CreateNexus> for NexusSpec {
 impl PartialEq<CreateNexus> for NexusSpec {
     fn eq(&self, other: &CreateNexus) -> bool {
         let mut other = NexusSpec::from(other);
-        other.state = self.state.clone();
+        other.spec_status = self.spec_status.clone();
         other.updating = self.updating;
         &other == self
     }
@@ -278,7 +278,7 @@ impl From<&NexusSpec> for message_bus::Nexus {
             node: nexus.node.clone(),
             uuid: nexus.uuid.clone(),
             size: nexus.size,
-            state: message_bus::NexusState::Unknown,
+            status: message_bus::NexusStatus::Unknown,
             children: nexus
                 .children
                 .iter()

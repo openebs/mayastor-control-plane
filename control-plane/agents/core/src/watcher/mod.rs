@@ -95,7 +95,7 @@ mod tests {
 
         let (volume, mut callback_ch) = setup_watcher(&client).await;
 
-        let watch_volume = WatchResourceId::Volume(volume.uuid);
+        let watch_volume = WatchResourceId::Volume(volume.get_spec().uuid);
         let callback = url::Url::parse("http://10.1.0.1:8082/test").unwrap();
 
         let watchers = client.get_watches(watch_volume.clone()).await.unwrap();

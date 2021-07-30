@@ -3127,107 +3127,6 @@ paths:
       - JWT: []
       tags:
       - Volumes
-  /nodes/{node_id}/volumes/{volume_id}:
-    get:
-      operationId: get_node_volume
-      parameters:
-      - explode: false
-        in: path
-        name: node_id
-        required: true
-        schema:
-          $ref: '#/components/schemas/NodeId'
-        style: simple
-      - explode: false
-        in: path
-        name: volume_id
-        required: true
-        schema:
-          $ref: '#/components/schemas/VolumeId'
-        style: simple
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Volume'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Request Timeout
-        "401":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Unauthorized
-        "404":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Not Found
-        "408":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Bad Request
-        "412":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Precondition Failed
-        "416":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Range Not satisfiable
-        "422":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Unprocessable entity
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Internal Server Error
-        "501":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Not Implemented
-        "503":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Service Unavailable
-        "504":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Gateway Timeout
-        "507":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestJsonError'
-          description: Insufficient Storage
-      security:
-      - JWT: []
-      tags:
-      - Volumes
   /nodes/{node}/block_devices:
     get:
       operationId: get_node_block_devices
@@ -5867,8 +5766,8 @@ components:
         policy:
           self_heal: false
           topology: null
-        replicas: 0
-        size: 0
+        replicas: 1
+        size: 10485761
         topology:
           explicit: null
           labelled: null
@@ -6452,8 +6351,8 @@ components:
       - Deleting
       - Deleted
       type: string
-    VolumeState:
-      description: current state of the volume
+    VolumeStatus:
+      description: current volume status
       enum:
       - Online
       - Degraded
@@ -6495,11 +6394,8 @@ components:
         uri:
           type: string
       type: object
-    Volume:
-      description: |-
-        Volumes
-
-         Volume information
+    VolumeState:
+      description: Runtime state of the volume
       example:
         children:
         - children:
@@ -6530,8 +6426,8 @@ components:
           format: int64
           minimum: 0
           type: integer
-        state:
-          $ref: '#/components/schemas/VolumeState'
+        status:
+          $ref: '#/components/schemas/VolumeStatus'
         uuid:
           description: name of the volume
           format: uuid
@@ -6542,6 +6438,46 @@ components:
       - size
       - state
       - uuid
+      type: object
+    Volume:
+      description: |-
+        Volumes
+        Volume information
+      example:
+        spec:
+        - labels: ""
+          num_paths: 1
+          num_replicas: 2
+          operation: null
+          protocol: none
+          size: 80241024
+          state: Created
+          target_node: null
+          uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
+        state:
+        - children:
+          - children:
+            - rebuildProgress: null
+              state: Online
+              uri: nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:nexus-a76adcd6-9df0-47a1-90a5-2d5bf4151572
+            deviceUri: ""
+            node: ksnode-1
+            rebuilds: 0
+            share: none
+            size: 80241024
+            state: Online
+            uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
+          protocol: none
+          size: 80241024
+          state: Online
+          uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
+      properties:
+        spec:
+          $ref: '#/components/schemas/VolumeSpec'
+        state:
+          $ref: '#/components/schemas/VolumeState'
+      required:
+      - spec
       type: object
     BlockDevice_filesystem:
       description: filesystem information in case where a filesystem is present

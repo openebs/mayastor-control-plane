@@ -14,57 +14,33 @@
 
 use crate::apis::IntoVec;
 
-/// Volume : Volumes   Volume information
+/// Volume : Volumes Volume information
 
-/// Volumes   Volume information
+/// Volumes Volume information
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Volume {
-    /// array of children nexuses
-    #[serde(rename = "children")]
-    pub children: Vec<crate::models::Nexus>,
-    #[serde(rename = "protocol")]
-    pub protocol: crate::models::Protocol,
-    /// size of the volume in bytes
-    #[serde(rename = "size")]
-    pub size: u64,
-    #[serde(rename = "state")]
-    pub state: crate::models::VolumeState,
-    /// name of the volume
-    #[serde(rename = "uuid")]
-    pub uuid: uuid::Uuid,
+    #[serde(rename = "spec")]
+    pub spec: crate::models::VolumeSpec,
+    #[serde(rename = "state", skip_serializing_if = "Option::is_none")]
+    pub state: Option<crate::models::VolumeState>,
 }
 
 impl Volume {
     /// Volume using only the required fields
-    pub fn new(
-        children: impl IntoVec<crate::models::Nexus>,
-        protocol: impl Into<crate::models::Protocol>,
-        size: impl Into<u64>,
-        state: impl Into<crate::models::VolumeState>,
-        uuid: impl Into<uuid::Uuid>,
-    ) -> Volume {
+    pub fn new(spec: impl Into<crate::models::VolumeSpec>) -> Volume {
         Volume {
-            children: children.into_vec(),
-            protocol: protocol.into(),
-            size: size.into(),
-            state: state.into(),
-            uuid: uuid.into(),
+            spec: spec.into(),
+            state: None,
         }
     }
     /// Volume using all fields
     pub fn new_all(
-        children: impl IntoVec<crate::models::Nexus>,
-        protocol: impl Into<crate::models::Protocol>,
-        size: impl Into<u64>,
-        state: impl Into<crate::models::VolumeState>,
-        uuid: impl Into<uuid::Uuid>,
+        spec: impl Into<crate::models::VolumeSpec>,
+        state: impl Into<Option<crate::models::VolumeState>>,
     ) -> Volume {
         Volume {
-            children: children.into_vec(),
-            protocol: protocol.into(),
-            size: size.into(),
+            spec: spec.into(),
             state: state.into(),
-            uuid: uuid.into(),
         }
     }
 }

@@ -1,7 +1,7 @@
 //! Converts rpc messages to message bus messages and vice versa.
 
 use common_lib::types::v0::{
-    message_bus::{self, ChildState, NexusState, Protocol, ReplicaState},
+    message_bus::{self, ChildState, NexusStatus, Protocol, ReplicaState},
     openapi::apis::IntoVec,
 };
 use rpc::mayastor as rpc;
@@ -118,7 +118,7 @@ impl RpcToMessageBus for rpc::Nexus {
             node: Default::default(),
             uuid: self.uuid.clone().into(),
             size: self.size,
-            state: NexusState::from(self.state),
+            status: NexusStatus::from(self.state),
             children: self.children.iter().map(|c| c.to_mbus()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,

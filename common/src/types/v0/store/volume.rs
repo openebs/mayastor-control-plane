@@ -45,8 +45,8 @@ pub struct VolumeState {
     pub nexuses: Vec<NexusId>,
     /// Number of front-end paths.
     pub num_paths: u8,
-    /// State of the volume.
-    pub state: message_bus::VolumeState,
+    /// Status of the volume.
+    pub status: message_bus::VolumeStatus,
 }
 
 /// Key used by the store to uniquely identify a VolumeState structure.
@@ -146,7 +146,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.state = SpecState::Deleted;
                 }
                 VolumeOperation::Create => {
-                    self.state = SpecState::Created(message_bus::VolumeState::Online);
+                    self.state = SpecState::Created(message_bus::VolumeStatus::Online);
                 }
                 VolumeOperation::Share(share) => {
                     self.protocol = share.into();
@@ -230,7 +230,18 @@ impl StorableObject for VolumeSpec {
 }
 
 /// State of the Volume Spec
-pub type VolumeSpecState = SpecState<message_bus::VolumeState>;
+pub type VolumeSpecState = SpecState<message_bus::VolumeStatus>;
+
+impl From<models::SpecState> for VolumeSpecState {
+    fn from(spec_state: models::SpecState) -> Self {
+        match spec_state {
+            models::SpecState::Creating => Self::Creating,
+            models::SpecState::Created => Self::Created(message_bus::VolumeStatus::Unknown),
+            models::SpecState::Deleting => Self::Deleting,
+            models::SpecState::Deleted => Self::Deleted,
+        }
+    }
+}
 
 impl From<&CreateVolume> for VolumeSpec {
     fn from(request: &CreateVolume) -> Self {
@@ -259,19 +270,19 @@ impl PartialEq<CreateVolume> for VolumeSpec {
         &other == self
     }
 }
-impl From<&VolumeSpec> for message_bus::Volume {
+impl From<&VolumeSpec> for message_bus::VolumeState {
     fn from(spec: &VolumeSpec) -> Self {
         Self {
             uuid: spec.uuid.clone(),
             size: spec.size,
-            state: message_bus::VolumeState::Unknown,
+            status: message_bus::VolumeStatus::Unknown,
             protocol: spec.protocol.clone(),
             children: vec![],
         }
     }
 }
-impl PartialEq<message_bus::Volume> for VolumeSpec {
-    fn eq(&self, other: &message_bus::Volume) -> bool {
+impl PartialEq<message_bus::VolumeState> for VolumeSpec {
+    fn eq(&self, other: &message_bus::VolumeState) -> bool {
         self.protocol == other.protocol
             && match &self.target_node {
                 None => other.target_node().flatten().is_none(),
@@ -294,5 +305,25 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.state,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
+    }
+}
+
+impl From<models::VolumeSpec> for VolumeSpec {
+    fn from(spec: models::VolumeSpec) -> Self {
+        Self {
+            uuid: spec.uuid.to_string().into(),
+            size: spec.size,
+            labels: spec.labels,
+            num_replicas: spec.num_replicas,
+            protocol: spec.protocol.into(),
+            num_paths: spec.num_paths,
+            state: spec.state.into(),
+            target_node: spec.target_node.map(From::from),
+            policy: Default::default(),
+            topology: Default::default(),
+            updating: false,
+            last_nexus_id: None,
+            operation: None,
+        }
     }
 }

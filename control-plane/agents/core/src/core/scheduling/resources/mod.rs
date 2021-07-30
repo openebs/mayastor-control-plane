@@ -3,7 +3,7 @@ use crate::core::{
     wrapper::{NodeWrapper, PoolWrapper},
 };
 use common_lib::types::v0::{
-    message_bus::{Child, ChildUri, Replica, Volume},
+    message_bus::{Child, ChildUri, Replica, VolumeState},
     store::{nexus_persistence::ChildInfo, replica::ReplicaSpec, volume::VolumeSpec},
 };
 
@@ -81,7 +81,7 @@ impl ReplicaItemLister {
     pub(crate) async fn list(
         registry: &Registry,
         spec: &VolumeSpec,
-        state: &Volume,
+        state: &VolumeState,
     ) -> Vec<ReplicaItem> {
         let replicas = registry.specs.get_volume_replicas(&spec.uuid);
         let nexuses = registry.specs.get_volume_nexuses(&spec.uuid);
