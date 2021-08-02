@@ -14,7 +14,7 @@
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
 use super::{specs::*, wrapper::NodeWrapper};
-use crate::core::wrapper::InternalOps;
+use crate::core::{reconciler::ReconcilerControl, wrapper::InternalOps};
 use common::errors::SvcError;
 use common_lib::{
     store::etcd::Etcd,
@@ -23,14 +23,29 @@ use common_lib::{
         store::definitions::{StorableObject, Store, StoreError, StoreKey},
     },
 };
-use std::{collections::HashMap, ops::DerefMut, sync::Arc};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 use tokio::sync::{Mutex, RwLock};
 
 /// Registry containing all mayastor instances (aka nodes)
-pub type Registry = RegistryInner<Etcd>;
+#[derive(Clone, Debug)]
+pub struct Registry {
+    inner: Arc<RegistryInner<Etcd>>,
+}
+
+impl Deref for Registry {
+    type Target = Arc<RegistryInner<Etcd>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
 
 /// Generic Registry Inner with a Store trait
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RegistryInner<S: Store> {
     /// the actual state of the node
     pub(crate) nodes: Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>,
@@ -45,6 +60,7 @@ pub struct RegistryInner<S: Store> {
     pub(crate) reconcile_idle_period: std::time::Duration,
     /// reconciliation period when work is pending
     pub(crate) reconcile_period: std::time::Duration,
+    reconciler: ReconcilerControl,
 }
 
 impl Registry {
@@ -62,13 +78,16 @@ impl Registry {
             .await
             .expect("Should connect to the persistent store");
         let registry = Self {
-            nodes: Default::default(),
-            specs: ResourceSpecsLocked::new(),
-            cache_period,
-            store: Arc::new(Mutex::new(store)),
-            store_timeout,
-            reconcile_period,
-            reconcile_idle_period,
+            inner: Arc::new(RegistryInner {
+                nodes: Default::default(),
+                specs: ResourceSpecsLocked::new(),
+                cache_period,
+                store: Arc::new(Mutex::new(store)),
+                store_timeout,
+                reconcile_period,
+                reconcile_idle_period,
+                reconciler: ReconcilerControl::new(),
+            }),
         };
         registry.start().await;
         registry
@@ -144,7 +163,9 @@ impl Registry {
         tokio::spawn(async move {
             registry.poller().await;
         });
-        self.specs.start(self.clone());
+        let registry = self.clone();
+        self.specs.start(registry.clone());
+        self.reconciler.start(registry.clone()).await;
     }
 
     /// Initialise the registry with the content of the persistent store.

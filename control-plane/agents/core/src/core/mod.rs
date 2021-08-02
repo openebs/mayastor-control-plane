@@ -2,6 +2,8 @@
 
 /// gRPC helpers
 pub mod grpc;
+/// reconciliation logic
+pub mod reconciler;
 /// registry with node and all its resources
 pub mod registry;
 /// generic resources
@@ -12,6 +14,8 @@ pub(crate) mod scheduling;
 pub mod specs;
 /// registry with all the resource states
 pub mod states;
+/// generic task pollers (eg used by the reconcilers)
+mod task_poller;
 /// helper wrappers over the resources
 pub mod wrapper;
 
