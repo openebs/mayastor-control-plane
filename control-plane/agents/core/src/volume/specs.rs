@@ -791,6 +791,71 @@ impl ResourceSpecsLocked {
             specs.volumes.insert(VolumeSpec::from(request))
         }
     }
+
+    /// Worker that reconciles dirty VolumeSpecs's with the persistent store.
+    /// This is useful when nexus operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub async fn reconcile_dirty_volumes(&self, registry: &Registry) -> bool {
+        if registry.store_online().await {
+            let mut pending_count = 0;
+
+            let volumes = self.get_locked_volumes();
+            for volume_spec in volumes {
+                let mut volume_clone = {
+                    let mut volume = volume_spec.lock();
+                    if volume.updating || !volume.status.created() {
+                        continue;
+                    }
+                    volume.updating = true;
+                    volume.clone()
+                };
+
+                if let Some(op) = volume_clone.operation.clone() {
+                    let fail = !match op.result {
+                        Some(true) => {
+                            volume_clone.commit_op();
+                            let result = registry.store_obj(&volume_clone).await;
+                            if result.is_ok() {
+                                let mut volume = volume_spec.lock();
+                                volume.commit_op();
+                            }
+                            result.is_ok()
+                        }
+                        Some(false) => {
+                            volume_clone.clear_op();
+                            let result = registry.store_obj(&volume_clone).await;
+                            if result.is_ok() {
+                                let mut volume = volume_spec.lock();
+                                volume.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                        None => {
+                            // we must have crashed... we could check the node to see what the
+                            // current state is but for now assume failure
+                            volume_clone.clear_op();
+                            let result = registry.store_obj(&volume_clone).await;
+                            if result.is_ok() {
+                                let mut volume = volume_spec.lock();
+                                volume.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                    };
+                    if fail {
+                        pending_count += 1;
+                    }
+                } else {
+                    // No operation to reconcile.
+                    let mut volume = volume_spec.lock();
+                    volume.updating = false;
+                }
+            }
+            pending_count > 0
+        } else {
+            true
+        }
+    }
 }
 
 fn get_volume_nexus(volume_state: &VolumeState) -> Result<Nexus, SvcError> {

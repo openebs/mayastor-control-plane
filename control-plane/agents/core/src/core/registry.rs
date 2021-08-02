@@ -164,8 +164,7 @@ impl Registry {
             registry.poller().await;
         });
         let registry = self.clone();
-        self.specs.start(registry.clone());
-        self.reconciler.start(registry.clone()).await;
+        self.reconciler.start(registry).await;
     }
 
     /// Initialise the registry with the content of the persistent store.

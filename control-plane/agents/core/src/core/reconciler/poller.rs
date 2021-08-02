@@ -1,5 +1,5 @@
 use crate::core::{
-    reconciler::volume,
+    reconciler::{persistent_store::PersistentStoreReconciler, volume},
     registry::Registry,
     task_poller::{squash_results, PollContext, PollEvent, PollResult, PollerState, TaskPoller},
 };
@@ -23,8 +23,10 @@ impl std::fmt::Debug for ReconcilerWorker {
 impl ReconcilerWorker {
     /// Create a new `Self` with the provided communication channels
     pub(super) fn new() -> Self {
-        let poll_targets: Vec<Box<dyn TaskPoller>> =
-            vec![Box::new(volume::VolumeReconciler::new())];
+        let poll_targets: Vec<Box<dyn TaskPoller>> = vec![
+            Box::new(volume::VolumeReconciler::new()),
+            Box::new(PersistentStoreReconciler::new()),
+        ];
 
         let event_channel = tokio::sync::mpsc::channel(poll_targets.len());
         let shutdown_channel = tokio::sync::mpsc::channel(1);
