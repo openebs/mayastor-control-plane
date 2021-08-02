@@ -4,7 +4,7 @@ use crate::types::v0::{
     message_bus::{self, CreatePool, NodeId, Pool as MbusPool, PoolDeviceUri, PoolId},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecState, SpecTransaction,
+        SpecStatus, SpecTransaction,
     },
 };
 
@@ -43,15 +43,15 @@ impl UuidString for PoolState {
     }
 }
 
-/// State of the Pool Spec
-pub type PoolSpecState = SpecState<message_bus::PoolState>;
+/// Status of the Pool Spec
+pub type PoolSpecStatus = SpecStatus<message_bus::PoolStatus>;
 impl From<&CreatePool> for PoolSpec {
     fn from(request: &CreatePool) -> Self {
         Self {
             node: request.node.clone(),
             id: request.id.clone(),
             disks: request.disks.clone(),
-            state: PoolSpecState::Creating,
+            status: PoolSpecStatus::Creating,
             labels: vec![],
             updating: false,
             operation: None,
@@ -61,7 +61,7 @@ impl From<&CreatePool> for PoolSpec {
 impl PartialEq<CreatePool> for PoolSpec {
     fn eq(&self, other: &CreatePool) -> bool {
         let mut other = PoolSpec::from(other);
-        other.state = self.state.clone();
+        other.status = self.status.clone();
         &other == self
     }
 }
@@ -75,8 +75,8 @@ pub struct PoolSpec {
     pub id: PoolId,
     /// absolute disk paths claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
-    /// state of the pool
-    pub state: PoolSpecState,
+    /// status of the pool
+    pub status: PoolSpecStatus,
     /// Pool labels.
     pub labels: Vec<PoolLabel>,
     /// Update in progress
@@ -94,7 +94,7 @@ impl UuidString for PoolSpec {
 
 impl From<PoolSpec> for models::PoolSpec {
     fn from(src: PoolSpec) -> Self {
-        Self::new(src.disks, src.id, src.labels, src.node, src.state)
+        Self::new(src.disks, src.id, src.labels, src.node, src.status)
     }
 }
 
@@ -115,10 +115,10 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
         if let Some(op) = self.operation.clone() {
             match op.operation {
                 PoolOperation::Destroy => {
-                    self.state = SpecState::Deleted;
+                    self.status = SpecStatus::Deleted;
                 }
                 PoolOperation::Create => {
-                    self.state = SpecState::Created(message_bus::PoolState::Online);
+                    self.status = SpecStatus::Created(message_bus::PoolStatus::Online);
                 }
             }
         }
@@ -192,7 +192,7 @@ impl From<&PoolSpec> for message_bus::Pool {
             node: pool.node.clone(),
             id: pool.id.clone(),
             disks: pool.disks.clone(),
-            state: message_bus::PoolState::Unknown,
+            state: message_bus::PoolStatus::Unknown,
             capacity: 0,
             used: 0,
         }

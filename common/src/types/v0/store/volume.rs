@@ -4,7 +4,7 @@ use crate::types::v0::{
     message_bus::{self, CreateVolume, NexusId, NodeId, Protocol, VolumeId, VolumeShareProtocol},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecState, SpecTransaction,
+        SpecStatus, SpecTransaction,
     },
 };
 
@@ -91,8 +91,8 @@ pub struct VolumeSpec {
     pub protocol: Protocol,
     /// Number of front-end paths.
     pub num_paths: u8,
-    /// State that the volume should eventually achieve.
-    pub state: VolumeSpecState,
+    /// Status that the volume should eventually achieve.
+    pub status: VolumeSpecStatus,
     /// The node where front-end IO will be sent to
     pub target_node: Option<NodeId>,
     /// volume healing policy
@@ -143,10 +143,10 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
         if let Some(op) = self.operation.clone() {
             match op.operation {
                 VolumeOperation::Destroy => {
-                    self.state = SpecState::Deleted;
+                    self.status = SpecStatus::Deleted;
                 }
                 VolumeOperation::Create => {
-                    self.state = SpecState::Created(message_bus::VolumeStatus::Online);
+                    self.status = SpecStatus::Created(message_bus::VolumeStatus::Online);
                 }
                 VolumeOperation::Share(share) => {
                     self.protocol = share.into();
@@ -230,9 +230,9 @@ impl StorableObject for VolumeSpec {
 }
 
 /// State of the Volume Spec
-pub type VolumeSpecState = SpecState<message_bus::VolumeStatus>;
+pub type VolumeSpecStatus = SpecStatus<message_bus::VolumeStatus>;
 
-impl From<models::SpecState> for VolumeSpecState {
+impl From<models::SpecState> for VolumeSpecStatus {
     fn from(spec_state: models::SpecState) -> Self {
         match spec_state {
             models::SpecState::Creating => Self::Creating,
@@ -252,7 +252,7 @@ impl From<&CreateVolume> for VolumeSpec {
             num_replicas: request.replicas as u8,
             protocol: Protocol::None,
             num_paths: 1,
-            state: VolumeSpecState::Creating,
+            status: VolumeSpecStatus::Creating,
             target_node: None,
             policy: request.policy.clone(),
             topology: request.topology.clone(),
@@ -265,7 +265,7 @@ impl From<&CreateVolume> for VolumeSpec {
 impl PartialEq<CreateVolume> for VolumeSpec {
     fn eq(&self, other: &CreateVolume) -> bool {
         let mut other = VolumeSpec::from(other);
-        other.state = self.state.clone();
+        other.status = self.status.clone();
         other.updating = self.updating;
         &other == self
     }
@@ -302,7 +302,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.num_replicas,
             src.protocol,
             src.size,
-            src.state,
+            src.status,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }
@@ -317,7 +317,7 @@ impl From<models::VolumeSpec> for VolumeSpec {
             num_replicas: spec.num_replicas,
             protocol: spec.protocol.into(),
             num_paths: spec.num_paths,
-            state: spec.state.into(),
+            status: spec.state.into(),
             target_node: spec.target_node.map(From::from),
             policy: Default::default(),
             topology: Default::default(),

@@ -7,8 +7,8 @@ use common_lib::{
     mbus_api::ResourceKind,
     types::v0::message_bus::{
         AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
-        DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId, PoolState, Protocol,
-        RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica, UnshareNexus,
+        DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId, PoolStatus,
+        Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica, UnshareNexus,
         UnshareReplica,
     },
 };
@@ -704,7 +704,7 @@ impl PoolWrapper {
 
     /// Set pool state as unknown
     pub fn set_unknown(&mut self) {
-        self.pool.state = PoolState::Unknown;
+        self.pool.state = PoolStatus::Unknown;
     }
 
     /// Add replica to list

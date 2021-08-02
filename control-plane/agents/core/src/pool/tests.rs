@@ -5,7 +5,7 @@ use common_lib::{
     mbus_api::TimeoutOptions,
     types::v0::{
         message_bus::{
-            GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaShareProtocol, ReplicaState,
+            GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaShareProtocol, ReplicaStatus,
         },
         store::replica::ReplicaSpec,
     },
@@ -66,7 +66,7 @@ async fn pool() {
             size: 12582912,
             share: Protocol::None,
             uri,
-            state: ReplicaState::Online
+            status: ReplicaStatus::Online
         }
     );
 

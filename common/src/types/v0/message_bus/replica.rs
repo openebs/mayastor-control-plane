@@ -31,13 +31,13 @@ pub struct Replica {
     pub share: Protocol,
     /// uri usable by nexus to access it
     pub uri: String,
-    /// state of the replica
-    pub state: ReplicaState,
+    /// status of the replica
+    pub status: ReplicaStatus,
 }
 impl Replica {
     /// check if the replica is online
     pub fn online(&self) -> bool {
-        self.state.online()
+        self.status.online()
     }
 }
 
@@ -48,7 +48,7 @@ impl From<Replica> for models::Replica {
             src.pool,
             src.share,
             src.size,
-            src.state,
+            src.status,
             src.thin,
             src.uri,
             apis::Uuid::try_from(src.uuid).unwrap(),
@@ -65,7 +65,7 @@ impl From<models::Replica> for Replica {
             size: src.size,
             share: src.share.into(),
             uri: src.uri,
-            state: src.state.into(),
+            status: src.state.into(),
         }
     }
 }
@@ -298,7 +298,7 @@ impl From<models::ReplicaShareProtocol> for ReplicaShareProtocol {
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
-pub enum ReplicaState {
+pub enum ReplicaStatus {
     /// unknown state
     Unknown = 0,
     /// the replica is in normal working order
@@ -308,19 +308,19 @@ pub enum ReplicaState {
     /// the replica is completely inaccessible
     Faulted = 3,
 }
-impl ReplicaState {
+impl ReplicaStatus {
     /// check if the state is online
     pub fn online(&self) -> bool {
         self == &Self::Online
     }
 }
 
-impl Default for ReplicaState {
+impl Default for ReplicaStatus {
     fn default() -> Self {
         Self::Unknown
     }
 }
-impl From<i32> for ReplicaState {
+impl From<i32> for ReplicaStatus {
     fn from(src: i32) -> Self {
         match src {
             1 => Self::Online,
@@ -330,17 +330,17 @@ impl From<i32> for ReplicaState {
         }
     }
 }
-impl From<ReplicaState> for models::ReplicaState {
-    fn from(src: ReplicaState) -> Self {
+impl From<ReplicaStatus> for models::ReplicaState {
+    fn from(src: ReplicaStatus) -> Self {
         match src {
-            ReplicaState::Unknown => Self::Unknown,
-            ReplicaState::Online => Self::Online,
-            ReplicaState::Degraded => Self::Degraded,
-            ReplicaState::Faulted => Self::Faulted,
+            ReplicaStatus::Unknown => Self::Unknown,
+            ReplicaStatus::Online => Self::Online,
+            ReplicaStatus::Degraded => Self::Degraded,
+            ReplicaStatus::Faulted => Self::Faulted,
         }
     }
 }
-impl From<models::ReplicaState> for ReplicaState {
+impl From<models::ReplicaState> for ReplicaStatus {
     fn from(src: models::ReplicaState) -> Self {
         match src {
             models::ReplicaState::Unknown => Self::Unknown,

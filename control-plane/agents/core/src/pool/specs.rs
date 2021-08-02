@@ -14,13 +14,13 @@ use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
         message_bus::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
-            Replica, ReplicaId, ReplicaOwners, ReplicaState, ShareReplica, UnshareReplica,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolStatus,
+            Replica, ReplicaId, ReplicaOwners, ReplicaStatus, ShareReplica, UnshareReplica,
         },
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
-            SpecState, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
     },
 };
@@ -28,8 +28,8 @@ use common_lib::{
 impl SpecOperations for PoolSpec {
     type Create = CreatePool;
     type Owners = ();
-    type State = PoolState;
-    type Status = Pool;
+    type Status = PoolStatus;
+    type State = Pool;
     type UpdateOp = ();
 
     fn validate_destroy(
@@ -74,34 +74,30 @@ impl SpecOperations for PoolSpec {
     fn uuid(&self) -> String {
         self.id.to_string()
     }
-    fn state(&self) -> SpecState<Self::State> {
-        self.state.clone()
+    fn status(&self) -> SpecStatus<Self::Status> {
+        self.status.clone()
     }
-    fn set_state(&mut self, state: SpecState<Self::State>) {
-        self.state = state;
+    fn set_status(&mut self, status: SpecStatus<Self::Status>) {
+        self.status = status;
     }
 }
 
 impl SpecOperations for ReplicaSpec {
     type Create = CreateReplica;
     type Owners = ReplicaOwners;
-    type State = ReplicaState;
-    type Status = Replica;
+    type Status = ReplicaStatus;
+    type State = Replica;
     type UpdateOp = ReplicaOperation;
 
-    fn start_update_op(
-        &mut self,
-        status: &Self::Status,
-        op: Self::UpdateOp,
-    ) -> Result<(), SvcError> {
+    fn start_update_op(&mut self, state: &Self::State, op: Self::UpdateOp) -> Result<(), SvcError> {
         match op {
-            ReplicaOperation::Share(_) if status.share.shared() => Err(SvcError::AlreadyShared {
+            ReplicaOperation::Share(_) if state.share.shared() => Err(SvcError::AlreadyShared {
                 kind: self.kind(),
                 id: self.uuid(),
-                share: status.share.to_string(),
+                share: state.share.to_string(),
             }),
             ReplicaOperation::Share(_) => Ok(()),
-            ReplicaOperation::Unshare if !status.share.shared() => Err(SvcError::NotShared {
+            ReplicaOperation::Unshare if !state.share.shared() => Err(SvcError::NotShared {
                 kind: self.kind(),
                 id: self.uuid(),
             }),
@@ -136,11 +132,11 @@ impl SpecOperations for ReplicaSpec {
     fn uuid(&self) -> String {
         self.uuid.to_string()
     }
-    fn state(&self) -> SpecState<Self::State> {
-        self.state.clone()
+    fn status(&self) -> SpecStatus<Self::Status> {
+        self.status.clone()
     }
-    fn set_state(&mut self, state: SpecState<Self::State>) {
-        self.state = state;
+    fn set_status(&mut self, status: SpecStatus<Self::Status>) {
+        self.status = status;
     }
     fn owned(&self) -> bool {
         self.owners.is_owned()
@@ -386,7 +382,7 @@ impl ResourceSpecsLocked {
             for replica_spec in replicas {
                 let mut replica_clone = {
                     let mut replica = replica_spec.lock();
-                    if replica.updating || !replica.state.created() {
+                    if replica.updating || !replica.status.created() {
                         continue;
                     }
                     replica.updating = true;
