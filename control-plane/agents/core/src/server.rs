@@ -84,18 +84,20 @@ async fn server(cli_args: CliArgs) {
         CliArgs::from_args().reconcile_idle_period.into(),
     )
     .await;
-    Service::builder(cli_args.nats, ChannelVs::Core)
+    let service = Service::builder(cli_args.nats, ChannelVs::Core)
         .with_default_liveness()
         .connect_message_bus()
         .await
-        .with_shared_state(registry)
-        .configure(node::configure)
+        .with_shared_state(registry.clone())
+        .configure_async(node::configure)
+        .await
         .configure(pool::configure)
         .configure(nexus::configure)
         .configure(volume::configure)
-        .configure(watcher::configure)
-        .run()
-        .await;
+        .configure(watcher::configure);
+
+    registry.start().await;
+    service.run().await;
 }
 
 /// Constructs a service handler for `RequestType` which gets redirected to a

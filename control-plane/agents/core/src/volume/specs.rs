@@ -888,7 +888,7 @@ async fn get_volume_target_node(
     match request.target_node.as_ref() {
         None => {
             // auto select a node
-            let nodes = registry.get_nodes_wrapper().await;
+            let nodes = registry.get_node_wrappers().await;
             for locked_node in nodes {
                 let node = locked_node.lock().await;
                 // todo: use other metrics in order to make the "best" choice

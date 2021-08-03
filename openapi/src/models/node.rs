@@ -19,38 +19,33 @@ use crate::apis::IntoVec;
 /// mayastor storage node information
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Node {
-    /// grpc_endpoint of the mayastor instance
-    #[serde(rename = "grpcEndpoint")]
-    pub grpc_endpoint: String,
     /// storage node identifier
     #[serde(rename = "id")]
     pub id: String,
-    #[serde(rename = "state")]
-    pub state: crate::models::NodeState,
+    #[serde(rename = "spec", skip_serializing_if = "Option::is_none")]
+    pub spec: Option<crate::models::NodeSpec>,
+    #[serde(rename = "state", skip_serializing_if = "Option::is_none")]
+    pub state: Option<crate::models::NodeState>,
 }
 
 impl Node {
     /// Node using only the required fields
-    pub fn new(
-        grpc_endpoint: impl Into<String>,
-        id: impl Into<String>,
-        state: impl Into<crate::models::NodeState>,
-    ) -> Node {
+    pub fn new(id: impl Into<String>) -> Node {
         Node {
-            grpc_endpoint: grpc_endpoint.into(),
             id: id.into(),
-            state: state.into(),
+            spec: None,
+            state: None,
         }
     }
     /// Node using all fields
     pub fn new_all(
-        grpc_endpoint: impl Into<String>,
         id: impl Into<String>,
-        state: impl Into<crate::models::NodeState>,
+        spec: impl Into<Option<crate::models::NodeSpec>>,
+        state: impl Into<Option<crate::models::NodeState>>,
     ) -> Node {
         Node {
-            grpc_endpoint: grpc_endpoint.into(),
             id: id.into(),
+            spec: spec.into(),
             state: state.into(),
         }
     }

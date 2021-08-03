@@ -5868,14 +5868,31 @@ components:
       - state
       - uuid
       type: object
-    NodeState:
+    NodeStatus:
       description: deemed state of the node
       enum:
       - Unknown
       - Online
       - Offline
       type: string
-    Node:
+    NodeSpec:
+      description: mayastor storage node information
+      example:
+        grpcEndpoint: 10.1.0.5:10124
+        id: ksnode-1
+      properties:
+        grpcEndpoint:
+          description: gRPC endpoint of the mayastor instance
+          type: string
+        id:
+          description: storage node identifier
+          example: ksnode-1
+          type: string
+      required:
+      - grpcEndpoint
+      - id
+      type: object
+    NodeState:
       description: mayastor storage node information
       example:
         grpcEndpoint: 10.1.0.5:10124
@@ -5883,18 +5900,41 @@ components:
         state: Online
       properties:
         grpcEndpoint:
-          description: grpc_endpoint of the mayastor instance
+          description: gRPC endpoint of the mayastor instance
           type: string
         id:
           description: storage node identifier
           example: ksnode-1
           type: string
-        state:
-          $ref: '#/components/schemas/NodeState'
+        status:
+          $ref: '#/components/schemas/NodeStatus'
       required:
       - grpcEndpoint
       - id
-      - state
+      - status
+      type: object
+    Node:
+      description: mayastor storage node information
+      example:
+        id: ksnode-1
+        state:
+          grpcEndpoint: 10.1.0.5:10124
+          id: ksnode-1
+          state: Online
+        spec:
+          grpcEndpoint: 10.1.0.5:10124
+          id: ksnode-1
+      properties:
+        id:
+          description: storage node identifier
+          example: ksnode-1
+          type: string
+        spec:
+          $ref: '#/components/schemas/NodeSpec'
+        state:
+          $ref: '#/components/schemas/NodeState'
+      required:
+      - id
       type: object
     PoolState:
       description: current state of the pool

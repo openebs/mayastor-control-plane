@@ -24,9 +24,12 @@ use futures::future::Ready;
 use serde::Deserialize;
 
 use crate::authentication::authenticate;
-pub use common_lib::types::v0::openapi::{
-    apis::{Body, Path, Query, RestError},
-    models::RestJsonError,
+pub use common_lib::{
+    types::v0::openapi::{
+        apis::{Body, Path, Query, RestError},
+        models::RestJsonError,
+    },
+    IntoVec,
 };
 use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
 use rest_client::versions::v0::*;

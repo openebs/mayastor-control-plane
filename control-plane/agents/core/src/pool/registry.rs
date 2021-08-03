@@ -21,7 +21,7 @@ impl Registry {
         &self,
         pool_id: PoolId,
     ) -> Result<PoolWrapper, SvcError> {
-        let nodes = self.get_nodes_wrapper().await;
+        let nodes = self.get_node_wrappers().await;
         for node in nodes {
             if let Some(pool) = node.pool_wrapper(&pool_id).await {
                 return Ok(pool);
@@ -32,7 +32,7 @@ impl Registry {
 
     /// Get all pools
     pub(crate) async fn get_pools_inner(&self) -> Result<Vec<Pool>, SvcError> {
-        let nodes = self.get_nodes_wrapper().await;
+        let nodes = self.get_node_wrappers().await;
         let mut pools = vec![];
         for node in nodes {
             pools.append(&mut node.pools().await)
@@ -51,7 +51,7 @@ impl Registry {
 impl Registry {
     /// Get all replicas
     pub(crate) async fn get_replicas(&self) -> Vec<Replica> {
-        let nodes = self.get_nodes_wrapper().await;
+        let nodes = self.get_node_wrappers().await;
         let mut replicas = vec![];
         for node in nodes {
             replicas.append(&mut node.replicas().await);

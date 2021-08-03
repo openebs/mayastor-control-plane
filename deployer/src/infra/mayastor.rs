@@ -6,7 +6,7 @@ impl ComponentAction for Mayastor {
         let mut cfg = cfg;
         for i in 0 .. options.mayastors {
             let mayastor_socket = format!("{}:10124", cfg.next_container_ip()?);
-            let mut bin = Binary::from_nix("mayastor")
+            let mut bin = Binary::from_path("mayastor")
                 .with_nats("-n")
                 .with_args(vec!["-N", &Self::name(i, options)])
                 .with_args(vec!["-g", &mayastor_socket]);

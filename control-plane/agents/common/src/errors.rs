@@ -170,11 +170,16 @@ pub enum SvcError {
     ReplicaRemovalNoCandidates { id: String },
     #[snafu(display("No online replicas are available for Volume '{}'", id))]
     NoOnlineReplicas { id: String },
+    #[snafu(display("Entry with key '{}' not found in the persistent store.", key))]
+    StoreMissingEntry { key: String },
 }
 
 impl From<StoreError> for SvcError {
     fn from(source: StoreError) -> Self {
-        SvcError::Store { source }
+        match source {
+            StoreError::MissingEntry { key } => SvcError::StoreMissingEntry { key },
+            _ => SvcError::Store { source },
+        }
     }
 }
 
@@ -339,6 +344,12 @@ impl From<SvcError> for ReplyError {
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
+            },
+            SvcError::StoreMissingEntry { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error_str,
             },
             SvcError::JsonRpc { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,

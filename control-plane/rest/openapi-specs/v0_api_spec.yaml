@@ -5743,14 +5743,29 @@ components:
         - size
         - state
         - uuid
-    NodeState:
+    NodeStatus:
       description: deemed state of the node
       type: string
       enum:
         - Unknown
         - Online
         - Offline
-    Node:
+    NodeSpec:
+      example:
+        grpcEndpoint: '10.1.0.5:10124'
+        id: ksnode-1
+      description: mayastor storage node information
+      type: object
+      properties:
+        grpcEndpoint:
+          description: gRPC endpoint of the mayastor instance
+          type: string
+        id:
+          $ref: '#/components/schemas/NodeId'
+      required:
+        - grpcEndpoint
+        - id
+    NodeState:
       example:
         grpcEndpoint: '10.1.0.5:10124'
         id: ksnode-1
@@ -5759,16 +5774,28 @@ components:
       type: object
       properties:
         grpcEndpoint:
-          description: grpc_endpoint of the mayastor instance
+          description: gRPC endpoint of the mayastor instance
           type: string
         id:
           $ref: '#/components/schemas/NodeId'
-        state:
-          $ref: '#/components/schemas/NodeState'
+        status:
+          $ref: '#/components/schemas/NodeStatus'
       required:
         - grpcEndpoint
         - id
-        - state
+        - status
+    Node:
+      description: mayastor storage node information
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/NodeId'
+        spec:
+          $ref: '#/components/schemas/NodeSpec'
+        state:
+          $ref: '#/components/schemas/NodeState'
+      required:
+        - id
     PoolState:
       description: current state of the pool
       type: string

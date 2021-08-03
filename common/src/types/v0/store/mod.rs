@@ -5,6 +5,7 @@ pub mod nexus_child;
 pub mod nexus_persistence;
 pub mod node;
 pub mod pool;
+pub mod registry;
 pub mod replica;
 pub mod volume;
 pub mod watch;

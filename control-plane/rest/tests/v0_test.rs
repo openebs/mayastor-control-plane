@@ -1,5 +1,5 @@
 use common_lib::{
-    mbus_api::Message,
+    mbus_api::{Message, TimeoutOptions},
     types::v0::message_bus::{ChannelVs, Liveness, NodeId, WatchResourceId},
 };
 use composer::{Binary, Builder, ComposeTest, ContainerSpec};
@@ -45,7 +45,7 @@ async fn test_setup(auth: &bool) -> ((String, String), ComposeTest) {
     let test = Builder::new()
         .name("rest")
         .add_container_spec(
-            ContainerSpec::from_binary("nats", Binary::from_nix("nats-server").with_arg("-DV"))
+            ContainerSpec::from_binary("nats", Binary::from_path("nats-server").with_arg("-DV"))
                 .with_portmap("4222", "4222"),
         )
         .add_container_bin(
@@ -66,14 +66,14 @@ async fn test_setup(auth: &bool) -> ((String, String), ComposeTest) {
         )
         .add_container_bin(
             "mayastor-1",
-            Binary::from_nix("mayastor")
+            Binary::from_path("mayastor")
                 .with_nats("-n")
                 .with_args(vec!["-N", mayastor1])
                 .with_args(vec!["-g", "10.1.0.5:10124"]),
         )
         .add_container_bin(
             "mayastor-2",
-            Binary::from_nix("mayastor")
+            Binary::from_path("mayastor")
                 .with_nats("-n")
                 .with_args(vec!["-N", mayastor2])
                 .with_args(vec!["-g", "10.1.0.6:10124"]),
@@ -87,7 +87,7 @@ async fn test_setup(auth: &bool) -> ((String, String), ComposeTest) {
         .add_container_spec(
             ContainerSpec::from_binary(
                 "etcd",
-                Binary::from_nix("etcd").with_args(vec![
+                Binary::from_path("etcd").with_args(vec![
                     "--data-dir",
                     "/tmp/etcd-data",
                     "--advertise-client-urls",
@@ -114,6 +114,24 @@ fn wait_for_etcd_ready(endpoint: &str) -> io::Result<TcpStream> {
     TcpStream::connect_timeout(&sa, Duration::from_secs(3))
 }
 
+/// connect to message bus helper for the cargo test code
+async fn connect_to_bus(test: &ComposeTest, name: &str) {
+    let timeout = TimeoutOptions::new()
+        .with_timeout(Duration::from_millis(500))
+        .with_timeout_backoff(Duration::from_millis(500))
+        .with_max_retries(10);
+    connect_to_bus_timeout(test, name, timeout).await;
+}
+
+/// connect to message bus helper for the cargo test code with bus timeouts
+async fn connect_to_bus_timeout(test: &ComposeTest, name: &str, bus_timeout: TimeoutOptions) {
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        mbus_api::message_bus_init_options(test.container_ip(name), bus_timeout).await
+    })
+    .await
+    .unwrap();
+}
+
 // to avoid waiting for timeouts
 async fn orderly_start(test: &ComposeTest) {
     test.start_containers(vec!["nats", "jsongrpc", "rest", "jaeger", "etcd"])
@@ -124,7 +142,7 @@ async fn orderly_start(test: &ComposeTest) {
         "etcd not ready"
     );
 
-    test.connect_to_bus("nats").await;
+    connect_to_bus(test, "nats").await;
     test.start("core").await.unwrap();
     wait_for_services().await;
 
@@ -181,8 +199,15 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
     let listed_node = client.nodes_api().get_node(mayastor1.as_str()).await;
     let mut node = models::Node {
         id: mayastor1.to_string(),
-        grpc_endpoint: "10.1.0.5:10124".to_string(),
-        state: models::NodeState::Online,
+        spec: Some(models::NodeSpec {
+            id: mayastor1.to_string(),
+            grpc_endpoint: "10.1.0.5:10124".to_string(),
+        }),
+        state: Some(models::NodeState {
+            id: mayastor1.to_string(),
+            grpc_endpoint: "10.1.0.5:10124".to_string(),
+            status: models::NodeStatus::Online,
+        }),
     };
     assert_eq!(listed_node.unwrap(), node);
 
@@ -467,7 +492,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
 
     test.stop("mayastor-1").await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-    node.state = models::NodeState::Unknown;
+    node.state.as_mut().unwrap().status = models::NodeStatus::Unknown;
     assert_eq!(
         client
             .nodes_api()

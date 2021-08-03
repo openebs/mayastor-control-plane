@@ -27,7 +27,7 @@ async fn etcd() {
         .add_container_spec(
             ContainerSpec::from_binary(
                 "etcd",
-                Binary::from_nix("etcd").with_args(vec![
+                Binary::from_path("etcd").with_args(vec![
                     "--data-dir",
                     "/tmp/etcd-data",
                     "--advertise-client-urls",

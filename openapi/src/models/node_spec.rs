@@ -14,44 +14,32 @@
 
 use crate::apis::IntoVec;
 
-/// NodeState : mayastor storage node information
+/// NodeSpec : mayastor storage node information
 
 /// mayastor storage node information
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct NodeState {
+pub struct NodeSpec {
     /// gRPC endpoint of the mayastor instance
     #[serde(rename = "grpcEndpoint")]
     pub grpc_endpoint: String,
     /// storage node identifier
     #[serde(rename = "id")]
     pub id: String,
-    #[serde(rename = "status")]
-    pub status: crate::models::NodeStatus,
 }
 
-impl NodeState {
-    /// NodeState using only the required fields
-    pub fn new(
-        grpc_endpoint: impl Into<String>,
-        id: impl Into<String>,
-        status: impl Into<crate::models::NodeStatus>,
-    ) -> NodeState {
-        NodeState {
+impl NodeSpec {
+    /// NodeSpec using only the required fields
+    pub fn new(grpc_endpoint: impl Into<String>, id: impl Into<String>) -> NodeSpec {
+        NodeSpec {
             grpc_endpoint: grpc_endpoint.into(),
             id: id.into(),
-            status: status.into(),
         }
     }
-    /// NodeState using all fields
-    pub fn new_all(
-        grpc_endpoint: impl Into<String>,
-        id: impl Into<String>,
-        status: impl Into<crate::models::NodeStatus>,
-    ) -> NodeState {
-        NodeState {
+    /// NodeSpec using all fields
+    pub fn new_all(grpc_endpoint: impl Into<String>, id: impl Into<String>) -> NodeSpec {
+        NodeSpec {
             grpc_endpoint: grpc_endpoint.into(),
             id: id.into(),
-            status: status.into(),
         }
     }
 }

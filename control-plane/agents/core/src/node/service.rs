@@ -1,13 +1,15 @@
 use super::*;
 use crate::core::{registry::Registry, wrapper::NodeWrapper};
 use common::{
-    errors::{GrpcRequestError, NodeNotFound, SvcError},
+    errors::{GrpcRequestError, SvcError},
     v0::msg_translation::RpcToMessageBus,
 };
-use common_lib::types::v0::message_bus::{GetSpecs, Node, NodeId, NodeState, Specs, States};
+use common_lib::types::v0::message_bus::{
+    Filter, GetSpecs, Node, NodeId, NodeState, NodeStatus, Specs, States,
+};
 use rpc::mayastor::ListBlockDevicesRequest;
-use snafu::{OptionExt, ResultExt};
-use std::sync::Arc;
+use snafu::ResultExt;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
 /// Node's Service
@@ -79,18 +81,26 @@ impl Service {
 
     /// Register a new node through the register information
     pub(super) async fn register(&self, registration: &Register) {
-        let node = Node {
+        self.registry.register_node_spec(registration).await;
+        self.register_state(registration).await;
+    }
+
+    /// Attempt to Register a new node state through the register information
+    pub(super) async fn register_state(&self, registration: &Register) {
+        let node = NodeState {
             id: registration.id.clone(),
             grpc_endpoint: registration.grpc_endpoint.clone(),
-            state: NodeState::Online,
+            status: NodeStatus::Online,
         };
+
         let mut nodes = self.registry.nodes.write().await;
         match nodes.get_mut(&node.id) {
             None => {
                 let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
-                node.reload().await.ok();
-                node.watchdog_mut().arm(self.clone());
-                nodes.insert(node.id.clone(), Arc::new(Mutex::new(node)));
+                if node.load().await.is_ok() {
+                    node.watchdog_mut().arm(self.clone());
+                    nodes.insert(node.id.clone(), Arc::new(Mutex::new(node)));
+                }
             }
             Some(node) => {
                 node.lock().await.on_register().await;
@@ -108,19 +118,56 @@ impl Service {
             // information at this level :(
             // maybe nodes should also be registered/deregistered via REST?
             Some(node) => {
-                node.lock().await.set_state(NodeState::Unknown);
+                node.lock().await.set_status(NodeStatus::Unknown);
             }
         }
     }
 
-    /// Get all nodes
-    pub(crate) async fn get_nodes(&self, _: &GetNodes) -> Result<Nodes, SvcError> {
-        let nodes = self.registry.get_nodes_wrapper().await;
-        let mut nodes_vec = vec![];
-        for node in nodes {
-            nodes_vec.push(node.lock().await.node().clone());
+    /// Get nodes by filter
+    pub(crate) async fn get_nodes(&self, request: &GetNodes) -> Result<Nodes, SvcError> {
+        match request.filter() {
+            Filter::None => {
+                let node_states = self.registry.get_node_states().await;
+                let node_specs = self.registry.specs.get_nodes();
+                let mut nodes = HashMap::new();
+
+                node_states.into_iter().for_each(|state| {
+                    let spec = node_specs.iter().find(|s| s.id() == &state.id);
+                    nodes.insert(
+                        state.id.clone(),
+                        Node::new(state.id.clone(), spec.cloned(), Some(state)),
+                    );
+                });
+                node_specs.into_iter().for_each(|spec| {
+                    if nodes.get(spec.id()).is_none() {
+                        nodes.insert(
+                            spec.id().clone(),
+                            Node::new(spec.id().clone(), Some(spec), None),
+                        );
+                    }
+                });
+
+                Ok(Nodes(nodes.values().cloned().collect()))
+            }
+            Filter::Node(node_id) => {
+                let node_state = self.registry.get_node_state(node_id).await.ok();
+                let node_spec = self.registry.specs.get_node(node_id).ok();
+                if node_state.is_none() && node_spec.is_none() {
+                    Err(SvcError::NodeNotFound {
+                        node_id: node_id.to_owned(),
+                    })
+                } else {
+                    Ok(Nodes(vec![Node::new(
+                        node_id.clone(),
+                        node_spec,
+                        node_state,
+                    )]))
+                }
+            }
+            _ => Err(SvcError::InvalidFilter {
+                filter: request.filter().clone(),
+            }),
         }
-        Ok(Nodes(nodes_vec))
     }
 
     /// Get block devices from a node
@@ -184,28 +231,5 @@ impl Service {
             pools,
             replicas,
         })
-    }
-}
-
-impl Registry {
-    /// Get all node wrappers
-    pub(crate) async fn get_nodes_wrapper(&self) -> Vec<Arc<Mutex<NodeWrapper>>> {
-        let nodes = self.nodes.read().await;
-        nodes.values().cloned().collect()
-    }
-
-    /// Get node `node_id`
-    pub(crate) async fn get_node_wrapper(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<Arc<Mutex<NodeWrapper>>, SvcError> {
-        let nodes = self.nodes.read().await;
-        nodes
-            .iter()
-            .find(|n| n.0 == node_id)
-            .map(|(_, node)| node.clone())
-            .context(NodeNotFound {
-                node_id: node_id.to_owned(),
-            })
     }
 }

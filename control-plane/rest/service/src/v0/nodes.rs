@@ -10,6 +10,6 @@ impl apis::Nodes for RestApi {
 
     async fn get_nodes() -> Result<Vec<models::Node>, RestError<RestJsonError>> {
         let nodes = MessageBus::get_nodes().await?;
-        Ok(nodes.iter().map(models::Node::from).collect())
+        Ok(nodes.into_vec())
     }
 }

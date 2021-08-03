@@ -11,7 +11,7 @@ cleanup_handler() {
   done
 }
 
-trap cleanup_handler ERR INT QUIT TERM HUP
+#trap cleanup_handler ERR INT QUIT TERM HUP
 
 set -euxo pipefail
 export PATH=$PATH:${HOME}/.cargo/bin

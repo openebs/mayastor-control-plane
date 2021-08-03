@@ -26,7 +26,7 @@ async fn nexus() {
         .unwrap();
 
     let mayastor = cluster.node(0);
-    let nodes = GetNodes {}.request().await.unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let replica = CreateReplica {
@@ -122,7 +122,7 @@ async fn nexus_share_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
 
-    let nodes = GetNodes {}.request().await.unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
@@ -304,7 +304,7 @@ async fn nexus_child_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
 
-    let nodes = GetNodes {}.request().await.unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let child2 = "malloc:///ch2?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b";

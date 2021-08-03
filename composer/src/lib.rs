@@ -26,7 +26,6 @@ use bollard::{
     container::KillContainerOptions, image::CreateImageOptions, models::ContainerInspectResponse,
     network::DisconnectNetworkOptions,
 };
-pub use common_lib::{mbus_api, mbus_api::TimeoutOptions};
 use rpc::mayastor::{bdev_rpc_client::BdevRpcClient, mayastor_client::MayastorClient};
 
 pub const TEST_NET_NAME: &str = "mayastor-testing-network";
@@ -88,8 +87,8 @@ impl Binary {
 
         Self::new(&format!("{}/target/debug/{}", srcdir, name), vec![])
     }
-    /// Setup nix shell binary from path and arguments
-    pub fn from_nix(name: &str) -> Self {
+    /// Setup binary from path
+    pub fn from_path(name: &str) -> Self {
         Self::new(name, vec![])
     }
     /// Add single argument
@@ -385,7 +384,7 @@ impl Builder {
     pub fn add_container(mut self, name: &str) -> Builder {
         self.containers.push(ContainerSpec::from_binary(
             name,
-            Binary::from_nix("mayastor"),
+            Binary::from_path("mayastor"),
         ));
         self
     }
@@ -1224,26 +1223,6 @@ impl ComposeTest {
     pub async fn down(&self) {
         self.remove_all().await.unwrap();
     }
-
-    /// connect to message bus helper for the cargo test code
-    pub async fn connect_to_bus(&self, name: &str) {
-        let timeout = TimeoutOptions::new()
-            .with_timeout(Duration::from_millis(500))
-            .with_timeout_backoff(Duration::from_millis(500))
-            .with_max_retries(10);
-        self.connect_to_bus_timeout(name, timeout).await;
-    }
-
-    /// connect to message bus helper for the cargo test code with bus timeouts
-    pub async fn connect_to_bus_timeout(&self, name: &str, bus_timeout: TimeoutOptions) {
-        let (_, ip) = self.containers.get(name).unwrap();
-        let url = format!("{}", ip);
-        tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            mbus_api::message_bus_init_options(url, bus_timeout).await
-        })
-        .await
-        .unwrap();
-    }
 }
 
 #[cfg(test)]
@@ -1257,13 +1236,16 @@ mod tests {
             .name("composer")
             .network("10.1.0.0/16")
             .add_container_spec(
-                ContainerSpec::from_binary("nats", Binary::from_nix("nats-server").with_arg("-DV"))
-                    .with_portmap("4222", "4222"),
+                ContainerSpec::from_binary(
+                    "nats",
+                    Binary::from_path("nats-server").with_arg("-DV"),
+                )
+                .with_portmap("4222", "4222"),
             )
             .add_container("mayastor")
             .add_container_bin(
                 "mayastor2",
-                Binary::from_nix("mayastor").with_args(vec!["-n", "nats.composer"]),
+                Binary::from_path("mayastor").with_args(vec!["-n", "nats.composer"]),
             )
             .with_clean(true)
             .build()

@@ -129,6 +129,7 @@ impl ResourceSpecs {
 
 impl ResourceSpecsLocked {
     /// Get a list of created NexusSpec's
+    #[allow(dead_code)]
     pub fn get_created_nexus_specs(&self) -> Vec<NexusSpec> {
         let specs = self.read();
         specs.get_created_nexuses()

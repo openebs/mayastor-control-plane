@@ -2,13 +2,13 @@
 #![allow(clippy::unit_arg)]
 
 use ::rpc::mayastor::{JsonRpcReply, JsonRpcRequest};
-use common::errors::{BusGetNode, JsonRpcDeserialise, SvcError};
+use common::errors::{BusGetNode, JsonRpcDeserialise, NodeNotOnline, SvcError};
 use common_lib::{
     mbus_api::message_bus::v0::{MessageBus, *},
     types::v0::message_bus::JsonGrpcRequest,
 };
 use rpc::mayastor::json_rpc_client::JsonRpcClient;
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 
 #[derive(Clone, Default)]
 pub(super) struct JsonGrpcSvc {}
@@ -24,6 +24,9 @@ impl JsonGrpcSvc {
             .context(BusGetNode {
                 node: request.node.clone(),
             })?;
+        let node = node.state().context(NodeNotOnline {
+            node: request.node.to_owned(),
+        })?;
         let mut client = JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
             .await
             .unwrap();

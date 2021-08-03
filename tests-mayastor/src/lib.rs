@@ -9,7 +9,8 @@ use opentelemetry::{
 };
 
 use common_lib::{
-    mbus_api::Message,
+    mbus_api,
+    mbus_api::{Message, TimeoutOptions},
     types::v0::message_bus::{self, PoolDeviceUri},
 };
 pub use rest_client::{
@@ -112,10 +113,6 @@ impl Cluster {
             .start_wait(&composer, std::time::Duration::from_secs(10))
             .await?;
 
-        // the deployer uses a "fake" message bus so now it's time to
-        // connect to the "real" message bus
-        composer.connect_to_bus_timeout("nats", bus_timeout).await;
-
         let cluster = Cluster {
             composer,
             rest_client,
@@ -123,7 +120,30 @@ impl Cluster {
             builder: ClusterBuilder::builder(),
         };
 
+        // the deployer uses a "fake" message bus so now it's time to
+        // connect to the "real" message bus
+        cluster.connect_to_bus_timeout("nats", bus_timeout).await;
+
         Ok(cluster)
+    }
+
+    /// connect to message bus helper for the cargo test code
+    #[allow(dead_code)]
+    async fn connect_to_bus(&self, name: &str) {
+        let timeout = TimeoutOptions::new()
+            .with_timeout(Duration::from_millis(500))
+            .with_timeout_backoff(Duration::from_millis(500))
+            .with_max_retries(10);
+        self.connect_to_bus_timeout(name, timeout).await;
+    }
+
+    /// connect to message bus helper for the cargo test code with bus timeouts
+    async fn connect_to_bus_timeout(&self, name: &str, bus_timeout: TimeoutOptions) {
+        actix_rt::time::timeout(std::time::Duration::from_secs(2), async {
+            mbus_api::message_bus_init_options(self.composer.container_ip(name), bus_timeout).await
+        })
+        .await
+        .unwrap();
     }
 }
 
