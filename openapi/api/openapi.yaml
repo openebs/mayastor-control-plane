@@ -6041,6 +6041,7 @@ components:
           - Conflict
           - FailedPersist
           - Deleting
+          - InUse
           type: string
       required:
       - details

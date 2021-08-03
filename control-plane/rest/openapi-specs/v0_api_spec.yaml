@@ -5916,6 +5916,7 @@ components:
             - Conflict
             - FailedPersist
             - Deleting
+            - InUse
       required:
         - details
         - kind
