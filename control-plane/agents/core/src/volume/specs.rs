@@ -29,7 +29,7 @@ use common_lib::{
             nexus_child::NexusChild,
             replica::ReplicaSpec,
             volume::{VolumeOperation, VolumeSpec},
-            SpecState, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
     },
 };
@@ -179,6 +179,11 @@ impl ResourceSpecsLocked {
         let specs = self.read();
         specs.get_volumes()
     }
+    /// Gets a copy of all locked VolumeSpec's
+    pub(crate) fn get_locked_volumes(&self) -> Vec<Arc<Mutex<VolumeSpec>>> {
+        let specs = self.read();
+        specs.volumes.to_vec()
+    }
 
     /// Get a list of nodes currently used as replicas
     pub(crate) fn get_volume_data_nodes(&self, id: &VolumeId) -> Vec<NodeId> {
@@ -251,12 +256,14 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &CreateVolume,
     ) -> Result<Volume, SvcError> {
+        let volume = self.get_or_create_volume(request);
+        let volume_clone = SpecOperations::start_create(&volume, registry, request).await?;
+
         // todo: pick nodes and pools using the Node&Pool Topology
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
-        let create_replicas = get_create_volume_replicas(registry, request).await?;
-
-        let volume = self.get_or_create_volume(request);
-        SpecOperations::start_create(&volume, registry, request).await?;
+        let result = get_create_volume_replicas(registry, request).await;
+        let create_replicas =
+            SpecOperations::validate_update_step(registry, result, &volume, &volume_clone).await?;
 
         let mut replicas = Vec::<Replica>::new();
         for replica in &create_replicas {
@@ -784,6 +791,71 @@ impl ResourceSpecsLocked {
             specs.volumes.insert(VolumeSpec::from(request))
         }
     }
+
+    /// Worker that reconciles dirty VolumeSpecs's with the persistent store.
+    /// This is useful when nexus operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub async fn reconcile_dirty_volumes(&self, registry: &Registry) -> bool {
+        if registry.store_online().await {
+            let mut pending_count = 0;
+
+            let volumes = self.get_locked_volumes();
+            for volume_spec in volumes {
+                let mut volume_clone = {
+                    let mut volume = volume_spec.lock();
+                    if volume.updating || !volume.status.created() {
+                        continue;
+                    }
+                    volume.updating = true;
+                    volume.clone()
+                };
+
+                if let Some(op) = volume_clone.operation.clone() {
+                    let fail = !match op.result {
+                        Some(true) => {
+                            volume_clone.commit_op();
+                            let result = registry.store_obj(&volume_clone).await;
+                            if result.is_ok() {
+                                let mut volume = volume_spec.lock();
+                                volume.commit_op();
+                            }
+                            result.is_ok()
+                        }
+                        Some(false) => {
+                            volume_clone.clear_op();
+                            let result = registry.store_obj(&volume_clone).await;
+                            if result.is_ok() {
+                                let mut volume = volume_spec.lock();
+                                volume.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                        None => {
+                            // we must have crashed... we could check the node to see what the
+                            // current state is but for now assume failure
+                            volume_clone.clear_op();
+                            let result = registry.store_obj(&volume_clone).await;
+                            if result.is_ok() {
+                                let mut volume = volume_spec.lock();
+                                volume.clear_op();
+                            }
+                            result.is_ok()
+                        }
+                    };
+                    if fail {
+                        pending_count += 1;
+                    }
+                } else {
+                    // No operation to reconcile.
+                    let mut volume = volume_spec.lock();
+                    volume.updating = false;
+                }
+            }
+            pending_count > 0
+        } else {
+            true
+        }
+    }
 }
 
 fn get_volume_nexus(volume_state: &VolumeState) -> Result<Nexus, SvcError> {
@@ -846,20 +918,20 @@ async fn get_volume_target_node(
 impl SpecOperations for VolumeSpec {
     type Create = CreateVolume;
     type Owners = ();
-    type State = VolumeStatus;
-    type Status = VolumeState;
+    type Status = VolumeStatus;
+    type State = VolumeState;
     type UpdateOp = VolumeOperation;
 
     fn start_update_op(
         &mut self,
-        status: &Self::Status,
+        state: &Self::State,
         operation: Self::UpdateOp,
     ) -> Result<(), SvcError> {
         // No ANA support, there can only be more than 1 nexus if we've recreated the nexus
         // on another node and original nexus reappears.
         // In this case, the reconciler will destroy one of them.
-        if (self.target_node.is_some() && status.children.len() != 1)
-            || self.target_node.is_none() && !status.children.is_empty()
+        if (self.target_node.is_some() && state.children.len() != 1)
+            || self.target_node.is_none() && !state.children.is_empty()
         {
             return Err(SvcError::NotReady {
                 kind: self.kind(),
@@ -871,8 +943,13 @@ impl SpecOperations for VolumeSpec {
             VolumeOperation::Share(_) if self.protocol.shared() => Err(SvcError::AlreadyShared {
                 kind: self.kind(),
                 id: self.uuid(),
-                share: status.protocol.to_string(),
+                share: state.protocol.to_string(),
             }),
+            VolumeOperation::Share(_) if self.target_node.is_none() => {
+                Err(SvcError::VolumeNotPublished {
+                    vol_id: self.uuid(),
+                })
+            }
             VolumeOperation::Share(_) => Ok(()),
             VolumeOperation::Unshare if !self.protocol.shared() => Err(SvcError::NotShared {
                 kind: self.kind(),
@@ -892,7 +969,7 @@ impl SpecOperations for VolumeSpec {
             }
 
             VolumeOperation::Publish(_) => Ok(()),
-            VolumeOperation::Unpublish => get_volume_nexus(status).map(|_| ()),
+            VolumeOperation::Unpublish => get_volume_nexus(state).map(|_| ()),
 
             VolumeOperation::SetReplica(replica_count) => {
                 if *replica_count == self.num_replicas {
@@ -906,12 +983,12 @@ impl SpecOperations for VolumeSpec {
                     })
                 } else if (*replica_count as i16 - self.num_replicas as i16).abs() > 1 {
                     Err(SvcError::ReplicaChangeCount {})
-                } else if status.status != VolumeStatus::Online
+                } else if state.status != VolumeStatus::Online
                     && (*replica_count > self.num_replicas)
                 {
                     Err(SvcError::ReplicaIncrease {
                         volume_id: self.uuid(),
-                        volume_state: status.status.to_string(),
+                        volume_state: state.status.to_string(),
                     })
                 } else {
                     Ok(())
@@ -949,10 +1026,10 @@ impl SpecOperations for VolumeSpec {
     fn uuid(&self) -> String {
         self.uuid.to_string()
     }
-    fn state(&self) -> SpecState<Self::State> {
-        self.state.clone()
+    fn status(&self) -> SpecStatus<Self::Status> {
+        self.status.clone()
     }
-    fn set_state(&mut self, state: SpecState<Self::State>) {
-        self.state = state;
+    fn set_status(&mut self, status: SpecStatus<Self::Status>) {
+        self.status = status;
     }
 }

@@ -18,7 +18,7 @@ use common_lib::{
         store::{
             nexus::{NexusOperation, NexusSpec},
             nexus_child::NexusChild,
-            SpecState, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
     },
 };
@@ -27,23 +27,19 @@ use common_lib::{
 impl SpecOperations for NexusSpec {
     type Create = CreateNexus;
     type Owners = ();
-    type State = NexusStatus;
-    type Status = Nexus;
+    type Status = NexusStatus;
+    type State = Nexus;
     type UpdateOp = NexusOperation;
 
-    fn start_update_op(
-        &mut self,
-        status: &Self::Status,
-        op: Self::UpdateOp,
-    ) -> Result<(), SvcError> {
+    fn start_update_op(&mut self, state: &Self::State, op: Self::UpdateOp) -> Result<(), SvcError> {
         match &op {
-            NexusOperation::Share(_) if status.share.shared() => Err(SvcError::AlreadyShared {
+            NexusOperation::Share(_) if state.share.shared() => Err(SvcError::AlreadyShared {
                 kind: ResourceKind::Nexus,
                 id: self.uuid(),
-                share: status.share.to_string(),
+                share: state.share.to_string(),
             }),
             NexusOperation::Share(_) => Ok(()),
-            NexusOperation::Unshare if !status.share.shared() => Err(SvcError::NotShared {
+            NexusOperation::Unshare if !state.share.shared() => Err(SvcError::NotShared {
                 kind: ResourceKind::Nexus,
                 id: self.uuid(),
             }),
@@ -92,11 +88,11 @@ impl SpecOperations for NexusSpec {
     fn uuid(&self) -> String {
         self.uuid.to_string()
     }
-    fn state(&self) -> SpecState<NexusStatus> {
+    fn status(&self) -> SpecStatus<NexusStatus> {
         self.spec_status.clone()
     }
-    fn set_state(&mut self, state: SpecState<Self::State>) {
-        self.spec_status = state;
+    fn set_status(&mut self, status: SpecStatus<Self::Status>) {
+        self.spec_status = status;
     }
     fn owned(&self) -> bool {
         self.owner.is_some()

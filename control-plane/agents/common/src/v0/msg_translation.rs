@@ -1,7 +1,7 @@
 //! Converts rpc messages to message bus messages and vice versa.
 
 use common_lib::types::v0::{
-    message_bus::{self, ChildState, NexusStatus, Protocol, ReplicaState},
+    message_bus::{self, ChildState, NexusStatus, Protocol, ReplicaStatus},
     openapi::apis::IntoVec,
 };
 use rpc::mayastor as rpc;
@@ -103,7 +103,7 @@ impl RpcToMessageBus for rpc::Replica {
             size: self.size,
             share: self.share.into(),
             uri: self.uri.clone(),
-            state: ReplicaState::Online,
+            status: ReplicaStatus::Online,
         }
     }
 }

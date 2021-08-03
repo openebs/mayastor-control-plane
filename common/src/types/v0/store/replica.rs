@@ -8,7 +8,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecState, SpecTransaction, UuidString,
+        SpecStatus, SpecTransaction, UuidString,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -76,8 +76,8 @@ pub struct ReplicaSpec {
     pub share: Protocol,
     /// Thin provisioning.
     pub thin: bool,
-    /// The state that the replica should eventually achieve.
-    pub state: ReplicaSpecState,
+    /// The status that the replica should eventually achieve.
+    pub status: ReplicaSpecStatus,
     /// Managed by our control plane
     pub managed: bool,
     /// Owner Resource
@@ -103,7 +103,7 @@ impl From<ReplicaSpec> for models::ReplicaSpec {
             src.pool,
             src.share,
             src.size,
-            src.state,
+            src.status,
             src.thin,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
@@ -127,10 +127,10 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
         if let Some(op) = self.operation.clone() {
             match op.operation {
                 ReplicaOperation::Create => {
-                    self.state = SpecState::Created(message_bus::ReplicaState::Online);
+                    self.status = SpecStatus::Created(message_bus::ReplicaStatus::Online);
                 }
                 ReplicaOperation::Destroy => {
-                    self.state = SpecState::Deleted;
+                    self.status = SpecStatus::Deleted;
                 }
                 ReplicaOperation::Share(share) => {
                     self.share = share.into();
@@ -210,13 +210,13 @@ impl From<&ReplicaSpec> for message_bus::Replica {
             size: replica.size,
             share: replica.share.clone(),
             uri: "".to_string(),
-            state: message_bus::ReplicaState::Unknown,
+            status: message_bus::ReplicaStatus::Unknown,
         }
     }
 }
 
 /// State of the Replica Spec
-pub type ReplicaSpecState = SpecState<message_bus::ReplicaState>;
+pub type ReplicaSpecStatus = SpecStatus<message_bus::ReplicaStatus>;
 
 impl From<&CreateReplica> for ReplicaSpec {
     fn from(request: &CreateReplica) -> Self {
@@ -226,7 +226,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             pool: request.pool.clone(),
             share: request.share.clone(),
             thin: request.thin,
-            state: ReplicaSpecState::Creating,
+            status: ReplicaSpecStatus::Creating,
             managed: request.managed,
             owners: request.owners.clone(),
             updating: false,
@@ -237,7 +237,7 @@ impl From<&CreateReplica> for ReplicaSpec {
 impl PartialEq<CreateReplica> for ReplicaSpec {
     fn eq(&self, other: &CreateReplica) -> bool {
         let mut other = ReplicaSpec::from(other);
-        other.state = self.state.clone();
+        other.status = self.status.clone();
         other.updating = self.updating;
         &other == self
     }

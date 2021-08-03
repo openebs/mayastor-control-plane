@@ -20,7 +20,7 @@ use common_lib::types::v0::{
 use crate::core::resource_map::ResourceMap;
 use async_trait::async_trait;
 use common::errors::SvcError;
-use common_lib::{mbus_api::ResourceKind, types::v0::store::SpecState};
+use common_lib::{mbus_api::ResourceKind, types::v0::store::SpecStatus};
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::fmt::Debug;
@@ -47,8 +47,8 @@ enum SpecError {
 pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     type Create: Debug + PartialEq + Sync + Send;
     type Owners: Default + Sync + Send;
-    type State: PartialEq;
-    type Status: PartialEq + Sync + Send;
+    type Status: PartialEq;
+    type State: PartialEq + Sync + Send;
     type UpdateOp: Sync + Send;
 
     /// Start a create operation and attempt to log the transaction to the store.
@@ -57,7 +57,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         locked_spec: &Arc<Mutex<Self>>,
         registry: &Registry,
         request: &Self::Create,
-    ) -> Result<(), SvcError>
+    ) -> Result<Self, SvcError>
     where
         Self: PartialEq<Self::Create>,
         Self: SpecTransaction<O>,
@@ -68,7 +68,8 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             spec.start_create_inner(request)?;
             spec.clone()
         };
-        Self::store_operation_log(registry, locked_spec, &spec_clone).await
+        Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
+        Ok(spec_clone)
     }
 
     /// When a create request is issued we need to validate by verifying that:
@@ -80,7 +81,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     {
         // we're busy with another request, try again later
         let _ = self.busy()?;
-        if self.state().creating() {
+        if self.status().creating() {
             if self != request {
                 Err(SvcError::ReCreateMismatch {
                     id: self.uuid(),
@@ -92,7 +93,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
                 self.start_create_op();
                 Ok(())
             }
-        } else if self.state().created() {
+        } else if self.status().created() {
             Err(SvcError::AlreadyExists {
                 kind: self.kind(),
                 id: self.uuid(),
@@ -185,7 +186,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         {
             let mut spec = locked_spec.lock();
             let _ = spec.busy()?;
-            if spec.state().deleted() {
+            if spec.status().deleted() {
                 return Ok(());
             } else if !ignore_owners {
                 spec.disown(owners);
@@ -217,7 +218,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             let mut spec = locked_spec.lock();
 
             // once we've started, there's no going back...
-            spec.set_state(SpecState::Deleting);
+            spec.set_status(SpecStatus::Deleting);
 
             spec.start_destroy_op();
             spec.clone()
@@ -282,17 +283,17 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     async fn start_update(
         registry: &Registry,
         locked_spec: &Arc<Mutex<Self>>,
-        status: &Self::Status,
+        state: &Self::State,
         update_operation: Self::UpdateOp,
     ) -> Result<Self, SvcError>
     where
-        Self: PartialEq<Self::Status>,
+        Self: PartialEq<Self::State>,
         Self: SpecTransaction<Self::UpdateOp>,
         Self: StorableObject,
     {
         let spec_clone = {
             let mut spec = locked_spec.lock();
-            spec.start_update_inner(status, update_operation, false)?
+            spec.start_update_inner(state, update_operation, false)?
         };
 
         Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
@@ -302,38 +303,38 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     /// Checks that the object ready to accept a new update operation
     fn start_update_inner(
         &mut self,
-        status: &Self::Status,
+        state: &Self::State,
         operation: Self::UpdateOp,
         reconciling: bool,
     ) -> Result<Self, SvcError>
     where
-        Self: PartialEq<Self::Status>,
+        Self: PartialEq<Self::State>,
     {
         // we're busy right now, try again later
         let _ = self.busy()?;
 
-        match self.state() {
-            SpecState::Creating => Err(SvcError::PendingCreation {
+        match self.status() {
+            SpecStatus::Creating => Err(SvcError::PendingCreation {
                 id: self.uuid(),
                 kind: self.kind(),
             }),
-            SpecState::Deleted | SpecState::Deleting => Err(SvcError::PendingDeletion {
+            SpecStatus::Deleted | SpecStatus::Deleting => Err(SvcError::PendingDeletion {
                 id: self.uuid(),
                 kind: self.kind(),
             }),
-            SpecState::Created(_) => {
+            SpecStatus::Created(_) => {
                 // if it's not part of a reconcile effort then the status should match up with
                 // what the spec defines, otherwise it's probably not a good idea to allow this
                 // "frontend" operation to go through
                 // todo: should we also compare the "state"? (online vs degraded)?
-                if !reconciling && !self.status_synced(status) {
+                if !reconciling && !self.state_synced(state) {
                     Err(SvcError::NotReady {
                         id: self.uuid(),
                         kind: self.kind(),
                     })
                 } else {
                     // start the requested operation (which also checks if it's a valid transition)
-                    self.start_update_op(status, operation)?;
+                    self.start_update_op(state, operation)?;
                     Ok(self.clone())
                 }
             }
@@ -458,7 +459,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     /// Start an update operation (not all resources support this currently)
     fn start_update_op(
         &mut self,
-        _status: &Self::Status,
+        _state: &Self::State,
         _operation: Self::UpdateOp,
     ) -> Result<(), SvcError> {
         unimplemented!();
@@ -470,13 +471,13 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     ) -> Result<(), SvcError> {
         Ok(())
     }
-    /// Check if the status is in sync with the spec
-    fn status_synced(&self, status: &Self::Status) -> bool
+    /// Check if the state is in sync with the spec
+    fn state_synced(&self, state: &Self::State) -> bool
     where
-        Self: PartialEq<Self::Status>,
+        Self: PartialEq<Self::State>,
     {
         // todo: do the check explicitly on each specialization rather than using PartialEq
-        self == status
+        self == state
     }
     /// Start a create transaction
     fn start_create_op(&mut self);
@@ -495,9 +496,9 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     /// Get the UUID as a string (for log messages)
     fn uuid(&self) -> String;
     /// Get the state of the object
-    fn state(&self) -> SpecState<Self::State>;
+    fn status(&self) -> SpecStatus<Self::Status>;
     /// Set the state of the object
-    fn set_state(&mut self, state: SpecState<Self::State>);
+    fn set_status(&mut self, state: SpecStatus<Self::Status>);
     /// Check if the object is owned by another
     fn owned(&self) -> bool {
         false
@@ -636,28 +637,5 @@ impl ResourceSpecsLocked {
             }
         };
         Ok(())
-    }
-
-    /// Start worker threads
-    /// 1. test store connections and commit dirty specs to the store
-    pub(crate) fn start(&self, registry: Registry) {
-        let this = self.clone();
-        tokio::spawn(async move { this.reconcile_dirty_specs(registry).await });
-    }
-
-    /// Reconcile dirty specs to the persistent store
-    async fn reconcile_dirty_specs(&self, registry: Registry) {
-        loop {
-            let dirty_replicas = self.reconcile_dirty_replicas(&registry).await;
-            let dirty_nexuses = self.reconcile_dirty_nexuses(&registry).await;
-
-            let period = if dirty_nexuses || dirty_replicas {
-                registry.reconcile_period
-            } else {
-                registry.reconcile_idle_period
-            };
-
-            tokio::time::sleep(period).await;
-        }
     }
 }

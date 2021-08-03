@@ -9,7 +9,7 @@ use crate::types::v0::{
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         nexus_child::NexusChild,
-        SpecState, SpecTransaction, UuidString,
+        SpecStatus, SpecTransaction, UuidString,
     },
 };
 
@@ -71,8 +71,8 @@ impl StorableObject for NexusState {
     }
 }
 
-/// State of the Nexus Spec
-pub type NexusSpecStatus = SpecState<message_bus::NexusStatus>;
+/// Status of the Nexus Spec
+pub type NexusSpecStatus = SpecStatus<message_bus::NexusStatus>;
 
 /// User specification of a nexus.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -164,10 +164,10 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
         if let Some(op) = self.operation.clone() {
             match op.operation {
                 NexusOperation::Destroy => {
-                    self.spec_status = SpecState::Deleted;
+                    self.spec_status = SpecStatus::Deleted;
                 }
                 NexusOperation::Create => {
-                    self.spec_status = SpecState::Created(message_bus::NexusStatus::Online);
+                    self.spec_status = SpecStatus::Created(message_bus::NexusStatus::Online);
                 }
                 NexusOperation::Share(share) => {
                     self.share = share.into();

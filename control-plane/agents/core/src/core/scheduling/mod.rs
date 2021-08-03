@@ -7,7 +7,7 @@ use crate::core::scheduling::{
     resources::{ChildItem, PoolItem, ReplicaItem},
     volume::GetSuitablePoolsContext,
 };
-use common_lib::types::v0::message_bus::PoolState;
+use common_lib::types::v0::message_bus::PoolStatus;
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 
 #[async_trait::async_trait(?Send)]
@@ -68,7 +68,7 @@ impl PoolFilters {
     }
     /// Should only attempt to use usable (not faulted) pools
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        item.pool.state != PoolState::Faulted && item.pool.state != PoolState::Unknown
+        item.pool.state != PoolStatus::Faulted && item.pool.state != PoolStatus::Unknown
     }
 }
 

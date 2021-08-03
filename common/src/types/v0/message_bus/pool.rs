@@ -12,9 +12,9 @@ pub struct GetPools {
     pub filter: Filter,
 }
 
-/// State of the Pool
+/// Status of the Pool
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
-pub enum PoolState {
+pub enum PoolStatus {
     /// unknown state
     Unknown = 0,
     /// the pool is in normal working order
@@ -25,12 +25,12 @@ pub enum PoolState {
     Faulted = 3,
 }
 
-impl Default for PoolState {
+impl Default for PoolStatus {
     fn default() -> Self {
         Self::Unknown
     }
 }
-impl From<i32> for PoolState {
+impl From<i32> for PoolStatus {
     fn from(src: i32) -> Self {
         match src {
             1 => Self::Online,
@@ -40,17 +40,17 @@ impl From<i32> for PoolState {
         }
     }
 }
-impl From<PoolState> for models::PoolState {
-    fn from(src: PoolState) -> Self {
+impl From<PoolStatus> for models::PoolState {
+    fn from(src: PoolStatus) -> Self {
         match src {
-            PoolState::Unknown => Self::Unknown,
-            PoolState::Online => Self::Online,
-            PoolState::Degraded => Self::Degraded,
-            PoolState::Faulted => Self::Faulted,
+            PoolStatus::Unknown => Self::Unknown,
+            PoolStatus::Online => Self::Online,
+            PoolStatus::Degraded => Self::Degraded,
+            PoolStatus::Faulted => Self::Faulted,
         }
     }
 }
-impl From<models::PoolState> for PoolState {
+impl From<models::PoolState> for PoolStatus {
     fn from(src: models::PoolState) -> Self {
         match src {
             models::PoolState::Unknown => Self::Unknown,
@@ -72,7 +72,7 @@ pub struct Pool {
     /// absolute disk paths claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
     /// current state of the pool
-    pub state: PoolState,
+    pub state: PoolStatus,
     /// size of the pool in bytes
     pub capacity: u64,
     /// used bytes from the pool
@@ -107,32 +107,32 @@ impl From<models::Pool> for Pool {
 bus_impl_string_id!(PoolId, "ID of a mayastor pool");
 
 // online > degraded > unknown/faulted
-impl PartialOrd for PoolState {
+impl PartialOrd for PoolStatus {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match self {
-            PoolState::Unknown => match other {
-                PoolState::Unknown => None,
-                PoolState::Online => Some(Ordering::Less),
-                PoolState::Degraded => Some(Ordering::Less),
-                PoolState::Faulted => None,
+            PoolStatus::Unknown => match other {
+                PoolStatus::Unknown => None,
+                PoolStatus::Online => Some(Ordering::Less),
+                PoolStatus::Degraded => Some(Ordering::Less),
+                PoolStatus::Faulted => None,
             },
-            PoolState::Online => match other {
-                PoolState::Unknown => Some(Ordering::Greater),
-                PoolState::Online => Some(Ordering::Equal),
-                PoolState::Degraded => Some(Ordering::Greater),
-                PoolState::Faulted => Some(Ordering::Greater),
+            PoolStatus::Online => match other {
+                PoolStatus::Unknown => Some(Ordering::Greater),
+                PoolStatus::Online => Some(Ordering::Equal),
+                PoolStatus::Degraded => Some(Ordering::Greater),
+                PoolStatus::Faulted => Some(Ordering::Greater),
             },
-            PoolState::Degraded => match other {
-                PoolState::Unknown => Some(Ordering::Greater),
-                PoolState::Online => Some(Ordering::Less),
-                PoolState::Degraded => Some(Ordering::Equal),
-                PoolState::Faulted => Some(Ordering::Greater),
+            PoolStatus::Degraded => match other {
+                PoolStatus::Unknown => Some(Ordering::Greater),
+                PoolStatus::Online => Some(Ordering::Less),
+                PoolStatus::Degraded => Some(Ordering::Equal),
+                PoolStatus::Faulted => Some(Ordering::Greater),
             },
-            PoolState::Faulted => match other {
-                PoolState::Unknown => None,
-                PoolState::Online => Some(Ordering::Less),
-                PoolState::Degraded => Some(Ordering::Less),
-                PoolState::Faulted => Some(Ordering::Equal),
+            PoolStatus::Faulted => match other {
+                PoolStatus::Unknown => None,
+                PoolStatus::Online => Some(Ordering::Less),
+                PoolStatus::Degraded => Some(Ordering::Less),
+                PoolStatus::Faulted => Some(Ordering::Equal),
             },
         }
     }

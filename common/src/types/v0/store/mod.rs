@@ -15,32 +15,32 @@ use strum_macros::ToString;
 
 /// Enum defining the various states that a resource spec can be in.
 #[derive(Serialize, Deserialize, Debug, Clone, ToString, PartialEq)]
-pub enum SpecState<T> {
+pub enum SpecStatus<T> {
     Creating,
     Created(T),
     Deleting,
     Deleted,
 }
 
-impl<T> Default for SpecState<T> {
+impl<T> Default for SpecStatus<T> {
     fn default() -> Self {
         Self::Creating
     }
 }
 
 // todo: change openapi spec to support enum variants
-impl<T> From<SpecState<T>> for models::SpecState {
-    fn from(src: SpecState<T>) -> Self {
+impl<T> From<SpecStatus<T>> for models::SpecState {
+    fn from(src: SpecStatus<T>) -> Self {
         match src {
-            SpecState::Creating => Self::Creating,
-            SpecState::Created(_) => Self::Created,
-            SpecState::Deleting => Self::Deleting,
-            SpecState::Deleted => Self::Deleted,
+            SpecStatus::Creating => Self::Creating,
+            SpecStatus::Created(_) => Self::Created,
+            SpecStatus::Deleting => Self::Deleting,
+            SpecStatus::Deleted => Self::Deleted,
         }
     }
 }
 
-impl<T: std::cmp::PartialEq> SpecState<T> {
+impl<T: std::cmp::PartialEq> SpecStatus<T> {
     pub fn creating(&self) -> bool {
         self == &Self::Creating
     }
