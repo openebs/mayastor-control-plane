@@ -343,6 +343,7 @@ pub enum ReplyErrorKind {
     ReplicaChangeCount,
     ReplicaIncrease,
     VolumeNoReplicas,
+    InUse,
 }
 
 impl From<Error> for ReplyError {

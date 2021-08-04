@@ -2,7 +2,8 @@
 
 use super::*;
 use common_lib::{
-    mbus_api::TimeoutOptions,
+    mbus_api,
+    mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
             GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaShareProtocol, ReplicaStatus,
@@ -86,6 +87,24 @@ async fn pool() {
     let replica = GetReplicas::default().request().await.unwrap();
     let replica = replica.0.first().unwrap();
     assert_eq!(replica, &replica_updated);
+
+    let error = DestroyPool {
+        node: mayastor.clone(),
+        id: "pooloop".into(),
+    }
+    .request()
+    .await
+    .expect_err("Should fail to destroy a pool that is in use.");
+    assert!(matches!(
+        error,
+        mbus_api::Error::ReplyWithError {
+            source: ReplyError {
+                kind: ReplyErrorKind::InUse,
+                resource: ResourceKind::Pool,
+                ..
+            }
+        }
+    ));
 
     DestroyReplica {
         node: mayastor.clone(),

@@ -171,6 +171,10 @@ impl From<ReplyError> for RestError<RestJsonError> {
                 let error = RestJsonError::new(details, Kind::FailedPrecondition);
                 (StatusCode::PRECONDITION_FAILED, error)
             }
+            ReplyErrorKind::InUse => {
+                let error = RestJsonError::new(details, Kind::InUse);
+                (StatusCode::CONFLICT, error)
+            }
         };
 
         RestError::new(status, error)

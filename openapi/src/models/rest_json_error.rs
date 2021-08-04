@@ -93,6 +93,8 @@ pub enum Kind {
     FailedPersist,
     #[serde(rename = "Deleting")]
     Deleting,
+    #[serde(rename = "InUse")]
+    InUse,
 }
 
 impl Default for Kind {

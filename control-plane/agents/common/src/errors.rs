@@ -147,7 +147,7 @@ pub enum SvcError {
     },
     #[snafu(display("{} Resource id {} needs to be reconciled. Please retry", kind.to_string(), id))]
     NotReady { kind: ResourceKind, id: String },
-    #[snafu(display("{} Resource id {} still in still use", kind.to_string(), id))]
+    #[snafu(display("{} Resource id {} still in use", kind.to_string(), id))]
     InUse { kind: ResourceKind, id: String },
     #[snafu(display("{} Resource id {} already exists", kind.to_string(), id))]
     AlreadyExists { kind: ResourceKind, id: String },
@@ -227,7 +227,7 @@ impl From<SvcError> for ReplyError {
                 extra: error.full_string(),
             },
             SvcError::InUse { kind, id } => ReplyError {
-                kind: ReplyErrorKind::Conflict,
+                kind: ReplyErrorKind::InUse,
                 resource: kind,
                 source: desc.to_string(),
                 extra: format!("id: {}", id),
