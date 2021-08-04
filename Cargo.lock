@@ -734,7 +734,6 @@ name = "composer"
 version = "0.1.0"
 dependencies = [
  "bollard",
- "common-lib",
  "crossbeam",
  "futures",
  "ipnetwork",

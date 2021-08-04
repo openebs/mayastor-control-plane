@@ -7,7 +7,7 @@ use common_lib::{
     mbus_api::ResourceKind,
     types::v0::message_bus::{
         AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
-        DestroyReplica, Nexus, NexusId, Node, NodeId, NodeState, Pool, PoolId, PoolStatus,
+        DestroyReplica, Nexus, NexusId, NodeId, NodeState, NodeStatus, Pool, PoolId, PoolStatus,
         Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica, UnshareNexus,
         UnshareReplica,
     },
@@ -22,8 +22,8 @@ use std::cmp::Ordering;
 /// a lock to serialize mutating gRPC calls
 #[derive(Debug, Clone)]
 pub(crate) struct NodeWrapper {
-    /// inner Node value
-    node: Node,
+    /// inner Node state
+    node_state: NodeState,
     /// watchdog to track the node state
     watchdog: Watchdog,
     /// gRPC CRUD lock
@@ -37,13 +37,13 @@ pub(crate) struct NodeWrapper {
 impl NodeWrapper {
     /// Create a new wrapper for a `Node` with a `deadline` for its watchdog
     pub(crate) fn new(
-        node: &Node,
+        node: &NodeState,
         deadline: std::time::Duration,
         comms_timeouts: NodeCommsTimeout,
     ) -> Self {
         tracing::debug!("Creating new node {:?}", node);
         Self {
-            node: node.clone(),
+            node_state: node.clone(),
             watchdog: Watchdog::new(&node.id, deadline),
             lock: Default::default(),
             comms_timeouts,
@@ -61,7 +61,7 @@ impl NodeWrapper {
         GrpcContext::new(
             self.lock.clone(),
             &self.id,
-            &self.node.grpc_endpoint,
+            &self.node_state.grpc_endpoint,
             &self.comms_timeouts,
         )
     }
@@ -74,27 +74,27 @@ impl NodeWrapper {
     /// On_register callback when the node is registered with the registry
     pub(crate) async fn on_register(&mut self) {
         self.watchdog.pet().await.ok();
-        self.set_state(NodeState::Online);
+        self.set_status(NodeStatus::Online);
     }
 
     /// Update the node state based on the watchdog
     pub(crate) fn update(&mut self) {
         if self.registration_expired() {
-            self.set_state(NodeState::Offline);
+            self.set_status(NodeStatus::Offline);
         }
     }
 
     /// Set the node state
-    pub(crate) fn set_state(&mut self, state: NodeState) {
-        if self.node.state != state {
+    pub(crate) fn set_status(&mut self, state: NodeStatus) {
+        if self.node_state.status != state {
             tracing::info!(
                 "Node '{}' changing from {} to {}",
-                self.node.id,
-                self.node.state.to_string(),
+                self.node_state.id,
+                self.node_state.status.to_string(),
                 state.to_string(),
             );
-            self.node.state = state;
-            if self.node.state == NodeState::Unknown {
+            self.node_state.status = state;
+            if self.node_state.status == NodeStatus::Unknown {
                 self.watchdog.disarm()
             }
         }
@@ -105,8 +105,8 @@ impl NodeWrapper {
         &mut self.watchdog
     }
     /// Get the inner node
-    pub(crate) fn node(&self) -> &Node {
-        &self.node
+    pub(crate) fn node_state(&self) -> &NodeState {
+        &self.node_state
     }
     /// Get all pools
     pub(crate) fn pools(&self) -> Vec<Pool> {
@@ -199,13 +199,44 @@ impl NodeWrapper {
     }
     /// Is the node online
     pub(crate) fn is_online(&self) -> bool {
-        self.node.state == NodeState::Online
+        self.node_state.status == NodeStatus::Online
     }
 
-    //// Reload the node by fetching information from mayastor
+    /// Load the node by fetching information from mayastor
+    pub(crate) async fn load(&mut self) -> Result<(), SvcError> {
+        tracing::info!(
+            "Preloading node '{}' on endpoint '{}'",
+            self.id,
+            self.grpc_endpoint
+        );
+
+        match self.fetch_resources().await {
+            Ok((replicas, pools, nexuses)) => {
+                let mut states = self.states.write();
+                states.update(pools, replicas, nexuses);
+                Ok(())
+            }
+            Err(error) => {
+                self.node_state.status = NodeStatus::Unknown;
+                tracing::error!(
+                    "Preloading of node '{}' on endpoint '{}' failed with error: {:?}",
+                    self.id,
+                    self.grpc_endpoint,
+                    error
+                );
+                Err(error)
+            }
+        }
+    }
+
+    /// Reload the node by fetching information from mayastor
     pub(crate) async fn reload(&mut self) -> Result<(), SvcError> {
         if self.is_online() {
-            tracing::trace!("Reloading node '{}'", self.id);
+            tracing::trace!(
+                "Reloading node '{}' on endpoint '{}'",
+                self.id,
+                self.grpc_endpoint
+            );
 
             match self.fetch_resources().await {
                 Ok((replicas, pools, nexuses)) => {
@@ -217,8 +248,8 @@ impl NodeWrapper {
                     // We failed to fetch all resources from Mayastor so clear all state
                     // information. We take the approach that no information is better than
                     // inconsistent information.
-                    let mut states = self.states.write();
-                    states.clear_all();
+                    self.states.write().clear_all();
+                    self.set_status(NodeStatus::Unknown);
                     Err(e)
                 }
             }
@@ -226,8 +257,9 @@ impl NodeWrapper {
             tracing::trace!(
                 "Skipping reload of node '{}' since it's '{:?}'",
                 self.id,
-                self.state
+                self.status
             );
+            self.states.write().clear_all();
             Err(SvcError::NodeNotOnline {
                 node: self.id.to_owned(),
             })
@@ -318,9 +350,9 @@ impl NodeWrapper {
 }
 
 impl std::ops::Deref for NodeWrapper {
-    type Target = Node;
+    type Target = NodeState;
     fn deref(&self) -> &Self::Target {
-        &self.node
+        &self.node_state
     }
 }
 
@@ -728,9 +760,9 @@ impl PoolWrapper {
     }
 }
 
-impl From<&NodeWrapper> for Node {
+impl From<&NodeWrapper> for NodeState {
     fn from(node: &NodeWrapper) -> Self {
-        node.node.clone()
+        node.node_state.clone()
     }
 }
 

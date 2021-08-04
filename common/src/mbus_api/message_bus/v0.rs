@@ -54,17 +54,13 @@ pub trait MessageBusTrait: Sized {
     /// Get all known nodes from the registry
     #[tracing::instrument(level = "debug", err)]
     async fn get_nodes() -> BusResult<Vec<Node>> {
-        Ok(GetNodes {}.request().await?.into_inner())
+        Ok(GetNodes::from(None).request().await?.into_inner())
     }
 
     /// Get node with `id`
     #[tracing::instrument(level = "debug", err)]
     async fn get_node(id: &NodeId) -> BusResult<Node> {
-        let nodes = Self::get_nodes().await?;
-        let nodes = nodes
-            .into_iter()
-            .filter(|n| &n.id == id)
-            .collect::<Vec<_>>();
+        let nodes = GetNodes::from(id.clone()).request().await?.into_inner();
         only_one!(nodes, ResourceKind::Node)
     }
 
@@ -303,7 +299,10 @@ impl MessageBusTrait for MessageBus {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::v0::message_bus::NodeState;
+    use crate::types::v0::{
+        message_bus::{NodeState, NodeStatus},
+        store::node::{NodeLabels, NodeSpec},
+    };
     use composer::*;
     use rpc::mayastor::Null;
 
@@ -315,7 +314,7 @@ mod tests {
         Ok(())
     }
     async fn wait_for_node() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = GetNodes {}.request().await?;
+        let _ = GetNodes::default().request().await?;
         Ok(())
     }
     fn init_tracing() {
@@ -345,11 +344,11 @@ mod tests {
         let mayastor = "node-test-name";
         let test = Builder::new()
             .name("rest_backend")
-            .add_container_bin("nats", Binary::from_nix("nats-server").with_arg("-DV"))
+            .add_container_bin("nats", Binary::from_path("nats-server").with_arg("-DV"))
             .add_container_bin("node", Binary::from_dbg("node").with_nats("-n"))
             .add_container_bin(
                 "mayastor",
-                Binary::from_nix("mayastor")
+                Binary::from_path("mayastor")
                     .with_nats("-n")
                     .with_args(vec!["-N", mayastor]),
             )
@@ -374,23 +373,22 @@ mod tests {
         let nodes = MessageBus::get_nodes().await?;
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.len(), 1);
-        assert_eq!(
-            nodes.first().unwrap(),
-            &Node {
-                id: mayastor.clone(),
-                grpc_endpoint: "0.0.0.0:10124".to_string(),
-                state: NodeState::Online,
-            }
+        let node_check = Node::new(
+            mayastor.clone(),
+            Some(NodeSpec::new(
+                mayastor.clone(),
+                "0.0.0.0:10124".to_string(),
+                NodeLabels::new(),
+            )),
+            Some(NodeState::new(
+                mayastor.clone(),
+                "0.0.0.0:10124".to_string(),
+                NodeStatus::Online,
+            )),
         );
+        assert_eq!(nodes.first().unwrap(), &node_check);
         let node = MessageBus::get_node(mayastor).await?;
-        assert_eq!(
-            node,
-            Node {
-                id: mayastor.clone(),
-                grpc_endpoint: "0.0.0.0:10124".to_string(),
-                state: NodeState::Online,
-            }
-        );
+        assert_eq!(node, node_check);
 
         test.stop("mayastor").await?;
 

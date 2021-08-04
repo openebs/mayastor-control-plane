@@ -10,13 +10,13 @@ impl Registry {
         volume_uuid: &VolumeId,
     ) -> Result<VolumeState, SvcError> {
         let nexuses = self.get_node_opt_nexuses(None).await?;
-        let nexus_specs = self.specs.get_created_nexus_specs();
-        let nexus_status = nexus_specs
+        let nexus_specs = self.specs.get_volume_nexuses(volume_uuid);
+        let nexus_states = nexus_specs
             .iter()
-            .filter(|n| n.owner.as_ref() == Some(volume_uuid))
-            .map(|n| nexuses.iter().find(|nexus| nexus.uuid == n.uuid))
+            .map(|n| nexuses.iter().find(|nexus| nexus.uuid == n.lock().uuid))
             .flatten()
             .collect::<Vec<_>>();
+
         let volume_spec = self
             .specs
             .get_locked_volume(volume_uuid)
@@ -25,13 +25,13 @@ impl Registry {
             })?;
         let volume_spec = volume_spec.lock();
 
-        Ok(if let Some(first_nexus_status) = nexus_status.get(0) {
+        Ok(if let Some(first_nexus_state) = nexus_states.get(0) {
             VolumeState {
                 uuid: volume_uuid.to_owned(),
-                size: first_nexus_status.size,
-                status: first_nexus_status.status.clone(),
-                protocol: first_nexus_status.share.clone(),
-                children: nexus_status.iter().map(|&n| n.clone()).collect(),
+                size: first_nexus_state.size,
+                status: first_nexus_state.status.clone(),
+                protocol: first_nexus_state.share.clone(),
+                children: nexus_states.iter().map(|&n| n.clone()).collect(),
             }
         } else {
             VolumeState {

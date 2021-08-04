@@ -20,7 +20,10 @@ use common_lib::{
     store::etcd::Etcd,
     types::v0::{
         message_bus::NodeId,
-        store::definitions::{StorableObject, Store, StoreError, StoreKey},
+        store::{
+            definitions::{StorableObject, Store, StoreError, StoreKey},
+            registry::{CoreRegistryConfig, NodeRegistration},
+        },
     },
 };
 use std::{
@@ -61,6 +64,7 @@ pub struct RegistryInner<S: Store> {
     /// reconciliation period when work is pending
     pub(crate) reconcile_period: std::time::Duration,
     reconciler: ReconcilerControl,
+    config: CoreRegistryConfig,
 }
 
 impl Registry {
@@ -82,15 +86,31 @@ impl Registry {
                 nodes: Default::default(),
                 specs: ResourceSpecsLocked::new(),
                 cache_period,
-                store: Arc::new(Mutex::new(store)),
+                store: Arc::new(Mutex::new(store.clone())),
                 store_timeout,
                 reconcile_period,
                 reconcile_idle_period,
                 reconciler: ReconcilerControl::new(),
+                config: Self::get_config_or_panic(store).await,
             }),
         };
-        registry.start().await;
+        registry.init().await;
         registry
+    }
+    /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default
+    async fn get_config_or_panic<S: Store>(mut store: S) -> CoreRegistryConfig {
+        let config = CoreRegistryConfig::new(NodeRegistration::Automatic);
+        match store.get_obj(&config.key()).await {
+            Ok(config) => config,
+            Err(StoreError::MissingEntry { .. }) => config,
+            Err(error) => panic!(
+                "Must be able to access the persistent store to load configuration information. Got error: '{:#?}'", error
+            ),
+        }
+    }
+    /// Get the `CoreRegistryConfig`
+    pub(crate) fn config(&self) -> &CoreRegistryConfig {
+        &self.config
     }
 
     /// Serialized write to the persistent store
@@ -157,8 +177,7 @@ impl Registry {
     }
 
     /// Start the worker thread which updates the registry
-    async fn start(&self) {
-        self.init().await;
+    pub async fn start(&self) {
         let registry = self.clone();
         tokio::spawn(async move {
             registry.poller().await;

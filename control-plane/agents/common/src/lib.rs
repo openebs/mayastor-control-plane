@@ -13,7 +13,7 @@ use std::{
 
 use async_trait::async_trait;
 use dyn_clonable::clonable;
-use futures::{future::join_all, stream::StreamExt};
+use futures::{future::join_all, stream::StreamExt, Future};
 use snafu::{OptionExt, ResultExt, Snafu};
 use state::Container;
 use tracing::{debug, error};
@@ -257,6 +257,15 @@ impl Service {
         configure(self)
     }
 
+    /// Configure `self` through an async configure closure
+    pub async fn configure_async<F, Fut>(self, configure: F) -> Self
+    where
+        F: FnOnce(Service) -> Fut,
+        Fut: Future<Output = Service>,
+    {
+        configure(self).await
+    }
+
     /// Add a new subscriber on the default channel
     pub fn with_subscription(self, service_subscriber: impl ServiceSubscriber + 'static) -> Self {
         let channel = self.channel.clone();
@@ -350,7 +359,7 @@ impl Service {
     /// each channel benefits from a tokio thread which routes messages
     /// accordingly todo: only one subscriber per message id supported at
     /// the moment
-    pub async fn run(&mut self) {
+    pub async fn run(mut self) {
         let mut threads = vec![];
 
         self.message_bus_init().await;

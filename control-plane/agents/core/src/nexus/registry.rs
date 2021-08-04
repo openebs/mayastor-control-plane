@@ -37,7 +37,7 @@ impl Registry {
 
     /// Get nexus `nexus_id`
     pub(crate) async fn get_nexus(&self, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
-        let nodes = self.get_nodes_wrapper().await;
+        let nodes = self.get_node_wrappers().await;
         for node in nodes {
             if let Some(nexus) = node.nexus(nexus_id).await {
                 return Ok(nexus);
@@ -50,7 +50,7 @@ impl Registry {
 
     /// Get all nexuses
     pub(crate) async fn get_nexuses(&self) -> Vec<Nexus> {
-        let nodes = self.get_nodes_wrapper().await;
+        let nodes = self.get_node_wrappers().await;
         let mut nexuses = vec![];
         for node in nodes {
             nexuses.extend(node.nexuses().await);

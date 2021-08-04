@@ -24,7 +24,7 @@ async fn pool() {
         .unwrap();
     let mayastor = cluster.node(0);
 
-    let nodes = GetNodes {}.request().await.unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     CreatePool {
@@ -166,7 +166,7 @@ async fn replica_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
 
-    let nodes = GetNodes {}.request().await.unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pools = GetPools::default().request().await.unwrap();

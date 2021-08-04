@@ -33,7 +33,7 @@ async fn volume() {
         .await
         .unwrap();
 
-    let nodes = GetNodes {}.request().await.unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     test_volume(&cluster).await;

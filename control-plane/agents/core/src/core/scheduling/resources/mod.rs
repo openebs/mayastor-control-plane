@@ -25,7 +25,7 @@ impl PoolItem {
 pub(crate) struct PoolItemLister {}
 impl PoolItemLister {
     async fn nodes(registry: &Registry) -> Vec<NodeWrapper> {
-        let nodes = registry.get_nodes_wrapper().await;
+        let nodes = registry.get_node_wrappers().await;
         let mut raw_nodes = vec![];
         for node in nodes {
             let node = node.lock().await;

@@ -150,6 +150,7 @@ pub enum StorableObjectType {
     VolumeState,
     ChildSpec,
     ChildState,
+    CoreRegistryConfig,
 }
 
 pub fn key_prefix(obj_type: StorableObjectType) -> String {

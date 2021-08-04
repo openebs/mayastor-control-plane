@@ -7,7 +7,7 @@ use std::time::Duration;
 impl ComponentAction for Nats {
     fn configure(&self, _options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         Ok(cfg.add_container_spec(
-            ContainerSpec::from_binary("nats", Binary::from_nix("nats-server").with_arg("-DV"))
+            ContainerSpec::from_binary("nats", Binary::from_path("nats-server").with_arg("-DV"))
                 .with_portmap("4222", "4222"),
         ))
     }
