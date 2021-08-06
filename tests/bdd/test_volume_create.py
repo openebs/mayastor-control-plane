@@ -1,4 +1,6 @@
 """Volume creation feature tests."""
+import os
+import subprocess
 
 from pytest_bdd import (
     given,
@@ -6,6 +8,16 @@ from pytest_bdd import (
     then,
     when,
 )
+
+import pytest
+
+# This fixture will be automatically used by all tests
+@pytest.fixture(autouse=True)
+def deployer():
+    deployer = os.environ["SRCDIR"] + "/target/debug/deployer"
+    subprocess.run([deployer, "start"])
+    yield
+    subprocess.run([deployer, "stop"])
 
 
 @scenario("features/volume/create.feature", "provisioning failure")
