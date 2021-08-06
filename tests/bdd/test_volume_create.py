@@ -8,17 +8,17 @@ from pytest_bdd import (
 )
 
 
-@scenario("volume/create.feature", "provisioning failure")
+@scenario("features/volume/create.feature", "provisioning failure")
 def test_provisioning_failure():
     """provisioning failure."""
 
 
-@scenario("volume/create.feature", "spec cannot be satisfied")
+@scenario("features/volume/create.feature", "spec cannot be satisfied")
 def test_spec_cannot_be_satisfied():
     """spec cannot be satisfied."""
 
 
-@scenario("volume/create.feature", "successful creation")
+@scenario("features/volume/create.feature", "successful creation")
 def test_successful_creation():
     """successful creation."""
 
