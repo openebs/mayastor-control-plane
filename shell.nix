@@ -16,6 +16,9 @@ let
   nomayastor_moth = "You have requested an environment without mayastor, you should provide it!";
   channel = import ./nix/lib/rust.nix { inherit sources; };
   mayastor = import pkgs.mayastor-src { };
+  # python environment for test/python
+  pytest_inputs = python3.withPackages
+    (ps: with ps; [ virtualenv grpcio grpcio-tools asyncssh black ]);
 in
 mkShell {
   name = "mayastor-control-plane-shell";
@@ -36,6 +39,7 @@ mkShell {
     docker
     etcd
     pkgs.openapi-generator
+    pytest_inputs
   ]
   ++ pkgs.lib.optional (!norust) channel.nightly
   ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
