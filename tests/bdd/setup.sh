@@ -13,3 +13,4 @@ cd "$SRCDIR"
 virtualenv --no-setuptools tests/bdd/venv
 source ./tests/bdd/venv/bin/activate
 pip install -r tests/bdd/requirements.txt
+export PYTHONPATH=$PYTHONPATH:$SRCDIR/tests/bdd/openapi

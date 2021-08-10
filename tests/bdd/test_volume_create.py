@@ -1,6 +1,8 @@
 """Volume creation feature tests."""
+import json
 import os
 import subprocess
+import time
 
 from pytest_bdd import (
     given,
@@ -12,15 +14,67 @@ from pytest_bdd import (
 import pytest
 import docker
 
-from openapi.openapi_client import api
+from openapi.openapi_client import api_client
+from openapi.openapi_client import configuration
+from openapi.openapi_client.api.volumes_api import VolumesApi
+from openapi.openapi_client.api.pools_api import PoolsApi
+from openapi.openapi_client.model.create_pool_body import CreatePoolBody
+from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
+from openapi.openapi_client.model.volume import Volume
+from openapi.openapi_client.model.volume_spec import VolumeSpec
+from openapi.openapi_client.model.protocol import Protocol
+from openapi.openapi_client.model.spec_state import SpecState
+from openapi.openapi_client.model.volume_state import VolumeState
+from openapi.openapi_client.model.volume_status import VolumeStatus
 
-# This fixture will be automatically used by all tests
+VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
+VOLUME_SIZE = 10485761
+NUM_VOLUME_REPLICAS = 1
+REST_SERVER = "http://localhost:8081/v0"
+SUCCESSFUL_CREATE_KEY = "created_volume"
+
+# This fixture will be automatically used by all tests.
+# It starts the deployer which launches all the necessary containers.
+# A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
-def deployer():
-    deployer = os.environ["SRCDIR"] + "/target/debug/deployer"
-    subprocess.run([deployer, "start"])
+def init():
+    deployer_path = os.environ["SRCDIR"] + "/target/debug/deployer"
+    subprocess.run([deployer_path, "start"])
+
+    # Allow time for containers to start
+    time.sleep(5)
+
+    # Create a pool
+    get_pools_api().put_node_pool(
+        "mayastor", "pool1", CreatePoolBody(["malloc:///disk?size_mb=500"])
+    )
+
     yield
-    subprocess.run([deployer, "stop"])
+    subprocess.run([deployer_path, "stop"])
+
+
+@pytest.fixture(scope="function")
+def create_context():
+    return {}
+
+
+# Return a configuration which can be used for API calls.
+# This is necessary for the API calls so that parameter type conversions can be performed. If the
+# configuration is not passed, a type error is raised.
+def get_cfg():
+    return configuration.Configuration(host=REST_SERVER, discard_unknown_keys=True)
+
+
+# Return a VolumesApi object which can be used for performing volume related REST calls.
+def get_volumes_api():
+    api = api_client.ApiClient(get_cfg())
+    return VolumesApi(api)
+
+
+# Return a PoolsApi object which can be used for performing pool related REST calls.
+def get_pools_api():
+    api = api_client.ApiClient(get_cfg())
+    return PoolsApi(api)
 
 
 # @scenario("features/volume/create.feature", "provisioning failure")
@@ -73,10 +127,15 @@ def one_or_more_mayastor_instances():
 
 
 @when("a user attempts to create a volume")
-def a_user_attempts_to_create_a_volume():
+def a_user_attempts_to_create_a_volume(create_context):
     """a user attempts to create a volume."""
-    api.getVolumeApi()
-    # raise NotImplementedError
+    policy = {"self_heal": False, "topology": None}
+    topology = {"explicit": None, "labelled": None}
+    volume = get_volumes_api().put_volume(
+        VOLUME_UUID,
+        CreateVolumeBody(policy, NUM_VOLUME_REPLICAS, VOLUME_SIZE, topology),
+    )
+    create_context[SUCCESSFUL_CREATE_KEY] = volume
 
 
 @when("during the provisioning there is a failure")
@@ -100,8 +159,8 @@ def the_spec_of_the_volume_cannot_be_satisfied():
 @when("there are at least as many suitable pools as there are requested replicas")
 def there_are_at_least_as_many_suitable_pools_as_there_are_requested_replicas():
     """there are at least as many suitable pools as there are requested replicas."""
-    pass
-    # raise NotImplementedError
+    pools = get_pools_api().get_pools()
+    assert len(pools) == NUM_VOLUME_REPLICAS
 
 
 @then("the partially created volume should eventually be cleaned up")
@@ -117,17 +176,44 @@ def the_reason_the_volume_could_not_be_created_should_be_returned():
 
 
 @then("the volume object should be returned")
-def the_volume_object_should_be_returned():
+def the_volume_object_should_be_returned(create_context):
     """the volume object should be returned."""
-    pass
-    # raise NotImplementedError
+
+    # Check the volume object was returned on create.
+    assert SUCCESSFUL_CREATE_KEY in create_context
+    assert len(create_context) == 1
+
+    cfg = get_cfg()
+    expected_spec = VolumeSpec(
+        [],
+        1,
+        1,
+        Protocol("none"),
+        VOLUME_SIZE,
+        SpecState("Created"),
+        VOLUME_UUID,
+        _configuration=cfg,
+    )
+    expected_state = VolumeState(
+        [],
+        Protocol("none"),
+        VOLUME_SIZE,
+        VOLUME_UUID,
+        _configuration=cfg,
+        status=VolumeStatus("Online"),
+    )
+
+    # Check the volume object returned on create is as expected.
+    created_volume = create_context[SUCCESSFUL_CREATE_KEY]
+    assert str(created_volume.spec) == str(expected_spec)
+    assert str(created_volume.state) == str(expected_state)
 
 
 @then("the volume should be created")
 def the_volume_should_be_created():
     """the volume should be created."""
-    pass
-    # raise NotImplementedError
+    volume = get_volumes_api().get_volume(VOLUME_UUID)
+    assert volume.spec.uuid == VOLUME_UUID
 
 
 @then("the volume should not be created")
