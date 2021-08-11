@@ -207,12 +207,7 @@ impl Registry {
                 // update node in the registry
                 *node.lock().await = node_clone;
             }
-            self.trace_all().await;
             tokio::time::sleep(self.cache_period).await;
         }
-    }
-    async fn trace_all(&self) {
-        let registry = self.nodes.read().await;
-        tracing::trace!("Registry update: {:?}", registry);
     }
 }

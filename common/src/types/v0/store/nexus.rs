@@ -13,6 +13,7 @@ use crate::types::v0::{
     },
 };
 
+use crate::types::v0::store::{OperationSequence, OperationSequencer};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -95,9 +96,28 @@ pub struct NexusSpec {
     pub owner: Option<VolumeId>,
     /// Update of the state in progress
     #[serde(skip)]
-    pub updating: bool,
+    pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<NexusOperationState>,
+}
+impl NexusSpec {
+    /// Check if the spec contains the provided replica by it's `ReplicaId`
+    pub fn contains_replica(&self, uuid: &ReplicaId) -> bool {
+        self.children.iter().any(|child| match child {
+            NexusChild::Replica(replica) => &replica.uuid == uuid,
+            NexusChild::Uri(_) => false,
+        })
+    }
+}
+
+impl OperationSequencer for NexusSpec {
+    fn as_ref(&self) -> &OperationSequence {
+        &self.sequencer
+    }
+
+    fn as_mut(&mut self) -> &mut OperationSequence {
+        &mut self.sequencer
+    }
 }
 
 impl UuidString for NexusSpec {
@@ -184,11 +204,9 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
 
     fn clear_op(&mut self) {
         self.operation = None;
-        self.updating = false;
     }
 
     fn start_op(&mut self, operation: NexusOperation) {
-        self.updating = true;
         self.operation = Some(NexusOperationState {
             operation,
             result: None,
@@ -199,7 +217,6 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
-        self.updating = false;
     }
 }
 
@@ -252,7 +269,7 @@ impl From<&CreateNexus> for NexusSpec {
             share: Protocol::None,
             managed: request.managed,
             owner: request.owner.clone(),
-            updating: false,
+            sequencer: OperationSequence::new(request.uuid.clone()),
             operation: None,
         }
     }
@@ -262,7 +279,7 @@ impl PartialEq<CreateNexus> for NexusSpec {
     fn eq(&self, other: &CreateNexus) -> bool {
         let mut other = NexusSpec::from(other);
         other.spec_status = self.spec_status.clone();
-        other.updating = self.updating;
+        other.sequencer = self.sequencer.clone();
         &other == self
     }
 }

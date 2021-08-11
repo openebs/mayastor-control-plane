@@ -22,7 +22,10 @@ use crate::errors::SvcError;
 use common_lib::{
     mbus_api,
     mbus_api::*,
-    types::{v0::message_bus::Liveness, Channel},
+    types::{
+        v0::message_bus::{ChannelVs, Liveness},
+        Channel,
+    },
 };
 
 /// Agent level errors
@@ -307,7 +310,9 @@ impl Service {
 
             let context = Context::new(&bus, state.deref());
             let args = Arguments::new(&context, &message);
-            debug!("Processing message: {{ {} }}", args.request);
+            if args.request.channel() != Channel::v0(ChannelVs::Registry) {
+                debug!("Processing message: {{ {} }}", args.request);
+            }
 
             if let Err(error) = Self::process_message(args, subscriptions).await {
                 error!("Error processing message: {}", error.full_string());

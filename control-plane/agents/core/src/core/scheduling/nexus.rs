@@ -83,6 +83,8 @@ impl GetPersistedNexusChildrenCtx {
         let state_replicas = self.registry.get_replicas().await;
         // find all replica specs for this volume
         let spec_replicas = self.registry.specs.get_volume_replicas(&self.spec.uuid);
+        // all pools
+        let pool_wrappers = self.registry.get_pool_wrappers().await;
 
         spec_replicas
             .into_iter()
@@ -105,9 +107,15 @@ impl GetPersistedNexusChildrenCtx {
                         })
                     })
                     .flatten();
-                replica_state.map(|replica_state| {
-                    ChildItem::new(replica_spec, replica_state.clone(), child_info.cloned())
-                })
+                pool_wrappers
+                    .iter()
+                    .find(|p| p.id == replica_spec.pool)
+                    .map(|pool| {
+                        replica_state.map(|replica_state| {
+                            ChildItem::new(&replica_spec, replica_state, child_info, pool)
+                        })
+                    })
+                    .flatten()
             })
             .collect()
     }

@@ -9,9 +9,9 @@ use crate::types::v0::{
 };
 
 use crate::types::v0::{
-    message_bus::{Topology, VolumeHealPolicy},
+    message_bus::{ReplicaId, Topology, VolumeHealPolicy, VolumeStatus},
     openapi::models,
-    store::UuidString,
+    store::{OperationSequence, OperationSequencer, UuidString},
 };
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -101,11 +101,21 @@ pub struct VolumeSpec {
     pub topology: Topology,
     /// Update of the state in progress
     #[serde(skip)]
-    pub updating: bool,
+    pub sequencer: OperationSequence,
     /// Id of the last Nexus used by the volume
     pub last_nexus_id: Option<NexusId>,
     /// Record of the operation in progress
     pub operation: Option<VolumeOperationState>,
+}
+
+impl OperationSequencer for VolumeSpec {
+    fn as_ref(&self) -> &OperationSequence {
+        &self.sequencer
+    }
+
+    fn as_mut(&mut self) -> &mut OperationSequence {
+        &mut self.sequencer
+    }
 }
 
 impl VolumeSpec {
@@ -155,6 +165,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.protocol = Protocol::None;
                 }
                 VolumeOperation::SetReplica(count) => self.num_replicas = count,
+                VolumeOperation::RemoveUnusedReplica(_) => {}
                 VolumeOperation::Publish((node, nexus, share)) => {
                     self.target_node = Some(node);
                     self.last_nexus_id = Some(nexus);
@@ -171,11 +182,9 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
 
     fn clear_op(&mut self) {
         self.operation = None;
-        self.updating = false;
     }
 
     fn start_op(&mut self, operation: VolumeOperation) {
-        self.updating = true;
         self.operation = Some(VolumeOperationState {
             operation,
             result: None,
@@ -186,7 +195,6 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
-        self.updating = false;
     }
 }
 
@@ -200,6 +208,7 @@ pub enum VolumeOperation {
     SetReplica(u8),
     Publish((NodeId, NexusId, Option<VolumeShareProtocol>)),
     Unpublish,
+    RemoveUnusedReplica(ReplicaId),
 }
 
 /// Key used by the store to uniquely identify a VolumeSpec structure.
@@ -256,7 +265,7 @@ impl From<&CreateVolume> for VolumeSpec {
             target_node: None,
             policy: request.policy.clone(),
             topology: request.topology.clone(),
-            updating: false,
+            sequencer: OperationSequence::new(request.uuid.clone()),
             last_nexus_id: None,
             operation: None,
         }
@@ -266,7 +275,7 @@ impl PartialEq<CreateVolume> for VolumeSpec {
     fn eq(&self, other: &CreateVolume) -> bool {
         let mut other = VolumeSpec::from(other);
         other.status = self.status.clone();
-        other.updating = self.updating;
+        other.sequencer = self.sequencer.clone();
         &other == self
     }
 }
@@ -289,6 +298,7 @@ impl PartialEq<message_bus::VolumeState> for VolumeSpec {
                 Some(node) => {
                     self.num_paths as usize == other.children.len()
                         && Some(node) == other.target_node().flatten().as_ref()
+                        && other.status == VolumeStatus::Online
                 }
             }
     }
@@ -321,7 +331,7 @@ impl From<models::VolumeSpec> for VolumeSpec {
             target_node: spec.target_node.map(From::from),
             policy: Default::default(),
             topology: Default::default(),
-            updating: false,
+            sequencer: OperationSequence::new(spec.uuid.to_string()),
             last_nexus_id: None,
             operation: None,
         }

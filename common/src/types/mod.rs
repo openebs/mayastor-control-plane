@@ -14,7 +14,7 @@ use std::{fmt::Debug, str::FromStr};
 pub mod v0;
 
 /// Available Message Bus channels
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum Channel {
     /// Version 0 of the Channels

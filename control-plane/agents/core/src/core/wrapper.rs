@@ -636,32 +636,59 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     /// Add a child to a nexus via gRPC
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let rpc_child =
-            ctx.client
-                .add_child_nexus(request.to_rpc())
-                .await
-                .context(GrpcRequestError {
-                    resource: ResourceKind::Child,
-                    request: "add_child_nexus",
-                })?;
-        let child = rpc_child.into_inner().to_mbus();
+        let result = ctx.client.add_child_nexus(request.to_rpc()).await;
         self.lock().await.update_nexus_states().await?;
+        let rpc_child = match result {
+            Ok(child) => Ok(child),
+            Err(error) => {
+                if error.code() == tonic::Code::AlreadyExists {
+                    if let Some(nexus) = self.lock().await.nexus(&request.nexus) {
+                        if let Some(child) = nexus.children.iter().find(|c| c.uri == request.uri) {
+                            tracing::warn!(
+                                "Trying to add Child '{}' which is already part of nexus '{}'. Ok",
+                                request.uri,
+                                request.nexus
+                            );
+                            return Ok(child.clone());
+                        }
+                    }
+                }
+                Err(error)
+            }
+        }
+        .context(GrpcRequestError {
+            resource: ResourceKind::Child,
+            request: "add_child_nexus",
+        })?;
+        let child = rpc_child.into_inner().to_mbus();
         Ok(child)
     }
 
     /// Remove a child from its parent nexus via gRPC
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
-        let _ = ctx
-            .client
-            .remove_child_nexus(request.to_rpc())
-            .await
-            .context(GrpcRequestError {
-                resource: ResourceKind::Child,
-                request: "remove_child_nexus",
-            })?;
+        let result = ctx.client.remove_child_nexus(request.to_rpc()).await;
         self.lock().await.update_nexus_states().await?;
-        Ok(())
+        match result {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                if let Some(nexus) = self.lock().await.nexus(&request.nexus) {
+                    if !nexus.contains_child(&request.uri) {
+                        tracing::warn!(
+                            "Forgetting about Child '{}' which is no longer part of nexus '{}'",
+                            request.uri,
+                            request.nexus
+                        );
+                        return Ok(());
+                    }
+                }
+                Err(error)
+            }
+        }
+        .context(GrpcRequestError {
+            resource: ResourceKind::Child,
+            request: "remove_child_nexus",
+        })
     }
 }
 

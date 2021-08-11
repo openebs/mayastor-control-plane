@@ -2,9 +2,12 @@ use crate::core::{registry::Registry, wrapper::GetterOps};
 use common::errors::{PoolNotFound, ReplicaNotFound, SvcError};
 use common_lib::{
     mbus_api::message_bus::v0::{Pools, Replicas},
-    types::v0::message_bus::{
-        CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-        NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,
+    types::v0::{
+        message_bus::{
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
+            NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,
+        },
+        store::OperationMode,
     },
 };
 use snafu::OptionExt;
@@ -128,7 +131,7 @@ impl Service {
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         self.registry
             .specs
-            .create_pool(&self.registry, request)
+            .create_pool(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -137,7 +140,7 @@ impl Service {
     pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         self.registry
             .specs
-            .destroy_pool(&self.registry, request)
+            .destroy_pool(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -149,7 +152,7 @@ impl Service {
     ) -> Result<Replica, SvcError> {
         self.registry
             .specs
-            .create_replica(&self.registry, request)
+            .create_replica(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -158,7 +161,7 @@ impl Service {
     pub(super) async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         self.registry
             .specs
-            .destroy_replica(&self.registry, request, true)
+            .destroy_replica(&self.registry, request, false, OperationMode::Exclusive)
             .await
     }
 
@@ -167,7 +170,7 @@ impl Service {
     pub(super) async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         self.registry
             .specs
-            .share_replica(&self.registry, request)
+            .share_replica(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -176,7 +179,7 @@ impl Service {
     pub(super) async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
         self.registry
             .specs
-            .unshare_replica(&self.registry, request)
+            .unshare_replica(&self.registry, request, OperationMode::Exclusive)
             .await?;
         Ok(())
     }

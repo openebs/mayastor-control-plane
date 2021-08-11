@@ -3,7 +3,7 @@ use crate::core::{
     scheduling::{
         nexus,
         nexus::GetPersistedNexusChildren,
-        resources::{HealthyChildItems, ReplicaItem},
+        resources::{HealthyChildItems, NexusChildItem, ReplicaItem},
         volume,
         volume::{GetChildForRemoval, GetSuitablePools},
         ResourceFilter,
@@ -11,13 +11,14 @@ use crate::core::{
     wrapper::PoolWrapper,
 };
 use common::errors::SvcError;
+use common_lib::types::v0::store::{nexus::NexusSpec, volume::VolumeSpec};
 
 /// Return a list of pre sorted pools to be used by a volume
 pub(crate) async fn get_volume_pool_candidates(
     request: impl Into<GetSuitablePools>,
     registry: &Registry,
 ) -> Vec<PoolWrapper> {
-    volume::IncreaseVolumeReplica::builder_with_defaults(request, registry)
+    volume::AddVolumeReplica::builder_with_defaults(request, registry)
         .await
         .collect()
         .into_iter()
@@ -25,12 +26,23 @@ pub(crate) async fn get_volume_pool_candidates(
         .collect()
 }
 
-/// Return a nexus child candidate to be removed from a nexus
-pub(crate) async fn get_nexus_child_remove_candidate(
+/// Return a volume child candidate to be removed from a volume
+pub(crate) async fn get_volume_replica_remove_candidates(
     request: &GetChildForRemoval,
     registry: &Registry,
 ) -> Vec<ReplicaItem> {
     volume::DecreaseVolumeReplica::builder_with_defaults(request, registry)
+        .await
+        .collect()
+}
+
+/// Return a nexus child candidate to be removed from a nexus
+pub(crate) async fn get_nexus_child_remove_candidates(
+    vol_spec: &VolumeSpec,
+    nexus_spec: &NexusSpec,
+    registry: &Registry,
+) -> Vec<NexusChildItem> {
+    volume::DecreaseNexusReplica::builder_with_defaults(vol_spec, nexus_spec, registry)
         .await
         .collect()
 }

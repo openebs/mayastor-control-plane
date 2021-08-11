@@ -3,8 +3,8 @@ use crate::core::{
     wrapper::{NodeWrapper, PoolWrapper},
 };
 use common_lib::types::v0::{
-    message_bus::{Child, ChildUri, Replica, VolumeState},
-    store::{nexus_persistence::ChildInfo, replica::ReplicaSpec, volume::VolumeSpec},
+    message_bus::{Child, ChildUri, Replica},
+    store::{nexus_child::NexusChild, nexus_persistence::ChildInfo, replica::ReplicaSpec},
 };
 
 #[derive(Debug, Clone)]
@@ -53,78 +53,41 @@ impl PoolItemLister {
 pub(crate) struct ReplicaItem {
     replica: ReplicaSpec,
     child_uri: Option<ChildUri>,
-    child_status: Option<Child>,
+    child_state: Option<Child>,
+    child_spec: Option<NexusChild>,
 }
 
 impl ReplicaItem {
-    pub(crate) fn new(replica: ReplicaSpec, child_uri: Vec<ChildUri>, child: Vec<Child>) -> Self {
+    /// Create new `Self` from the provided arguments
+    pub(crate) fn new(
+        replica: ReplicaSpec,
+        child_uri: Vec<ChildUri>,
+        child_states: Vec<Child>,
+        child_specs: Vec<NexusChild>,
+    ) -> Self {
         Self {
             replica,
             child_uri: child_uri.first().cloned(),
             // ANA not currently supported
-            child_status: child.first().cloned(),
+            child_state: child_states.first().cloned(),
+            child_spec: child_specs.first().cloned(),
         }
     }
+    /// Get a reference to the replica spec
     pub(crate) fn spec(&self) -> &ReplicaSpec {
         &self.replica
     }
+    /// Get a reference to the child spec
     pub(crate) fn uri(&self) -> &Option<ChildUri> {
         &self.child_uri
     }
-    pub(crate) fn status(&self) -> &Option<Child> {
-        &self.child_status
+    /// Get a reference to the child state
+    pub(crate) fn child_state(&self) -> &Option<Child> {
+        &self.child_state
     }
-}
-
-pub(crate) struct ReplicaItemLister {}
-impl ReplicaItemLister {
-    pub(crate) async fn list(
-        registry: &Registry,
-        spec: &VolumeSpec,
-        state: &VolumeState,
-    ) -> Vec<ReplicaItem> {
-        let replicas = registry.specs.get_volume_replicas(&spec.uuid);
-        let nexuses = registry.specs.get_volume_nexuses(&spec.uuid);
-        let replicas = replicas.iter().map(|r| r.lock().clone());
-
-        let replica_states = registry.get_replicas().await;
-        replicas
-            .map(|r| {
-                ReplicaItem::new(
-                    r.clone(),
-                    replica_states
-                        .iter()
-                        .find(|rs| rs.uuid == r.uuid)
-                        .map(|rs| {
-                            nexuses
-                                .iter()
-                                .filter_map(|n| {
-                                    n.lock()
-                                        .children
-                                        .iter()
-                                        .find(|c| c.uri() == rs.uri)
-                                        .map(|n| n.uri())
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default(),
-                    replica_states
-                        .iter()
-                        .find(|rs| rs.uuid == r.uuid)
-                        .map(|rs| {
-                            state
-                                .children
-                                .iter()
-                                .filter_map(|n| {
-                                    n.children.iter().find(|c| c.uri.as_str() == rs.uri)
-                                })
-                                .cloned()
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default(),
-                )
-            })
-            .collect::<Vec<_>>()
+    /// Get a reference to the child spec
+    pub(crate) fn child_spec(&self) -> Option<&NexusChild> {
+        self.child_spec.as_ref()
     }
 }
 
@@ -133,6 +96,7 @@ impl ReplicaItemLister {
 pub(crate) struct ChildItem {
     replica_spec: ReplicaSpec,
     replica_state: Replica,
+    pool_state: PoolWrapper,
     child_info: Option<ChildInfo>,
 }
 
@@ -158,14 +122,16 @@ impl HealthyChildItems {
 impl ChildItem {
     /// Create a new `Self` from the replica and the persistent child information
     pub(crate) fn new(
-        replica_spec: ReplicaSpec,
-        replica_state: Replica,
-        child_info: Option<ChildInfo>,
+        replica_spec: &ReplicaSpec,
+        replica_state: &Replica,
+        child_info: Option<&ChildInfo>,
+        pool_state: &PoolWrapper,
     ) -> Self {
         Self {
-            replica_spec,
-            replica_state,
-            child_info,
+            replica_spec: replica_spec.clone(),
+            replica_state: replica_state.clone(),
+            child_info: child_info.cloned(),
+            pool_state: pool_state.clone(),
         }
     }
     /// Get the replica spec
@@ -179,5 +145,44 @@ impl ChildItem {
     /// Get the persisted nexus child information
     pub(crate) fn info(&self) -> &Option<ChildInfo> {
         &self.child_info
+    }
+    /// Get the pool wrapper
+    pub(crate) fn pool(&self) -> &PoolWrapper {
+        &self.pool_state
+    }
+}
+
+/// Nexus Child Items, used to filter nexus children for removal operations
+#[derive(Debug, Clone)]
+pub(crate) struct NexusChildItem {
+    replica: Option<ReplicaSpec>,
+    child_uri: ChildUri,
+    child_state: Option<Child>,
+}
+
+impl NexusChildItem {
+    /// Create new `Self` from the provided arguments
+    pub(crate) fn new(
+        replica: Option<ReplicaSpec>,
+        child_uri: ChildUri,
+        child_state: Option<&Child>,
+    ) -> Self {
+        Self {
+            replica,
+            child_uri,
+            child_state: child_state.cloned(),
+        }
+    }
+    /// Get a reference to the replica spec
+    pub(crate) fn replica(&self) -> Option<&ReplicaSpec> {
+        self.replica.as_ref()
+    }
+    /// Get a reference to the child state
+    pub(crate) fn child_state(&self) -> Option<&Child> {
+        self.child_state.as_ref()
+    }
+    /// Get a reference to the child URI
+    pub(crate) fn child_uri(&self) -> &ChildUri {
+        &self.child_uri
     }
 }

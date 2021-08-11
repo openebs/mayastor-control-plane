@@ -4,8 +4,8 @@ pub(crate) mod volume;
 
 use crate::core::scheduling::{
     nexus::GetPersistedNexusChildrenCtx,
-    resources::{ChildItem, PoolItem, ReplicaItem},
-    volume::GetSuitablePoolsContext,
+    resources::{ChildItem, NexusChildItem, PoolItem, ReplicaItem},
+    volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
 use common_lib::types::v0::message_bus::PoolStatus;
 use std::{cmp::Ordering, collections::HashMap, future::Future};
@@ -42,6 +42,7 @@ pub(crate) trait ResourceFilter: Sized {
     }
 }
 
+/// Filter nodes used for replica creation
 pub(crate) struct NodeFilters {}
 impl NodeFilters {
     /// Should only attempt to use online nodes
@@ -54,12 +55,13 @@ impl NodeFilters {
     }
     /// Should only attempt to use nodes not currently used by the volume
     pub(crate) fn unused(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        let registry = &request.registry;
+        let registry = request.registry();
         let used_nodes = registry.specs.get_volume_data_nodes(&request.uuid);
         !used_nodes.contains(&item.pool.node)
     }
 }
 
+/// Filter pools used for replica creation
 pub(crate) struct PoolFilters {}
 impl PoolFilters {
     /// Should only attempt to use pools with sufficient free space
@@ -72,6 +74,7 @@ impl PoolFilters {
     }
 }
 
+/// Sort the pools used for replica creation
 pub(crate) struct PoolSorters {}
 impl PoolSorters {
     /// Sort pools by their number of allocated replicas
@@ -80,6 +83,7 @@ impl PoolSorters {
     }
 }
 
+/// Sort the nexus children for removal when decreasing a volume's replica count
 pub(crate) struct ChildSorters {}
 impl ChildSorters {
     /// Sort replicas by their nexus child (state and rebuild progress)
@@ -102,9 +106,9 @@ impl ChildSorters {
     }
     fn sort_by_child(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
         // ANA not supported at the moment, so use only 1 child
-        match a.status() {
+        match a.child_spec() {
             None => {
-                match b.status() {
+                match b.child_spec() {
                     None => std::cmp::Ordering::Equal,
                     Some(_) => {
                         // prefer the replica that is not part of a nexus
@@ -112,14 +116,21 @@ impl ChildSorters {
                     }
                 }
             }
-            Some(childa) => {
-                match b.status() {
+            Some(_) => {
+                match b.child_spec() {
                     // prefer the replica that is not part of a nexus
                     None => std::cmp::Ordering::Less,
                     // compare the child states, and then the rebuild progress
-                    Some(childb) => match childa.state.partial_cmp(&childb.state) {
-                        None => childa.rebuild_progress.cmp(&childb.rebuild_progress),
-                        Some(ord) => ord,
+                    Some(_) => match (a.child_state(), b.child_state()) {
+                        (Some(a_state), Some(b_state)) => {
+                            match a_state.state.partial_cmp(&b_state.state) {
+                                None => a_state.rebuild_progress.cmp(&b_state.rebuild_progress),
+                                Some(ord) => ord,
+                            }
+                        }
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => std::cmp::Ordering::Equal,
                     },
                 }
             }
@@ -127,6 +138,7 @@ impl ChildSorters {
     }
 }
 
+/// Filter the nexus children/replica candidates when creating a nexus
 pub(crate) struct ChildInfoFilters {}
 impl ChildInfoFilters {
     /// Should only allow healthy children
@@ -137,6 +149,7 @@ impl ChildInfoFilters {
     }
 }
 
+/// Filter the nexus children/replica candidates when creating a nexus
 pub(crate) struct ReplicaFilters {}
 impl ReplicaFilters {
     /// Should only allow children with corresponding online replicas
@@ -150,6 +163,7 @@ impl ReplicaFilters {
     }
 }
 
+/// Sort the nexus replicas/children by preference when creating a nexus
 pub(crate) struct ChildItemSorters {}
 impl ChildItemSorters {
     /// Sort ChildItem's for volume nexus creation
@@ -165,6 +179,80 @@ impl ChildItemSorters {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
             (_, _) => std::cmp::Ordering::Equal,
+        }
+    }
+}
+
+/// Filter replicas when selecting the best candidates to add to a nexus
+pub(crate) struct AddReplicaFilters {}
+impl AddReplicaFilters {
+    /// Should only allow children with corresponding online replicas
+    pub(crate) fn online(_request: &VolumeReplicasForNexusCtx, item: &ChildItem) -> bool {
+        item.state().online()
+    }
+
+    /// Should only allow children with corresponding replicas with enough size
+    pub(crate) fn size(request: &VolumeReplicasForNexusCtx, item: &ChildItem) -> bool {
+        item.state().size >= request.vol_spec().size
+    }
+}
+
+/// Sort replicas to pick the best choice to add to a given nexus
+pub(crate) struct AddReplicaSorters {}
+impl AddReplicaSorters {
+    /// Sorted by:
+    /// 1. replicas local to the nexus
+    /// 2. replicas which have not been marked as faulted by mayastor
+    /// 3. replicas from pools with more free space
+    pub(crate) fn sort(
+        request: &VolumeReplicasForNexusCtx,
+        a: &ChildItem,
+        b: &ChildItem,
+    ) -> std::cmp::Ordering {
+        let a_is_local = a.state().node == request.nexus_spec().node;
+        let b_is_local = b.state().node == request.nexus_spec().node;
+        match (a_is_local, b_is_local) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            (_, _) => {
+                let a_healthy = a.info().as_ref().map(|i| i.healthy).unwrap_or(false);
+                let b_healthy = b.info().as_ref().map(|i| i.healthy).unwrap_or(false);
+                match (a_healthy, b_healthy) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    (_, _) => a.pool().free_space().cmp(&b.pool().free_space()),
+                }
+            }
+        }
+    }
+}
+
+/// Sort replicas to pick the best choice to remove from a given nexus
+pub(crate) struct NexusChildSorter {}
+impl NexusChildSorter {
+    /// sort nexus children for removal
+    /// remove "generic uri" children first (ie not spdk lvol replicas)
+    /// then children with no state
+    /// then children which are not local to the nexus
+    pub(crate) fn sort(a: &NexusChildItem, b: &NexusChildItem) -> std::cmp::Ordering {
+        match (a.replica(), b.replica()) {
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (_, _) => match (a.child_state(), b.child_state()) {
+                (Some(a_status), Some(b_status)) => {
+                    match a_status.state.partial_cmp(&b_status.state) {
+                        None | Some(std::cmp::Ordering::Equal) => {
+                            let a_is_local = a.replica().map(|spec| !spec.share.shared());
+                            let b_is_local = b.replica().map(|spec| !spec.share.shared());
+                            a_is_local.cmp(&b_is_local)
+                        }
+                        Some(ordering) => ordering,
+                    }
+                }
+                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, Some(_)) => std::cmp::Ordering::Less,
+                (None, None) => std::cmp::Ordering::Equal,
+            },
         }
     }
 }
