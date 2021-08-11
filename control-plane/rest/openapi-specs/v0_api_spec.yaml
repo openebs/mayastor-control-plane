@@ -5769,7 +5769,7 @@ components:
       example:
         grpcEndpoint: '10.1.0.5:10124'
         id: ksnode-1
-        state: Online
+        status: Online
       description: mayastor storage node information
       type: object
       properties:
@@ -6258,15 +6258,14 @@ components:
         - uuid
     VolumeSpec:
       example:
-        labels:
-          - ''
+        labels: null
         num_paths: 1
         num_replicas: 2
         operation: null
         protocol: none
         size: 80241024
         state: Created
-        target_node: null
+        target_node: ksnode-1
         uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
       description: User specification of a volume.
       type: object
@@ -6348,10 +6347,10 @@ components:
       description: current volume status
       type: string
       enum:
+        - Unknown
         - Online
         - Degraded
         - Faulted
-        - Unknown
     VolumeShareProtocol:
       description: Volume Share Protocol
       type: string
@@ -6403,7 +6402,7 @@ components:
             uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
         protocol: none
         size: 80241024
-        state: Online
+        status: Online
         uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
       description: Runtime state of the volume
       type: object
@@ -6432,35 +6431,8 @@ components:
         - size
         - state
         - uuid
+        - status
     Volume:
-      example:
-        spec:
-          - labels: ''
-            num_paths: 1
-            num_replicas: 2
-            operation: null
-            protocol: none
-            size: 80241024
-            state: Created
-            target_node: null
-            uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
-        state:
-          - children:
-            - children:
-                - rebuildProgress: null
-                  state: Online
-                  uri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:nexus-a76adcd6-9df0-47a1-90a5-2d5bf4151572'
-              deviceUri: ''
-              node: ksnode-1
-              rebuilds: 0
-              share: none
-              size: 80241024
-              state: Online
-              uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
-            protocol: none
-            size: 80241024
-            state: Online
-            uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
       description: |-
         Volumes
         Volume information
