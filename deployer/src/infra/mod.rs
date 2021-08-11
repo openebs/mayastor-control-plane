@@ -230,6 +230,14 @@ macro_rules! impl_component {
         pub struct Components(Vec<Component>, StartOptions);
         impl BuilderConfigure for Components {
             fn configure(&self, cfg: Builder) -> Result<Builder, Error> {
+                if self.1.build_all {
+                    let path = std::path::PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
+                    let status = std::process::Command::new("cargo")
+                        .current_dir(path.parent().expect("main workspace"))
+                        .args(&["build", "--bins"])
+                        .status()?;
+                    build_error("all the workspace binaries", status.code())?;
+                }
                 let mut cfg = cfg;
                 for component in &self.0 {
                     cfg = component.configure(&self.1, cfg)?;

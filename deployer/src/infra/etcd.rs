@@ -35,6 +35,13 @@ impl ComponentAction for Etcd {
             let mut store = EtcdStore::new("0.0.0.0:2379")
                 .await
                 .expect("Failed to connect to etcd.");
+
+            if !store.online().await {
+                // we seem to get in this situation on CI, let's log the result of a get key
+                // in case the result will be helpful
+                let result = store.get_kv(&"a".to_string()).await;
+                panic!("etcd get_kv result: {:#?}", result);
+            }
             assert!(store.online().await);
         }
         Ok(())
