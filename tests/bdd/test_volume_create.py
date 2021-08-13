@@ -110,7 +110,7 @@ def a_request_for_a_volume(create_request):
     """a request for a volume."""
     policy = {"self_heal": False, "topology": None}
     topology = {"explicit": None, "labelled": None}
-    request = (CreateVolumeBody(policy, NUM_VOLUME_REPLICAS, VOLUME_SIZE, topology),)
+    request = CreateVolumeBody(policy, NUM_VOLUME_REPLICAS, VOLUME_SIZE, topology)
     create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -129,7 +129,7 @@ def the_number_of_suitable_pools_is_less_than_the_number_of_desired_volume_repli
     pools_api = common.get_pools_api()
     pools_api.del_pool(POOL_UUID)
     num_pools = len(pools_api.get_pools())
-    num_volume_replicas = create_request[CREATE_REQUEST_KEY][0]["replicas"]
+    num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
     assert num_pools < num_volume_replicas
 
 
@@ -141,7 +141,7 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
 ):
     """the number of volume replicas is less than or equal to the number of suitable pools."""
     num_pools = len(common.get_pools_api().get_pools())
-    num_volume_replicas = create_request[CREATE_REQUEST_KEY][0]["replicas"]
+    num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
     assert num_volume_replicas <= num_pools
 
 
@@ -158,7 +158,7 @@ def there_are_no_available_mayastor_instances():
 @then("volume creation should fail with an insufficient storage error")
 def volume_creation_should_fail_with_an_insufficient_storage_error(create_request):
     """volume creation should fail with an insufficient storage error."""
-    request = create_request[CREATE_REQUEST_KEY][0]
+    request = create_request[CREATE_REQUEST_KEY]
     try:
         common.get_volumes_api().put_volume(VOLUME_UUID, request)
     except Exception as e:
@@ -168,7 +168,6 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
     # finally:
     #     # Check that the volume wasn't created.
     #     volumes = common.get_volumes_api().get_volumes()
-    #     print("VOLUME: ", volumes[0])
     #     assert len(volumes) == 0
 
 
@@ -196,7 +195,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
     )
 
     # Check the volume object returned is as expected
-    request = create_request[CREATE_REQUEST_KEY][0]
+    request = create_request[CREATE_REQUEST_KEY]
     volume = common.get_volumes_api().put_volume(VOLUME_UUID, request)
     assert str(volume.spec) == str(expected_spec)
     assert str(volume.state) == str(expected_state)
