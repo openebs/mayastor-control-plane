@@ -38,7 +38,7 @@ NODE_NAME = "mayastor"
 # A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    common.deployer_start()
+    common.deployer_start(1)
     common.get_pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=500"])
     )

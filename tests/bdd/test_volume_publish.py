@@ -1,4 +1,4 @@
-"""Volume sharing and publishing feature tests."""
+"""Volume publishing feature tests."""
 
 from pytest_bdd import (
     given,
@@ -27,7 +27,7 @@ VOLUME_SIZE = 10485761
 # A pool and volume are created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    common.deployer_start()
+    common.deployer_start(1)
     common.get_pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=500"])
     )
