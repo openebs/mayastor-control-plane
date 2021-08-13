@@ -36,6 +36,12 @@ pub struct Nexus {
     /// protocol used for exposing the nexus
     pub share: Protocol,
 }
+impl Nexus {
+    /// Check if the nexus contains the provided `ChildUri`
+    pub fn contains_child(&self, uri: &ChildUri) -> bool {
+        self.children.iter().any(|c| &c.uri == uri)
+    }
+}
 
 impl From<Nexus> for models::Nexus {
     fn from(src: Nexus) -> Self {

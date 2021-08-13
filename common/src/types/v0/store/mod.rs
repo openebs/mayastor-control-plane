@@ -11,7 +11,9 @@ pub mod volume;
 pub mod watch;
 
 use crate::types::v0::openapi::models;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use strum_macros::ToString;
 
 /// Enum defining the various states that a resource spec can be in.
@@ -73,4 +75,160 @@ pub trait SpecTransaction<Operation> {
 /// Trait which allows a UUID to be returned as a string.
 pub trait UuidString {
     fn uuid_as_string(&self) -> String;
+}
+
+/// Sequence operations for a resource without locking it
+/// Allows for multiple reconciliation operation steps to be executed in sequence whilst
+/// blocking access from front-end operations (rest)
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct OperationSequence {
+    uuid: String,
+    state: OperationSequenceState,
+}
+impl OperationSequence {
+    /// Create new `Self` with a uuid for observability
+    pub fn new(uuid: impl Into<String>) -> Self {
+        Self {
+            uuid: uuid.into(),
+            state: Default::default(),
+        }
+    }
+}
+
+/// Sequence operations
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum OperationSequenceState {
+    /// None in progress
+    Idle,
+    /// An single exclusive operation (openapi driven)
+    Exclusive,
+    /// Compound Operations as part of a reconcile algorithm
+    /// todo: If we have multiple concurrent reconcile loops, then we'll need an ID to
+    /// distinguish between them and avoid concurrent updates
+    Reconcile { active: bool },
+}
+impl Default for OperationSequenceState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+/// Operations are locked
+pub trait OperationSequencer {
+    fn as_ref(&self) -> &OperationSequence;
+    fn as_mut(&mut self) -> &mut OperationSequence;
+}
+
+/// Guard for Spec Operations
+/// It unlock the sequence lock on drop
+#[derive(Debug)]
+pub struct OperationGuard<T: OperationSequencer> {
+    locked: Option<(OperationSequenceState, Arc<Mutex<T>>)>,
+}
+impl<T: OperationSequencer> OperationGuard<T> {
+    fn unlock(&mut self) {
+        if let Some((revert, resource)) = self.locked.take() {
+            resource.lock().as_mut().complete(revert);
+        }
+    }
+    /// Create operation Guard for the resource with the operation mode
+    pub fn try_sequence(resource: &Arc<Mutex<T>>, mode: OperationMode) -> Result<Self, String> {
+        // use result variable to make sure the mutex's temporary guard is dropped
+        let result = resource.lock().as_mut().sequence(mode);
+        match result {
+            Some(revert) => Ok(Self {
+                locked: Some((revert, resource.clone())),
+            }),
+            None => Err(format!(
+                "Cannot transition from '{:?}' to '{:?}'",
+                resource.lock().as_ref(),
+                mode.apply()
+            )),
+        }
+    }
+}
+
+impl<T: OperationSequencer> Drop for OperationGuard<T> {
+    fn drop(&mut self) {
+        self.unlock();
+    }
+}
+
+/// Exclusive operations must be performed one at a time.
+/// A reconcile compound operation can be comprised of multiple steps
+/// A reconcile compound operation must first be issued, followed by 1-N Single Step Operations
+#[derive(Debug, Copy, Clone)]
+pub enum OperationMode {
+    /// Start Exclusive operation
+    Exclusive,
+    /// Start Reconcile Step operation that follows a ReconcileStart
+    ReconcileStep,
+    /// Start Reconcile Compound operation
+    ReconcileStart,
+}
+
+impl OperationMode {
+    /// Transform this operation into a sequence to transition to
+    fn apply(&self) -> OperationSequenceState {
+        match self {
+            OperationMode::Exclusive => OperationSequenceState::Exclusive,
+            OperationMode::ReconcileStep => OperationSequenceState::Reconcile { active: true },
+            OperationMode::ReconcileStart => OperationSequenceState::Reconcile { active: false },
+        }
+    }
+}
+
+impl OperationSequence {
+    /// Check if the transition is valid
+    fn valid(&mut self, next: OperationSequenceState) -> bool {
+        match self.state {
+            OperationSequenceState::Idle => {
+                matches!(
+                    next,
+                    OperationSequenceState::Exclusive
+                        | OperationSequenceState::Reconcile { active: false }
+                        | OperationSequenceState::Reconcile { active: true }
+                )
+            }
+            OperationSequenceState::Exclusive => {
+                matches!(next, OperationSequenceState::Idle)
+            }
+            OperationSequenceState::Reconcile { active: true } => {
+                matches!(
+                    next,
+                    OperationSequenceState::Idle
+                        | OperationSequenceState::Reconcile { active: false }
+                )
+            }
+            OperationSequenceState::Reconcile { active: false } => {
+                matches!(
+                    next,
+                    OperationSequenceState::Idle
+                        | OperationSequenceState::Reconcile { active: true }
+                )
+            }
+        }
+    }
+    /// Try to transition from current to next state.
+    fn transition(&mut self, next: OperationSequenceState) -> Option<OperationSequenceState> {
+        if self.valid(next) {
+            let previous = self.state;
+            self.state = next;
+            Some(previous)
+        } else {
+            None
+        }
+    }
+    /// Sequence an operation using the provided `OperationMode`.
+    /// It returns the state which must be used to revert this operation.
+    fn sequence(&mut self, mode: OperationMode) -> Option<OperationSequenceState> {
+        self.transition(mode.apply())
+    }
+    /// Complete the operation sequenced using the provided `OperationMode`.
+    fn complete(&mut self, revert: OperationSequenceState) {
+        if self.transition(revert).is_none() {
+            debug_assert!(false, "Invalid revert from '{:?}' to '{:?}'", self, revert);
+            self.state = OperationSequenceState::Idle;
+        }
+    }
 }

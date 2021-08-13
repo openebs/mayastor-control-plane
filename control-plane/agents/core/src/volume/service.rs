@@ -2,9 +2,12 @@ use crate::core::registry::Registry;
 use common::errors::SvcError;
 use common_lib::{
     mbus_api::message_bus::v0::Volumes,
-    types::v0::message_bus::{
-        CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
-        ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+    types::v0::{
+        message_bus::{
+            CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
+            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+        },
+        store::OperationMode,
     },
 };
 
@@ -42,7 +45,7 @@ impl Service {
     pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
         self.registry
             .specs
-            .create_volume(&self.registry, request)
+            .create_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -51,7 +54,7 @@ impl Service {
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
         self.registry
             .specs
-            .destroy_volume(&self.registry, request)
+            .destroy_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -60,7 +63,7 @@ impl Service {
     pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
         self.registry
             .specs
-            .share_volume(&self.registry, request)
+            .share_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -69,7 +72,7 @@ impl Service {
     pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
         self.registry
             .specs
-            .unshare_volume(&self.registry, request)
+            .unshare_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -78,7 +81,7 @@ impl Service {
     pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
         self.registry
             .specs
-            .publish_volume(&self.registry, request)
+            .publish_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -90,7 +93,7 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         self.registry
             .specs
-            .unpublish_volume(&self.registry, request)
+            .unpublish_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -102,7 +105,7 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         self.registry
             .specs
-            .set_volume_replica(&self.registry, request)
+            .set_volume_replica(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 }

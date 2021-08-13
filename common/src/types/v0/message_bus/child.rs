@@ -72,6 +72,12 @@ pub enum ChildState {
     /// unrecoverable error (control plane must act)
     Faulted = 3,
 }
+impl ChildState {
+    /// Check if the child is `Faulted`
+    pub fn faulted(&self) -> bool {
+        self == &Self::Faulted
+    }
+}
 impl PartialOrd for ChildState {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match &self {
@@ -150,7 +156,16 @@ pub struct RemoveNexusChild {
     /// URI of the child device to be removed
     pub uri: ChildUri,
 }
-
+impl RemoveNexusChild {
+    /// Return new `Self`
+    pub fn new(node: &NodeId, nexus: &NexusId, uri: &ChildUri) -> Self {
+        Self {
+            node: node.clone(),
+            nexus: nexus.clone(),
+            uri: uri.clone(),
+        }
+    }
+}
 impl From<AddNexusChild> for RemoveNexusChild {
     fn from(add: AddNexusChild) -> Self {
         Self {

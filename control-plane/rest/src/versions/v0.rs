@@ -514,7 +514,7 @@ impl RestClient for ActixRestClient {
     }
 
     async fn destroy_volume(&self, args: DestroyVolume) -> ClientResult<()> {
-        let urn = format!("/v0/volumes/{}", &args.uuid);
+        let urn = format!("/v0/volumes/{}", &args.uuid());
         self.del(urn).await?;
         Ok(())
     }

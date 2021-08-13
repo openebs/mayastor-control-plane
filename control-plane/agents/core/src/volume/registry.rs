@@ -1,6 +1,8 @@
 use crate::core::registry::Registry;
 use common::errors::{SvcError, VolumeNotFound};
-use common_lib::types::v0::message_bus::{Volume, VolumeId, VolumeState, VolumeStatus};
+use common_lib::types::v0::message_bus::{
+    NexusStatus, Volume, VolumeId, VolumeState, VolumeStatus,
+};
 use snafu::OptionExt;
 
 impl Registry {
@@ -16,20 +18,28 @@ impl Registry {
             .map(|n| nexuses.iter().find(|nexus| nexus.uuid == n.lock().uuid))
             .flatten()
             .collect::<Vec<_>>();
-
+        let replica_specs = self.specs.get_volume_replicas(volume_uuid);
         let volume_spec = self
             .specs
             .get_locked_volume(volume_uuid)
             .context(VolumeNotFound {
                 vol_id: volume_uuid.to_string(),
             })?;
-        let volume_spec = volume_spec.lock();
+        let volume_spec = volume_spec.lock().clone();
 
         Ok(if let Some(first_nexus_state) = nexus_states.get(0) {
             VolumeState {
                 uuid: volume_uuid.to_owned(),
                 size: first_nexus_state.size,
-                status: first_nexus_state.status.clone(),
+                status: match first_nexus_state.status {
+                    NexusStatus::Online
+                        if first_nexus_state.children.len()
+                            != volume_spec.num_replicas as usize =>
+                    {
+                        VolumeStatus::Degraded
+                    }
+                    _ => first_nexus_state.status.clone(),
+                },
                 protocol: first_nexus_state.share.clone(),
                 children: nexus_states.iter().map(|&n| n.clone()).collect(),
             }
@@ -38,11 +48,17 @@ impl Registry {
                 uuid: volume_uuid.to_owned(),
                 size: volume_spec.size,
                 status: if volume_spec.target_node.is_none() {
-                    VolumeStatus::Online
+                    if replica_specs.len() >= volume_spec.num_replicas as usize {
+                        VolumeStatus::Online
+                    } else if replica_specs.is_empty() {
+                        VolumeStatus::Faulted
+                    } else {
+                        VolumeStatus::Degraded
+                    }
                 } else {
                     VolumeStatus::Unknown
                 },
-                protocol: volume_spec.protocol.clone(),
+                protocol: volume_spec.protocol,
                 children: vec![],
             }
         })

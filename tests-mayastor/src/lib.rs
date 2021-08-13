@@ -37,6 +37,7 @@ pub fn default_options() -> StartOptions {
         .with_mayastors(1)
         .with_show_info(true)
         .with_cluster_name("rest_cluster")
+        .with_build_all(true)
 }
 
 /// Cluster with the composer, the rest client and the jaeger pipeline#
@@ -325,6 +326,16 @@ impl ClusterBuilder {
     /// Specify whether rest is enabled or not
     pub fn with_rest(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_rest(enabled);
+        self
+    }
+    /// Specify whether the components should be cargo built or not
+    pub fn with_build(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_build(enabled);
+        self
+    }
+    /// Specify whether the workspace binaries should be cargo built or not
+    pub fn with_build_all(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_build_all(enabled);
         self
     }
     /// Build into the resulting Cluster using a composer closure, eg:

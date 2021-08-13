@@ -19,29 +19,29 @@ use crate::apis::IntoVec;
 /// current volume status
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum VolumeStatus {
+    #[serde(rename = "Unknown")]
+    Unknown,
     #[serde(rename = "Online")]
     Online,
     #[serde(rename = "Degraded")]
     Degraded,
     #[serde(rename = "Faulted")]
     Faulted,
-    #[serde(rename = "Unknown")]
-    Unknown,
 }
 
 impl ToString for VolumeStatus {
     fn to_string(&self) -> String {
         match self {
+            Self::Unknown => String::from("Unknown"),
             Self::Online => String::from("Online"),
             Self::Degraded => String::from("Degraded"),
             Self::Faulted => String::from("Faulted"),
-            Self::Unknown => String::from("Unknown"),
         }
     }
 }
 
 impl Default for VolumeStatus {
     fn default() -> Self {
-        Self::Online
+        Self::Unknown
     }
 }

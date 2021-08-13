@@ -2,10 +2,11 @@ use crate::{
     core::{
         scheduling::{
             nexus::GetPersistedNexusChildren,
-            resources::{HealthyChildItems, ReplicaItem},
-            volume::{GetChildForRemoval, GetSuitablePools},
+            resources::{ChildItem, HealthyChildItems, NexusChildItem, ReplicaItem},
+            volume::{AddVolumeNexusReplicas, GetChildForRemoval, GetSuitablePools},
+            ResourceFilter,
         },
-        specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+        specs::{OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     },
     registry::Registry,
     volume::scheduling,
@@ -15,7 +16,7 @@ use common::{
     errors::{NotEnough, SvcError, SvcError::VolumeNotFound},
 };
 use common_lib::{
-    mbus_api::ResourceKind,
+    mbus_api::{ErrorChain, ResourceKind},
     types::v0::{
         message_bus::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
@@ -29,7 +30,7 @@ use common_lib::{
             nexus_child::NexusChild,
             replica::ReplicaSpec,
             volume::{VolumeOperation, VolumeSpec},
-            SpecStatus, SpecTransaction,
+            OperationMode, SpecStatus, SpecTransaction,
         },
     },
 };
@@ -37,14 +38,14 @@ use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::{convert::From, ops::Deref, sync::Arc};
 
-/// Select a nexus child to be removed from a nexus
-pub(crate) async fn get_nexus_child_remove_candidate(
+/// Select a replica to be removed from the volume
+pub(crate) async fn get_volume_replica_remove_candidate(
     spec: &VolumeSpec,
     state: &VolumeState,
     registry: &Registry,
 ) -> Result<ReplicaItem, SvcError> {
-    let candidates = scheduling::get_nexus_child_remove_candidate(
-        &GetChildForRemoval::new(spec, state),
+    let candidates = scheduling::get_volume_replica_remove_candidates(
+        &GetChildForRemoval::new(spec, state, false),
         registry,
     )
     .await;
@@ -61,8 +62,75 @@ pub(crate) async fn get_nexus_child_remove_candidate(
     }
 }
 
-/// Return a list of appropriate CreateReplica requests per node
-async fn get_volume_replica_candidates(
+/// Select a replica to be removed from the volume
+pub(crate) async fn get_volume_unused_replica_remove_candidates(
+    spec: &VolumeSpec,
+    state: &VolumeState,
+    registry: &Registry,
+) -> Vec<ReplicaItem> {
+    let candidates = scheduling::get_volume_replica_remove_candidates(
+        &GetChildForRemoval::new(spec, state, true),
+        registry,
+    )
+    .await;
+    tracing::trace!(
+        "Unused Replica removal candidates for volume '{}': {:?}",
+        spec.uuid,
+        candidates
+    );
+
+    candidates
+}
+
+/// Get a list of nexus children to be removed from a nexus
+pub(crate) async fn get_nexus_child_remove_candidates(
+    vol_spec: &VolumeSpec,
+    nexus_spec: &NexusSpec,
+    registry: &Registry,
+) -> Result<Vec<NexusChildItem>, SvcError> {
+    let candidates =
+        scheduling::get_nexus_child_remove_candidates(vol_spec, nexus_spec, registry).await;
+    tracing::trace!(
+        "Nexus Child removal candidates for nexus '{}' of volume '{}': {:?}",
+        nexus_spec.uuid,
+        vol_spec.uuid,
+        candidates
+    );
+
+    if candidates.len() <= 1 {
+        Err(SvcError::ReplicaRemovalNoCandidates {
+            id: vol_spec.uuid(),
+        })
+    } else {
+        Ok(candidates)
+    }
+}
+
+/// Get a list of existing candidate volume replicas to attach to a given nexus
+/// Useful to attach replicas to a nexus when the number of nexus children does not match
+/// the volume's replica count
+pub(crate) async fn get_nexus_attach_candidates(
+    vol_spec: &VolumeSpec,
+    nexus_spec: &NexusSpec,
+    registry: &Registry,
+) -> Result<Vec<ChildItem>, SvcError> {
+    let candidates = AddVolumeNexusReplicas::builder_with_defaults(vol_spec, nexus_spec, registry)
+        .await?
+        .collect();
+    tracing::debug!(
+        "Nexus Replica Attach candidates for nexus '{}' of volume '{}': {:?}",
+        nexus_spec.uuid,
+        vol_spec.uuid,
+        candidates
+    );
+
+    Ok(candidates)
+}
+
+/// Return a list of appropriate requests which can be used to create a a replica on a pool
+/// This can be used when the volume's current replica count is smaller than the desired volume's
+/// replica count
+pub(crate) async fn get_volume_replica_candidates(
     registry: &Registry,
     request: impl Into<GetSuitablePools>,
 ) -> Result<Vec<CreateReplica>, SvcError> {
@@ -89,14 +157,15 @@ async fn get_volume_replica_candidates(
             pool: p.id.clone(),
             size: request.size,
             thin: false,
-            share: Protocol::Nvmf,
+            share: Protocol::None,
             managed: true,
             owners: ReplicaOwners::from_volume(&request.uuid),
         })
         .collect::<Vec<_>>())
 }
 
-/// Return a list of appropriate CreateReplica requests per node
+/// Return a list of appropriate requests which can be used to create a a replica on a pool
+/// This can be used when creating a volume
 async fn get_create_volume_replicas(
     registry: &Registry,
     request: &CreateVolume,
@@ -133,7 +202,7 @@ pub(crate) async fn get_healthy_volume_replicas(
     )
     .await?;
 
-    tracing::debug!(
+    tracing::trace!(
         "Healthy volume nexus replicas for volume '{}': {:?}",
         spec.uuid,
         children
@@ -202,7 +271,7 @@ impl ResourceSpecsLocked {
             .collect::<Vec<_>>()
     }
 
-    /// Get a list of protected ReplicaSpec's for the given `id`
+    /// Get a list of protected ReplicaSpec's for the given volume `id`
     /// todo: we could also get the replicas from the volume nexuses?
     pub(crate) fn get_volume_replicas(&self, id: &VolumeId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         self.read()
@@ -212,6 +281,7 @@ impl ResourceSpecsLocked {
             .cloned()
             .collect()
     }
+
     /// Get the `NodeId` where `replica` lives
     pub(crate) async fn get_replica_node(
         registry: &Registry,
@@ -255,9 +325,11 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &CreateVolume,
+        mode: OperationMode,
     ) -> Result<Volume, SvcError> {
         let volume = self.get_or_create_volume(request);
-        let volume_clone = SpecOperations::start_create(&volume, registry, request).await?;
+        let (volume_clone, _guard) =
+            SpecOperations::start_create(&volume, registry, request, mode).await?;
 
         // todo: pick nodes and pools using the Node&Pool Topology
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
@@ -281,7 +353,7 @@ impl ResourceSpecsLocked {
             } else {
                 replica.clone()
             };
-            match self.create_replica(registry, &replica).await {
+            match self.create_replica(registry, &replica, mode).await {
                 Ok(replica) => {
                     replicas.push(replica);
                 }
@@ -290,7 +362,7 @@ impl ResourceSpecsLocked {
                         "Failed to create replica {:?} for volume {}, error: {}",
                         replica,
                         request.uuid,
-                        error
+                        error.full_string()
                     );
                     // continue trying...
                 }
@@ -302,7 +374,7 @@ impl ResourceSpecsLocked {
         let result = if replicas.len() < request.replicas as usize {
             for replica in &replicas {
                 if let Err(error) = self
-                    .destroy_replica(registry, &replica.clone().into(), true)
+                    .destroy_replica(registry, &replica.clone().into(), true, mode)
                     .await
                 {
                     tracing::error!(
@@ -330,17 +402,18 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &DestroyVolume,
+        mode: OperationMode,
     ) -> Result<(), SvcError> {
         let volume = self.get_locked_volume(&request.uuid);
         if let Some(volume) = &volume {
-            SpecOperations::start_destroy(volume, registry, false).await?;
+            SpecOperations::start_destroy(volume, registry, false, mode).await?;
 
             let mut first_error = Ok(());
             let nexuses = self.get_volume_nexuses(&request.uuid);
             for nexus in nexuses {
                 let nexus = nexus.lock().deref().clone();
                 if let Err(error) = self
-                    .destroy_nexus(registry, &DestroyNexus::from(nexus), true)
+                    .destroy_nexus(registry, &DestroyNexus::from(nexus), true, mode)
                     .await
                 {
                     if first_error.is_ok() {
@@ -358,6 +431,7 @@ impl ResourceSpecsLocked {
                             registry,
                             &Self::destroy_replica_request(spec, Default::default(), &node),
                             true,
+                            mode,
                         )
                         .await
                     {
@@ -385,19 +459,22 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &ShareVolume,
+        mode: OperationMode,
     ) -> Result<String, SvcError> {
         let volume_spec =
             self.get_locked_volume(&request.uuid)
                 .context(errors::VolumeNotFound {
                     vol_id: request.uuid.to_string(),
                 })?;
+
         let state = registry.get_volume_state(&request.uuid).await?;
 
-        let spec_clone = SpecOperations::start_update(
+        let (spec_clone, _guard) = SpecOperations::start_update(
             registry,
             &volume_spec,
             &state,
             VolumeOperation::Share(request.protocol),
+            mode,
         )
         .await?;
 
@@ -405,7 +482,11 @@ impl ResourceSpecsLocked {
         assert_eq!(state.children.len(), 1);
         let nexus = state.children.get(0).unwrap();
         let result = self
-            .share_nexus(registry, &ShareNexus::from((nexus, None, request.protocol)))
+            .share_nexus(
+                registry,
+                &ShareNexus::from((nexus, None, request.protocol)),
+                mode,
+            )
             .await;
 
         SpecOperations::complete_update(registry, result, volume_spec, spec_clone).await
@@ -416,6 +497,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &UnshareVolume,
+        mode: OperationMode,
     ) -> Result<(), SvcError> {
         let volume_spec =
             self.get_locked_volume(&request.uuid)
@@ -424,15 +506,20 @@ impl ResourceSpecsLocked {
                 })?;
         let state = registry.get_volume_state(&request.uuid).await?;
 
-        let spec_clone =
-            SpecOperations::start_update(registry, &volume_spec, &state, VolumeOperation::Unshare)
-                .await?;
+        let (spec_clone, _guard) = SpecOperations::start_update(
+            registry,
+            &volume_spec,
+            &state,
+            VolumeOperation::Unshare,
+            mode,
+        )
+        .await?;
 
         // Unshare the first child nexus (no ANA)
         assert_eq!(state.children.len(), 1);
         let nexus = state.children.get(0).unwrap();
         let result = self
-            .unshare_nexus(registry, &UnshareNexus::from(nexus))
+            .unshare_nexus(registry, &UnshareNexus::from(nexus), mode)
             .await;
 
         SpecOperations::complete_update(registry, result, volume_spec, spec_clone).await
@@ -443,6 +530,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &PublishVolume,
+        mode: OperationMode,
     ) -> Result<Volume, SvcError> {
         let spec = self
             .get_locked_volume(&request.uuid)
@@ -456,11 +544,12 @@ impl ResourceSpecsLocked {
 
         let operation =
             VolumeOperation::Publish((nexus_node.clone(), nexus_id.clone(), request.share));
-        let spec_clone = SpecOperations::start_update(registry, &spec, &state, operation).await?;
+        let (spec_clone, _guard) =
+            SpecOperations::start_update(registry, &spec, &state, operation, mode).await?;
 
         // Create a Nexus on the requested or auto-selected node
         let result = self
-            .volume_create_nexus(registry, &nexus_node, &nexus_id, &spec_clone)
+            .volume_create_nexus(registry, &nexus_node, &nexus_id, &spec_clone, mode)
             .await;
 
         let nexus =
@@ -470,7 +559,7 @@ impl ResourceSpecsLocked {
         let mut result = Ok(nexus.clone());
         if let Some(share) = request.share {
             result = self
-                .share_nexus(registry, &ShareNexus::from((&nexus, None, share)))
+                .share_nexus(registry, &ShareNexus::from((&nexus, None, share)), mode)
                 .await
                 .map(|_| nexus);
         }
@@ -484,6 +573,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &UnpublishVolume,
+        mode: OperationMode,
     ) -> Result<Volume, SvcError> {
         let spec = self
             .get_locked_volume(&request.uuid)
@@ -492,13 +582,15 @@ impl ResourceSpecsLocked {
             })?;
         let state = registry.get_volume_state(&request.uuid).await?;
 
-        let spec_clone =
-            SpecOperations::start_update(registry, &spec, &state, VolumeOperation::Unpublish)
+        let (spec_clone, _guard) =
+            SpecOperations::start_update(registry, &spec, &state, VolumeOperation::Unpublish, mode)
                 .await?;
         let nexus = get_volume_nexus(&state).expect("Already validated");
 
         // Destroy the Nexus
-        let result = self.destroy_nexus(registry, &nexus.into(), true).await;
+        let result = self
+            .destroy_nexus(registry, &nexus.into(), true, mode)
+            .await;
         SpecOperations::complete_update(registry, result, spec.clone(), spec_clone.clone()).await?;
         registry.get_volume(&request.uuid).await
     }
@@ -509,6 +601,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         state: &VolumeState,
         candidates: &[CreateReplica],
+        mode: OperationMode,
     ) -> Result<Replica, SvcError> {
         let mut result = Err(SvcError::NotEnoughResources {
             source: NotEnough::OfReplicas { have: 0, need: 1 },
@@ -520,7 +613,7 @@ impl ResourceSpecsLocked {
                 attempt.share = Protocol::None;
             }
 
-            result = self.create_replica(registry, &attempt).await;
+            result = self.create_replica(registry, &attempt, mode).await;
             if result.is_ok() {
                 break;
             }
@@ -528,14 +621,53 @@ impl ResourceSpecsLocked {
         result
     }
 
+    /// Create `count` replicas for the given volume using the provided list of candidates, in order
+    pub(crate) async fn create_volume_replicas(
+        &self,
+        registry: &Registry,
+        volume_uuid: &VolumeId,
+        candidates: Vec<CreateReplica>,
+        count: usize,
+        mode: OperationMode,
+    ) -> usize {
+        let mut created = 0;
+        for attempt in candidates.into_iter() {
+            if created >= count {
+                break;
+            }
+
+            match self.create_replica(registry, &attempt, mode).await {
+                Ok(replica) => {
+                    tracing::debug!(
+                        "Successfully created replica '{}' for volume '{}'",
+                        replica.uuid,
+                        volume_uuid
+                    );
+
+                    created += 1;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to created replica '{:?}' for volume '{}', error: '{}'",
+                        attempt,
+                        volume_uuid,
+                        error.full_string(),
+                    );
+                }
+            }
+        }
+        created
+    }
+
     /// Add the given replica to the nexuses of the given volume
     /// Only volumes with 1 nexus are currently supported
     /// todo: support N Nexuses per volume for ANA
-    async fn add_volume_nexus_replica(
+    async fn add_replica_to_volume(
         &self,
         registry: &Registry,
         status: &VolumeState,
         replica: Replica,
+        mode: OperationMode,
     ) -> Result<(), SvcError> {
         let children = status.children.len();
         // status object already validated
@@ -543,27 +675,8 @@ impl ResourceSpecsLocked {
 
         if children == 1 {
             let nexus = &status.children[0];
-            match self
-                .add_nexus_replica(
-                    registry,
-                    &AddNexusReplica {
-                        node: nexus.node.clone(),
-                        nexus: nexus.uuid.clone(),
-                        replica: ReplicaUri::new(&replica.uuid, &ChildUri::from(replica.uri)),
-                        auto_rebuild: true,
-                    },
-                )
+            self.attach_replica_to_nexus(registry, &status.uuid, nexus, &replica, mode)
                 .await
-            {
-                Ok(_) => Ok(()),
-                Err(error) => {
-                    if let Some(replica) = self.get_replica(&replica.uuid) {
-                        let mut replica = replica.lock();
-                        replica.disown(&ReplicaOwners::from_volume(&status.uuid));
-                    }
-                    Err(error)
-                }
-            }
         } else {
             Ok(())
         }
@@ -578,6 +691,7 @@ impl ResourceSpecsLocked {
         spec: Arc<Mutex<VolumeSpec>>,
         state: VolumeState,
         spec_clone: VolumeSpec,
+        mode: OperationMode,
     ) -> Result<Volume, SvcError> {
         // Prepare a list of candidates (based on some criteria)
         let result = get_volume_replica_candidates(registry, &spec_clone).await;
@@ -586,14 +700,14 @@ impl ResourceSpecsLocked {
 
         // Create the data replica from the pool candidates
         let result = self
-            .create_volume_replica(registry, &state, &candidates)
+            .create_volume_replica(registry, &state, &candidates, mode)
             .await;
         let replica =
             SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
 
         // Add the newly created replica to the nexus, if it's up
         let result = self
-            .add_volume_nexus_replica(registry, &state, replica)
+            .add_replica_to_volume(registry, &state, replica, mode)
             .await;
         SpecOperations::complete_update(registry, result, spec, spec_clone).await?;
 
@@ -602,11 +716,12 @@ impl ResourceSpecsLocked {
 
     /// Remove a replica from all nexuses for the given volume
     /// Only volumes with 1 nexus are currently supported
-    pub(crate) async fn remove_nexus_child_candidate(
+    pub(crate) async fn remove_volume_child_candidate(
         &self,
         spec_clone: &VolumeSpec,
         registry: &Registry,
         remove: &ReplicaItem,
+        mode: OperationMode,
     ) -> Result<(), SvcError> {
         if let Some(child_uri) = remove.uri() {
             // if the nexus is up, first remove the child from the nexus before deleting the replica
@@ -627,6 +742,7 @@ impl ResourceSpecsLocked {
                             nexus: nexus.uuid,
                             replica: ReplicaUri::new(&remove.spec().uuid, child_uri),
                         },
+                        mode,
                     )
                     .await
                 }
@@ -644,16 +760,17 @@ impl ResourceSpecsLocked {
         spec: Arc<Mutex<VolumeSpec>>,
         state: VolumeState,
         spec_clone: VolumeSpec,
+        mode: OperationMode,
     ) -> Result<Volume, SvcError> {
         // Determine which replica is most suitable to be removed
-        let result = get_nexus_child_remove_candidate(&spec_clone, &state, registry).await;
+        let result = get_volume_replica_remove_candidate(&spec_clone, &state, registry).await;
         // Can fail if meanwhile the state of a replica/nexus/child changes, so fail gracefully
         let remove =
             SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
 
         // Remove the replica from its nexus (where it exists as a child)
         let result = self
-            .remove_nexus_child_candidate(&spec_clone, registry, &remove)
+            .remove_volume_child_candidate(&spec_clone, registry, &remove, mode)
             .await;
         SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
 
@@ -664,6 +781,7 @@ impl ResourceSpecsLocked {
                 remove.spec(),
                 ReplicaOwners::from_volume(&state.uuid),
                 false,
+                mode,
             )
             .await;
 
@@ -676,6 +794,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &SetVolumeReplica,
+        mode: OperationMode,
     ) -> Result<Volume, SvcError> {
         let spec = self
             .get_locked_volume(&request.uuid)
@@ -685,14 +804,15 @@ impl ResourceSpecsLocked {
         let state = registry.get_volume_state(&request.uuid).await?;
 
         let operation = VolumeOperation::SetReplica(request.replicas);
-        let spec_clone = SpecOperations::start_update(registry, &spec, &state, operation).await?;
+        let (spec_clone, _guard) =
+            SpecOperations::start_update(registry, &spec, &state, operation, mode).await?;
 
         assert_ne!(request.replicas, spec_clone.num_replicas);
         if request.replicas > spec_clone.num_replicas {
-            self.increase_volume_replica(registry, spec, state, spec_clone.clone())
+            self.increase_volume_replica(registry, spec, state, spec_clone.clone(), mode)
                 .await?
         } else {
-            self.decrease_volume_replica(registry, spec, state, spec_clone.clone())
+            self.decrease_volume_replica(registry, spec, state, spec_clone.clone(), mode)
                 .await?
         };
 
@@ -707,17 +827,24 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         replica_state: &Replica,
         nexus_node: &NodeId,
+        mode: OperationMode,
     ) -> Result<ChildUri, SvcError> {
         if nexus_node == &replica_state.node {
             // on the same node, so connect via the loopback bdev
-            match self.unshare_replica(registry, &replica_state.into()).await {
+            match self
+                .unshare_replica(registry, &replica_state.into(), mode)
+                .await
+            {
                 Ok(uri) => Ok(uri.into()),
                 Err(SvcError::NotShared { .. }) => Ok(replica_state.uri.clone().into()),
                 Err(error) => Err(error),
             }
         } else {
             // on a different node, so connect via an nvmf target
-            match self.share_replica(registry, &replica_state.into()).await {
+            match self
+                .share_replica(registry, &replica_state.into(), mode)
+                .await
+            {
                 Ok(uri) => Ok(uri.into()),
                 Err(SvcError::AlreadyShared { .. }) => Ok(replica_state.uri.clone().into()),
                 Err(error) => Err(error),
@@ -733,6 +860,7 @@ impl ResourceSpecsLocked {
         target_node: &NodeId,
         nexus_id: &NexusId,
         vol_spec: &VolumeSpec,
+        mode: OperationMode,
     ) -> Result<Nexus, SvcError> {
         let children = get_healthy_volume_replicas(vol_spec, target_node, registry).await?;
         let (count, items) = match children {
@@ -751,7 +879,7 @@ impl ResourceSpecsLocked {
             }
 
             if let Ok(uri) = self
-                .make_replica_accessible(registry, item.state(), target_node)
+                .make_replica_accessible(registry, item.state(), target_node, mode)
                 .await
             {
                 nexus_replicas.push(NexusChild::Replica(ReplicaUri::new(
@@ -773,8 +901,314 @@ impl ResourceSpecsLocked {
                 managed: true,
                 owner: Some(vol_spec.uuid.clone()),
             },
+            mode,
         )
         .await
+    }
+
+    /// Attach the specified replica to the volume nexus
+    /// The replica might need to be shared/unshared so it can be opened by the nexus
+    pub(crate) async fn attach_replica_to_nexus(
+        &self,
+        registry: &Registry,
+        volume_uuid: &VolumeId,
+        nexus: &Nexus,
+        replica: &Replica,
+        mode: OperationMode,
+    ) -> Result<(), SvcError> {
+        let uri = self
+            .make_replica_accessible(registry, replica, &nexus.node, mode)
+            .await?;
+        match self
+            .add_nexus_replica(
+                registry,
+                &AddNexusReplica {
+                    node: nexus.node.clone(),
+                    nexus: nexus.uuid.clone(),
+                    replica: ReplicaUri::new(&replica.uuid, &uri),
+                    auto_rebuild: true,
+                },
+                mode,
+            )
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                if let Some(replica) = self.get_replica(&replica.uuid) {
+                    let mut replica = replica.lock();
+                    replica.disown(&ReplicaOwners::from_volume(volume_uuid));
+                }
+                Err(error)
+            }
+        }
+    }
+
+    /// Remove unused replicas from the volume
+    /// (that is, replicas which are not used by a nexus and are in excess to the
+    /// volume's replica count).
+    pub(crate) async fn remove_unused_volume_replicas(
+        &self,
+        registry: &Registry,
+        volume_spec: &Arc<Mutex<VolumeSpec>>,
+        mut count: usize,
+        mode: OperationMode,
+    ) -> Result<(), SvcError> {
+        let spec_clone = volume_spec.lock().clone();
+        let state = registry.get_volume_state(&spec_clone.uuid).await?;
+
+        let candidates =
+            get_volume_unused_replica_remove_candidates(&spec_clone, &state, registry).await;
+
+        let mut result = Ok(());
+        for replica in candidates {
+            if count == 0 {
+                break;
+            }
+            match self
+                .remove_unused_volume_replica(registry, volume_spec, &replica.spec().uuid, mode)
+                .await
+            {
+                Ok(_) => {
+                    tracing::info!("Successfully removed replica '{}'", replica.spec().uuid);
+                    count -= 1;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to remove unused replicas xx: {}",
+                        error.full_string()
+                    );
+                    result = Err(error);
+                }
+            }
+        }
+        result
+    }
+
+    /// Remove unused replica from the volume
+    /// (that is, replicas which are not used by a nexus).
+    /// It must not be the last replica of the volume
+    /// (an error will be returned in such case).
+    pub(crate) async fn remove_unused_volume_replica(
+        &self,
+        registry: &Registry,
+        volume_spec: &Arc<Mutex<VolumeSpec>>,
+        replica_id: &ReplicaId,
+        mode: OperationMode,
+    ) -> Result<(), SvcError> {
+        let volume_uuid = volume_spec.lock().uuid.clone();
+        let (spec_clone, _guard) = SpecOperations::start_update(
+            registry,
+            volume_spec,
+            &registry.get_volume_state(&volume_uuid).await?,
+            VolumeOperation::RemoveUnusedReplica(replica_id.clone()),
+            mode,
+        )
+        .await?;
+
+        // The replica is unused, so we can disown it...
+        let replica = self
+            .get_replica(replica_id)
+            .context(errors::ReplicaNotFound {
+                replica_id: replica_id.to_owned(),
+            });
+        let replica =
+            SpecOperations::validate_update_step(registry, replica, volume_spec, &spec_clone)
+                .await?;
+
+        // disown it from the volume first, so at the very least it can be garbage collected
+        // at a later point if the node is not accessible
+        let result = self.disown_volume_replica(registry, &replica).await;
+        SpecOperations::validate_update_step(registry, result, volume_spec, &spec_clone).await?;
+
+        // the garbage collector will destroy it at a later time
+        let _ = self.destroy_volume_replica(registry, None, &replica).await;
+        SpecOperations::complete_update(registry, Ok(()), volume_spec.clone(), spec_clone.clone())
+            .await?;
+        Ok(())
+    }
+
+    /// Attach existing replicas to the given volume nexus until it reaches the required number of
+    /// data replicas.
+    /// Returns the first encountered error, but tries to add as many as it can until it does so.
+    pub(crate) async fn attach_replicas_to_nexus(
+        &self,
+        registry: &Registry,
+        volume_spec: &Arc<Mutex<VolumeSpec>>,
+        nexus_spec: &Arc<Mutex<NexusSpec>>,
+        nexus_state: &Nexus,
+        mode: OperationMode,
+    ) -> Result<(), SvcError> {
+        let vol_spec_clone = volume_spec.lock().clone();
+        let vol_uuid = vol_spec_clone.uuid.clone();
+        let nexus_spec_clone = nexus_spec.lock().clone();
+        let volume_children = self
+            .get_volume_replicas(&vol_spec_clone.uuid)
+            .len()
+            .min(vol_spec_clone.num_replicas as usize);
+        let mut nexus_children = nexus_spec_clone.children.len();
+
+        let replicas =
+            get_nexus_attach_candidates(&vol_spec_clone, &nexus_spec_clone, registry).await?;
+
+        let mut result = Ok(());
+        for replica in replicas {
+            if nexus_children >= volume_children {
+                break;
+            }
+            match self
+                .attach_replica_to_nexus(registry, &vol_uuid, nexus_state, replica.state(), mode)
+                .await
+            {
+                Ok(_) => {
+                    tracing::info!(
+                        "Successfully attached replica '{}' to nexus '{}'",
+                        replica.state().uuid,
+                        nexus_state.uuid
+                    );
+                    nexus_children += 1;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to attach replica '{}' to nexus '{}' part of volume '{}': '{}'",
+                        replica.state().uuid,
+                        nexus_state.uuid,
+                        vol_spec_clone.uuid,
+                        error.full_string()
+                    );
+                    result = Err(error);
+                }
+            };
+        }
+        result
+    }
+
+    /// Remove excessive replicas from the given volume nexus.
+    /// It should not have more replicas then the volume's required replica count.
+    /// Returns the first encountered error, but tries to remove as many as it can until it does so.
+    pub(crate) async fn remove_excess_replicas_from_nexus(
+        &self,
+        registry: &Registry,
+        volume_spec: &Arc<Mutex<VolumeSpec>>,
+        nexus_spec: &Arc<Mutex<NexusSpec>>,
+        nexus_state: &Nexus,
+        mode: OperationMode,
+    ) -> Result<(), SvcError> {
+        let vol_spec_clone = volume_spec.lock().clone();
+        let nexus_spec_clone = nexus_spec.lock().clone();
+        let volume_children = vol_spec_clone.num_replicas as usize;
+        let mut nexus_replica_children =
+            nexus_spec_clone
+                .children
+                .iter()
+                .fold(0usize, |mut c, child| {
+                    if let Some(replica) = child.as_replica() {
+                        if registry.specs.get_replica(replica.uuid()).is_some() {
+                            c += 1;
+                        }
+                    }
+                    c
+                });
+
+        let candidates =
+            get_nexus_child_remove_candidates(&vol_spec_clone, &nexus_spec_clone, registry).await?;
+
+        let mut result = Ok(());
+        for candidate in candidates {
+            if nexus_replica_children <= volume_children {
+                break;
+            }
+            match self
+                .remove_nexus_child_by_uri(registry, nexus_state, candidate.child_uri(), true, mode)
+                .await
+            {
+                Ok(_) => {
+                    tracing::info!(
+                        "Successfully removed child '{}' from nexus '{}' part of volume '{}'",
+                        candidate.child_uri(),
+                        nexus_state.uuid,
+                        vol_spec_clone.uuid
+                    );
+                    nexus_replica_children -= 1;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to remove child '{}' from nexus '{}' part of volume '{}': '{}'",
+                        candidate.child_uri(),
+                        nexus_state.uuid,
+                        vol_spec_clone.uuid,
+                        error.full_string()
+                    );
+                    result = Err(error);
+                }
+            }
+        }
+        result
+    }
+
+    /// Disown replica from its volume
+    async fn disown_volume_replica(
+        &self,
+        registry: &Registry,
+        replica: &Arc<Mutex<ReplicaSpec>>,
+    ) -> Result<(), SvcError> {
+        replica.lock().owners.disowned_by_volume();
+        let clone = replica.lock().clone();
+        registry.store_obj(&clone).await
+    }
+
+    /// Destroy the replica from its volume
+    pub(crate) async fn destroy_volume_replica(
+        &self,
+        registry: &Registry,
+        node_id: Option<&NodeId>,
+        replica: &Arc<Mutex<ReplicaSpec>>,
+    ) -> Result<(), SvcError> {
+        let node_id = match node_id {
+            Some(node_id) => node_id.clone(),
+            None => {
+                let replica_uuid = replica.lock().uuid.clone();
+                match registry.get_replica(&replica_uuid).await {
+                    Ok(state) => state.node.clone(),
+                    Err(_) => {
+                        let pool_id = replica.lock().pool.clone();
+                        let pool_spec = self.get_pool(&pool_id).context(errors::PoolNotFound {
+                            pool_id: pool_id.to_string(),
+                        })?;
+                        let node_id = pool_spec.lock().node.clone();
+                        node_id
+                    }
+                }
+            }
+        };
+
+        let spec = replica.lock().clone();
+        self.destroy_replica(
+            registry,
+            &Self::destroy_replica_request(spec, Default::default(), &node_id),
+            true,
+            OperationMode::ReconcileStep,
+        )
+        .await
+    }
+
+    /// Disown and destroy the replica from its volume
+    pub(crate) async fn disown_and_destroy_replica(
+        &self,
+        registry: &Registry,
+        node: &NodeId,
+        replica_uuid: &ReplicaId,
+    ) -> Result<(), SvcError> {
+        if let Some(replica) = self.get_replica(replica_uuid) {
+            // disown it from the volume first, so at the very least it can be garbage collected
+            // at a later point if the node is not accessible
+            self.disown_volume_replica(registry, &replica).await?;
+            self.destroy_volume_replica(registry, Some(node), &replica)
+                .await
+        } else {
+            Err(SvcError::ReplicaNotFound {
+                replica_id: replica_uuid.to_owned(),
+            })
+        }
     }
 
     /// Remove volume by its `id`
@@ -801,13 +1235,16 @@ impl ResourceSpecsLocked {
 
             let volumes = self.get_locked_volumes();
             for volume_spec in volumes {
-                let mut volume_clone = {
-                    let mut volume = volume_spec.lock();
-                    if volume.updating || !volume.status.created() {
+                let (mut volume_clone, _guard) = {
+                    if let Ok(guard) = volume_spec.operation_guard(OperationMode::ReconcileStart) {
+                        let volume = volume_spec.lock();
+                        if !volume.status.created() {
+                            continue;
+                        }
+                        (volume.clone(), guard)
+                    } else {
                         continue;
                     }
-                    volume.updating = true;
-                    volume.clone()
                 };
 
                 if let Some(op) = volume_clone.operation.clone() {
@@ -847,8 +1284,6 @@ impl ResourceSpecsLocked {
                     }
                 } else {
                     // No operation to reconcile.
-                    let mut volume = volume_spec.lock();
-                    volume.updating = false;
                 }
             }
             pending_count > 0
@@ -924,6 +1359,7 @@ impl SpecOperations for VolumeSpec {
 
     fn start_update_op(
         &mut self,
+        registry: &Registry,
         state: &Self::State,
         operation: Self::UpdateOp,
     ) -> Result<(), SvcError> {
@@ -995,6 +1431,21 @@ impl SpecOperations for VolumeSpec {
                 }
             }
 
+            VolumeOperation::RemoveUnusedReplica(uuid) => {
+                let last_replica = !registry
+                    .specs
+                    .get_volume_replicas(&self.uuid)
+                    .iter()
+                    .any(|r| &r.lock().uuid != uuid);
+                let nexuses = registry.specs.get_volume_nexuses(&self.uuid);
+                let used = nexuses.iter().any(|n| n.lock().contains_replica(uuid));
+                if !last_replica && !used {
+                    Ok(())
+                } else {
+                    Err(SvcError::Conflict {})
+                }
+            }
+
             VolumeOperation::Create => unreachable!(),
             VolumeOperation::Destroy => unreachable!(),
         }?;
@@ -1010,12 +1461,6 @@ impl SpecOperations for VolumeSpec {
     fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
         let uuid = locked_spec.lock().uuid.clone();
         registry.specs.remove_volume(&uuid);
-    }
-    fn set_updating(&mut self, updating: bool) {
-        self.updating = updating;
-    }
-    fn updating(&self) -> bool {
-        self.updating
     }
     fn dirty(&self) -> bool {
         self.pending_op()

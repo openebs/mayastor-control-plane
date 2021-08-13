@@ -94,6 +94,10 @@ pub struct StartOptions {
     #[structopt(short, long)]
     pub build: bool,
 
+    /// Cargo Build the workspace before deploying
+    #[structopt(long)]
+    pub build_all: bool,
+
     /// Use a dns resolver for the cluster: defreitas/dns-proxy-server
     /// Note this messes with your /etc/resolv.conf so use at your own risk
     #[structopt(short, long)]
@@ -179,6 +183,10 @@ impl StartOptions {
     }
     pub fn with_build(mut self, build: bool) -> Self {
         self.build = build;
+        self
+    }
+    pub fn with_build_all(mut self, build: bool) -> Self {
+        self.build_all = build;
         self
     }
     pub fn with_mayastors(mut self, mayastors: u32) -> Self {

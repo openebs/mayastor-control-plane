@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     core::{
-        specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+        specs::{OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
         wrapper::ClientOps,
     },
     registry::Registry,
@@ -20,7 +20,7 @@ use common_lib::{
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
-            SpecStatus, SpecTransaction,
+            OperationMode, SpecStatus, SpecTransaction,
         },
     },
 };
@@ -57,12 +57,6 @@ impl SpecOperations for PoolSpec {
         let id = locked_spec.lock().id.clone();
         registry.specs.remove_pool(&id);
     }
-    fn set_updating(&mut self, updating: bool) {
-        self.updating = updating;
-    }
-    fn updating(&self) -> bool {
-        self.updating
-    }
     fn dirty(&self) -> bool {
         // pools are not updatable currently, so the spec is never dirty (not written to etcd)
         // because it can never change after creation
@@ -89,18 +83,27 @@ impl SpecOperations for ReplicaSpec {
     type State = Replica;
     type UpdateOp = ReplicaOperation;
 
-    fn start_update_op(&mut self, state: &Self::State, op: Self::UpdateOp) -> Result<(), SvcError> {
+    fn start_update_op(
+        &mut self,
+        _: &Registry,
+        state: &Self::State,
+        op: Self::UpdateOp,
+    ) -> Result<(), SvcError> {
         match op {
-            ReplicaOperation::Share(_) if state.share.shared() => Err(SvcError::AlreadyShared {
-                kind: self.kind(),
-                id: self.uuid(),
-                share: state.share.to_string(),
-            }),
+            ReplicaOperation::Share(_) if self.share.shared() && state.share.shared() => {
+                Err(SvcError::AlreadyShared {
+                    kind: self.kind(),
+                    id: self.uuid(),
+                    share: state.share.to_string(),
+                })
+            }
             ReplicaOperation::Share(_) => Ok(()),
-            ReplicaOperation::Unshare if !state.share.shared() => Err(SvcError::NotShared {
-                kind: self.kind(),
-                id: self.uuid(),
-            }),
+            ReplicaOperation::Unshare if !self.share.shared() && !state.share.shared() => {
+                Err(SvcError::NotShared {
+                    kind: self.kind(),
+                    id: self.uuid(),
+                })
+            }
             ReplicaOperation::Unshare => Ok(()),
             _ => unreachable!(),
         }?;
@@ -116,12 +119,6 @@ impl SpecOperations for ReplicaSpec {
     fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
         let uuid = locked_spec.lock().uuid.clone();
         registry.specs.remove_replica(&uuid);
-    }
-    fn set_updating(&mut self, updating: bool) {
-        self.updating = updating;
-    }
-    fn updating(&self) -> bool {
-        self.updating
     }
     fn dirty(&self) -> bool {
         self.pending_op()
@@ -187,11 +184,12 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &CreatePool,
+        mode: OperationMode,
     ) -> Result<Pool, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let pool_spec = self.get_or_create_pool(request);
-        SpecOperations::start_create(&pool_spec, registry, request).await?;
+        SpecOperations::start_create(&pool_spec, registry, request, mode).await?;
 
         let result = node.create_pool(request).await;
         SpecOperations::complete_create(result, &pool_spec, registry).await
@@ -201,6 +199,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &DestroyPool,
+        mode: OperationMode,
     ) -> Result<(), SvcError> {
         // what if the node is never coming back?
         // do we need a way to forcefully "delete" things?
@@ -208,7 +207,7 @@ impl ResourceSpecsLocked {
 
         let pool_spec = self.get_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
-            SpecOperations::start_destroy(pool_spec, registry, false).await?;
+            SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
 
             let result = node.destroy_pool(request).await;
             SpecOperations::complete_destroy(result, pool_spec, registry).await
@@ -221,11 +220,13 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &CreateReplica,
+        mode: OperationMode,
     ) -> Result<Replica, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let replica_spec = self.get_or_create_replica(request);
-        SpecOperations::start_create(&replica_spec, registry, request).await?;
+        let (_, _guard) =
+            SpecOperations::start_create(&replica_spec, registry, request, mode).await?;
 
         let result = node.create_replica(request).await;
         SpecOperations::complete_create(result, &replica_spec, registry).await
@@ -237,6 +238,7 @@ impl ResourceSpecsLocked {
         replica: &ReplicaSpec,
         destroy_by: ReplicaOwners,
         delete_owned: bool,
+        mode: OperationMode,
     ) -> Result<(), SvcError> {
         match Self::get_replica_node(registry, replica).await {
             // Should never happen, but just in case...
@@ -248,6 +250,7 @@ impl ResourceSpecsLocked {
                     registry,
                     &Self::destroy_replica_request(replica.clone(), destroy_by, &node),
                     delete_owned,
+                    mode,
                 )
                 .await
             }
@@ -259,13 +262,20 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &DestroyReplica,
         delete_owned: bool,
+        mode: OperationMode,
     ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let replica = self.get_replica(&request.uuid);
         if let Some(replica) = &replica {
-            SpecOperations::start_destroy_by(replica, registry, &request.disowners, delete_owned)
-                .await?;
+            SpecOperations::start_destroy_by(
+                replica,
+                registry,
+                &request.disowners,
+                delete_owned,
+                mode,
+            )
+            .await?;
 
             let result = node.destroy_replica(request).await;
             SpecOperations::complete_destroy(result, replica, registry).await
@@ -277,16 +287,18 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &ShareReplica,
+        mode: OperationMode,
     ) -> Result<String, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;
-            let spec_clone = SpecOperations::start_update(
+            let (spec_clone, _guard) = SpecOperations::start_update(
                 registry,
                 &replica_spec,
                 &status,
                 ReplicaOperation::Share(request.protocol),
+                mode,
             )
             .await?;
 
@@ -300,16 +312,18 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &UnshareReplica,
+        mode: OperationMode,
     ) -> Result<String, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;
-            let spec_clone = SpecOperations::start_update(
+            let (spec_clone, _guard) = SpecOperations::start_update(
                 registry,
                 &replica_spec,
                 &status,
                 ReplicaOperation::Unshare,
+                mode,
             )
             .await?;
 
@@ -345,7 +359,7 @@ impl ResourceSpecsLocked {
         }
     }
     /// Get a protected PoolSpec for the given pool `id`, if it exists
-    fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
+    pub(crate) fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
         let specs = self.read();
         specs.pools.get(id).cloned()
     }
@@ -380,13 +394,16 @@ impl ResourceSpecsLocked {
 
             let replicas = self.get_replicas();
             for replica_spec in replicas {
-                let mut replica_clone = {
-                    let mut replica = replica_spec.lock();
-                    if replica.updating || !replica.status.created() {
+                let (mut replica_clone, _guard) = {
+                    if let Ok(guard) = replica_spec.operation_guard(OperationMode::ReconcileStart) {
+                        let replica = replica_spec.lock();
+                        if !replica.status.created() {
+                            continue;
+                        }
+                        (replica.clone(), guard)
+                    } else {
                         continue;
                     }
-                    replica.updating = true;
-                    replica.clone()
                 };
 
                 if let Some(op) = replica_clone.operation.clone() {
@@ -426,8 +443,6 @@ impl ResourceSpecsLocked {
                     }
                 } else {
                     // No operation to reconcile.
-                    let mut spec = replica_spec.lock();
-                    spec.updating = false;
                 }
             }
             pending_count > 0

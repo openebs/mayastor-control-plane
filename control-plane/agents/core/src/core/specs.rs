@@ -20,7 +20,12 @@ use common_lib::types::v0::{
 use crate::core::resource_map::ResourceMap;
 use async_trait::async_trait;
 use common::errors::SvcError;
-use common_lib::{mbus_api::ResourceKind, types::v0::store::SpecStatus};
+use common_lib::{
+    mbus_api::ResourceKind,
+    types::v0::store::{
+        OperationGuard, OperationMode, OperationSequence, OperationSequencer, SpecStatus,
+    },
+};
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::fmt::Debug;
@@ -44,7 +49,7 @@ enum SpecError {
 /// This trait is used to encapsulate common behaviour for all different types of resources,
 /// including validation rules and error handling.
 #[async_trait]
-pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
+pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequencer {
     type Create: Debug + PartialEq + Sync + Send;
     type Owners: Default + Sync + Send;
     type Status: PartialEq;
@@ -57,19 +62,21 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         locked_spec: &Arc<Mutex<Self>>,
         registry: &Registry,
         request: &Self::Create,
-    ) -> Result<Self, SvcError>
+        mode: OperationMode,
+    ) -> Result<(Self, OperationGuard<Self>), SvcError>
     where
         Self: PartialEq<Self::Create>,
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
+        let guard = locked_spec.operation_guard(mode)?;
         let spec_clone = {
             let mut spec = locked_spec.lock();
             spec.start_create_inner(request)?;
             spec.clone()
         };
         Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
-        Ok(spec_clone)
+        Ok((spec_clone, guard))
     }
 
     /// When a create request is issued we need to validate by verifying that:
@@ -160,12 +167,20 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         locked_spec: &Arc<Mutex<Self>>,
         registry: &Registry,
         del_owned: bool,
-    ) -> Result<(), SvcError>
+        mode: OperationMode,
+    ) -> Result<OperationGuard<Self>, SvcError>
     where
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
-        Self::start_destroy_by(locked_spec, registry, &Self::Owners::default(), del_owned).await
+        Self::start_destroy_by(
+            locked_spec,
+            registry,
+            &Self::Owners::default(),
+            del_owned,
+            mode,
+        )
+        .await
     }
 
     /// Start a destroy operation by spec owners and attempt to log the transaction to the store.
@@ -178,16 +193,18 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         registry: &Registry,
         owners: &Self::Owners,
         ignore_owners: bool,
-    ) -> Result<(), SvcError>
+        mode: OperationMode,
+    ) -> Result<OperationGuard<Self>, SvcError>
     where
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
+        let guard = locked_spec.operation_guard_wait(mode).await?;
         {
             let mut spec = locked_spec.lock();
             let _ = spec.busy()?;
             if spec.status().deleted() {
-                return Ok(());
+                return Ok(guard);
             } else if !ignore_owners {
                 spec.disown(owners);
                 if spec.owned() {
@@ -203,14 +220,10 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
                     });
                 }
             }
-
-            spec.set_updating(true);
         }
 
         // resource specific validation rules
         if let Err(error) = Self::validate_destroy(locked_spec, registry) {
-            let mut spec = locked_spec.lock();
-            spec.set_updating(false);
             return Err(error);
         }
 
@@ -224,7 +237,8 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
             spec.clone()
         };
 
-        Self::store_operation_log(registry, locked_spec, &spec_clone).await
+        Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
+        Ok(guard)
     }
 
     /// Completes a destroy operation by trying to delete the spec from the persistent store.
@@ -285,28 +299,32 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         locked_spec: &Arc<Mutex<Self>>,
         state: &Self::State,
         update_operation: Self::UpdateOp,
-    ) -> Result<Self, SvcError>
+        mode: OperationMode,
+    ) -> Result<(Self, OperationGuard<Self>), SvcError>
     where
         Self: PartialEq<Self::State>,
         Self: SpecTransaction<Self::UpdateOp>,
         Self: StorableObject,
     {
+        let guard = locked_spec.operation_guard_wait(mode).await?;
         let spec_clone = {
-            let mut spec = locked_spec.lock();
-            spec.start_update_inner(state, update_operation, false)?
+            let mut spec = locked_spec.lock().clone();
+            spec.start_update_inner(registry, state, update_operation)?;
+            *locked_spec.lock() = spec.clone();
+            spec
         };
 
         Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
-        Ok(spec_clone)
+        Ok((spec_clone, guard))
     }
 
     /// Checks that the object ready to accept a new update operation
     fn start_update_inner(
         &mut self,
+        registry: &Registry,
         state: &Self::State,
         operation: Self::UpdateOp,
-        reconciling: bool,
-    ) -> Result<Self, SvcError>
+    ) -> Result<(), SvcError>
     where
         Self: PartialEq<Self::State>,
     {
@@ -323,20 +341,9 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
                 kind: self.kind(),
             }),
             SpecStatus::Created(_) => {
-                // if it's not part of a reconcile effort then the status should match up with
-                // what the spec defines, otherwise it's probably not a good idea to allow this
-                // "frontend" operation to go through
-                // todo: should we also compare the "state"? (online vs degraded)?
-                if !reconciling && !self.state_synced(state) {
-                    Err(SvcError::NotReady {
-                        id: self.uuid(),
-                        kind: self.kind(),
-                    })
-                } else {
-                    // start the requested operation (which also checks if it's a valid transition)
-                    self.start_update_op(state, operation)?;
-                    Ok(self.clone())
-                }
+                // start the requested operation (which also checks if it's a valid transition)
+                self.start_update_op(registry, state, operation)?;
+                Ok(())
             }
         }
     }
@@ -425,9 +432,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
 
     /// Check if the object is free to be modified or if it's still busy
     fn busy(&self) -> Result<(), SvcError> {
-        if self.updating() {
-            return Err(SvcError::Conflict {});
-        } else if self.dirty() {
+        if self.dirty() {
             return Err(SvcError::StoreSave {
                 kind: self.kind(),
                 id: self.uuid(),
@@ -435,7 +440,12 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
         }
         Ok(())
     }
-
+    fn operation_lock(&self) -> &OperationSequence {
+        self.as_ref()
+    }
+    fn operation_lock_mut(&mut self) -> &mut OperationSequence {
+        self.as_mut()
+    }
     /// Attempt to store a spec object with a logged SpecOperation to the persistent store
     /// In case of failure the operation cannot proceed so clear it and return an error
     async fn store_operation_log<O>(
@@ -459,6 +469,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     /// Start an update operation (not all resources support this currently)
     fn start_update_op(
         &mut self,
+        _registry: &Registry,
         _state: &Self::State,
         _operation: Self::UpdateOp,
     ) -> Result<(), SvcError> {
@@ -485,10 +496,6 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     fn start_destroy_op(&mut self);
     /// Remove the object from the global Spec List
     fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry);
-    /// Set the updating flag
-    fn set_updating(&mut self, updating: bool);
-    /// Check if the object is currently being updated
-    fn updating(&self) -> bool;
     /// Check if the object is dirty -> needs to be flushed to the persistent store
     fn dirty(&self) -> bool;
     /// Get the kind (for log messages)
@@ -509,6 +516,49 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject {
     }
     /// Disown resource by owners
     fn disown(&mut self, _owner: &Self::Owners) {}
+}
+
+/// Operations are locked
+#[async_trait::async_trait]
+pub trait OperationSequenceGuard<T: OperationSequencer + SpecOperations> {
+    /// Attempt to obtain a guard for the specified operation mode
+    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuard<T>, SvcError>;
+    /// Attempt to obtain a guard for the specified operation mode
+    /// A few attempts are made with an async sleep in case something else is already running
+    async fn operation_guard_wait(
+        &self,
+        mode: OperationMode,
+    ) -> Result<OperationGuard<T>, SvcError>;
+}
+
+#[async_trait::async_trait]
+impl<T: OperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc<Mutex<T>> {
+    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuard<T>, SvcError> {
+        match OperationGuard::try_sequence(self, mode) {
+            Ok(guard) => Ok(guard),
+            Err(error) => {
+                tracing::trace!("Resource '{}' is busy: {}", self.lock().uuid(), error);
+                Err(SvcError::Conflict {})
+            }
+        }
+    }
+    async fn operation_guard_wait(
+        &self,
+        mode: OperationMode,
+    ) -> Result<OperationGuard<T>, SvcError> {
+        let mut tries = 10;
+        loop {
+            match self.operation_guard(mode) {
+                Ok(guard) => return Ok(guard),
+                Err(error) if tries == 0 => {
+                    return Err(error);
+                }
+                Err(_) => tries -= 1,
+            };
+
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+    }
 }
 
 /// Locked Resource Specs

@@ -59,9 +59,15 @@ pub(crate) struct CliArgs {
 
 fn init_tracing() {
     if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
-        tracing_subscriber::fmt().with_env_filter(filter).init();
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_env_filter(filter)
+            .init();
     } else {
-        tracing_subscriber::fmt().with_env_filter("info").init();
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_env_filter("info")
+            .init();
     }
 }
 

@@ -38,7 +38,7 @@ pub use crate::{
 pub const VERSION: &str = "v0";
 
 /// Versioned Channels
-#[derive(Clone, Debug, EnumString, ToString)]
+#[derive(Clone, Debug, EnumString, ToString, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 pub enum ChannelVs {
     /// Default

@@ -8,7 +8,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecStatus, SpecTransaction, UuidString,
+        OperationSequence, OperationSequencer, SpecStatus, SpecTransaction, UuidString,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -84,9 +84,19 @@ pub struct ReplicaSpec {
     pub owners: ReplicaOwners,
     /// Update in progress
     #[serde(skip)]
-    pub updating: bool,
+    pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<ReplicaOperationState>,
+}
+
+impl OperationSequencer for ReplicaSpec {
+    fn as_ref(&self) -> &OperationSequence {
+        &self.sequencer
+    }
+
+    fn as_mut(&mut self) -> &mut OperationSequence {
+        &mut self.sequencer
+    }
 }
 
 impl UuidString for ReplicaSpec {
@@ -145,11 +155,9 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
 
     fn clear_op(&mut self) {
         self.operation = None;
-        self.updating = false;
     }
 
     fn start_op(&mut self, operation: ReplicaOperation) {
-        self.updating = true;
         self.operation = Some(ReplicaOperationState {
             operation,
             result: None,
@@ -160,7 +168,6 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
-        self.updating = false;
     }
 }
 
@@ -229,7 +236,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             status: ReplicaSpecStatus::Creating,
             managed: request.managed,
             owners: request.owners.clone(),
-            updating: false,
+            sequencer: OperationSequence::new(request.uuid.clone()),
             operation: None,
         }
     }
@@ -238,7 +245,7 @@ impl PartialEq<CreateReplica> for ReplicaSpec {
     fn eq(&self, other: &CreateReplica) -> bool {
         let mut other = ReplicaSpec::from(other);
         other.status = self.status.clone();
-        other.updating = self.updating;
+        other.sequencer = self.sequencer.clone();
         &other == self
     }
 }

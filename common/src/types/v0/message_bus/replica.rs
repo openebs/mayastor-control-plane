@@ -12,6 +12,14 @@ pub struct GetReplicas {
     /// Filter request
     pub filter: Filter,
 }
+impl GetReplicas {
+    /// Return new `Self` to fetch a replica by its `ReplicaId`
+    pub fn new(uuid: &ReplicaId) -> Self {
+        Self {
+            filter: Filter::Replica(uuid.clone()),
+        }
+    }
+}
 
 /// Replica information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -185,6 +193,17 @@ pub struct DestroyReplica {
     pub uuid: ReplicaId,
     /// delete by owners
     pub disowners: ReplicaOwners,
+}
+impl DestroyReplica {
+    /// Return a new `Self` from the provided arguments
+    pub fn new(node: &NodeId, pool: &PoolId, uuid: &ReplicaId, disowners: &ReplicaOwners) -> Self {
+        Self {
+            node: node.clone(),
+            pool: pool.clone(),
+            uuid: uuid.clone(),
+            disowners: disowners.clone(),
+        }
+    }
 }
 
 /// Share Replica Request
@@ -364,6 +383,17 @@ pub struct AddNexusReplica {
     /// auto start rebuilding
     pub auto_rebuild: bool,
 }
+impl AddNexusReplica {
+    /// Return new `Self` from it's properties
+    pub fn new(node: &NodeId, nexus: &NexusId, replica: &ReplicaUri, auto_rebuild: bool) -> Self {
+        Self {
+            node: node.clone(),
+            nexus: nexus.clone(),
+            replica: replica.clone(),
+            auto_rebuild,
+        }
+    }
+}
 
 impl From<&AddNexusReplica> for AddNexusChild {
     fn from(add: &AddNexusReplica) -> Self {
@@ -388,7 +418,16 @@ pub struct RemoveNexusReplica {
     /// UUID and URI of the replica to be added
     pub replica: ReplicaUri,
 }
-
+impl RemoveNexusReplica {
+    /// Return new `Self`
+    pub fn new(node: &NodeId, nexus: &NexusId, replica: &ReplicaUri) -> Self {
+        Self {
+            node: node.clone(),
+            nexus: nexus.clone(),
+            replica: replica.clone(),
+        }
+    }
+}
 impl From<&RemoveNexusReplica> for RemoveNexusChild {
     fn from(rm: &RemoveNexusReplica) -> Self {
         Self {

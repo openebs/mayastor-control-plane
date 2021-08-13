@@ -32,6 +32,11 @@ impl Volume {
         self.spec.clone()
     }
 
+    /// Get the volume's uuid.
+    pub fn uuid(&self) -> &VolumeId {
+        &self.spec.uuid
+    }
+
     /// Get the volume state.
     pub fn get_state(&self) -> Option<VolumeState> {
         self.state.clone()
@@ -78,7 +83,7 @@ impl From<VolumeState> for models::VolumeState {
             children: volume.children.into_vec(),
             protocol: volume.protocol.into(),
             size: volume.size,
-            status: Some(volume.status.into()),
+            status: volume.status.into(),
             uuid: apis::Uuid::try_from(volume.uuid).unwrap(),
         }
     }
@@ -89,7 +94,7 @@ impl From<models::VolumeState> for VolumeState {
         Self {
             uuid: state.uuid.to_string().into(),
             size: state.size,
-            status: state.status.unwrap_or(models::VolumeStatus::Unknown).into(),
+            status: state.status.into(),
             protocol: state.protocol.into(),
             children: state.children.into_vec(),
         }
@@ -320,6 +325,14 @@ pub struct GetVolumes {
     /// filter volumes
     pub filter: Filter,
 }
+impl GetVolumes {
+    /// Return new `Self` to retrieve the specified volume
+    pub fn new(volume: &VolumeId) -> Self {
+        Self {
+            filter: Filter::Volume(volume.clone()),
+        }
+    }
+}
 
 /// Create volume
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -450,7 +463,7 @@ pub struct SetVolumeReplica {
     pub replicas: u8,
 }
 impl SetVolumeReplica {
-    /// Create new `SetVolumeReplica` based on the provided arguments
+    /// Create new `Self` based on the provided arguments
     pub fn new(uuid: VolumeId, replicas: u8) -> Self {
         Self { uuid, replicas }
     }
@@ -462,4 +475,16 @@ impl SetVolumeReplica {
 pub struct DestroyVolume {
     /// uuid of the volume
     pub uuid: VolumeId,
+}
+impl DestroyVolume {
+    /// Create new `Self` to destroy the specified volume
+    pub fn new(volume: &VolumeId) -> Self {
+        Self {
+            uuid: volume.clone(),
+        }
+    }
+    /// Get the volume's identification
+    pub fn uuid(&self) -> &VolumeId {
+        &self.uuid
+    }
 }

@@ -8,7 +8,10 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::{openapi::models, store::UuidString};
+use crate::types::v0::{
+    openapi::models,
+    store::{OperationSequence, OperationSequencer, UuidString},
+};
 use serde::{Deserialize, Serialize};
 use std::convert::From;
 
@@ -53,7 +56,7 @@ impl From<&CreatePool> for PoolSpec {
             disks: request.disks.clone(),
             status: PoolSpecStatus::Creating,
             labels: vec![],
-            updating: false,
+            sequencer: OperationSequence::new(request.id.clone()),
             operation: None,
         }
     }
@@ -62,6 +65,7 @@ impl PartialEq<CreatePool> for PoolSpec {
     fn eq(&self, other: &CreatePool) -> bool {
         let mut other = PoolSpec::from(other);
         other.status = self.status.clone();
+        other.sequencer = self.sequencer.clone();
         &other == self
     }
 }
@@ -81,9 +85,19 @@ pub struct PoolSpec {
     pub labels: Vec<PoolLabel>,
     /// Update in progress
     #[serde(skip)]
-    pub updating: bool,
+    pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<PoolOperationState>,
+}
+
+impl OperationSequencer for PoolSpec {
+    fn as_ref(&self) -> &OperationSequence {
+        &self.sequencer
+    }
+
+    fn as_mut(&mut self) -> &mut OperationSequence {
+        &mut self.sequencer
+    }
 }
 
 impl UuidString for PoolSpec {
@@ -127,11 +141,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
 
     fn clear_op(&mut self) {
         self.operation = None;
-        self.updating = false;
     }
 
     fn start_op(&mut self, operation: PoolOperation) {
-        self.updating = true;
         self.operation = Some(PoolOperationState {
             operation,
             result: None,
@@ -142,7 +154,6 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
-        self.updating = false;
     }
 }
 

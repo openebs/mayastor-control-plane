@@ -5897,7 +5897,7 @@ components:
       example:
         grpcEndpoint: 10.1.0.5:10124
         id: ksnode-1
-        state: Online
+        status: Online
       properties:
         grpcEndpoint:
           description: gRPC endpoint of the mayastor instance
@@ -5920,7 +5920,7 @@ components:
         state:
           grpcEndpoint: 10.1.0.5:10124
           id: ksnode-1
-          state: Online
+          status: Online
         spec:
           grpcEndpoint: 10.1.0.5:10124
           id: ksnode-1
@@ -6329,15 +6329,14 @@ components:
     VolumeSpec:
       description: User specification of a volume.
       example:
-        labels:
-        - ""
+        labels: null
         num_paths: 1
         num_replicas: 2
         operation: null
         protocol: none
         size: 80241024
         state: Created
-        target_node: null
+        target_node: ksnode-1
         uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
       properties:
         labels:
@@ -6395,10 +6394,10 @@ components:
     VolumeStatus:
       description: current volume status
       enum:
+      - Unknown
       - Online
       - Degraded
       - Faulted
-      - Unknown
       type: string
     VolumeShareProtocol:
       description: Volume Share Protocol
@@ -6452,7 +6451,7 @@ components:
           uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
         protocol: none
         size: 80241024
-        state: Online
+        status: Online
         uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
       properties:
         children:
@@ -6478,6 +6477,7 @@ components:
       - protocol
       - size
       - state
+      - status
       - uuid
       type: object
     Volume:
@@ -6485,18 +6485,8 @@ components:
         Volumes
         Volume information
       example:
-        spec:
-        - labels: ""
-          num_paths: 1
-          num_replicas: 2
-          operation: null
-          protocol: none
-          size: 80241024
-          state: Created
-          target_node: null
-          uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
         state:
-        - children:
+          children:
           - children:
             - rebuildProgress: null
               state: Online
@@ -6510,8 +6500,18 @@ components:
             uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
           protocol: none
           size: 80241024
-          state: Online
+          status: Online
           uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
+        spec:
+          labels: null
+          num_paths: 1
+          num_replicas: 2
+          operation: null
+          protocol: none
+          size: 80241024
+          state: Created
+          target_node: ksnode-1
+          uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
       properties:
         spec:
           $ref: '#/components/schemas/VolumeSpec'

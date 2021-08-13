@@ -1,3 +1,4 @@
+mod nexus;
 mod persistent_store;
 pub mod poller;
 mod volume;

@@ -27,8 +27,8 @@ pub struct VolumeState {
     /// size of the volume in bytes
     #[serde(rename = "size")]
     pub size: u64,
-    #[serde(rename = "status", skip_serializing_if = "Option::is_none")]
-    pub status: Option<crate::models::VolumeStatus>,
+    #[serde(rename = "status")]
+    pub status: crate::models::VolumeStatus,
     /// name of the volume
     #[serde(rename = "uuid")]
     pub uuid: uuid::Uuid,
@@ -40,13 +40,14 @@ impl VolumeState {
         children: impl IntoVec<crate::models::Nexus>,
         protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
+        status: impl Into<crate::models::VolumeStatus>,
         uuid: impl Into<uuid::Uuid>,
     ) -> VolumeState {
         VolumeState {
             children: children.into_vec(),
             protocol: protocol.into(),
             size: size.into(),
-            status: None,
+            status: status.into(),
             uuid: uuid.into(),
         }
     }
@@ -55,7 +56,7 @@ impl VolumeState {
         children: impl IntoVec<crate::models::Nexus>,
         protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
-        status: impl Into<Option<crate::models::VolumeStatus>>,
+        status: impl Into<crate::models::VolumeStatus>,
         uuid: impl Into<uuid::Uuid>,
     ) -> VolumeState {
         VolumeState {

@@ -2,9 +2,12 @@ use crate::core::registry::Registry;
 use common::errors::SvcError;
 use common_lib::{
     mbus_api::message_bus::v0::Nexuses,
-    types::v0::message_bus::{
-        AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
-        RemoveNexusChild, ShareNexus, UnshareNexus,
+    types::v0::{
+        message_bus::{
+            AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
+            RemoveNexusChild, ShareNexus, UnshareNexus,
+        },
+        store::OperationMode,
     },
 };
 
@@ -43,7 +46,7 @@ impl Service {
     pub(super) async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         self.registry
             .specs
-            .create_nexus(&self.registry, request)
+            .create_nexus(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -52,7 +55,7 @@ impl Service {
     pub(super) async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         self.registry
             .specs
-            .destroy_nexus(&self.registry, request, true)
+            .destroy_nexus(&self.registry, request, true, OperationMode::Exclusive)
             .await
     }
 
@@ -61,7 +64,7 @@ impl Service {
     pub(super) async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         self.registry
             .specs
-            .share_nexus(&self.registry, request)
+            .share_nexus(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -70,7 +73,7 @@ impl Service {
     pub(super) async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         self.registry
             .specs
-            .unshare_nexus(&self.registry, request)
+            .unshare_nexus(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -79,7 +82,7 @@ impl Service {
     pub(super) async fn add_nexus_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         self.registry
             .specs
-            .add_nexus_child(&self.registry, request)
+            .add_nexus_child(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -91,7 +94,7 @@ impl Service {
     ) -> Result<(), SvcError> {
         self.registry
             .specs
-            .remove_nexus_child(&self.registry, request)
+            .remove_nexus_child(&self.registry, request, OperationMode::Exclusive)
             .await
     }
 }

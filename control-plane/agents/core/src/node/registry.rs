@@ -1,7 +1,7 @@
 use crate::core::{registry::Registry, wrapper::NodeWrapper};
-use common::errors::{NodeNotFound, SvcError};
+use common::errors::SvcError;
 use common_lib::types::v0::message_bus::{NodeId, NodeState, Register};
-use snafu::OptionExt;
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -27,19 +27,36 @@ impl Registry {
         &self,
         node_id: &NodeId,
     ) -> Result<Arc<Mutex<NodeWrapper>>, SvcError> {
-        let nodes = self.nodes.read().await;
-        nodes.get(node_id).cloned().context(NodeNotFound {
-            node_id: node_id.to_owned(),
-        })
+        match self.nodes.read().await.get(node_id).cloned() {
+            None => {
+                if self.specs.get_node(node_id).is_ok() {
+                    Err(SvcError::NodeNotOnline {
+                        node: node_id.to_owned(),
+                    })
+                } else {
+                    Err(SvcError::NodeNotFound {
+                        node_id: node_id.to_owned(),
+                    })
+                }
+            }
+            Some(node) => Ok(node),
+        }
     }
 
     /// Get node state by its `NodeId`
     pub(crate) async fn get_node_state(&self, node_id: &NodeId) -> Result<NodeState, SvcError> {
-        let nodes = self.nodes.read().await;
-        match nodes.get(node_id) {
-            None => Err(SvcError::NodeNotFound {
-                node_id: node_id.to_owned(),
-            }),
+        match self.nodes.read().await.get(node_id).cloned() {
+            None => {
+                if self.specs.get_node(node_id).is_ok() {
+                    Err(SvcError::NodeNotOnline {
+                        node: node_id.to_owned(),
+                    })
+                } else {
+                    Err(SvcError::NodeNotFound {
+                        node_id: node_id.to_owned(),
+                    })
+                }
+            }
             Some(node) => Ok(node.lock().await.node_state().clone()),
         }
     }
