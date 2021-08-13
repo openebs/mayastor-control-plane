@@ -1,25 +1,19 @@
 Feature: Volume creation
 
   Background:
-    Given one or more Mayastor instances
-    And a control plane
+    Given a control plane, Mayastor instances and a pool
 
-  Scenario: successful creation
-    When a user attempts to create a volume
-    And there are at least as many suitable pools as there are requested replicas
-    Then the volume should be created
-    And the volume object should be returned
+  Scenario: sufficient suitable pools
+    Given a request for a volume
+    When the number of volume replicas is less than or equal to the number of suitable pools
+    Then volume creation should succeed with a returned volume object
 
-  Scenario: spec cannot be satisfied
-    When a user attempts to create a volume
-    And the spec of the volume cannot be satisfied
-    Then the volume should not be created
-    And the reason the volume could not be created should be returned
+  Scenario: desired number of replicas cannot be created
+    Given a request for a volume
+    When the number of suitable pools is less than the number of desired volume replicas
+    Then volume creation should fail with an insufficient storage error
 
-  Scenario: provisioning failure
-    When a user attempts to create a volume
-    And the request can initially be satisfied
-    And during the provisioning there is a failure
-    Then the volume should not be created
-    And the reason the volume could not be created should be returned
-    And the partially created volume should eventually be cleaned up
+  Scenario: provisioning failure due to missing Mayastor
+    Given a request for a volume
+    When there are no available Mayastor instances
+    Then volume creation should fail with an insufficient storage error
