@@ -7,3 +7,5 @@
 /package.json
 /default.etcd/
 /node_modules/
+tests/bdd/__pycache__/
+tests/bdd/openapi/

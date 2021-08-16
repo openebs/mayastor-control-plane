@@ -47,6 +47,7 @@ String cron_schedule = BRANCH_NAME == "develop" ? "0 2 * * *" : ""
 
 run_linter = true
 rust_test = true
+bdd_test = true
 
 pipeline {
   agent none
@@ -91,6 +92,7 @@ pipeline {
         sh 'nix-shell --run "cargo fmt --all -- --check"'
         sh 'nix-shell --run "cargo clippy --all-targets -- -D warnings"'
         sh 'nix-shell --run "./scripts/generate-openapi-bindings.sh"'
+        sh 'nix-shell --run "black tests/bdd"'
       }
     }
     stage('test') {
@@ -118,6 +120,17 @@ pipeline {
               // in case of abnormal termination of any nvmf test
               sh 'sudo nvme disconnect-all'
             }
+          }
+        }
+        stage('BDD tests') {
+          when{
+            expression { bdd_test == true }
+          }
+          agent { label 'nixos-mayastor' }
+          steps {
+            sh 'printenv'
+            sh 'nix-shell --run "cargo build --bins"'
+            sh 'nix-shell --run "./scripts/bdd-tests.sh"'
           }
         }
       }// parallel stages block

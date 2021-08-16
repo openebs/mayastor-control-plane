@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
 
-set -euxo pipefail
-
-if [ "${SRCDIR:-unset}" = unset ]
-then
-  echo "SRCDIR must be set to the root of your working tree" 2>&1
-  exit 1
-fi
-
-cd "$SRCDIR"
+DIR_NAME="$(dirname "$0")"
 
 virtualenv --no-setuptools tests/bdd/venv
-source ./tests/bdd/venv/bin/activate
-pip install -r tests/bdd/requirements.txt
-export PYTHONPATH=$PYTHONPATH:$SRCDIR/tests/bdd/openapi
+source "$DIR_NAME"/venv/bin/activate
+pip install -r "$DIR_NAME"/requirements.txt
+export PYTHONPATH=$PYTHONPATH:$DIR_NAME/openapi
+export ROOT_DIR="$DIR_NAME/../.."

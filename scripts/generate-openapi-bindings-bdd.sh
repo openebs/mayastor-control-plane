@@ -2,9 +2,13 @@
 
 set -e
 
-SCRIPTDIR=$(dirname "$0")
-TARGET="$SCRIPTDIR/../tests/bdd/openapi"
-SPEC="$SCRIPTDIR/../control-plane/rest/openapi-specs/v0_api_spec.yaml"
+if [ -z "$1" ] ; then
+    echo "Failed to provide root directory"
+fi
+
+ROOT_DIR="$1"
+TARGET="$ROOT_DIR/tests/bdd/openapi"
+SPEC="$ROOT_DIR/control-plane/rest/openapi-specs/v0_api_spec.yaml"
 
 # Regenerate the bindings only if the rest src changed
 check_spec="no"

@@ -13,6 +13,7 @@ import common
 from openapi.openapi_client.model.create_pool_body import CreatePoolBody
 from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
 from openapi.openapi_client.model.protocol import Protocol
+from openapi.openapi_client.exceptions import ApiValueError
 
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
@@ -133,7 +134,7 @@ def an_additional_replica_should_be_added_to_the_volume(replica_ctx):
 
 
 @then("setting the number of replicas to zero should fail with a suitable error")
-def the_replica_removal_should_fail_with_a_suitable_error():
+def setting_the_number_of_replicas_to_zero_should_fail_with_a_suitable_error():
     """the replica removal should fail with a suitable error."""
     volumes_api = common.get_volumes_api()
     volume = volumes_api.get_volume(VOLUME_UUID)
@@ -141,7 +142,4 @@ def the_replica_removal_should_fail_with_a_suitable_error():
     try:
         volumes_api.put_volume_replica_count(VOLUME_UUID, 0)
     except Exception as e:
-        assert (
-            "Invalid value for `replica_count`, must be a value greater than or equal to `1`"
-            == str(e)
-        )
+        assert "ApiValueError" in str(type(e))

@@ -34,14 +34,14 @@ def get_pools_api():
 
 # Start containers
 def deployer_start(num_mayastors):
-    deployer_path = os.environ["SRCDIR"] + "/target/debug/deployer"
+    deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
     # Start containers and wait for them to become active.
     subprocess.run([deployer_path, "start", "-m", str(num_mayastors), "-w", "10s"])
 
 
 # Stop containers
 def deployer_stop():
-    deployer_path = os.environ["SRCDIR"] + "/target/debug/deployer"
+    deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
     subprocess.run([deployer_path, "stop"])
     # Allow time for containers to stop
     time.sleep(2)

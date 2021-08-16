@@ -84,9 +84,9 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         [],
         Protocol("none"),
         VOLUME_SIZE,
+        VolumeStatus("Online"),
         VOLUME_UUID,
         _configuration=cfg,
-        status=VolumeStatus("Online"),
     )
 
     volume = volume_ctx[VOLUME_CTX_KEY]

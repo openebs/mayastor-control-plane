@@ -189,9 +189,9 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
         [],
         Protocol("none"),
         VOLUME_SIZE,
+        VolumeStatus("Online"),
         VOLUME_UUID,
         _configuration=cfg,
-        status=VolumeStatus("Online"),
     )
 
     # Check the volume object returned is as expected
