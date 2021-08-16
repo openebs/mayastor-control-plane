@@ -110,6 +110,50 @@ impl NexusSpec {
     }
 }
 
+macro_rules! nexus_log {
+    ($Self:tt, $Level:expr, $Message:tt) => {
+        match tracing::Span::current().field("nexus.uuid") {
+            None => {
+                if let Some(volume_uuid) = &$Self.owner {
+                    let _span = tracing::span!($Level, "log_event", volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid).entered();
+                    tracing::event!($Level, volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid, $Message);
+                } else {
+                    let _span = tracing::span!($Level, "log_event", nexus.uuid = %$Self.uuid).entered();
+                    tracing::event!($Level, nexus.uuid = %$Self.uuid, $Message);
+                }
+            }
+            Some(_) => {
+                if let Some(volume_uuid) = &$Self.owner {
+                    tracing::event!($Level, volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid, $Message);
+                } else {
+                    tracing::event!($Level, nexus.uuid = %$Self.uuid, $Message);
+                }
+            }
+        }
+    };
+}
+crate::impl_trace_str_log!(nexus_log, NexusSpec);
+
+macro_rules! nexus_span {
+    ($Self:tt, $Level:expr, $func:expr) => {
+        match tracing::Span::current().field("nexus.uuid") {
+            None => {
+                if let Some(volume_uuid) = &$Self.owner {
+                    let _span = tracing::span!($Level, "log_event", volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid).entered();
+                    $func();
+                } else {
+                    let _span = tracing::span!($Level, "log_event", nexus.uuid = %$Self.uuid).entered();
+                    $func();
+                }
+            }
+            Some(_) => {
+                $func();
+            }
+        }
+    };
+}
+crate::impl_trace_span!(nexus_span, NexusSpec);
+
 impl OperationSequencer for NexusSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer

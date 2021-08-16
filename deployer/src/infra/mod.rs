@@ -122,6 +122,10 @@ macro_rules! impl_ctrlp_agents {
                     if let Some(period) = &options.reconcile_idle_period {
                         binary = binary.with_args(vec!["--reconcile-idle-period", &period.to_string()]);
                     }
+                    if options.jaeger {
+                        let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
+                        binary = binary.with_args(vec!["--jaeger", &jaeger_config]);
+                    }
                 }
                 Ok(cfg.add_container_bin(&name, binary))
             }

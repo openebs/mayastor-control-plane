@@ -89,7 +89,7 @@ impl ChildSorters {
     /// Sort replicas by their nexus child (state and rebuild progress)
     /// todo: should we use weights instead (like moac)?
     pub(crate) fn sort(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
-        match Self::sort_by_healthy(a, b) {
+        match Self::sort_by_health(a, b) {
             Ordering::Equal => match Self::sort_by_child(a, b) {
                 Ordering::Equal => {
                     let childa_is_local = !a.spec().share.shared();
@@ -107,13 +107,13 @@ impl ChildSorters {
             ord => ord,
         }
     }
-    // remove unhealthy replicas first
-    fn sort_by_healthy(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
+    // sort replicas by their health: prefer healthy replicas over unhealthy
+    fn sort_by_health(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
         match a.child_info() {
             None => {
                 match b.child_info() {
                     Some(b_info) if b_info.healthy => {
-                        // remove unhealthy replicas first
+                        // sort replicas by their health: prefer healthy replicas over unhealthy
                         std::cmp::Ordering::Less
                     }
                     _ => std::cmp::Ordering::Equal,

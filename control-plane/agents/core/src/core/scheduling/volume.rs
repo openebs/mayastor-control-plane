@@ -304,7 +304,7 @@ pub(crate) struct ReplicaRemovalCandidates {
 impl ReplicaRemovalCandidates {
     /// Get the next healthy replica removal candidate
     fn next_healthy(&mut self) -> Option<ReplicaItem> {
-        let replica_count = self.context.spec.target_num_replicas();
+        let replica_count = self.context.spec.desired_num_replicas();
         let healthy_online = self.healthy.iter().filter(|replica| match replica.state() {
             None => false,
             Some(state) => state.online(),
@@ -342,7 +342,9 @@ impl ReplicaRemovalCandidates {
         let is_not_healthy = |item: &&ReplicaItem| -> bool { !is_healthy(item) };
         Self {
             context,
-            // reverse so we can pop them
+            // replicas were sorted with the least preferred replica at the front
+            // since we're going to "pop" them here, we now need to move the least preferred to the
+            // back and that's why we need the "rev"
             healthy: items.iter().filter(is_healthy).rev().cloned().collect(),
             unhealthy: items.iter().filter(is_not_healthy).rev().cloned().collect(),
         }

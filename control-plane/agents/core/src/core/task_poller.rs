@@ -108,7 +108,7 @@ impl PollContext {
 #[async_trait::async_trait]
 pub(crate) trait TaskPoller: Send + Sync + std::fmt::Debug {
     /// Attempts to poll this poller, which will poll itself depending on the `PollEvent`
-    #[tracing::instrument(skip(context), err)]
+    #[tracing::instrument(skip(context), level = "trace", err)]
     async fn try_poll(&mut self, context: &PollContext) -> PollResult {
         tracing::trace!("Entering trace call");
         let result = if self.poll_ready(context).await {

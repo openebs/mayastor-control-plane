@@ -468,7 +468,7 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::LastHealthyReplica { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
-                resource: ResourceKind::ReplicaSpec,
+                resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

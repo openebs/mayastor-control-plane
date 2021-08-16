@@ -16,6 +16,7 @@ use common_lib::{
     },
 };
 
+use common_lib::types::v0::store::{TraceSpan, TraceStrLog};
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::{cmp::Ordering, sync::Arc};
@@ -42,6 +43,7 @@ impl TaskPoller for HotSpareReconciler {
     }
 }
 
+#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
 async fn hot_spare_reconcile(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
@@ -103,6 +105,7 @@ async fn hot_spare_nexus_reconcile(
     squash_results(results)
 }
 
+#[tracing::instrument(skip(context, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid))]
 async fn generic_nexus_reconciler(
     nexus_spec: &Arc<Mutex<NexusSpec>>,
     context: &PollContext,
@@ -154,6 +157,7 @@ async fn missing_children_remover(
 /// Given a degraded volume
 /// When the nexus spec has a different number of children to the number of volume replicas
 /// Then the nexus spec should eventually have as many children as the number of volume replicas
+#[tracing::instrument(skip(context, volume_spec, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid))]
 async fn nexus_replica_count_reconciler(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     nexus_spec: &Arc<Mutex<NexusSpec>>,
@@ -183,13 +187,13 @@ async fn nexus_replica_count_reconciler(
 
     match nexus_replica_children.cmp(&volume_replicas) {
         Ordering::Less => {
-            tracing::warn!(
-                "Nexus '{}' of Volume '{}' only has '{}' replica(s) but the volume requires '{}' replica(s)",
-                nexus_spec_clone.uuid,
-                vol_spec_clone.uuid,
-                nexus_replica_children,
-                volume_replicas
-            );
+            nexus_spec_clone.warn_span(|| {
+                tracing::warn!(
+                    "The nexus only has '{}' replica(s) but the volume requires '{}' replica(s)",
+                    nexus_replica_children,
+                    volume_replicas
+                )
+            });
             context
                 .registry()
                 .specs
@@ -203,13 +207,13 @@ async fn nexus_replica_count_reconciler(
                 .await?;
         }
         Ordering::Greater => {
-            tracing::warn!(
-                "Nexus '{}' of Volume '{}' has more replicas(s) ('{}') than the required replica count ('{}')",
-                nexus_spec_clone.uuid,
-                vol_spec_clone.uuid,
-                nexus_replica_children,
-                volume_replicas
-            );
+            nexus_spec_clone.warn_span(|| {
+                tracing::warn!(
+                    "The nexus has more replicas(s) ('{}') than the required replica count ('{}')",
+                    nexus_replica_children,
+                    volume_replicas
+                )
+            });
             context
                 .registry()
                 .specs
@@ -236,6 +240,7 @@ async fn nexus_replica_count_reconciler(
 /// When the number of created volume replicas is different to the required number of replicas
 /// Then the number of created volume replicas should eventually match the required number of
 /// replicas
+#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid))]
 async fn volume_replica_count_reconciler(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
@@ -250,12 +255,14 @@ async fn volume_replica_count_reconciler(
 
     match current_replica_count.cmp(&required_replica_count) {
         Ordering::Less => {
-            tracing::warn!(
-                "Volume '{}' only has '{}' replica(s) but it should have '{}'. Creating more...",
-                volume_spec_clone.uuid,
-                current_replica_count,
-                required_replica_count
-            );
+            volume_spec_clone.warn_span(|| {
+                tracing::warn!(
+                    "The volume has '{}' replica(s) but it should have '{}'. Creating more...",
+                    current_replica_count,
+                    required_replica_count
+                )
+            });
+
             let diff = required_replica_count - current_replica_count;
             let candidates =
                 get_volume_replica_candidates(context.registry(), &volume_spec_clone).await?;
@@ -263,32 +270,36 @@ async fn volume_replica_count_reconciler(
             match context
                 .registry()
                 .specs
-                .create_volume_replicas(context.registry(), &volume_uuid, candidates, diff, mode)
+                .create_volume_replicas(
+                    context.registry(),
+                    &volume_spec_clone,
+                    candidates,
+                    diff,
+                    mode,
+                )
                 .await
             {
                 result if result > 0 => {
                     current_replica_count += result;
-                    tracing::info!(
-                        "Successfully created '{}' new replica(s) for volume '{}'",
-                        result,
-                        volume_spec_clone.uuid,
-                    );
+
+                    volume_spec_clone.info_span(|| {
+                        tracing::info!("Successfully created '{}' new replica(s)", result)
+                    });
                 }
                 _ => {
-                    tracing::error!(
-                        "Failed to create replicas for volume '{}'",
-                        volume_spec_clone.uuid,
-                    );
+                    volume_spec_clone.error("Failed to create replicas");
                 }
             }
         }
         Ordering::Greater => {
-            tracing::warn!(
-                "Volume '{}' has '{}' replica(s) but it should only have '{}'. Removing...",
-                volume_spec_clone.uuid,
-                current_replica_count,
-                required_replica_count
-            );
+            volume_spec_clone.warn_span(|| {
+                tracing::warn!(
+                    "The volume has '{}' replica(s) but it should only have '{}'. Removing...",
+                    current_replica_count,
+                    required_replica_count
+                )
+            });
+
             let diff = current_replica_count - required_replica_count;
             match context
                 .registry()
@@ -297,17 +308,15 @@ async fn volume_replica_count_reconciler(
                 .await
             {
                 Ok(_) => {
-                    tracing::info!(
-                        "Successfully removed unused replicas from Volume '{}'",
-                        volume_spec_clone.uuid,
-                    );
+                    volume_spec_clone.info("Successfully removed unused replicas");
                 }
                 Err(error) => {
-                    tracing::error!(
-                        "Failed to remove unused replicas from volume '{}', error: '{}'",
-                        volume_spec_clone.uuid,
-                        error.full_string()
-                    );
+                    volume_spec_clone.warn_span(|| {
+                        tracing::warn!(
+                            "Failed to remove unused replicas from volume, error: '{}'",
+                            error.full_string()
+                        )
+                    });
                 }
             }
         }

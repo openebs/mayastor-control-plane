@@ -108,6 +108,36 @@ pub struct VolumeSpec {
     pub operation: Option<VolumeOperationState>,
 }
 
+macro_rules! volume_log {
+    ($Self:tt, $Level:expr, $Message:tt) => {
+        match tracing::Span::current().field("volume.uuid") {
+            None => {
+                let _span = tracing::span!($Level, "log_event", volume.uuid = %$Self.uuid).entered();
+                tracing::event!($Level, volume.uuid = %$Self.uuid, $Message);
+            }
+            Some(_) => {
+                tracing::event!($Level, volume.uuid = %$Self.uuid, $Message);
+            }
+        }
+    };
+}
+crate::impl_trace_str_log!(volume_log, VolumeSpec);
+
+macro_rules! volume_span {
+    ($Self:tt, $Level:expr, $func:expr) => {
+        match tracing::Span::current().field("volume.uuid") {
+            None => {
+                let _span = tracing::span!($Level, "log_event", volume.uuid = %$Self.uuid).entered();
+                $func();
+            }
+            Some(_) => {
+                $func();
+            }
+        }
+    };
+}
+crate::impl_trace_span!(volume_span, VolumeSpec);
+
 impl OperationSequencer for VolumeSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
@@ -127,9 +157,9 @@ impl VolumeSpec {
             .unwrap_or_default()
             .allowed_nodes
     }
-    /// target volume replica count if during `SetReplica` operation
+    /// desired volume replica count if during `SetReplica` operation
     /// or otherwise the current num_replicas
-    pub fn target_num_replicas(&self) -> u8 {
+    pub fn desired_num_replicas(&self) -> u8 {
         match &self.operation {
             Some(operation) => match operation.operation {
                 VolumeOperation::SetReplica(count) => count,

@@ -22,14 +22,17 @@ impl Service {
     }
 
     /// Get volumes
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid))]
     pub(super) async fn get_volumes(&self, request: &GetVolumes) -> Result<Volumes, SvcError> {
         let volumes = self.registry.get_volumes().await;
 
         // The filter criteria is matched against the volume state.
         let filtered_volumes = match &request.filter {
             Filter::None => volumes,
-            Filter::Volume(volume_id) => vec![self.registry.get_volume(volume_id).await?],
+            Filter::Volume(volume_id) => {
+                tracing::Span::current().record("volume.uuid", &volume_id.as_str());
+                vec![self.registry.get_volume(volume_id).await?]
+            }
             filter => {
                 return Err(SvcError::InvalidFilter {
                     filter: filter.clone(),
@@ -41,7 +44,7 @@ impl Service {
     }
 
     /// Create volume
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
         self.registry
             .specs
@@ -50,7 +53,7 @@ impl Service {
     }
 
     /// Destroy volume
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
         self.registry
             .specs
@@ -59,7 +62,7 @@ impl Service {
     }
 
     /// Share volume
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
         self.registry
             .specs
@@ -68,7 +71,7 @@ impl Service {
     }
 
     /// Unshare volume
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
         self.registry
             .specs
@@ -77,7 +80,7 @@ impl Service {
     }
 
     /// Publish volume
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
         self.registry
             .specs
@@ -86,7 +89,7 @@ impl Service {
     }
 
     /// Unpublish volume
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unpublish_volume(
         &self,
         request: &UnpublishVolume,
@@ -98,7 +101,7 @@ impl Service {
     }
 
     /// Set volume replica
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn set_volume_replica(
         &self,
         request: &SetVolumeReplica,

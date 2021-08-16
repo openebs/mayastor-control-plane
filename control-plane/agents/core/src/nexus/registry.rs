@@ -63,12 +63,12 @@ impl Registry {
 
     /// Fetch the `NexusInfo` from the persistent store
     /// Returns an error if we fail to query the persistent store
-    /// Returns Ok(None) if the entry does not exist
-    /// allow_missing determines whether not finding the key is an allow or not
+    /// Returns Ok(None) if the entry does not exist or if no nexus_uuid was provided
+    /// missing_key_is_error determines whether not finding the key is considered an error or not
     pub(crate) async fn get_nexus_info(
         &self,
         nexus_uuid: Option<&NexusId>,
-        allow_missing: bool,
+        missing_key_is_error: bool,
     ) -> Result<Option<NexusInfo>, SvcError> {
         match nexus_uuid {
             None => Ok(None),
@@ -81,7 +81,7 @@ impl Registry {
                         info.uuid = nexus_uuid.clone();
                         Ok(Some(info))
                     }
-                    Err(SvcError::StoreMissingEntry { .. }) if allow_missing => Ok(None),
+                    Err(SvcError::StoreMissingEntry { .. }) if missing_key_is_error => Ok(None),
                     Err(error) => Err(error),
                 }
             }

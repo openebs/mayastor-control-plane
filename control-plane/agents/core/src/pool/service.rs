@@ -23,7 +23,7 @@ impl Service {
     }
 
     /// Get pools according to the filter
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn get_pools(&self, request: &GetPools) -> Result<Pools, SvcError> {
         let filter = request.filter.clone();
         match filter {
@@ -58,7 +58,7 @@ impl Service {
     }
 
     /// Get replicas according to the filter
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn get_replicas(&self, request: &GetReplicas) -> Result<Replicas, SvcError> {
         let filter = request.filter.clone();
         match filter {
@@ -127,7 +127,7 @@ impl Service {
     }
 
     /// Create pool
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         self.registry
             .specs
@@ -136,7 +136,7 @@ impl Service {
     }
 
     /// Destroy pool
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         self.registry
             .specs
@@ -145,7 +145,7 @@ impl Service {
     }
 
     /// Create replica
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn create_replica(
         &self,
         request: &CreateReplica,
@@ -157,7 +157,7 @@ impl Service {
     }
 
     /// Destroy replica
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         self.registry
             .specs
@@ -166,7 +166,7 @@ impl Service {
     }
 
     /// Share replica
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         self.registry
             .specs
@@ -175,7 +175,7 @@ impl Service {
     }
 
     /// Unshare replica
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
         self.registry
             .specs

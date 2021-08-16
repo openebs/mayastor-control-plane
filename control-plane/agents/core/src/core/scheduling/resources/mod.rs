@@ -51,7 +51,7 @@ impl PoolItemLister {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ReplicaItem {
-    replica: ReplicaSpec,
+    replica_spec: ReplicaSpec,
     replica_state: Option<Replica>,
     child_uri: Option<ChildUri>,
     child_state: Option<Child>,
@@ -70,7 +70,7 @@ impl ReplicaItem {
         child_info: Option<ChildInfo>,
     ) -> Self {
         Self {
-            replica,
+            replica_spec: replica,
             replica_state: replica_state.cloned(),
             child_uri: child_uri.first().cloned(),
             // ANA not currently supported
@@ -81,7 +81,7 @@ impl ReplicaItem {
     }
     /// Get a reference to the replica spec
     pub(crate) fn spec(&self) -> &ReplicaSpec {
-        &self.replica
+        &self.replica_spec
     }
     /// Get a reference to the replica state
     pub(crate) fn state(&self) -> Option<&Replica> {

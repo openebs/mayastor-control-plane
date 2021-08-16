@@ -11,6 +11,7 @@ use common_lib::types::v0::message_bus::ChannelVs;
 
 use structopt::StructOpt;
 use tracing::info;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct CliArgs {
@@ -55,20 +56,49 @@ pub(crate) struct CliArgs {
     /// The timeout for every node request operation (gRPC)
     #[structopt(long, short, default_value = "6s")]
     pub(crate) request: humantime::Duration,
+
+    /// Trace rest requests to the Jaeger endpoint agent
+    #[structopt(long, short)]
+    jaeger: Option<String>,
+}
+
+const RUST_LOG_QUIET_DEFAULTS: &str =
+    "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info";
+
+fn rust_log_add_quiet_defaults(
+    current: tracing_subscriber::EnvFilter,
+) -> tracing_subscriber::EnvFilter {
+    let main = match current.to_string().as_str() {
+        "debug" => "debug",
+        "trace" => "trace",
+        _ => return current,
+    };
+    let logs = format!("{},{}", main, RUST_LOG_QUIET_DEFAULTS);
+    tracing_subscriber::EnvFilter::try_new(logs).unwrap()
 }
 
 fn init_tracing() {
-    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
-        tracing_subscriber::fmt()
-            .pretty()
-            .with_env_filter(filter)
-            .init();
-    } else {
-        tracing_subscriber::fmt()
-            .pretty()
-            .with_env_filter("info")
-            .init();
-    }
+    let filter = rust_log_add_quiet_defaults(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+    );
+
+    let subscriber = Registry::default()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().pretty());
+
+    match CliArgs::from_args().jaeger {
+        Some(jaeger) => {
+            let tracer = opentelemetry_jaeger::new_pipeline()
+                .with_agent_endpoint(jaeger)
+                .with_service_name("core-agent")
+                .install_simple()
+                .expect("Should be able to initialise the exporter");
+            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+            subscriber.with(telemetry).init();
+        }
+        None => subscriber.init(),
+    };
 }
 
 #[tokio::main]
@@ -76,7 +106,7 @@ async fn main() {
     init_tracing();
 
     let cli_args = CliArgs::from_args();
-    info!("Using options: {:?}", &cli_args);
+    info!("Starting Core Agent with options: {:?}", cli_args);
 
     server(cli_args).await;
 }
@@ -90,6 +120,7 @@ async fn server(cli_args: CliArgs) {
         CliArgs::from_args().reconcile_idle_period.into(),
     )
     .await;
+
     let service = Service::builder(cli_args.nats, ChannelVs::Core)
         .with_default_liveness()
         .connect_message_bus()
@@ -120,11 +151,27 @@ macro_rules! impl_request_handler {
         #[async_trait]
         impl common::ServiceSubscriber for ServiceHandler<$RequestType> {
             async fn handler(&self, args: common::Arguments<'_>) -> Result<(), SvcError> {
-                let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
-
-                let service: &service::Service = args.context.get_state()?;
-                let reply = service.$ServiceFnName(&request.inner()).await?;
-                Ok(request.reply(reply).await?)
+                #[tracing::instrument(skip(args), fields(result, error, request.service = true))]
+                async fn $ServiceFnName(args: common::Arguments<'_>) -> Result<(), SvcError> {
+                    let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
+                    let service: &service::Service = args.context.get_state()?;
+                    match service.$ServiceFnName(&request.inner()).await {
+                        Ok(reply) => {
+                            if let Ok(result_str) = serde_json::to_string(&reply) {
+                                tracing::Span::current().record("result", &result_str.as_str());
+                            }
+                            tracing::Span::current().record("error", &false);
+                            Ok(request.reply(reply).await?)
+                        }
+                        Err(error) => {
+                            tracing::Span::current()
+                                .record("result", &format!("{:?}", error).as_str());
+                            tracing::Span::current().record("error", &true);
+                            Err(error)
+                        }
+                    }
+                }
+                $ServiceFnName(args).await
             }
             fn filter(&self) -> Vec<MessageId> {
                 vec![$RequestType::default().id()]

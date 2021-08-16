@@ -22,7 +22,7 @@ impl Service {
     }
 
     /// Get nexuses according to the filter
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn get_nexuses(&self, request: &GetNexuses) -> Result<Nexuses, SvcError> {
         let filter = request.filter.clone();
         let nexuses = match filter {
@@ -42,7 +42,7 @@ impl Service {
     }
 
     /// Create nexus
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         self.registry
             .specs
@@ -51,7 +51,7 @@ impl Service {
     }
 
     /// Destroy nexus
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         self.registry
             .specs
@@ -60,7 +60,7 @@ impl Service {
     }
 
     /// Share nexus
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         self.registry
             .specs
@@ -69,7 +69,7 @@ impl Service {
     }
 
     /// Unshare nexus
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         self.registry
             .specs
@@ -78,7 +78,7 @@ impl Service {
     }
 
     /// Add nexus child
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
     pub(super) async fn add_nexus_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         self.registry
             .specs
@@ -87,7 +87,7 @@ impl Service {
     }
 
     /// Remove nexus child
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
     pub(super) async fn remove_nexus_child(
         &self,
         request: &RemoveNexusChild,
