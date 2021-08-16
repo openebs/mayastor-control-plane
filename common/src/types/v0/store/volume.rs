@@ -127,6 +127,17 @@ impl VolumeSpec {
             .unwrap_or_default()
             .allowed_nodes
     }
+    /// target volume replica count if during `SetReplica` operation
+    /// or otherwise the current num_replicas
+    pub fn target_num_replicas(&self) -> u8 {
+        match &self.operation {
+            Some(operation) => match operation.operation {
+                VolumeOperation::SetReplica(count) => count,
+                _ => self.num_replicas,
+            },
+            _ => self.num_replicas,
+        }
+    }
 }
 
 impl UuidString for VolumeSpec {

@@ -4,7 +4,7 @@ pub(crate) mod volume;
 
 use crate::core::scheduling::{
     nexus::GetPersistedNexusChildrenCtx,
-    resources::{ChildItem, NexusChildItem, PoolItem, ReplicaItem},
+    resources::{ChildItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
 use common_lib::types::v0::message_bus::PoolStatus;
@@ -89,23 +89,45 @@ impl ChildSorters {
     /// Sort replicas by their nexus child (state and rebuild progress)
     /// todo: should we use weights instead (like moac)?
     pub(crate) fn sort(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
-        match Self::sort_by_child(a, b) {
-            Ordering::Equal => {
-                let childa_is_local = !a.spec().share.shared();
-                let childb_is_local = !b.spec().share.shared();
-                if childa_is_local == childb_is_local {
-                    std::cmp::Ordering::Equal
-                } else if childa_is_local {
-                    std::cmp::Ordering::Greater
-                } else {
-                    std::cmp::Ordering::Less
+        match Self::sort_by_healthy(a, b) {
+            Ordering::Equal => match Self::sort_by_child(a, b) {
+                Ordering::Equal => {
+                    let childa_is_local = !a.spec().share.shared();
+                    let childb_is_local = !b.spec().share.shared();
+                    if childa_is_local == childb_is_local {
+                        std::cmp::Ordering::Equal
+                    } else if childa_is_local {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        std::cmp::Ordering::Less
+                    }
                 }
-            }
+                ord => ord,
+            },
             ord => ord,
         }
     }
+    // remove unhealthy replicas first
+    fn sort_by_healthy(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
+        match a.child_info() {
+            None => {
+                match b.child_info() {
+                    Some(b_info) if b_info.healthy => {
+                        // remove unhealthy replicas first
+                        std::cmp::Ordering::Less
+                    }
+                    _ => std::cmp::Ordering::Equal,
+                }
+            }
+            Some(a_info) => match b.child_info() {
+                Some(b_info) if a_info.healthy && !b_info.healthy => std::cmp::Ordering::Greater,
+                Some(b_info) if !a_info.healthy && b_info.healthy => std::cmp::Ordering::Less,
+                _ => std::cmp::Ordering::Equal,
+            },
+        }
+    }
+    // remove unused replicas first
     fn sort_by_child(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
-        // ANA not supported at the moment, so use only 1 child
         match a.child_spec() {
             None => {
                 match b.child_spec() {
@@ -223,36 +245,6 @@ impl AddReplicaSorters {
                     (_, _) => a.pool().free_space().cmp(&b.pool().free_space()),
                 }
             }
-        }
-    }
-}
-
-/// Sort replicas to pick the best choice to remove from a given nexus
-pub(crate) struct NexusChildSorter {}
-impl NexusChildSorter {
-    /// sort nexus children for removal
-    /// remove "generic uri" children first (ie not spdk lvol replicas)
-    /// then children with no state
-    /// then children which are not local to the nexus
-    pub(crate) fn sort(a: &NexusChildItem, b: &NexusChildItem) -> std::cmp::Ordering {
-        match (a.replica(), b.replica()) {
-            (Some(_), None) => std::cmp::Ordering::Greater,
-            (None, Some(_)) => std::cmp::Ordering::Less,
-            (_, _) => match (a.child_state(), b.child_state()) {
-                (Some(a_status), Some(b_status)) => {
-                    match a_status.state.partial_cmp(&b_status.state) {
-                        None | Some(std::cmp::Ordering::Equal) => {
-                            let a_is_local = a.replica().map(|spec| !spec.share.shared());
-                            let b_is_local = b.replica().map(|spec| !spec.share.shared());
-                            a_is_local.cmp(&b_is_local)
-                        }
-                        Some(ordering) => ordering,
-                    }
-                }
-                (Some(_), None) => std::cmp::Ordering::Greater,
-                (None, Some(_)) => std::cmp::Ordering::Less,
-                (None, None) => std::cmp::Ordering::Equal,
-            },
         }
     }
 }

@@ -2,8 +2,11 @@ use crate::{
     core::{
         scheduling::{
             nexus::GetPersistedNexusChildren,
-            resources::{ChildItem, HealthyChildItems, NexusChildItem, ReplicaItem},
-            volume::{AddVolumeNexusReplicas, GetChildForRemoval, GetSuitablePools},
+            resources::{ChildItem, HealthyChildItems, ReplicaItem},
+            volume::{
+                AddVolumeNexusReplicas, GetChildForRemoval, GetSuitablePools,
+                ReplicaRemovalCandidates,
+            },
             ResourceFilter,
         },
         specs::{OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
@@ -44,42 +47,46 @@ pub(crate) async fn get_volume_replica_remove_candidate(
     state: &VolumeState,
     registry: &Registry,
 ) -> Result<ReplicaItem, SvcError> {
-    let candidates = scheduling::get_volume_replica_remove_candidates(
+    let mut candidates = scheduling::get_volume_replica_remove_candidates(
         &GetChildForRemoval::new(spec, state, false),
         registry,
     )
-    .await;
+    .await?
+    .candidates();
+
     tracing::trace!(
         "Removal candidates for volume '{}': {:?}",
         spec.uuid,
         candidates
     );
 
-    if candidates.len() <= 1 {
-        Err(SvcError::ReplicaRemovalNoCandidates { id: spec.uuid() })
-    } else {
-        Ok(candidates.first().unwrap().clone())
-    }
+    candidates
+        .next()
+        .context(errors::ReplicaRemovalNoCandidates { id: spec.uuid() })
 }
 
-/// Select a replica to be removed from the volume
+/// Get replica candidates to be removed from the volume
+/// This list includes healthy and non_healthy candidates, so care must be taken to
+/// make sure we don't remove "too many healthy" candidates
 pub(crate) async fn get_volume_unused_replica_remove_candidates(
     spec: &VolumeSpec,
     state: &VolumeState,
     registry: &Registry,
-) -> Vec<ReplicaItem> {
+) -> Result<ReplicaRemovalCandidates, SvcError> {
     let candidates = scheduling::get_volume_replica_remove_candidates(
         &GetChildForRemoval::new(spec, state, true),
         registry,
     )
-    .await;
+    .await?
+    .candidates();
+
     tracing::trace!(
         "Unused Replica removal candidates for volume '{}': {:?}",
         spec.uuid,
         candidates
     );
 
-    candidates
+    Ok(candidates)
 }
 
 /// Get a list of nexus children to be removed from a nexus
@@ -87,9 +94,11 @@ pub(crate) async fn get_nexus_child_remove_candidates(
     vol_spec: &VolumeSpec,
     nexus_spec: &NexusSpec,
     registry: &Registry,
-) -> Result<Vec<NexusChildItem>, SvcError> {
-    let candidates =
-        scheduling::get_nexus_child_remove_candidates(vol_spec, nexus_spec, registry).await;
+) -> Result<ReplicaRemovalCandidates, SvcError> {
+    let candidates = scheduling::get_nexus_child_remove_candidates(vol_spec, nexus_spec, registry)
+        .await?
+        .candidates();
+
     tracing::trace!(
         "Nexus Child removal candidates for nexus '{}' of volume '{}': {:?}",
         nexus_spec.uuid,
@@ -97,13 +106,7 @@ pub(crate) async fn get_nexus_child_remove_candidates(
         candidates
     );
 
-    if candidates.len() <= 1 {
-        Err(SvcError::ReplicaRemovalNoCandidates {
-            id: vol_spec.uuid(),
-        })
-    } else {
-        Ok(candidates)
-    }
+    Ok(candidates)
 }
 
 /// Get a list of existing candidate volume replicas to attach to a given nexus
@@ -956,11 +959,11 @@ impl ResourceSpecsLocked {
         let spec_clone = volume_spec.lock().clone();
         let state = registry.get_volume_state(&spec_clone.uuid).await?;
 
-        let candidates =
-            get_volume_unused_replica_remove_candidates(&spec_clone, &state, registry).await;
+        let mut candidates =
+            get_volume_unused_replica_remove_candidates(&spec_clone, &state, registry).await?;
 
         let mut result = Ok(());
-        for replica in candidates {
+        while let Some(replica) = candidates.next() {
             if count == 0 {
                 break;
             }
@@ -1021,7 +1024,13 @@ impl ResourceSpecsLocked {
         SpecOperations::validate_update_step(registry, result, volume_spec, &spec_clone).await?;
 
         // the garbage collector will destroy it at a later time
-        let _ = self.destroy_volume_replica(registry, None, &replica).await;
+        if let Err(error) = self.destroy_volume_replica(registry, None, &replica).await {
+            tracing::error!(
+                "Failed to destroy replica '{}'. It will be garbage collected. Error: '{}'",
+                replica_id,
+                error.full_string()
+            );
+        }
         SpecOperations::complete_update(registry, Ok(()), volume_spec.clone(), spec_clone.clone())
             .await?;
         Ok(())
@@ -1109,22 +1118,26 @@ impl ResourceSpecsLocked {
                     c
                 });
 
-        let candidates =
+        let mut candidates =
             get_nexus_child_remove_candidates(&vol_spec_clone, &nexus_spec_clone, registry).await?;
 
         let mut result = Ok(());
-        for candidate in candidates {
+        while let Some(candidate) = candidates.next() {
             if nexus_replica_children <= volume_children {
                 break;
             }
+            let child_uri = match candidate.child_state() {
+                None => break,
+                Some(child) => child.uri.clone(),
+            };
             match self
-                .remove_nexus_child_by_uri(registry, nexus_state, candidate.child_uri(), true, mode)
+                .remove_nexus_child_by_uri(registry, nexus_state, &child_uri, true, mode)
                 .await
             {
                 Ok(_) => {
                     tracing::info!(
                         "Successfully removed child '{}' from nexus '{}' part of volume '{}'",
-                        candidate.child_uri(),
+                        child_uri,
                         nexus_state.uuid,
                         vol_spec_clone.uuid
                     );
@@ -1133,7 +1146,7 @@ impl ResourceSpecsLocked {
                 Err(error) => {
                     tracing::error!(
                         "Failed to remove child '{}' from nexus '{}' part of volume '{}': '{}'",
-                        candidate.child_uri(),
+                        child_uri,
                         nexus_state.uuid,
                         vol_spec_clone.uuid,
                         error.full_string()
@@ -1357,7 +1370,7 @@ impl SpecOperations for VolumeSpec {
     type State = VolumeState;
     type UpdateOp = VolumeOperation;
 
-    fn start_update_op(
+    async fn start_update_op(
         &mut self,
         registry: &Registry,
         state: &Self::State,
@@ -1415,7 +1428,8 @@ impl SpecOperations for VolumeSpec {
                     })
                 } else if *replica_count < 1 {
                     Err(SvcError::LastReplica {
-                        id: self.uuid.to_string(),
+                        replica: "".to_string(),
+                        volume: self.uuid(),
                     })
                 } else if (*replica_count as i16 - self.num_replicas as i16).abs() > 1 {
                     Err(SvcError::ReplicaChangeCount {})
@@ -1439,10 +1453,45 @@ impl SpecOperations for VolumeSpec {
                     .any(|r| &r.lock().uuid != uuid);
                 let nexuses = registry.specs.get_volume_nexuses(&self.uuid);
                 let used = nexuses.iter().any(|n| n.lock().contains_replica(uuid));
-                if !last_replica && !used {
-                    Ok(())
+                if last_replica {
+                    Err(SvcError::LastReplica {
+                        replica: uuid.to_string(),
+                        volume: self.uuid(),
+                    })
+                } else if used {
+                    Err(SvcError::InUse {
+                        kind: ResourceKind::Replica,
+                        id: uuid.to_string(),
+                    })
                 } else {
-                    Err(SvcError::Conflict {})
+                    match registry
+                        .get_nexus_info(self.last_nexus_id.as_ref(), true)
+                        .await?
+                    {
+                        Some(info) => match info
+                            .children
+                            .iter()
+                            .find(|i| i.uuid.as_str() == uuid.as_str())
+                        {
+                            Some(replica_info)
+                                if replica_info.healthy
+                                    && !info
+                                        .children
+                                        .iter()
+                                        .filter(|i| i.uuid.as_str() != uuid.as_str())
+                                        .any(|i| i.healthy) =>
+                            {
+                                // if there are no other healthy replicas, then we cannot remove
+                                // this replica!
+                                Err(SvcError::LastHealthyReplica {
+                                    replica: uuid.to_string(),
+                                    volume: self.uuid(),
+                                })
+                            }
+                            _ => Ok(()),
+                        },
+                        None => Ok(()),
+                    }
                 }
             }
 
