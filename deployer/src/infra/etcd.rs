@@ -1,5 +1,5 @@
 use super::*;
-use common_lib::{store::etcd::Etcd as EtcdStore, types::v0::store::definitions::Store};
+use common_lib::store::etcd::Etcd as EtcdStore;
 
 #[async_trait]
 impl ComponentAction for Etcd {
@@ -32,17 +32,9 @@ impl ComponentAction for Etcd {
     }
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if !options.no_etcd {
-            let mut store = EtcdStore::new("0.0.0.0:2379")
+            let _store = EtcdStore::new("0.0.0.0:2379")
                 .await
                 .expect("Failed to connect to etcd.");
-
-            if !store.online().await {
-                // we seem to get in this situation on CI, let's log the result of a get key
-                // in case the result will be helpful
-                let result = store.get_kv(&"a".to_string()).await;
-                panic!("etcd get_kv result: {:#?}", result);
-            }
-            assert!(store.online().await);
         }
         Ok(())
     }

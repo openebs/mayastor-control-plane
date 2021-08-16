@@ -1,0 +1,4 @@
+pytest-bdd
+python-dateutil
+urllib3
+docker
