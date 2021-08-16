@@ -46,7 +46,7 @@ def init():
     common.deployer_stop()
 
 
-# Fixture used to pass the volume create request between test stages.
+# Fixture used to pass the volume create request between test steps.
 @pytest.fixture(scope="function")
 def create_request():
     return {}
@@ -112,12 +112,6 @@ def a_request_for_a_volume(create_request):
     topology = {"explicit": None, "labelled": None}
     request = CreateVolumeBody(policy, NUM_VOLUME_REPLICAS, VOLUME_SIZE, topology)
     create_request[CREATE_REQUEST_KEY] = request
-
-
-@when("the control plane cannot communicate with Mayastor")
-def the_control_plane_cannot_communicate_with_mayastor():
-    """the control plane cannot communicate with Mayastor."""
-    raise NotImplementedError
 
 
 @when("the number of suitable pools is less than the number of desired volume replicas")

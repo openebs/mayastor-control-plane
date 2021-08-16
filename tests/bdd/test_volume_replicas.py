@@ -53,6 +53,7 @@ def init():
     common.deployer_stop()
 
 
+# Fixture used to pass the replica context between test steps.
 @pytest.fixture(scope="function")
 def replica_ctx():
     return {}
@@ -92,7 +93,7 @@ def the_number_of_volume_replicas_is_greater_than_one():
     """the number of volume replicas is greater than one."""
     volumes_api = common.get_volumes_api()
     volume = volumes_api.put_volume_replica_count(VOLUME_UUID, 2)
-    assert volume.spec.num_replicas == 2
+    assert volume.spec.num_replicas > 1
 
 
 @when("a user attempts to decrease the number of volume replicas")

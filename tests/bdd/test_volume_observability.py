@@ -43,6 +43,7 @@ def init():
     common.deployer_stop()
 
 
+# Fixture used to pass the volume context between test steps.
 @pytest.fixture(scope="function")
 def volume_ctx():
     return {}
