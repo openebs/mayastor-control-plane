@@ -143,6 +143,10 @@ pub struct StartOptions {
     /// Override the core agent's reconcile idle period
     #[structopt(long)]
     pub reconcile_idle_period: Option<humantime::Duration>,
+
+    /// Amount of time to wait for all containers to start.
+    #[structopt(short = "w", long)]
+    pub start_wait_timeout: Option<humantime::Duration>,
 }
 
 impl StartOptions {
@@ -236,7 +240,14 @@ impl StartOptions {
             .build()
             .await?;
 
-        components.start(&composer).await?;
+        match self.start_wait_timeout {
+            Some(timeout) => {
+                components.start_wait(&composer, timeout.into()).await?;
+            }
+            None => {
+                components.start(&composer).await?;
+            }
+        }
 
         if self.show_info {
             let lister = ListOptions {
