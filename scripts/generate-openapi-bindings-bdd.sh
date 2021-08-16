@@ -2,11 +2,8 @@
 
 set -e
 
-if [ -z "$1" ] ; then
-    echo "Failed to provide root directory"
-fi
-
-ROOT_DIR="$1"
+ROOT_DIR="$(dirname "$0")/.."
+echo $ROOT_DIR
 TARGET="$ROOT_DIR/tests/bdd/openapi"
 SPEC="$ROOT_DIR/control-plane/rest/openapi-specs/v0_api_spec.yaml"
 
