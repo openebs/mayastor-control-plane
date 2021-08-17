@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-DIR_NAME="$(dirname "$0")"
+DIR_NAME="$(dirname "$(pwd)/${BASH_SOURCE[0]}")"
 
 virtualenv --no-setuptools "$DIR_NAME"/venv
 
-shellcheck disable=SC1091
+# shellcheck disable=SC1091
 source "$DIR_NAME"/venv/bin/activate
 
 pip install -r "$DIR_NAME"/requirements.txt
