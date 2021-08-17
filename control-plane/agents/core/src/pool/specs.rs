@@ -25,6 +25,7 @@ use common_lib::{
     },
 };
 
+#[async_trait::async_trait]
 impl SpecOperations for PoolSpec {
     type Create = CreatePool;
     type Owners = ();
@@ -76,6 +77,7 @@ impl SpecOperations for PoolSpec {
     }
 }
 
+#[async_trait::async_trait]
 impl SpecOperations for ReplicaSpec {
     type Create = CreateReplica;
     type Owners = ReplicaOwners;
@@ -83,7 +85,7 @@ impl SpecOperations for ReplicaSpec {
     type State = Replica;
     type UpdateOp = ReplicaOperation;
 
-    fn start_update_op(
+    async fn start_update_op(
         &mut self,
         _: &Registry,
         state: &Self::State,

@@ -38,10 +38,11 @@ async fn test_setup(auth: &bool) -> ((String, String), ComposeTest) {
         true => vec!["--jwk", &jwk_file],
         false => vec!["--no-auth"],
     };
-    rest_args.append(&mut vec!["-j", "10.1.0.6:6831", "--dummy-certificates"]);
+    rest_args.append(&mut vec!["-j", "10.1.0.7:6831", "--dummy-certificates"]);
 
     let mayastor1 = "node-test-name-1";
     let mayastor2 = "node-test-name-2";
+    // todo: this is getting unwieldy... we should make use of the deployer
     let test = Builder::new()
         .name("rest")
         .add_container_spec(
@@ -52,7 +53,8 @@ async fn test_setup(auth: &bool) -> ((String, String), ComposeTest) {
             "core",
             Binary::from_dbg("core")
                 .with_nats("-n")
-                .with_args(vec!["--store", "http://etcd.rest:2379"]),
+                .with_args(vec!["--store", "http://etcd.rest:2379"])
+                .with_args(vec!["-j", "10.1.0.7:6831"]),
         )
         .add_container_spec(
             ContainerSpec::from_binary(

@@ -11,37 +11,25 @@ impl ComponentAction for Rest {
                     .args(&["build", "-p", "rest", "--bin", "rest"])
                     .status()?;
             }
-            if !options.jaeger {
-                cfg.add_container_spec(
-                    ContainerSpec::from_binary(
-                        "rest",
-                        Binary::from_dbg("rest")
-                            .with_nats("-n")
-                            .with_arg("--dummy-certificates")
-                            .with_arg("--no-auth")
-                            .with_args(vec!["--https", "rest:8080"])
-                            .with_args(vec!["--http", "rest:8081"]),
-                    )
-                    .with_portmap("8080", "8080")
-                    .with_portmap("8081", "8081"),
-                )
+            let binary = Binary::from_dbg("rest")
+                .with_nats("-n")
+                .with_arg("--dummy-certificates")
+                .with_arg("--no-auth")
+                .with_args(vec!["--https", "rest:8080"])
+                .with_args(vec!["--http", "rest:8081"]);
+
+            let binary = if !options.jaeger {
+                binary
             } else {
                 let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
-                cfg.add_container_spec(
-                    ContainerSpec::from_binary(
-                        "rest",
-                        Binary::from_dbg("rest")
-                            .with_nats("-n")
-                            .with_arg("--dummy-certificates")
-                            .with_arg("--no-auth")
-                            .with_args(vec!["-j", &jaeger_config])
-                            .with_args(vec!["--https", "rest:8080"])
-                            .with_args(vec!["--http", "rest:8081"]),
-                    )
+                binary.with_args(vec!["--jaeger", &jaeger_config])
+            };
+
+            cfg.add_container_spec(
+                ContainerSpec::from_binary("rest", binary)
                     .with_portmap("8080", "8080")
                     .with_portmap("8081", "8081"),
-                )
-            }
+            )
         })
     }
     async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {

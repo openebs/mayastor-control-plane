@@ -7,10 +7,7 @@ use crate::core::{
 use common::errors::SvcError;
 use common_lib::types::v0::{
     message_bus::{ChildUri, NodeId},
-    store::{
-        nexus_persistence::{NexusInfo, NexusInfoKey},
-        volume::VolumeSpec,
-    },
+    store::{nexus_persistence::NexusInfo, volume::VolumeSpec},
 };
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -62,14 +59,9 @@ impl GetPersistedNexusChildrenCtx {
         request: &GetPersistedNexusChildren,
     ) -> Result<Self, SvcError> {
         let spec = request.spec.clone();
-        let nexus_info = if let Some(nexus_id) = &spec.last_nexus_id {
-            let mut nexus_info: NexusInfo =
-                registry.load_obj(&NexusInfoKey::from(nexus_id)).await?;
-            nexus_info.uuid = nexus_id.clone();
-            Some(nexus_info)
-        } else {
-            None
-        };
+        let nexus_info = registry
+            .get_nexus_info(spec.last_nexus_id.as_ref(), false)
+            .await?;
 
         Ok(Self {
             registry: registry.clone(),

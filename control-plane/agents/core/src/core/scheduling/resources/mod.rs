@@ -51,31 +51,41 @@ impl PoolItemLister {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ReplicaItem {
-    replica: ReplicaSpec,
+    replica_spec: ReplicaSpec,
+    replica_state: Option<Replica>,
     child_uri: Option<ChildUri>,
     child_state: Option<Child>,
     child_spec: Option<NexusChild>,
+    child_info: Option<ChildInfo>,
 }
 
 impl ReplicaItem {
     /// Create new `Self` from the provided arguments
     pub(crate) fn new(
         replica: ReplicaSpec,
+        replica_state: Option<&Replica>,
         child_uri: Vec<ChildUri>,
         child_states: Vec<Child>,
         child_specs: Vec<NexusChild>,
+        child_info: Option<ChildInfo>,
     ) -> Self {
         Self {
-            replica,
+            replica_spec: replica,
+            replica_state: replica_state.cloned(),
             child_uri: child_uri.first().cloned(),
             // ANA not currently supported
             child_state: child_states.first().cloned(),
             child_spec: child_specs.first().cloned(),
+            child_info,
         }
     }
     /// Get a reference to the replica spec
     pub(crate) fn spec(&self) -> &ReplicaSpec {
-        &self.replica
+        &self.replica_spec
+    }
+    /// Get a reference to the replica state
+    pub(crate) fn state(&self) -> Option<&Replica> {
+        self.replica_state.as_ref()
     }
     /// Get a reference to the child spec
     pub(crate) fn uri(&self) -> &Option<ChildUri> {
@@ -88,6 +98,10 @@ impl ReplicaItem {
     /// Get a reference to the child spec
     pub(crate) fn child_spec(&self) -> Option<&NexusChild> {
         self.child_spec.as_ref()
+    }
+    /// Get a reference to the child info
+    pub(crate) fn child_info(&self) -> Option<&ChildInfo> {
+        self.child_info.as_ref()
     }
 }
 
@@ -149,40 +163,5 @@ impl ChildItem {
     /// Get the pool wrapper
     pub(crate) fn pool(&self) -> &PoolWrapper {
         &self.pool_state
-    }
-}
-
-/// Nexus Child Items, used to filter nexus children for removal operations
-#[derive(Debug, Clone)]
-pub(crate) struct NexusChildItem {
-    replica: Option<ReplicaSpec>,
-    child_uri: ChildUri,
-    child_state: Option<Child>,
-}
-
-impl NexusChildItem {
-    /// Create new `Self` from the provided arguments
-    pub(crate) fn new(
-        replica: Option<ReplicaSpec>,
-        child_uri: ChildUri,
-        child_state: Option<&Child>,
-    ) -> Self {
-        Self {
-            replica,
-            child_uri,
-            child_state: child_state.cloned(),
-        }
-    }
-    /// Get a reference to the replica spec
-    pub(crate) fn replica(&self) -> Option<&ReplicaSpec> {
-        self.replica.as_ref()
-    }
-    /// Get a reference to the child state
-    pub(crate) fn child_state(&self) -> Option<&Child> {
-        self.child_state.as_ref()
-    }
-    /// Get a reference to the child URI
-    pub(crate) fn child_uri(&self) -> &ChildUri {
-        &self.child_uri
     }
 }

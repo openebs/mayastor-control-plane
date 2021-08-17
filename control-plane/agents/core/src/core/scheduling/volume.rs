@@ -1,24 +1,18 @@
 use crate::core::{
     registry::Registry,
     scheduling::{
-        resources::{PoolItem, PoolItemLister, ReplicaItem},
-        ChildSorters, NodeFilters, PoolFilters, PoolSorters, ResourceFilter,
+        resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},
+        AddReplicaFilters, AddReplicaSorters, ChildSorters, NodeFilters, PoolFilters, PoolSorters,
+        ResourceFilter,
     },
 };
 
-use crate::core::scheduling::{
-    resources::{ChildItem, NexusChildItem},
-    AddReplicaFilters, AddReplicaSorters, NexusChildSorter,
-};
 use common::errors::SvcError;
 use common_lib::types::v0::{
     message_bus::{ChildUri, CreateVolume, VolumeState},
-    store::{
-        nexus::NexusSpec,
-        nexus_persistence::{NexusInfo, NexusInfoKey},
-        volume::VolumeSpec,
-    },
+    store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
 };
+
 use itertools::Itertools;
 use std::{collections::HashMap, ops::Deref};
 
@@ -174,15 +168,30 @@ impl GetChildForRemoval {
 
 /// Used to filter nexus children in order to choose the best candidates for removal
 /// when the volume's replica count is being reduced.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct GetChildForRemovalContext {
     registry: Registry,
     spec: VolumeSpec,
     state: VolumeState,
+    nexus_info: Option<NexusInfo>,
     unused_only: bool,
 }
 
 impl GetChildForRemovalContext {
+    async fn new(registry: &Registry, request: &GetChildForRemoval) -> Result<Self, SvcError> {
+        let nexus_info = registry
+            .get_nexus_info(request.spec.last_nexus_id.as_ref(), true)
+            .await?;
+
+        Ok(GetChildForRemovalContext {
+            registry: registry.clone(),
+            spec: request.spec.clone(),
+            state: request.state.clone(),
+            nexus_info,
+            unused_only: request.unused_only,
+        })
+    }
+
     async fn list(&self) -> Vec<ReplicaItem> {
         let replicas = self.registry.specs.get_volume_replicas(&self.spec.uuid);
         let nexuses = self.registry.specs.get_volume_nexuses(&self.spec.uuid);
@@ -193,6 +202,7 @@ impl GetChildForRemovalContext {
             .map(|replica_spec| {
                 ReplicaItem::new(
                     replica_spec.clone(),
+                    replica_states.iter().find(|r| r.uuid == replica_spec.uuid),
                     replica_states
                         .iter()
                         .find(|replica_state| replica_state.uuid == replica_spec.uuid)
@@ -241,6 +251,16 @@ impl GetChildForRemovalContext {
                                 .cloned()
                         })
                         .collect(),
+                    self.nexus_info
+                        .as_ref()
+                        .map(|nexus_info| {
+                            nexus_info
+                                .children
+                                .iter()
+                                .find(|child| child.uuid.as_str() == replica_spec.uuid.as_str())
+                                .cloned()
+                        })
+                        .flatten(),
                 )
             })
             .collect::<Vec<_>>()
@@ -248,28 +268,86 @@ impl GetChildForRemovalContext {
 }
 
 impl DecreaseVolumeReplica {
-    async fn builder(request: &GetChildForRemoval, registry: &Registry) -> Self {
-        let context = GetChildForRemovalContext {
-            registry: registry.clone(),
-            spec: request.spec.clone(),
-            state: request.state.clone(),
-            unused_only: request.unused_only,
-        };
-        Self {
+    async fn builder(request: &GetChildForRemoval, registry: &Registry) -> Result<Self, SvcError> {
+        let context = GetChildForRemovalContext::new(registry, request).await?;
+        Ok(Self {
             list: context.list().await,
             context,
-        }
+        })
     }
-    /// Create new `Self` from the given arguments with a default list of filters and sorting rules
+    /// Create new `Self` from the given arguments with a default list of sorting rules
     pub(crate) async fn builder_with_defaults(
         request: &GetChildForRemoval,
         registry: &Registry,
-    ) -> Self {
-        Self::builder(request, registry)
-            .await
-            // if requested filter for replicas which are not currently used for a nexus
-            .filter(|request, item| !(request.unused_only && item.child_spec().is_some()))
-            .sort(ChildSorters::sort)
+    ) -> Result<Self, SvcError> {
+        Ok(Self::builder(request, registry)
+            .await?
+            .sort(ChildSorters::sort))
+    }
+    /// Get the `ReplicaRemovalCandidates` for this request, which splits the candidates into
+    /// healthy and unhealthy candidates
+    pub(crate) fn candidates(self) -> ReplicaRemovalCandidates {
+        ReplicaRemovalCandidates::new(self.context, self.list)
+    }
+}
+
+/// Replica Removal Candidates with explicit partitioning between the healthy and unhealthy replicas
+/// This way we can make sure we do not unintentionally remove "too many" healthy candidates and
+/// risk making the volume degraded, or worst faulted
+#[derive(Debug)]
+pub(crate) struct ReplicaRemovalCandidates {
+    context: GetChildForRemovalContext,
+    healthy: Vec<ReplicaItem>,
+    unhealthy: Vec<ReplicaItem>,
+}
+
+impl ReplicaRemovalCandidates {
+    /// Get the next healthy replica removal candidate
+    fn next_healthy(&mut self) -> Option<ReplicaItem> {
+        let replica_count = self.context.spec.desired_num_replicas();
+        let healthy_online = self.healthy.iter().filter(|replica| match replica.state() {
+            None => false,
+            Some(state) => state.online(),
+        });
+        // removing too many healthy_online replicas could compromise the volume's redundancy
+        if healthy_online.into_iter().count() > replica_count as usize {
+            match self.healthy.pop() {
+                Some(replica) if self.context.unused_only & replica.child_spec().is_none() => {
+                    Some(replica)
+                }
+                replica => replica,
+            }
+        } else {
+            None
+        }
+    }
+    /// Get the next unhealthy candidates (any is a good fit)
+    fn next_unhealthy(&mut self) -> Option<ReplicaItem> {
+        self.unhealthy.pop()
+    }
+    /// Get the next removal candidate.
+    /// Unhealthy replicas are removed before healthy replicas
+    pub fn next(&mut self) -> Option<ReplicaItem> {
+        self.next_unhealthy().or_else(|| self.next_healthy())
+    }
+
+    fn new(context: GetChildForRemovalContext, items: Vec<ReplicaItem>) -> Self {
+        let has_info = context.nexus_info.is_some();
+        let is_healthy = |item: &&ReplicaItem| -> bool {
+            match item.child_info() {
+                Some(info) => info.healthy,
+                None => !has_info,
+            }
+        };
+        let is_not_healthy = |item: &&ReplicaItem| -> bool { !is_healthy(item) };
+        Self {
+            context,
+            // replicas were sorted with the least preferred replica at the front
+            // since we're going to "pop" them here, we now need to move the least preferred to the
+            // back and that's why we need the "rev"
+            healthy: items.iter().filter(is_healthy).rev().cloned().collect(),
+            unhealthy: items.iter().filter(is_not_healthy).rev().cloned().collect(),
+        }
     }
 }
 
@@ -277,101 +355,6 @@ impl DecreaseVolumeReplica {
 impl ResourceFilter for DecreaseVolumeReplica {
     type Request = GetChildForRemovalContext;
     type Item = ReplicaItem;
-
-    fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
-        let request = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .filter(|v| filter(&request, v))
-            .collect();
-        self
-    }
-
-    fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
-        self.list = self.list.into_iter().sorted_by(sort).collect();
-        self
-    }
-
-    fn collect(self) -> Vec<Self::Item> {
-        self.list
-    }
-
-    fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
-        self,
-        group: F,
-    ) -> HashMap<K, V> {
-        group(&self.context, &self.list)
-    }
-}
-
-/// Used to determine the nexus child removal candidates when a nexus has "too many" replicas
-#[derive(Clone)]
-pub(crate) struct GetNexusChildForRemovalContext {
-    registry: Registry,
-    vol_spec: VolumeSpec,
-    nexus_spec: NexusSpec,
-}
-
-/// Decrease a nexus replica count when it has more than required by its volume
-#[derive(Clone)]
-pub(crate) struct DecreaseNexusReplica {
-    context: GetNexusChildForRemovalContext,
-    list: Vec<NexusChildItem>,
-}
-
-impl GetNexusChildForRemovalContext {
-    async fn list(&self) -> Vec<NexusChildItem> {
-        let nexus = self.registry.get_nexus(&self.nexus_spec.uuid).await.ok();
-        let replicas = self.registry.specs.get_volume_replicas(&self.vol_spec.uuid);
-        let mut replicas = replicas.iter().map(|r| r.lock().clone());
-
-        self.nexus_spec
-            .children
-            .iter()
-            .map(|child| {
-                let spec = child
-                    .as_replica()
-                    .map(|r| replicas.find(|s| &s.uuid == r.uuid()))
-                    .flatten();
-                let child_state = nexus
-                    .as_ref()
-                    .map(|n| n.children.iter().find(|c| c.uri == child.uri()));
-
-                NexusChildItem::new(spec, child.uri(), child_state.flatten())
-            })
-            .collect::<Vec<_>>()
-    }
-}
-
-impl DecreaseNexusReplica {
-    async fn builder(vol_spec: &VolumeSpec, nexus_spec: &NexusSpec, registry: &Registry) -> Self {
-        let context = GetNexusChildForRemovalContext {
-            registry: registry.clone(),
-            vol_spec: vol_spec.clone(),
-            nexus_spec: nexus_spec.clone(),
-        };
-        Self {
-            list: context.list().await,
-            context,
-        }
-    }
-    /// Create a new `Self` from the given arguments
-    pub(crate) async fn builder_with_defaults(
-        vol_spec: &VolumeSpec,
-        nexus_spec: &NexusSpec,
-        registry: &Registry,
-    ) -> Self {
-        Self::builder(vol_spec, nexus_spec, registry)
-            .await
-            .sort(NexusChildSorter::sort)
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-impl ResourceFilter for DecreaseNexusReplica {
-    type Request = GetNexusChildForRemovalContext;
-    type Item = NexusChildItem;
 
     fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
         let request = self.context.clone();
@@ -437,17 +420,7 @@ impl VolumeReplicasForNexusCtx {
         vol_spec: &VolumeSpec,
         nx_spec: &NexusSpec,
     ) -> Result<Self, SvcError> {
-        let nexus_info = match registry
-            .load_obj::<NexusInfo>(&NexusInfoKey::from(&nx_spec.uuid))
-            .await
-        {
-            Ok(mut info) => {
-                info.uuid = nx_spec.uuid.clone();
-                Some(info)
-            }
-            Err(SvcError::StoreMissingEntry { .. }) => None,
-            Err(error) => return Err(error),
-        };
+        let nexus_info = registry.get_nexus_info(Some(&nx_spec.uuid), true).await?;
 
         Ok(Self {
             registry: registry.clone(),

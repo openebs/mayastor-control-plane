@@ -55,7 +55,6 @@ impl ReconcilerWorker {
 impl ReconcilerWorker {
     /// Start polling the registered reconciliation loops
     /// The polling will continue until we receive the shutdown signal
-    #[tracing::instrument(skip(registry))]
     pub(super) async fn poller(mut self, registry: Registry) {
         // kick-off the first run
         let mut event = PollEvent::TimedRun;
@@ -88,6 +87,7 @@ impl ReconcilerWorker {
         }
     }
 
+    #[tracing::instrument(skip(context), level = "trace", err)]
     async fn poller_work(&mut self, context: PollContext) -> PollResult {
         tracing::trace!("Entering the reconcile loop...");
         let mut results = vec![];

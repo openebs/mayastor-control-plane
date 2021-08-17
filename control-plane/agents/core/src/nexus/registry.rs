@@ -1,6 +1,9 @@
 use crate::core::{registry::Registry, wrapper::*};
 use common::errors::{NexusNotFound, SvcError};
-use common_lib::types::v0::message_bus::{Nexus, NexusId, NodeId};
+use common_lib::types::v0::{
+    message_bus::{Nexus, NexusId, NodeId},
+    store::nexus_persistence::{NexusInfo, NexusInfoKey},
+};
 use snafu::OptionExt;
 
 /// Nexus helpers
@@ -56,5 +59,32 @@ impl Registry {
             nexuses.extend(node.nexuses().await);
         }
         nexuses
+    }
+
+    /// Fetch the `NexusInfo` from the persistent store
+    /// Returns an error if we fail to query the persistent store
+    /// Returns Ok(None) if the entry does not exist or if no nexus_uuid was provided
+    /// missing_key_is_error determines whether not finding the key is considered an error or not
+    pub(crate) async fn get_nexus_info(
+        &self,
+        nexus_uuid: Option<&NexusId>,
+        missing_key_is_error: bool,
+    ) -> Result<Option<NexusInfo>, SvcError> {
+        match nexus_uuid {
+            None => Ok(None),
+            Some(nexus_uuid) => {
+                match self
+                    .load_obj::<NexusInfo>(&NexusInfoKey::from(nexus_uuid))
+                    .await
+                {
+                    Ok(mut info) => {
+                        info.uuid = nexus_uuid.clone();
+                        Ok(Some(info))
+                    }
+                    Err(SvcError::StoreMissingEntry { .. }) if missing_key_is_error => Ok(None),
+                    Err(error) => Err(error),
+                }
+            }
+        }
     }
 }

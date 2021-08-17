@@ -151,8 +151,14 @@ pub enum SvcError {
     InUse { kind: ResourceKind, id: String },
     #[snafu(display("{} Resource id {} already exists", kind.to_string(), id))]
     AlreadyExists { kind: ResourceKind, id: String },
-    #[snafu(display("Cannot remove the last replica of volume '{}'", id))]
-    LastReplica { id: String },
+    #[snafu(display("Cannot remove the last replica '{}' of volume '{}'", replica, volume))]
+    LastReplica { replica: String, volume: String },
+    #[snafu(display(
+        "Cannot remove the last healthy replica '{}' of volume '{}'",
+        replica,
+        volume
+    ))]
+    LastHealthyReplica { replica: String, volume: String },
     #[snafu(display("Replica count of Volume '{}' is already '{}'", id, count))]
     ReplicaCountAchieved { id: String, count: u8 },
     #[snafu(display("Replica count only allowed to change by a maximum of one at a time"))]
@@ -455,6 +461,12 @@ impl From<SvcError> for ReplyError {
                 extra: error.full_string(),
             },
             SvcError::LastReplica { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::LastHealthyReplica { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),

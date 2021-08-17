@@ -52,7 +52,7 @@ enum SpecError {
 pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequencer {
     type Create: Debug + PartialEq + Sync + Send;
     type Owners: Default + Sync + Send;
-    type Status: PartialEq;
+    type Status: PartialEq + Sync + Send;
     type State: PartialEq + Sync + Send;
     type UpdateOp: Sync + Send;
 
@@ -309,7 +309,8 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         let guard = locked_spec.operation_guard_wait(mode).await?;
         let spec_clone = {
             let mut spec = locked_spec.lock().clone();
-            spec.start_update_inner(registry, state, update_operation)?;
+            spec.start_update_inner(registry, state, update_operation)
+                .await?;
             *locked_spec.lock() = spec.clone();
             spec
         };
@@ -319,7 +320,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
     }
 
     /// Checks that the object ready to accept a new update operation
-    fn start_update_inner(
+    async fn start_update_inner(
         &mut self,
         registry: &Registry,
         state: &Self::State,
@@ -342,7 +343,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
             }),
             SpecStatus::Created(_) => {
                 // start the requested operation (which also checks if it's a valid transition)
-                self.start_update_op(registry, state, operation)?;
+                self.start_update_op(registry, state, operation).await?;
                 Ok(())
             }
         }
@@ -467,7 +468,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
     }
 
     /// Start an update operation (not all resources support this currently)
-    fn start_update_op(
+    async fn start_update_op(
         &mut self,
         _registry: &Registry,
         _state: &Self::State,

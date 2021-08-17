@@ -30,9 +30,6 @@ snafu = "0.6"
 lazy_static = "1.4.0"
 humantime = "2.0.1"
 state = "0.4.2"
-tracing = "0.1"
-tracing-subscriber = "0.2"
-tracing-futures = "0.2.4"
 rpc = "0.1.0"
 http = "0.2.3"
 paste = "1.0.4"
@@ -41,10 +38,13 @@ reqwest = "0.11.4"
 parking_lot = "0.11.1"
 itertools = "0.10.0"
 
-# todo: tracing
-#opentelemetry-jaeger = { version = "0.14", features = ["tokio"] }
-#tracing-opentelemetry = "0.14.0"
-#opentelemetry = "0.15.0"
+# Tracing
+opentelemetry-jaeger = { version = "0.14", features = ["tokio"] }
+tracing-opentelemetry = "0.14.0"
+opentelemetry = "0.15.0"
+tracing = "0.1"
+tracing-subscriber = "0.2"
+tracing-futures = "0.2.4"
 
 [dev-dependencies]
 composer = { path = "../../composer" }

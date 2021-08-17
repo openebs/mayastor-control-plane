@@ -32,7 +32,7 @@ impl SpecOperations for NexusSpec {
     type State = Nexus;
     type UpdateOp = NexusOperation;
 
-    fn start_update_op(
+    async fn start_update_op(
         &mut self,
         _: &Registry,
         state: &Self::State,

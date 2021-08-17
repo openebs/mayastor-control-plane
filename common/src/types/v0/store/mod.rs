@@ -232,3 +232,78 @@ impl OperationSequence {
         }
     }
 }
+
+/// Tracing simple string messages with resource specific information
+/// eg, volume.uuid for volumes and replica.uuid for replicas
+pub trait TraceStrLog {
+    fn error(&self, message: &str);
+    fn warn(&self, message: &str);
+    fn info(&self, message: &str);
+    fn debug(&self, message: &str);
+    fn trace(&self, message: &str);
+}
+
+/// Execute code within a resource specific span which contains resource specific information, such
+/// as volume.uuid for volumes and replica.uuid for replicas
+/// # Example:
+/// let volume = VolumeSpec::default();
+/// volume.warn_span(|| tracing::warn!("This volume is not online"));
+pub trait TraceSpan {
+    fn error_span<F: FnOnce()>(&self, f: F);
+    fn warn_span<F: FnOnce()>(&self, f: F);
+    fn info_span<F: FnOnce()>(&self, f: F);
+    fn debug_span<F: FnOnce()>(&self, f: F);
+    fn trace_span<F: FnOnce()>(&self, f: F);
+}
+
+/// Implements `TraceStrLog` for the given $type
+/// $log_macro is the logging fn, provided as a macro so we can statically specify the log level
+/// $log_macro: ($Self:tt, $Level:expr, $Message:tt)
+#[macro_export]
+macro_rules! impl_trace_str_log {
+    ($log_macro:tt, $type:tt) => {
+        impl crate::types::v0::store::TraceStrLog for $type {
+            fn error(&self, message: &str) {
+                $log_macro!(self, tracing::Level::ERROR, message);
+            }
+            fn warn(&self, message: &str) {
+                $log_macro!(self, tracing::Level::WARN, message);
+            }
+            fn info(&self, message: &str) {
+                $log_macro!(self, tracing::Level::INFO, message);
+            }
+            fn debug(&self, message: &str) {
+                $log_macro!(self, tracing::Level::DEBUG, message);
+            }
+            fn trace(&self, message: &str) {
+                $log_macro!(self, tracing::Level::TRACE, message);
+            }
+        }
+    };
+}
+
+/// Implements `TraceSpan` for the given $type
+/// span_macro is the resource specific fn, provided as a macro so we can statically specify
+/// the log level span_macro: ($Self:tt, $Level:expr, $func:expr)
+#[macro_export]
+macro_rules! impl_trace_span {
+    ($span_macro:tt, $type:tt) => {
+        impl crate::types::v0::store::TraceSpan for $type {
+            fn error_span<F: FnOnce()>(&self, f: F) {
+                $span_macro!(self, tracing::Level::ERROR, f);
+            }
+            fn warn_span<F: FnOnce()>(&self, f: F) {
+                $span_macro!(self, tracing::Level::WARN, f);
+            }
+            fn info_span<F: FnOnce()>(&self, f: F) {
+                $span_macro!(self, tracing::Level::INFO, f);
+            }
+            fn debug_span<F: FnOnce()>(&self, f: F) {
+                $span_macro!(self, tracing::Level::DEBUG, f);
+            }
+            fn trace_span<F: FnOnce()>(&self, f: F) {
+                $span_macro!(self, tracing::Level::TRACE, f);
+            }
+        }
+    };
+}

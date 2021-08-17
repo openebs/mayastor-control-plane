@@ -322,7 +322,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
     destroy.disowners = ReplicaOwners::from_volume(volume.uuid());
     destroy.request().await.unwrap();
 
-    wait_till_volume(volume.uuid(), 1).await;
+    // check we have 2 replicas
     wait_till_volume(volume.uuid(), 2).await;
 
     // now add one extra replica (it should be removed)
@@ -340,7 +340,6 @@ async fn hotspare_replica_count(cluster: &Cluster) {
     .await
     .unwrap();
 
-    wait_till_volume(volume.uuid(), 3).await;
     wait_till_volume(volume.uuid(), 2).await;
 
     DestroyVolume::new(volume.uuid()).request().await.unwrap();
@@ -367,7 +366,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
 
     let timeout_opts = TimeoutOptions::default()
         .with_max_retries(10)
-        .with_timeout(Duration::from_millis(250))
+        .with_timeout(Duration::from_millis(500))
         .with_timeout_backoff(Duration::from_millis(50));
     let mut store = Etcd::new("0.0.0.0:2379")
         .await

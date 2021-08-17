@@ -3,7 +3,7 @@ use crate::core::{
     scheduling::{
         nexus,
         nexus::GetPersistedNexusChildren,
-        resources::{HealthyChildItems, NexusChildItem, ReplicaItem},
+        resources::HealthyChildItems,
         volume,
         volume::{GetChildForRemoval, GetSuitablePools},
         ResourceFilter,
@@ -27,13 +27,13 @@ pub(crate) async fn get_volume_pool_candidates(
 }
 
 /// Return a volume child candidate to be removed from a volume
+/// This list includes healthy and non_healthy candidates, so care must be taken to
+/// make sure we don't remove "too many healthy" candidates and make the volume degraded
 pub(crate) async fn get_volume_replica_remove_candidates(
     request: &GetChildForRemoval,
     registry: &Registry,
-) -> Vec<ReplicaItem> {
-    volume::DecreaseVolumeReplica::builder_with_defaults(request, registry)
-        .await
-        .collect()
+) -> Result<volume::DecreaseVolumeReplica, SvcError> {
+    Ok(volume::DecreaseVolumeReplica::builder_with_defaults(request, registry).await?)
 }
 
 /// Return a nexus child candidate to be removed from a nexus
@@ -41,10 +41,18 @@ pub(crate) async fn get_nexus_child_remove_candidates(
     vol_spec: &VolumeSpec,
     nexus_spec: &NexusSpec,
     registry: &Registry,
-) -> Vec<NexusChildItem> {
-    volume::DecreaseNexusReplica::builder_with_defaults(vol_spec, nexus_spec, registry)
-        .await
-        .collect()
+) -> Result<volume::DecreaseVolumeReplica, SvcError> {
+    let volume_state = registry.get_volume_state(&vol_spec.uuid).await?;
+    let request = GetChildForRemoval::new(vol_spec, &volume_state, false);
+    Ok(
+        volume::DecreaseVolumeReplica::builder_with_defaults(&request, registry)
+            .await?
+            // filter for children which belong to the nexus we're removing children from
+            .filter(|_, i| match i.child_spec() {
+                None => false,
+                Some(child) => nexus_spec.children.contains(child),
+            }),
+    )
 }
 
 /// Return healthy replicas for volume nexus creation
