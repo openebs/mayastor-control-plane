@@ -39,3 +39,10 @@ repos:
         args: ["--changes"]
         pass_filenames: false
         language: system
+    -   id: python-check
+        name: python lint
+        entry: black
+        description: runs black against the python code
+        pass_filenames: true
+        types: [file, python]
+        language: system

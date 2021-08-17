@@ -12,9 +12,9 @@ name = "testlib"
 path = "src/lib.rs"
 
 [dependencies]
-composer = { path = "../composer" }
-deployer = { path = "../deployer" }
-rest = { path = "../control-plane/rest" }
+composer = { path = "../../composer" }
+deployer = { path = "../../deployer" }
+rest = { path = "../../control-plane/rest" }
 actix-rt = "2.2.0"
 opentelemetry-jaeger = { version = "0.14", features = ["tokio"] }
 tracing-opentelemetry = "0.14.0"
@@ -22,4 +22,4 @@ opentelemetry = "0.15.0"
 actix-web-opentelemetry = "0.11.0-beta.4"
 tracing = "0.1"
 anyhow = "1.0.32"
-common-lib = { path = "../common" }
+common-lib = { path = "../../common" }

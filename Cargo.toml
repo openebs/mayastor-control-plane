@@ -15,5 +15,5 @@ members = [
     "deployer",
     "common",
 # Test mayastor through the rest api
-    "tests-mayastor",
+    "tests/tests-mayastor",
 ]
