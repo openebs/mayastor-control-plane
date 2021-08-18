@@ -2,7 +2,7 @@ pub mod infra;
 
 use infra::*;
 
-use composer::Builder;
+use composer::{Builder, TEST_LABEL_PREFIX};
 use std::{convert::TryInto, str::FromStr, time::Duration};
 use structopt::StructOpt;
 
@@ -20,14 +20,17 @@ pub(crate) enum Action {
     List(ListOptions),
 }
 
-const DEFAULT_CLUSTER_NAME: &str = "cluster";
+/// docker network label:
+/// $prefix.name = $name
+const DEFAULT_CLUSTER_LABEL: &str = ".cluster";
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Stop and delete all components")]
 pub struct StopOptions {
-    /// Name of the cluster
-    #[structopt(short, long, default_value = DEFAULT_CLUSTER_NAME)]
-    pub cluster_name: String,
+    /// Label for the cluster
+    /// In the form of "prefix.name"
+    #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
+    pub cluster_label: ClusterLabel,
 }
 
 #[derive(Debug, Default, StructOpt)]
@@ -41,11 +44,19 @@ pub struct ListOptions {
     #[structopt(short, long, conflicts_with = "no_docker")]
     pub format: Option<String>,
 
-    /// Name of the cluster
-    #[structopt(short, long, default_value = DEFAULT_CLUSTER_NAME)]
-    pub cluster_name: String,
+    /// Label for the cluster
+    #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
+    pub cluster_label: ClusterLabel,
 }
 
+/// Label for a cluster: $filter.name = $name
+#[derive(Default, Clone)]
+pub struct ClusterLabel {
+    prefix: String,
+    name: String,
+}
+
+/// default enabled agents
 pub fn default_agents() -> &'static str {
     "Core"
 }
@@ -67,16 +78,25 @@ pub struct StartOptions {
 
     /// Kubernetes Config file if using operators
     /// [default: "~/.kube/config"]
-    #[structopt(short, long)]
+    #[structopt(long)]
     pub kube_config: Option<String>,
 
     /// Use a base image for the binary components (eg: alpine:latest)
     #[structopt(long)]
     pub base_image: Option<String>,
 
-    /// Use a jaeger tracing service
+    /// Use the jaegertracing service
     #[structopt(short, long)]
     pub jaeger: bool,
+
+    /// Use the elasticsearch service
+    #[structopt(short, long)]
+    pub elastic: bool,
+
+    /// Use the kibana service.
+    /// Note: the index pattern is only created when used in conjunction with `wait_timeout`
+    #[structopt(short, long)]
+    pub kibana: bool,
 
     /// Disable the REST Server
     #[structopt(long)]
@@ -85,10 +105,6 @@ pub struct StartOptions {
     /// Use `N` mayastor instances
     #[structopt(short, long, default_value = "1")]
     pub mayastors: u32,
-
-    /// Use this custom image for the jaeger tracing service
-    #[structopt(long, requires = "jaeger")]
-    pub jaeger_image: Option<String>,
 
     /// Cargo Build each component before deploying
     #[structopt(short, long)]
@@ -107,13 +123,19 @@ pub struct StartOptions {
     #[structopt(short, long)]
     pub show_info: bool,
 
-    /// Name of the cluster - currently only one allowed at a time
-    #[structopt(short, long, default_value = DEFAULT_CLUSTER_NAME)]
-    pub cluster_name: String,
+    /// Name of the cluster - currently only one allowed at a time.
+    /// Note: Does not quite work as intended, as we haven't figured out of to bridge between
+    /// different networks
+    #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
+    pub cluster_label: ClusterLabel,
 
-    /// Disable the etcd cluster
+    /// Disable the etcd service
     #[structopt(long)]
     pub no_etcd: bool,
+
+    /// Disable the nats service
+    #[structopt(long)]
+    pub no_nats: bool,
 
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
@@ -145,8 +167,15 @@ pub struct StartOptions {
     pub reconcile_idle_period: Option<humantime::Duration>,
 
     /// Amount of time to wait for all containers to start.
-    #[structopt(short = "w", long)]
+    #[structopt(short, long)]
     pub wait_timeout: Option<humantime::Duration>,
+
+    /// Don't stop/remove existing containers on the same cluster
+    /// Allows us to start "different" stacks independently, eg:
+    /// > deployer start -ejk -s -a "" --no-nats --no-rest --no-etcd -m 0
+    /// > deployer start -s -m 2
+    #[structopt(short, long)]
+    pub reuse_cluster: bool,
 }
 
 impl StartOptions {
@@ -202,7 +231,7 @@ impl StartOptions {
         self
     }
     pub fn with_cluster_name(mut self, cluster_name: &str) -> Self {
-        self.cluster_name = cluster_name.to_string();
+        self.cluster_label = format!(".{}", cluster_name).parse().unwrap();
         self
     }
     pub fn with_base_image(mut self, base_image: impl Into<Option<String>>) -> Self {
@@ -232,11 +261,15 @@ impl StartOptions {
     async fn start(&self, _action: &Action) -> Result<(), Error> {
         let components = Components::new(self.clone());
         let composer = Builder::new()
-            .name(&self.cluster_name)
-            .configure(components.clone())?
+            .name(&self.cluster_label.name())
+            .label_prefix(&self.cluster_label.prefix())
             .with_clean(false)
             .with_base_image(self.base_image.clone())
+            .with_prune_reuse(!self.reuse_cluster, self.reuse_cluster, self.reuse_cluster)
             .autorun(false)
+            .load_existing_containers()
+            .await
+            .configure(components.clone())?
             .build()
             .await?;
 
@@ -251,7 +284,7 @@ impl StartOptions {
 
         if self.show_info {
             let lister = ListOptions {
-                cluster_name: self.cluster_name.clone(),
+                cluster_label: self.cluster_label.clone(),
                 ..Default::default()
             };
             lister.list_simple().await?;
@@ -262,21 +295,22 @@ impl StartOptions {
 impl StopOptions {
     async fn stop(&self, _action: &Action) -> Result<(), Error> {
         let composer = Builder::new()
-            .name(&self.cluster_name)
+            .name(&self.cluster_label.name())
+            .label_prefix(&self.cluster_label.prefix())
             .with_prune(false)
             .with_clean(true)
             .build()
             .await?;
         let _ = composer.stop_network_containers().await;
         let _ = composer
-            .remove_network_containers(&self.cluster_name)
+            .remove_network_containers(&self.cluster_label.name())
             .await?;
         Ok(())
     }
 }
 impl ListOptions {
     fn list_docker(&self) -> Result<(), Error> {
-        let label_filter = format!("label=io.mayastor.test.name={}", self.cluster_name);
+        let label_filter = format!("label={}", self.cluster_label.filter());
         let mut args = vec!["ps", "-a", "--filter", &label_filter];
         if let Some(format) = &self.format {
             args.push("--format");
@@ -288,8 +322,9 @@ impl ListOptions {
     /// Simple listing of all started components
     pub async fn list_simple(&self) -> Result<(), Error> {
         let cfg = Builder::new()
-            .name(&self.cluster_name)
-            .with_reuse(true)
+            .name(&self.cluster_label.name())
+            .label_prefix(&self.cluster_label.prefix())
+            .with_prune_reuse(false, false, false)
             .with_clean(false)
             .build()
             .await?;
@@ -299,7 +334,7 @@ impl ListOptions {
                 None => None,
                 Some(networks) => match networks.networks {
                     None => None,
-                    Some(network) => match network.get(&self.cluster_name) {
+                    Some(network) => match network.get(&self.cluster_label.name()) {
                         None => None,
                         Some(endpoint) => endpoint.ip_address.clone(),
                     },
@@ -330,5 +365,49 @@ fn option_str<F: ToString>(input: Option<F>) -> String {
     match input {
         Some(input) => input.to_string(),
         None => "?".into(),
+    }
+}
+
+impl ClusterLabel {
+    /// Get the network prefix
+    pub fn prefix(&self) -> String {
+        if self.prefix.is_empty() {
+            TEST_LABEL_PREFIX.to_string()
+        } else {
+            self.prefix.clone()
+        }
+    }
+    /// Get the network name
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+    /// Get the network as the filter
+    pub fn filter(&self) -> String {
+        format!("{}.name={}", self.prefix(), self.name())
+    }
+}
+
+impl FromStr for ClusterLabel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split = s.split('.');
+        if split.clone().count() == 2 {
+            return Ok(ClusterLabel {
+                prefix: split.next().unwrap().to_string(),
+                name: split.next().unwrap().to_string(),
+            });
+        }
+        Err("Should be in the format 'prefix.name'".to_string())
+    }
+}
+impl std::fmt::Display for ClusterLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'.'{}'", self.prefix(), self.name())
+    }
+}
+impl std::fmt::Debug for ClusterLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }

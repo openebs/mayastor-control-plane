@@ -18,7 +18,7 @@ impl ComponentAction for Rest {
                 .with_args(vec!["--https", "rest:8080"])
                 .with_args(vec!["--http", "rest:8081"]);
 
-            let binary = if !options.jaeger {
+            let binary = if !cfg.container_exists("jaeger") {
                 binary
             } else {
                 let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
@@ -38,40 +38,10 @@ impl ComponentAction for Rest {
         }
         Ok(())
     }
-    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if options.no_rest {
             return Ok(());
         }
-        // wait till the container is running
-        loop {
-            if let Some(rest) = cfg.get_cluster_container("rest").await? {
-                if rest.state == Some("running".to_string()) {
-                    break;
-                }
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        }
-
-        let max_tries = 20;
-        for i in 0 .. max_tries {
-            let request = reqwest::Client::new()
-                .get("http://localhost:8081/v0/api/spec")
-                .timeout(std::time::Duration::from_secs(1))
-                .send();
-            match request.await {
-                Ok(_) => return Ok(()),
-                Err(error) => {
-                    if i == max_tries - 1 {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::AddrNotAvailable,
-                            error.to_string(),
-                        )
-                        .into());
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                }
-            }
-        }
-        Ok(())
+        Components::wait_url("http://localhost:8081/v0/api/spec").await
     }
 }

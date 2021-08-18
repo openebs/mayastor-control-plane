@@ -39,7 +39,7 @@ let
       "composer"
       "control-plane"
       "openapi"
-      "tests-mayastor"
+      "tests"
       "deployer"
     ];
     cargoBuildFlags = [ "-p agents" "-p rest" ];
@@ -48,7 +48,6 @@ let
       lockFile = ../../../Cargo.lock;
       outputHashes = {
         "rpc-0.1.0" = "uLdGaHuHRV3QEcnBgMmzYtXLXur+BgAdzVbGLe6vX4M=";
-
       };
     };
 

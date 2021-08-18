@@ -29,6 +29,7 @@ use bollard::{
 use rpc::mayastor::{bdev_rpc_client::BdevRpcClient, mayastor_client::MayastorClient};
 
 pub const TEST_NET_NAME: &str = "mayastor-testing-network";
+pub const TEST_LABEL_PREFIX: &str = "io.mayastor.test";
 pub const TEST_NET_NETWORK: &str = "10.1.0.0/16";
 #[derive(Clone)]
 pub struct RpcHandle {
@@ -136,12 +137,16 @@ impl Binary {
         }
     }
 
+    fn command(&self) -> String {
+        self.path.clone()
+    }
     fn commands(&self) -> Vec<String> {
         let mut v = vec![self.path.clone()];
         v.extend(self.arguments.clone());
         v
     }
-    fn which(name: &str) -> std::io::Result<String> {
+    /// Run the `which` command to get location of the named binary
+    pub fn which(name: &str) -> std::io::Result<String> {
         let output = std::process::Command::new("which").arg(name).output()?;
         if !output.status.success() {
             return Err(std::io::Error::new(std::io::ErrorKind::NotFound, name));
@@ -158,7 +163,7 @@ impl Binary {
 }
 
 const RUST_LOG_DEFAULT: &str =
-    "debug,actix_web=debug,actix=debug,h2=info,hyper=info,tower_buffer=info,tower=info,bollard=info,rustls=info,reqwest=info";
+    "debug,actix_web=debug,actix=debug,h2=info,hyper=info,tower_buffer=info,tower=info,bollard=info,rustls=info,reqwest=info,composer=info";
 
 /// Specs of the allowed containers include only the binary path
 /// (relative to src) and the required arguments
@@ -170,12 +175,18 @@ pub struct ContainerSpec {
     image: Option<String>,
     /// Command to run
     command: Option<String>,
+    /// Entrypoint
+    entrypoint: Option<Vec<String>>,
     /// command arguments to run
     arguments: Option<Vec<String>>,
     /// local binary
     binary: Option<Binary>,
     /// Port mapping to host ports
     port_map: Option<PortMap>,
+    /// Bypass the container image's port mapping
+    bypass_image_port_map: bool,
+    /// Network alias names
+    network_aliases: Option<Vec<String>>,
     /// Use Init container
     init: Option<bool>,
     /// Key-Map of environment variables
@@ -214,7 +225,11 @@ impl ContainerSpec {
     }
     /// Add port mapping from container to host
     pub fn with_portmap(mut self, from: &str, to: &str) -> Self {
-        let from = format!("{}/tcp", from);
+        let from = if from.contains('/') {
+            from.to_string()
+        } else {
+            format!("{}/tcp", from)
+        };
         let binding = bollard::service::PortBinding {
             host_ip: None,
             host_port: Some(to.into()),
@@ -228,6 +243,21 @@ impl ContainerSpec {
         }
         self
     }
+    /// Bypass the container image's port map
+    pub fn with_bypass_port_map(mut self, bypass: bool) -> Self {
+        self.bypass_image_port_map = bypass;
+        self
+    }
+    /// Add an alias to the container
+    pub fn with_alias(mut self, alias: &str) -> Self {
+        match self.network_aliases.as_mut() {
+            None => self.network_aliases = Some(vec![alias.into()]),
+            Some(aliases) => {
+                aliases.push(alias.into());
+            }
+        };
+        self
+    }
     /// Add environment key-val, eg for setting the RUST_LOG
     /// If a key already exists, the value is replaced
     pub fn with_env(mut self, key: &str, val: &str) -> Self {
@@ -236,12 +266,59 @@ impl ContainerSpec {
         }
         self
     }
+    /// Add single argument
+    /// Only one argument can be passed per use. So instead of:
+    ///
+    /// # Self::from_image("hello", "hello")
+    /// .with_arg("-n nats")
+    /// # ;
+    ///
+    /// usage would be:
+    ///
+    /// # Self::from_image("hello", "hello")
+    /// .with_arg("-n")
+    /// .with_arg("nats")
+    /// # ;
+    pub fn with_arg(mut self, arg: &str) -> Self {
+        match self.arguments.as_mut() {
+            None => self.arguments = Some(vec![arg.into()]),
+            Some(args) => {
+                args.push(arg.into());
+            }
+        };
+        self
+    }
+    /// Add multiple arguments via a vector
+    pub fn with_args<S: Into<String>>(mut self, args: Vec<S>) -> Self {
+        match self.arguments.as_mut() {
+            None => self.arguments = Some(args.into_iter().map(Into::into).collect()),
+            Some(arguments) => {
+                arguments.extend(args.into_iter().map(Into::into));
+            }
+        };
+        self
+    }
+    /// Use a specific command to execute
+    /// Note: this is not the entrypoint!
+    pub fn with_cmd(mut self, command: &str) -> Self {
+        self.command = Some(command.to_string());
+        self
+    }
+    /// Add a container entrypoint
+    pub fn with_entrypoint<S: Into<String>>(mut self, entrypoint: S) -> Self {
+        self.entrypoint = Some(vec![entrypoint.into()]);
+        self
+    }
+    /// Add a container entrypoint with arguments
+    pub fn with_entrypoints<S: Into<String>>(mut self, entrypoints: Vec<S>) -> Self {
+        self.entrypoint = Some(entrypoints.into_iter().map(Into::into).collect());
+        self
+    }
     /// use a volume binds between host path and container container
     pub fn with_bind(mut self, host: &str, container: &str) -> Self {
         self.binds.insert(container.to_string(), host.to_string());
         self
     }
-
     /// List of volume binds with each element as host:container
     fn binds(&self) -> Vec<String> {
         let mut vec = vec![];
@@ -272,8 +349,18 @@ impl ContainerSpec {
         commands.extend(self.arguments.clone().unwrap_or_default());
         commands
     }
+    /// Get the container command, if any
+    fn command(&self, network: &str) -> Option<String> {
+        if let Some(mut binary) = self.binary.clone() {
+            binary.setup_nats(network);
+            Some(binary.command())
+        } else {
+            self.command.clone()
+        }
+    }
 }
 
+#[derive(Clone)]
 pub struct Builder {
     /// name of the experiment this name will be used as a network and labels
     /// this way we can "group" all objects within docker to match this test
@@ -282,17 +369,25 @@ pub struct Builder {
     name: String,
     /// containers we want to create, note these are mayastor containers
     /// only
-    containers: Vec<ContainerSpec>,
-    /// the network for the tests used
-    network: String,
+    containers: Vec<(ContainerSpec, Ipv4Addr)>,
+    /// existing containers and their (IDs, Ipv4)
+    existing_containers: HashMap<ContainerName, (ContainerId, Ipv4Addr)>,
+    /// the network used by this experiment
+    network: Ipv4Network,
     /// reuse existing containers
     reuse: bool,
+    /// prefix for labels set on containers and networks
+    ///   $prefix.name = $name will be created automatically
+    label_prefix: String,
     /// allow cleaning up on a panic (if clean is true)
     allow_clean_on_panic: bool,
     /// delete the container and network when dropped
     clean: bool,
-    /// destroy existing containers if any
+    /// destroy existing containers on the same network, if any
     prune: bool,
+    /// prune matching existing containers
+    /// useful when we want to recreate matching containers, and leave everything else alone
+    prune_matching: bool,
     /// run all containers on build
     autorun: bool,
     /// base image for image-less containers
@@ -318,11 +413,14 @@ impl Builder {
         Self {
             name: TEST_NET_NAME.to_string(),
             containers: Default::default(),
-            network: "10.1.0.0/16".to_string(),
+            existing_containers: Default::default(),
+            network: TEST_NET_NETWORK.parse().expect("Valid network config"),
             reuse: false,
+            label_prefix: TEST_LABEL_PREFIX.to_string(),
             allow_clean_on_panic: true,
             clean: true,
             prune: true,
+            prune_matching: false,
             autorun: true,
             image: None,
             logs_on_panic: true,
@@ -334,6 +432,33 @@ impl Builder {
         self.name.clone()
     }
 
+    /// load information existing containers by querying the docker network
+    pub async fn load_existing_containers(mut self) -> Self {
+        tracing::trace!("Loading Existing containers");
+        let composer = self.clone().build_only().await.unwrap();
+        let containers = composer.list_network_containers(&self.name).await.unwrap();
+        for container in containers {
+            let networks = container
+                .network_settings
+                .unwrap_or_default()
+                .networks
+                .unwrap_or_default();
+            if let Some(n) = container.names.unwrap_or_default().first() {
+                if let Some(endpoint) = networks.get(&self.name) {
+                    if let Some(ip) = endpoint.ip_address.clone() {
+                        if let Ok(ip) = ip.parse() {
+                            tracing::debug!("Reloading existing container: {}", n);
+                            self.existing_containers
+                                .insert(n[1 ..].into(), (container.id.unwrap_or_default(), ip));
+                        }
+                    }
+                }
+            }
+        }
+        tracing::trace!("Loaded Existing containers");
+        self
+    }
+
     /// configure the `Builder` using the `BuilderConfigure` trait
     pub fn configure(
         self,
@@ -342,23 +467,29 @@ impl Builder {
         cfg.configure(self)
     }
 
-    /// next ordinal container ip
-    pub fn next_container_ip(&self) -> Result<String, Error> {
-        let net: Ipv4Network =
-            self.network
-                .parse()
-                .map_err(|error| bollard::errors::Error::IOError {
-                    err: std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        format!("Invalid network format: {}", error),
-                    ),
-                })?;
-        let ip = net.nth((self.containers.len() + 2) as u32);
-        match ip {
-            None => Err(bollard::errors::Error::IOError {
-                err: std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "No available ip"),
-            }),
-            Some(ip) => Ok(ip.to_string()),
+    /// finds the next unused ip
+    pub fn next_ip(&self) -> Result<Ipv4Addr, Error> {
+        for ip in 2 ..= 255u32 {
+            if let Some(ip) = self.network.nth(ip) {
+                if self.existing_containers.values().all(|(_, e)| e != &ip)
+                    && self.containers.iter().all(|(_, e)| e != &ip)
+                {
+                    return Ok(ip);
+                }
+            }
+        }
+        Err(bollard::errors::Error::IOError {
+            err: std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "No available ip"),
+        })
+    }
+
+    /// next ordinal container ip for the given container name
+    /// (useful in case we're recreating an existing container and "inheriting" its ip)
+    pub fn next_ip_for_name(&self, name: &str) -> Result<Ipv4Addr, Error> {
+        if let Some(container) = self.existing_containers.get(name) {
+            Ok(container.1)
+        } else {
+            self.next_ip()
         }
     }
 
@@ -369,9 +500,16 @@ impl Builder {
     }
 
     /// set the network for this test
-    pub fn network(mut self, network: &str) -> Builder {
-        self.network = network.to_owned();
-        self
+    pub fn network(mut self, network: &str) -> Result<Builder, Error> {
+        self.network = network
+            .parse()
+            .map_err(|error| bollard::errors::Error::IOError {
+                err: std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Invalid network format: {}", error),
+                ),
+            })?;
+        Ok(self)
     }
 
     /// the name to be used as labels and network name
@@ -380,18 +518,38 @@ impl Builder {
         self
     }
 
+    /// set different label prefix for the network label
+    pub fn label_prefix(mut self, prefix: &str) -> Builder {
+        self.label_prefix = prefix.to_owned();
+        self
+    }
+
     /// add a mayastor container with a name
-    pub fn add_container(mut self, name: &str) -> Builder {
-        self.containers.push(ContainerSpec::from_binary(
+    pub fn add_container(self, name: &str) -> Builder {
+        self.add_container_spec(ContainerSpec::from_binary(
             name,
             Binary::from_path("mayastor"),
-        ));
-        self
+        ))
+    }
+
+    /// check if a container exists
+    pub fn container_exists(&self, name: &str) -> bool {
+        self.containers.iter().any(|(c, _)| c.name == name)
+            || self.existing_containers.get(name).is_some()
     }
 
     /// add a generic container which runs a local binary
     pub fn add_container_spec(mut self, spec: ContainerSpec) -> Builder {
-        self.containers.push(spec);
+        if let Some(container) = self.existing_containers.get(&spec.name) {
+            tracing::debug!("Reusing container: {}", spec.name);
+            let next_ip = container.1;
+            self.existing_containers.remove(&spec.name);
+            self.containers.push((spec, next_ip));
+        } else {
+            let next_ip = self.next_ip().unwrap();
+            tracing::debug!("Adding container: {}, ip: {}", spec.name, next_ip);
+            self.containers.push((spec, next_ip));
+        }
         self
     }
 
@@ -412,6 +570,14 @@ impl Builder {
         self
     }
 
+    /// set all the prune and reuse flags
+    pub fn with_prune_reuse(mut self, prune: bool, prune_matching: bool, reuse: bool) -> Builder {
+        self.reuse = reuse;
+        self.prune = prune;
+        self.prune_matching = prune_matching;
+        self
+    }
+
     /// clean on drop?
     pub fn with_clean(mut self, enable: bool) -> Builder {
         self.clean = enable;
@@ -427,6 +593,7 @@ impl Builder {
     /// prune containers and networks on start
     pub fn with_prune(mut self, enable: bool) -> Builder {
         self.prune = enable;
+        self.prune_matching = enable;
         self
     }
 
@@ -499,7 +666,6 @@ impl Builder {
     /// build the config but don't start the containers
     async fn build_only(mut self) -> Result<ComposeTest, Box<dyn std::error::Error>> {
         self.override_clean();
-        let net: Ipv4Network = self.network.parse()?;
 
         let path = std::path::PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
         let srcdir = path.parent().unwrap().to_string_lossy().into();
@@ -508,9 +674,9 @@ impl Builder {
         let mut cfg = HashMap::new();
         cfg.insert(
             "Subnet".to_string(),
-            format!("{}/{}", net.network().to_string(), net.prefix()),
+            format!("{}/{}", self.network.network(), self.network.prefix()),
         );
-        cfg.insert("Gateway".into(), net.nth(1).unwrap().to_string());
+        cfg.insert("Gateway".into(), self.network.nth(1).unwrap().to_string());
 
         let ipam = Ipam {
             driver: Some("default".into()),
@@ -525,44 +691,20 @@ impl Builder {
             network_id: "".to_string(),
             containers: Default::default(),
             ipam,
-            label_prefix: "io.mayastor.test".to_string(),
+            label_prefix: self.label_prefix,
             reuse: self.reuse,
             allow_clean_on_panic: self.allow_clean_on_panic,
             clean: self.clean,
             prune: self.prune,
+            prune_matching: self.prune_matching,
             image: self.image,
             logs_on_panic: self.logs_on_panic,
         };
 
         compose.network_id = compose.network_create().await.map_err(|e| e.to_string())?;
 
-        if self.reuse {
-            let containers = compose.list_network_containers(&self.name).await?;
-
-            for container in containers {
-                let networks = container
-                    .network_settings
-                    .unwrap_or_default()
-                    .networks
-                    .unwrap_or_default();
-                if let Some(n) = container.names.unwrap_or_default().first() {
-                    if let Some(endpoint) = networks.get(&self.name) {
-                        if let Some(ip) = endpoint.ip_address.clone() {
-                            compose.containers.insert(
-                                n[1 ..].into(),
-                                (container.id.unwrap_or_default(), ip.parse()?),
-                            );
-                        }
-                    }
-                }
-            }
-        } else {
-            // containers are created where the IPs are ordinal
-            for (i, spec) in self.containers.iter().enumerate() {
-                compose
-                    .create_container(spec, &net.nth((i + 2) as u32).unwrap().to_string())
-                    .await?;
-            }
+        for (spec, ip) in self.containers {
+            compose.create_container(&spec, ip).await?;
         }
 
         Ok(compose)
@@ -604,8 +746,10 @@ pub struct ComposeTest {
     allow_clean_on_panic: bool,
     /// automatically clean up the things we have created for this test
     clean: bool,
-    /// remove existing containers upon creation
+    /// remove existing containers on the same network
     prune: bool,
+    /// remove matching existing containers
+    prune_matching: bool,
     /// base image for image-less containers
     image: Option<String>,
     /// output container logs on panic
@@ -655,17 +799,15 @@ impl ComposeTest {
             if Some(self.name.clone()) == first.name {
                 // reuse the same network
                 self.network_id = first.id.unwrap();
-                if self.prune {
-                    // but clean up the existing containers
-                    self.remove_network_containers(&self.name).await?;
-                }
+                // but clean up the existing containers
+                self.remove_network_containers(&self.name).await?;
                 return Ok(self.network_id.clone());
             } else {
                 self.network_remove_labeled().await?;
             }
         }
 
-        let name_label = format!("{}.name", self.label_prefix);
+        let name_label = self.label_prefix();
         // we use the same network everywhere
         let create_opts = CreateNetworkOptions {
             name: self.name.as_str(),
@@ -695,25 +837,31 @@ impl ComposeTest {
         for network in our_networks {
             let name = &network.name.unwrap();
             self.remove_network_containers(name).await?;
-            self.network_remove(name).await?;
+            if self.prune {
+                self.network_remove(name).await?;
+            }
         }
         Ok(())
     }
 
     /// remove all containers from the network
-    pub async fn remove_network_containers(&self, name: &str) -> Result<(), Error> {
-        let containers = self.list_network_containers(name).await?;
+    pub async fn remove_network_containers(&self, network: &str) -> Result<(), Error> {
+        let containers = self.list_network_containers(network).await?;
         for k in &containers {
             let name = k.id.clone().unwrap();
-            self.remove_container(&name).await?;
-            while let Ok(_c) = self.docker.inspect_container(&name, None).await {
-                tokio::time::sleep(Duration::from_millis(500)).await;
+            tracing::trace!("Lookup container for removal: {:?}", k.names);
+            if self.prune || (self.prune_matching && self.containers.get(&name).is_some()) {
+                self.remove_container(&name).await?;
+                while let Ok(_c) = self.docker.inspect_container(&name, None).await {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
             }
         }
         Ok(())
     }
 
     async fn network_remove(&self, name: &str) -> Result<(), Error> {
+        tracing::debug!("Removing network: {}", name);
         // if the network is not found, its not an error, any other error is
         // reported as such. Networks can only be destroyed when all containers
         // attached to it are removed. To get a list of attached
@@ -731,7 +879,7 @@ impl ComposeTest {
     pub async fn network_list_labeled(&self) -> Result<Vec<Network>, Error> {
         self.docker
             .list_networks(Some(ListNetworksOptions {
-                filters: vec![("label", vec!["io.mayastor.test.name"])]
+                filters: vec![("label", vec![self.label_prefix().as_str()])]
                     .into_iter()
                     .collect(),
             }))
@@ -791,6 +939,7 @@ impl ComposeTest {
 
     /// remove a container from the configuration
     async fn remove_container(&self, name: &str) -> Result<(), Error> {
+        tracing::debug!("Removing container: {}", name);
         self.docker
             .remove_container(
                 name,
@@ -826,8 +975,14 @@ impl ComposeTest {
     /// for the container. (2) endpoints: this allows us to plugin in the
     /// container into our network configuration (3) config: the actual
     /// config which includes the above objects
-    async fn create_container(&mut self, spec: &ContainerSpec, ipv4: &str) -> Result<(), Error> {
-        if self.prune {
+    async fn create_container(
+        &mut self,
+        spec: &ContainerSpec,
+        ipv4: Ipv4Addr,
+    ) -> Result<(), Error> {
+        tracing::debug!("Creating container: {}", spec.name);
+        if self.prune || self.prune_matching {
+            tracing::debug!("Killing/Removing container: {}", spec.name);
             let _ = self
                 .docker
                 .kill_container(&spec.name, Some(KillContainerOptions { signal: "SIGKILL" }))
@@ -856,7 +1011,7 @@ impl ComposeTest {
                 binds.push(format!("{}:{}", bin.path, bin.path));
             }
         }
-        let host_config = HostConfig {
+        let mut host_config = HostConfig {
             binds: Some(binds),
             mounts: Some(vec![
                 // DPDK needs to have a /tmp
@@ -889,9 +1044,10 @@ impl ComposeTest {
             EndpointSettings {
                 network_id: Some(self.network_id.to_string()),
                 ipam_config: Some(EndpointIpamConfig {
-                    ipv4_address: Some(ipv4.into()),
+                    ipv4_address: Some(ipv4.to_string()),
                     ..Default::default()
                 }),
+                aliases: spec.network_aliases.clone(),
                 ..Default::default()
             },
         );
@@ -908,16 +1064,72 @@ impl ComposeTest {
         }
 
         let name = spec.name.as_str();
-        let cmd = spec.commands(&self.name);
-        let cmd = cmd.iter().map(|s| s.as_str()).collect();
+        let mut cmd = spec.commands(&self.name);
         let image = spec
             .image
             .as_ref()
             .map_or_else(|| self.image.as_deref(), |s| Some(s.as_str()));
+
+        let mut entrypoint = spec.entrypoint.clone().unwrap_or_default();
+
+        if let Some(image) = image {
+            // merge our host config with the container image's default host config parameters
+            let image = self.docker.inspect_image(image).await.unwrap();
+            let config = image.config.unwrap_or_default();
+            let mut img_cmd = config.cmd.unwrap_or_default();
+            if !img_cmd.is_empty() && spec.command(&self.network_id).is_none() {
+                // keep the default commands first, this way we can use the spec's cmd
+                // as additional arguments
+                img_cmd.extend(cmd);
+                cmd = img_cmd;
+            }
+            let mut img_entrypoint = config.entrypoint.unwrap_or_default();
+            if !img_entrypoint.is_empty() && entrypoint.is_empty() {
+                // use the entrypoint from the container image
+                entrypoint = img_entrypoint;
+            } else if !entrypoint.is_empty() && spec.command(&self.network_id).is_none() {
+                // extend the container image entrypoint with the command
+                img_entrypoint.extend(cmd);
+                // the new command now is the entrypoint plus the commands
+                cmd = img_entrypoint;
+            }
+            host_config.init = None;
+            match host_config.port_bindings.as_mut() {
+                _ if !spec.bypass_image_port_map => {}
+                None => {
+                    let mut port_map = bollard::service::PortMap::new();
+                    for (port, _) in config.exposed_ports.unwrap_or_default() {
+                        port_map.insert(
+                            port.clone(),
+                            Some(vec![bollard::service::PortBinding {
+                                host_ip: None,
+                                host_port: port.split('/').next().map(ToString::to_string),
+                            }]),
+                        );
+                    }
+                    if !port_map.is_empty() {
+                        host_config.port_bindings = Some(port_map);
+                    }
+                }
+                Some(port_map) => {
+                    for (port, _) in config.exposed_ports.unwrap_or_default() {
+                        port_map.insert(
+                            port.clone(),
+                            Some(vec![bollard::service::PortBinding {
+                                host_ip: None,
+                                host_port: port.split('/').next().map(ToString::to_string),
+                            }]),
+                        );
+                    }
+                }
+            }
+        }
+
         let name_label = format!("{}.name", self.label_prefix);
         let config = Config {
-            cmd: Some(cmd),
+            cmd: Some(cmd.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
             env: Some(env.iter().map(|s| s.as_str()).collect()),
+            entrypoint: Some(entrypoint.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
             image,
             hostname: Some(name),
             host_config: Some(host_config),
@@ -950,7 +1162,7 @@ impl ComposeTest {
             .unwrap();
 
         self.containers
-            .insert(name.to_string(), (container.id, ipv4.parse().unwrap()));
+            .insert(name.to_string(), (container.id, ipv4));
 
         Ok(())
     }
@@ -1001,6 +1213,7 @@ impl ComposeTest {
 
     /// start the container
     pub async fn start(&self, name: &str) -> Result<(), Error> {
+        tracing::trace!("Start container: {}", name);
         let id = self
             .containers
             .get(name)
@@ -1010,7 +1223,8 @@ impl ComposeTest {
                     format!("Can't start container {} as it was not configured", name),
                 ),
             })?;
-        if !self.reuse {
+        if !self.reuse || self.prune_matching {
+            tracing::debug!("Starting container: {}, ip: {}", name, id.1);
             self.docker
                 .start_container::<&str>(id.0.as_str(), None)
                 .await?;
@@ -1135,6 +1349,22 @@ impl ComposeTest {
         ip.to_string()
     }
 
+    /// check if a container exists
+    pub async fn container_exists(&self, name: &str) -> bool {
+        let containers = self
+            .list_network_containers(&self.name)
+            .await
+            .unwrap_or_default();
+
+        self.containers.get(name).is_some()
+            || containers.iter().any(|c| {
+                c.names
+                    .clone()
+                    .unwrap_or_default()
+                    .contains(&name.to_string())
+            })
+    }
+
     /// stop all the containers part of the network
     /// returns the last error, if any or Ok
     pub async fn stop_network_containers(&self) -> Result<(), Error> {
@@ -1223,6 +1453,10 @@ impl ComposeTest {
     pub async fn down(&self) {
         self.remove_all().await.unwrap();
     }
+
+    pub fn label_prefix(&self) -> String {
+        format!("{}.name", self.label_prefix)
+    }
 }
 
 #[cfg(test)]
@@ -1235,6 +1469,7 @@ mod tests {
         let test = Builder::new()
             .name("composer")
             .network("10.1.0.0/16")
+            .expect("Network should be valid")
             .add_container_spec(
                 ContainerSpec::from_binary(
                     "nats",
