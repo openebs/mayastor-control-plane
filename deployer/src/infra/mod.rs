@@ -1,7 +1,9 @@
 pub mod dns;
+mod elastic;
 mod empty;
 mod etcd;
 mod jaeger;
+mod kibana;
 mod mayastor;
 pub mod nats;
 mod rest;
@@ -99,7 +101,7 @@ macro_rules! impl_ctrlp_agents {
                 }
                 let mut binary = Binary::from_dbg(&name).with_nats("-n");
                 if name == "core" {
-                    let etcd = format!("etcd.{}:2379", options.cluster_name);
+                    let etcd = format!("etcd.{}:2379", options.cluster_label.name());
                     binary = binary.with_args(vec!["--store", &etcd]);
                     if let Some(cache_period) = &options.cache_period {
                         binary = binary.with_args(vec!["-c", &cache_period.to_string()]);
@@ -122,7 +124,7 @@ macro_rules! impl_ctrlp_agents {
                     if let Some(period) = &options.reconcile_idle_period {
                         binary = binary.with_args(vec!["--reconcile-idle-period", &period.to_string()]);
                     }
-                    if options.jaeger {
+                    if cfg.container_exists("jaeger") {
                         let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
                         binary = binary.with_args(vec!["--jaeger", &jaeger_config]);
                     }
@@ -161,6 +163,34 @@ pub fn build_error(name: &str, status: Option<i32>) -> Result<(), Error> {
 }
 
 impl Components {
+    /// Wait for the url endpoint to return success to a GET request with a default timeout of 10s
+    pub async fn wait_url(url: &str) -> Result<(), Error> {
+        Self::wait_url_timeout(url, std::time::Duration::from_secs(10)).await
+    }
+    /// Wait for the url endpoint to return success to a GET request with a provided timeout
+    pub async fn wait_url_timeout(url: &str, timeout: std::time::Duration) -> Result<(), Error> {
+        let start_time = std::time::Instant::now();
+        let get_timeout = std::time::Duration::from_millis(200);
+        loop {
+            let request = reqwest::Client::new().get(url).timeout(get_timeout);
+            match request.send().await {
+                Ok(_) => {
+                    return Ok(());
+                }
+                Err(error) => {
+                    if std::time::Instant::now() > (start_time + timeout) {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::AddrNotAvailable,
+                            format!("URL '{}' not ready yet: '{:?}'", url, error),
+                        )
+                        .into());
+                    }
+                }
+            }
+            tokio::time::sleep(get_timeout).await;
+        }
+    }
+    /// Start all components and wait up to the provided timeout
     pub async fn start_wait(
         &self,
         cfg: &ComposeTest,
@@ -174,6 +204,7 @@ impl Components {
             }
         }
     }
+    /// Start all components, in order, but don't wait for them
     pub async fn start(&self, cfg: &ComposeTest) -> Result<(), Error> {
         let mut last_done = None;
         for component in &self.0 {
@@ -193,6 +224,8 @@ impl Components {
         }
         Ok(())
     }
+    /// Start all components, in order. Then wait for all components with a wait between each
+    /// component to make sure they start orderly
     async fn start_wait_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
         let mut last_done = None;
         for component in &self.0 {
@@ -376,11 +409,13 @@ impl_component! {
     Nats,       0,
     Dns,        1,
     Etcd,       1,
-    Jaeger,     1,
-    Rest,       2,
+    Elastic,    1,
+    Kibana,     1,
+    Jaeger,     2,
     Core,       3,
-    JsonGrpc,   4,
-    Mayastor,   5,
+    Rest,       3,
+    Mayastor,   4,
+    JsonGrpc,   5,
 }
 
 // Message Bus Control Plane Agents

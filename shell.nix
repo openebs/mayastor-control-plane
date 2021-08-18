@@ -25,6 +25,8 @@ mkShell {
   buildInputs = [
     clang
     cowsay
+    docker
+    etcd
     fio
     git
     llvmPackages.libclang
@@ -33,14 +35,12 @@ mkShell {
     nvme-cli
     openssl
     pkg-config
+    pkgs.openapi-generator
     pre-commit
+    pytest_inputs
     python3
     utillinux
     which
-    docker
-    etcd
-    pkgs.openapi-generator
-    pytest_inputs
   ]
   ++ pkgs.lib.optional (!norust) channel.nightly
   ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;

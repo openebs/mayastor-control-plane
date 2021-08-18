@@ -360,7 +360,7 @@ impl ClusterBuilder {
     fn build_prepare(&self) -> Result<(Components, Builder), Error> {
         let components = Components::new(self.opts.clone());
         let composer = Builder::new()
-            .name(&self.opts.cluster_name)
+            .name(&self.opts.cluster_label.name())
             .configure(components.clone())?
             .with_base_image(self.opts.base_image.clone())
             .autorun(false)
@@ -399,7 +399,7 @@ impl ClusterBuilder {
             for container in cluster.composer.list_cluster_containers().await? {
                 let networks = container.network_settings.unwrap().networks.unwrap();
                 let ip = networks
-                    .get(&self.opts.cluster_name)
+                    .get(&self.opts.cluster_label.name())
                     .unwrap()
                     .ip_address
                     .clone();
