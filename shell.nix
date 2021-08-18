@@ -29,6 +29,7 @@ mkShell {
     git
     llvmPackages.libclang
     nats-server
+    nodejs-16_x
     nvme-cli
     openssl
     pkg-config
