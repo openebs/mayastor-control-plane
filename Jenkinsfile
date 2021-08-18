@@ -126,7 +126,7 @@ pipeline {
           when{
             expression { bdd_test == true }
           }
-          agent { label 'nixos-mayastor-pytest' }
+          agent { label 'nixos-mayastor' }
           steps {
             sh 'printenv'
             sh 'nix-shell --run "cargo build --bins"'
