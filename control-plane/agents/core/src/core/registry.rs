@@ -122,7 +122,7 @@ impl Registry {
         )
         .await
         {
-            Ok(_) => Ok(()),
+            Ok(result) => result.map_err(Into::into),
             Err(_) => Err(StoreError::Timeout {
                 operation: "Put".to_string(),
                 timeout: self.store_timeout,

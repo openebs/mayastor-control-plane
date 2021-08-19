@@ -75,8 +75,13 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
             spec.start_create_inner(request)?;
             spec.clone()
         };
-        Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
-        Ok((spec_clone, guard))
+        match Self::store_operation_log(registry, locked_spec, &spec_clone).await {
+            Ok(_) => Ok((spec_clone, guard)),
+            Err(e) => {
+                Self::delete_spec(registry, locked_spec).await.ok();
+                Err(e)
+            }
+        }
     }
 
     /// When a create request is issued we need to validate by verifying that:
@@ -141,20 +146,64 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
                 }
             }
             Err(error) => {
-                let mut spec_clone = locked_spec.lock().clone();
-                spec_clone.clear_op();
-                let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock();
-                match stored {
-                    Ok(_) => {
-                        spec.clear_op();
-                        Err(error)
-                    }
-                    Err(error) => {
-                        spec.set_op_result(false);
-                        Err(error)
-                    }
-                }
+                // The create failed so delete the spec.
+                Self::delete_spec(registry, locked_spec).await.ok();
+                Err(error)
+            }
+        }
+    }
+
+    /// Validates the outcome of a create step.
+    /// In case of an error, an attempt is made to delete the spec in the persistent store and
+    /// registry.
+    async fn validate_create_step<R: Send, O>(
+        registry: &Registry,
+        result: Result<R, SvcError>,
+        locked_spec: &Arc<Mutex<Self>>,
+    ) -> Result<R, SvcError>
+    where
+        Self: SpecTransaction<O>,
+        Self: StorableObject,
+    {
+        match result {
+            Ok(val) => Ok(val),
+            Err(error) => {
+                Self::delete_spec(registry, locked_spec).await.ok();
+                Err(error)
+            }
+        }
+    }
+
+    // Attempt to delete the spec from the persistent store and the registry.
+    // If the persistent store is unavailable the spec is marked as dirty and the dirty spec
+    // reconciler will attempt to update the store when the store is back online.
+    async fn delete_spec<O>(
+        registry: &Registry,
+        locked_spec: &Arc<Mutex<Self>>,
+    ) -> Result<(), SvcError>
+    where
+        Self: SpecTransaction<O>,
+    {
+        let spec_clone = locked_spec.lock().clone();
+
+        // Attempt to delete the spec from the persistent store.
+        match registry.delete_kv(&spec_clone.uuid()).await {
+            Ok(_) => {
+                // Delete the spec from the registry.
+                Self::remove_spec(locked_spec, registry);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Failed to delete spec {:?} from the persistent store. Error {:?}",
+                    spec_clone,
+                    e
+                );
+                // The spec failed to be deleted from the store, so don't delete it from the
+                // registry. Instead, mark the result of the operation as failed so that the garbage
+                // collector can tidy it up.
+                locked_spec.lock().set_op_result(false);
+                Err(e)
             }
         }
     }
