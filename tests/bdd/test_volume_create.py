@@ -146,11 +146,10 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
     except Exception as e:
         exception_info = e.__dict__
         assert exception_info["status"] == requests.codes["insufficient_storage"]
-    # TODO: Uncomment the "finally" clause when CAS-1059 is completed.
-    # finally:
-    #     # Check that the volume wasn't created.
-    #     volumes = common.get_volumes_api().get_volumes()
-    #     assert len(volumes) == 0
+    finally:
+        # Check that the volume wasn't created.
+        volumes = common.get_volumes_api().get_volumes()
+        assert len(volumes) == 0
 
 
 @then("volume creation should succeed with a returned volume object")

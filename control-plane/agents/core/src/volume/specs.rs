@@ -322,7 +322,7 @@ impl ResourceSpecsLocked {
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
         let result = get_create_volume_replicas(registry, request).await;
         let create_replicas =
-            SpecOperations::validate_update_step(registry, result, &volume, &volume_clone).await?;
+            SpecOperations::validate_create_step(registry, result, &volume).await?;
 
         let mut replicas = Vec::<Replica>::new();
         for replica in &create_replicas {
@@ -1228,8 +1228,15 @@ impl ResourceSpecsLocked {
             for volume_spec in volumes {
                 let (mut volume_clone, _guard) = {
                     if let Ok(guard) = volume_spec.operation_guard(OperationMode::ReconcileStart) {
-                        let volume = volume_spec.lock();
+                        let volume = volume_spec.lock().clone();
                         if !volume.status.created() {
+                            if volume.status.creating() {
+                                // An attempt to create the volume failed. Delete the spec from the
+                                // persistent store and registry.
+                                SpecOperations::delete_spec(registry, &volume_spec)
+                                    .await
+                                    .ok();
+                            }
                             continue;
                         }
                         (volume.clone(), guard)
