@@ -981,6 +981,7 @@ impl ComposeTest {
         ipv4: Ipv4Addr,
     ) -> Result<(), Error> {
         tracing::debug!("Creating container: {}", spec.name);
+
         if self.prune || self.prune_matching {
             tracing::debug!("Killing/Removing container: {}", spec.name);
             let _ = self
@@ -999,6 +1000,10 @@ impl ComposeTest {
                 )
                 .await;
         }
+
+        // pull the image, if missing
+        self.pull_missing_image(&spec.image).await;
+
         let mut binds = vec![
             format!("{}:{}", self.srcdir, self.srcdir),
             "/nix:/nix:ro".into(),
@@ -1152,8 +1157,6 @@ impl ComposeTest {
             exposed_ports: Some(exposed_ports),
             ..Default::default()
         };
-
-        self.pull_missing_image(&spec.image).await;
 
         let container = self
             .docker
