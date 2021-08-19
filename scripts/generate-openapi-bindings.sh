@@ -38,6 +38,7 @@ else
   mkdir -p "$TARGET"
 fi
 
+rm -rf "$tmpd"/api
 mv "$tmpd"/* "$TARGET"/
 rm -rf "$tmpd"
 

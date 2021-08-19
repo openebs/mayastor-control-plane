@@ -8,7 +8,7 @@
     non_camel_case_types
 )]
 
-use crate::apis::Body;
+use crate::apis::{Body, NoContent};
 use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,

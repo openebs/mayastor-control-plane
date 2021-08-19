@@ -8,7 +8,7 @@
     non_camel_case_types
 )]
 
-use crate::apis::Body;
+use crate::apis::{Body, NoContent};
 use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
@@ -94,19 +94,21 @@ struct put_volume_targetQueryParams {
 async fn del_share<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<String>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn del_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<String>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_volume(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn del_volume_target<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(

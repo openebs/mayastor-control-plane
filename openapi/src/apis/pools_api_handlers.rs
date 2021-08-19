@@ -8,7 +8,7 @@
     non_camel_case_types
 )]
 
-use crate::apis::Body;
+use crate::apis::{Body, NoContent};
 use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
@@ -65,19 +65,21 @@ pub fn configure<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
 async fn del_node_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<(String, String)>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_node_pool(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn del_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<String>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_pool(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn get_node_pool<T: crate::apis::Pools + 'static, A: FromRequest + 'static>(
