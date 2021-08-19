@@ -163,9 +163,9 @@ pub fn build_error(name: &str, status: Option<i32>) -> Result<(), Error> {
 }
 
 impl Components {
-    /// Wait for the url endpoint to return success to a GET request with a default timeout of 10s
+    /// Wait for the url endpoint to return success to a GET request with a default timeout
     pub async fn wait_url(url: &str) -> Result<(), Error> {
-        Self::wait_url_timeout(url, std::time::Duration::from_secs(10)).await
+        Self::wait_url_timeout(url, std::time::Duration::from_secs(20)).await
     }
     /// Wait for the url endpoint to return success to a GET request with a provided timeout
     pub async fn wait_url_timeout(url: &str, timeout: std::time::Duration) -> Result<(), Error> {

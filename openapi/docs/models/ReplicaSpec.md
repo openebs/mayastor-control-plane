@@ -10,7 +10,7 @@ Name | Type | Description | Notes
 **pool** | **String** | The pool that the replica should live on. | 
 **share** | [**crate::models::Protocol**](Protocol.md) |  | 
 **size** | **u64** | The size that the replica should be. | 
-**state** | [**crate::models::SpecState**](SpecState.md) |  | 
+**status** | [**crate::models::SpecStatus**](SpecStatus.md) |  | 
 **thin** | **bool** | Thin provisioning. | 
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | uuid of the replica | 
 

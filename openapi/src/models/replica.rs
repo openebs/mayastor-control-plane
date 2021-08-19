@@ -19,10 +19,10 @@ use crate::apis::IntoVec;
 /// Replica information
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Replica {
-    /// id of the mayastor instance
+    /// storage node identifier
     #[serde(rename = "node")]
     pub node: String,
-    /// id of the pool
+    /// storage pool identifier
     #[serde(rename = "pool")]
     pub pool: String,
     #[serde(rename = "share")]

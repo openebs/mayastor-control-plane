@@ -80,7 +80,6 @@ fn init_tracing() -> Option<Tracer> {
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(agent)
             .with_service_name("rest-server")
-            .with_max_packet_size(8_192)
             .install_batch(opentelemetry::runtime::TokioCurrentThread)
             .expect("Should be able to initialise the exporter");
         Some(tracer)

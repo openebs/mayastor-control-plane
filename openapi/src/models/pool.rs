@@ -14,65 +14,39 @@
 
 use crate::apis::IntoVec;
 
-/// Pool : Pool information
+/// Pool : Pool object, comprised of a spec and a state
 
-/// Pool information
+/// Pool object, comprised of a spec and a state
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Pool {
-    /// size of the pool in bytes
-    #[serde(rename = "capacity")]
-    pub capacity: u64,
-    /// absolute disk paths claimed by the pool
-    #[serde(rename = "disks")]
-    pub disks: Vec<String>,
-    /// id of the pool
+    /// storage pool identifier
     #[serde(rename = "id")]
     pub id: String,
-    /// id of the mayastor instance
-    #[serde(rename = "node")]
-    pub node: String,
-    #[serde(rename = "state")]
-    pub state: crate::models::PoolState,
-    /// used bytes from the pool
-    #[serde(rename = "used")]
-    pub used: u64,
+    #[serde(rename = "spec", skip_serializing_if = "Option::is_none")]
+    pub spec: Option<crate::models::PoolSpec>,
+    #[serde(rename = "state", skip_serializing_if = "Option::is_none")]
+    pub state: Option<crate::models::PoolState>,
 }
 
 impl Pool {
     /// Pool using only the required fields
-    pub fn new(
-        capacity: impl Into<u64>,
-        disks: impl IntoVec<String>,
-        id: impl Into<String>,
-        node: impl Into<String>,
-        state: impl Into<crate::models::PoolState>,
-        used: impl Into<u64>,
-    ) -> Pool {
+    pub fn new(id: impl Into<String>) -> Pool {
         Pool {
-            capacity: capacity.into(),
-            disks: disks.into_vec(),
             id: id.into(),
-            node: node.into(),
-            state: state.into(),
-            used: used.into(),
+            spec: None,
+            state: None,
         }
     }
     /// Pool using all fields
     pub fn new_all(
-        capacity: impl Into<u64>,
-        disks: impl IntoVec<String>,
         id: impl Into<String>,
-        node: impl Into<String>,
-        state: impl Into<crate::models::PoolState>,
-        used: impl Into<u64>,
+        spec: impl Into<Option<crate::models::PoolSpec>>,
+        state: impl Into<Option<crate::models::PoolState>>,
     ) -> Pool {
         Pool {
-            capacity: capacity.into(),
-            disks: disks.into_vec(),
             id: id.into(),
-            node: node.into(),
+            spec: spec.into(),
             state: state.into(),
-            used: used.into(),
         }
     }
 }

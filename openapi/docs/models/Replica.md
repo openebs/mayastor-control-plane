@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**node** | **String** | id of the mayastor instance | 
-**pool** | **String** | id of the pool | 
+**node** | **String** | storage node identifier | 
+**pool** | **String** | storage pool identifier | 
 **share** | [**crate::models::Protocol**](Protocol.md) |  | 
 **size** | **u64** | size of the replica in bytes | 
 **state** | [**crate::models::ReplicaState**](ReplicaState.md) |  | 

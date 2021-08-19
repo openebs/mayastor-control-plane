@@ -22,19 +22,17 @@ pub struct PoolSpec {
     /// absolute disk paths claimed by the pool
     #[serde(rename = "disks")]
     pub disks: Vec<String>,
-    /// id of the pool
+    /// storage pool identifier
     #[serde(rename = "id")]
     pub id: String,
     /// Pool labels.
     #[serde(rename = "labels")]
     pub labels: Vec<String>,
-    /// id of the mayastor instance
+    /// storage node identifier
     #[serde(rename = "node")]
     pub node: String,
-    #[serde(rename = "operation", skip_serializing_if = "Option::is_none")]
-    pub operation: Option<crate::models::PoolSpecOperation>,
-    #[serde(rename = "state")]
-    pub state: crate::models::SpecState,
+    #[serde(rename = "status")]
+    pub status: crate::models::SpecStatus,
 }
 
 impl PoolSpec {
@@ -44,15 +42,14 @@ impl PoolSpec {
         id: impl Into<String>,
         labels: impl IntoVec<String>,
         node: impl Into<String>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
     ) -> PoolSpec {
         PoolSpec {
             disks: disks.into_vec(),
             id: id.into(),
             labels: labels.into_vec(),
             node: node.into(),
-            operation: None,
-            state: state.into(),
+            status: status.into(),
         }
     }
     /// PoolSpec using all fields
@@ -61,16 +58,14 @@ impl PoolSpec {
         id: impl Into<String>,
         labels: impl IntoVec<String>,
         node: impl Into<String>,
-        operation: impl Into<Option<crate::models::PoolSpecOperation>>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
     ) -> PoolSpec {
         PoolSpec {
             disks: disks.into_vec(),
             id: id.into(),
             labels: labels.into_vec(),
             node: node.into(),
-            operation: operation.into(),
-            state: state.into(),
+            status: status.into(),
         }
     }
 }

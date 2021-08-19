@@ -274,7 +274,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         replica: &ReplicaSpec,
     ) -> Option<NodeId> {
-        let pools = registry.get_pools_inner().await.unwrap();
+        let pools = registry.get_pool_states_inner().await.unwrap();
         pools.iter().find_map(|p| {
             if p.id == replica.pool {
                 Some(p.node.clone())
@@ -1162,9 +1162,11 @@ impl ResourceSpecsLocked {
                     Ok(state) => state.node.clone(),
                     Err(_) => {
                         let pool_id = replica.lock().pool.clone();
-                        let pool_spec = self.get_pool(&pool_id).context(errors::PoolNotFound {
-                            pool_id: pool_id.to_string(),
-                        })?;
+                        let pool_spec =
+                            self.get_locked_pool(&pool_id)
+                                .context(errors::PoolNotFound {
+                                    pool_id: pool_id.to_string(),
+                                })?;
                         let node_id = pool_spec.lock().node.clone();
                         node_id
                     }

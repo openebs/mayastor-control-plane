@@ -76,7 +76,7 @@ impl Registry {
         volumes
     }
 
-    /// Create and return a volume object corresponding to the ID.
+    /// Return a volume object corresponding to the ID.
     pub(crate) async fn get_volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
         Ok(Volume::new(
             &self.specs.get_volume(id)?,

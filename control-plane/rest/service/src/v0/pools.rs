@@ -13,7 +13,7 @@ async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
         },
         Filter::Pool(pool_id) => {
             let node_id = match MessageBus::get_pool(filter).await {
-                Ok(pool) => pool.node,
+                Ok(pool) => pool.node(),
                 Err(error) => return Err(RestError::from(error)),
             };
             DestroyPool {

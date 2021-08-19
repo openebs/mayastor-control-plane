@@ -19,7 +19,7 @@ impl ComponentAction for Jaeger {
                     .with_env("ES_HOST", "elasticsearch")
                     .with_env("ES_PORT", "9200")
             }
-            if options.wait_timeout.is_none() {
+            if cfg.container_exists("elastic") && options.wait_timeout.is_none() {
                 image = image
                     // use our entrypoint which doesn't crash when elasticsearch is not ready...
                     // instead, wait until $ES_HOST:$ES_PORT is open

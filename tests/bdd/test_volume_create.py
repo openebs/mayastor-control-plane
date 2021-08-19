@@ -18,7 +18,7 @@ from openapi.openapi_client.model.create_pool_body import CreatePoolBody
 from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
 from openapi.openapi_client.model.volume_spec import VolumeSpec
 from openapi.openapi_client.model.protocol import Protocol
-from openapi.openapi_client.model.spec_state import SpecState
+from openapi.openapi_client.model.spec_status import SpecStatus
 from openapi.openapi_client.model.volume_state import VolumeState
 from openapi.openapi_client.model.volume_status import VolumeStatus
 
@@ -162,7 +162,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
         1,
         Protocol("none"),
         VOLUME_SIZE,
-        SpecState("Created"),
+        SpecStatus("Created"),
         VOLUME_UUID,
         _configuration=cfg,
     )

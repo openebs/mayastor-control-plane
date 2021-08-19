@@ -10,7 +10,7 @@ Name | Type | Description | Notes
 **operation** | Option<[**crate::models::VolumeSpecOperation**](VolumeSpec_operation.md)> |  | [optional]
 **protocol** | [**crate::models::Protocol**](Protocol.md) |  | 
 **size** | **u64** | Size that the volume should be. | 
-**state** | [**crate::models::SpecState**](SpecState.md) |  | 
+**status** | [**crate::models::SpecStatus**](SpecStatus.md) |  | 
 **target_node** | Option<**String**> | The node where front-end IO will be sent to | [optional]
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | Volume Id | 
 

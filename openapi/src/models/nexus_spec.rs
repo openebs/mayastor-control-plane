@@ -38,8 +38,8 @@ pub struct NexusSpec {
     /// Size of the nexus.
     #[serde(rename = "size")]
     pub size: u64,
-    #[serde(rename = "state")]
-    pub state: crate::models::SpecState,
+    #[serde(rename = "status")]
+    pub status: crate::models::SpecStatus,
     /// Nexus Id
     #[serde(rename = "uuid")]
     pub uuid: uuid::Uuid,
@@ -53,7 +53,7 @@ impl NexusSpec {
         node: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
         uuid: impl Into<uuid::Uuid>,
     ) -> NexusSpec {
         NexusSpec {
@@ -64,7 +64,7 @@ impl NexusSpec {
             owner: None,
             share: share.into(),
             size: size.into(),
-            state: state.into(),
+            status: status.into(),
             uuid: uuid.into(),
         }
     }
@@ -77,7 +77,7 @@ impl NexusSpec {
         owner: impl Into<Option<uuid::Uuid>>,
         share: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
         uuid: impl Into<uuid::Uuid>,
     ) -> NexusSpec {
         NexusSpec {
@@ -88,7 +88,7 @@ impl NexusSpec {
             owner: owner.into(),
             share: share.into(),
             size: size.into(),
-            state: state.into(),
+            status: status.into(),
             uuid: uuid.into(),
         }
     }

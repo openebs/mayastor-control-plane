@@ -17,7 +17,7 @@ async fn put_replica(
         }
         Filter::PoolReplica(pool_id, replica_id) => {
             let node_id = match MessageBus::get_pool(Filter::Pool(pool_id.clone())).await {
-                Ok(replica) => replica.node,
+                Ok(pool) => pool.node(),
                 Err(error) => return Err(RestError::from(error)),
             };
             body.bus_request(node_id, pool_id, replica_id)

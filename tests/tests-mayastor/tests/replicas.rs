@@ -86,7 +86,7 @@ async fn create_replica_sizes() {
         .get_pools(v0::Filter::Pool(cluster.pool(0, 0)))
         .await
         .unwrap();
-    let capacity = pool.first().unwrap().capacity;
+    let capacity = pool.first().unwrap().state().unwrap().capacity;
     assert!(size > capacity && capacity > 0);
     let sizes = vec![Ok(capacity / 2), Ok(capacity), Err(capacity + 512)];
     for test in sizes {

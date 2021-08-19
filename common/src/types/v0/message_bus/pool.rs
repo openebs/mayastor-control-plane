@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::{types::v0::store::pool::PoolSpec, IntoOption};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, ops::Deref};
 use strum_macros::{EnumString, ToString};
@@ -40,7 +41,7 @@ impl From<i32> for PoolStatus {
         }
     }
 }
-impl From<PoolStatus> for models::PoolState {
+impl From<PoolStatus> for models::PoolStatus {
     fn from(src: PoolStatus) -> Self {
         match src {
             PoolStatus::Unknown => Self::Unknown,
@@ -50,13 +51,13 @@ impl From<PoolStatus> for models::PoolState {
         }
     }
 }
-impl From<models::PoolState> for PoolStatus {
-    fn from(src: models::PoolState) -> Self {
+impl From<models::PoolStatus> for PoolStatus {
+    fn from(src: models::PoolStatus) -> Self {
         match src {
-            models::PoolState::Unknown => Self::Unknown,
-            models::PoolState::Online => Self::Online,
-            models::PoolState::Degraded => Self::Degraded,
-            models::PoolState::Faulted => Self::Faulted,
+            models::PoolStatus::Unknown => Self::Unknown,
+            models::PoolStatus::Online => Self::Online,
+            models::PoolStatus::Degraded => Self::Degraded,
+            models::PoolStatus::Faulted => Self::Faulted,
         }
     }
 }
@@ -64,7 +65,7 @@ impl From<models::PoolState> for PoolStatus {
 /// Pool information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct Pool {
+pub struct PoolState {
     /// id of the mayastor instance
     pub node: NodeId,
     /// id of the pool
@@ -72,32 +73,32 @@ pub struct Pool {
     /// absolute disk paths claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
     /// current state of the pool
-    pub state: PoolStatus,
+    pub status: PoolStatus,
     /// size of the pool in bytes
     pub capacity: u64,
     /// used bytes from the pool
     pub used: u64,
 }
 
-impl From<Pool> for models::Pool {
-    fn from(src: Pool) -> Self {
+impl From<PoolState> for models::PoolState {
+    fn from(src: PoolState) -> Self {
         Self::new(
             src.capacity,
             src.disks,
             src.id,
             src.node,
-            src.state,
+            src.status,
             src.used,
         )
     }
 }
-impl From<models::Pool> for Pool {
-    fn from(src: models::Pool) -> Self {
+impl From<models::PoolState> for PoolState {
+    fn from(src: models::PoolState) -> Self {
         Self {
             node: src.node.into(),
             id: src.id.into(),
             disks: src.disks.iter().map(From::from).collect(),
-            state: src.state.into(),
+            status: src.status.into(),
             capacity: src.capacity,
             used: src.used,
         }
@@ -135,6 +136,90 @@ impl PartialOrd for PoolStatus {
                 PoolStatus::Faulted => Some(Ordering::Equal),
             },
         }
+    }
+}
+
+/// A Mayastor Storage Pool
+/// It may have a spec which is the specification provided by the creator
+/// It may have a state if such state is retrieved from a mayastor storage node
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Pool {
+    /// pool identification
+    id: PoolId,
+    /// Desired specification of the pool.
+    spec: Option<PoolSpec>,
+    /// Runtime state of the pool.
+    state: Option<PoolState>,
+}
+
+impl Pool {
+    /// Construct a new pool with spec and state
+    pub fn new(spec: PoolSpec, state: PoolState) -> Self {
+        Self {
+            id: spec.id.clone(),
+            spec: Some(spec),
+            state: Some(state),
+        }
+    }
+    /// Construct a new pool with spec but no state
+    pub fn from_spec(spec: PoolSpec) -> Self {
+        Self {
+            id: spec.id.clone(),
+            spec: Some(spec),
+            state: None,
+        }
+    }
+    /// Construct a new pool with optional spec and state
+    pub fn from_state(state: PoolState, spec: Option<PoolSpec>) -> Self {
+        Self {
+            id: state.id.clone(),
+            spec,
+            state: Some(state),
+        }
+    }
+    /// Try to construct a new pool from spec and state
+    pub fn try_new(spec: Option<PoolSpec>, state: Option<PoolState>) -> Option<Self> {
+        match (spec, state) {
+            (Some(spec), Some(state)) => Some(Self::new(spec, state)),
+            (Some(spec), None) => Some(Self::from_spec(spec)),
+            (None, Some(state)) => Some(Self::from_state(state, None)),
+            _ => None,
+        }
+    }
+    /// Get the pool spec.
+    pub fn spec(&self) -> Option<PoolSpec> {
+        self.spec.clone()
+    }
+    /// Get the pool identification.
+    pub fn id(&self) -> &PoolId {
+        &self.id
+    }
+    /// Get the pool state.
+    pub fn state(&self) -> Option<PoolState> {
+        self.state.clone()
+    }
+    /// Get the node identification
+    pub fn node(&self) -> NodeId {
+        match &self.spec {
+            // guaranteed that at either spec or state are defined
+            // todo: use enum derivation
+            None => self.state.as_ref().unwrap().node.clone(),
+            Some(spec) => spec.node.clone(),
+        }
+    }
+}
+
+impl From<Pool> for models::Pool {
+    fn from(src: Pool) -> Self {
+        models::Pool::new_all(src.id, src.spec.into_opt(), src.state.into_opt())
+    }
+}
+
+impl From<models::Pool> for Pool {
+    fn from(src: models::Pool) -> Self {
+        Pool::try_new(src.spec.into_opt(), src.state.into_opt())
+            .expect("Should have at least 1 of [spec,state]")
     }
 }
 

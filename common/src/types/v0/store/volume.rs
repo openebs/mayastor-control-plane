@@ -282,13 +282,13 @@ impl StorableObject for VolumeSpec {
 /// State of the Volume Spec
 pub type VolumeSpecStatus = SpecStatus<message_bus::VolumeStatus>;
 
-impl From<models::SpecState> for VolumeSpecStatus {
-    fn from(spec_state: models::SpecState) -> Self {
+impl From<models::SpecStatus> for VolumeSpecStatus {
+    fn from(spec_state: models::SpecStatus) -> Self {
         match spec_state {
-            models::SpecState::Creating => Self::Creating,
-            models::SpecState::Created => Self::Created(message_bus::VolumeStatus::Unknown),
-            models::SpecState::Deleting => Self::Deleting,
-            models::SpecState::Deleted => Self::Deleted,
+            models::SpecStatus::Creating => Self::Creating,
+            models::SpecStatus::Created => Self::Created(message_bus::VolumeStatus::Unknown),
+            models::SpecStatus::Deleting => Self::Deleting,
+            models::SpecStatus::Deleted => Self::Deleted,
         }
     }
 }
@@ -368,7 +368,7 @@ impl From<models::VolumeSpec> for VolumeSpec {
             num_replicas: spec.num_replicas,
             protocol: spec.protocol.into(),
             num_paths: spec.num_paths,
-            status: spec.state.into(),
+            status: spec.status.into(),
             target_node: spec.target_node.map(From::from),
             policy: Default::default(),
             topology: Default::default(),

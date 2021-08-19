@@ -926,7 +926,7 @@ paths:
           name: node
           required: true
           schema:
-            type: string
+            $ref: '#/components/schemas/NodeId'
       responses:
         '200':
           description: OK
@@ -2090,8 +2090,8 @@ components:
           $ref: '#/components/schemas/NodeState'
       required:
         - id
-    PoolState:
-      description: current state of the pool
+    PoolStatus:
+      description: current status of the pool
       type: string
       enum:
         - Unknown
@@ -2099,19 +2099,25 @@ components:
         - Degraded
         - Faulted
     Pool:
-      example:
-        capacity: 100663296
-        disks:
-          - 'malloc:///disk?size_mb=100'
-        id: test ram pool
-        node: mayastor-2
-        state: Online
-        used: 0
-      description: Pool information
+      description: Pool object, comprised of a spec and a state
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/PoolId'
+        spec:
+          $ref: '#/components/schemas/PoolSpec'
+        state:
+          $ref: '#/components/schemas/PoolState'
+      required:
+        - id
+      minProperties: 2
+    PoolState:
+      description: State of a pool, as reported by mayastor
       type: object
       properties:
         capacity:
           description: size of the pool in bytes
+          example: 10737418240
           type: integer
           format: int64
           minimum: 0
@@ -2119,20 +2125,18 @@ components:
           description: absolute disk paths claimed by the pool
           type: array
           items:
-            example: 'malloc:///disk?size_mb=100'
+            example: 'aio:///dev/sda?uuid=caede6dd-5732-4771-8cb6-c32315ed28d3'
             description: |-
               Pool device URI
                Can be specified in the form of a file path or a URI
                eg: /dev/sda, aio:///dev/sda, malloc:///disk?size_mb=100
             type: string
         id:
-          description: id of the pool
-          type: string
+          $ref: '#/components/schemas/PoolId'
         node:
-          description: id of the mayastor instance
-          type: string
-        state:
-          $ref: '#/components/schemas/PoolState'
+          $ref: '#/components/schemas/NodeId'
+        status:
+          $ref: '#/components/schemas/PoolStatus'
         used:
           description: used bytes from the pool
           type: integer
@@ -2143,7 +2147,7 @@ components:
         - disks
         - id
         - node
-        - state
+        - status
         - used
     ReplicaState:
       description: state of the replica
@@ -2154,28 +2158,18 @@ components:
         - degraded
         - faulted
     Replica:
-      example:
-        node: mayastor-1
-        pool: pooloop
-        share: none
-        size: 80241024
-        state: Online
-        thin: false
-        uri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:fb04022b-1ca1-4789-bcd4-dacbcb54e23c'
-        uuid: fb04022b-1ca1-4789-bcd4-dacbcb54e23c
       description: Replica information
       type: object
       properties:
         node:
-          description: id of the mayastor instance
-          type: string
+          $ref: '#/components/schemas/NodeId'
         pool:
-          description: id of the pool
-          type: string
+          $ref: '#/components/schemas/PoolId'
         share:
           $ref: '#/components/schemas/Protocol'
         size:
           description: size of the replica in bytes
+          example: 80241024
           type: integer
           format: int64
           minimum: 0
@@ -2183,9 +2177,11 @@ components:
           $ref: '#/components/schemas/ReplicaState'
         thin:
           description: thin provisioning
+          example: false
           type: boolean
         uri:
           description: uri usable by nexus to access it
+          example: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:fb04022b-1ca1-4789-bcd4-dacbcb54e23c'
           type: string
         uuid:
           description: uuid of the replica
@@ -2258,51 +2254,6 @@ components:
         - callback
         - resource
     Specs:
-      example:
-        nexuses:
-          - children:
-              - 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:37d83441-e8ef-4e17-a29e-25169d91cb96'
-            managed: false
-            node: mayastor-1
-            operation: null
-            owner: null
-            share: none
-            size: 80241024
-            state: Created
-            uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
-        pools:
-          - disks:
-              - 'malloc:///disk?size_mb=100'
-            id: pooloop
-            labels:
-              - ''
-            node: mayastor-1
-            operation: null
-            state: Created
-        replicas:
-          - managed: false
-            operation: null
-            owners:
-              nexuses:
-                - 514ed1c8-7174-49ac-b9cd-ad44ef670a67
-              volume: null
-            pool: pooloop
-            share: none
-            size: 80241024
-            state: Created
-            thin: false
-            uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
-        volumes:
-          - labels:
-              - ''
-            num_paths: 1
-            num_replicas: 1
-            operation: null
-            protocol: none
-            size: 80241024
-            state: Created
-            target_node: null
-            uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
       description: Specs detailing the requested configuration of the objects.
       type: object
       properties:
@@ -2390,8 +2341,8 @@ components:
           type: integer
           format: int64
           minimum: 0
-        state:
-          $ref: '#/components/schemas/SpecState'
+        status:
+          $ref: '#/components/schemas/SpecStatus'
         uuid:
           description: Nexus Id
           type: string
@@ -2402,18 +2353,9 @@ components:
         - node
         - share
         - size
-        - state
+        - status
         - uuid
     PoolSpec:
-      example:
-        disks:
-          - 'malloc:///disk?size_mb=100'
-        id: pooloop
-        labels:
-          - ''
-        node: mayastor-1
-        operation: null
-        state: Created
       description: User specification of a pool.
       type: object
       properties:
@@ -2421,49 +2363,29 @@ components:
           description: absolute disk paths claimed by the pool
           type: array
           items:
-            example: 'malloc:///disk?size_mb=100'
+            example: '/dev/sda'
             description: |-
               Pool device URI
                Can be specified in the form of a file path or a URI
                eg: /dev/sda, aio:///dev/sda, malloc:///disk?size_mb=100
             type: string
         id:
-          description: id of the pool
-          type: string
+          $ref: '#/components/schemas/PoolId'
         labels:
           description: Pool labels.
           type: array
           items:
             type: string
         node:
-          description: id of the mayastor instance
-          type: string
-        operation:
-          example:
-            operation: Create
-            result: null
-          description: Record of the operation in progress
-          type: object
-          properties:
-            operation:
-              description: Record of the operation
-              type: string
-              enum:
-                - Create
-                - Destroy
-            result:
-              description: Result of the operation
-              type: boolean
-          required:
-            - operation
-        state:
-          $ref: '#/components/schemas/SpecState'
+          $ref: '#/components/schemas/NodeId'
+        status:
+          $ref: '#/components/schemas/SpecStatus'
       required:
         - disks
         - id
         - labels
         - node
-        - state
+        - status
     ReplicaSpec:
       example:
         managed: false
@@ -2532,8 +2454,8 @@ components:
           type: integer
           format: int64
           minimum: 0
-        state:
-          $ref: '#/components/schemas/SpecState'
+        status:
+          $ref: '#/components/schemas/SpecStatus'
         thin:
           description: Thin provisioning.
           type: boolean
@@ -2547,7 +2469,7 @@ components:
         - pool
         - share
         - size
-        - state
+        - status
         - thin
         - uuid
     VolumeSpec:
@@ -2612,8 +2534,8 @@ components:
           type: integer
           format: int64
           minimum: 0
-        state:
-          $ref: '#/components/schemas/SpecState'
+        status:
+          $ref: '#/components/schemas/SpecStatus'
         target_node:
           description: The node where front-end IO will be sent to
           type: string
@@ -2627,9 +2549,9 @@ components:
         - num_replicas
         - protocol
         - size
-        - state
+        - status
         - uuid
-    SpecState:
+    SpecStatus:
       description: Common base state for a resource
       type: string
       enum:

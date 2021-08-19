@@ -7,9 +7,9 @@ use common_lib::{
     mbus_api::ResourceKind,
     types::v0::message_bus::{
         AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
-        DestroyReplica, Nexus, NexusId, NodeId, NodeState, NodeStatus, Pool, PoolId, PoolStatus,
-        Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica, UnshareNexus,
-        UnshareReplica,
+        DestroyReplica, Nexus, NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState,
+        PoolStatus, Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica,
+        UnshareNexus, UnshareReplica,
     },
 };
 use rpc::mayastor::Null;
@@ -109,7 +109,7 @@ impl NodeWrapper {
         &self.node_state
     }
     /// Get all pools
-    pub(crate) fn pools(&self) -> Vec<Pool> {
+    pub(crate) fn pools(&self) -> Vec<PoolState> {
         self.states
             .read()
             .get_pool_states()
@@ -139,7 +139,7 @@ impl NodeWrapper {
         self.states.read().get_pool_states()
     }
     /// Get pool from `pool_id` or None
-    pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<Pool> {
+    pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
         self.states.read().get_pool_state(pool_id).map(|p| p.pool)
     }
     /// Get a PoolWrapper for the pool ID.
@@ -267,7 +267,9 @@ impl NodeWrapper {
     }
 
     /// Fetch the various resources from Mayastor.
-    async fn fetch_resources(&self) -> Result<(Vec<Replica>, Vec<Pool>, Vec<Nexus>), SvcError> {
+    async fn fetch_resources(
+        &self,
+    ) -> Result<(Vec<Replica>, Vec<PoolState>, Vec<Nexus>), SvcError> {
         let replicas = self.fetch_replicas().await?;
         let pools = self.fetch_pools().await?;
         let nexuses = self.fetch_nexuses().await?;
@@ -293,7 +295,7 @@ impl NodeWrapper {
         Ok(pools)
     }
     /// Fetch all pools from this node via gRPC
-    pub(crate) async fn fetch_pools(&self) -> Result<Vec<Pool>, SvcError> {
+    pub(crate) async fn fetch_pools(&self) -> Result<Vec<PoolState>, SvcError> {
         let mut ctx = self.grpc_client().await?;
         let rpc_pools = ctx
             .client
@@ -374,7 +376,7 @@ use std::{ops::Deref, sync::Arc};
 /// pools, replicas, nexuses and their children
 #[async_trait]
 pub trait ClientOps {
-    async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError>;
+    async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError>;
     /// Destroy a pool on the node via gRPC
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError>;
     /// Create a replica on the pool via gRPC
@@ -414,9 +416,9 @@ pub(crate) trait InternalOps {
 /// resources, such as pools, replicas and nexuses
 #[async_trait]
 pub(crate) trait GetterOps {
-    async fn pools(&self) -> Vec<Pool>;
+    async fn pools(&self) -> Vec<PoolState>;
     async fn pool_wrappers(&self) -> Vec<PoolWrapper>;
-    async fn pool(&self, pool_id: &PoolId) -> Option<Pool>;
+    async fn pool(&self, pool_id: &PoolId) -> Option<PoolState>;
     async fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper>;
 
     async fn replicas(&self) -> Vec<Replica>;
@@ -428,7 +430,7 @@ pub(crate) trait GetterOps {
 
 #[async_trait]
 impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
-    async fn pools(&self) -> Vec<Pool> {
+    async fn pools(&self) -> Vec<PoolState> {
         let node = self.lock().await;
         node.pools()
     }
@@ -436,7 +438,7 @@ impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
         let node = self.lock().await;
         node.pool_wrappers()
     }
-    async fn pool(&self, pool_id: &PoolId) -> Option<Pool> {
+    async fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
         let node = self.lock().await;
         node.pool(pool_id)
     }
@@ -476,7 +478,7 @@ impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
 #[async_trait]
 impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
-    async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
+    async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         let mut ctx = self.grpc_client_locked().await?;
         let rpc_pool =
             ctx.client
@@ -693,7 +695,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 }
 
 /// convert rpc pool to a message bus pool
-fn rpc_pool_to_bus(rpc_pool: &rpc::mayastor::Pool, id: &NodeId) -> Pool {
+fn rpc_pool_to_bus(rpc_pool: &rpc::mayastor::Pool, id: &NodeId) -> PoolState {
     let mut pool = rpc_pool.to_mbus();
     pool.node = id.clone();
     pool
@@ -716,46 +718,50 @@ fn rpc_nexus_to_bus(rpc_nexus: &rpc::mayastor::Nexus, id: &NodeId) -> Nexus {
 /// and Ord traits to aid pool selection for volume replicas
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PoolWrapper {
-    pool: Pool,
+    state: PoolState,
     replicas: Vec<Replica>,
 }
 
 impl Deref for PoolWrapper {
-    type Target = Pool;
+    type Target = PoolState;
     fn deref(&self) -> &Self::Target {
-        &self.pool
+        &self.state
     }
 }
 
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas
-    pub fn new(pool: &Pool, replicas: &[Replica]) -> Self {
+    pub fn new(pool: &PoolState, replicas: &[Replica]) -> Self {
         Self {
-            pool: pool.clone(),
+            state: pool.clone(),
             replicas: replicas.into(),
         }
     }
 
-    /// Get the pool's replicas
+    /// Get all the replicas
     pub fn replicas(&self) -> Vec<Replica> {
         self.replicas.clone()
     }
-    /// Get replica from the pool
+    /// Get the specified replica
     pub fn replica(&self, replica: &ReplicaId) -> Option<&Replica> {
         self.replicas.iter().find(|r| &r.uuid == replica)
+    }
+    /// Get the state
+    pub fn state(&self) -> &PoolState {
+        &self.state
     }
 
     /// Get the free space
     pub fn free_space(&self) -> u64 {
-        if self.pool.capacity >= self.pool.used {
-            self.pool.capacity - self.pool.used
+        if self.state.capacity >= self.state.used {
+            self.state.capacity - self.state.used
         } else {
             // odd, let's report no free space available
             tracing::error!(
                 "Pool '{}' has a capacity of '{} B' but is using '{} B'",
-                self.pool.id,
-                self.pool.capacity,
-                self.pool.used
+                self.state.id,
+                self.state.capacity,
+                self.state.used
             );
             0
         }
@@ -763,7 +769,7 @@ impl PoolWrapper {
 
     /// Set pool state as unknown
     pub fn set_unknown(&mut self) {
-        self.pool.state = PoolStatus::Unknown;
+        self.state.status = PoolStatus::Unknown;
     }
 
     /// Add replica to list
@@ -793,14 +799,14 @@ impl From<&NodeWrapper> for NodeState {
     }
 }
 
-impl From<PoolWrapper> for Pool {
+impl From<PoolWrapper> for PoolState {
     fn from(pool: PoolWrapper) -> Self {
-        pool.pool
+        pool.state
     }
 }
-impl From<&PoolWrapper> for Pool {
+impl From<&PoolWrapper> for PoolState {
     fn from(pool: &PoolWrapper) -> Self {
-        pool.pool.clone()
+        pool.state.clone()
     }
 }
 impl From<PoolWrapper> for Vec<Replica> {
@@ -821,7 +827,7 @@ impl From<&PoolWrapper> for Vec<Replica> {
 // are not active)
 impl PartialOrd for PoolWrapper {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self.pool.state.partial_cmp(&other.pool.state) {
+        match self.state.status.partial_cmp(&other.state.status) {
             Some(Ordering::Greater) => Some(Ordering::Greater),
             Some(Ordering::Less) => Some(Ordering::Less),
             Some(Ordering::Equal) => match self.replicas.len().cmp(&other.replicas.len()) {
@@ -836,7 +842,7 @@ impl PartialOrd for PoolWrapper {
 
 impl Ord for PoolWrapper {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.pool.state.partial_cmp(&other.pool.state) {
+        match self.state.status.partial_cmp(&other.state.status) {
             Some(Ordering::Greater) => Ordering::Greater,
             Some(Ordering::Less) => Ordering::Less,
             Some(Ordering::Equal) => match self.replicas.len().cmp(&other.replicas.len()) {

@@ -35,8 +35,8 @@ pub struct VolumeSpec {
     /// Size that the volume should be.
     #[serde(rename = "size")]
     pub size: u64,
-    #[serde(rename = "state")]
-    pub state: crate::models::SpecState,
+    #[serde(rename = "status")]
+    pub status: crate::models::SpecStatus,
     /// The node where front-end IO will be sent to
     #[serde(rename = "target_node", skip_serializing_if = "Option::is_none")]
     pub target_node: Option<String>,
@@ -53,7 +53,7 @@ impl VolumeSpec {
         num_replicas: impl Into<u8>,
         protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
         uuid: impl Into<uuid::Uuid>,
     ) -> VolumeSpec {
         VolumeSpec {
@@ -63,7 +63,7 @@ impl VolumeSpec {
             operation: None,
             protocol: protocol.into(),
             size: size.into(),
-            state: state.into(),
+            status: status.into(),
             target_node: None,
             uuid: uuid.into(),
         }
@@ -76,7 +76,7 @@ impl VolumeSpec {
         operation: impl Into<Option<crate::models::VolumeSpecOperation>>,
         protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
         target_node: impl Into<Option<String>>,
         uuid: impl Into<uuid::Uuid>,
     ) -> VolumeSpec {
@@ -87,7 +87,7 @@ impl VolumeSpec {
             operation: operation.into(),
             protocol: protocol.into(),
             size: size.into(),
-            state: state.into(),
+            status: status.into(),
             target_node: target_node.into(),
             uuid: uuid.into(),
         }

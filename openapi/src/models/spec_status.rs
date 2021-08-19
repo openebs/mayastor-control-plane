@@ -14,11 +14,11 @@
 
 use crate::apis::IntoVec;
 
-/// SpecState : Common base state for a resource
+/// SpecStatus : Common base state for a resource
 
 /// Common base state for a resource
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum SpecState {
+pub enum SpecStatus {
     #[serde(rename = "Creating")]
     Creating,
     #[serde(rename = "Created")]
@@ -29,7 +29,7 @@ pub enum SpecState {
     Deleted,
 }
 
-impl ToString for SpecState {
+impl ToString for SpecStatus {
     fn to_string(&self) -> String {
         match self {
             Self::Creating => String::from("Creating"),
@@ -40,7 +40,7 @@ impl ToString for SpecState {
     }
 }
 
-impl Default for SpecState {
+impl Default for SpecStatus {
     fn default() -> Self {
         Self::Creating
     }

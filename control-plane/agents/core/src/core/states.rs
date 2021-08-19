@@ -1,5 +1,5 @@
 use common_lib::types::v0::{
-    message_bus::{Nexus, NexusId, Pool, PoolId, Replica, ReplicaId},
+    message_bus::{self, Nexus, NexusId, PoolId, Replica, ReplicaId},
     store::{nexus::NexusState, pool::PoolState, replica::ReplicaState},
 };
 use std::{ops::Deref, sync::Arc};
@@ -34,7 +34,12 @@ pub(crate) struct ResourceStates {
 
 impl ResourceStates {
     /// Update the various resource states.
-    pub(crate) fn update(&mut self, pools: Vec<Pool>, replicas: Vec<Replica>, nexuses: Vec<Nexus>) {
+    pub(crate) fn update(
+        &mut self,
+        pools: Vec<message_bus::PoolState>,
+        replicas: Vec<Replica>,
+        nexuses: Vec<Nexus>,
+    ) {
         self.update_replicas(replicas);
         self.update_pools(pools);
         self.update_nexuses(nexuses);
@@ -57,7 +62,7 @@ impl ResourceStates {
     }
 
     /// Update pool states.
-    pub(crate) fn update_pools(&mut self, pools: Vec<Pool>) {
+    pub(crate) fn update_pools(&mut self, pools: Vec<message_bus::PoolState>) {
         self.pools.clear();
         self.pools.populate(pools);
     }
