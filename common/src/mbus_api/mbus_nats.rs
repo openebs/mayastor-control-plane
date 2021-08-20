@@ -1,5 +1,5 @@
 use super::*;
-use nats::asynk::Connection;
+use async_nats::Connection;
 use once_cell::sync::OnceCell;
 use tracing::{info, warn};
 
@@ -59,11 +59,7 @@ impl NatsMessageBus {
         let interval = std::time::Duration::from_millis(500);
         let mut log_error = true;
         loop {
-            match BusOptions::new()
-                .max_reconnects(None)
-                .connect_async(server)
-                .await
-            {
+            match BusOptions::new().max_reconnects(None).connect(server).await {
                 Ok(connection) => {
                     info!("Successfully connected to the nats server {}", server);
                     return connection;

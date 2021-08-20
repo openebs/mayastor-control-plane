@@ -37,8 +37,8 @@ mkShell {
     python3
     utillinux
     which
-    (lib.optionalString (!nomayastor) mayastor.units.debug.mayastor)
-  ];
+  ] ++ pkgs.lib.optional (!norust) channel.nightly
+  ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
 
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
