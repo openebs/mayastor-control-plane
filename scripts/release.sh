@@ -119,14 +119,15 @@ cd $SCRIPTDIR/..
 
 if [ -z "$IMAGES" ]; then
   if [ -z "$DEBUG" ]; then
-    IMAGES="agents rest"
+    IMAGES="core jsongrpc rest"
   else
-    IMAGES="agents-dev rest-dev"
+    IMAGES="core-dev jsongrpc-dev rest-dev"
   fi
 fi
 
 for name in $IMAGES; do
-  image_basename="mayadata/${name}"
+  #image_basename="mayadata/${name}"
+  image_basename="REGISTRY_IP/mcp-${name}"
   image=$image_basename
   if [ -n "$REGISTRY" ]; then
     image="${REGISTRY}/${image}"
