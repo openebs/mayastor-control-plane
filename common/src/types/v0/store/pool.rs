@@ -1,17 +1,17 @@
 //! Definition of pool types that can be saved to the persistent store.
 
-use crate::types::v0::{
-    message_bus::{self, CreatePool, NodeId, Pool as MbusPool, PoolDeviceUri, PoolId},
-    store::{
-        definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecStatus, SpecTransaction,
+use crate::{
+    types::v0::{
+        message_bus::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
+        openapi::models,
+        store::{
+            definitions::{ObjectKey, StorableObject, StorableObjectType},
+            OperationSequence, OperationSequencer, SpecStatus, SpecTransaction, UuidString,
+        },
     },
+    IntoVec,
 };
 
-use crate::types::v0::{
-    openapi::models,
-    store::{OperationSequence, OperationSequencer, UuidString},
-};
 use serde::{Deserialize, Serialize};
 use std::convert::From;
 
@@ -31,11 +31,11 @@ pub struct Pool {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]
 pub struct PoolState {
     /// Pool information returned by Mayastor.
-    pub pool: message_bus::Pool,
+    pub pool: message_bus::PoolState,
 }
 
-impl From<MbusPool> for PoolState {
-    fn from(pool: MbusPool) -> Self {
+impl From<message_bus::PoolState> for PoolState {
+    fn from(pool: message_bus::PoolState) -> Self {
         Self { pool }
     }
 }
@@ -48,6 +48,17 @@ impl UuidString for PoolState {
 
 /// Status of the Pool Spec
 pub type PoolSpecStatus = SpecStatus<message_bus::PoolStatus>;
+impl From<models::SpecStatus> for PoolSpecStatus {
+    fn from(spec_state: models::SpecStatus) -> Self {
+        match spec_state {
+            models::SpecStatus::Creating => Self::Creating,
+            models::SpecStatus::Created => Self::Created(message_bus::PoolStatus::Unknown),
+            models::SpecStatus::Deleting => Self::Deleting,
+            models::SpecStatus::Deleted => Self::Deleted,
+        }
+    }
+}
+
 impl From<&CreatePool> for PoolSpec {
     fn from(request: &CreatePool) -> Self {
         Self {
@@ -111,6 +122,19 @@ impl From<PoolSpec> for models::PoolSpec {
         Self::new(src.disks, src.id, src.labels, src.node, src.status)
     }
 }
+impl From<models::PoolSpec> for PoolSpec {
+    fn from(src: models::PoolSpec) -> Self {
+        Self {
+            node: src.node.into(),
+            id: src.id.into(),
+            disks: src.disks.into_vec(),
+            status: src.status.into(),
+            labels: src.labels,
+            sequencer: Default::default(),
+            operation: None,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PoolOperationState {
@@ -164,8 +188,8 @@ pub enum PoolOperation {
     Destroy,
 }
 
-impl PartialEq<message_bus::Pool> for PoolSpec {
-    fn eq(&self, other: &message_bus::Pool) -> bool {
+impl PartialEq<message_bus::PoolState> for PoolSpec {
+    fn eq(&self, other: &message_bus::PoolState) -> bool {
         self.node == other.node
     }
 }
@@ -197,13 +221,13 @@ impl StorableObject for PoolSpec {
     }
 }
 
-impl From<&PoolSpec> for message_bus::Pool {
+impl From<&PoolSpec> for message_bus::PoolState {
     fn from(pool: &PoolSpec) -> Self {
         Self {
             node: pool.node.clone(),
             id: pool.id.clone(),
             disks: pool.disks.clone(),
-            state: message_bus::PoolStatus::Unknown,
+            status: message_bus::PoolStatus::Unknown,
             capacity: 0,
             used: 0,
         }

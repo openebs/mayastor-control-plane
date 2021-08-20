@@ -23,16 +23,20 @@ impl Service {
     }
 
     /// Get pools according to the filter
-    #[tracing::instrument(level = "info", skip(self), err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.uuid))]
     pub(super) async fn get_pools(&self, request: &GetPools) -> Result<Pools, SvcError> {
         let filter = request.filter.clone();
         match filter {
             Filter::None => self.node_pools(None, None).await,
             Filter::Node(node_id) => self.node_pools(Some(node_id), None).await,
             Filter::NodePool(node_id, pool_id) => {
+                tracing::Span::current().record("pool.uuid", &pool_id.as_str());
                 self.node_pools(Some(node_id), Some(pool_id)).await
             }
-            Filter::Pool(pool_id) => self.node_pools(None, Some(pool_id)).await,
+            Filter::Pool(pool_id) => {
+                tracing::Span::current().record("pool.uuid", &pool_id.as_str());
+                self.node_pools(None, Some(pool_id)).await
+            }
             _ => Err(SvcError::InvalidFilter { filter }),
         }
     }
@@ -43,18 +47,21 @@ impl Service {
         node_id: Option<NodeId>,
         pool_id: Option<PoolId>,
     ) -> Result<Pools, SvcError> {
-        let pools = self.registry.get_node_opt_pools(node_id).await?;
-        match pool_id {
-            Some(id) => {
-                let p: Vec<Pool> = pools.iter().filter(|p| p.id == id).cloned().collect();
-                if p.is_empty() {
-                    Err(SvcError::PoolNotFound { pool_id: id })
-                } else {
-                    Ok(Pools(p))
-                }
+        let pools = match pool_id {
+            Some(id) if node_id.is_none() => {
+                vec![self.registry.get_pool(&id).await?]
             }
-            None => Ok(Pools(pools)),
-        }
+            Some(id) => {
+                let pools = self.registry.get_node_opt_pools(node_id).await?;
+                let pools: Vec<Pool> = pools.iter().filter(|p| p.id() == &id).cloned().collect();
+                if pools.is_empty() {
+                    return Err(SvcError::PoolNotFound { pool_id: id });
+                }
+                pools
+            }
+            None => self.registry.get_node_opt_pools(node_id).await?,
+        };
+        Ok(Pools(pools))
     }
 
     /// Get replicas according to the filter
@@ -127,7 +134,7 @@ impl Service {
     }
 
     /// Create pool
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self), fields(pool.uuid = %request.id))]
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         self.registry
             .specs
@@ -136,7 +143,7 @@ impl Service {
     }
 
     /// Destroy pool
-    #[tracing::instrument(level = "info", skip(self), err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.uuid = %request.id))]
     pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         self.registry
             .specs

@@ -16,7 +16,7 @@ from openapi.openapi_client.model.volume_spec import VolumeSpec
 from openapi.openapi_client.model.volume_state import VolumeState
 from openapi.openapi_client.model.volume_status import VolumeStatus
 from openapi.openapi_client.model.protocol import Protocol
-from openapi.openapi_client.model.spec_state import SpecState
+from openapi.openapi_client.model.spec_status import SpecStatus
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -77,7 +77,7 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         1,
         Protocol("none"),
         VOLUME_SIZE,
-        SpecState("Created"),
+        SpecStatus("Created"),
         VOLUME_UUID,
         _configuration=cfg,
     )

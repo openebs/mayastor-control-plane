@@ -229,14 +229,11 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
     info!("Pools: {:#?}", pool);
     assert_eq!(
         pool,
-        models::Pool {
-            node: mayastor1.to_string(),
-            id: "pooloop".into(),
-            disks: vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0".into()],
-            state: models::PoolState::Online,
-            capacity: 100663296,
-            used: 0,
-        }
+        models::Pool::new_all(
+            "pooloop",
+            models::PoolSpec::new(vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", Vec::<String>::new(), mayastor1, models::SpecStatus::Created),
+            models::PoolState::new(100663296u64, vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", mayastor1, models::PoolStatus::Online, 0u64)
+        )
     );
 
     assert_eq!(
@@ -262,7 +259,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
     let replica = client
         .replicas_api()
         .put_node_pool_replica(
-            &pool.node,
+            &pool.spec.as_ref().unwrap().node,
             &pool.id,
             "e6e7d39d-e343-42f7-936a-1ab05f1839db",
             /* actual size will be a multiple of 4MB so just
@@ -277,7 +274,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
     assert_eq!(
         replica,
         models::Replica {
-            node: pool.node.clone(),
+            node: pool.spec.clone().unwrap().node,
             uuid: FromStr::from_str("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
             pool: pool.id.clone(),
             thin: false,
@@ -474,10 +471,14 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
 
     client
         .pools_api()
-        .del_node_pool(&pool.node, &pool.id)
+        .del_node_pool(&pool.spec.as_ref().unwrap().node, &pool.id)
         .await
         .unwrap();
-    let pools = client.pools_api().get_node_pools(&pool.node).await.unwrap();
+    let pools = client
+        .pools_api()
+        .get_node_pools(&pool.spec.as_ref().unwrap().node)
+        .await
+        .unwrap();
     assert!(pools.is_empty());
 
     client

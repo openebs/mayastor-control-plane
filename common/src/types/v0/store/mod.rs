@@ -32,7 +32,7 @@ impl<T> Default for SpecStatus<T> {
 }
 
 // todo: change openapi spec to support enum variants
-impl<T> From<SpecStatus<T>> for models::SpecState {
+impl<T> From<SpecStatus<T>> for models::SpecStatus {
     fn from(src: SpecStatus<T>) -> Self {
         match src {
             SpecStatus::Creating => Self::Creating,

@@ -34,8 +34,8 @@ pub struct ReplicaSpec {
     /// The size that the replica should be.
     #[serde(rename = "size")]
     pub size: u64,
-    #[serde(rename = "state")]
-    pub state: crate::models::SpecState,
+    #[serde(rename = "status")]
+    pub status: crate::models::SpecStatus,
     /// Thin provisioning.
     #[serde(rename = "thin")]
     pub thin: bool,
@@ -52,7 +52,7 @@ impl ReplicaSpec {
         pool: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
         thin: impl Into<bool>,
         uuid: impl Into<uuid::Uuid>,
     ) -> ReplicaSpec {
@@ -63,7 +63,7 @@ impl ReplicaSpec {
             pool: pool.into(),
             share: share.into(),
             size: size.into(),
-            state: state.into(),
+            status: status.into(),
             thin: thin.into(),
             uuid: uuid.into(),
         }
@@ -76,7 +76,7 @@ impl ReplicaSpec {
         pool: impl Into<String>,
         share: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
-        state: impl Into<crate::models::SpecState>,
+        status: impl Into<crate::models::SpecStatus>,
         thin: impl Into<bool>,
         uuid: impl Into<uuid::Uuid>,
     ) -> ReplicaSpec {
@@ -87,7 +87,7 @@ impl ReplicaSpec {
             pool: pool.into(),
             share: share.into(),
             size: size.into(),
-            state: state.into(),
+            status: status.into(),
             thin: thin.into(),
             uuid: uuid.into(),
         }

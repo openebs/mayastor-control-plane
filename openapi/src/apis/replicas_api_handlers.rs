@@ -8,7 +8,7 @@
     non_camel_case_types
 )]
 
-use crate::apis::Body;
+use crate::apis::{Body, NoContent};
 use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
@@ -103,10 +103,11 @@ pub fn configure<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
 async fn del_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<(String, String, String)>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_node_pool_replica(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn del_node_pool_replica_share<
@@ -115,28 +116,31 @@ async fn del_node_pool_replica_share<
 >(
     _token: A,
     path: Path<(String, String, String)>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_node_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn del_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<(String, String)>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_pool_replica(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn del_pool_replica_share<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<(String, String)>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await
         .map(Json)
+        .map(Into::into)
 }
 
 async fn get_node_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(

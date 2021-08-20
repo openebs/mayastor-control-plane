@@ -75,17 +75,13 @@ impl RpcToMessageBus for rpc::BlockDevice {
 ///  Pool Agent conversions
 
 impl RpcToMessageBus for rpc::Pool {
-    type BusMessage = message_bus::Pool;
+    type BusMessage = message_bus::PoolState;
     fn to_mbus(&self) -> Self::BusMessage {
         Self::BusMessage {
             node: Default::default(),
             id: self.name.clone().into(),
-            disks: self
-                .disks
-                .iter()
-                .map(message_bus::PoolDeviceUri::from)
-                .collect(),
-            state: self.state.into(),
+            disks: self.disks.clone().into_vec(),
+            status: self.state.into(),
             capacity: self.capacity,
             used: self.used,
         }

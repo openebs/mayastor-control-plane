@@ -11,7 +11,7 @@ Name | Type | Description | Notes
 **owner** | Option<[**uuid::Uuid**](uuid::Uuid.md)> | Volume which owns this nexus, if any | [optional]
 **share** | [**crate::models::Protocol**](Protocol.md) |  | 
 **size** | **u64** | Size of the nexus. | 
-**state** | [**crate::models::SpecState**](SpecState.md) |  | 
+**status** | [**crate::models::SpecStatus**](SpecStatus.md) |  | 
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | Nexus Id | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

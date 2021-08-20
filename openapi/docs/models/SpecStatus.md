@@ -1,4 +1,4 @@
-# SpecState
+# SpecStatus
 
 ## Properties
 

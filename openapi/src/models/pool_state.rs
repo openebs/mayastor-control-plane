@@ -14,34 +14,65 @@
 
 use crate::apis::IntoVec;
 
-/// PoolState : current state of the pool
+/// PoolState : State of a pool, as reported by mayastor
 
-/// current state of the pool
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum PoolState {
-    #[serde(rename = "Unknown")]
-    Unknown,
-    #[serde(rename = "Online")]
-    Online,
-    #[serde(rename = "Degraded")]
-    Degraded,
-    #[serde(rename = "Faulted")]
-    Faulted,
+/// State of a pool, as reported by mayastor
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PoolState {
+    /// size of the pool in bytes
+    #[serde(rename = "capacity")]
+    pub capacity: u64,
+    /// absolute disk paths claimed by the pool
+    #[serde(rename = "disks")]
+    pub disks: Vec<String>,
+    /// storage pool identifier
+    #[serde(rename = "id")]
+    pub id: String,
+    /// storage node identifier
+    #[serde(rename = "node")]
+    pub node: String,
+    #[serde(rename = "status")]
+    pub status: crate::models::PoolStatus,
+    /// used bytes from the pool
+    #[serde(rename = "used")]
+    pub used: u64,
 }
 
-impl ToString for PoolState {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Unknown => String::from("Unknown"),
-            Self::Online => String::from("Online"),
-            Self::Degraded => String::from("Degraded"),
-            Self::Faulted => String::from("Faulted"),
+impl PoolState {
+    /// PoolState using only the required fields
+    pub fn new(
+        capacity: impl Into<u64>,
+        disks: impl IntoVec<String>,
+        id: impl Into<String>,
+        node: impl Into<String>,
+        status: impl Into<crate::models::PoolStatus>,
+        used: impl Into<u64>,
+    ) -> PoolState {
+        PoolState {
+            capacity: capacity.into(),
+            disks: disks.into_vec(),
+            id: id.into(),
+            node: node.into(),
+            status: status.into(),
+            used: used.into(),
         }
     }
-}
-
-impl Default for PoolState {
-    fn default() -> Self {
-        Self::Unknown
+    /// PoolState using all fields
+    pub fn new_all(
+        capacity: impl Into<u64>,
+        disks: impl IntoVec<String>,
+        id: impl Into<String>,
+        node: impl Into<String>,
+        status: impl Into<crate::models::PoolStatus>,
+        used: impl Into<u64>,
+    ) -> PoolState {
+        PoolState {
+            capacity: capacity.into(),
+            disks: disks.into_vec(),
+            id: id.into(),
+            node: node.into(),
+            status: status.into(),
+            used: used.into(),
+        }
     }
 }

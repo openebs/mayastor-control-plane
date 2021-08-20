@@ -111,7 +111,7 @@ impl Cluster {
         .unwrap();
 
         components
-            .start_wait(&composer, std::time::Duration::from_secs(10))
+            .start_wait(&composer, std::time::Duration::from_secs(30))
             .await?;
 
         let cluster = Cluster {

@@ -8,7 +8,7 @@
     non_camel_case_types
 )]
 
-use crate::apis::Body;
+use crate::apis::{Body, NoContent};
 use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     FromRequest, HttpRequest,
@@ -55,7 +55,7 @@ async fn del_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 's
     _token: A,
     path: Path<String>,
     query: Query<del_watch_volumeQueryParams>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     let query = query.into_inner();
     T::del_watch_volume(
         crate::apis::Path(path.into_inner()),
@@ -63,6 +63,7 @@ async fn del_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 's
     )
     .await
     .map(Json)
+    .map(Into::into)
 }
 
 async fn get_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 'static>(
@@ -79,7 +80,7 @@ async fn put_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 's
     _token: A,
     path: Path<String>,
     query: Query<put_watch_volumeQueryParams>,
-) -> Result<Json<()>, crate::apis::RestError<crate::models::RestJsonError>> {
+) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     let query = query.into_inner();
     T::put_watch_volume(
         crate::apis::Path(path.into_inner()),
@@ -87,4 +88,5 @@ async fn put_watch_volume<T: crate::apis::Watches + 'static, A: FromRequest + 's
     )
     .await
     .map(Json)
+    .map(Into::into)
 }

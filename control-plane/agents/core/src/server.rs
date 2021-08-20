@@ -92,7 +92,6 @@ fn init_tracing() {
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_agent_endpoint(jaeger)
                 .with_service_name("core-agent")
-                .with_max_packet_size(8_192)
                 .install_batch(opentelemetry::runtime::TokioCurrentThread)
                 .expect("Should be able to initialise the exporter");
             let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);

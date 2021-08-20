@@ -70,7 +70,7 @@ impl PoolFilters {
     }
     /// Should only attempt to use usable (not faulted) pools
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        item.pool.state != PoolStatus::Faulted && item.pool.state != PoolStatus::Unknown
+        item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
     }
 }
 

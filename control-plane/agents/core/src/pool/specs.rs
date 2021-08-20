@@ -1,7 +1,3 @@
-use parking_lot::Mutex;
-
-use std::sync::Arc;
-
 use crate::{
     core::{
         specs::{OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
@@ -9,13 +5,14 @@ use crate::{
     },
     registry::Registry,
 };
-use common::errors::SvcError;
+use common::errors::{SvcError, SvcError::PoolNotFound};
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
         message_bus::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolStatus,
-            Replica, ReplicaId, ReplicaOwners, ReplicaStatus, ShareReplica, UnshareReplica,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
+            PoolStatus, Replica, ReplicaId, ReplicaOwners, ReplicaStatus, ShareReplica,
+            UnshareReplica,
         },
         store::{
             pool::{PoolOperation, PoolSpec},
@@ -25,12 +22,15 @@ use common_lib::{
     },
 };
 
+use parking_lot::Mutex;
+use std::sync::Arc;
+
 #[async_trait::async_trait]
 impl SpecOperations for PoolSpec {
     type Create = CreatePool;
     type Owners = ();
     type Status = PoolStatus;
-    type State = Pool;
+    type State = PoolState;
     type UpdateOp = ();
 
     fn validate_destroy(
@@ -191,10 +191,12 @@ impl ResourceSpecsLocked {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let pool_spec = self.get_or_create_pool(request);
-        SpecOperations::start_create(&pool_spec, registry, request, mode).await?;
+        let (_, _g) = SpecOperations::start_create(&pool_spec, registry, request, mode).await?;
 
         let result = node.create_pool(request).await;
-        SpecOperations::complete_create(result, &pool_spec, registry).await
+        let pool_state = SpecOperations::complete_create(result, &pool_spec, registry).await?;
+        let pool_spec = pool_spec.lock().clone();
+        Ok(Pool::new(pool_spec, pool_state))
     }
 
     pub(crate) async fn destroy_pool(
@@ -207,7 +209,7 @@ impl ResourceSpecsLocked {
         // do we need a way to forcefully "delete" things?
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        let pool_spec = self.get_pool(&request.id);
+        let pool_spec = self.get_locked_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
             SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
 
@@ -361,9 +363,30 @@ impl ResourceSpecsLocked {
         }
     }
     /// Get a protected PoolSpec for the given pool `id`, if it exists
-    pub(crate) fn get_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
+    pub(crate) fn get_locked_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
         let specs = self.read();
         specs.pools.get(id).cloned()
+    }
+    /// Get a PoolSpec for the given pool `id`, if it exists
+    pub(crate) fn get_pool(&self, id: &PoolId) -> Result<PoolSpec, SvcError> {
+        let specs = self.read();
+        specs
+            .pools
+            .get(id)
+            .map(|p| p.lock().clone())
+            .ok_or(PoolNotFound {
+                pool_id: id.to_owned(),
+            })
+    }
+    /// Get a vector of protected PoolSpec's
+    fn get_locked_pools(&self) -> Vec<Arc<Mutex<PoolSpec>>> {
+        let specs = self.read();
+        specs.pools.to_vec()
+    }
+    /// Get a vector of PoolSpec's
+    pub(crate) fn get_pools(&self) -> Vec<PoolSpec> {
+        let pools = self.get_locked_pools();
+        pools.into_iter().map(|p| p.lock().clone()).collect()
     }
     /// Check if the given pool `id` has any replicas
     fn pool_has_replicas(&self, id: &PoolId) -> bool {

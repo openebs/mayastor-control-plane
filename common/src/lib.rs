@@ -13,3 +13,15 @@ impl<F: Into<T>, T> IntoVec<T> for Vec<F> {
         self.into_iter().map(Into::into).collect()
     }
 }
+
+/// Helper to convert from Option<F> into Option<T>
+pub trait IntoOption<T>: Sized {
+    /// Performs the conversion.
+    fn into_opt(self) -> Option<T>;
+}
+
+impl<F: Into<T>, T> IntoOption<T> for Option<F> {
+    fn into_opt(self) -> Option<T> {
+        self.map(Into::into)
+    }
+}

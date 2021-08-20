@@ -88,6 +88,11 @@ macro_rules! bus_impl_string_id_inner {
                 id.to_string()
             }
         }
+        impl From<&$Name> for String {
+            fn from(id: &$Name) -> String {
+                id.to_string()
+            }
+        }
     };
 }
 

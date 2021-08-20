@@ -61,6 +61,26 @@ impl<T: Debug + Serialize> ResponseError for RestError<T> {
     }
 }
 
+/// 204 Response with no content
+#[derive(Default)]
+struct NoContent;
+
+impl From<actix_web::web::Json<()>> for NoContent {
+    fn from(_: actix_web::web::Json<()>) -> Self {
+        NoContent {}
+    }
+}
+impl From<()> for NoContent {
+    fn from(_: ()) -> Self {
+        NoContent {}
+    }
+}
+impl actix_web::Responder for NoContent {
+    fn respond_to(self, _: &actix_web::HttpRequest) -> actix_web::HttpResponse {
+        actix_web::HttpResponse::NoContent().finish()
+    }
+}
+
 /// Wrapper type used as tag to easily distinguish the 3 different parameter types:
 /// 1. Path 2. Query 3. Body
 /// Example usage:

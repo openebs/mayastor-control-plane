@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::{types::v0::store::volume::VolumeSpec, IntoVec};
+use crate::{types::v0::store::volume::VolumeSpec, IntoOption, IntoVec};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug};
 
@@ -28,7 +28,7 @@ impl Volume {
     }
 
     /// Get the volume spec.
-    pub fn get_spec(&self) -> VolumeSpec {
+    pub fn spec(&self) -> VolumeSpec {
         self.spec.clone()
     }
 
@@ -38,17 +38,14 @@ impl Volume {
     }
 
     /// Get the volume state.
-    pub fn get_state(&self) -> Option<VolumeState> {
+    pub fn state(&self) -> Option<VolumeState> {
         self.state.clone()
     }
 }
 
 impl From<Volume> for models::Volume {
     fn from(volume: Volume) -> Self {
-        Self {
-            spec: volume.get_spec().into(),
-            state: volume.state.map(|state| state.into()),
-        }
+        models::Volume::new_all(volume.spec(), volume.state().into_opt())
     }
 }
 
