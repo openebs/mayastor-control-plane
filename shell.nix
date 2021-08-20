@@ -59,6 +59,7 @@ mkShell {
     ${pkgs.lib.optionalString (norust) "echo"}
     ${pkgs.lib.optionalString (nomayastor) "cowsay ${nomayastor_moth}"}
     ${pkgs.lib.optionalString (nomayastor) "echo 'Hint: build mayastor from https://github.com/openebs/mayastor.'"}
+    ${pkgs.lib.optionalString (nomayastor) "echo 'After building ensure the output directory is within your $PATH'"}
     ${pkgs.lib.optionalString (nomayastor) "echo"}
     pre-commit install
     pre-commit install --hook commit-msg

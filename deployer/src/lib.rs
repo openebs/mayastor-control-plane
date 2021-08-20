@@ -116,7 +116,7 @@ pub struct StartOptions {
 
     /// Use a dns resolver for the cluster: defreitas/dns-proxy-server
     /// Note this messes with your /etc/resolv.conf so use at your own risk
-    #[structopt(short, long)]
+    #[structopt(long)]
     pub dns: bool,
 
     /// Show information from the cluster after creation
@@ -176,6 +176,10 @@ pub struct StartOptions {
     /// > deployer start -s -m 2
     #[structopt(short, long)]
     pub reuse_cluster: bool,
+
+    /// Set the developer delayed env flag of the mayastor reactor
+    #[structopt(short, long)]
+    pub developer_delayed: bool,
 }
 
 impl StartOptions {
