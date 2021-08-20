@@ -27,12 +27,8 @@ mkShell {
     cowsay
     docker
     etcd
-    fio
-    git
-    llvmPackages.libclang
+    llvmPackages_11.libclang
     nats-server
-    nodejs-16_x
-    nvme-cli
     openssl
     pkg-config
     pkgs.openapi-generator
@@ -41,13 +37,14 @@ mkShell {
     python3
     utillinux
     which
-  ]
-  ++ pkgs.lib.optional (!norust) channel.nightly
-  ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
+    (lib.optionalString (!nomayastor) mayastor.units.debug.mayastor)
+  ];
 
-  LIBCLANG_PATH = control-plane.LIBCLANG_PATH;
-  PROTOC = control-plane.PROTOC;
-  PROTOC_INCLUDE = control-plane.PROTOC_INCLUDE;
+
+  LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
+  PROTOC = "${protobuf}/bin/protoc";
+  PROTOC_INCLUDE = "${protobuf}/include";
+
 
   # variables used to easily create containers with docker files
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";

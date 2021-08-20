@@ -21,7 +21,7 @@ nats = "0.8"
 structopt = "0.3.15"
 tokio = { version = "1", features = ["full"] }
 async-trait = "=0.1.42"
-rpc = "0.1.0"
+rpc = { path = "../rpc"}
 strum = "0.19"
 strum_macros = "0.19"
 paste = "1.0.4"

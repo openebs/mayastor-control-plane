@@ -46,7 +46,7 @@ composer = { path = "../../composer" }
 common-lib = { path = "../../common" }
 
 [dev-dependencies]
-rpc = "0.1.0"
+rpc = { path = "../../rpc"}
 tokio = { version = "1", features = ["full"] }
 actix-rt = "2.2.0"
 

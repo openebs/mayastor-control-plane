@@ -30,7 +30,7 @@ snafu = "0.6"
 lazy_static = "1.4.0"
 humantime = "2.0.1"
 state = "0.4.2"
-rpc = "0.1.0"
+rpc =  { path = "../../rpc"}
 http = "0.2.3"
 paste = "1.0.4"
 common-lib = { path = "../../common" }

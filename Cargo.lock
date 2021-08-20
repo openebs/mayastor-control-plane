@@ -2533,7 +2533,6 @@ dependencies = [
 [[package]]
 name = "rpc"
 version = "0.1.0"
-source = "git+https://github.com/openebs/mayastor?rev=ebe0c03e5f472e94c74889d0a1797949f7e28166#ebe0c03e5f472e94c74889d0a1797949f7e28166"
 dependencies = [
  "bytes",
  "prost",
