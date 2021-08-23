@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: core
-          image: REGISTRY_IP/mcp-core:93be586
+          image: REGISTRY_IP/mcp-core:bc31c16
           imagePullPolicy: Always
           args:
             - "-smayastor-etcd"

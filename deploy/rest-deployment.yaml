@@ -23,3 +23,5 @@ spec:
             - "--dummy-certificates"
             - "--no-auth"
             - "-nnats"
+          ports:
+          - containerPort: 8080
