@@ -26,10 +26,6 @@ let
     name = "rest";
     config = { ExposedPorts = { "8080/tcp" = { }; "8081/tcp" = { }; }; };
   };
-  #  agent-images = { build }: {
-  #    core = build-agent-image { inherit build; name = "core"; };
-  #    jsongrpc = build-agent-image { inherit build; name = "jsongrpc"; };
-  #  };
 in
 {
   core = build-agent-image { build = "release"; name = "core"; };

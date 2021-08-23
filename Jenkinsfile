@@ -55,7 +55,7 @@ pipeline {
     timeout(time: 1, unit: 'HOURS')
   }
   parameters {
-    booleanParam(defaultValue: false, name: 'build_images')
+    booleanParam(defaultValue: true, name: 'build_images')
   }
   triggers {
     cron(cron_schedule)
@@ -145,6 +145,7 @@ pipeline {
             branch 'master'
             branch 'release/*'
             branch 'develop'
+            branch 'trying'
           }
         }
       }
