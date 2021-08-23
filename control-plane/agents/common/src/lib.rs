@@ -13,7 +13,7 @@ use std::{
 
 use async_trait::async_trait;
 use dyn_clonable::clonable;
-use futures::{future::join_all, stream::StreamExt, Future};
+use futures::{future::join_all, Future};
 use snafu::{OptionExt, ResultExt, Snafu};
 use state::Container;
 use tracing::{debug, error};
@@ -61,7 +61,7 @@ pub struct Service {
     server_connected: bool,
     channel: Channel,
     subscriptions: HashMap<String, Vec<Box<dyn ServiceSubscriber>>>,
-    shared_state: std::sync::Arc<state::Container>,
+    shared_state: std::sync::Arc<Container![Send + Sync]>,
 }
 
 impl Default for Service {
@@ -71,7 +71,7 @@ impl Default for Service {
             server_connected: false,
             channel: Default::default(),
             subscriptions: Default::default(),
-            shared_state: std::sync::Arc::new(Container::new()),
+            shared_state: std::sync::Arc::new(<Container![Send + Sync]>::new()),
         }
     }
 }
@@ -100,12 +100,12 @@ impl<'a> Arguments<'a> {
 #[derive(Clone)]
 pub struct Context<'a> {
     bus: &'a DynBus,
-    state: &'a Container,
+    state: &'a Container![Send + Sync],
 }
 
 impl<'a> Context<'a> {
     /// create a new context
-    pub fn new(bus: &'a DynBus, state: &'a Container) -> Self {
+    pub fn new(bus: &'a DynBus, state: &'a Container![Send + Sync]) -> Self {
         Self { bus, state }
     }
     /// get the message bus from the context
@@ -297,9 +297,9 @@ impl Service {
         bus: DynBus,
         channel: Channel,
         subscriptions: &[Box<dyn ServiceSubscriber>],
-        state: std::sync::Arc<Container>,
+        state: std::sync::Arc<Container![Send + Sync]>,
     ) -> Result<(), ServiceError> {
-        let mut handle = bus.subscribe(channel.clone()).await.context(Subscribe {
+        let handle = bus.subscribe(channel.clone()).await.context(Subscribe {
             channel: channel.clone(),
         })?;
 

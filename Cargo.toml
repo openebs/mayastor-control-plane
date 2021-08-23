@@ -1,19 +1,19 @@
 [patch.crates-io]
 # Update nix/overlay.nix with the sha256:
 # nix-prefetch-url https://github.com/openebs/Mayastor/tarball/$rev --print-path --unpack
-rpc = { git = "https://github.com/openebs/mayastor", rev = "ebe0c03e5f472e94c74889d0a1797949f7e28166"}
 
 [profile.dev]
 panic = "abort"
 
 [workspace]
 members = [
-    "control-plane/agents",
-    "composer",
-    "control-plane/rest",
-    "openapi",
-    "deployer",
     "common",
+    "composer",
+    "control-plane/agents",
+    "control-plane/rest",
+    "deployer",
+    "openapi",
+    "rpc",
 # Test mayastor through the rest api
     "tests/tests-mayastor",
 ]

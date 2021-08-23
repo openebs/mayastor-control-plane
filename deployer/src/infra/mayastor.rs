@@ -11,6 +11,11 @@ impl ComponentAction for Mayastor {
                 .with_nats("-n")
                 .with_args(vec!["-N", &Self::name(i, options)])
                 .with_args(vec!["-g", &mayastor_socket]);
+
+            if options.developer_delayed {
+                bin = bin.with_env("DEVELOPER_DELAYED", "1");
+            }
+
             if !options.no_etcd {
                 let etcd = format!("etcd.{}:2379", options.cluster_label.name());
                 bin = bin.with_args(vec!["-p", &etcd]);

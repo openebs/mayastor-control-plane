@@ -531,7 +531,6 @@ fn grpc_to_reply_error(error: SvcError) -> ReplyError {
                 Code::Unavailable => ReplyErrorKind::Unavailable,
                 Code::DataLoss => ReplyErrorKind::Internal,
                 Code::Unauthenticated => ReplyErrorKind::Unauthenticated,
-                Code::__NonExhaustive => ReplyErrorKind::Internal,
             };
             let extra = format!("{}::{}", request, source.to_string());
             ReplyError {
