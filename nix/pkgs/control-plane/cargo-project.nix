@@ -38,17 +38,15 @@ let
       "common"
       "composer"
       "control-plane"
-      "openapi"
-      "tests"
       "deployer"
+      "openapi"
+      "rpc"
+      "tests"
     ];
-    cargoBuildFlags = [ "-p agents" "-p rest" ];
+    cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" ];
 
     cargoLock = {
       lockFile = ../../../Cargo.lock;
-      outputHashes = {
-        "rpc-0.1.0" = "uLdGaHuHRV3QEcnBgMmzYtXLXur+BgAdzVbGLe6vX4M=";
-      };
     };
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
