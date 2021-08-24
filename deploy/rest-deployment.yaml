@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rest
+  namespace: mayastor
+  labels:
+    app: rest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rest
+  template:
+    metadata:
+      labels:
+        app: rest
+    spec:
+      containers:
+        - name: rest
+          image: mayadata/mcp-rest:develop
+          imagePullPolicy: Always
+          args:
+            - "--dummy-certificates"
+            - "--no-auth"
+            - "-nnats"
+          ports:
+          - containerPort: 8080

@@ -55,7 +55,7 @@ pipeline {
     timeout(time: 1, unit: 'HOURS')
   }
   parameters {
-    booleanParam(defaultValue: false, name: 'build_images')
+    booleanParam(defaultValue: true, name: 'build_images')
   }
   triggers {
     cron(cron_schedule)
@@ -135,7 +135,7 @@ pipeline {
         }
       }// parallel stages block
     }// end of test stage
-    stage('build images') {
+    stage('build and push images') {
       agent { label 'nixos-mayastor' }
       when {
         beforeAgent true
@@ -149,7 +149,10 @@ pipeline {
         }
       }
       steps {
-        sh './scripts/release.sh --skip-publish'
+        withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+        }
+        sh './scripts/release.sh'
       }
       post {
         always {
