@@ -135,7 +135,7 @@ pipeline {
         }
       }// parallel stages block
     }// end of test stage
-    stage('build images') {
+    stage('build and push images') {
       agent { label 'nixos-mayastor' }
       when {
         beforeAgent true
@@ -145,7 +145,6 @@ pipeline {
             branch 'master'
             branch 'release/*'
             branch 'develop'
-            branch 'trying'
           }
         }
       }

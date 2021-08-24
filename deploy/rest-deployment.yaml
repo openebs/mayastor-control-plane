@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: rest
-          image: REGISTRY_IP/mcp-rest:93be586
+          image: mayadata/mcp-rest:develop
           imagePullPolicy: Always
           args:
             - "--dummy-certificates"

@@ -14,7 +14,6 @@ let
     tag = control-plane.version;
     created = "now";
     name = "mayadata/mcp-${name}";
-    #name = "REGISTRY_IP/mcp-${name}";
     contents = [ tini busybox control-plane.${build}.${name} ];
     config = { Entrypoint = [ "tini" "--" control-plane.${build}.${name}.binary ]; } // config;
   };
