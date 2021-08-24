@@ -126,8 +126,8 @@ if [ -z "$IMAGES" ]; then
 fi
 
 for name in $IMAGES; do
-  #image_basename="mayadata/${name}"
-  image_basename="REGISTRY_IP/mcp-${name}"
+  image_basename="mayadata/mcp-${name}"
+  #image_basename="REGISTRY_IP/mcp-${name}"
   image=$image_basename
   if [ -n "$REGISTRY" ]; then
     image="${REGISTRY}/${image}"
@@ -168,6 +168,8 @@ if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
     alias_tag=develop
   elif [ "$BRANCH" == "master" ]; then
     alias_tag=latest
+  elif [ "$BRANCH" == "trying" ]; then
+    alias_tag=trying
   fi
   if [ -n "$alias_tag" ]; then
     for img in $UPLOAD; do

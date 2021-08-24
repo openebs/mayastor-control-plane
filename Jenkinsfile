@@ -150,7 +150,10 @@ pipeline {
         }
       }
       steps {
-        sh './scripts/release.sh --skip-publish'
+        withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+        }
+        sh './scripts/release.sh'
       }
       post {
         always {

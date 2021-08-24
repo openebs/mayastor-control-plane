@@ -13,8 +13,8 @@ let
   build-control-plane-image = { build, name, config ? { } }: dockerTools.buildImage {
     tag = control-plane.version;
     created = "now";
-    #name = "mayadata/mayastor-${name}";
-    name = "REGISTRY_IP/mcp-${name}";
+    name = "mayadata/mcp-${name}";
+    #name = "REGISTRY_IP/mcp-${name}";
     contents = [ tini busybox control-plane.${build}.${name} ];
     config = { Entrypoint = [ "tini" "--" control-plane.${build}.${name}.binary ]; } // config;
   };
