@@ -78,9 +78,11 @@ impl Registry {
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
     ) -> Self {
-        let store = Etcd::new(&store_url)
+        let store_endpoint = Self::format_store_endpoint(&store_url);
+        let store = Etcd::new(&store_endpoint)
             .await
             .expect("Should connect to the persistent store");
+        tracing::info!("Connected to persistent store at {}", store_endpoint);
         let registry = Self {
             inner: Arc::new(RegistryInner {
                 nodes: Default::default(),
@@ -97,6 +99,15 @@ impl Registry {
         registry.init().await;
         registry
     }
+
+    /// Formats the store endpoint with a default port if one isn't supplied.
+    fn format_store_endpoint(endpoint: &str) -> String {
+        match endpoint.contains(':') {
+            true => endpoint.to_string(),
+            false => format!("{}:{}", endpoint, "2379"),
+        }
+    }
+
     /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default
     async fn get_config_or_panic<S: Store>(mut store: S) -> CoreRegistryConfig {
         let config = CoreRegistryConfig::new(NodeRegistration::Automatic);
