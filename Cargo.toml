@@ -12,6 +12,7 @@ members = [
     "control-plane/agents",
     "control-plane/rest",
     "deployer",
+    "kubectl-plugin",
     "openapi",
     "rpc",
 # Test mayastor through the rest api

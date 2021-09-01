@@ -1631,6 +1631,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kubectl-mayastor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "once_cell",
+ "reqwest",
+ "serde_json",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
 name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

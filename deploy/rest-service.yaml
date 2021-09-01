@@ -11,6 +11,12 @@ spec:
     app: rest
   ports:
     - port: 8080
+      name: https
       targetPort: 8080
       protocol: TCP
       nodePort: 30010
+    - port: 8081
+      name: http
+      targetPort: 8081
+      protocol: TCP
+      nodePort: 30011
