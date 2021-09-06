@@ -43,11 +43,7 @@ impl ComponentAction for Mayastor {
 }
 
 impl Mayastor {
-    pub fn name(i: u32, options: &StartOptions) -> String {
-        if options.mayastors == 1 {
-            "mayastor".into()
-        } else {
-            format!("mayastor-{}", i + 1)
-        }
+    pub fn name(i: u32, _options: &StartOptions) -> String {
+        format!("mayastor-{}", i + 1)
     }
 }

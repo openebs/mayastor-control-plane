@@ -28,7 +28,7 @@ NUM_VOLUME_REPLICAS = 1
 REST_SERVER = "http://localhost:8081/v0"
 CREATE_REQUEST_KEY = "create_request"
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-NODE_NAME = "mayastor"
+NODE_NAME = "mayastor-1"
 
 
 # This fixture will be automatically used by all tests.
@@ -133,7 +133,7 @@ def there_are_no_available_mayastor_instances():
     """there are no available Mayastor instances."""
     # Kill mayastor instance
     docker_client = docker.from_env()
-    container = docker_client.containers.get("mayastor")
+    container = docker_client.containers.get("mayastor-1")
     container.kill()
 
 

@@ -7,8 +7,8 @@ async fn create_pool_malloc() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -22,8 +22,8 @@ async fn create_pool_with_missing_disk() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["/dev/c/3po".into()],
         })
         .await
@@ -37,8 +37,8 @@ async fn create_pool_with_existing_disk() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -47,8 +47,8 @@ async fn create_pool_with_existing_disk() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop-new".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -57,8 +57,8 @@ async fn create_pool_with_existing_disk() {
     cluster
         .rest_v0()
         .destroy_pool(v0::DestroyPool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
         })
         .await
         .unwrap();
@@ -66,8 +66,8 @@ async fn create_pool_with_existing_disk() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop-new".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -81,8 +81,8 @@ async fn create_pool_idempotent() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -91,8 +91,8 @@ async fn create_pool_idempotent() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -112,8 +112,8 @@ async fn create_pool_idempotent_same_disk_different_query() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=100&blk_size=512".into()],
         })
         .await
@@ -122,8 +122,8 @@ async fn create_pool_idempotent_same_disk_different_query() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor".into(),
-            id: "pooloop".into(),
+            node: cluster.node(0),
+            id: cluster.pool(0, 0),
             disks: vec!["malloc:///disk?size_mb=200&blk_size=4096".into()],
         })
         .await
@@ -141,8 +141,8 @@ async fn create_pool_idempotent_different_nvmf_host() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor-1".into(),
-            id: "pooloop-1".into(),
+            node: cluster.node(1),
+            id: cluster.pool(1, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -151,8 +151,8 @@ async fn create_pool_idempotent_different_nvmf_host() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor-2".into(),
-            id: "pooloop-2".into(),
+            node: cluster.node(2),
+            id: cluster.pool(2, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -161,8 +161,8 @@ async fn create_pool_idempotent_different_nvmf_host() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor-2".into(),
-            id: "pooloop-2".into(),
+            node: cluster.node(2),
+            id: cluster.pool(2, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
@@ -171,8 +171,8 @@ async fn create_pool_idempotent_different_nvmf_host() {
     cluster
         .rest_v0()
         .create_pool(v0::CreatePool {
-            node: "mayastor-2".into(),
-            id: "pooloop-x".into(),
+            node: cluster.node(2),
+            id: cluster.pool(2, 0),
             disks: vec!["malloc:///disk?size_mb=100".into()],
         })
         .await
