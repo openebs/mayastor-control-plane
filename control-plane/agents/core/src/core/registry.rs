@@ -179,6 +179,11 @@ impl Registry {
         }
     }
 
+    /// Get the locked resource specs object
+    pub(crate) fn specs(&self) -> &ResourceSpecsLocked {
+        &self.specs
+    }
+
     /// Check if the persistent store is currently online
     pub async fn store_online(&self) -> bool {
         let mut store = self.store.lock().await;

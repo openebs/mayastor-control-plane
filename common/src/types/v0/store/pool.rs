@@ -101,6 +101,21 @@ pub struct PoolSpec {
     pub operation: Option<PoolOperationState>,
 }
 
+macro_rules! pool_span {
+    ($Self:tt, $Level:expr, $func:expr) => {
+        match tracing::Span::current().field("pool.uuid") {
+            None => {
+                let _span = tracing::span!($Level, "log_event", pool.uuid = %$Self.id).entered();
+                $func();
+            }
+            Some(_) => {
+                $func();
+            }
+        }
+    };
+}
+crate::impl_trace_span!(pool_span, PoolSpec);
+
 impl OperationSequencer for PoolSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer

@@ -379,7 +379,7 @@ impl ResourceSpecsLocked {
             })
     }
     /// Get a vector of protected PoolSpec's
-    fn get_locked_pools(&self) -> Vec<Arc<Mutex<PoolSpec>>> {
+    pub(crate) fn get_locked_pools(&self) -> Vec<Arc<Mutex<PoolSpec>>> {
         let specs = self.read();
         specs.pools.to_vec()
     }

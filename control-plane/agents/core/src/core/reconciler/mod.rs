@@ -1,6 +1,7 @@
 mod nexus;
 mod persistent_store;
 pub mod poller;
+mod pool;
 mod volume;
 
 use crate::core::task_poller::{PollContext, PollEvent, TaskPoller};

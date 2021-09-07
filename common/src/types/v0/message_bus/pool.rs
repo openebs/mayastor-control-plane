@@ -278,6 +278,17 @@ pub struct CreatePool {
     pub disks: Vec<PoolDeviceUri>,
 }
 
+impl CreatePool {
+    /// Create new `Self` from the given parameters
+    pub fn new(node: &NodeId, id: &PoolId, disks: &[PoolDeviceUri]) -> Self {
+        Self {
+            node: node.clone(),
+            id: id.clone(),
+            disks: disks.to_vec(),
+        }
+    }
+}
+
 /// Destroy Pool Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
