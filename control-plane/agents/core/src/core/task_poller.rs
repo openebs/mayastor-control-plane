@@ -9,18 +9,16 @@ pub(crate) enum PollEvent {
     /// Request Triggered by another component
     /// example: A node has come back online so it could be a good idea to run the
     /// reconciliation loop's as soon as possible
-    #[allow(dead_code)]
     Triggered(PollTriggerEvent),
     /// Shutdown the pollers
     Shutdown,
 }
 
 /// Poll Trigger source
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) enum PollTriggerEvent {
-    /// A node state has changed
-    NodeStateChange,
+    /// A node state has changed to Online
+    NodeStateChangeOnline,
 }
 
 /// State of a poller

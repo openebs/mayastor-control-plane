@@ -14,7 +14,11 @@
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
 use super::{specs::*, wrapper::NodeWrapper};
-use crate::core::{reconciler::ReconcilerControl, wrapper::InternalOps};
+use crate::core::{
+    reconciler::ReconcilerControl,
+    task_poller::{PollEvent, PollTriggerEvent},
+    wrapper::InternalOps,
+};
 use common::errors::SvcError;
 use common_lib::{
     store::etcd::Etcd,
@@ -206,6 +210,11 @@ impl Registry {
     async fn init(&self) {
         let mut store = self.store.lock().await;
         self.specs.init(store.deref_mut()).await;
+    }
+
+    /// Send a triggered event signal to the reconciler module
+    pub(crate) async fn notify(&self, event: PollTriggerEvent) {
+        self.reconciler.notify(PollEvent::Triggered(event)).await
     }
 
     /// Poll each node for resource updates

@@ -1,5 +1,7 @@
 use super::*;
 use crate::core::{registry::Registry, wrapper::NodeWrapper};
+
+use crate::core::reconciler::PollTriggerEvent;
 use common::{
     errors::{GrpcRequestError, SvcError},
     v0::msg_translation::RpcToMessageBus,
@@ -93,6 +95,7 @@ impl Service {
             status: NodeStatus::Online,
         };
 
+        let mut send_event = true;
         let mut nodes = self.registry.nodes.write().await;
         match nodes.get_mut(&node.id) {
             None => {
@@ -103,8 +106,17 @@ impl Service {
                 }
             }
             Some(node) => {
+                if node.lock().await.status() == &NodeStatus::Online {
+                    send_event = false;
+                }
                 node.lock().await.on_register().await;
             }
+        }
+
+        if send_event {
+            self.registry
+                .notify(PollTriggerEvent::NodeStateChangeOnline)
+                .await;
         }
     }
 
