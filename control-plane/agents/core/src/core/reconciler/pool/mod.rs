@@ -84,11 +84,11 @@ async fn missing_pool_state_reconciler(
             Ok(node) if !node.lock().await.is_online() => {
                 let node_status = node.lock().await.status().clone();
                 warn_missing(&pool_spec, node_status);
-                return PollResult::Ok(PollerState::Busy);
+                return PollResult::Ok(PollerState::Idle);
             }
             Err(_) => {
                 warn_missing(&pool_spec, NodeStatus::Unknown);
-                return PollResult::Ok(PollerState::Busy);
+                return PollResult::Ok(PollerState::Idle);
             }
             Ok(node) => node,
         };

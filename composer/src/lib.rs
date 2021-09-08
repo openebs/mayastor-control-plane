@@ -78,6 +78,7 @@ pub struct Binary {
     arguments: Vec<String>,
     nats_arg: Option<String>,
     env: HashMap<String, String>,
+    binds: HashMap<String, String>,
 }
 
 impl Binary {
@@ -124,6 +125,11 @@ impl Binary {
         if let Some(old) = self.env.insert(key.into(), val.into()) {
             println!("Replaced key {} val {} with val {}", key, old, val);
         }
+        self
+    }
+    /// use a volume binds between host path and container container
+    pub fn with_bind(mut self, host: &str, container: &str) -> Self {
+        self.binds.insert(container.to_string(), host.to_string());
         self
     }
     /// pick up the nats argument name for a particular binary from nats_arg
@@ -325,6 +331,11 @@ impl ContainerSpec {
         self.binds.iter().for_each(|(container, host)| {
             vec.push(format!("{}:{}", host, container));
         });
+        if let Some(binary) = &self.binary {
+            binary.binds.iter().for_each(|(container, host)| {
+                vec.push(format!("{}:{}", host, container));
+            });
+        }
         vec
     }
 
@@ -657,15 +668,20 @@ impl Builder {
     }
     /// override clean flags with environment variable
     /// useful for testing without having to change the code
-    fn override_clean(&mut self) {
+    fn override_debug_flags(&mut self) {
         Self::override_flags(&mut self.clean, "clean");
         Self::override_flags(&mut self.allow_clean_on_panic, "allow_clean_on_panic");
         Self::override_flags(&mut self.logs_on_panic, "logs_on_panic");
+        let mut use_alpine = false;
+        Self::override_flags(&mut use_alpine, "alpine");
+        if use_alpine {
+            self.image = Some("alpine:latest".to_string());
+        }
     }
 
     /// build the config but don't start the containers
     async fn build_only(mut self) -> Result<ComposeTest, Box<dyn std::error::Error>> {
-        self.override_clean();
+        self.override_debug_flags();
 
         let path = std::path::PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
         let srcdir = path.parent().unwrap().to_string_lossy().into();
@@ -1250,6 +1266,28 @@ impl ComposeTest {
             .await
         {
             // where already stopped
+            if !matches!(e, Error::DockerResponseNotModifiedError { .. }) {
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// kill the container
+    pub async fn kill(&self, name: &str) -> Result<(), Error> {
+        let id = self.containers.get(name).unwrap();
+        self.kill_id(id.0.as_str()).await
+    }
+
+    /// kill the container by its id
+    pub async fn kill_id(&self, id: &str) -> Result<(), Error> {
+        if let Err(e) = self
+            .docker
+            .kill_container(id, Some(KillContainerOptions { signal: "SIGKILL" }))
+            .await
+        {
+            // where already killed
             if !matches!(e, Error::DockerResponseNotModifiedError { .. }) {
                 return Err(e);
             }
