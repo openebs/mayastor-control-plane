@@ -1,4 +1,4 @@
-use crate::core::registry::Registry;
+use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 
 /// Poll Event that identifies why a poll is running
@@ -93,6 +93,10 @@ impl PollContext {
     /// Get a reference to the core registry
     pub(crate) fn registry(&self) -> &Registry {
         &self.registry
+    }
+    /// Get a reference to the locked resource specs object
+    pub(crate) fn specs(&self) -> &ResourceSpecsLocked {
+        self.registry.specs()
     }
 
     #[allow(dead_code)]

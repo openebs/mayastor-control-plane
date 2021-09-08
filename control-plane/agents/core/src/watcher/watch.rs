@@ -447,7 +447,7 @@ impl StoreWatcher {
         };
 
         let mut watch_cfg = watch_cfg.lock().await;
-        watch_cfg.add(&watch, self.registry.store.clone()).await?;
+        watch_cfg.add(&watch, self.registry.store().clone()).await?;
         Ok(())
     }
 

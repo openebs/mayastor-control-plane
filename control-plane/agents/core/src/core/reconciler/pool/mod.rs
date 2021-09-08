@@ -33,7 +33,7 @@ impl PoolReconciler {
 impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
-        for pool in context.registry().specs().get_locked_pools() {
+        for pool in context.specs().get_locked_pools() {
             if pool.lock().status().created() {
                 results.push(missing_pool_state_reconciler(pool, context).await)
             }

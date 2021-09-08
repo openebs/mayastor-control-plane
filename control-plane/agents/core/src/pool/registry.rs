@@ -18,14 +18,14 @@ impl Registry {
                         .await?
                         .into_iter()
                         .map(|state| {
-                            let spec = self.specs.get_pool(&state.id).ok();
+                            let spec = self.specs().get_pool(&state.id).ok();
                             Pool::from_state(state, spec)
                         });
 
                 pools.extend(pools_from_state);
 
                 let pools_from_spec = self
-                    .specs
+                    .specs()
                     .get_pools()
                     .into_iter()
                     .filter(|p| !pools.iter().any(|i| i.id() == &p.id))
@@ -42,14 +42,14 @@ impl Registry {
                         .await?
                         .into_iter()
                         .map(|state| {
-                            let spec = self.specs.get_pool(&state.id).ok();
+                            let spec = self.specs().get_pool(&state.id).ok();
                             Pool::from_state(state, spec)
                         });
 
                 pools.extend(pools_from_state);
 
                 let pools_from_spec = self
-                    .specs
+                    .specs()
                     .get_pools()
                     .into_iter()
                     .filter(|p| p.node == node_id)
@@ -120,7 +120,7 @@ impl Registry {
     /// Get the pool object corresponding to the id.
     pub(crate) async fn get_pool(&self, id: &PoolId) -> Result<Pool, SvcError> {
         Pool::try_new(
-            self.specs.get_pool(id).ok(),
+            self.specs().get_pool(id).ok(),
             self.get_pool_state(id).await.ok(),
         )
         .ok_or(PoolNotFound {

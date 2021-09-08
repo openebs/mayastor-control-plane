@@ -74,7 +74,7 @@ impl GetPersistedNexusChildrenCtx {
         // find all replica status
         let state_replicas = self.registry.get_replicas().await;
         // find all replica specs for this volume
-        let spec_replicas = self.registry.specs.get_volume_replicas(&self.spec.uuid);
+        let spec_replicas = self.registry.specs().get_volume_replicas(&self.spec.uuid);
         // all pools
         let pool_wrappers = self.registry.get_pool_wrappers().await;
 

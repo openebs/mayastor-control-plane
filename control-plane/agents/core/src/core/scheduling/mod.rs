@@ -56,7 +56,7 @@ impl NodeFilters {
     /// Should only attempt to use nodes not currently used by the volume
     pub(crate) fn unused(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let registry = request.registry();
-        let used_nodes = registry.specs.get_volume_data_nodes(&request.uuid);
+        let used_nodes = registry.specs().get_volume_data_nodes(&request.uuid);
         !used_nodes.contains(&item.pool.node)
     }
 }

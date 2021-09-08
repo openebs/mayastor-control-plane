@@ -23,8 +23,7 @@ pub(super) async fn faulted_children_remover(
         nexus_spec_clone
             .warn_span(|| tracing::warn!("Attempting to remove faulted child '{}'", child.uri));
         if let Err(error) = context
-            .registry()
-            .specs
+            .specs()
             .remove_nexus_child_by_uri(context.registry(), &nexus_state, &child.uri, true, mode)
             .await
         {
@@ -62,8 +61,7 @@ pub(super) async fn unknown_children_remover(
         nexus_spec_clone
             .warn_span(|| tracing::warn!("Attempting to remove unknown child '{}'", child.uri));
         if let Err(error) = context
-            .registry()
-            .specs
+            .specs()
             .remove_nexus_child_by_uri(context.registry(), &nexus_state, &child.uri, false, mode)
             .await
         {
@@ -107,8 +105,7 @@ pub(super) async fn missing_children_remover(
         ));
 
         if let Err(error) = context
-            .registry()
-            .specs
+            .specs()
             .remove_nexus_child_by_uri(context.registry(), &nexus_state, &child.uri(), true, mode)
             .await
         {

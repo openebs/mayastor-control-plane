@@ -1,4 +1,4 @@
-use crate::core::registry::Registry;
+use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
     mbus_api::message_bus::v0::Nexuses,
@@ -19,6 +19,9 @@ pub(super) struct Service {
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
         Self { registry }
+    }
+    fn specs(&self) -> &ResourceSpecsLocked {
+        self.registry.specs()
     }
 
     /// Get nexuses according to the filter
@@ -44,8 +47,7 @@ impl Service {
     /// Create nexus
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .create_nexus(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -53,8 +55,7 @@ impl Service {
     /// Destroy nexus
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .destroy_nexus(&self.registry, request, true, OperationMode::Exclusive)
             .await
     }
@@ -62,8 +63,7 @@ impl Service {
     /// Share nexus
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .share_nexus(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -71,8 +71,7 @@ impl Service {
     /// Unshare nexus
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .unshare_nexus(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -80,8 +79,7 @@ impl Service {
     /// Add nexus child
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
     pub(super) async fn add_nexus_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .add_nexus_child(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -92,8 +90,7 @@ impl Service {
         &self,
         request: &RemoveNexusChild,
     ) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .remove_nexus_child(&self.registry, request, OperationMode::Exclusive)
             .await
     }

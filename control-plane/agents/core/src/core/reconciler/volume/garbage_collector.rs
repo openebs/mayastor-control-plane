@@ -25,7 +25,7 @@ impl GarbageCollector {
 #[async_trait::async_trait]
 impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let volumes = context.registry().specs.get_locked_volumes();
+        let volumes = context.specs().get_locked_volumes();
         for volume in volumes {
             let _ = garbage_collector_reconcile(volume, context).await;
         }

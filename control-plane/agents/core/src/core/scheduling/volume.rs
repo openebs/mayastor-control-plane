@@ -193,8 +193,8 @@ impl GetChildForRemovalContext {
     }
 
     async fn list(&self) -> Vec<ReplicaItem> {
-        let replicas = self.registry.specs.get_volume_replicas(&self.spec.uuid);
-        let nexuses = self.registry.specs.get_volume_nexuses(&self.spec.uuid);
+        let replicas = self.registry.specs().get_volume_replicas(&self.spec.uuid);
+        let nexuses = self.registry.specs().get_volume_nexuses(&self.spec.uuid);
         let replicas = replicas.iter().map(|r| r.lock().clone());
 
         let replica_states = self.registry.get_replicas().await;
@@ -435,7 +435,7 @@ impl VolumeReplicasForNexusCtx {
         // find all replica specs which are not yet part of the nexus
         let spec_replicas = self
             .registry
-            .specs
+            .specs()
             .get_volume_replicas(&self.vol_spec.uuid)
             .into_iter()
             .filter(|r| !self.nexus_spec.contains_replica(&r.lock().uuid));

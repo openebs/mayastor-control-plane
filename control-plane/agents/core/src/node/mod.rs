@@ -41,7 +41,7 @@ async fn create_node_service(builder: &Service) -> service::Service {
     let service = service::Service::new(registry.clone(), deadline, request, connect);
 
     // attempt to reload the node state based on the specification
-    for node in registry.specs.get_nodes() {
+    for node in registry.specs().get_nodes() {
         service
             .register_state(&Register {
                 id: node.id().clone(),

@@ -78,9 +78,9 @@ impl ReconcilerWorker {
                     event.unwrap_or(PollEvent::Shutdown)
                 },
                 _timed = tokio::time::sleep(if result.unwrap_or(PollerState::Busy) == PollerState::Busy {
-                    registry.reconcile_period
+                    registry.reconcile_period()
                 } else {
-                    registry.reconcile_idle_period
+                    registry.reconcile_idle_period()
                 }) => {
                     PollEvent::TimedRun
                 }

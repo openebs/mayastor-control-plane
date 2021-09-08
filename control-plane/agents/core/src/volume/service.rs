@@ -1,4 +1,4 @@
-use crate::core::registry::Registry;
+use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
     mbus_api::message_bus::v0::Volumes,
@@ -19,6 +19,9 @@ pub(super) struct Service {
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
         Self { registry }
+    }
+    fn specs(&self) -> &ResourceSpecsLocked {
+        self.registry.specs()
     }
 
     /// Get volumes
@@ -46,8 +49,7 @@ impl Service {
     /// Create volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .create_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -55,8 +57,7 @@ impl Service {
     /// Destroy volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .destroy_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -64,8 +65,7 @@ impl Service {
     /// Share volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .share_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -73,8 +73,7 @@ impl Service {
     /// Unshare volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .unshare_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -82,8 +81,7 @@ impl Service {
     /// Publish volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .publish_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -94,8 +92,7 @@ impl Service {
         &self,
         request: &UnpublishVolume,
     ) -> Result<Volume, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .unpublish_volume(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -106,8 +103,7 @@ impl Service {
         &self,
         request: &SetVolumeReplica,
     ) -> Result<Volume, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .set_volume_replica(&self.registry, request, OperationMode::Exclusive)
             .await
     }
