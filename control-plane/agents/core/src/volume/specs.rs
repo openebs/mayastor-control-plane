@@ -1093,7 +1093,7 @@ impl ResourceSpecsLocked {
                 .iter()
                 .fold(0usize, |mut c, child| {
                     if let Some(replica) = child.as_replica() {
-                        if registry.specs.get_replica(replica.uuid()).is_some() {
+                        if registry.specs().get_replica(replica.uuid()).is_some() {
                             c += 1;
                         }
                     }
@@ -1434,11 +1434,11 @@ impl SpecOperations for VolumeSpec {
 
             VolumeOperation::RemoveUnusedReplica(uuid) => {
                 let last_replica = !registry
-                    .specs
+                    .specs()
                     .get_volume_replicas(&self.uuid)
                     .iter()
                     .any(|r| &r.lock().uuid != uuid);
-                let nexuses = registry.specs.get_volume_nexuses(&self.uuid);
+                let nexuses = registry.specs().get_volume_nexuses(&self.uuid);
                 let used = nexuses.iter().any(|n| n.lock().contains_replica(uuid));
                 if last_replica {
                     Err(SvcError::LastReplica {
@@ -1496,7 +1496,7 @@ impl SpecOperations for VolumeSpec {
     }
     fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
         let uuid = locked_spec.lock().uuid.clone();
-        registry.specs.remove_volume(&uuid);
+        registry.specs().remove_volume(&uuid);
     }
     fn dirty(&self) -> bool {
         self.pending_op()

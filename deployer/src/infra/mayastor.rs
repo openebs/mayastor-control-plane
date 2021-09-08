@@ -10,7 +10,8 @@ impl ComponentAction for Mayastor {
             let mut bin = Binary::from_path("mayastor")
                 .with_nats("-n")
                 .with_args(vec!["-N", &Self::name(i, options)])
-                .with_args(vec!["-g", &mayastor_socket]);
+                .with_args(vec!["-g", &mayastor_socket])
+                .with_bind("/tmp", "/host/tmp");
 
             if options.developer_delayed {
                 bin = bin.with_env("DEVELOPER_DELAYED", "1");
@@ -43,11 +44,7 @@ impl ComponentAction for Mayastor {
 }
 
 impl Mayastor {
-    pub fn name(i: u32, options: &StartOptions) -> String {
-        if options.mayastors == 1 {
-            "mayastor".into()
-        } else {
-            format!("mayastor-{}", i + 1)
-        }
+    pub fn name(i: u32, _options: &StartOptions) -> String {
+        format!("mayastor-{}", i + 1)
     }
 }

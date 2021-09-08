@@ -12,15 +12,15 @@ impl Registry {
         volume_uuid: &VolumeId,
     ) -> Result<VolumeState, SvcError> {
         let nexuses = self.get_node_opt_nexuses(None).await?;
-        let nexus_specs = self.specs.get_volume_nexuses(volume_uuid);
+        let nexus_specs = self.specs().get_volume_nexuses(volume_uuid);
         let nexus_states = nexus_specs
             .iter()
             .map(|n| nexuses.iter().find(|nexus| nexus.uuid == n.lock().uuid))
             .flatten()
             .collect::<Vec<_>>();
-        let replica_specs = self.specs.get_volume_replicas(volume_uuid);
+        let replica_specs = self.specs().get_volume_replicas(volume_uuid);
         let volume_spec = self
-            .specs
+            .specs()
             .get_locked_volume(volume_uuid)
             .context(VolumeNotFound {
                 vol_id: volume_uuid.to_string(),
@@ -66,7 +66,7 @@ impl Registry {
     /// Get all volumes
     pub(super) async fn get_volumes(&self) -> Vec<Volume> {
         let mut volumes = vec![];
-        let volume_specs = self.specs.get_volumes();
+        let volume_specs = self.specs().get_volumes();
         for spec in &volume_specs {
             volumes.push(Volume::new(
                 spec,
@@ -79,7 +79,7 @@ impl Registry {
     /// Return a volume object corresponding to the ID.
     pub(crate) async fn get_volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
         Ok(Volume::new(
-            &self.specs.get_volume(id)?,
+            &self.specs().get_volume(id)?,
             &self.get_volume_state(id).await.ok(),
         ))
     }

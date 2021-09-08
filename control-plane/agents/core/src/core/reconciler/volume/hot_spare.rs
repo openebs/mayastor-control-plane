@@ -35,7 +35,7 @@ impl HotSpareReconciler {
 impl TaskPoller for HotSpareReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
-        let volumes = context.registry().specs.get_locked_volumes();
+        let volumes = context.specs().get_locked_volumes();
         for volume in volumes {
             results.push(hot_spare_reconcile(&volume, context).await);
         }
@@ -81,7 +81,7 @@ async fn hot_spare_nexus_reconcile(
 
     // todo: ANA will have more than 1 nexus
     if let Some(nexus) = volume_state.children.first() {
-        let nexus_spec = context.registry().specs.get_nexus(&nexus.uuid);
+        let nexus_spec = context.specs().get_nexus(&nexus.uuid);
         let nexus_spec = nexus_spec.context(NexusNotFound {
             nexus_id: nexus.uuid.to_string(),
         })?;
@@ -175,10 +175,9 @@ async fn nexus_replica_count_reconciler(
             .children
             .iter()
             .fold(0usize, |mut counter, child| {
-                let registry = context.registry();
                 // only account for children which are lvol replicas
                 if let Some(replica) = child.as_replica() {
-                    if registry.specs.get_replica(replica.uuid()).is_some() {
+                    if context.specs().get_replica(replica.uuid()).is_some() {
                         counter += 1;
                     }
                 }
@@ -195,8 +194,7 @@ async fn nexus_replica_count_reconciler(
                 )
             });
             context
-                .registry()
-                .specs
+                .specs()
                 .attach_replicas_to_nexus(
                     context.registry(),
                     volume_spec,
@@ -215,8 +213,7 @@ async fn nexus_replica_count_reconciler(
                 )
             });
             context
-                .registry()
-                .specs
+                .specs()
                 .remove_excess_replicas_from_nexus(
                     context.registry(),
                     volume_spec,
@@ -250,7 +247,7 @@ async fn volume_replica_count_reconciler(
     let volume_uuid = volume_spec_clone.uuid.clone();
     let required_replica_count = volume_spec_clone.num_replicas as usize;
 
-    let current_replicas = context.registry().specs.get_volume_replicas(&volume_uuid);
+    let current_replicas = context.specs().get_volume_replicas(&volume_uuid);
     let mut current_replica_count = current_replicas.len();
 
     match current_replica_count.cmp(&required_replica_count) {
@@ -268,8 +265,7 @@ async fn volume_replica_count_reconciler(
                 get_volume_replica_candidates(context.registry(), &volume_spec_clone).await?;
 
             match context
-                .registry()
-                .specs
+                .specs()
                 .create_volume_replicas(
                     context.registry(),
                     &volume_spec_clone,
@@ -302,8 +298,7 @@ async fn volume_replica_count_reconciler(
 
             let diff = current_replica_count - required_replica_count;
             match context
-                .registry()
-                .specs
+                .specs()
                 .remove_unused_volume_replicas(context.registry(), volume_spec, diff, mode)
                 .await
             {

@@ -16,7 +16,7 @@ impl PersistentStoreReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for PersistentStoreReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let specs = &context.registry().specs;
+        let specs = context.specs();
         let dirty_replicas = specs.reconcile_dirty_replicas(context.registry()).await;
         let dirty_nexuses = specs.reconcile_dirty_nexuses(context.registry()).await;
         let dirty_volumes = specs.reconcile_dirty_volumes(context.registry()).await;

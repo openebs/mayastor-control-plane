@@ -20,7 +20,7 @@ from openapi.openapi_client.model.spec_status import SpecStatus
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-NODE_NAME = "mayastor"
+NODE_NAME = "mayastor-1"
 VOLUME_CTX_KEY = "volume"
 VOLUME_SIZE = 10485761
 

@@ -14,7 +14,11 @@
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
 use super::{specs::*, wrapper::NodeWrapper};
-use crate::core::{reconciler::ReconcilerControl, wrapper::InternalOps};
+use crate::core::{
+    reconciler::ReconcilerControl,
+    task_poller::{PollEvent, PollTriggerEvent},
+    wrapper::InternalOps,
+};
 use common::errors::SvcError;
 use common_lib::{
     store::etcd::Etcd,
@@ -39,6 +43,9 @@ pub struct Registry {
     inner: Arc<RegistryInner<Etcd>>,
 }
 
+/// Map that stores the actual state of the nodes
+pub(crate) type NodesMapLocked = Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>;
+
 impl Deref for Registry {
     type Target = Arc<RegistryInner<Etcd>>;
 
@@ -50,19 +57,19 @@ impl Deref for Registry {
 /// Generic Registry Inner with a Store trait
 #[derive(Debug)]
 pub struct RegistryInner<S: Store> {
-    /// the actual state of the node
-    pub(crate) nodes: Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>,
+    /// the actual state of the nodes
+    nodes: NodesMapLocked,
     /// spec (aka desired state) of the various resources
-    pub(crate) specs: ResourceSpecsLocked,
+    specs: ResourceSpecsLocked,
     /// period to refresh the cache
     cache_period: std::time::Duration,
-    pub(crate) store: Arc<Mutex<S>>,
+    store: Arc<Mutex<S>>,
     /// store gRPC operation timeout
     store_timeout: std::time::Duration,
     /// reconciliation period when no work is being done
-    pub(crate) reconcile_idle_period: std::time::Duration,
+    reconcile_idle_period: std::time::Duration,
     /// reconciliation period when work is pending
-    pub(crate) reconcile_period: std::time::Duration,
+    reconcile_period: std::time::Duration,
     reconciler: ReconcilerControl,
     config: CoreRegistryConfig,
 }
@@ -124,6 +131,24 @@ impl Registry {
         &self.config
     }
 
+    /// reconciliation period when no work is being done
+    pub(crate) fn reconcile_idle_period(&self) -> std::time::Duration {
+        self.reconcile_idle_period
+    }
+    /// reconciliation period when work is pending
+    pub(crate) fn reconcile_period(&self) -> std::time::Duration {
+        self.reconcile_period
+    }
+
+    /// Get a reference to the actual state of the nodes
+    pub(crate) fn nodes(&self) -> &NodesMapLocked {
+        &self.nodes
+    }
+    /// Get a reference to the locked resource specs object
+    pub(crate) fn specs(&self) -> &ResourceSpecsLocked {
+        &self.specs
+    }
+
     /// Serialized write to the persistent store
     pub async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
@@ -179,6 +204,11 @@ impl Registry {
         }
     }
 
+    /// Get a reference to the persistent store
+    pub(crate) fn store(&self) -> &Arc<Mutex<Etcd>> {
+        &self.store
+    }
+
     /// Check if the persistent store is currently online
     pub async fn store_online(&self) -> bool {
         let mut store = self.store.lock().await;
@@ -203,10 +233,15 @@ impl Registry {
         self.specs.init(store.deref_mut()).await;
     }
 
+    /// Send a triggered event signal to the reconciler module
+    pub(crate) async fn notify(&self, event: PollTriggerEvent) {
+        self.reconciler.notify(PollEvent::Triggered(event)).await
+    }
+
     /// Poll each node for resource updates
     async fn poller(&self) {
         loop {
-            let nodes = self.nodes.read().await.clone();
+            let nodes = self.nodes().read().await.clone();
             for (_, node) in nodes.iter() {
                 let lock = node.grpc_lock().await;
                 let _guard = lock.lock().await;

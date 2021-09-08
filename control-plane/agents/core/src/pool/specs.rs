@@ -38,7 +38,7 @@ impl SpecOperations for PoolSpec {
         registry: &Registry,
     ) -> Result<(), SvcError> {
         let id = locked_spec.lock().id.clone();
-        let pool_in_use = registry.specs.pool_has_replicas(&id);
+        let pool_in_use = registry.specs().pool_has_replicas(&id);
         if pool_in_use {
             Err(SvcError::InUse {
                 kind: ResourceKind::Pool,
@@ -56,7 +56,7 @@ impl SpecOperations for PoolSpec {
     }
     fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
         let id = locked_spec.lock().id.clone();
-        registry.specs.remove_pool(&id);
+        registry.specs().remove_pool(&id);
     }
     fn dirty(&self) -> bool {
         // pools are not updatable currently, so the spec is never dirty (not written to etcd)
@@ -120,7 +120,7 @@ impl SpecOperations for ReplicaSpec {
     }
     fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
         let uuid = locked_spec.lock().uuid.clone();
-        registry.specs.remove_replica(&uuid);
+        registry.specs().remove_replica(&uuid);
     }
     fn dirty(&self) -> bool {
         self.pending_op()
@@ -379,7 +379,7 @@ impl ResourceSpecsLocked {
             })
     }
     /// Get a vector of protected PoolSpec's
-    fn get_locked_pools(&self) -> Vec<Arc<Mutex<PoolSpec>>> {
+    pub(crate) fn get_locked_pools(&self) -> Vec<Arc<Mutex<PoolSpec>>> {
         let specs = self.read();
         specs.pools.to_vec()
     }

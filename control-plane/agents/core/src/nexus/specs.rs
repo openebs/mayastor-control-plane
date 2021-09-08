@@ -79,7 +79,7 @@ impl SpecOperations for NexusSpec {
     }
     fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
         let uuid = locked_spec.lock().uuid.clone();
-        registry.specs.remove_nexus(&uuid);
+        registry.specs().remove_nexus(&uuid);
     }
 
     fn dirty(&self) -> bool {

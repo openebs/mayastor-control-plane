@@ -156,7 +156,7 @@ impl<T: OperationSequencer> Drop for OperationGuard<T> {
 
 /// Exclusive operations must be performed one at a time.
 /// A reconcile compound operation can be comprised of multiple steps
-/// A reconcile compound operation must first be issued, followed by 1-N Single Step Operations
+/// A reconcile start operation must first be issued, followed by 1-N Single Step Operations
 #[derive(Debug, Copy, Clone)]
 pub enum OperationMode {
     /// Start Exclusive operation

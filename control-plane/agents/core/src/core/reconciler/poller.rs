@@ -1,5 +1,5 @@
 use crate::core::{
-    reconciler::{persistent_store::PersistentStoreReconciler, volume},
+    reconciler::{persistent_store::PersistentStoreReconciler, pool, volume},
     registry::Registry,
     task_poller::{squash_results, PollContext, PollEvent, PollResult, PollerState, TaskPoller},
 };
@@ -25,6 +25,7 @@ impl ReconcilerWorker {
     pub(super) fn new() -> Self {
         let poll_targets: Vec<Box<dyn TaskPoller>> = vec![
             Box::new(volume::VolumeReconciler::new()),
+            Box::new(pool::PoolReconciler::new()),
             Box::new(PersistentStoreReconciler::new()),
         ];
 
@@ -77,9 +78,9 @@ impl ReconcilerWorker {
                     event.unwrap_or(PollEvent::Shutdown)
                 },
                 _timed = tokio::time::sleep(if result.unwrap_or(PollerState::Busy) == PollerState::Busy {
-                    registry.reconcile_period
+                    registry.reconcile_period()
                 } else {
-                    registry.reconcile_idle_period
+                    registry.reconcile_idle_period()
                 }) => {
                     PollEvent::TimedRun
                 }
@@ -87,7 +88,7 @@ impl ReconcilerWorker {
         }
     }
 
-    #[tracing::instrument(skip(context), level = "trace", err)]
+    #[tracing::instrument(skip(context), level = "trace")]
     async fn poller_work(&mut self, context: PollContext) -> PollResult {
         tracing::trace!("Entering the reconcile loop...");
         let mut results = vec![];

@@ -1,4 +1,4 @@
-use crate::core::{registry::Registry, wrapper::GetterOps};
+use crate::core::{registry::Registry, specs::ResourceSpecsLocked, wrapper::GetterOps};
 use common::errors::{PoolNotFound, ReplicaNotFound, SvcError};
 use common_lib::{
     mbus_api::message_bus::v0::{Pools, Replicas},
@@ -20,6 +20,9 @@ pub(super) struct Service {
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
         Self { registry }
+    }
+    fn specs(&self) -> &ResourceSpecsLocked {
+        self.registry.specs()
     }
 
     /// Get pools according to the filter
@@ -118,7 +121,7 @@ impl Service {
                 let replicas = self.registry.get_replicas().await.into_iter();
                 let replicas = replicas
                     .filter(|r| {
-                        if let Some(spec) = self.registry.specs.get_replica(&r.uuid) {
+                        if let Some(spec) = self.specs().get_replica(&r.uuid) {
                             let spec = spec.lock().clone();
                             spec.owners.owned_by(&volume.uuid)
                         } else {
@@ -136,8 +139,7 @@ impl Service {
     /// Create pool
     #[tracing::instrument(level = "debug", skip(self), fields(pool.uuid = %request.id))]
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .create_pool(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -145,8 +147,7 @@ impl Service {
     /// Destroy pool
     #[tracing::instrument(level = "info", skip(self), err, fields(pool.uuid = %request.id))]
     pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .destroy_pool(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -157,8 +158,7 @@ impl Service {
         &self,
         request: &CreateReplica,
     ) -> Result<Replica, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .create_replica(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -166,8 +166,7 @@ impl Service {
     /// Destroy replica
     #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .destroy_replica(&self.registry, request, false, OperationMode::Exclusive)
             .await
     }
@@ -175,8 +174,7 @@ impl Service {
     /// Share replica
     #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .share_replica(&self.registry, request, OperationMode::Exclusive)
             .await
     }
@@ -184,8 +182,7 @@ impl Service {
     /// Unshare replica
     #[tracing::instrument(level = "info", skip(self), err)]
     pub(super) async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
-        self.registry
-            .specs
+        self.specs()
             .unshare_replica(&self.registry, request, OperationMode::Exclusive)
             .await?;
         Ok(())

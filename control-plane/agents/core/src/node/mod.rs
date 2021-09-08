@@ -41,7 +41,7 @@ async fn create_node_service(builder: &Service) -> service::Service {
     let service = service::Service::new(registry.clone(), deadline, request, connect);
 
     // attempt to reload the node state based on the specification
-    for node in registry.specs.get_nodes() {
+    for node in registry.specs().get_nodes() {
         service
             .register_state(&Register {
                 id: node.id().clone(),
@@ -123,7 +123,7 @@ mod tests {
             &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online)
         );
 
-        cluster.composer().stop("mayastor").await.unwrap();
+        cluster.composer().stop(maya_name.as_str()).await.unwrap();
         cluster.composer().restart("core").await.unwrap();
         Liveness {}
             .request_on_ext(ChannelVs::Node, bus_timeout)

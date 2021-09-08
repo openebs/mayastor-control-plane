@@ -1,4 +1,4 @@
-use crate::core::registry::Registry;
+use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 
 /// Poll Event that identifies why a poll is running
@@ -9,18 +9,16 @@ pub(crate) enum PollEvent {
     /// Request Triggered by another component
     /// example: A node has come back online so it could be a good idea to run the
     /// reconciliation loop's as soon as possible
-    #[allow(dead_code)]
     Triggered(PollTriggerEvent),
     /// Shutdown the pollers
     Shutdown,
 }
 
 /// Poll Trigger source
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) enum PollTriggerEvent {
-    /// A node state has changed
-    NodeStateChange,
+    /// A node state has changed to Online
+    NodeStateChangeOnline,
 }
 
 /// State of a poller
@@ -95,6 +93,10 @@ impl PollContext {
     /// Get a reference to the core registry
     pub(crate) fn registry(&self) -> &Registry {
         &self.registry
+    }
+    /// Get a reference to the locked resource specs object
+    pub(crate) fn specs(&self) -> &ResourceSpecsLocked {
+        self.registry.specs()
     }
 
     #[allow(dead_code)]

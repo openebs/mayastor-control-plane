@@ -126,6 +126,18 @@ impl NodeState {
             status,
         }
     }
+    /// Get the node identification
+    pub fn id(&self) -> &NodeId {
+        &self.id
+    }
+    /// Get the node's gRPC endpoint
+    pub fn grpc(&self) -> &str {
+        &self.grpc_endpoint
+    }
+    /// Get the node status
+    pub fn status(&self) -> &NodeStatus {
+        &self.status
+    }
 }
 
 impl From<models::NodeState> for NodeState {

@@ -490,6 +490,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 })?;
         let pool = rpc_pool_to_bus(&rpc_pool.into_inner(), &request.node);
         self.lock().await.update_pool_states().await?;
+        self.lock().await.update_replica_states().await?;
         Ok(pool)
     }
     /// Destroy a pool on the node via gRPC
@@ -521,6 +522,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
         let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node);
         self.lock().await.update_replica_states().await?;
+        self.lock().await.update_pool_states().await?;
         Ok(replica)
     }
 
@@ -570,6 +572,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 request: "destroy_replica",
             })?;
         self.lock().await.update_replica_states().await?;
+        self.lock().await.update_pool_states().await?;
         Ok(())
     }
 

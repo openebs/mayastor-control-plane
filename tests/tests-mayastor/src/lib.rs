@@ -204,6 +204,40 @@ enum PoolDisk {
     Uri(String),
 }
 
+/// Temporary "disk" file, which gets deleted on drop
+pub struct TmpDiskFile {
+    path: String,
+    uri: String,
+}
+
+impl TmpDiskFile {
+    /// Creates a new file on `path` with `size`.
+    /// The file is deleted on drop.
+    pub fn new(path: &str, size: u64) -> Self {
+        let path = format!("/tmp/mayastor-{}", path);
+        let file = std::fs::File::create(&path).expect("to create the tmp file");
+        file.set_len(size).expect("to truncate the tmp file");
+        Self {
+            // mayastor is setup with a bind mount from /tmp to /host/tmp
+            uri: format!(
+                "aio:///host{}?blk_size=512&uuid={}",
+                path,
+                message_bus::PoolId::new().to_string()
+            ),
+            path,
+        }
+    }
+    /// Disk URI to be used by mayastor
+    pub fn uri(&self) -> &str {
+        &self.uri
+    }
+}
+impl Drop for TmpDiskFile {
+    fn drop(&mut self) {
+        std::fs::remove_file(&self.path).expect("to unlink the tmp file");
+    }
+}
+
 /// Builder for the Cluster
 pub struct ClusterBuilder {
     opts: StartOptions,
@@ -475,7 +509,13 @@ impl Pool {
         match &self.disk {
             PoolDisk::Malloc(size) => {
                 let size = size / (1024 * 1024);
-                format!("malloc:///disk{}?size_mb={}", self.index, size).into()
+                format!(
+                    "malloc:///disk{}?size_mb={}&uuid={}",
+                    self.index,
+                    size,
+                    message_bus::PoolId::new()
+                )
+                .into()
             }
             PoolDisk::Uri(uri) => uri.into(),
         }

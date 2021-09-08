@@ -1,8 +1,10 @@
 mod nexus;
 mod persistent_store;
 pub mod poller;
+mod pool;
 mod volume;
 
+pub(crate) use crate::core::task_poller::PollTriggerEvent;
 use crate::core::task_poller::{PollContext, PollEvent, TaskPoller};
 use poller::ReconcilerWorker;
 
@@ -42,5 +44,10 @@ impl ReconcilerControl {
     #[allow(dead_code)]
     pub(crate) async fn shutdown(&self) {
         self.shutdown_channel.send(()).await.ok();
+    }
+
+    /// Send an event signal to the poller's main loop
+    pub(crate) async fn notify(&self, event: PollEvent) {
+        self.event_channel.send(event).await.ok();
     }
 }
