@@ -13,7 +13,7 @@ use k8s_openapi::{
 };
 use kube::{
     api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams},
-    Client, CustomResource, ResourceExt,
+    Client, CustomResource, CustomResourceExt, ResourceExt,
 };
 use kube_runtime::{
     controller::{Context, Controller, ReconcilerAction},
@@ -685,6 +685,43 @@ impl ResourceContext {
     }
 }
 
+/// ensure the CRD is installed. This creates a chicken and egg problem. When the CRD is remoed,
+/// the operator will fail to list the CRD going into a error loop.
+///
+/// To prevent that, we will simply panic, and hope we can make progress after restart. Keep
+/// running is not an option as the operator would be "running" and the only way to know something
+/// is wrong would be to consult the logs.
+async fn ensure_crd(k8s: Client) {
+    let msp: Api<k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition> = Api::all(k8s);
+    let lp = ListParams::default().fields(&format!("metadata.name={}", "mayastorpools.openebs.io"));
+    let crds = msp.list(&lp).await.expect("failed to list CRDS");
+
+    // the CRD has not been installed yet, to avoid overwriting (and create upgrade issues) only
+    // install it when there is no crd with the given name
+    if crds.iter().count() == 0 {
+        let crd = MayastorPool::crd();
+        info!(
+            "Creating Foo CRD: {}",
+            serde_json::to_string_pretty(&crd).unwrap()
+        );
+
+        let pp = PostParams::default();
+        match msp.create(&pp, &crd).await {
+            Ok(o) => {
+                info!(crd = ?o.name(), "created");
+            }
+
+            Err(e) => {
+                error!("failed to create CRD error {}", e);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                std::process::exit(1);
+            }
+        }
+    } else {
+        info!("CRD present")
+    }
+}
+
 /// Determine what we want to do when dealing with errors from the
 /// reconciliation loop
 fn error_policy(error: &Error, _ctx: Context<OperatorContext>) -> ReconcilerAction {
@@ -763,6 +800,8 @@ async fn reconcile(
 async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
     let k8s = Client::try_default().await?;
     let namespace = args.value_of("namespace").unwrap();
+    ensure_crd(k8s.clone()).await;
+
     let msp: Api<MayastorPool> = Api::namespaced(k8s.clone(), namespace);
     let lp = ListParams::default();
 
