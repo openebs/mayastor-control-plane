@@ -22,3 +22,6 @@ spec:
           args:
             - "-smayastor-etcd"
             - "-nnats"
+
+      imagePullSecrets:
+        - name: regcred

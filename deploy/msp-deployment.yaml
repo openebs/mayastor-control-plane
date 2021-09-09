@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: msp-operator
+  namespace: mayastor
+  labels:
+    app: msp-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: msp-operator
+  template:
+    metadata:
+      labels:
+        app: msp-operator
+    spec:
+      serviceAccount: mayastor-service-account
+      containers:
+        - name: msp-operator
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "500Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          image: mayadata/mcp-msp-operator:develop
+          imagePullPolicy: Always
+          args:
+            - "-e http://$(REST_SERVICE_HOST):8081"
+          env:
+            - name: RUST_LOG
+              value: info,msp_operator=info
+      imagePullSecrets:
+        - name: regcred

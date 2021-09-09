@@ -25,6 +25,10 @@ let
     name = "rest";
     config = { ExposedPorts = { "8080/tcp" = { }; "8081/tcp" = { }; }; };
   };
+  build-msp-operator-image = { build }: build-control-plane-image {
+    inherit build;
+    name = "msp-operator";
+  };
 in
 {
   core = build-agent-image { build = "release"; name = "core"; };
@@ -35,6 +39,13 @@ in
     build = "release";
   };
   rest-dev = build-rest-image {
+    build = "debug";
+  };
+
+  msp-operator = build-msp-operator-image {
+    build = "release";
+  };
+  msp-operator-dev = build-msp-operator-image {
     build = "debug";
   };
 }
