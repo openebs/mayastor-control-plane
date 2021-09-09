@@ -21,16 +21,16 @@ actix-web = { version = "4.0.0-beta.8", features = ["rustls"] }
 actix-service = "2.0.0"
 opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }
 tracing-opentelemetry = "0.15.0"
-opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"]}
-actix-web-opentelemetry = "0.11.0-beta.4"
+opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
+actix-web-opentelemetry = "0.11.0-beta.5"
 actix-http = "3.0.0-beta.9"
 awc = "3.0.0-beta.7"
 
 async-trait = "0.1.51"
-serde_json = { version = "1.0.66", features = ["preserve_order"] }
-serde_yaml = "0.8.18"
-structopt = "0.3.22"
-futures = "0.3.16"
+serde_json = { version = "1.0.67", features = ["preserve_order"] }
+serde_yaml = "0.8.20"
+structopt = "0.3.23"
+futures = "0.3.17"
 tracing = "0.1.26"
 tracing-subscriber = "0.2.20"
 tracing-futures = "0.2.5"
@@ -47,9 +47,9 @@ common-lib = { path = "../../common" }
 
 [dev-dependencies]
 rpc = { path = "../../rpc"}
-tokio = { version = "1.10.0", features = ["full"] }
+tokio = { version = "1.11.0", features = ["full"] }
 actix-rt = "2.2.0"
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.127"
+version = "1.0.130"

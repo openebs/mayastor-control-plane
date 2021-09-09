@@ -23,5 +23,9 @@ spec:
             - "--dummy-certificates"
             - "--no-auth"
             - "-nnats"
+            - "--http=0.0.0.0:8081"
           ports:
           - containerPort: 8080
+          - containerPort: 8081
+      imagePullSecrets:
+        - name: regcred
