@@ -31,7 +31,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use url::Url;
 const WHO_AM_I: &str = "Mayastor pool operator";
 
-/// Our for Pool spec
 #[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
 #[kube(
     group = "openebs.io",
@@ -43,11 +42,10 @@ const WHO_AM_I: &str = "Mayastor pool operator";
     status = "MayastorPoolStatus",
     derive = "PartialEq",
     derive = "Default",
-    shortname = "msp"
+    shortname = "msp",
 )]
 
-/// The pool spec which contains the parameters we consult when creating the
-/// pool
+/// The pool spec which contains the paramaters we use when creating the pool
 pub struct MayastorPoolSpec {
     /// The node the pool is placed on
     node: String,
@@ -77,19 +75,19 @@ pub enum PoolState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
-/// Status of the pool which is driven and changed but the controller loop
+/// Status of the pool which is driven and changed by the controller loop
 pub struct MayastorPoolStatus {
     /// The state of the pool
     state: PoolState,
     /// Used number of bytes
-    used: Option<u64>,
+    used: u64,
 }
 
 impl Default for MayastorPoolStatus {
     fn default() -> Self {
         Self {
             state: PoolState::Creating,
-            used: None,
+            used: 0,
         }
     }
 }
@@ -98,13 +96,13 @@ impl MayastorPoolStatus {
     fn error() -> Self {
         Self {
             state: PoolState::Error,
-            used: None,
+            used: 0,
         }
     }
     fn created() -> Self {
         Self {
             state: PoolState::Created,
-            used: None,
+            used: 0,
         }
     }
 }
@@ -113,7 +111,7 @@ impl From<Pool> for MayastorPoolStatus {
     fn from(p: Pool) -> Self {
         Self {
             state: PoolState::Online,
-            used: Some(p.state.expect("pool does not have state").used),
+            used: p.state.expect("pool does not have state").used,
         }
     }
 }
@@ -584,7 +582,7 @@ impl ResourceContext {
             let _ = self
                 .patch_status(MayastorPoolStatus {
                     state: PoolState::Online,
-                    used: Some(state.used),
+                    used: state.used,
                 })
                 .await;
         } else {
@@ -685,7 +683,7 @@ impl ResourceContext {
     }
 }
 
-/// ensure the CRD is installed. This creates a chicken and egg problem. When the CRD is remoed,
+/// ensure the CRD is installed. This creates a chicken and egg problem. When the CRD is removed,
 /// the operator will fail to list the CRD going into a error loop.
 ///
 /// To prevent that, we will simply panic, and hope we can make progress after restart. Keep
