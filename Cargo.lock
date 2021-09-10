@@ -2732,6 +2732,7 @@ dependencies = [
  "composer",
  "futures",
  "http",
+ "humantime",
  "jsonwebtoken",
  "opentelemetry",
  "opentelemetry-jaeger",

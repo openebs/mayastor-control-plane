@@ -23,7 +23,7 @@ pub(crate) struct CliArgs {
 
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
-    #[structopt(long, short, default_value = "20s")]
+    #[structopt(long, short, default_value = "30s")]
     pub(crate) cache_period: humantime::Duration,
 
     /// The period at which the reconcile loop checks for new work
@@ -31,7 +31,7 @@ pub(crate) struct CliArgs {
     pub(crate) reconcile_idle_period: humantime::Duration,
 
     /// The period at which the reconcile loop attempts to do work
-    #[structopt(long, default_value = "3s")]
+    #[structopt(long, default_value = "10s")]
     pub(crate) reconcile_period: humantime::Duration,
 
     /// Deadline for the mayastor instance keep alive registration
@@ -54,7 +54,7 @@ pub(crate) struct CliArgs {
     pub(crate) connect: humantime::Duration,
 
     /// The timeout for every node request operation (gRPC)
-    #[structopt(long, short, default_value = "6s")]
+    #[structopt(long, short, default_value = "5s")]
     pub(crate) request: humantime::Duration,
 
     /// Trace rest requests to the Jaeger endpoint agent

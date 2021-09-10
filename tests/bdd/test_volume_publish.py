@@ -98,5 +98,6 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
         VOLUME_UUID, NODE_NAME, Protocol("nvmf")
     )
     assert str(volume.spec.protocol) == str(Protocol("nvmf"))
-    assert len(volume.state.children) > 0
-    assert "nvmf://" in volume.state.children[0].device_uri
+    assert hasattr(volume.spec, "target_node")
+    assert hasattr(volume.state, "child")
+    assert "nvmf://" in volume.state.child["deviceUri"]

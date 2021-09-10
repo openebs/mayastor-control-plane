@@ -103,8 +103,17 @@ pub struct StartOptions {
     pub no_rest: bool,
 
     /// Use `N` mayastor instances
+    /// Note: the mayastor containers have the host's /tmp directory mapped into the container
+    /// as /host/tmp. This is useful to create pool's from file images.
     #[structopt(short, long, default_value = "1")]
     pub mayastors: u32,
+
+    /// Add host block devices to the mayastor containers as a docker bind mount
+    /// A raw block device: --mayastor-devices /dev/sda /dev/sdb
+    /// An lvm volume group: --mayastor-devices /dev/sdavg
+    /// Note: the mayastor containers will run as `privileged`!
+    #[structopt(long)]
+    pub mayastor_devices: Vec<String>,
 
     /// Cargo Build each component before deploying
     #[structopt(short, long)]

@@ -3,6 +3,7 @@ use common::errors::{SvcError, VolumeNotFound};
 use common_lib::types::v0::message_bus::{
     NexusStatus, Volume, VolumeId, VolumeState, VolumeStatus,
 };
+
 use snafu::OptionExt;
 
 impl Registry {
@@ -11,13 +12,6 @@ impl Registry {
         &self,
         volume_uuid: &VolumeId,
     ) -> Result<VolumeState, SvcError> {
-        let nexuses = self.get_node_opt_nexuses(None).await?;
-        let nexus_specs = self.specs().get_volume_nexuses(volume_uuid);
-        let nexus_states = nexus_specs
-            .iter()
-            .map(|n| nexuses.iter().find(|nexus| nexus.uuid == n.lock().uuid))
-            .flatten()
-            .collect::<Vec<_>>();
         let replica_specs = self.specs().get_volume_replicas(volume_uuid);
         let volume_spec = self
             .specs()
@@ -26,28 +20,35 @@ impl Registry {
                 vol_id: volume_uuid.to_string(),
             })?;
         let volume_spec = volume_spec.lock().clone();
+        let nexus_spec = self.specs().get_volume_target_nexus(&volume_spec);
+        let nexus_state = match nexus_spec {
+            None => None,
+            Some(spec) => {
+                let nexus_id = spec.lock().uuid.clone();
+                self.get_nexus(&nexus_id).await.ok()
+            }
+        };
 
-        Ok(if let Some(first_nexus_state) = nexus_states.get(0) {
+        Ok(if let Some(nexus_state) = nexus_state {
             VolumeState {
                 uuid: volume_uuid.to_owned(),
-                size: first_nexus_state.size,
-                status: match first_nexus_state.status {
+                size: nexus_state.size,
+                status: match nexus_state.status {
                     NexusStatus::Online
-                        if first_nexus_state.children.len()
-                            != volume_spec.num_replicas as usize =>
+                        if nexus_state.children.len() != volume_spec.num_replicas as usize =>
                     {
                         VolumeStatus::Degraded
                     }
-                    _ => first_nexus_state.status.clone(),
+                    _ => nexus_state.status.clone(),
                 },
-                protocol: first_nexus_state.share.clone(),
-                children: nexus_states.iter().map(|&n| n.clone()).collect(),
+                protocol: nexus_state.share.clone(),
+                child: Some(nexus_state),
             }
         } else {
             VolumeState {
                 uuid: volume_uuid.to_owned(),
                 size: volume_spec.size,
-                status: if volume_spec.target_node.is_none() {
+                status: if volume_spec.target.is_none() {
                     if replica_specs.len() >= volume_spec.num_replicas as usize {
                         VolumeStatus::Online
                     } else if replica_specs.is_empty() {
@@ -59,7 +60,7 @@ impl Registry {
                     VolumeStatus::Unknown
                 },
                 protocol: volume_spec.protocol,
-                children: vec![],
+                child: None,
             }
         })
     }

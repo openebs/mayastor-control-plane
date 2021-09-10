@@ -7,6 +7,7 @@ use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use tonic::transport::Channel;
 
@@ -35,7 +36,9 @@ impl GrpcContext {
             node_id: node.to_string(),
             uri: uri.clone(),
         })?;
-        let endpoint = tonic::transport::Endpoint::from(uri).timeout(comms_timeouts.request());
+        let endpoint = tonic::transport::Endpoint::from(uri)
+            .connect_timeout(comms_timeouts.connect() + Duration::from_millis(500))
+            .timeout(comms_timeouts.request());
 
         Ok(Self {
             node: node.clone(),
@@ -73,10 +76,13 @@ impl GrpcClient {
         {
             Err(_) => Err(SvcError::GrpcConnectTimeout {
                 node_id: context.node.to_string(),
-                endpoint: format!("{:?}", context.endpoint),
+                endpoint: context.endpoint.uri().to_string(),
                 timeout: context.comms_timeouts.connect(),
             }),
-            Ok(client) => Ok(client.context(GrpcConnect)?),
+            Ok(client) => Ok(client.context(GrpcConnect {
+                node_id: context.node.to_string(),
+                endpoint: context.endpoint.uri().to_string(),
+            })?),
         }?;
 
         Ok(Self {

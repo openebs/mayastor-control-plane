@@ -120,18 +120,19 @@ def a_user_attempts_to_increase_the_number_of_volume_replicas(replica_ctx):
 def a_replica_should_be_removed_from_the_volume(replica_ctx):
     """a replica should be removed from the volume."""
     volume = common.get_volumes_api().get_volume(VOLUME_UUID)
-    assert len(volume.state.children) > 0
-    nexus = volume.state.children[0]
-    assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus.children)
+    assert hasattr(volume.state, "child")
+    nexus = volume.state.child
+    assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus["children"])
 
 
 @then("an additional replica should be added to the volume")
 def an_additional_replica_should_be_added_to_the_volume(replica_ctx):
     """an additional replica should be added to the volume."""
     volume = common.get_volumes_api().get_volume(VOLUME_UUID)
-    assert len(volume.state.children) > 0
-    nexus = volume.state.children[0]
-    assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus.children)
+    print(volume.state)
+    assert hasattr(volume.state, "child")
+    nexus = volume.state.child
+    assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus["children"])
 
 
 @then("setting the number of replicas to zero should fail with a suitable error")
@@ -139,7 +140,7 @@ def setting_the_number_of_replicas_to_zero_should_fail_with_a_suitable_error():
     """the replica removal should fail with a suitable error."""
     volumes_api = common.get_volumes_api()
     volume = volumes_api.get_volume(VOLUME_UUID)
-    assert len(volume.state.children) > 0
+    assert hasattr(volume.state, "child")
     try:
         volumes_api.put_volume_replica_count(VOLUME_UUID, 0)
     except Exception as e:

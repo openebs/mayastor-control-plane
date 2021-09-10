@@ -56,18 +56,19 @@ async fn hot_spare_reconcile(
     };
     let mode = OperationMode::ReconcileStep;
 
-    if volume_spec.lock().status.created() {
-        match volume_state.status {
-            VolumeStatus::Online => {
-                volume_replica_count_reconciler(volume_spec, context, mode).await
-            }
-            VolumeStatus::Unknown | VolumeStatus::Degraded => {
-                hot_spare_nexus_reconcile(volume_spec, &volume_state, context).await
-            }
-            VolumeStatus::Faulted => PollResult::Ok(PollerState::Idle),
+    if !volume_spec.lock().policy.self_heal {
+        return PollResult::Ok(PollerState::Idle);
+    }
+    if !volume_spec.lock().status.created() {
+        return PollResult::Ok(PollerState::Idle);
+    }
+
+    match volume_state.status {
+        VolumeStatus::Online => volume_replica_count_reconciler(volume_spec, context, mode).await,
+        VolumeStatus::Unknown | VolumeStatus::Degraded => {
+            hot_spare_nexus_reconcile(volume_spec, &volume_state, context).await
         }
-    } else {
-        PollResult::Ok(PollerState::Idle)
+        VolumeStatus::Faulted => PollResult::Ok(PollerState::Idle),
     }
 }
 
@@ -79,8 +80,7 @@ async fn hot_spare_nexus_reconcile(
     let mode = OperationMode::ReconcileStep;
     let mut results = vec![];
 
-    // todo: ANA will have more than 1 nexus
-    if let Some(nexus) = volume_state.children.first() {
+    if let Some(nexus) = &volume_state.child {
         let nexus_spec = context.specs().get_nexus(&nexus.uuid);
         let nexus_spec = nexus_spec.context(NexusNotFound {
             nexus_id: nexus.uuid.to_string(),

@@ -91,4 +91,4 @@ def unpublishing_the_volume_should_succeed():
     """unpublishing the volume should succeed."""
     volume = common.get_volumes_api().del_volume_target(VOLUME_UUID)
     assert str(volume.spec.protocol) == str(Protocol("none"))
-    assert len(volume.state.children) == 0
+    assert not hasattr(volume.state, "child")

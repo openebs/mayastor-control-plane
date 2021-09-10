@@ -79,6 +79,7 @@ pub struct Binary {
     nats_arg: Option<String>,
     env: HashMap<String, String>,
     binds: HashMap<String, String>,
+    privileged: Option<bool>,
 }
 
 impl Binary {
@@ -130,6 +131,11 @@ impl Binary {
     /// use a volume binds between host path and container container
     pub fn with_bind(mut self, host: &str, container: &str) -> Self {
         self.binds.insert(container.to_string(), host.to_string());
+        self
+    }
+    /// run the container as privileged
+    pub fn with_privileged(mut self, enable: Option<bool>) -> Self {
+        self.privileged = enable;
         self
     }
     /// pick up the nats argument name for a particular binary from nats_arg
@@ -200,6 +206,8 @@ pub struct ContainerSpec {
     env: HashMap<String, String>,
     /// Volume bind dst/source
     binds: HashMap<String, String>,
+    /// run the container as privileged
+    privileged: Option<bool>,
 }
 
 impl ContainerSpec {
@@ -338,6 +346,21 @@ impl ContainerSpec {
         }
         vec
     }
+    /// run the container as privileged
+    pub fn with_privileged(mut self, enable: Option<bool>) -> Self {
+        self.privileged = enable;
+        self
+    }
+    /// check if the container is to run as privileged
+    pub fn privileged(&self) -> Option<bool> {
+        if self.privileged.is_some() {
+            self.privileged
+        } else if let Some(binary) = &self.binary {
+            binary.privileged
+        } else {
+            None
+        }
+    }
 
     /// Environment variables as a vector with each element as:
     /// "{key}={value}"
@@ -359,6 +382,16 @@ impl ContainerSpec {
         }
         commands.extend(self.arguments.clone().unwrap_or_default());
         commands
+    }
+    /// Container spec's entrypoint
+    fn entrypoint(&self, default_image: &Option<String>) -> Vec<String> {
+        if let Some(entrypoint) = &self.entrypoint {
+            entrypoint.clone()
+        } else if self.binary.is_some() && default_image.is_some() && self.init.unwrap_or(true) {
+            vec!["tini".to_string(), "--".to_string()]
+        } else {
+            vec![]
+        }
     }
     /// Get the container command, if any
     fn command(&self, network: &str) -> Option<String> {
@@ -1000,10 +1033,7 @@ impl ComposeTest {
 
         if self.prune || self.prune_matching {
             tracing::debug!("Killing/Removing container: {}", spec.name);
-            let _ = self
-                .docker
-                .kill_container(&spec.name, Some(KillContainerOptions { signal: "SIGKILL" }))
-                .await;
+            let _ = self.kill_id(&spec.name).await;
             let _ = self
                 .docker
                 .remove_container(
@@ -1031,6 +1061,11 @@ impl ComposeTest {
             if !path.starts_with("/nix") || !path.starts_with(&self.srcdir) {
                 binds.push(format!("{}:{}", bin.path, bin.path));
             }
+            if (spec.image.is_some() || self.image.is_some()) && spec.init.unwrap_or(true) {
+                if let Ok(tini) = Binary::which("tini") {
+                    binds.push(format!("{}:{}", tini, "/sbin/tini"));
+                }
+            }
         }
         let mut host_config = HostConfig {
             binds: Some(binds),
@@ -1053,6 +1088,7 @@ impl ComposeTest {
                 "IPC_LOCK".into(),
                 "SYS_NICE".into(),
             ]),
+            privileged: spec.privileged(),
             security_opt: Some(vec!["seccomp=unconfined".into()]),
             init: spec.init,
             port_bindings: spec.port_map.clone(),
@@ -1091,7 +1127,7 @@ impl ComposeTest {
             .as_ref()
             .map_or_else(|| self.image.as_deref(), |s| Some(s.as_str()));
 
-        let mut entrypoint = spec.entrypoint.clone().unwrap_or_default();
+        let mut entrypoint = spec.entrypoint(&self.image);
 
         if let Some(image) = image {
             // merge our host config with the container image's default host config parameters

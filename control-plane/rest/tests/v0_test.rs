@@ -397,7 +397,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
         .await
         .unwrap();
     let volume_state = volume.state.expect("Volume state not found.");
-    let nexus = volume_state.children.first().unwrap();
+    let nexus = volume_state.child.unwrap();
     tracing::info!("Published on '{}'", nexus.node);
 
     let volume = client
@@ -407,7 +407,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
         .expect("We have 2 nodes with a pool each");
     tracing::info!("Volume: {:#?}", volume);
     let volume_state = volume.state.expect("No volume state");
-    let nexus = volume_state.children.first().unwrap();
+    let nexus = volume_state.child.unwrap();
     assert_eq!(nexus.children.len(), 2);
 
     let volume = client
@@ -417,7 +417,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
         .expect("Should be able to reduce back to 1");
     tracing::info!("Volume: {:#?}", volume);
     let volume_state = volume.state.expect("No volume state");
-    let nexus = volume_state.children.first().unwrap();
+    let nexus = volume_state.child.unwrap();
     assert_eq!(nexus.children.len(), 1);
 
     let volume = client
@@ -427,7 +427,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
         .unwrap();
     tracing::info!("Volume: {:#?}", volume);
     let volume_state = volume.state.expect("No volume state");
-    assert!(volume_state.children.is_empty());
+    assert!(volume_state.child.is_none());
 
     let volume_uuid = volume_state.uuid.to_string();
 

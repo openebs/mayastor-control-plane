@@ -50,13 +50,17 @@ pub(crate) struct CliArgs {
     /// Don't authenticate REST requests
     #[structopt(long, required_unless = "jwk")]
     no_auth: bool,
+
+    /// The timeout for every REST request
+    #[structopt(long, short, default_value = "6s")]
+    pub(crate) timeout: humantime::Duration,
 }
 
 /// default timeout options for every bus request
 fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_max_retries(0)
-        .with_timeout(Duration::from_secs(6))
+        .with_timeout(CliArgs::from_args().timeout.into())
 }
 
 use actix_web_opentelemetry::RequestTracing;
@@ -65,7 +69,6 @@ use opentelemetry::{
     global,
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
-use std::time::Duration;
 
 fn init_tracing() -> Option<Tracer> {
     if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
