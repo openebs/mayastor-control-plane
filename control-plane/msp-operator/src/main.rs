@@ -578,13 +578,18 @@ impl ResourceContext {
         let p = p.json::<Pool>().await?;
 
         if let Some(state) = p.state {
-            // update the usage state
-            let _ = self
-                .patch_status(MayastorPoolStatus {
-                    state: PoolState::Online,
-                    used: state.used,
-                })
-                .await;
+            if let Some(status) = &self.status {
+                if status.used != state.used {
+                    // update the usage state such that users can see the values changes
+                    // as replica's are added and/or removed.
+                    let _ = self
+                        .patch_status(MayastorPoolStatus {
+                            state: PoolState::Online,
+                            used: state.used,
+                        })
+                        .await;
+                }
+            }
         } else {
             info!(pool = ?self.name(), "offline");
             self.k8s_notify(
