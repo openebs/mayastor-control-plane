@@ -13,6 +13,13 @@ impl ComponentAction for Mayastor {
                 .with_args(vec!["-g", &mayastor_socket])
                 .with_bind("/tmp", "/host/tmp");
 
+            if !options.mayastor_devices.is_empty() {
+                bin = bin.with_privileged(Some(true));
+                for device in options.mayastor_devices.iter() {
+                    bin = bin.with_bind(device, device);
+                }
+            }
+
             if options.developer_delayed {
                 bin = bin.with_env("DEVELOPER_DELAYED", "1");
             }

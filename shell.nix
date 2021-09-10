@@ -37,6 +37,7 @@ mkShell {
     python3
     utillinux
     which
+    tini
   ] ++ pkgs.lib.optional (!norust) channel.nightly
   ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
 

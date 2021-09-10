@@ -106,8 +106,6 @@ impl VolumeState {
     }
 }
 
-/// ANA not supported at the moment, so derive volume state from the
-/// single Nexus instance
 impl From<(&VolumeId, &Nexus)> for VolumeState {
     fn from(src: (&VolumeId, &Nexus)) -> Self {
         let uuid = src.0.clone();
