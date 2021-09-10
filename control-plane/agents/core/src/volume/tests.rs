@@ -102,7 +102,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
 
     tracing::info!("Volume: {:?}", volume);
     let volume_state = volume.state().unwrap().clone();
-    let nexus = volume_state.children.first().unwrap().clone();
+    let nexus = volume_state.child.unwrap().clone();
 
     let mut rpc_handle = cluster
         .composer()
@@ -150,7 +150,7 @@ async fn wait_till_volume_nexus(volume: &VolumeId, replicas: usize, no_child: &s
     loop {
         let volume = GetVolumes::new(volume).request().await.unwrap();
         let volume_state = volume.0.clone().first().unwrap().state().unwrap();
-        let nexus = volume_state.children.first().unwrap().clone();
+        let nexus = volume_state.child.clone().unwrap();
         let specs = GetSpecs::default().request().await.unwrap();
         let nexus_spec = specs.nexuses.first().unwrap().clone();
 
@@ -174,7 +174,7 @@ async fn wait_till_volume_nexus(volume: &VolumeId, replicas: usize, no_child: &s
 async fn volume_children(volume: &VolumeId) -> Vec<Child> {
     let volume = GetVolumes::new(volume).request().await.unwrap();
     let volume_state = volume.0.first().unwrap().state().unwrap();
-    volume_state.children.first().unwrap().children.clone()
+    volume_state.child.unwrap().children
 }
 
 /// Adds a child to the volume nexus (under the control plane) and waits till it gets removed
@@ -197,7 +197,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
 
     tracing::info!("Volume: {:?}", volume);
     let volume_state = volume.state().unwrap().clone();
-    let nexus = volume_state.children.first().unwrap().clone();
+    let nexus = volume_state.child.unwrap().clone();
 
     let mut rpc_handle = cluster
         .composer()
@@ -263,7 +263,7 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 
     tracing::info!("Volume: {:?}", volume);
     let volume_state = volume.state().unwrap().clone();
-    let nexus = volume_state.children.first().unwrap().clone();
+    let nexus = volume_state.child.unwrap().clone();
 
     let mut rpc_handle = cluster
         .composer()
@@ -481,7 +481,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     .unwrap();
 
     let volume_state = volume.state().unwrap();
-    let nexus = volume_state.children.first().unwrap().clone();
+    let nexus = volume_state.child.unwrap().clone();
     tracing::info!("Nexus: {:?}", nexus);
     let nexus_uuid = nexus.uuid.clone();
 
@@ -557,7 +557,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     tracing::info!("Volume: {:?}", volume);
 
     let volume_state = volume.state().unwrap();
-    let nexus = volume_state.children.first().unwrap().clone();
+    let nexus = volume_state.child.unwrap().clone();
     tracing::info!("Nexus: {:?}", nexus);
     assert_eq!(nexus.children.len(), 1);
 
@@ -621,10 +621,7 @@ async fn publishing_test(cluster: &Cluster) {
 
     let volume_state = volume.state().unwrap();
 
-    tracing::info!(
-        "Published on: {}",
-        volume_state.children.first().unwrap().node
-    );
+    tracing::info!("Published on: {}", volume_state.child.clone().unwrap().node);
 
     let share = ShareVolume {
         uuid: volume_state.uuid.clone(),
@@ -684,7 +681,7 @@ async fn publishing_test(cluster: &Cluster) {
     .expect("The volume is unpublished so we should be able to publish again");
 
     let volume_state = volume.state().unwrap();
-    let nx = volume_state.children.first().unwrap();
+    let nx = volume_state.child.unwrap();
     tracing::info!("Published on '{}' with share '{}'", nx.node, nx.device_uri);
 
     let volumes = GetVolumes {
@@ -727,10 +724,7 @@ async fn publishing_test(cluster: &Cluster) {
     .expect("The volume is unpublished so we should be able to publish again");
 
     let volume_state = volume.state().unwrap();
-    tracing::info!(
-        "Published on: {}",
-        volume_state.children.first().unwrap().node
-    );
+    tracing::info!("Published on: {}", volume_state.child.clone().unwrap().node);
 
     let volumes = GetVolumes {
         filter: Filter::Volume(volume_state.uuid.clone()),
@@ -883,7 +877,7 @@ async fn replica_count_test() {
     let volume_state = volume.state().unwrap();
     assert_eq!(volume_state.status, VolumeStatus::Online);
     assert!(!volume_state
-        .children
+        .child
         .iter()
         .any(|n| n.children.iter().any(|c| c.state != ChildState::Online)));
 

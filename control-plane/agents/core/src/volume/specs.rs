@@ -283,7 +283,12 @@ impl ResourceSpecsLocked {
             }
         })
     }
-    /// Get a list of protected NexusSpecs's for the given volume `id`
+
+    /// Get a list of protected NexusSpecs's which are owned by the given volume `id`
+    /// but may not be active anymore.
+    /// This may happen if the connection to the persistent store is lost and we fail to
+    /// update/delete the nexus spec and the control plane restarts.
+    /// To get the current active volume nexus target use `get_volume_target_nexus`.
     pub(crate) fn get_volume_nexuses(&self, id: &VolumeId) -> Vec<Arc<Mutex<NexusSpec>>> {
         self.read()
             .nexuses
@@ -291,6 +296,16 @@ impl ResourceSpecsLocked {
             .filter(|n| n.lock().owner.as_ref() == Some(id))
             .cloned()
             .collect()
+    }
+    /// Get the protected volume nexus target for the given volume
+    pub(crate) fn get_volume_target_nexus(
+        &self,
+        volume: &VolumeSpec,
+    ) -> Option<Arc<Mutex<NexusSpec>>> {
+        match &volume.target {
+            None => None,
+            Some(target) => self.get_nexus(target.nexus()),
+        }
     }
 
     /// Return a `DestroyReplica` request based on the provided arguments
@@ -463,13 +478,11 @@ impl ResourceSpecsLocked {
         )
         .await?;
 
-        // Share the first child nexus (no ANA)
-        assert_eq!(state.children.len(), 1);
-        let nexus = state.children.get(0).unwrap();
+        let nexus = state.child.expect("already validated");
         let result = self
             .share_nexus(
                 registry,
-                &ShareNexus::from((nexus, None, request.protocol)),
+                &ShareNexus::from((&nexus, None, request.protocol)),
                 mode,
             )
             .await;
@@ -500,11 +513,9 @@ impl ResourceSpecsLocked {
         )
         .await?;
 
-        // Unshare the first child nexus (no ANA)
-        assert_eq!(state.children.len(), 1);
-        let nexus = state.children.get(0).unwrap();
+        let nexus = state.child.expect("Already validated");
         let result = self
-            .unshare_nexus(registry, &UnshareNexus::from(nexus), mode)
+            .unshare_nexus(registry, &UnshareNexus::from(&nexus), mode)
             .await;
 
         SpecOperations::complete_update(registry, result, volume_spec, spec_clone).await
@@ -570,12 +581,18 @@ impl ResourceSpecsLocked {
         let (spec_clone, _guard) =
             SpecOperations::start_update(registry, &spec, &state, VolumeOperation::Unpublish, mode)
                 .await?;
-        let nexus = get_volume_nexus(&state).expect("Already validated");
 
-        // Destroy the Nexus
-        let result = self
-            .destroy_nexus(registry, &nexus.into(), true, mode)
-            .await;
+        let volume_target = spec_clone.target.as_ref().expect("already validated");
+        let result = match self.get_nexus(volume_target.nexus()) {
+            None => Ok(()),
+            Some(nexus_spec) => {
+                let nexus_clone = nexus_spec.lock().clone();
+                // Destroy the Nexus
+                self.destroy_nexus(registry, &nexus_clone.into(), true, mode)
+                    .await
+            }
+        };
+
         SpecOperations::complete_update(registry, result, spec.clone(), spec_clone.clone()).await?;
         registry.get_volume(&request.uuid).await
     }
@@ -594,8 +611,10 @@ impl ResourceSpecsLocked {
         for attempt in candidates.iter() {
             let mut attempt = attempt.clone();
 
-            if state.children.len() == 1 && state.children[0].node == attempt.node {
-                attempt.share = Protocol::None;
+            if let Some(nexus) = &state.child {
+                if nexus.node == attempt.node {
+                    attempt.share = Protocol::None;
+                }
             }
 
             result = self.create_replica(registry, &attempt, mode).await;
@@ -639,9 +658,7 @@ impl ResourceSpecsLocked {
         created
     }
 
-    /// Add the given replica to the nexuses of the given volume
-    /// Only volumes with 1 nexus are currently supported
-    /// todo: support N Nexuses per volume for ANA
+    /// Add the given replica to the nexus of the given volume
     async fn add_replica_to_volume(
         &self,
         registry: &Registry,
@@ -649,12 +666,7 @@ impl ResourceSpecsLocked {
         replica: Replica,
         mode: OperationMode,
     ) -> Result<(), SvcError> {
-        let children = status.children.len();
-        // status object already validated
-        assert!(children == 0 || children == 1);
-
-        if children == 1 {
-            let nexus = &status.children[0];
+        if let Some(nexus) = &status.child {
             self.attach_replica_to_nexus(registry, &status.uuid, nexus, &replica, mode)
                 .await
         } else {
@@ -705,13 +717,12 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         if let Some(child_uri) = remove.uri() {
             // if the nexus is up, first remove the child from the nexus before deleting the replica
-            let nexuses = self
-                .get_volume_nexuses(&spec_clone.uuid)
+            let nexus = self
+                .get_volume_target_nexus(spec_clone)
                 .iter()
-                // todo: remove from multiple nexuses for ANA
                 .find(|n| n.lock().children.iter().any(|c| &c.uri() == child_uri))
                 .cloned();
-            match nexuses {
+            match nexus {
                 None => Ok(()),
                 Some(nexus) => {
                     let nexus = nexus.lock().clone();
@@ -1293,30 +1304,17 @@ impl ResourceSpecsLocked {
     }
 }
 
-fn get_volume_nexus(volume_state: &VolumeState) -> Result<Nexus, SvcError> {
-    match volume_state.children.len() {
-        0 => Err(SvcError::VolumeNotPublished {
-            vol_id: volume_state.uuid.to_string(),
-        }),
-        1 => Ok(volume_state.children[0].clone()),
-        _ => Err(SvcError::NotReady {
-            kind: ResourceKind::Volume,
-            id: volume_state.uuid.to_string(),
-        }),
-    }
-}
-
 async fn get_volume_target_node(
     registry: &Registry,
     status: &VolumeState,
     request: &PublishVolume,
 ) -> Result<NodeId, SvcError> {
     // We can't configure a new target_node if the volume is currently published
-    if let Some(current_node) = status.children.get(0) {
+    if let Some(nexus) = &status.child {
         return Err(SvcError::VolumeAlreadyPublished {
             vol_id: status.uuid.to_string(),
-            node: current_node.node.to_string(),
-            protocol: current_node.share.to_string(),
+            node: nexus.node.to_string(),
+            protocol: nexus.share.to_string(),
         });
     }
 
@@ -1363,16 +1361,17 @@ impl SpecOperations for VolumeSpec {
         state: &Self::State,
         operation: Self::UpdateOp,
     ) -> Result<(), SvcError> {
-        // No ANA support, there can only be more than 1 nexus if we've recreated the nexus
-        // on another node and original nexus reappears.
-        // In this case, the reconciler will destroy one of them.
-        if (self.target_node.is_some() && state.children.len() != 1)
-            || self.target_node.is_none() && !state.children.is_empty()
-        {
-            return Err(SvcError::NotReady {
-                kind: self.kind(),
-                id: self.uuid(),
-            });
+        if !matches!(
+            &operation,
+            VolumeOperation::Publish(..) | VolumeOperation::Unpublish
+        ) {
+            // don't attempt to modify the volume parameters if the nexus target is not "stable"
+            if self.target.is_some() != state.child.is_some() {
+                return Err(SvcError::NotReady {
+                    kind: self.kind(),
+                    id: self.uuid(),
+                });
+            }
         }
 
         match &operation {
@@ -1381,7 +1380,7 @@ impl SpecOperations for VolumeSpec {
                 id: self.uuid(),
                 share: state.protocol.to_string(),
             }),
-            VolumeOperation::Share(_) if self.target_node.is_none() => {
+            VolumeOperation::Share(_) if self.target.is_none() => {
                 Err(SvcError::VolumeNotPublished {
                     vol_id: self.uuid(),
                 })
@@ -1393,19 +1392,23 @@ impl SpecOperations for VolumeSpec {
             }),
             VolumeOperation::Unshare => Ok(()),
             VolumeOperation::Publish((_, _, share_option))
-                if self.target_node.is_some()
-                    || (share_option.is_some() && self.protocol.shared()) =>
+                if self.target.is_some() || (share_option.is_some() && self.protocol.shared()) =>
             {
-                let target_node = self.target_node.as_ref();
+                let target = self.target.as_ref().map(|t| t.node());
                 Err(SvcError::VolumeAlreadyPublished {
                     vol_id: self.uuid(),
-                    node: target_node.map_or("".into(), ToString::to_string),
+                    node: target.map_or("".into(), ToString::to_string),
                     protocol: self.protocol.to_string(),
                 })
             }
 
             VolumeOperation::Publish(_) => Ok(()),
-            VolumeOperation::Unpublish => get_volume_nexus(state).map(|_| ()),
+            VolumeOperation::Unpublish if self.target.is_none() => {
+                Err(SvcError::VolumeNotPublished {
+                    vol_id: self.uuid(),
+                })
+            }
+            VolumeOperation::Unpublish => Ok(()),
 
             VolumeOperation::SetReplica(replica_count) => {
                 if *replica_count == self.num_replicas {
@@ -1438,14 +1441,14 @@ impl SpecOperations for VolumeSpec {
                     .get_volume_replicas(&self.uuid)
                     .iter()
                     .any(|r| &r.lock().uuid != uuid);
-                let nexuses = registry.specs().get_volume_nexuses(&self.uuid);
-                let used = nexuses.iter().any(|n| n.lock().contains_replica(uuid));
+                let nexus = registry.specs().get_volume_target_nexus(self);
+                let used = nexus.map(|n| n.lock().contains_replica(uuid));
                 if last_replica {
                     Err(SvcError::LastReplica {
                         replica: uuid.to_string(),
                         volume: self.uuid(),
                     })
-                } else if used {
+                } else if used.unwrap_or_default() {
                     Err(SvcError::InUse {
                         kind: ResourceKind::Replica,
                         id: uuid.to_string(),

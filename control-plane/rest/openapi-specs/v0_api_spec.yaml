@@ -1933,7 +1933,7 @@ components:
     CreateVolumeBody:
       example:
         policy:
-          self_heal: false
+          self_heal: true
           topology: null
         replicas: 1
         size: 10485761
@@ -2475,7 +2475,6 @@ components:
     VolumeSpec:
       example:
         labels: null
-        num_paths: 1
         num_replicas: 2
         operation: null
         protocol: none
@@ -2491,12 +2490,6 @@ components:
           type: array
           items:
             type: string
-        num_paths:
-          description: Number of front-end paths.
-          type: integer
-          format: uint8
-          minimum: 0
-          maximum: 255
         num_replicas:
           description: Number of children the volume should have.
           type: integer
@@ -2518,8 +2511,8 @@ components:
                 - Destroy
                 - Share
                 - Unshare
-                - AddReplica
-                - RemoveReplica
+                - SetReplica
+                - RemoveUnusedReplica
                 - Publish
                 - Unpublish
             result:
@@ -2604,18 +2597,18 @@ components:
             - uri
     VolumeState:
       example:
-        children:
-          - children:
-              - rebuildProgress: null
-                state: Online
-                uri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:nexus-a76adcd6-9df0-47a1-90a5-2d5bf4151572'
-            deviceUri: ''
-            node: mayastor-1
-            rebuilds: 0
-            share: none
-            size: 80241024
-            state: Online
-            uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
+        child:
+          children:
+            - rebuildProgress: null
+              state: Online
+              uri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:nexus-a76adcd6-9df0-47a1-90a5-2d5bf4151572'
+          deviceUri: ''
+          node: mayastor-1
+          rebuilds: 0
+          share: none
+          size: 80241024
+          state: Online
+          uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
         protocol: none
         size: 80241024
         status: Online
@@ -2623,11 +2616,10 @@ components:
       description: Runtime state of the volume
       type: object
       properties:
-        children:
-          description: array of children nexuses
-          type: array
-          items:
-            $ref: '#/components/schemas/Nexus'
+        child:
+          description: nexus child that exposes the target
+          allOf:
+            - $ref: '#/components/schemas/Nexus'
         protocol:
           $ref: '#/components/schemas/Protocol'
         size:

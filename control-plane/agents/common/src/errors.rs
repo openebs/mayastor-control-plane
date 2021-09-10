@@ -33,8 +33,16 @@ pub enum SvcError {
         endpoint: String,
         timeout: std::time::Duration,
     },
-    #[snafu(display("Failed to connect to node via gRPC"))]
-    GrpcConnect { source: tonic::transport::Error },
+    #[snafu(display(
+        "Failed to connect to node '{}' via gRPC endpoint '{}'",
+        node_id,
+        endpoint
+    ))]
+    GrpcConnect {
+        node_id: String,
+        endpoint: String,
+        source: tonic::transport::Error,
+    },
     #[snafu(display("Node '{}' has invalid gRPC URI '{}'", node_id, uri))]
     GrpcConnectUri {
         node_id: String,
@@ -322,11 +330,11 @@ impl From<SvcError> for ReplyError {
                 extra: error.full_string(),
             },
 
-            SvcError::GrpcConnect { source } => ReplyError {
+            SvcError::GrpcConnect { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
-                extra: source.to_string(),
+                extra: error_str,
             },
 
             SvcError::NotEnoughResources { ref source } => ReplyError {

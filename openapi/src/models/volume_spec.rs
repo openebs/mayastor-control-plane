@@ -22,9 +22,6 @@ pub struct VolumeSpec {
     /// Volume labels.
     #[serde(rename = "labels")]
     pub labels: Vec<String>,
-    /// Number of front-end paths.
-    #[serde(rename = "num_paths")]
-    pub num_paths: u8,
     /// Number of children the volume should have.
     #[serde(rename = "num_replicas")]
     pub num_replicas: u8,
@@ -49,7 +46,6 @@ impl VolumeSpec {
     /// VolumeSpec using only the required fields
     pub fn new(
         labels: impl IntoVec<String>,
-        num_paths: impl Into<u8>,
         num_replicas: impl Into<u8>,
         protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
@@ -58,7 +54,6 @@ impl VolumeSpec {
     ) -> VolumeSpec {
         VolumeSpec {
             labels: labels.into_vec(),
-            num_paths: num_paths.into(),
             num_replicas: num_replicas.into(),
             operation: None,
             protocol: protocol.into(),
@@ -71,7 +66,6 @@ impl VolumeSpec {
     /// VolumeSpec using all fields
     pub fn new_all(
         labels: impl IntoVec<String>,
-        num_paths: impl Into<u8>,
         num_replicas: impl Into<u8>,
         operation: impl Into<Option<crate::models::VolumeSpecOperation>>,
         protocol: impl Into<crate::models::Protocol>,
@@ -82,7 +76,6 @@ impl VolumeSpec {
     ) -> VolumeSpec {
         VolumeSpec {
             labels: labels.into_vec(),
-            num_paths: num_paths.into(),
             num_replicas: num_replicas.into(),
             operation: operation.into(),
             protocol: protocol.into(),

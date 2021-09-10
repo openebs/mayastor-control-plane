@@ -194,7 +194,7 @@ impl GetChildForRemovalContext {
 
     async fn list(&self) -> Vec<ReplicaItem> {
         let replicas = self.registry.specs().get_volume_replicas(&self.spec.uuid);
-        let nexuses = self.registry.specs().get_volume_nexuses(&self.spec.uuid);
+        let nexus = self.registry.specs().get_volume_target_nexus(&self.spec);
         let replicas = replicas.iter().map(|r| r.lock().clone());
 
         let replica_states = self.registry.get_replicas().await;
@@ -207,9 +207,9 @@ impl GetChildForRemovalContext {
                         .iter()
                         .find(|replica_state| replica_state.uuid == replica_spec.uuid)
                         .map(|replica_state| {
-                            nexuses
-                                .iter()
-                                .filter_map(|nexus_spec| {
+                            nexus
+                                .as_ref()
+                                .map(|nexus_spec| {
                                     nexus_spec
                                         .lock()
                                         .children
@@ -217,29 +217,29 @@ impl GetChildForRemovalContext {
                                         .find(|child| child.uri() == replica_state.uri)
                                         .map(|child| child.uri())
                                 })
-                                .collect::<Vec<_>>()
+                                .flatten()
                         })
-                        .unwrap_or_default(),
+                        .flatten(),
                     replica_states
                         .iter()
                         .find(|replica_state| replica_state.uuid == replica_spec.uuid)
                         .map(|replica_state| {
                             self.state
-                                .children
-                                .iter()
-                                .filter_map(|nexus_state| {
+                                .child
+                                .as_ref()
+                                .map(|nexus_state| {
                                     nexus_state
                                         .children
                                         .iter()
                                         .find(|child| child.uri.as_str() == replica_state.uri)
+                                        .cloned()
                                 })
-                                .cloned()
-                                .collect::<Vec<_>>()
+                                .flatten()
                         })
-                        .unwrap_or_default(),
-                    nexuses
-                        .iter()
-                        .filter_map(|nexus_spec| {
+                        .flatten(),
+                    nexus
+                        .as_ref()
+                        .map(|nexus_spec| {
                             nexus_spec
                                 .lock()
                                 .children
@@ -250,7 +250,7 @@ impl GetChildForRemovalContext {
                                 })
                                 .cloned()
                         })
-                        .collect(),
+                        .flatten(),
                     self.nexus_info
                         .as_ref()
                         .map(|nexus_info| {

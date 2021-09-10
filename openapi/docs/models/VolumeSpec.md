@@ -5,7 +5,6 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **labels** | **Vec<String>** | Volume labels. | 
-**num_paths** | **u8** | Number of front-end paths. | 
 **num_replicas** | **u8** | Number of children the volume should have. | 
 **operation** | Option<[**crate::models::VolumeSpecOperation**](VolumeSpec_operation.md)> |  | [optional]
 **protocol** | [**crate::models::Protocol**](Protocol.md) |  | 

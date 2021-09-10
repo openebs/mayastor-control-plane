@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::{types::v0::store::volume::VolumeSpec, IntoOption, IntoVec};
+use crate::{types::v0::store::volume::VolumeSpec, IntoOption};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug};
 
@@ -70,14 +70,14 @@ pub struct VolumeState {
     pub status: VolumeStatus,
     /// current share protocol
     pub protocol: Protocol,
-    /// array of children nexuses
-    pub children: Vec<Nexus>,
+    /// child nexus
+    pub child: Option<Nexus>,
 }
 
 impl From<VolumeState> for models::VolumeState {
     fn from(volume: VolumeState) -> Self {
         Self {
-            children: volume.children.into_vec(),
+            child: volume.child.into_opt(),
             protocol: volume.protocol.into(),
             size: volume.size,
             status: volume.status.into(),
@@ -93,7 +93,7 @@ impl From<models::VolumeState> for VolumeState {
             size: state.size,
             status: state.status.into(),
             protocol: state.protocol.into(),
-            children: state.children.into_vec(),
+            child: state.child.into_opt(),
         }
     }
 }
@@ -101,10 +101,8 @@ impl From<models::VolumeState> for VolumeState {
 impl VolumeState {
     /// Get the target node if the volume is published
     pub fn target_node(&self) -> Option<Option<NodeId>> {
-        if self.children.len() > 1 {
-            return None;
-        }
-        Some(self.children.get(0).map(|n| n.node.clone()))
+        self.child.as_ref()?;
+        Some(self.child.clone().map(|n| n.node))
     }
 }
 
@@ -119,7 +117,7 @@ impl From<(&VolumeId, &Nexus)> for VolumeState {
             size: nexus.size,
             status: nexus.status.clone(),
             protocol: nexus.share.clone(),
-            children: vec![nexus.clone()],
+            child: Some(nexus.clone()),
         }
     }
 }
@@ -296,7 +294,7 @@ impl From<models::ExplicitTopology> for ExplicitTopology {
 }
 
 /// Volume Healing policy used to determine if and how to replace a replica
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct VolumeHealPolicy {
     /// the server will attempt to heal the volume by itself
     /// the client should not attempt to do the same if this is enabled
@@ -304,6 +302,15 @@ pub struct VolumeHealPolicy {
     /// topology to choose a replacement replica for self healing
     /// (overrides the initial creation topology)
     pub topology: Option<Topology>,
+}
+
+impl Default for VolumeHealPolicy {
+    fn default() -> Self {
+        Self {
+            self_heal: true,
+            topology: None,
+        }
+    }
 }
 
 impl From<models::VolumeHealPolicy> for VolumeHealPolicy {

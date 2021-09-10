@@ -74,7 +74,6 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
     expected_spec = VolumeSpec(
         [],
         1,
-        1,
         Protocol("none"),
         VOLUME_SIZE,
         SpecStatus("Created"),
@@ -82,7 +81,6 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         _configuration=cfg,
     )
     expected_state = VolumeState(
-        [],
         Protocol("none"),
         VOLUME_SIZE,
         VolumeStatus("Online"),

@@ -64,18 +64,17 @@ impl ReplicaItem {
     pub(crate) fn new(
         replica: ReplicaSpec,
         replica_state: Option<&Replica>,
-        child_uri: Vec<ChildUri>,
-        child_states: Vec<Child>,
-        child_specs: Vec<NexusChild>,
+        child_uri: Option<ChildUri>,
+        child_state: Option<Child>,
+        child_spec: Option<NexusChild>,
         child_info: Option<ChildInfo>,
     ) -> Self {
         Self {
             replica_spec: replica,
             replica_state: replica_state.cloned(),
-            child_uri: child_uri.first().cloned(),
-            // ANA not currently supported
-            child_state: child_states.first().cloned(),
-            child_spec: child_specs.first().cloned(),
+            child_uri,
+            child_state,
+            child_spec,
             child_info,
         }
     }

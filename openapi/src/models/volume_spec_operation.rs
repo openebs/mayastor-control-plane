@@ -58,10 +58,10 @@ pub enum Operation {
     Share,
     #[serde(rename = "Unshare")]
     Unshare,
-    #[serde(rename = "AddReplica")]
-    AddReplica,
-    #[serde(rename = "RemoveReplica")]
-    RemoveReplica,
+    #[serde(rename = "SetReplica")]
+    SetReplica,
+    #[serde(rename = "RemoveUnusedReplica")]
+    RemoveUnusedReplica,
     #[serde(rename = "Publish")]
     Publish,
     #[serde(rename = "Unpublish")]

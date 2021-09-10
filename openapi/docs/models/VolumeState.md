@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**children** | [**Vec<crate::models::Nexus>**](Nexus.md) | array of children nexuses | 
+**child** | Option<[**crate::models::Nexus**](Nexus.md)> | nexus child that exposes the target | [optional]
 **protocol** | [**crate::models::Protocol**](Protocol.md) |  | 
 **size** | **u64** | size of the volume in bytes | 
 **status** | [**crate::models::VolumeStatus**](VolumeStatus.md) |  | 

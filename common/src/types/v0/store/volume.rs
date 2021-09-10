@@ -8,10 +8,13 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::{
-    message_bus::{ReplicaId, Topology, VolumeHealPolicy, VolumeStatus},
-    openapi::models,
-    store::{OperationSequence, OperationSequencer, UuidString},
+use crate::{
+    types::v0::{
+        message_bus::{ReplicaId, Topology, VolumeHealPolicy, VolumeStatus},
+        openapi::models,
+        store::{OperationSequence, OperationSequencer, UuidString},
+    },
+    IntoOption,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -76,6 +79,29 @@ impl StorableObject for VolumeState {
     }
 }
 
+/// Volume Target (node and nexus)
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct VolumeTarget {
+    /// The node where front-end IO will be sent to
+    node: NodeId,
+    /// The identification of the nexus where the frontend-IO will be sent to
+    nexus: NexusId,
+}
+impl VolumeTarget {
+    /// Create a new `Self` based on the given parameters
+    pub fn new(node: NodeId, nexus: NexusId) -> Self {
+        Self { node, nexus }
+    }
+    /// Get a reference to the node identification
+    pub fn node(&self) -> &NodeId {
+        &self.node
+    }
+    /// Get a reference to the nexus identification
+    pub fn nexus(&self) -> &NexusId {
+        &self.nexus
+    }
+}
+
 /// User specification of a volume.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeSpec {
@@ -89,12 +115,10 @@ pub struct VolumeSpec {
     pub num_replicas: u8,
     /// Protocol that the volume should be shared over.
     pub protocol: Protocol,
-    /// Number of front-end paths.
-    pub num_paths: u8,
     /// Status that the volume should eventually achieve.
     pub status: VolumeSpecStatus,
-    /// The node where front-end IO will be sent to
-    pub target_node: Option<NodeId>,
+    /// The target where front-end IO will be sent to
+    pub target: Option<VolumeTarget>,
     /// volume healing policy
     pub policy: VolumeHealPolicy,
     /// replica placement topology
@@ -185,6 +209,12 @@ pub struct VolumeOperationState {
     pub result: Option<bool>,
 }
 
+impl From<VolumeOperationState> for models::VolumeSpecOperation {
+    fn from(src: VolumeOperationState) -> Self {
+        models::VolumeSpecOperation::new_all(src.operation, src.result)
+    }
+}
+
 impl SpecTransaction<VolumeOperation> for VolumeSpec {
     fn pending_op(&self) -> bool {
         self.operation.is_some()
@@ -208,12 +238,12 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::SetReplica(count) => self.num_replicas = count,
                 VolumeOperation::RemoveUnusedReplica(_) => {}
                 VolumeOperation::Publish((node, nexus, share)) => {
-                    self.target_node = Some(node);
+                    self.target = Some(VolumeTarget::new(node, nexus.clone()));
                     self.last_nexus_id = Some(nexus);
                     self.protocol = share.map_or(Protocol::None, Protocol::from);
                 }
                 VolumeOperation::Unpublish => {
-                    self.target_node = None;
+                    self.target = None;
                     self.protocol = Protocol::None;
                 }
             }
@@ -250,6 +280,23 @@ pub enum VolumeOperation {
     Publish((NodeId, NexusId, Option<VolumeShareProtocol>)),
     Unpublish,
     RemoveUnusedReplica(ReplicaId),
+}
+
+impl From<VolumeOperation> for models::volume_spec_operation::Operation {
+    fn from(src: VolumeOperation) -> Self {
+        match src {
+            VolumeOperation::Create => models::volume_spec_operation::Operation::Create,
+            VolumeOperation::Destroy => models::volume_spec_operation::Operation::Destroy,
+            VolumeOperation::Share(_) => models::volume_spec_operation::Operation::Share,
+            VolumeOperation::Unshare => models::volume_spec_operation::Operation::Unshare,
+            VolumeOperation::SetReplica(_) => models::volume_spec_operation::Operation::SetReplica,
+            VolumeOperation::Publish(_) => models::volume_spec_operation::Operation::Publish,
+            VolumeOperation::Unpublish => models::volume_spec_operation::Operation::Unpublish,
+            VolumeOperation::RemoveUnusedReplica(_) => {
+                models::volume_spec_operation::Operation::RemoveUnusedReplica
+            }
+        }
+    }
 }
 
 /// Key used by the store to uniquely identify a VolumeSpec structure.
@@ -301,9 +348,8 @@ impl From<&CreateVolume> for VolumeSpec {
             labels: vec![],
             num_replicas: request.replicas as u8,
             protocol: Protocol::None,
-            num_paths: 1,
             status: VolumeSpecStatus::Creating,
-            target_node: None,
+            target: None,
             policy: request.policy.clone(),
             topology: request.topology.clone(),
             sequencer: OperationSequence::new(request.uuid.clone()),
@@ -327,18 +373,17 @@ impl From<&VolumeSpec> for message_bus::VolumeState {
             size: spec.size,
             status: message_bus::VolumeStatus::Unknown,
             protocol: spec.protocol.clone(),
-            children: vec![],
+            child: None,
         }
     }
 }
 impl PartialEq<message_bus::VolumeState> for VolumeSpec {
     fn eq(&self, other: &message_bus::VolumeState) -> bool {
         self.protocol == other.protocol
-            && match &self.target_node {
+            && match &self.target {
                 None => other.target_node().flatten().is_none(),
-                Some(node) => {
-                    self.num_paths as usize == other.children.len()
-                        && Some(node) == other.target_node().flatten().as_ref()
+                Some(target) => {
+                    Some(&target.node) == other.target_node().flatten().as_ref()
                         && other.status == VolumeStatus::Online
                 }
             }
@@ -347,13 +392,14 @@ impl PartialEq<message_bus::VolumeState> for VolumeSpec {
 
 impl From<VolumeSpec> for models::VolumeSpec {
     fn from(src: VolumeSpec) -> Self {
-        Self::new(
+        Self::new_all(
             src.labels,
-            src.num_paths,
             src.num_replicas,
+            src.operation.into_opt(),
             src.protocol,
             src.size,
             src.status,
+            src.target.map(|t| t.node).into_opt(),
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
     }
@@ -367,9 +413,10 @@ impl From<models::VolumeSpec> for VolumeSpec {
             labels: spec.labels,
             num_replicas: spec.num_replicas,
             protocol: spec.protocol.into(),
-            num_paths: spec.num_paths,
             status: spec.status.into(),
-            target_node: spec.target_node.map(From::from),
+            target: spec
+                .target_node
+                .map(|t| VolumeTarget::new(t.into(), NexusId::new())),
             policy: Default::default(),
             topology: Default::default(),
             sequencer: OperationSequence::new(spec.uuid.to_string()),
