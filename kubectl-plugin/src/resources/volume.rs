@@ -1,26 +1,49 @@
 use crate::{
     operations::{Get, List, Scale},
-    resources::{ReplicaCount, VolumeId},
+    resources::{utils, OutputFormat, ReplicaCount, VolumeId},
     rest_wrapper::RestClient,
 };
-use anyhow::Result;
 use async_trait::async_trait;
 use structopt::StructOpt;
 
+use prettytable::Row;
+
 /// Volumes resource.
 #[derive(StructOpt, Debug)]
-pub(crate) struct Volumes {}
+pub(crate) struct Volumes {
+    output: OutputFormat,
+}
 
 #[async_trait(?Send)]
 impl List for Volumes {
-    async fn list() -> Result<()> {
-        let volumes = RestClient::client()
-            .volumes_api()
-            .get_volumes()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get volumes. Error {}", e))?;
-        println!("{:?}", volumes);
-        Ok(())
+    type Format = OutputFormat;
+    async fn list(output: &Self::Format) {
+        match RestClient::client().volumes_api().get_volumes().await {
+            Ok(volumes) => match output.to_lowercase().trim() {
+                "" => {
+                    // Show the tabular form if output format is not specified.
+                    let rows: Vec<Row> = utils::create_volume_rows(volumes);
+                    utils::table_printer((&*utils::VOLUME_HEADERS).clone(), rows);
+                }
+                utils::YAML_FORMAT => {
+                    // Show the YAML form output if output format is YAML.
+                    let s = serde_yaml::to_string(&volumes).unwrap();
+                    println!("{}", s);
+                }
+                utils::JSON_FORMAT => {
+                    // Show the JSON form output if output format is JSON.
+                    let s = serde_json::to_string(&volumes).unwrap();
+                    println!("{}", s);
+                }
+                _ => {
+                    // Incase of invalid output format, show error and gracefully end.
+                    println!("Output not supported for {} format", output);
+                }
+            },
+            Err(e) => {
+                println!("Failed to list volumes. Error {}", e)
+            }
+        }
     }
 }
 
@@ -31,33 +54,78 @@ pub(crate) struct Volume {
     id: VolumeId,
     /// Number of replicas.
     replica_count: Option<ReplicaCount>,
+    output: OutputFormat,
 }
 
 #[async_trait(?Send)]
 impl Get for Volume {
     type ID = VolumeId;
-    async fn get(id: &Self::ID) -> Result<()> {
-        let volume = RestClient::client()
-            .volumes_api()
-            .get_volume(id)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get volume {}. Error {}", id, e))?;
-        println!("{:?}", volume);
-        Ok(())
+    type Format = OutputFormat;
+    async fn get(id: &Self::ID, output: &Self::Format) {
+        match RestClient::client().volumes_api().get_volume(id).await {
+            Ok(volume) => match output.to_lowercase().trim() {
+                "" => {
+                    // Show the tabular form if output format is not specified.
+                    // Convert the output to a vector to be used in the method.
+                    let volume_to_vector: Vec<openapi::models::Volume> = vec![volume];
+                    let rows: Vec<Row> = utils::create_volume_rows(volume_to_vector);
+                    utils::table_printer((&*utils::VOLUME_HEADERS).clone(), rows);
+                }
+                utils::YAML_FORMAT => {
+                    // Show the YAML form output if output format is YAML.
+                    let s = serde_yaml::to_string(&volume).unwrap();
+                    println!("{}", s);
+                }
+                utils::JSON_FORMAT => {
+                    // Show the JSON form output if output format is JSON.
+                    let s = serde_json::to_string(&volume).unwrap();
+                    println!("{}", s);
+                }
+                _ => {
+                    // Incase of invalid output format, show error and gracefully end.
+                    println!("Output not supported for {} format", output);
+                }
+            },
+            Err(e) => {
+                println!("Failed to get volume {}. Error {}", id, e)
+            }
+        }
     }
 }
 
 #[async_trait(?Send)]
 impl Scale for Volume {
     type ID = VolumeId;
-
-    async fn scale(id: &Self::ID, replica_count: u8) -> Result<()> {
-        let volume = RestClient::client()
+    type Format = OutputFormat;
+    async fn scale(id: &Self::ID, replica_count: u8, output: &Self::Format) {
+        match RestClient::client()
             .volumes_api()
             .put_volume_replica_count(id, replica_count)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to scale volume {}. Error {}", id, e))?;
-        println!("{:?}", volume);
-        Ok(())
+        {
+            Ok(volume) => match output.to_lowercase().trim() {
+                "" => {
+                    // Incase the output format is not specified, show a success message.
+                    println!("Volume {} Scaled Successfully 🚀", id)
+                }
+                utils::YAML_FORMAT => {
+                    // Show the YAML form output if output format is YAML.
+                    let s = serde_yaml::to_string(&volume).unwrap();
+                    println!("{}", s);
+                }
+                utils::JSON_FORMAT => {
+                    // Show the JSON form output if output format is JSON.
+                    let s = serde_json::to_string_pretty(&volume).unwrap();
+                    println!("{}", s);
+                }
+                _ => {
+                    // Incase of invalid output format, show error and gracefully end.
+                    println!("Output not supported for {} format", output);
+                }
+            },
+            Err(e) => {
+                println!("Failed to scale volume {}. Error {}", id, e)
+            }
+        }
     }
 }

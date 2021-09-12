@@ -1,4 +1,9 @@
-#![feature(once_cell)]
+//#![feature(once_cell)]
+
+#[macro_use]
+extern crate prettytable;
+#[macro_use]
+extern crate lazy_static;
 
 mod operations;
 mod resources;
@@ -24,6 +29,9 @@ struct CliArgs {
     /// The operation to be performed.
     #[structopt(subcommand)]
     operations: Operations,
+    /// Output Format
+    #[structopt(default_value = "", short = "o", long = "output")]
+    output: String,
 }
 
 #[actix_rt::main]
@@ -36,23 +44,19 @@ async fn main() {
     }
 
     // Perform the requested operation.
-    let result = match &cli_args.operations {
+    match &cli_args.operations {
         Operations::Get(resource) => match resource {
-            GetResources::Volumes => volume::Volumes::list().await,
-            GetResources::Volume { id } => volume::Volume::get(id).await,
-            GetResources::Pools => pool::Pools::list().await,
-            GetResources::Pool { id } => pool::Pool::get(id).await,
+            GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
+            GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
+            GetResources::Pools => pool::Pools::list(&cli_args.output).await,
+            GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
         },
         Operations::Scale(resource) => match resource {
             ScaleResources::Volume { id, replica_count } => {
-                volume::Volume::scale(id, *replica_count).await
+                volume::Volume::scale(id, *replica_count, &cli_args.output).await
             }
         },
     };
-
-    if let Err(e) = result {
-        println!("{}", e);
-    }
 }
 
 /// Initialise the REST client.
