@@ -76,7 +76,7 @@ async fn create_replica_sizes() {
     let size = 100 * 1024 * 1024;
     let disk = format!("malloc:///disk?size_mb={}", size / (1024 * 1024));
     let cluster = ClusterBuilder::builder()
-        .with_pool(&disk)
+        .with_pool(0, &disk)
         .build()
         .await
         .unwrap();
