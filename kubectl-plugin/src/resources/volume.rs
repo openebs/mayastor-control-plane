@@ -20,11 +20,6 @@ impl List for Volumes {
     async fn list(output: &Self::Format) {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => match output.to_lowercase().trim() {
-                "" => {
-                    // Show the tabular form if output format is not specified.
-                    let rows: Vec<Row> = utils::create_volume_rows(volumes);
-                    utils::table_printer((&*utils::VOLUME_HEADERS).clone(), rows);
-                }
                 utils::YAML_FORMAT => {
                     // Show the YAML form output if output format is YAML.
                     let s = serde_yaml::to_string(&volumes).unwrap();
@@ -36,8 +31,9 @@ impl List for Volumes {
                     println!("{}", s);
                 }
                 _ => {
-                    // Incase of invalid output format, show error and gracefully end.
-                    println!("Output not supported for {} format", output);
+                    // Show the tabular form if output format is not specified.
+                    let rows: Vec<Row> = utils::create_volume_rows(volumes);
+                    utils::table_printer((&*utils::VOLUME_HEADERS).clone(), rows);
                 }
             },
             Err(e) => {
@@ -64,13 +60,6 @@ impl Get for Volume {
     async fn get(id: &Self::ID, output: &Self::Format) {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => match output.to_lowercase().trim() {
-                "" => {
-                    // Show the tabular form if output format is not specified.
-                    // Convert the output to a vector to be used in the method.
-                    let volume_to_vector: Vec<openapi::models::Volume> = vec![volume];
-                    let rows: Vec<Row> = utils::create_volume_rows(volume_to_vector);
-                    utils::table_printer((&*utils::VOLUME_HEADERS).clone(), rows);
-                }
                 utils::YAML_FORMAT => {
                     // Show the YAML form output if output format is YAML.
                     let s = serde_yaml::to_string(&volume).unwrap();
@@ -82,8 +71,11 @@ impl Get for Volume {
                     println!("{}", s);
                 }
                 _ => {
-                    // Incase of invalid output format, show error and gracefully end.
-                    println!("Output not supported for {} format", output);
+                    // Show the tabular form if output format is not specified.
+                    // Convert the output to a vector to be used in the method.
+                    let volume_to_vector: Vec<openapi::models::Volume> = vec![volume];
+                    let rows: Vec<Row> = utils::create_volume_rows(volume_to_vector);
+                    utils::table_printer((&*utils::VOLUME_HEADERS).clone(), rows);
                 }
             },
             Err(e) => {
@@ -104,10 +96,6 @@ impl Scale for Volume {
             .await
         {
             Ok(volume) => match output.to_lowercase().trim() {
-                "" => {
-                    // Incase the output format is not specified, show a success message.
-                    println!("Volume {} Scaled Successfully 🚀", id)
-                }
                 utils::YAML_FORMAT => {
                     // Show the YAML form output if output format is YAML.
                     let s = serde_yaml::to_string(&volume).unwrap();
@@ -119,8 +107,8 @@ impl Scale for Volume {
                     println!("{}", s);
                 }
                 _ => {
-                    // Incase of invalid output format, show error and gracefully end.
-                    println!("Output not supported for {} format", output);
+                    // Incase the output format is not specified, show a success message.
+                    println!("Volume {} Scaled Successfully 🚀", id)
                 }
             },
             Err(e) => {

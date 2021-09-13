@@ -11,7 +11,7 @@ mod rest_wrapper;
 
 use crate::{
     operations::{Get, List, Scale},
-    resources::{pool, volume, GetResources, ScaleResources},
+    resources::{pool, utils, volume, GetResources, ScaleResources},
     rest_wrapper::RestClient,
 };
 use anyhow::Result;
@@ -43,20 +43,28 @@ async fn main() {
         println!("Failed to initialise the REST client. Error {}", e);
     }
 
-    // Perform the requested operation.
-    match &cli_args.operations {
-        Operations::Get(resource) => match resource {
-            GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
-            GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
-            GetResources::Pools => pool::Pools::list(&cli_args.output).await,
-            GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
-        },
-        Operations::Scale(resource) => match resource {
-            ScaleResources::Volume { id, replica_count } => {
-                volume::Volume::scale(id, *replica_count, &cli_args.output).await
-            }
-        },
-    };
+    if &cli_args.output != ""
+        && &cli_args.output != utils::YAML_FORMAT
+        && &cli_args.output != utils::JSON_FORMAT
+    {
+        // Incase of invalid output format, show error and gracefully end.
+        println!("Output not supported for {} format", &cli_args.output);
+    } else {
+        // Perform the requested operation.
+        match &cli_args.operations {
+            Operations::Get(resource) => match resource {
+                GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
+                GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
+                GetResources::Pools => pool::Pools::list(&cli_args.output).await,
+                GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
+            },
+            Operations::Scale(resource) => match resource {
+                ScaleResources::Volume { id, replica_count } => {
+                    volume::Volume::scale(id, *replica_count, &cli_args.output).await
+                }
+            },
+        };
+    }
 }
 
 /// Initialise the REST client.

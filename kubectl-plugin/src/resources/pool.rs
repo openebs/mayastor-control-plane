@@ -18,11 +18,6 @@ impl List for Pools {
     async fn list(output: &Self::Format) {
         match RestClient::client().pools_api().get_pools().await {
             Ok(pools) => match output.to_lowercase().trim() {
-                "" => {
-                    // Show the tabular form if output format is not specified.
-                    let rows: Vec<Row> = utils::create_pool_rows(pools);
-                    utils::table_printer((&*utils::POOLS_HEADERS).clone(), rows);
-                }
                 utils::YAML_FORMAT => {
                     // Show the YAML form output if output format is YAML.
                     let s = serde_yaml::to_string(&pools).unwrap();
@@ -34,8 +29,9 @@ impl List for Pools {
                     println!("{}", s);
                 }
                 _ => {
-                    // Incase of invalid output format, show error and gracefully end.
-                    println!("Output not supported for {} format", output);
+                    // Show the tabular form if output format is not specified.
+                    let rows: Vec<Row> = utils::create_pool_rows(pools);
+                    utils::table_printer((&*utils::POOLS_HEADERS).clone(), rows);
                 }
             },
             Err(e) => {
@@ -60,13 +56,6 @@ impl Get for Pool {
     async fn get(id: &Self::ID, output: &Self::Format) {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => match output.to_lowercase().trim() {
-                "" => {
-                    // Show the tabular form if outpur format is not specified.
-                    // Convert the output to a vector to be used in the method.
-                    let pool_to_vector: Vec<openapi::models::Pool> = vec![pool];
-                    let rows: Vec<Row> = utils::create_pool_rows(pool_to_vector);
-                    utils::table_printer((&*utils::POOLS_HEADERS).clone(), rows);
-                }
                 utils::YAML_FORMAT => {
                     // Show the YAML form output if output format is YAML.
                     let s = serde_yaml::to_string(&pool).unwrap();
@@ -78,8 +67,11 @@ impl Get for Pool {
                     println!("{}", s);
                 }
                 _ => {
-                    // Incase of invalid output format, show error and gracefully end.
-                    println!("Output not supported for {} format", output);
+                    // Show the tabular form if outpur format is not specified.
+                    // Convert the output to a vector to be used in the method.
+                    let pool_to_vector: Vec<openapi::models::Pool> = vec![pool];
+                    let rows: Vec<Row> = utils::create_pool_rows(pool_to_vector);
+                    utils::table_printer((&*utils::POOLS_HEADERS).clone(), rows);
                 }
             },
             Err(e) => {
