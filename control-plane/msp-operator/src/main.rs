@@ -43,6 +43,9 @@ const WHO_AM_I: &str = "Mayastor pool operator";
     derive = "PartialEq",
     derive = "Default",
     shortname = "msp",
+    printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
+    printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
+    printcolumn = r#"{ "name":"used", "type":"integer", "description":"used bytes", "jsonPath":".status.used"}"#
 )]
 
 /// The pool spec which contains the paramaters we use when creating the pool
@@ -575,36 +578,38 @@ impl ResourceContext {
             }
         }
 
-        let p = p.json::<Pool>().await?;
-
-        if let Some(state) = p.state {
-            if let Some(status) = &self.status {
-                if status.used != state.used {
-                    // update the usage state such that users can see the values changes
-                    // as replica's are added and/or removed.
-                    let _ = self
-                        .patch_status(MayastorPoolStatus {
-                            state: PoolState::Online,
-                            used: state.used,
-                        })
-                        .await;
+        if let Ok(p) = p.json::<Pool>().await {
+            if let Some(state) = p.state {
+                if let Some(status) = &self.status {
+                    if status.used != state.used {
+                        // update the usage state such that users can see the values changes
+                        // as replica's are added and/or removed.
+                        let _ = self
+                            .patch_status(MayastorPoolStatus {
+                                state: PoolState::Online,
+                                used: state.used,
+                            })
+                            .await;
+                    }
                 }
+            } else {
+                warn!("CRD does not contain the valid fields we except");
             }
+
+            // always reschedule though
+            Ok(ReconcilerAction {
+                requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
+            })
         } else {
-            info!(pool = ?self.name(), "offline");
             self.k8s_notify(
                 "Offline",
                 "Check",
-                "The pool can not be located scheduling import operation",
+                "The pool has been deleted through an external API request",
                 "Warning",
             )
             .await;
-            return self.is_missing().await;
+            self.is_missing().await
         }
-
-        Ok(ReconcilerAction {
-            requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
-        })
     }
 
     /// Post an event, typically these events are used to indicate that
