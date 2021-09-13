@@ -30,7 +30,7 @@ struct CliArgs {
     #[structopt(subcommand)]
     operations: Operations,
     /// Output Format
-    #[structopt(default_value = "", short = "o", long = "output")]
+    #[structopt(default_value = "", short, long)]
     output: String,
 }
 

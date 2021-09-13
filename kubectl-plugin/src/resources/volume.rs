@@ -16,8 +16,7 @@ pub(crate) struct Volumes {
 
 #[async_trait(?Send)]
 impl List for Volumes {
-    type Format = OutputFormat;
-    async fn list(output: &Self::Format) {
+    async fn list(output: &OutputFormat) {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => match output.to_lowercase().trim() {
                 utils::YAML_FORMAT => {
@@ -56,8 +55,7 @@ pub(crate) struct Volume {
 #[async_trait(?Send)]
 impl Get for Volume {
     type ID = VolumeId;
-    type Format = OutputFormat;
-    async fn get(id: &Self::ID, output: &Self::Format) {
+    async fn get(id: &Self::ID, output: &OutputFormat) {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => match output.to_lowercase().trim() {
                 utils::YAML_FORMAT => {
@@ -88,8 +86,7 @@ impl Get for Volume {
 #[async_trait(?Send)]
 impl Scale for Volume {
     type ID = VolumeId;
-    type Format = OutputFormat;
-    async fn scale(id: &Self::ID, replica_count: u8, output: &Self::Format) {
+    async fn scale(id: &Self::ID, replica_count: u8, output: &OutputFormat) {
         match RestClient::client()
             .volumes_api()
             .put_volume_replica_count(id, replica_count)
