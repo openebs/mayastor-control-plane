@@ -10,14 +10,8 @@ pub const JSON_FORMAT: &str = "json";
 lazy_static! {
     pub static ref VOLUME_HEADERS: Row =
         row!["ID", "PATHS", "REPLICAS", "PROTOCOL", "STATUS", "SIZE"];
-    pub static ref POOLS_HEADERS: Row = row![
-        "ID",
-        "TOTAL CAPACITY",
-        "USED CAPACITY",
-        "DISKS",
-        "NODE",
-        "STATUS"
-    ];
+    pub static ref POOLS_HEADERS: Row = 
+        row!["ID", "TOTAL CAPACITY", "USED CAPACITY", "DISKS", "NODE", "STATUS"];
 }
 
 // table_printer takes the above defined headers and the rows created at execution,
