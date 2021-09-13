@@ -43,6 +43,9 @@ const WHO_AM_I: &str = "Mayastor pool operator";
     derive = "PartialEq",
     derive = "Default",
     shortname = "msp",
+    printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
+    printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
+    printcolumn = r#"{ "name":"used", "type":"integer", "description":"used bytes", "jsonPath":".status.used"}"#
 )]
 
 /// The pool spec which contains the paramaters we use when creating the pool
