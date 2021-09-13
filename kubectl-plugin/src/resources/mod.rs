@@ -7,7 +7,6 @@ use structopt::StructOpt;
 pub(crate) type VolumeId = String;
 pub(crate) type ReplicaCount = u8;
 pub(crate) type PoolId = String;
-pub(crate) type OutputFormat = String;
 
 /// The types of resources that support the 'list' operation.
 #[derive(StructOpt, Debug)]

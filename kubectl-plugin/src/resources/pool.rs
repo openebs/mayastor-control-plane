@@ -1,38 +1,45 @@
 use crate::{
     operations::{Get, List},
-    resources::{utils, OutputFormat, PoolId},
+    resources::{utils, utils::CreateRows, PoolId},
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
 use prettytable::Row;
 use structopt::StructOpt;
+
 /// Pools resource.
 #[derive(StructOpt, Debug)]
 pub struct Pools {
-    output: OutputFormat,
+    output: String,
+}
+
+impl CreateRows for Vec<openapi::models::Pool> {
+    fn create_rows(&self) -> Vec<Row> {
+        let mut rows: Vec<Row> = Vec::new();
+        for pool in self {
+            let state = pool.state.as_ref().unwrap();
+            // The disks are joined by a comma and shown in the table, ex /dev/vda, /dev/vdb
+            let disks = state.disks.join(", ");
+            rows.push(row![
+                state.id,
+                state.capacity,
+                state.used,
+                disks,
+                state.node,
+                state.status
+            ]);
+        }
+        rows
+    }
 }
 
 #[async_trait(?Send)]
 impl List for Pools {
-    async fn list(output: &OutputFormat) {
+    async fn list(output: utils::OutputFormat) {
         match RestClient::client().pools_api().get_pools().await {
-            Ok(pools) => match output.to_lowercase().trim() {
-                utils::YAML_FORMAT => {
-                    // Show the YAML form output if output format is YAML.
-                    let s = serde_yaml::to_string(&pools).unwrap();
-                    println!("{}", s);
-                }
-                utils::JSON_FORMAT => {
-                    // Show the JSON form output if output format is JSON.
-                    let s = serde_json::to_string(&pools).unwrap();
-                    println!("{}", s);
-                }
-                _ => {
-                    // Show the tabular form if output format is not specified.
-                    let rows: Vec<Row> = utils::create_pool_rows(pools);
-                    utils::table_printer((&*utils::POOLS_HEADERS).clone(), rows);
-                }
-            },
+            Ok(pools) => {
+                utils::print_table::<openapi::models::Pool>(output, pools);
+            }
             Err(e) => {
                 println!("Failed to list pools. Error {}", e)
             }
@@ -45,33 +52,18 @@ impl List for Pools {
 pub(crate) struct Pool {
     /// ID of the pool.
     id: PoolId,
-    output: OutputFormat,
+    output: String,
 }
 
 #[async_trait(?Send)]
 impl Get for Pool {
     type ID = PoolId;
-    async fn get(id: &Self::ID, output: &OutputFormat) {
+    async fn get(id: &Self::ID, output: utils::OutputFormat) {
         match RestClient::client().pools_api().get_pool(id).await {
-            Ok(pool) => match output.to_lowercase().trim() {
-                utils::YAML_FORMAT => {
-                    // Show the YAML form output if output format is YAML.
-                    let s = serde_yaml::to_string(&pool).unwrap();
-                    println!("{}", s);
-                }
-                utils::JSON_FORMAT => {
-                    // Show the JSON form output if output format is JSON.
-                    let s = serde_json::to_string(&pool).unwrap();
-                    println!("{}", s);
-                }
-                _ => {
-                    // Show the tabular form if outpur format is not specified.
-                    // Convert the output to a vector to be used in the method.
-                    let pool_to_vector: Vec<openapi::models::Pool> = vec![pool];
-                    let rows: Vec<Row> = utils::create_pool_rows(pool_to_vector);
-                    utils::table_printer((&*utils::POOLS_HEADERS).clone(), rows);
-                }
-            },
+            Ok(pool) => {
+                let pool_to_vector: Vec<openapi::models::Pool> = vec![pool];
+                utils::print_table::<openapi::models::Pool>(output, pool_to_vector);
+            }
             Err(e) => {
                 println!("Failed to get pool {}. Error {}", id, e)
             }

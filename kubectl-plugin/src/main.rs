@@ -43,24 +43,28 @@ async fn main() {
         println!("Failed to initialise the REST client. Error {}", e);
     }
 
-    if &cli_args.output != ""
-        && &cli_args.output != utils::YAML_FORMAT
-        && &cli_args.output != utils::JSON_FORMAT
+    if !&cli_args.output.is_empty()
+        && cli_args.output != utils::YAML_FORMAT
+        && cli_args.output != utils::JSON_FORMAT
     {
         // Incase of invalid output format, show error and gracefully end.
         println!("Output not supported for {} format", &cli_args.output);
     } else {
+        let tmp = &cli_args.output.to_lowercase();
+        let l = tmp.trim();
+        let output_format: utils::OutputFormat = l.into();
+
         // Perform the requested operation.
         match &cli_args.operations {
             Operations::Get(resource) => match resource {
-                GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
-                GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
-                GetResources::Pools => pool::Pools::list(&cli_args.output).await,
-                GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
+                GetResources::Volumes => volume::Volumes::list(output_format).await,
+                GetResources::Volume { id } => volume::Volume::get(id, output_format).await,
+                GetResources::Pools => pool::Pools::list(output_format).await,
+                GetResources::Pool { id } => pool::Pool::get(id, output_format).await,
             },
             Operations::Scale(resource) => match resource {
                 ScaleResources::Volume { id, replica_count } => {
-                    volume::Volume::scale(id, *replica_count, &cli_args.output).await
+                    volume::Volume::scale(id, *replica_count, output_format).await
                 }
             },
         };
