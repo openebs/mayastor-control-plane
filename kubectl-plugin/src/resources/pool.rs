@@ -14,8 +14,7 @@ pub struct Pools {
 
 #[async_trait(?Send)]
 impl List for Pools {
-    type Format = OutputFormat;
-    async fn list(output: &Self::Format) {
+    async fn list(output: &OutputFormat) {
         match RestClient::client().pools_api().get_pools().await {
             Ok(pools) => match output.to_lowercase().trim() {
                 utils::YAML_FORMAT => {
@@ -52,8 +51,7 @@ pub(crate) struct Pool {
 #[async_trait(?Send)]
 impl Get for Pool {
     type ID = PoolId;
-    type Format = OutputFormat;
-    async fn get(id: &Self::ID, output: &Self::Format) {
+    async fn get(id: &Self::ID, output: &OutputFormat) {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => match output.to_lowercase().trim() {
                 utils::YAML_FORMAT => {

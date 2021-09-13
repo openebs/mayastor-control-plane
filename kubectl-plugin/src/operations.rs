@@ -1,4 +1,4 @@
-use crate::resources::{GetResources, ScaleResources};
+use crate::resources::{GetResources, ScaleResources, OutputFormat};
 use async_trait::async_trait;
 use structopt::StructOpt;
 
@@ -15,8 +15,7 @@ pub(crate) enum Operations {
 /// To be implemented by resources which support the 'list' operation.
 #[async_trait(?Send)]
 pub trait List {
-    type Format;
-    async fn list(output: &Self::Format);
+    async fn list(output: &OutputFormat);
 }
 
 /// Get trait.
@@ -24,8 +23,7 @@ pub trait List {
 #[async_trait(?Send)]
 pub trait Get {
     type ID;
-    type Format;
-    async fn get(id: &Self::ID, output: &Self::Format);
+    async fn get(id: &Self::ID, output: &OutputFormat);
 }
 
 /// Scale trait.
@@ -33,6 +31,5 @@ pub trait Get {
 #[async_trait(?Send)]
 pub trait Scale {
     type ID;
-    type Format;
-    async fn scale(id: &Self::ID, replica_count: u8, output: &Self::Format);
+    async fn scale(id: &Self::ID, replica_count: u8, output: &OutputFormat);
 }
