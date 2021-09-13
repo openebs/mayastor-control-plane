@@ -62,7 +62,7 @@ async fn create_replica_protocols() {
                 pool: cluster.pool(0, 0),
                 size: 5 * 1024 * 1024,
                 thin: true,
-                share: protocol.clone(),
+                share: *protocol,
                 ..Default::default()
             }),
         )
@@ -227,7 +227,7 @@ async fn create_replica_idempotent_different_protocols() {
                 pool: replica.pool.clone(),
                 size: replica.size,
                 thin: replica.thin,
-                share: protocol.clone(),
+                share: *protocol,
                 ..Default::default()
             }),
         )

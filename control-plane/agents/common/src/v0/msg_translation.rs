@@ -154,7 +154,7 @@ impl MessageBusToRpc for message_bus::CreateReplica {
             pool: self.pool.clone().into(),
             thin: self.thin,
             size: self.size,
-            share: self.share.clone() as i32,
+            share: self.share as i32,
         }
     }
 }

@@ -169,6 +169,18 @@ impl From<models::NexusShareProtocol> for NexusShareProtocol {
         }
     }
 }
+impl TryFrom<Protocol> for NexusShareProtocol {
+    type Error = String;
+
+    fn try_from(value: Protocol) -> Result<Self, Self::Error> {
+        match value {
+            Protocol::None => Err(format!("Invalid protocol: {:?}", value)),
+            Protocol::Nvmf => Ok(Self::Nvmf),
+            Protocol::Iscsi => Ok(Self::Iscsi),
+            Protocol::Nbd => Err(format!("Invalid protocol: {:?}", value)),
+        }
+    }
+}
 
 /// Create Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -189,6 +201,27 @@ pub struct CreateNexus {
     pub managed: bool,
     /// Volume which owns this nexus, if any
     pub owner: Option<VolumeId>,
+}
+
+impl CreateNexus {
+    /// Create new `Self` from the given parameters
+    pub fn new(
+        node: &NodeId,
+        uuid: &NexusId,
+        size: u64,
+        children: &[NexusChild],
+        managed: bool,
+        owner: Option<&VolumeId>,
+    ) -> Self {
+        Self {
+            node: node.clone(),
+            uuid: uuid.clone(),
+            size,
+            children: children.to_owned(),
+            managed,
+            owner: owner.cloned(),
+        }
+    }
 }
 
 /// Destroy Nexus Request

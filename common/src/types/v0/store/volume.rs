@@ -372,7 +372,7 @@ impl From<&VolumeSpec> for message_bus::VolumeState {
             uuid: spec.uuid.clone(),
             size: spec.size,
             status: message_bus::VolumeStatus::Unknown,
-            protocol: spec.protocol.clone(),
+            protocol: spec.protocol,
             child: None,
         }
     }

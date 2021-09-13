@@ -6,8 +6,8 @@ use crate::core::{
 };
 use common::errors::SvcError;
 use common_lib::types::v0::{
-    message_bus::{ChildUri, NodeId},
-    store::{nexus_persistence::NexusInfo, volume::VolumeSpec},
+    message_bus::{ChildUri, NexusId, NodeId},
+    store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
 };
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -15,16 +15,39 @@ use std::collections::HashMap;
 /// Request to retrieve a list of healthy nexus children which is used for nexus creation
 /// used by `CreateVolumeNexus`
 #[derive(Clone)]
-pub(crate) struct GetPersistedNexusChildren {
-    spec: VolumeSpec,
-    target_node: NodeId,
+pub(crate) enum GetPersistedNexusChildren {
+    Create((VolumeSpec, NodeId)),
+    ReCreate(NexusSpec),
 }
 
 impl GetPersistedNexusChildren {
-    pub(crate) fn new(spec: &VolumeSpec, target_node: &NodeId) -> Self {
-        Self {
-            spec: spec.clone(),
-            target_node: target_node.clone(),
+    /// Retrieve a list of children for a volume nexus creation
+    pub(crate) fn new_create(spec: &VolumeSpec, target_node: &NodeId) -> Self {
+        Self::Create((spec.clone(), target_node.clone()))
+    }
+    /// Retrieve a list of children for a nexus REcreation
+    pub(crate) fn new_recreate(spec: &NexusSpec) -> Self {
+        Self::ReCreate(spec.clone())
+    }
+    /// Get the optional volume spec (used for nexus creation)
+    pub(crate) fn vol_spec(&self) -> Option<&VolumeSpec> {
+        match self {
+            Self::Create((spec, _)) => Some(spec),
+            Self::ReCreate(_) => None,
+        }
+    }
+    /// Get the target node where the nexus will be created/recreated on
+    pub(crate) fn target_node(&self) -> &NodeId {
+        match self {
+            Self::Create((_, node)) => node,
+            Self::ReCreate(nexus) => &nexus.node,
+        }
+    }
+    /// Get the current nexus persistent information Id
+    pub(crate) fn nexus_info_id(&self) -> Option<&NexusId> {
+        match self {
+            Self::Create((vol, _)) => vol.last_nexus_id.as_ref(),
+            Self::ReCreate(nexus) => Some(&nexus.uuid),
         }
     }
 }
@@ -32,20 +55,19 @@ impl GetPersistedNexusChildren {
 /// `GetPersistedNexusChildren` context used by the filter functions for `GetPersistedNexusChildren`
 #[derive(Clone)]
 pub(crate) struct GetPersistedNexusChildrenCtx {
+    request: GetPersistedNexusChildren,
     registry: Registry,
-    spec: VolumeSpec,
-    target_node: NodeId,
     nexus_info: Option<NexusInfo>,
 }
 
 impl GetPersistedNexusChildrenCtx {
-    /// Get the volume spec
-    pub(crate) fn spec(&self) -> &VolumeSpec {
-        &self.spec
+    /// Get the optional volume spec (used for nexus creation)
+    pub(crate) fn vol_spec(&self) -> Option<&VolumeSpec> {
+        self.request.vol_spec()
     }
     /// Get the target node where the nexus will be created on
     pub(crate) fn target_node(&self) -> &NodeId {
-        &self.target_node
+        self.request.target_node()
     }
     /// Get the current nexus persistent information
     pub(crate) fn nexus_info(&self) -> &Option<NexusInfo> {
@@ -58,25 +80,33 @@ impl GetPersistedNexusChildrenCtx {
         registry: &Registry,
         request: &GetPersistedNexusChildren,
     ) -> Result<Self, SvcError> {
-        let spec = request.spec.clone();
         let nexus_info = registry
-            .get_nexus_info(spec.last_nexus_id.as_ref(), false)
+            .get_nexus_info(request.nexus_info_id(), false)
             .await?;
 
         Ok(Self {
             registry: registry.clone(),
-            spec,
+            request: request.clone(),
             nexus_info,
-            target_node: request.target_node.clone(),
         })
     }
     async fn list(&self) -> Vec<ChildItem> {
         // find all replica status
         let state_replicas = self.registry.get_replicas().await;
-        // find all replica specs for this volume
-        let spec_replicas = self.registry.specs().get_volume_replicas(&self.spec.uuid);
         // all pools
         let pool_wrappers = self.registry.get_pool_wrappers().await;
+
+        let spec_replicas = match &self.request {
+            GetPersistedNexusChildren::Create((vol_spec, _)) => {
+                self.registry.specs().get_volume_replicas(&vol_spec.uuid)
+            }
+            GetPersistedNexusChildren::ReCreate(nexus_spec) => {
+                // replicas used by the nexus
+                // note: if the nexus was somehow created without using replicas (eg: directly using
+                // aio:// etc) then we will not recreate it with those devices...
+                self.registry.specs().get_nexus_replicas(nexus_spec)
+            }
+        };
 
         spec_replicas
             .into_iter()

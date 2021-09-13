@@ -181,7 +181,10 @@ impl ReplicaFilters {
 
     /// Should only allow children with corresponding replicas with enough size
     pub(crate) fn size(request: &GetPersistedNexusChildrenCtx, item: &ChildItem) -> bool {
-        item.state().size >= request.spec().size
+        match request.vol_spec() {
+            Some(volume) => item.state().size >= volume.size,
+            None => true,
+        }
     }
 }
 

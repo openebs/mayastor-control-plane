@@ -41,7 +41,7 @@ impl Registry {
                     }
                     _ => nexus_state.status.clone(),
                 },
-                protocol: nexus_state.share.clone(),
+                protocol: nexus_state.share,
                 child: Some(nexus_state),
             }
         } else {

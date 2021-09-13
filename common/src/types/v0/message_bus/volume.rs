@@ -114,7 +114,7 @@ impl From<(&VolumeId, &Nexus)> for VolumeState {
             uuid,
             size: nexus.size,
             status: nexus.status.clone(),
-            protocol: nexus.share.clone(),
+            protocol: nexus.share,
             child: Some(nexus.clone()),
         }
     }

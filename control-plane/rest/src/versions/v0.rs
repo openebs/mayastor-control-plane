@@ -94,7 +94,7 @@ impl CreateReplicaBody {
             pool: pool_id,
             size: self.size,
             thin: self.thin,
-            share: self.share.clone(),
+            share: self.share,
             managed: false,
             owners: Default::default(),
         }

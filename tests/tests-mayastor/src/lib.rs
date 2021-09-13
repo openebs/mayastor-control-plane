@@ -482,7 +482,7 @@ impl ClusterBuilder {
                         pool: pool.id(),
                         size: self.replicas.size,
                         thin: false,
-                        share: self.replicas.share.clone(),
+                        share: self.replicas.share,
                         managed: false,
                         owners: Default::default(),
                     });
