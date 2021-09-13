@@ -21,7 +21,7 @@ The plugin needs to be able to connect to the REST server in order to make the a
 
 ### Examples and Outputs
 
-1. List Volumes
+1. Get Volumes
 ```
 ❯ kubectl mayastor get volumes
  ID                                    PATHS  REPLICAS  PROTOCOL  STATUS  SIZE 
@@ -36,7 +36,7 @@ The plugin needs to be able to connect to the REST server in order to make the a
  18e30e83-b106-4e0d-9fb6-2b04e761e18a  1      4         none      Online  10485761 
 
 ```
-3. List Pools
+3. Get Pools
 ```
 ❯ kubectl mayastor get pools
  ID               TOTAL CAPACITY  USED CAPACITY  DISKS                                                     NODE      STATUS 
@@ -56,7 +56,7 @@ The plugin needs to be able to connect to the REST server in order to make the a
 Volume 0c08667c-8b59-4d11-9192-b54e27e0ce0f Scaled Successfully 🚀
 
 ```
-6. List/Get Volume(s)/Pool(s) to a specific Output Format
+6. Get Volume(s)/Pool(s) to a specific Output Format
 ```
 ❯ kubectl mayastor -ojson get volumes
 [{"spec":{"labels":[],"num_paths":1,"num_replicas":4,"protocol":"none","size":10485761,"status":"Created","uuid":"18e30e83-b106-4e0d-9fb6-2b04e761e18a"},"state":{"children":[],"protocol":"none","size":10485761,"status":"Online","uuid":"18e30e83-b106-4e0d-9fb6-2b04e761e18a"}},{"spec":{"labels":[],"num_paths":1,"num_replicas":5,"protocol":"none","size":10485761,"status":"Created","uuid":"0c08667c-8b59-4d11-9192-b54e27e0ce0f"},"state":{"children":[],"protocol":"none","size":10485761,"status":"Online","uuid":"0c08667c-8b59-4d11-9192-b54e27e0ce0f"}}]
