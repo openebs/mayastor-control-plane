@@ -32,48 +32,18 @@ pub fn table_printer(titles: Row, rows: Vec<Row>) {
     table.printstd();
 }
 
-// // create_volume_rows takes the marshalled Volume json response from REST and creates
-// // rows out of it, for Volume Tabular Output.
-// pub fn create_volume_rows(volumes: Vec<Volume>) -> Vec<Row> {
-//     let mut rows: Vec<Row> = Vec::new();
-//     for volume in volumes {
-//         let state = volume.state.unwrap();
-//         rows.push(row![
-//             state.uuid,
-//             volume.spec.num_paths,
-//             volume.spec.num_replicas,
-//             state.protocol,
-//             state.status,
-//             state.size
-//         ]);
-//     }
-//     rows
-// }
-//
-// // create_volume_rows takes the marshalled Volume json response from REST and creates
-// // rows out of it, for Volume Tabular Output.
-// pub fn create_pool_rows(pools: Vec<Pool>) -> Vec<Row> {
-//     let mut rows: Vec<Row> = Vec::new();
-//     for pool in pools {
-//         let state = pool.state.unwrap();
-//         // The disks are joined by a comma and shown in the table, ex /dev/vda, /dev/vdb
-//         let disks = state.disks.join(", ");
-//         rows.push(row![
-//             state.id,
-//             state.capacity,
-//             state.used,
-//             disks,
-//             state.node,
-//             state.status
-//         ]);
-//     }
-//     rows
-// }
-
+// CreateRows trait to be implemented by Vec<Volume/Pool> to create the rows.
 pub trait CreateRows {
     fn create_rows(&self) -> Vec<Row>;
 }
 
+// CreateRows trait to be implemented by Volume/Pool to fetch the corresponding headers.
+pub trait GetHeaderRow {
+    fn get_header_row(&self) -> Row;
+}
+
+// OutputFormat to be used as an enum to match the output from args.
+#[derive(Debug)]
 pub enum OutputFormat {
     Yaml,
     Json,
@@ -82,12 +52,10 @@ pub enum OutputFormat {
 
 impl From<&str> for OutputFormat {
     fn from(format_str: &str) -> Self {
-        if format_str == YAML_FORMAT {
-            Self::Yaml
-        } else if format_str == JSON_FORMAT {
-            Self::Json
-        } else {
-            Self::NoFormat
+        match format_str {
+            YAML_FORMAT => Self::Yaml,
+            JSON_FORMAT => Self::Json,
+            _ => Self::NoFormat,
         }
     }
 }
@@ -96,6 +64,7 @@ pub fn print_table<T>(output: OutputFormat, obj: Vec<T>)
 where
     T: ser::Serialize,
     Vec<T>: CreateRows,
+    Vec<T>: GetHeaderRow,
 {
     match output {
         OutputFormat::Yaml => {
@@ -108,10 +77,11 @@ where
             let s = serde_json::to_string(&obj).unwrap();
             println!("{}", s);
         }
-        _ => {
+        OutputFormat::NoFormat => {
             // Show the tabular form if output format is not specified.
             let rows: Vec<Row> = obj.create_rows();
-            table_printer((&*VOLUME_HEADERS).clone(), rows);
+            let header: Row = obj.get_header_row();
+            table_printer(header, rows);
         }
     }
 }

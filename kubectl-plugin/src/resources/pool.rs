@@ -1,6 +1,6 @@
 use crate::{
     operations::{Get, List},
-    resources::{utils, utils::CreateRows, PoolId},
+    resources::{utils, utils::CreateRows, utils::GetHeaderRow, PoolId},
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
@@ -9,10 +9,10 @@ use structopt::StructOpt;
 
 /// Pools resource.
 #[derive(StructOpt, Debug)]
-pub struct Pools {
-    output: String,
-}
+pub struct Pools {}
 
+// CreateRows being trait for Vec<Pool> would create the rows from the list of
+// Pools returned from REST call.
 impl CreateRows for Vec<openapi::models::Pool> {
     fn create_rows(&self) -> Vec<Row> {
         let mut rows: Vec<Row> = Vec::new();
@@ -33,11 +33,20 @@ impl CreateRows for Vec<openapi::models::Pool> {
     }
 }
 
+// GetHeaderRow being trait for Pool would return the Header Row for
+// Pool.
+impl GetHeaderRow for Vec<openapi::models::Pool> {
+    fn get_header_row(&self) -> Row {
+        (&*utils::POOLS_HEADERS).clone()
+    }
+}
+
 #[async_trait(?Send)]
 impl List for Pools {
     async fn list(output: utils::OutputFormat) {
         match RestClient::client().pools_api().get_pools().await {
             Ok(pools) => {
+                // Print table, json or yaml based on output format.
                 utils::print_table::<openapi::models::Pool>(output, pools);
             }
             Err(e) => {
@@ -52,7 +61,6 @@ impl List for Pools {
 pub(crate) struct Pool {
     /// ID of the pool.
     id: PoolId,
-    output: String,
 }
 
 #[async_trait(?Send)]
@@ -61,8 +69,8 @@ impl Get for Pool {
     async fn get(id: &Self::ID, output: utils::OutputFormat) {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => {
-                let pool_to_vector: Vec<openapi::models::Pool> = vec![pool];
-                utils::print_table::<openapi::models::Pool>(output, pool_to_vector);
+                // Print table, json or yaml based on output format.
+                utils::print_table::<openapi::models::Pool>(output, vec![pool]);
             }
             Err(e) => {
                 println!("Failed to get pool {}. Error {}", id, e)

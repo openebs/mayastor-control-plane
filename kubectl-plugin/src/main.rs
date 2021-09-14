@@ -42,7 +42,7 @@ async fn main() {
     if let Err(e) = init_rest(cli_args.rest.as_ref()) {
         println!("Failed to initialise the REST client. Error {}", e);
     }
-
+    // Check whether the entered format is valid or not
     if !&cli_args.output.is_empty()
         && cli_args.output != utils::YAML_FORMAT
         && cli_args.output != utils::JSON_FORMAT
@@ -50,10 +50,8 @@ async fn main() {
         // Incase of invalid output format, show error and gracefully end.
         println!("Output not supported for {} format", &cli_args.output);
     } else {
-        let tmp = &cli_args.output.to_lowercase();
-        let l = tmp.trim();
-        let output_format: utils::OutputFormat = l.into();
-
+        // Only Valid formats to be taken down the code
+        let output_format: utils::OutputFormat = ((&cli_args.output.to_lowercase()).trim()).into();
         // Perform the requested operation.
         match &cli_args.operations {
             Operations::Get(resource) => match resource {
