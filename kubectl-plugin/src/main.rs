@@ -23,15 +23,15 @@ use yaml_rust::YamlLoader;
 
 #[derive(StructOpt, Debug)]
 struct CliArgs {
-    /// Rest endpoint.
+    /// The rest endpoint, parsed from KUBECONFIG, if left empty .
     #[structopt(long, short)]
     rest: Option<Url>,
     /// The operation to be performed.
     #[structopt(subcommand)]
     operations: Operations,
-    /// Output Format
-    #[structopt(default_value = "", short, long)]
-    output: String,
+    /// The Output, viz yaml, json.
+    #[structopt(default_value = "none", short, long, possible_values=&["yaml", "json", "none"], parse(from_str))]
+    output: utils::OutputFormat,
 }
 
 #[actix_rt::main]
@@ -42,31 +42,21 @@ async fn main() {
     if let Err(e) = init_rest(cli_args.rest.as_ref()) {
         println!("Failed to initialise the REST client. Error {}", e);
     }
-    // Check whether the entered format is valid or not
-    if !&cli_args.output.is_empty()
-        && cli_args.output != utils::YAML_FORMAT
-        && cli_args.output != utils::JSON_FORMAT
-    {
-        // Incase of invalid output format, show error and gracefully end.
-        println!("Output not supported for {} format", &cli_args.output);
-    } else {
-        // Only Valid formats to be taken down the code
-        let output_format: utils::OutputFormat = ((&cli_args.output.to_lowercase()).trim()).into();
-        // Perform the requested operation.
-        match &cli_args.operations {
-            Operations::Get(resource) => match resource {
-                GetResources::Volumes => volume::Volumes::list(output_format).await,
-                GetResources::Volume { id } => volume::Volume::get(id, output_format).await,
-                GetResources::Pools => pool::Pools::list(output_format).await,
-                GetResources::Pool { id } => pool::Pool::get(id, output_format).await,
-            },
-            Operations::Scale(resource) => match resource {
-                ScaleResources::Volume { id, replica_count } => {
-                    volume::Volume::scale(id, *replica_count, output_format).await
-                }
-            },
-        };
-    }
+
+    // Perform the operations based on the subcommand, with proper output format.
+    match &cli_args.operations {
+        Operations::Get(resource) => match resource {
+            GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
+            GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
+            GetResources::Pools => pool::Pools::list(&cli_args.output).await,
+            GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
+        },
+        Operations::Scale(resource) => match resource {
+            ScaleResources::Volume { id, replica_count } => {
+                volume::Volume::scale(id, *replica_count, &cli_args.output).await
+            }
+        },
+    };
 }
 
 /// Initialise the REST client.

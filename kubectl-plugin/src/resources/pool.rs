@@ -43,7 +43,7 @@ impl GetHeaderRow for Vec<openapi::models::Pool> {
 
 #[async_trait(?Send)]
 impl List for Pools {
-    async fn list(output: utils::OutputFormat) {
+    async fn list(output: &utils::OutputFormat) {
         match RestClient::client().pools_api().get_pools().await {
             Ok(pools) => {
                 // Print table, json or yaml based on output format.
@@ -66,7 +66,7 @@ pub(crate) struct Pool {
 #[async_trait(?Send)]
 impl Get for Pool {
     type ID = PoolId;
-    async fn get(id: &Self::ID, output: utils::OutputFormat) {
+    async fn get(id: &Self::ID, output: &utils::OutputFormat) {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => {
                 // Print table, json or yaml based on output format.
