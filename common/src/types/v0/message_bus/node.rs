@@ -72,15 +72,6 @@ impl Node {
     }
 }
 
-impl From<models::Node> for Node {
-    fn from(src: models::Node) -> Self {
-        Self {
-            id: src.id.into(),
-            spec: src.spec.map(Into::into),
-            state: src.state.map(Into::into),
-        }
-    }
-}
 impl From<Node> for models::Node {
     fn from(src: Node) -> Self {
         Self::new_all(src.id, src.spec.map(Into::into), src.state.map(Into::into))
@@ -140,16 +131,6 @@ impl NodeState {
     }
 }
 
-impl From<models::NodeState> for NodeState {
-    fn from(src: models::NodeState) -> Self {
-        Self {
-            id: src.id.into(),
-            grpc_endpoint: src.grpc_endpoint,
-            status: src.status.into(),
-        }
-    }
-}
-
 bus_impl_string_id!(NodeId, "ID of a mayastor node");
 
 impl From<NodeState> for models::NodeState {
@@ -170,15 +151,6 @@ impl From<NodeStatus> for models::NodeStatus {
             NodeStatus::Unknown => Self::Unknown,
             NodeStatus::Online => Self::Online,
             NodeStatus::Offline => Self::Offline,
-        }
-    }
-}
-impl From<models::NodeStatus> for NodeStatus {
-    fn from(src: models::NodeStatus) -> Self {
-        match src {
-            models::NodeStatus::Unknown => Self::Unknown,
-            models::NodeStatus::Online => Self::Online,
-            models::NodeStatus::Offline => Self::Offline,
         }
     }
 }

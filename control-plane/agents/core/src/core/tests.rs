@@ -19,27 +19,26 @@ async fn bootstrap_registry() {
         .await
         .unwrap();
 
-    let replica = cluster
-        .rest_v00()
+    let client = cluster.rest_v00();
+
+    let replica = client
         .replicas_api()
         .get_replica(Cluster::replica(0, 0, 0).as_str())
         .await
         .unwrap();
-    cluster
-        .rest_v0()
-        .create_nexus(message_bus::CreateNexus {
-            node: cluster.node(0),
-            uuid: message_bus::NexusId::new(),
-            size,
-            children: vec![replica.uri.into()],
-            ..Default::default()
-        })
+    client
+        .nexuses_api()
+        .put_node_nexus(
+            cluster.node(0).as_str(),
+            message_bus::NexusId::new().as_str(),
+            models::CreateNexusBody::new(vec![replica.uri], size),
+        )
         .await
         .expect("Failed to create nexus");
 
     // Get all resource specs.
-    let specs = cluster
-        .rest_v0()
+    let specs = client
+        .specs_api()
         .get_specs()
         .await
         .expect("Failed to get resource specs");
@@ -57,8 +56,8 @@ async fn bootstrap_registry() {
 
     // Get the specs after the core agent has restarted and check that they match what was there
     // before.
-    let restart_specs = cluster
-        .rest_v0()
+    let restart_specs = client
+        .specs_api()
         .get_specs()
         .await
         .expect("Failed to get resource specs after restart");

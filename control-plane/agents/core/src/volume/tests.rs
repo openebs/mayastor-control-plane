@@ -11,12 +11,14 @@ use common_lib::{
             PublishVolume, SetVolumeReplica, ShareVolume, Topology, UnpublishVolume, UnshareVolume,
             Volume, VolumeShareProtocol, VolumeState, VolumeStatus,
         },
+        openapi::apis::{StatusCode, Uuid},
         store::{
             definitions::Store,
             nexus_persistence::{NexusInfo, NexusInfoKey},
         },
     },
 };
+
 use rpc::mayastor::FaultNexusChildRequest;
 use testlib::{Cluster, ClusterBuilder};
 
@@ -26,6 +28,10 @@ use common_lib::{
         message_bus::{
             ChannelVs, ChildUri, DestroyReplica, GetSpecs, Liveness, ReplicaId, ReplicaOwners,
             VolumeId,
+        },
+        openapi::{
+            apis::client::{Error, ResponseContent},
+            models,
         },
         store::{definitions::StorableObject, volume::VolumeSpec},
     },
@@ -59,7 +65,7 @@ async fn test_volume(cluster: &Cluster) {
     nexus_persistence_test(cluster).await;
 }
 
-const HOTSPARE_RECONCILE_TIMEOUT_SECS: u64 = 7;
+const RECONCILE_TIMEOUT_SECS: u64 = 7;
 
 #[actix_rt::test]
 async fn hotspare() {
@@ -81,6 +87,112 @@ async fn hotspare() {
     hotspare_missing_children(&cluster).await;
     hotspare_replica_count(&cluster).await;
     hotspare_nexus_replica_count(&cluster).await;
+}
+
+const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+#[actix_rt::test]
+async fn volume_nexus_reconcile() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_mayastors(2)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .build()
+        .await
+        .unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+
+    missing_nexus_reconcile(&cluster).await;
+}
+
+/// Creates a volume nexus on a mayastor instance, which will have both spec and state.
+/// Stops/Kills the mayastor container. At some point we will have no nexus state, because the node
+/// is gone. We then restart the node and the volume nexus reconciler will then recreate the nexus!
+/// At this point, we'll have a state again and the volume will be Online!
+async fn missing_nexus_reconcile(cluster: &Cluster) {
+    let volume = CreateVolume {
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        size: 5242880,
+        replicas: 1,
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
+
+    let rest_api = cluster.rest_v00();
+    let volumes_api = rest_api.volumes_api();
+
+    let volume = volumes_api
+        .put_volume_target(
+            volume.spec().uuid.as_str(),
+            cluster.node(0).as_str(),
+            models::VolumeShareProtocol::Nvmf,
+        )
+        .await
+        .unwrap();
+
+    tracing::info!("Volume: {:?}", volume);
+    let volume_state = volume.state.unwrap();
+    let nexus = volume_state.child.unwrap();
+
+    cluster.composer().stop(nexus.node.as_str()).await.unwrap();
+    let curr_nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;
+    assert_eq!(curr_nexus, None);
+
+    cluster.composer().start(nexus.node.as_str()).await.unwrap();
+    let curr_nexus = wait_till_nexus_state(cluster, &nexus.uuid, Some(&nexus)).await;
+    assert_eq!(Some(nexus), curr_nexus);
+
+    let volume_id = volume_state.uuid.to_string();
+    let volume = volumes_api.get_volume(&volume_id).await.unwrap();
+    assert_eq!(volume.state.unwrap().status, models::VolumeStatus::Online);
+
+    volumes_api.del_volume(&volume_id).await.unwrap();
+}
+
+/// Wait until the specified nexus state option matches the requested `state`
+async fn wait_till_nexus_state(
+    cluster: &Cluster,
+    nexus_id: &Uuid,
+    state: Option<&models::Nexus>,
+) -> Option<models::Nexus> {
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let client = cluster.rest_v00();
+    let nexuses_api = client.nexuses_api();
+    let start = std::time::Instant::now();
+    loop {
+        let nexus = nexuses_api.get_nexus(nexus_id.to_string().as_str()).await;
+
+        match nexuses_api.get_nexus(nexus_id.to_string().as_str()).await {
+            Ok(nexus) => {
+                if let Some(state) = state {
+                    if nexus.share != models::Protocol::None
+                        && state.share != models::Protocol::None
+                    {
+                        return Some(nexus);
+                    }
+                }
+            }
+            Err(Error::ResponseError(ResponseContent { status, .. }))
+                if status == StatusCode::NOT_FOUND && state.is_none() =>
+            {
+                return None;
+            }
+            _ => {}
+        };
+
+        if std::time::Instant::now() > (start + timeout) {
+            panic!(
+                "Timeout waiting for the nexus to have state: '{:#?}'. Actual: '{:#?}'",
+                state, nexus
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
 }
 
 /// Faults a volume nexus replica and waits for it to be replaced with a new one
@@ -145,7 +257,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
 /// Wait for the published volume to have the specified replicas and to not having the specified
 /// child. Wait up to the specified timeout.
 async fn wait_till_volume_nexus(volume: &VolumeId, replicas: usize, no_child: &str) -> Vec<Child> {
-    let timeout = Duration::from_secs(HOTSPARE_RECONCILE_TIMEOUT_SECS);
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
     loop {
         let volume = GetVolumes::new(volume).request().await.unwrap();
@@ -407,7 +519,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
 
 /// Wait for the unpublished volume to have the specified replica count
 async fn wait_till_volume(volume: &VolumeId, replicas: usize) {
-    let timeout = Duration::from_secs(HOTSPARE_RECONCILE_TIMEOUT_SECS);
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
     loop {
         // the volume state does not carry replica information, so inspect the replica spec instead.

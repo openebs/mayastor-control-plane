@@ -49,15 +49,6 @@ impl From<Volume> for models::Volume {
     }
 }
 
-impl From<models::Volume> for Volume {
-    fn from(volume: models::Volume) -> Self {
-        Self {
-            spec: volume.spec.into(),
-            state: volume.state.map(From::from),
-        }
-    }
-}
-
 /// Runtime volume state information.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -86,18 +77,6 @@ impl From<VolumeState> for models::VolumeState {
     }
 }
 
-impl From<models::VolumeState> for VolumeState {
-    fn from(state: models::VolumeState) -> Self {
-        Self {
-            uuid: state.uuid.to_string().into(),
-            size: state.size,
-            status: state.status.into(),
-            protocol: state.protocol.into(),
-            child: state.child.into_opt(),
-        }
-    }
-}
-
 impl VolumeState {
     /// Get the target node if the volume is published
     pub fn target_node(&self) -> Option<Option<NodeId>> {
@@ -114,7 +93,7 @@ impl From<(&VolumeId, &Nexus)> for VolumeState {
             uuid,
             size: nexus.size,
             status: nexus.status.clone(),
-            protocol: nexus.share.clone(),
+            protocol: nexus.share,
             child: Some(nexus.clone()),
         }
     }
@@ -123,15 +102,6 @@ impl From<(&VolumeId, &Nexus)> for VolumeState {
 /// The protocol used to share the volume
 /// Currently it's the same as the nexus
 pub type VolumeShareProtocol = NexusShareProtocol;
-
-impl From<models::VolumeShareProtocol> for VolumeShareProtocol {
-    fn from(src: models::VolumeShareProtocol) -> Self {
-        match src {
-            models::VolumeShareProtocol::Nvmf => Self::Nvmf,
-            models::VolumeShareProtocol::Iscsi => Self::Iscsi,
-        }
-    }
-}
 
 /// Volume State information
 /// Currently it's the same as the nexus
@@ -148,13 +118,11 @@ impl From<VolumeStatus> for models::VolumeStatus {
     }
 }
 
-impl From<models::VolumeStatus> for VolumeStatus {
-    fn from(src: models::VolumeStatus) -> Self {
+impl From<models::VolumeShareProtocol> for VolumeShareProtocol {
+    fn from(src: models::VolumeShareProtocol) -> Self {
         match src {
-            models::VolumeStatus::Online => VolumeStatus::Online,
-            models::VolumeStatus::Degraded => VolumeStatus::Degraded,
-            models::VolumeStatus::Faulted => VolumeStatus::Faulted,
-            models::VolumeStatus::Unknown => VolumeStatus::Unknown,
+            models::VolumeShareProtocol::Nvmf => Self::Nvmf,
+            models::VolumeShareProtocol::Iscsi => Self::Iscsi,
         }
     }
 }

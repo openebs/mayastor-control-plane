@@ -178,7 +178,7 @@ macro_rules! bus_impl_string_id_percent_decoding {
 }
 
 /// Indicates what protocol the bdev is shared as
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, EnumString, ToString, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum Protocol {
@@ -247,16 +247,6 @@ impl From<Protocol> for models::Protocol {
             Protocol::Nvmf => Self::Nvmf,
             Protocol::Iscsi => Self::Iscsi,
             Protocol::Nbd => Self::Nbd,
-        }
-    }
-}
-impl From<models::Protocol> for Protocol {
-    fn from(src: models::Protocol) -> Self {
-        match src {
-            models::Protocol::None => Self::None,
-            models::Protocol::Nvmf => Self::Nvmf,
-            models::Protocol::Iscsi => Self::Iscsi,
-            models::Protocol::Nbd => Self::Nbd,
         }
     }
 }

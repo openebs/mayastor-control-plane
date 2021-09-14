@@ -77,7 +77,6 @@ pub trait Replicas: Clone {
         node_id: &str,
         pool_id: &str,
         replica_id: &str,
-        protocol: crate::models::ReplicaShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>>;
     async fn put_pool_replica(
         &self,
@@ -89,7 +88,6 @@ pub trait Replicas: Clone {
         &self,
         pool_id: &str,
         replica_id: &str,
-        protocol: crate::models::ReplicaShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>>;
 }
 
@@ -577,18 +575,16 @@ impl Replicas for ReplicasClient {
         node_id: &str,
         pool_id: &str,
         replica_id: &str,
-        protocol: crate::models::ReplicaShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
 
         let local_var_uri_str = format!(
-            "{}/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol}",
+            "{}/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/nvmf",
             configuration.base_path,
             node_id = crate::apis::client::urlencode(node_id),
             pool_id = crate::apis::client::urlencode(pool_id),
-            replica_id = replica_id.to_string(),
-            protocol = protocol.to_string()
+            replica_id = replica_id.to_string()
         );
         let mut local_var_req_builder =
             local_var_client.request(awc::http::Method::PUT, local_var_uri_str.as_str());
@@ -680,17 +676,15 @@ impl Replicas for ReplicasClient {
         &self,
         pool_id: &str,
         replica_id: &str,
-        protocol: crate::models::ReplicaShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
 
         let local_var_uri_str = format!(
-            "{}/pools/{pool_id}/replicas/{replica_id}/share/{protocol}",
+            "{}/pools/{pool_id}/replicas/{replica_id}/share/nvmf",
             configuration.base_path,
             pool_id = crate::apis::client::urlencode(pool_id),
-            replica_id = replica_id.to_string(),
-            protocol = protocol.to_string()
+            replica_id = replica_id.to_string()
         );
         let mut local_var_req_builder =
             local_var_client.request(awc::http::Method::PUT, local_var_uri_str.as_str());

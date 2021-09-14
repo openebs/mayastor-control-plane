@@ -134,11 +134,3 @@ impl Default for WatchCallback {
         Self::Uri(Default::default())
     }
 }
-
-impl From<models::WatchCallback> for WatchCallback {
-    fn from(src: models::WatchCallback) -> Self {
-        match src {
-            models::WatchCallback::uri(uri) => Self::Uri(uri),
-        }
-    }
-}

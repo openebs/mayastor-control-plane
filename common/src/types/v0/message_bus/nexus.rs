@@ -57,20 +57,6 @@ impl From<Nexus> for models::Nexus {
         )
     }
 }
-impl From<models::Nexus> for Nexus {
-    fn from(src: models::Nexus) -> Self {
-        Self {
-            node: src.node.into(),
-            uuid: src.uuid.to_string().into(),
-            status: src.state.into(),
-            children: src.children.into_iter().map(From::from).collect(),
-            device_uri: src.device_uri,
-            rebuilds: src.rebuilds,
-            size: src.size,
-            share: src.share.into(),
-        }
-    }
-}
 
 bus_impl_string_uuid!(NexusId, "UUID of a mayastor nexus");
 
@@ -108,16 +94,6 @@ impl From<NexusStatus> for models::NexusState {
             NexusStatus::Online => Self::Online,
             NexusStatus::Degraded => Self::Degraded,
             NexusStatus::Faulted => Self::Faulted,
-        }
-    }
-}
-impl From<models::NexusState> for NexusStatus {
-    fn from(src: models::NexusState) -> Self {
-        match src {
-            models::NexusState::Unknown => Self::Unknown,
-            models::NexusState::Online => Self::Online,
-            models::NexusState::Degraded => Self::Degraded,
-            models::NexusState::Faulted => Self::Faulted,
         }
     }
 }
@@ -169,6 +145,18 @@ impl From<models::NexusShareProtocol> for NexusShareProtocol {
         }
     }
 }
+impl TryFrom<Protocol> for NexusShareProtocol {
+    type Error = String;
+
+    fn try_from(value: Protocol) -> Result<Self, Self::Error> {
+        match value {
+            Protocol::None => Err(format!("Invalid protocol: {:?}", value)),
+            Protocol::Nvmf => Ok(Self::Nvmf),
+            Protocol::Iscsi => Ok(Self::Iscsi),
+            Protocol::Nbd => Err(format!("Invalid protocol: {:?}", value)),
+        }
+    }
+}
 
 /// Create Nexus Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -189,6 +177,27 @@ pub struct CreateNexus {
     pub managed: bool,
     /// Volume which owns this nexus, if any
     pub owner: Option<VolumeId>,
+}
+
+impl CreateNexus {
+    /// Create new `Self` from the given parameters
+    pub fn new(
+        node: &NodeId,
+        uuid: &NexusId,
+        size: u64,
+        children: &[NexusChild],
+        managed: bool,
+        owner: Option<&VolumeId>,
+    ) -> Self {
+        Self {
+            node: node.clone(),
+            uuid: uuid.clone(),
+            size,
+            children: children.to_owned(),
+            managed,
+            owner: owner.cloned(),
+        }
+    }
 }
 
 /// Destroy Nexus Request

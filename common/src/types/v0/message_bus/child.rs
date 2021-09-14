@@ -25,15 +25,6 @@ impl From<Child> for models::Child {
         }
     }
 }
-impl From<models::Child> for Child {
-    fn from(src: models::Child) -> Self {
-        Self {
-            uri: src.uri.into(),
-            state: src.state.into(),
-            rebuild_progress: src.rebuild_progress,
-        }
-    }
-}
 
 bus_impl_string_id_percent_decoding!(ChildUri, "URI of a mayastor nexus child");
 
@@ -131,16 +122,6 @@ impl From<ChildState> for models::ChildState {
             ChildState::Online => Self::Online,
             ChildState::Degraded => Self::Degraded,
             ChildState::Faulted => Self::Faulted,
-        }
-    }
-}
-impl From<models::ChildState> for ChildState {
-    fn from(src: models::ChildState) -> Self {
-        match src {
-            models::ChildState::Unknown => Self::Unknown,
-            models::ChildState::Online => Self::Online,
-            models::ChildState::Degraded => Self::Degraded,
-            models::ChildState::Faulted => Self::Faulted,
         }
     }
 }

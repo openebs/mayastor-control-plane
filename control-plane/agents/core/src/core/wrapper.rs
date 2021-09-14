@@ -74,7 +74,10 @@ impl NodeWrapper {
     /// On_register callback when the node is registered with the registry
     pub(crate) async fn on_register(&mut self) {
         self.watchdog.pet().await.ok();
-        self.set_status(NodeStatus::Online);
+        if self.set_status(NodeStatus::Online) != NodeStatus::Online {
+            // if a node reappears as online, then reload its information
+            self.reload().await.ok();
+        }
     }
 
     /// Update the node state based on the watchdog
@@ -84,8 +87,9 @@ impl NodeWrapper {
         }
     }
 
-    /// Set the node state
-    pub(crate) fn set_status(&mut self, state: NodeStatus) {
+    /// Set the node status and return the previous status
+    pub(crate) fn set_status(&mut self, state: NodeStatus) -> NodeStatus {
+        let previous = self.status.clone();
         if self.node_state.status != state {
             tracing::info!(
                 "Node '{}' changing from {} to {}",
@@ -98,6 +102,7 @@ impl NodeWrapper {
                 self.watchdog.disarm()
             }
         }
+        previous
     }
 
     /// Get a mutable reference to the node's watchdog
@@ -790,7 +795,7 @@ impl PoolWrapper {
             .iter_mut()
             .find(|replica| &replica.uuid == uuid)
         {
-            replica.share = share.clone();
+            replica.share = *share;
             replica.uri = uri.to_string();
         }
     }

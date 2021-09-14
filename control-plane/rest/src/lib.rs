@@ -15,28 +15,20 @@
 /// expose different versions of the client
 pub mod versions;
 
-use actix_http::{
-    client::{SendRequestError, TcpConnect, TcpConnectError, TcpConnection},
-    encoding::Decoder,
-    error::PayloadError,
-    Payload, PayloadStream,
-};
+use actix_http::client::{TcpConnect, TcpConnectError, TcpConnection};
 use actix_service::Service;
-use actix_web::{body::Body, dev::ResponseHead, rt::net::TcpStream, web::Bytes};
-use actix_web_opentelemetry::ClientExt;
-use awc::{http::Uri, Client, ClientBuilder, ClientResponse};
+use actix_web::rt::net::TcpStream;
+
+use awc::{http::Uri, Client, ClientBuilder};
 
 use common_lib::types::v0::openapi::apis::{client, configuration};
-use futures::Stream;
-use serde::Deserialize;
-use snafu::{ResultExt, Snafu};
+
 use std::{io::BufReader, string::ToString};
 
 /// Actix Rest Client
 #[derive(Clone)]
 pub struct ActixRestClient {
     openapi_client_v0: client::ApiClient,
-    client_v0: awc::Client,
     url: String,
     trace: bool,
 }
@@ -107,7 +99,7 @@ impl ActixRestClient {
 
         let openapi_client_config = configuration::Configuration::new_with_client(
             &format!("{}/v0", url),
-            rest_client.clone(),
+            rest_client,
             bearer_token,
             trace,
         );
@@ -115,7 +107,6 @@ impl ActixRestClient {
 
         Ok(Self {
             openapi_client_v0: openapi_client,
-            client_v0: rest_client,
             url: url.to_string(),
             trace,
         })
@@ -137,238 +128,15 @@ impl ActixRestClient {
         let client = client.finish();
         let openapi_client_config = configuration::Configuration::new_with_client(
             &format!("{}/v0", url),
-            client.clone(),
+            client,
             bearer_token,
             trace,
         );
         let openapi_client = client::ApiClient::new(openapi_client_config);
         Self {
             openapi_client_v0: openapi_client,
-            client_v0: client,
             url: url.to_string(),
             trace,
-        }
-    }
-    async fn get<R>(&self, urn: String) -> ClientResult<R>
-    where
-        for<'de> R: Deserialize<'de> + Default,
-    {
-        let uri = format!("{}{}", self.url, urn);
-        let rest_response = self.do_get(&uri).await.context(Send {
-            details: format!("Failed to get uri {}", uri),
-        })?;
-        Self::rest_result(rest_response).await
-    }
-    async fn get_vec<R>(&self, urn: String) -> ClientResult<Vec<R>>
-    where
-        for<'de> R: Deserialize<'de>,
-    {
-        let uri = format!("{}{}", self.url, urn);
-        let rest_response = self.do_get(&uri).await.context(Send {
-            details: format!("Failed to get_vec uri {}", uri),
-        })?;
-        Self::rest_vec_result(rest_response).await
-    }
-
-    async fn do_get(
-        &self,
-        uri: &str,
-    ) -> Result<ClientResponse<Decoder<Payload<PayloadStream>>>, SendRequestError> {
-        if self.trace {
-            self.client_v0.get(uri).trace_request().send().await
-        } else {
-            self.client_v0.get(uri).send().await
-        }
-    }
-
-    async fn put<R, B: Into<Body>>(&self, urn: String, body: B) -> Result<R, ClientError>
-    where
-        for<'de> R: Deserialize<'de> + Default,
-    {
-        let uri = format!("{}{}", self.url, urn);
-
-        let result = if self.trace {
-            self.client_v0
-                .put(uri.clone())
-                .content_type("application/json")
-                .trace_request()
-                .send_body(body)
-                .await
-        } else {
-            self.client_v0
-                .put(uri.clone())
-                .content_type("application/json")
-                .send_body(body)
-                .await
-        };
-
-        let rest_response = result.context(Send {
-            details: format!("Failed to put uri {}", uri),
-        })?;
-
-        Self::rest_result(rest_response).await
-    }
-    async fn del<R>(&self, urn: String) -> ClientResult<R>
-    where
-        for<'de> R: Deserialize<'de> + Default,
-    {
-        let uri = format!("{}{}", self.url, urn);
-
-        let result = if self.trace {
-            self.client_v0
-                .delete(uri.clone())
-                .trace_request()
-                .send()
-                .await
-        } else {
-            self.client_v0.delete(uri.clone()).send().await
-        };
-
-        let rest_response = result.context(Send {
-            details: format!("Failed to delete uri {}", uri),
-        })?;
-
-        Self::rest_result(rest_response).await
-    }
-
-    async fn rest_vec_result<S, R>(mut rest_response: ClientResponse<S>) -> ClientResult<Vec<R>>
-    where
-        S: Stream<Item = Result<Bytes, PayloadError>> + Unpin,
-        for<'de> R: Deserialize<'de>,
-    {
-        let status = rest_response.status();
-        let headers = rest_response.headers().clone();
-        let head = || {
-            let mut head = ResponseHead::new(status);
-            head.headers = headers.clone();
-            head
-        };
-        let body = rest_response
-            .body()
-            .await
-            .context(InvalidPayload { head: head() })?;
-        if status.is_success() {
-            match serde_json::from_slice(&body) {
-                Ok(r) => Ok(r),
-                Err(_) => {
-                    let result = serde_json::from_slice(&body)
-                        .context(InvalidBody { head: head(), body })?;
-                    Ok(vec![result])
-                }
-            }
-        } else if body.is_empty() {
-            Err(ClientError::Header { head: head() })
-        } else {
-            let error = serde_json::from_slice::<serde_json::Value>(&body)
-                .context(InvalidBody { head: head(), body })?;
-            Err(ClientError::RestServer {
-                head: head(),
-                error,
-            })
-        }
-    }
-
-    async fn rest_result<S, R>(mut rest_response: ClientResponse<S>) -> Result<R, ClientError>
-    where
-        S: Stream<Item = Result<Bytes, PayloadError>> + Unpin,
-        for<'de> R: Deserialize<'de> + Default,
-    {
-        let status = rest_response.status();
-        let headers = rest_response.headers().clone();
-        let head = || {
-            let mut head = ResponseHead::new(status);
-            head.headers = headers.clone();
-            head
-        };
-        let body = rest_response
-            .body()
-            .await
-            .context(InvalidPayload { head: head() })?;
-        if status.is_success() {
-            let empty = body.is_empty();
-            let result = serde_json::from_slice(&body).context(InvalidBody { head: head(), body });
-            match result {
-                Ok(result) => Ok(result),
-                Err(_) if empty && std::any::type_name::<R>() == "()" => Ok(R::default()),
-                Err(error) => Err(error),
-            }
-        } else if body.is_empty() {
-            Err(ClientError::Header { head: head() })
-        } else {
-            let error = serde_json::from_slice::<serde_json::Value>(&body)
-                .context(InvalidBody { head: head(), body })?;
-            Err(ClientError::RestServer {
-                head: head(),
-                error,
-            })
-        }
-    }
-}
-
-/// Result of a Rest Client Operation
-/// T is the Object parsed from the Json body
-pub type ClientResult<T> = Result<T, ClientError>;
-
-/// Rest Client Error
-#[derive(Debug, Snafu)]
-pub enum ClientError {
-    /// Failed to send message to the server (details in source)
-    #[snafu(display("{}, reason: {}", details, source))]
-    Send {
-        /// Message
-        details: String,
-        /// Source Request Error
-        source: SendRequestError,
-    },
-    /// Invalid Resource Filter so couldn't send the request
-    #[snafu(display("Invalid Resource Filter: {}", details))]
-    InvalidFilter {
-        /// Message
-        details: String,
-    },
-    /// Response an error code and with an invalid payload
-    #[snafu(display("Invalid payload, header: {:?}, reason: {}", head, source))]
-    InvalidPayload {
-        /// http Header
-        head: ResponseHead,
-        /// source payload error
-        source: PayloadError,
-    },
-    /// Response an error code and also with an invalid body
-    #[snafu(display(
-        "Invalid body, header: {:?}, body: {:?}, reason: {}",
-        head,
-        body,
-        source
-    ))]
-    InvalidBody {
-        /// http Header
-        head: ResponseHead,
-        /// http Body
-        body: Bytes,
-        /// source json deserialize error
-        source: serde_json::Error,
-    },
-    /// Response an error code and only the header (and so no additional info)
-    #[snafu(display("No body, header: {:?}", head))]
-    Header {
-        /// http Header
-        head: ResponseHead,
-    },
-    /// Error within the Body in valid JSON format, returned by the Rest Server
-    #[snafu(display("Http status: {}, error: {}", head.status, error.to_string()))]
-    RestServer {
-        /// http Header
-        head: ResponseHead,
-        /// JSON error
-        error: serde_json::Value,
-    },
-}
-
-impl ClientError {
-    fn filter(message: &str) -> ClientError {
-        ClientError::InvalidFilter {
-            details: message.to_string(),
         }
     }
 }

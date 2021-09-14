@@ -130,6 +130,13 @@ impl HealthyChildItems {
             HealthyChildItems::All(items) => items.is_empty(),
         }
     }
+    /// Get a reference to the list of candidates
+    pub(crate) fn candidates(&self) -> &Vec<ChildItem> {
+        match self {
+            HealthyChildItems::One(items) => items,
+            HealthyChildItems::All(items) => items,
+        }
+    }
 }
 
 impl ChildItem {

@@ -5,12 +5,13 @@ use testlib::*;
 async fn create_pool_malloc() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
     cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
+        .rest_v00()
+        .pools_api()
+        .put_node_pool(
+            cluster.node(0).as_str(),
+            cluster.pool(0, 0).as_str(),
+            models::CreatePoolBody::new(vec!["malloc:///disk?size_mb=100"]),
+        )
         .await
         .unwrap();
 }
@@ -20,12 +21,13 @@ async fn create_pool_with_missing_disk() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
     cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["/dev/c/3po".into()],
-        })
+        .rest_v00()
+        .pools_api()
+        .put_node_pool(
+            cluster.node(0).as_str(),
+            cluster.pool(0, 0).as_str(),
+            models::CreatePoolBody::new(vec!["/dev/c/3po"]),
+        )
         .await
         .expect_err("Device should not exist");
 }
@@ -35,41 +37,42 @@ async fn create_pool_with_existing_disk() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
     cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
+        .rest_v00()
+        .pools_api()
+        .put_node_pool(
+            cluster.node(0).as_str(),
+            cluster.pool(0, 0).as_str(),
+            models::CreatePoolBody::new(vec!["malloc:///disk?size_mb=100"]),
+        )
         .await
         .unwrap();
 
     cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
+        .rest_v00()
+        .pools_api()
+        .put_node_pool(
+            cluster.node(0).as_str(),
+            cluster.pool(0, 0).as_str(),
+            models::CreatePoolBody::new(vec!["malloc:///disk?size_mb=100"]),
+        )
         .await
         .expect_err("Disk should be used by another pool");
 
     cluster
-        .rest_v0()
-        .destroy_pool(v0::DestroyPool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-        })
+        .rest_v00()
+        .pools_api()
+        .del_pool(cluster.pool(0, 0).as_str())
         .await
         .unwrap();
 
     cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
+        .rest_v00()
+        .pools_api()
+        .put_node_pool(
+            cluster.node(0).as_str(),
+            cluster.pool(0, 0).as_str(),
+            models::CreatePoolBody::new(vec!["malloc:///disk?size_mb=100"]),
+        )
         .await
         .expect("Should now be able to create the new pool");
 }
@@ -78,25 +81,23 @@ async fn create_pool_with_existing_disk() {
 async fn create_pool_idempotent() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
-        .await
-        .unwrap();
+    v0::CreatePool {
+        node: cluster.node(0),
+        id: cluster.pool(0, 0),
+        disks: vec!["malloc:///disk?size_mb=100".into()],
+    }
+    .request()
+    .await
+    .unwrap();
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
-        .await
-        .expect_err("already exists");
+    v0::CreatePool {
+        node: cluster.node(0),
+        id: cluster.pool(0, 0),
+        disks: vec!["malloc:///disk?size_mb=100".into()],
+    }
+    .request()
+    .await
+    .expect_err("already exists");
 }
 
 /// FIXME: CAS-710
@@ -109,25 +110,23 @@ async fn create_pool_idempotent_same_disk_different_query() {
         .await
         .unwrap();
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=100&blk_size=512".into()],
-        })
-        .await
-        .unwrap();
+    v0::CreatePool {
+        node: cluster.node(0),
+        id: cluster.pool(0, 0),
+        disks: vec!["malloc:///disk?size_mb=100&blk_size=512".into()],
+    }
+    .request()
+    .await
+    .unwrap();
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(0),
-            id: cluster.pool(0, 0),
-            disks: vec!["malloc:///disk?size_mb=200&blk_size=4096".into()],
-        })
-        .await
-        .expect_err("Different query not allowed!");
+    v0::CreatePool {
+        node: cluster.node(0),
+        id: cluster.pool(0, 0),
+        disks: vec!["malloc:///disk?size_mb=200&blk_size=4096".into()],
+    }
+    .request()
+    .await
+    .expect_err("Different query not allowed!");
 }
 
 #[actix_rt::test]
@@ -138,43 +137,39 @@ async fn create_pool_idempotent_different_nvmf_host() {
         .await
         .unwrap();
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(1),
-            id: cluster.pool(1, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
-        .await
-        .unwrap();
+    v0::CreatePool {
+        node: cluster.node(1),
+        id: cluster.pool(1, 0),
+        disks: vec!["malloc:///disk?size_mb=100".into()],
+    }
+    .request()
+    .await
+    .unwrap();
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(2),
-            id: cluster.pool(2, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
-        .await
-        .unwrap();
+    v0::CreatePool {
+        node: cluster.node(2),
+        id: cluster.pool(2, 0),
+        disks: vec!["malloc:///disk?size_mb=100".into()],
+    }
+    .request()
+    .await
+    .unwrap();
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(2),
-            id: cluster.pool(2, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
-        .await
-        .expect_err("Pool Already exists!");
+    v0::CreatePool {
+        node: cluster.node(2),
+        id: cluster.pool(2, 0),
+        disks: vec!["malloc:///disk?size_mb=100".into()],
+    }
+    .request()
+    .await
+    .expect_err("Pool Already exists!");
 
-    cluster
-        .rest_v0()
-        .create_pool(v0::CreatePool {
-            node: cluster.node(2),
-            id: cluster.pool(2, 0),
-            disks: vec!["malloc:///disk?size_mb=100".into()],
-        })
-        .await
-        .expect_err("Pool disk already used by another pool!");
+    v0::CreatePool {
+        node: cluster.node(2),
+        id: cluster.pool(2, 0),
+        disks: vec!["malloc:///disk?size_mb=100".into()],
+    }
+    .request()
+    .await
+    .expect_err("Pool disk already used by another pool!");
 }

@@ -185,7 +185,7 @@ pub(crate) async fn get_healthy_volume_replicas(
     registry: &Registry,
 ) -> Result<HealthyChildItems, SvcError> {
     let children = scheduling::get_healthy_volume_replicas(
-        &GetPersistedNexusChildren::new(spec, target_node),
+        &GetPersistedNexusChildren::new_create(spec, target_node),
         registry,
     )
     .await?;
@@ -814,7 +814,7 @@ impl ResourceSpecsLocked {
     /// Make the replica accessible on the specified `NodeId`
     /// This means the replica might have to be shared/unshared so it can be open through
     /// the correct protocol (loopback locally, and nvmf remotely)
-    async fn make_replica_accessible(
+    pub(crate) async fn make_replica_accessible(
         &self,
         registry: &Registry,
         replica_state: &Replica,
@@ -885,14 +885,14 @@ impl ResourceSpecsLocked {
         // Create the nexus on the requested node
         self.create_nexus(
             registry,
-            &CreateNexus {
-                node: target_node.clone(),
-                uuid: nexus_id.clone(),
-                size: vol_spec.size,
-                children: nexus_replicas,
-                managed: true,
-                owner: Some(vol_spec.uuid.clone()),
-            },
+            &CreateNexus::new(
+                target_node,
+                nexus_id,
+                vol_spec.size,
+                &nexus_replicas,
+                true,
+                Some(&vol_spec.uuid),
+            ),
             mode,
         )
         .await

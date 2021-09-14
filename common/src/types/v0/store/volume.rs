@@ -329,17 +329,6 @@ impl StorableObject for VolumeSpec {
 /// State of the Volume Spec
 pub type VolumeSpecStatus = SpecStatus<message_bus::VolumeStatus>;
 
-impl From<models::SpecStatus> for VolumeSpecStatus {
-    fn from(spec_state: models::SpecStatus) -> Self {
-        match spec_state {
-            models::SpecStatus::Creating => Self::Creating,
-            models::SpecStatus::Created => Self::Created(message_bus::VolumeStatus::Unknown),
-            models::SpecStatus::Deleting => Self::Deleting,
-            models::SpecStatus::Deleted => Self::Deleted,
-        }
-    }
-}
-
 impl From<&CreateVolume> for VolumeSpec {
     fn from(request: &CreateVolume) -> Self {
         Self {
@@ -372,7 +361,7 @@ impl From<&VolumeSpec> for message_bus::VolumeState {
             uuid: spec.uuid.clone(),
             size: spec.size,
             status: message_bus::VolumeStatus::Unknown,
-            protocol: spec.protocol.clone(),
+            protocol: spec.protocol,
             child: None,
         }
     }
@@ -402,26 +391,5 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.target.map(|t| t.node).into_opt(),
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
         )
-    }
-}
-
-impl From<models::VolumeSpec> for VolumeSpec {
-    fn from(spec: models::VolumeSpec) -> Self {
-        Self {
-            uuid: spec.uuid.to_string().into(),
-            size: spec.size,
-            labels: spec.labels,
-            num_replicas: spec.num_replicas,
-            protocol: spec.protocol.into(),
-            status: spec.status.into(),
-            target: spec
-                .target_node
-                .map(|t| VolumeTarget::new(t.into(), NexusId::new())),
-            policy: Default::default(),
-            topology: Default::default(),
-            sequencer: OperationSequence::new(spec.uuid.to_string()),
-            last_nexus_id: None,
-            operation: None,
-        }
     }
 }

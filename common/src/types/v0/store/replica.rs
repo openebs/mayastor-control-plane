@@ -215,7 +215,7 @@ impl From<&ReplicaSpec> for message_bus::Replica {
             pool: replica.pool.clone(),
             thin: replica.thin,
             size: replica.size,
-            share: replica.share.clone(),
+            share: replica.share,
             uri: "".to_string(),
             status: message_bus::ReplicaStatus::Unknown,
         }
@@ -231,7 +231,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             uuid: request.uuid.clone(),
             size: request.size,
             pool: request.pool.clone(),
-            share: request.share.clone(),
+            share: request.share,
             thin: request.thin,
             status: ReplicaSpecStatus::Creating,
             managed: request.managed,

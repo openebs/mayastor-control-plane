@@ -1033,14 +1033,13 @@ impl ComposeTest {
 
         if self.prune || self.prune_matching {
             tracing::debug!("Killing/Removing container: {}", spec.name);
-            let _ = self.kill_id(&spec.name).await;
             let _ = self
                 .docker
                 .remove_container(
                     &spec.name,
                     Some(RemoveContainerOptions {
                         v: false,
-                        force: false,
+                        force: true,
                         link: false,
                     }),
                 )

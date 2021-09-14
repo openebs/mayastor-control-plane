@@ -14,9 +14,14 @@ impl ComponentAction for Rest {
             let binary = Binary::from_dbg("rest")
                 .with_nats("-n")
                 .with_arg("--dummy-certificates")
-                .with_arg("--no-auth")
                 .with_args(vec!["--https", "rest:8080"])
                 .with_args(vec!["--http", "rest:8081"]);
+
+            let binary = if let Some(jwk) = &options.rest_jwk {
+                binary.with_arg("--jwk").with_arg(jwk)
+            } else {
+                binary.with_arg("--no-auth")
+            };
 
             let binary = if !cfg.container_exists("jaeger") {
                 binary

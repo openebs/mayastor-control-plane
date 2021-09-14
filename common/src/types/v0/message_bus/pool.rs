@@ -51,16 +51,6 @@ impl From<PoolStatus> for models::PoolStatus {
         }
     }
 }
-impl From<models::PoolStatus> for PoolStatus {
-    fn from(src: models::PoolStatus) -> Self {
-        match src {
-            models::PoolStatus::Unknown => Self::Unknown,
-            models::PoolStatus::Online => Self::Online,
-            models::PoolStatus::Degraded => Self::Degraded,
-            models::PoolStatus::Faulted => Self::Faulted,
-        }
-    }
-}
 
 /// Pool information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -90,18 +80,6 @@ impl From<PoolState> for models::PoolState {
             src.status,
             src.used,
         )
-    }
-}
-impl From<models::PoolState> for PoolState {
-    fn from(src: models::PoolState) -> Self {
-        Self {
-            node: src.node.into(),
-            id: src.id.into(),
-            disks: src.disks.iter().map(From::from).collect(),
-            status: src.status.into(),
-            capacity: src.capacity,
-            used: src.used,
-        }
     }
 }
 
@@ -213,13 +191,6 @@ impl Pool {
 impl From<Pool> for models::Pool {
     fn from(src: Pool) -> Self {
         models::Pool::new_all(src.id, src.spec.into_opt(), src.state.into_opt())
-    }
-}
-
-impl From<models::Pool> for Pool {
-    fn from(src: models::Pool) -> Self {
-        Pool::try_new(src.spec.into_opt(), src.state.into_opt())
-            .expect("Should have at least 1 of [spec,state]")
     }
 }
 

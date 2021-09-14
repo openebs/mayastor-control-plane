@@ -1,4 +1,5 @@
 pub(crate) mod registry;
+pub(crate) mod scheduling;
 mod service;
 pub mod specs;
 

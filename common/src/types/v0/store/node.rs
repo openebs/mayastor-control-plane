@@ -63,11 +63,6 @@ impl From<NodeSpec> for models::NodeSpec {
         Self::new(src.endpoint, src.id)
     }
 }
-impl From<models::NodeSpec> for NodeSpec {
-    fn from(src: models::NodeSpec) -> Self {
-        Self::new(src.id.into(), src.grpc_endpoint, NodeLabels::new())
-    }
-}
 
 impl UuidString for NodeSpec {
     fn uuid_as_string(&self) -> String {

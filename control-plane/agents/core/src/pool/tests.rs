@@ -350,7 +350,7 @@ async fn reconciler() {
         .with_rest(true)
         .with_agents(vec!["core"])
         .with_mayastors(1)
-        .with_pool(disk.uri())
+        .with_pool(0, disk.uri())
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()

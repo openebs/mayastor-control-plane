@@ -19,8 +19,8 @@ async fn nexus() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_agents(vec!["core"])
-        .with_pools(2)
         .with_mayastors(2)
+        .with_pools(2)
         .build()
         .await
         .unwrap();

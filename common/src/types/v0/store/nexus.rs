@@ -154,6 +154,19 @@ macro_rules! nexus_span {
 }
 crate::impl_trace_span!(nexus_span, NexusSpec);
 
+impl From<&NexusSpec> for CreateNexus {
+    fn from(spec: &NexusSpec) -> Self {
+        CreateNexus::new(
+            &spec.node,
+            &spec.uuid,
+            spec.size,
+            &spec.children,
+            spec.managed,
+            spec.owner.as_ref(),
+        )
+    }
+}
+
 impl OperationSequencer for NexusSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
@@ -351,7 +364,7 @@ impl From<&NexusSpec> for message_bus::Nexus {
                 .collect(),
             device_uri: "".to_string(),
             rebuilds: 0,
-            share: nexus.share.clone(),
+            share: nexus.share,
         }
     }
 }

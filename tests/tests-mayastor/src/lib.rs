@@ -8,16 +8,36 @@ use opentelemetry::{
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
 
-use common_lib::{
+pub use common_lib::{
     mbus_api,
     mbus_api::{Message, TimeoutOptions},
-    types::v0::message_bus::{self, PoolDeviceUri},
+    types::v0::{
+        message_bus::{self, PoolDeviceUri},
+        openapi::{apis::Uuid, models},
+    },
 };
-pub use rest_client::{
-    versions::v0::{self, RestClient},
-    ActixRestClient, ClientError,
-};
-use std::time::Duration;
+pub use rest_client::ActixRestClient;
+
+pub mod v0 {
+    pub use common_lib::{
+        mbus_api,
+        types::v0::{
+            message_bus::{
+                AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool,
+                CreateReplica, CreateVolume, DestroyNexus, DestroyPool, DestroyReplica,
+                DestroyVolume, Filter, GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node,
+                NodeId, Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica,
+                ReplicaId, ReplicaShareProtocol, ShareNexus, ShareReplica, Specs, Topology,
+                UnshareNexus, UnshareReplica, VolumeHealPolicy, VolumeId, Watch, WatchCallback,
+                WatchResourceId,
+            },
+            openapi::{apis, models},
+        },
+    };
+    pub use models::rest_json_error::Kind as RestJsonErrorKind;
+}
+
+use std::{collections::HashMap, rc::Rc, time::Duration};
 
 #[actix_rt::test]
 #[ignore]
@@ -80,11 +100,6 @@ impl Cluster {
             uuid, node as u8, pool as u8, replica
         )
         .into()
-    }
-
-    /// rest client v0
-    pub fn rest_v0(&self) -> impl RestClient {
-        self.rest_client.v0()
     }
 
     /// openapi rest client v0
@@ -166,21 +181,21 @@ pub async fn test_result<F, O, E, T>(
     future: F,
 ) -> Result<(), anyhow::Error>
 where
-    F: std::future::Future<Output = Result<T, rest_client::ClientError>>,
+    F: std::future::Future<Output = Result<T, common_lib::mbus_api::Error>>,
     E: std::fmt::Debug,
     O: std::fmt::Debug,
 {
     match future.await {
         Ok(_) if expected.is_ok() => Ok(()),
         Err(error) if expected.is_err() => match error {
-            ClientError::RestServer { .. } => Ok(()),
+            common_lib::mbus_api::Error::ReplyWithError { .. } => Ok(()),
             _ => {
                 // not the error we were waiting for
-                Err(anyhow::anyhow!("Invalid rest response: {}", error))
+                Err(anyhow::anyhow!("Invalid response: {:?}", error))
             }
         },
         Err(error) => Err(anyhow::anyhow!(
-            "Expected '{:#?}' but failed with '{}'!",
+            "Expected '{:#?}' but failed with '{:?}'!",
             expected,
             error
         )),
@@ -202,10 +217,16 @@ macro_rules! result_either {
 enum PoolDisk {
     Malloc(u64),
     Uri(String),
+    Tmp(TmpDiskFile),
 }
 
 /// Temporary "disk" file, which gets deleted on drop
+#[derive(Clone)]
 pub struct TmpDiskFile {
+    inner: Rc<TmpDiskFileInner>,
+}
+
+struct TmpDiskFileInner {
     path: String,
     uri: String,
 }
@@ -213,8 +234,19 @@ pub struct TmpDiskFile {
 impl TmpDiskFile {
     /// Creates a new file on `path` with `size`.
     /// The file is deleted on drop.
-    pub fn new(path: &str, size: u64) -> Self {
-        let path = format!("/tmp/mayastor-{}", path);
+    pub fn new(name: &str, size: u64) -> Self {
+        Self {
+            inner: Rc::new(TmpDiskFileInner::new(name, size)),
+        }
+    }
+    /// Disk URI to be used by mayastor
+    pub fn uri(&self) -> &str {
+        self.inner.uri()
+    }
+}
+impl TmpDiskFileInner {
+    fn new(name: &str, size: u64) -> Self {
+        let path = format!("/tmp/mayastor-{}", name);
         let file = std::fs::File::create(&path).expect("to create the tmp file");
         file.set_len(size).expect("to truncate the tmp file");
         Self {
@@ -227,12 +259,12 @@ impl TmpDiskFile {
             path,
         }
     }
-    /// Disk URI to be used by mayastor
-    pub fn uri(&self) -> &str {
+    fn uri(&self) -> &str {
         &self.uri
     }
 }
-impl Drop for TmpDiskFile {
+
+impl Drop for TmpDiskFileInner {
     fn drop(&mut self) {
         std::fs::remove_file(&self.path).expect("to unlink the tmp file");
     }
@@ -241,7 +273,7 @@ impl Drop for TmpDiskFile {
 /// Builder for the Cluster
 pub struct ClusterBuilder {
     opts: StartOptions,
-    pools: Vec<PoolDisk>,
+    pools: HashMap<u32, Vec<PoolDisk>>,
     replicas: Replica,
     trace: bool,
     bearer_token: Option<String>,
@@ -269,7 +301,7 @@ impl ClusterBuilder {
     pub fn builder() -> Self {
         ClusterBuilder {
             opts: default_options(),
-            pools: vec![],
+            pools: Default::default(),
             replicas: Default::default(),
             trace: true,
             bearer_token: None,
@@ -298,13 +330,37 @@ impl ClusterBuilder {
     /// Add `count` malloc pools (100MiB size) to each node
     pub fn with_pools(mut self, count: u32) -> Self {
         for _ in 0 .. count {
-            self.pools.push(PoolDisk::Malloc(100 * 1024 * 1024));
+            for node in 0 .. self.opts.mayastors {
+                if let Some(pools) = self.pools.get_mut(&node) {
+                    pools.push(PoolDisk::Malloc(100 * 1024 * 1024));
+                } else {
+                    self.pools
+                        .insert(node, vec![PoolDisk::Malloc(100 * 1024 * 1024)]);
+                }
+            }
         }
         self
     }
-    /// Add pool with `disk` to each node
-    pub fn with_pool(mut self, disk: &str) -> Self {
-        self.pools.push(PoolDisk::Uri(disk.to_string()));
+    /// Add pool URI with `disk` to the node `index`
+    pub fn with_pool(mut self, index: u32, disk: &str) -> Self {
+        if let Some(pools) = self.pools.get_mut(&index) {
+            pools.push(PoolDisk::Uri(disk.to_string()));
+        } else {
+            self.pools
+                .insert(index, vec![PoolDisk::Uri(disk.to_string())]);
+        }
+        self
+    }
+    /// Add a tmpfs img pool with `disk` to each mayastor node with the specified `size`
+    pub fn with_tmpfs_pool(mut self, size: u64) -> Self {
+        for node in 0 .. self.opts.mayastors {
+            let disk = TmpDiskFile::new(&Uuid::new_v4().to_string(), size);
+            if let Some(pools) = self.pools.get_mut(&node) {
+                pools.push(PoolDisk::Tmp(disk));
+            } else {
+                self.pools.insert(node, vec![PoolDisk::Tmp(disk)]);
+            }
+        }
         self
     }
     /// Specify `count` replicas to add to each node per pool
@@ -359,7 +415,12 @@ impl ClusterBuilder {
     }
     /// Specify whether rest is enabled or not
     pub fn with_rest(mut self, enabled: bool) -> Self {
-        self.opts = self.opts.with_rest(enabled);
+        self.opts = self.opts.with_rest(enabled, None);
+        self
+    }
+    /// Specify whether rest is enabled or not and wether to use authentication or not
+    pub fn with_rest_auth(mut self, enabled: bool, jwk: Option<String>) -> Self {
+        self.opts = self.opts.with_rest(enabled, jwk);
         self
     }
     /// Specify whether the components should be cargo built or not
@@ -466,11 +527,10 @@ impl ClusterBuilder {
     fn pools(&self) -> Vec<Pool> {
         let mut pools = vec![];
 
-        for node in 0 .. self.opts.mayastors {
-            for pool_index in 0 .. self.pools.len() {
-                let pool = &self.pools[pool_index];
+        for (node, i_pools) in &self.pools {
+            for (pool_index, pool) in i_pools.iter().enumerate() {
                 let mut pool = Pool {
-                    node: Mayastor::name(node, &self.opts),
+                    node: Mayastor::name(*node, &self.opts),
                     disk: pool.clone(),
                     index: (pool_index + 1) as u32,
                     replicas: vec![],
@@ -478,11 +538,11 @@ impl ClusterBuilder {
                 for replica_index in 0 .. self.replicas.count {
                     pool.replicas.push(message_bus::CreateReplica {
                         node: pool.node.clone().into(),
-                        uuid: Cluster::replica(node, pool_index, replica_index),
+                        uuid: Cluster::replica(*node, pool_index, replica_index),
                         pool: pool.id(),
                         size: self.replicas.size,
                         thin: false,
-                        share: self.replicas.share.clone(),
+                        share: self.replicas.share,
                         managed: false,
                         owners: Default::default(),
                     });
@@ -518,6 +578,7 @@ impl Pool {
                 .into()
             }
             PoolDisk::Uri(uri) => uri.into(),
+            PoolDisk::Tmp(disk) => disk.uri().into(),
         }
     }
 }

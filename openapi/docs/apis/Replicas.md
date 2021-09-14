@@ -14,9 +14,9 @@ Method | HTTP request | Description
 [**get_replica**](Replicas.md#get_replica) | **Get** /replicas/{id} | 
 [**get_replicas**](Replicas.md#get_replicas) | **Get** /replicas | 
 [**put_node_pool_replica**](Replicas.md#put_node_pool_replica) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
-[**put_node_pool_replica_share**](Replicas.md#put_node_pool_replica_share) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
+[**put_node_pool_replica_share**](Replicas.md#put_node_pool_replica_share) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/nvmf | 
 [**put_pool_replica**](Replicas.md#put_pool_replica) | **Put** /pools/{pool_id}/replicas/{replica_id} | 
-[**put_pool_replica_share**](Replicas.md#put_pool_replica_share) | **Put** /pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
+[**put_pool_replica_share**](Replicas.md#put_pool_replica_share) | **Put** /pools/{pool_id}/replicas/{replica_id}/share/nvmf | 
 
 
 
@@ -311,7 +311,7 @@ Name | Type | Description  | Required | Notes
 
 ## put_node_pool_replica_share
 
-> String put_node_pool_replica_share(node_id, pool_id, replica_id, protocol)
+> String put_node_pool_replica_share(node_id, pool_id, replica_id)
 
 
 ### Parameters
@@ -322,7 +322,6 @@ Name | Type | Description  | Required | Notes
 **node_id** | **String** |  | [required] |
 **pool_id** | **String** |  | [required] |
 **replica_id** | [**uuid::Uuid**](.md) |  | [required] |
-**protocol** | [**crate::models::ReplicaShareProtocol**](.md) |  | [required] |
 
 ### Return type
 
@@ -372,7 +371,7 @@ Name | Type | Description  | Required | Notes
 
 ## put_pool_replica_share
 
-> String put_pool_replica_share(pool_id, replica_id, protocol)
+> String put_pool_replica_share(pool_id, replica_id)
 
 
 ### Parameters
@@ -382,7 +381,6 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **pool_id** | **String** |  | [required] |
 **replica_id** | [**uuid::Uuid**](.md) |  | [required] |
-**protocol** | [**crate::models::ReplicaShareProtocol**](.md) |  | [required] |
 
 ### Return type
 

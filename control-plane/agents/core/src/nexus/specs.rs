@@ -15,6 +15,7 @@ use common_lib::{
         store::{
             nexus::{NexusOperation, NexusSpec},
             nexus_child::NexusChild,
+            replica::ReplicaSpec,
             OperationMode, SpecStatus, SpecTransaction,
         },
     },
@@ -464,6 +465,15 @@ impl ResourceSpecsLocked {
     pub fn get_nexuses(&self) -> Vec<Arc<Mutex<NexusSpec>>> {
         let specs = self.read();
         specs.nexuses.to_vec()
+    }
+    /// Get a list of protected ReplicaSpec's used by the given nexus spec
+    pub(crate) fn get_nexus_replicas(&self, nexus: &NexusSpec) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+        self.read()
+            .replicas
+            .values()
+            .filter(|r| nexus.contains_replica(&r.lock().uuid))
+            .cloned()
+            .collect()
     }
 
     /// Worker that reconciles dirty NexusSpecs's with the persistent store.
