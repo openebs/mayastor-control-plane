@@ -37,7 +37,7 @@ pub trait CreateRows {
     fn create_rows(&self) -> Vec<Row>;
 }
 
-// CreateRows trait to be implemented by Volume/Pool to fetch the corresponding headers.
+// GetHeaderRow trait to be implemented by Volume/Pool to fetch the corresponding headers.
 pub trait GetHeaderRow {
     fn get_header_row(&self) -> Row;
 }
