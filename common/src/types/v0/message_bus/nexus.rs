@@ -57,20 +57,6 @@ impl From<Nexus> for models::Nexus {
         )
     }
 }
-impl From<models::Nexus> for Nexus {
-    fn from(src: models::Nexus) -> Self {
-        Self {
-            node: src.node.into(),
-            uuid: src.uuid.to_string().into(),
-            status: src.state.into(),
-            children: src.children.into_iter().map(From::from).collect(),
-            device_uri: src.device_uri,
-            rebuilds: src.rebuilds,
-            size: src.size,
-            share: src.share.into(),
-        }
-    }
-}
 
 bus_impl_string_uuid!(NexusId, "UUID of a mayastor nexus");
 
@@ -108,16 +94,6 @@ impl From<NexusStatus> for models::NexusState {
             NexusStatus::Online => Self::Online,
             NexusStatus::Degraded => Self::Degraded,
             NexusStatus::Faulted => Self::Faulted,
-        }
-    }
-}
-impl From<models::NexusState> for NexusStatus {
-    fn from(src: models::NexusState) -> Self {
-        match src {
-            models::NexusState::Unknown => Self::Unknown,
-            models::NexusState::Online => Self::Online,
-            models::NexusState::Degraded => Self::Degraded,
-            models::NexusState::Faulted => Self::Faulted,
         }
     }
 }

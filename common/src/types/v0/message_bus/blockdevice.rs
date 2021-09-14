@@ -31,18 +31,6 @@ impl From<Partition> for models::BlockDevicePartition {
         )
     }
 }
-impl From<models::BlockDevicePartition> for Partition {
-    fn from(src: models::BlockDevicePartition) -> Self {
-        Self {
-            parent: src.parent,
-            number: src.number as u32,
-            name: src.name,
-            scheme: src.scheme,
-            typeid: src.typeid,
-            uuid: src.uuid,
-        }
-    }
-}
 
 /// Filesystem information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -59,16 +47,6 @@ pub struct Filesystem {
 impl From<Filesystem> for models::BlockDeviceFilesystem {
     fn from(src: Filesystem) -> Self {
         models::BlockDeviceFilesystem::new(src.fstype, src.mountpoint, src.label, src.uuid)
-    }
-}
-impl From<models::BlockDeviceFilesystem> for Filesystem {
-    fn from(src: models::BlockDeviceFilesystem) -> Self {
-        Self {
-            fstype: src.fstype,
-            label: src.label,
-            uuid: src.uuid,
-            mountpoint: src.mountpoint,
-        }
     }
 }
 
@@ -116,23 +94,6 @@ impl From<BlockDevice> for models::BlockDevice {
             src.partition,
             src.size as i64,
         )
-    }
-}
-impl From<models::BlockDevice> for BlockDevice {
-    fn from(src: models::BlockDevice) -> Self {
-        Self {
-            devname: src.devname,
-            devtype: src.devtype,
-            devmajor: src.devmajor as u32,
-            devminor: src.devminor as u32,
-            model: src.model,
-            devpath: src.devpath,
-            devlinks: src.devlinks,
-            size: src.size as u64,
-            partition: src.partition.into(),
-            filesystem: src.filesystem.into(),
-            available: src.available,
-        }
     }
 }
 

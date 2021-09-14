@@ -1,23 +1,23 @@
 #![feature(allow_fail)]
+use common_lib::mbus_api::Message;
 use testlib::*;
 
 #[actix_rt::test]
 async fn create_nexus_malloc() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
-    cluster
-        .rest_v0()
-        .create_nexus(v0::CreateNexus {
-            node: cluster.node(0),
-            uuid: v0::NexusId::new(),
-            size: 10 * 1024 * 1024,
-            children: vec![
-                "malloc:///disk?size_mb=100&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into(),
-            ],
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    v0::CreateNexus {
+        node: cluster.node(0),
+        uuid: v0::NexusId::new(),
+        size: 10 * 1024 * 1024,
+        children: vec![
+            "malloc:///disk?size_mb=100&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into(),
+        ],
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
 }
 
 #[actix_rt::test]
@@ -41,25 +41,24 @@ async fn create_nexus_sizes() {
         for test in sizes {
             let size = result_either!(test);
             test_result(&test, async {
-                let nexus = cluster
-                    .rest_v0()
-                    .create_nexus(v0::CreateNexus {
-                        node: cluster.node(0),
-                        uuid: v0::NexusId::new(),
-                        size,
-                        children: vec![disk().into()],
-                        ..Default::default()
-                    })
-                    .await;
+                let nexus = v0::CreateNexus {
+                    node: cluster.node(0),
+                    uuid: v0::NexusId::new(),
+                    size,
+                    children: vec![disk().into()],
+                    ..Default::default()
+                }
+                .request()
+                .await;
+
                 if let Ok(nexus) = &nexus {
-                    cluster
-                        .rest_v0()
-                        .destroy_nexus(v0::DestroyNexus {
-                            node: nexus.node.clone(),
-                            uuid: nexus.uuid.clone(),
-                        })
-                        .await
-                        .unwrap();
+                    v0::DestroyNexus {
+                        node: nexus.node.clone(),
+                        uuid: nexus.uuid.clone(),
+                    }
+                    .request()
+                    .await
+                    .unwrap();
                 }
                 nexus
             })
@@ -80,25 +79,23 @@ async fn create_nexus_sizes() {
         for test in sizes {
             let size = result_either!(test);
             test_result(&test, async {
-                let nexus = cluster
-                    .rest_v0()
-                    .create_nexus(v0::CreateNexus {
-                        node: cluster.node(0),
-                        uuid: v0::NexusId::new(),
-                        size,
-                        children: vec![disk().into()],
-                        ..Default::default()
-                    })
-                    .await;
+                let nexus = v0::CreateNexus {
+                    node: cluster.node(0),
+                    uuid: v0::NexusId::new(),
+                    size,
+                    children: vec![disk().into()],
+                    ..Default::default()
+                }
+                .request()
+                .await;
                 if let Ok(nexus) = &nexus {
-                    cluster
-                        .rest_v0()
-                        .destroy_nexus(v0::DestroyNexus {
-                            node: nexus.node.clone(),
-                            uuid: nexus.uuid.clone(),
-                        })
-                        .await
-                        .unwrap();
+                    v0::DestroyNexus {
+                        node: nexus.node.clone(),
+                        uuid: nexus.uuid.clone(),
+                    }
+                    .request()
+                    .await
+                    .unwrap();
                 }
                 nexus
             })
@@ -124,17 +121,17 @@ async fn create_nexus_local_replica() {
         .get_replica(Cluster::replica(0, 0, 0).as_str())
         .await
         .unwrap();
-    cluster
-        .rest_v0()
-        .create_nexus(v0::CreateNexus {
-            node: cluster.node(0),
-            uuid: v0::NexusId::new(),
-            size,
-            children: vec![replica.uri.into()],
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+
+    v0::CreateNexus {
+        node: cluster.node(0),
+        uuid: v0::NexusId::new(),
+        size,
+        children: vec![replica.uri.into()],
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
 }
 
 #[actix_rt::test]
@@ -154,28 +151,26 @@ async fn create_nexus_replicas() {
         .get_replica(Cluster::replica(0, 0, 0).as_str())
         .await
         .unwrap();
-    let remote = cluster
-        .rest_v0()
-        .share_replica(v0::ShareReplica {
-            node: cluster.node(1),
-            pool: cluster.pool(1, 0),
-            uuid: Cluster::replica(1, 0, 0),
-            protocol: v0::ReplicaShareProtocol::Nvmf,
-        })
-        .await
-        .unwrap();
+    let remote = v0::ShareReplica {
+        node: cluster.node(1),
+        pool: cluster.pool(1, 0),
+        uuid: Cluster::replica(1, 0, 0),
+        protocol: v0::ReplicaShareProtocol::Nvmf,
+    }
+    .request()
+    .await
+    .unwrap();
 
-    cluster
-        .rest_v0()
-        .create_nexus(v0::CreateNexus {
-            node: cluster.node(0),
-            uuid: v0::NexusId::new(),
-            size,
-            children: vec![local.uri.into(), remote.into()],
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    v0::CreateNexus {
+        node: cluster.node(0),
+        uuid: v0::NexusId::new(),
+        size,
+        children: vec![local.uri.into(), remote.into()],
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
 }
 
 #[actix_rt::test]
@@ -196,34 +191,31 @@ async fn create_nexus_replica_not_available() {
         .await
         .unwrap();
     let remote = cluster
-        .rest_v0()
-        .share_replica(v0::ShareReplica {
-            node: cluster.node(1),
-            pool: cluster.pool(1, 0),
-            uuid: Cluster::replica(1, 0, 0),
-            protocol: v0::ReplicaShareProtocol::Nvmf,
-        })
+        .rest_v00()
+        .replicas_api()
+        .put_pool_replica_share(
+            cluster.pool(1, 0).as_str(),
+            Cluster::replica(1, 0, 0).as_str(),
+        )
         .await
         .unwrap();
     cluster
-        .rest_v0()
-        .unshare_replica(v0::UnshareReplica {
-            node: cluster.node(1),
-            pool: cluster.pool(1, 0),
-            uuid: Cluster::replica(1, 0, 0),
-        })
+        .rest_v00()
+        .replicas_api()
+        .del_pool_replica_share(
+            cluster.pool(1, 0).as_str(),
+            Cluster::replica(1, 0, 0).as_str(),
+        )
         .await
         .unwrap();
-
     cluster
-        .rest_v0()
-        .create_nexus(v0::CreateNexus {
-            node: cluster.node(0),
-            uuid: v0::NexusId::new(),
-            size,
-            children: vec![local.uri.into(), remote.into()],
-            ..Default::default()
-        })
+        .rest_v00()
+        .nexuses_api()
+        .put_node_nexus(
+            cluster.node(0).as_str(),
+            v0::NexusId::new().as_str(),
+            models::CreateNexusBody::new(vec![local.uri, remote], size),
+        )
         .await
         .expect_err("One replica is not present so nexus shouldn't be created");
 }

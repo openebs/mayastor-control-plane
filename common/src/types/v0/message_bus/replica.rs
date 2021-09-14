@@ -63,20 +63,6 @@ impl From<Replica> for models::Replica {
         )
     }
 }
-impl From<models::Replica> for Replica {
-    fn from(src: models::Replica) -> Self {
-        Self {
-            node: src.node.into(),
-            uuid: src.uuid.to_string().into(),
-            pool: src.pool.into(),
-            thin: src.thin,
-            size: src.size,
-            share: src.share.into(),
-            uri: src.uri,
-            status: src.state.into(),
-        }
-    }
-}
 
 bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
 
@@ -305,13 +291,6 @@ impl From<ReplicaShareProtocol> for Protocol {
         }
     }
 }
-impl From<models::ReplicaShareProtocol> for ReplicaShareProtocol {
-    fn from(src: models::ReplicaShareProtocol) -> Self {
-        match src {
-            models::ReplicaShareProtocol::Nvmf => Self::Nvmf,
-        }
-    }
-}
 
 /// State of the Replica
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
@@ -356,16 +335,6 @@ impl From<ReplicaStatus> for models::ReplicaState {
             ReplicaStatus::Online => Self::Online,
             ReplicaStatus::Degraded => Self::Degraded,
             ReplicaStatus::Faulted => Self::Faulted,
-        }
-    }
-}
-impl From<models::ReplicaState> for ReplicaStatus {
-    fn from(src: models::ReplicaState) -> Self {
-        match src {
-            models::ReplicaState::Unknown => Self::Unknown,
-            models::ReplicaState::Online => Self::Online,
-            models::ReplicaState::Degraded => Self::Degraded,
-            models::ReplicaState::Faulted => Self::Faulted,
         }
     }
 }

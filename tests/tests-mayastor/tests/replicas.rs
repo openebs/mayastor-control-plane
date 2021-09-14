@@ -21,11 +21,7 @@ async fn create_replica() {
         share: v0::Protocol::None,
         ..Default::default()
     };
-    let created_replica = cluster
-        .rest_v0()
-        .create_replica(replica.clone())
-        .await
-        .unwrap();
+    let created_replica = replica.request().await.unwrap();
     assert_eq!(created_replica.node, replica.node);
     assert_eq!(created_replica.uuid, replica.uuid);
     assert_eq!(created_replica.pool, replica.pool);
@@ -56,7 +52,7 @@ async fn create_replica_protocols() {
         let protocol = result_either!(&test);
         test_result(
             &test,
-            cluster.rest_v0().create_replica(v0::CreateReplica {
+            v0::CreateReplica {
                 node: cluster.node(0),
                 uuid: v0::ReplicaId::new(),
                 pool: cluster.pool(0, 0),
@@ -64,7 +60,8 @@ async fn create_replica_protocols() {
                 thin: true,
                 share: *protocol,
                 ..Default::default()
-            }),
+            }
+            .request(),
         )
         .await
         .unwrap();
@@ -82,38 +79,37 @@ async fn create_replica_sizes() {
         .unwrap();
 
     let pool = cluster
-        .rest_v0()
-        .get_pools(v0::Filter::Pool(cluster.pool(0, 0)))
+        .rest_v00()
+        .pools_api()
+        .get_pool(cluster.pool(0, 0).as_str())
         .await
         .unwrap();
-    let capacity = pool.first().unwrap().state().unwrap().capacity;
+    let capacity = pool.state.unwrap().capacity;
     assert!(size > capacity && capacity > 0);
     let sizes = vec![Ok(capacity / 2), Ok(capacity), Err(capacity + 512)];
     for test in sizes {
         let size = result_either!(test);
         test_result(&test, async {
-            let result = cluster
-                .rest_v0()
-                .create_replica(v0::CreateReplica {
-                    node: cluster.node(0),
-                    uuid: v0::ReplicaId::new(),
-                    pool: cluster.pool(0, 0),
-                    size,
-                    thin: false,
-                    ..Default::default()
-                })
-                .await;
+            let result = v0::CreateReplica {
+                node: cluster.node(0),
+                uuid: v0::ReplicaId::new(),
+                pool: cluster.pool(0, 0),
+                size,
+                thin: false,
+                ..Default::default()
+            }
+            .request()
+            .await;
             if let Ok(replica) = &result {
-                cluster
-                    .rest_v0()
-                    .destroy_replica(v0::DestroyReplica {
-                        node: replica.node.clone(),
-                        pool: replica.pool.clone(),
-                        uuid: replica.uuid.clone(),
-                        ..Default::default()
-                    })
-                    .await
-                    .unwrap();
+                v0::DestroyReplica {
+                    node: replica.node.clone(),
+                    pool: replica.pool.clone(),
+                    uuid: replica.uuid.clone(),
+                    ..Default::default()
+                }
+                .request()
+                .await
+                .unwrap();
             }
             result
         })
@@ -135,41 +131,39 @@ async fn create_replica_idempotent_different_sizes() {
 
     let uuid = v0::ReplicaId::new();
     let size = 5 * 1024 * 1024;
-    let replica = cluster
-        .rest_v0()
-        .create_replica(v0::CreateReplica {
-            node: cluster.node(0),
-            uuid: uuid.clone(),
-            pool: cluster.pool(0, 0),
-            size,
-            thin: false,
-            share: v0::Protocol::None,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    let replica = v0::CreateReplica {
+        node: cluster.node(0),
+        uuid: uuid.clone(),
+        pool: cluster.pool(0, 0),
+        size,
+        thin: false,
+        share: v0::Protocol::None,
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
     assert_eq!(&replica.uuid, &uuid);
 
-    cluster
-        .rest_v0()
-        .create_replica(v0::CreateReplica {
-            node: cluster.node(0),
-            uuid: uuid.clone(),
-            pool: cluster.pool(0, 0),
-            size,
-            thin: replica.thin,
-            share: v0::Protocol::None,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    v0::CreateReplica {
+        node: cluster.node(0),
+        uuid: uuid.clone(),
+        pool: cluster.pool(0, 0),
+        size,
+        thin: replica.thin,
+        share: v0::Protocol::None,
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
 
     let sizes = vec![Ok(size), Err(size / 2), Err(size * 2)];
     for test in sizes {
         let size = result_either!(test);
         test_result(
             &test,
-            cluster.rest_v0().create_replica(v0::CreateReplica {
+            v0::CreateReplica {
                 node: cluster.node(0),
                 uuid: replica.uuid.clone(),
                 pool: cluster.pool(0, 0),
@@ -177,7 +171,8 @@ async fn create_replica_idempotent_different_sizes() {
                 thin: replica.thin,
                 share: v0::Protocol::None,
                 ..Default::default()
-            }),
+            }
+            .request(),
         )
         .await
         .unwrap();
@@ -197,19 +192,18 @@ async fn create_replica_idempotent_different_protocols() {
 
     let uuid = v0::ReplicaId::new();
     let size = 5 * 1024 * 1024;
-    let replica = cluster
-        .rest_v0()
-        .create_replica(v0::CreateReplica {
-            node: cluster.node(0),
-            uuid: uuid.clone(),
-            pool: cluster.pool(0, 0),
-            size,
-            thin: false,
-            share: v0::Protocol::None,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    let replica = v0::CreateReplica {
+        node: cluster.node(0),
+        uuid: uuid.clone(),
+        pool: cluster.pool(0, 0),
+        size,
+        thin: false,
+        share: v0::Protocol::None,
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
     assert_eq!(&replica.uuid, &uuid);
 
     let protocols = vec![
@@ -221,7 +215,7 @@ async fn create_replica_idempotent_different_protocols() {
         let protocol = result_either!(&test);
         test_result(
             &test,
-            cluster.rest_v0().create_replica(v0::CreateReplica {
+            v0::CreateReplica {
                 node: cluster.node(0),
                 uuid: replica.uuid.clone(),
                 pool: replica.pool.clone(),
@@ -229,7 +223,8 @@ async fn create_replica_idempotent_different_protocols() {
                 thin: replica.thin,
                 share: *protocol,
                 ..Default::default()
-            }),
+            }
+            .request(),
         )
         .await
         .unwrap();

@@ -44,22 +44,13 @@ pub trait Replicas {
         Body(create_replica_body): Body<crate::models::CreateReplicaBody>,
     ) -> Result<crate::models::Replica, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_node_pool_replica_share(
-        Path((node_id, pool_id, replica_id, protocol)): Path<(
-            String,
-            String,
-            String,
-            crate::models::ReplicaShareProtocol,
-        )>,
+        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
     ) -> Result<String, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_pool_replica(
         Path((pool_id, replica_id)): Path<(String, String)>,
         Body(create_replica_body): Body<crate::models::CreateReplicaBody>,
     ) -> Result<crate::models::Replica, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_pool_replica_share(
-        Path((pool_id, replica_id, protocol)): Path<(
-            String,
-            String,
-            crate::models::ReplicaShareProtocol,
-        )>,
+        Path((pool_id, replica_id)): Path<(String, String)>,
     ) -> Result<String, crate::apis::RestError<crate::models::RestJsonError>>;
 }

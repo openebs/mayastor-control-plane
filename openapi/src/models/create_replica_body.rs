@@ -19,8 +19,8 @@ use crate::apis::IntoVec;
 /// Create Replica Body JSON
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreateReplicaBody {
-    #[serde(rename = "share")]
-    pub share: crate::models::Protocol,
+    #[serde(rename = "share", skip_serializing_if = "Option::is_none")]
+    pub share: Option<crate::models::ReplicaShareProtocol>,
     /// size of the replica in bytes
     #[serde(rename = "size")]
     pub size: u64,
@@ -31,20 +31,16 @@ pub struct CreateReplicaBody {
 
 impl CreateReplicaBody {
     /// CreateReplicaBody using only the required fields
-    pub fn new(
-        share: impl Into<crate::models::Protocol>,
-        size: impl Into<u64>,
-        thin: impl Into<bool>,
-    ) -> CreateReplicaBody {
+    pub fn new(size: impl Into<u64>, thin: impl Into<bool>) -> CreateReplicaBody {
         CreateReplicaBody {
-            share: share.into(),
+            share: None,
             size: size.into(),
             thin: thin.into(),
         }
     }
     /// CreateReplicaBody using all fields
     pub fn new_all(
-        share: impl Into<crate::models::Protocol>,
+        share: impl Into<Option<crate::models::ReplicaShareProtocol>>,
         size: impl Into<u64>,
         thin: impl Into<bool>,
     ) -> CreateReplicaBody {

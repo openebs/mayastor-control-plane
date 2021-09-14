@@ -1,15 +1,12 @@
 //! Definition of pool types that can be saved to the persistent store.
 
-use crate::{
-    types::v0::{
-        message_bus::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
-        openapi::models,
-        store::{
-            definitions::{ObjectKey, StorableObject, StorableObjectType},
-            OperationSequence, OperationSequencer, SpecStatus, SpecTransaction, UuidString,
-        },
+use crate::types::v0::{
+    message_bus::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
+    openapi::models,
+    store::{
+        definitions::{ObjectKey, StorableObject, StorableObjectType},
+        OperationSequence, OperationSequencer, SpecStatus, SpecTransaction, UuidString,
     },
-    IntoVec,
 };
 
 use serde::{Deserialize, Serialize};
@@ -48,16 +45,6 @@ impl UuidString for PoolState {
 
 /// Status of the Pool Spec
 pub type PoolSpecStatus = SpecStatus<message_bus::PoolStatus>;
-impl From<models::SpecStatus> for PoolSpecStatus {
-    fn from(spec_state: models::SpecStatus) -> Self {
-        match spec_state {
-            models::SpecStatus::Creating => Self::Creating,
-            models::SpecStatus::Created => Self::Created(message_bus::PoolStatus::Unknown),
-            models::SpecStatus::Deleting => Self::Deleting,
-            models::SpecStatus::Deleted => Self::Deleted,
-        }
-    }
-}
 
 impl From<&CreatePool> for PoolSpec {
     fn from(request: &CreatePool) -> Self {
@@ -135,19 +122,6 @@ impl UuidString for PoolSpec {
 impl From<PoolSpec> for models::PoolSpec {
     fn from(src: PoolSpec) -> Self {
         Self::new(src.disks, src.id, src.labels, src.node, src.status)
-    }
-}
-impl From<models::PoolSpec> for PoolSpec {
-    fn from(src: models::PoolSpec) -> Self {
-        Self {
-            node: src.node.into(),
-            id: src.id.into(),
-            disks: src.disks.into_vec(),
-            status: src.status.into(),
-            labels: src.labels,
-            sequencer: Default::default(),
-            operation: None,
-        }
     }
 }
 

@@ -102,6 +102,11 @@ pub struct StartOptions {
     #[structopt(long)]
     pub no_rest: bool,
 
+    /// Rest Path to JSON Web KEY file used for authenticating REST requests.
+    /// Otherwise, no authentication is used
+    #[structopt(long, conflicts_with = "no_rest")]
+    pub rest_jwk: Option<String>,
+
     /// Use `N` mayastor instances
     /// Note: the mayastor containers have the host's /tmp directory mapped into the container
     /// as /host/tmp. This is useful to create pool's from file images.
@@ -219,8 +224,9 @@ impl StartOptions {
         self.node_req_timeout = Some(request.into());
         self
     }
-    pub fn with_rest(mut self, enabled: bool) -> Self {
+    pub fn with_rest(mut self, enabled: bool, jwk: Option<String>) -> Self {
         self.no_rest = !enabled;
+        self.rest_jwk = jwk;
         self
     }
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {

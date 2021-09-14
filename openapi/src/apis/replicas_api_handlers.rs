@@ -80,7 +80,7 @@ pub fn configure<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     )
     .service(
         actix_web::web::resource(
-            "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol}",
+            "/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/nvmf",
         )
         .name("put_node_pool_replica_share")
         .guard(actix_web::guard::Put())
@@ -93,7 +93,7 @@ pub fn configure<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
             .route(actix_web::web::put().to(put_pool_replica::<T, A>)),
     )
     .service(
-        actix_web::web::resource("/pools/{pool_id}/replicas/{replica_id}/share/{protocol}")
+        actix_web::web::resource("/pools/{pool_id}/replicas/{replica_id}/share/nvmf")
             .name("put_pool_replica_share")
             .guard(actix_web::guard::Put())
             .route(actix_web::web::put().to(put_pool_replica_share::<T, A>)),
@@ -206,7 +206,7 @@ async fn put_node_pool_replica_share<
     A: FromRequest + 'static,
 >(
     _token: A,
-    path: Path<(String, String, String, crate::models::ReplicaShareProtocol)>,
+    path: Path<(String, String, String)>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_node_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await
@@ -228,7 +228,7 @@ async fn put_pool_replica<T: crate::apis::Replicas + 'static, A: FromRequest + '
 
 async fn put_pool_replica_share<T: crate::apis::Replicas + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<(String, String, crate::models::ReplicaShareProtocol)>,
+    path: Path<(String, String)>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_pool_replica_share(crate::apis::Path(path.into_inner()))
         .await

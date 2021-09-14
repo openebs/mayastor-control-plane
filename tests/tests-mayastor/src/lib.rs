@@ -8,16 +8,35 @@ use opentelemetry::{
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
 };
 
-use crate::v0::apis::Uuid;
-use common_lib::{
+pub use common_lib::{
     mbus_api,
     mbus_api::{Message, TimeoutOptions},
-    types::v0::message_bus::{self, PoolDeviceUri},
+    types::v0::{
+        message_bus::{self, PoolDeviceUri},
+        openapi::{apis::Uuid, models},
+    },
 };
-pub use rest_client::{
-    versions::v0::{self, RestClient},
-    ActixRestClient, ClientError,
-};
+pub use rest_client::ActixRestClient;
+
+pub mod v0 {
+    pub use common_lib::{
+        mbus_api,
+        types::v0::{
+            message_bus::{
+                AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool,
+                CreateReplica, CreateVolume, DestroyNexus, DestroyPool, DestroyReplica,
+                DestroyVolume, Filter, GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node,
+                NodeId, Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica,
+                ReplicaId, ReplicaShareProtocol, ShareNexus, ShareReplica, Specs, Topology,
+                UnshareNexus, UnshareReplica, VolumeHealPolicy, VolumeId, Watch, WatchCallback,
+                WatchResourceId,
+            },
+            openapi::{apis, models},
+        },
+    };
+    pub use models::rest_json_error::Kind as RestJsonErrorKind;
+}
+
 use std::{collections::HashMap, rc::Rc, time::Duration};
 
 #[actix_rt::test]
@@ -81,11 +100,6 @@ impl Cluster {
             uuid, node as u8, pool as u8, replica
         )
         .into()
-    }
-
-    /// rest client v0
-    pub fn rest_v0(&self) -> impl RestClient {
-        self.rest_client.v0()
     }
 
     /// openapi rest client v0
@@ -167,21 +181,21 @@ pub async fn test_result<F, O, E, T>(
     future: F,
 ) -> Result<(), anyhow::Error>
 where
-    F: std::future::Future<Output = Result<T, rest_client::ClientError>>,
+    F: std::future::Future<Output = Result<T, common_lib::mbus_api::Error>>,
     E: std::fmt::Debug,
     O: std::fmt::Debug,
 {
     match future.await {
         Ok(_) if expected.is_ok() => Ok(()),
         Err(error) if expected.is_err() => match error {
-            ClientError::RestServer { .. } => Ok(()),
+            common_lib::mbus_api::Error::ReplyWithError { .. } => Ok(()),
             _ => {
                 // not the error we were waiting for
-                Err(anyhow::anyhow!("Invalid rest response: {}", error))
+                Err(anyhow::anyhow!("Invalid response: {:?}", error))
             }
         },
         Err(error) => Err(anyhow::anyhow!(
-            "Expected '{:#?}' but failed with '{}'!",
+            "Expected '{:#?}' but failed with '{:?}'!",
             expected,
             error
         )),
@@ -401,7 +415,12 @@ impl ClusterBuilder {
     }
     /// Specify whether rest is enabled or not
     pub fn with_rest(mut self, enabled: bool) -> Self {
-        self.opts = self.opts.with_rest(enabled);
+        self.opts = self.opts.with_rest(enabled, None);
+        self
+    }
+    /// Specify whether rest is enabled or not and wether to use authentication or not
+    pub fn with_rest_auth(mut self, enabled: bool, jwk: Option<String>) -> Self {
+        self.opts = self.opts.with_rest(enabled, jwk);
         self
     }
     /// Specify whether the components should be cargo built or not

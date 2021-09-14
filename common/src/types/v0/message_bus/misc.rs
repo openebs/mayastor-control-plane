@@ -250,16 +250,6 @@ impl From<Protocol> for models::Protocol {
         }
     }
 }
-impl From<models::Protocol> for Protocol {
-    fn from(src: models::Protocol) -> Self {
-        match src {
-            models::Protocol::None => Self::None,
-            models::Protocol::Nvmf => Self::Nvmf,
-            models::Protocol::Iscsi => Self::Iscsi,
-            models::Protocol::Nbd => Self::Nbd,
-        }
-    }
-}
 
 /// Liveness Probe
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]

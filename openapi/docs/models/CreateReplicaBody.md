@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**share** | [**crate::models::Protocol**](Protocol.md) |  | 
+**share** | Option<[**crate::models::ReplicaShareProtocol**](ReplicaShareProtocol.md)> |  | [optional]
 **size** | **u64** | size of the replica in bytes | 
 **thin** | **bool** | thin provisioning | 
 

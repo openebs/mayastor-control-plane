@@ -38,16 +38,16 @@ mod tests {
 
     static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();
 
-    async fn setup_watcher(client: &impl RestClient) -> (Volume, tokio::sync::mpsc::Receiver<()>) {
-        let volume = client
-            .create_volume(CreateVolume {
-                uuid: VolumeId::new(),
-                size: 10 * 1024 * 1024,
-                replicas: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
+    async fn setup_watcher() -> (Volume, tokio::sync::mpsc::Receiver<()>) {
+        let volume = CreateVolume {
+            uuid: VolumeId::new(),
+            size: 10 * 1024 * 1024,
+            replicas: 1,
+            ..Default::default()
+        }
+        .request()
+        .await
+        .unwrap();
 
         let (s, r) = tokio::sync::mpsc::channel(1);
         CALLBACK.set(s).unwrap();
@@ -91,14 +91,18 @@ mod tests {
     async fn watcher() {
         let cluster = ClusterBuilder::builder().with_pools(1).build().await;
         let cluster = cluster.unwrap();
-        let client = cluster.rest_v0();
+        let client = cluster.rest_v00();
+        let client = client.watches_api();
 
-        let (volume, mut callback_ch) = setup_watcher(&client).await;
+        let (volume, mut callback_ch) = setup_watcher().await;
 
         let watch_volume = WatchResourceId::Volume(volume.spec().uuid);
         let callback = url::Url::parse("http://10.1.0.1:8082/test").unwrap();
 
-        let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+        let watchers = client
+            .get_watch_volume(volume.spec().uuid.as_str())
+            .await
+            .unwrap();
         assert!(watchers.is_empty());
 
         let mut store = Etcd::new("0.0.0.0:2379")
@@ -106,7 +110,7 @@ mod tests {
             .expect("Failed to connect to etcd.");
 
         client
-            .create_watch(watch_volume.clone(), callback.clone())
+            .put_watch_volume(volume.spec().uuid.as_str(), callback.as_str())
             .await
             .expect_err("volume does not exist in the store");
 
@@ -116,14 +120,17 @@ mod tests {
             .unwrap();
 
         client
-            .create_watch(watch_volume.clone(), callback.clone())
+            .put_watch_volume(volume.spec().uuid.as_str(), callback.as_str())
             .await
             .unwrap();
 
-        let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+        let watchers = client
+            .get_watch_volume(volume.spec().uuid.as_str())
+            .await
+            .unwrap();
         assert_eq!(
             watchers.first(),
-            Some(&v0::RestWatch {
+            Some(&v0::models::RestWatch {
                 resource: watch_volume.to_string(),
                 callback: callback.to_string(),
             })
@@ -140,7 +147,7 @@ mod tests {
             .unwrap();
 
         client
-            .delete_watch(watch_volume.clone(), callback.clone())
+            .del_watch_volume(volume.spec().uuid.as_str(), callback.as_str())
             .await
             .unwrap();
 
@@ -153,7 +160,10 @@ mod tests {
             .await
             .expect_err("should have been deleted so no callback");
 
-        let watchers = client.get_watches(watch_volume.clone()).await.unwrap();
+        let watchers = client
+            .get_watch_volume(volume.spec().uuid.as_str())
+            .await
+            .unwrap();
         assert!(watchers.is_empty());
     }
 }

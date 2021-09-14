@@ -62,9 +62,9 @@ Class | Method | HTTP request | Description
 *Replicas* | [**get_replica**](docs/apis/Replicas.md#get_replica) | **Get** /replicas/{id} | 
 *Replicas* | [**get_replicas**](docs/apis/Replicas.md#get_replicas) | **Get** /replicas | 
 *Replicas* | [**put_node_pool_replica**](docs/apis/Replicas.md#put_node_pool_replica) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id} | 
-*Replicas* | [**put_node_pool_replica_share**](docs/apis/Replicas.md#put_node_pool_replica_share) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
+*Replicas* | [**put_node_pool_replica_share**](docs/apis/Replicas.md#put_node_pool_replica_share) | **Put** /nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/nvmf | 
 *Replicas* | [**put_pool_replica**](docs/apis/Replicas.md#put_pool_replica) | **Put** /pools/{pool_id}/replicas/{replica_id} | 
-*Replicas* | [**put_pool_replica_share**](docs/apis/Replicas.md#put_pool_replica_share) | **Put** /pools/{pool_id}/replicas/{replica_id}/share/{protocol} | 
+*Replicas* | [**put_pool_replica_share**](docs/apis/Replicas.md#put_pool_replica_share) | **Put** /pools/{pool_id}/replicas/{replica_id}/share/nvmf | 
 *Specs* | [**get_specs**](docs/apis/Specs.md#get_specs) | **Get** /specs | 
 *Volumes* | [**del_share**](docs/apis/Volumes.md#del_share) | **Delete** /volumes{volume_id}/share | 
 *Volumes* | [**del_volume**](docs/apis/Volumes.md#del_volume) | **Delete** /volumes/{volume_id} | 

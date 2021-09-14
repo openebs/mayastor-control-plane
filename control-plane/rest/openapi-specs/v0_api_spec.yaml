@@ -845,7 +845,7 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
-  '/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/{protocol}':
+  '/nodes/{node_id}/pools/{pool_id}/replicas/{replica_id}/share/nvmf':
     put:
       tags:
         - Replicas
@@ -867,11 +867,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - in: path
-          name: protocol
-          required: true
-          schema:
-            $ref: '#/components/schemas/ReplicaShareProtocol'
       responses:
         '200':
           description: OK
@@ -1127,7 +1122,7 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
-  '/pools/{pool_id}/replicas/{replica_id}/share/{protocol}':
+  '/pools/{pool_id}/replicas/{replica_id}/share/nvmf':
     put:
       tags:
         - Replicas
@@ -1144,11 +1139,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - in: path
-          name: protocol
-          required: true
-          schema:
-            $ref: '#/components/schemas/ReplicaShareProtocol'
       responses:
         '200':
           description: OK
@@ -1773,14 +1763,13 @@ components:
         - disks
     CreateReplicaBody:
       example:
-        share: none
         size: 80241024
         thin: false
       description: Create Replica Body JSON
       type: object
       properties:
         share:
-          $ref: '#/components/schemas/Protocol'
+          $ref: '#/components/schemas/ReplicaShareProtocol'
         size:
           description: size of the replica in bytes
           type: integer
@@ -1790,7 +1779,6 @@ components:
           description: thin provisioning
           type: boolean
       required:
-        - share
         - size
         - thin
     ExclusiveLabel:

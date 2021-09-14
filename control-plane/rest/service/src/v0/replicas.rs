@@ -229,16 +229,11 @@ impl apis::Replicas for RestApi {
     }
 
     async fn put_node_pool_replica_share(
-        Path((node_id, pool_id, replica_id, protocol)): Path<(
-            String,
-            String,
-            String,
-            models::ReplicaShareProtocol,
-        )>,
+        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
             Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
-            protocol.into(),
+            ReplicaShareProtocol::Nvmf,
         )
         .await
     }
@@ -255,11 +250,11 @@ impl apis::Replicas for RestApi {
     }
 
     async fn put_pool_replica_share(
-        Path((pool_id, replica_id, protocol)): Path<(String, String, models::ReplicaShareProtocol)>,
+        Path((pool_id, replica_id)): Path<(String, String)>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
             Filter::PoolReplica(pool_id.into(), replica_id.into()),
-            protocol.into(),
+            ReplicaShareProtocol::Nvmf,
         )
         .await
     }

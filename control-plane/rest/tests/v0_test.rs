@@ -1,26 +1,14 @@
-use common_lib::{
-    mbus_api::{Message, TimeoutOptions},
-    types::v0::message_bus::{ChannelVs, Liveness, NodeId, WatchResourceId},
+use common_lib::types::v0::{
+    message_bus::WatchResourceId,
+    openapi::{apis, models},
 };
-use composer::{Binary, Builder, ComposeTest, ContainerSpec};
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
-use rest_client::{versions::v0::*, ActixRestClient};
-use rpc::mayastor::Null;
-use std::{
-    io,
-    net::{SocketAddr, TcpStream},
-    str::FromStr,
-    time::Duration,
-};
-use tracing::info;
 
-async fn wait_for_services() {
-    Liveness {}.request_on(ChannelVs::Node).await.unwrap();
-    Liveness {}.request_on(ChannelVs::Pool).await.unwrap();
-    Liveness {}.request_on(ChannelVs::Nexus).await.unwrap();
-    Liveness {}.request_on(ChannelVs::Volume).await.unwrap();
-    Liveness {}.request_on(ChannelVs::JsonGrpc).await.unwrap();
-}
+use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
+use rest_client::ActixRestClient;
+
+use std::{str::FromStr, time::Duration};
+use testlib::{Cluster, ClusterBuilder};
+use tracing::info;
 
 // Returns the path to the JWK file.
 fn jwk_file() -> String {
@@ -32,129 +20,24 @@ fn jwk_file() -> String {
 }
 
 // Setup the infrastructure ready for the tests.
-async fn test_setup(auth: &bool) -> ((String, String), ComposeTest) {
-    let jwk_file = jwk_file();
-    let mut rest_args = match auth {
-        true => vec!["--jwk", &jwk_file],
-        false => vec!["--no-auth"],
+async fn test_setup(auth: &bool) -> Cluster {
+    let rest_jwk = match auth {
+        true => Some(jwk_file()),
+        false => None,
     };
-    rest_args.append(&mut vec!["-j", "10.1.0.7:6831", "--dummy-certificates"]);
 
-    let mayastor1 = "node-test-name-1";
-    let mayastor2 = "node-test-name-2";
-    // todo: this is getting unwieldy... we should make use of the deployer
-    let test = Builder::new()
-        .name("rest")
-        .add_container_spec(
-            ContainerSpec::from_binary("nats", Binary::from_path("nats-server").with_arg("-DV"))
-                .with_portmap("4222", "4222"),
-        )
-        .add_container_bin(
-            "core",
-            Binary::from_dbg("core")
-                .with_nats("-n")
-                .with_args(vec!["--store", "http://etcd.rest:2379"])
-                .with_args(vec!["-j", "10.1.0.7:6831"]),
-        )
-        .add_container_spec(
-            ContainerSpec::from_binary(
-                "rest",
-                Binary::from_dbg("rest")
-                    .with_nats("-n")
-                    .with_args(rest_args),
-            )
-            .with_portmap("8080", "8080")
-            .with_portmap("8081", "8081"),
-        )
-        .add_container_bin(
-            "mayastor-1",
-            Binary::from_path("mayastor")
-                .with_nats("-n")
-                .with_args(vec!["-N", mayastor1])
-                .with_args(vec!["-g", "10.1.0.5:10124"]),
-        )
-        .add_container_bin(
-            "mayastor-2",
-            Binary::from_path("mayastor")
-                .with_nats("-n")
-                .with_args(vec!["-N", mayastor2])
-                .with_args(vec!["-g", "10.1.0.6:10124"]),
-        )
-        .add_container_spec(
-            ContainerSpec::from_image("jaeger", "jaegertracing/all-in-one:latest")
-                .with_portmap("16686", "16686")
-                .with_portmap("6831/udp", "6831/udp"),
-        )
-        .add_container_bin("jsongrpc", Binary::from_dbg("jsongrpc").with_nats("-n"))
-        .add_container_spec(
-            ContainerSpec::from_binary(
-                "etcd",
-                Binary::from_path("etcd").with_args(vec![
-                    "--data-dir",
-                    "/tmp/etcd-data",
-                    "--advertise-client-urls",
-                    "http://0.0.0.0:2379",
-                    "--listen-client-urls",
-                    "http://0.0.0.0:2379",
-                ]),
-            )
-            .with_portmap("2379", "2379")
-            .with_portmap("2380", "2380"),
-        )
-        .with_default_tracing()
-        .autorun(false)
+    let cluster = ClusterBuilder::builder()
+        .with_rest_auth(true, rest_jwk)
+        .with_options(|o| o.with_jaeger(true))
+        .with_agents(vec!["core", "jsongrpc"])
+        .with_mayastors(2)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
         .await
         .unwrap();
-    ((mayastor1.into(), mayastor2.into()), test)
-}
 
-/// Wait to establish a connection to etcd.
-/// Returns 'Ok' if connected otherwise 'Err' is returned.
-fn wait_for_etcd_ready(endpoint: &str) -> io::Result<TcpStream> {
-    let sa = SocketAddr::from_str(endpoint).unwrap();
-    TcpStream::connect_timeout(&sa, Duration::from_secs(3))
-}
-
-/// connect to message bus helper for the cargo test code
-async fn connect_to_bus(test: &ComposeTest, name: &str) {
-    let timeout = TimeoutOptions::new()
-        .with_timeout(Duration::from_millis(500))
-        .with_timeout_backoff(Duration::from_millis(500))
-        .with_max_retries(10);
-    connect_to_bus_timeout(test, name, timeout).await;
-}
-
-/// connect to message bus helper for the cargo test code with bus timeouts
-async fn connect_to_bus_timeout(test: &ComposeTest, name: &str, bus_timeout: TimeoutOptions) {
-    tokio::time::timeout(std::time::Duration::from_secs(2), async {
-        mbus_api::message_bus_init_options(test.container_ip(name), bus_timeout).await
-    })
-    .await
-    .unwrap();
-}
-
-// to avoid waiting for timeouts
-async fn orderly_start(test: &ComposeTest) {
-    test.start_containers(vec!["nats", "jsongrpc", "rest", "jaeger", "etcd"])
-        .await
-        .unwrap();
-    assert!(
-        wait_for_etcd_ready("0.0.0.0:2379").is_ok(),
-        "etcd not ready"
-    );
-
-    connect_to_bus(test, "nats").await;
-    test.start("core").await.unwrap();
-    wait_for_services().await;
-
-    test.start("mayastor-1").await.unwrap();
-    test.start("mayastor-2").await.unwrap();
-
-    let mut hdl = test.grpc_handle("mayastor-1").await.unwrap();
-    hdl.mayastor.list_nexus(Null {}).await.unwrap();
-    let mut hdl = test.grpc_handle("mayastor-2").await.unwrap();
-    hdl.mayastor.list_nexus(Null {}).await.unwrap();
+    cluster
 }
 
 // Return a bearer token to be sent with REST requests.
@@ -175,14 +58,13 @@ async fn client() {
         .unwrap();
     // Run the client test both with and without authentication.
     for auth in &[true, false] {
-        let (mayastor, test) = test_setup(auth).await;
-        client_test(&mayastor.0.into(), &mayastor.1.into(), &test, auth).await;
+        let cluster = test_setup(auth).await;
+        client_test(&cluster, auth).await;
     }
 }
 
-async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest, auth: &bool) {
-    orderly_start(test).await;
-
+async fn client_test(cluster: &Cluster, auth: &bool) {
+    let test = cluster.composer();
     let client = ActixRestClient::new(
         "https://localhost:8080",
         true,
@@ -197,17 +79,19 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
     let nodes = client.nodes_api().get_nodes().await.unwrap();
     info!("Nodes: {:#?}", nodes);
     assert_eq!(nodes.len(), 2);
+    let mayastor1 = cluster.node(0);
+    let mayastor2 = cluster.node(1);
 
     let listed_node = client.nodes_api().get_node(mayastor1.as_str()).await;
     let mut node = models::Node {
         id: mayastor1.to_string(),
         spec: Some(models::NodeSpec {
             id: mayastor1.to_string(),
-            grpc_endpoint: "10.1.0.5:10124".to_string(),
+            grpc_endpoint: "10.1.0.7:10124".to_string(),
         }),
         state: Some(models::NodeState {
             id: mayastor1.to_string(),
-            grpc_endpoint: "10.1.0.5:10124".to_string(),
+            grpc_endpoint: "10.1.0.7:10124".to_string(),
             status: models::NodeStatus::Online,
         }),
     };
@@ -231,8 +115,8 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
         pool,
         models::Pool::new_all(
             "pooloop",
-            models::PoolSpec::new(vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", Vec::<String>::new(), mayastor1, models::SpecStatus::Created),
-            models::PoolState::new(100663296u64, vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", mayastor1, models::PoolStatus::Online, 0u64)
+            models::PoolSpec::new(vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", Vec::<String>::new(), &mayastor1, models::SpecStatus::Created),
+            models::PoolState::new(100663296u64, vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", &mayastor1, models::PoolStatus::Online, 0u64)
         )
     );
 
@@ -264,7 +148,11 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
             "e6e7d39d-e343-42f7-936a-1ab05f1839db",
             /* actual size will be a multiple of 4MB so just
              * create it like so */
-            models::CreateReplicaBody::new(models::Protocol::Nvmf, 12582912u64, true),
+            models::CreateReplicaBody::new_all(
+                models::ReplicaShareProtocol::Nvmf,
+                12582912u64,
+                true,
+            ),
         )
         .await
         .unwrap();
@@ -494,7 +382,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
         .expect("Failed to get block devices");
 
     test.stop("mayastor-1").await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(350)).await;
     node.state.as_mut().unwrap().status = models::NodeStatus::Unknown;
     assert_eq!(
         client
@@ -508,8 +396,7 @@ async fn client_test(mayastor1: &NodeId, mayastor2: &NodeId, test: &ComposeTest,
 
 #[actix_rt::test]
 async fn client_invalid_token() {
-    let (_, test) = test_setup(&true).await;
-    orderly_start(&test).await;
+    let _cluster = test_setup(&true).await;
 
     // Use an invalid token to make requests.
     let mut token = bearer_token();
