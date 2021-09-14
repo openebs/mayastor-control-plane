@@ -6,15 +6,15 @@ use crate::{
 use async_trait::async_trait;
 use structopt::StructOpt;
 
-use crate::resources::utils::{CreateRows, OutputFormat};
+use crate::resources::utils::{CreateRows, GetHeaderRow, OutputFormat};
 use prettytable::Row;
 
 /// Volumes resource.
 #[derive(StructOpt, Debug)]
-pub(crate) struct Volumes {
-    output: String,
-}
+pub(crate) struct Volumes {}
 
+// CreateRows being trait for Vec<Volume> would create the rows from the list of
+// Volumes returned from REST call.
 impl CreateRows for Vec<openapi::models::Volume> {
     fn create_rows(&self) -> Vec<Row> {
         let mut rows: Vec<Row> = Vec::new();
@@ -33,11 +33,20 @@ impl CreateRows for Vec<openapi::models::Volume> {
     }
 }
 
+// GetHeaderRow being trait for Volume would return the Header Row for
+// Volume.
+impl GetHeaderRow for Vec<openapi::models::Volume> {
+    fn get_header_row(&self) -> Row {
+        (&*utils::VOLUME_HEADERS).clone()
+    }
+}
+
 #[async_trait(?Send)]
 impl List for Volumes {
     async fn list(output: utils::OutputFormat) {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => {
+                // Print table, json or yaml based on output format.
                 utils::print_table::<openapi::models::Volume>(output, volumes);
             }
             Err(e) => {
@@ -54,7 +63,6 @@ pub(crate) struct Volume {
     id: VolumeId,
     /// Number of replicas.
     replica_count: Option<ReplicaCount>,
-    output: String,
 }
 
 #[async_trait(?Send)]
@@ -63,8 +71,8 @@ impl Get for Volume {
     async fn get(id: &Self::ID, output: utils::OutputFormat) {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
-                let volume_to_vector: Vec<openapi::models::Volume> = vec![volume];
-                utils::print_table::<openapi::models::Volume>(output, volume_to_vector);
+                // Print table, json or yaml based on output format.
+                utils::print_table::<openapi::models::Volume>(output, vec![volume]);
             }
             Err(e) => {
                 println!("Failed to get volume {}. Error {}", id, e)
@@ -84,8 +92,8 @@ impl Scale for Volume {
         {
             Ok(volume) => match output {
                 OutputFormat::Yaml | OutputFormat::Json => {
-                    let volume_to_vector: Vec<openapi::models::Volume> = vec![volume];
-                    utils::print_table::<openapi::models::Volume>(output, volume_to_vector);
+                    // Print json or yaml based on output format.
+                    utils::print_table::<openapi::models::Volume>(output, vec![volume]);
                 }
                 OutputFormat::NoFormat => {
                     // Incase the output format is not specified, show a success message.
