@@ -43,7 +43,7 @@ impl GetHeaderRow for Vec<openapi::models::Volume> {
 
 #[async_trait(?Send)]
 impl List for Volumes {
-    async fn list(output: utils::OutputFormat) {
+    async fn list(output: &utils::OutputFormat) {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => {
                 // Print table, json or yaml based on output format.
@@ -68,7 +68,7 @@ pub(crate) struct Volume {
 #[async_trait(?Send)]
 impl Get for Volume {
     type ID = VolumeId;
-    async fn get(id: &Self::ID, output: utils::OutputFormat) {
+    async fn get(id: &Self::ID, output: &utils::OutputFormat) {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
@@ -84,7 +84,7 @@ impl Get for Volume {
 #[async_trait(?Send)]
 impl Scale for Volume {
     type ID = VolumeId;
-    async fn scale(id: &Self::ID, replica_count: u8, output: utils::OutputFormat) {
+    async fn scale(id: &Self::ID, replica_count: u8, output: &utils::OutputFormat) {
         match RestClient::client()
             .volumes_api()
             .put_volume_replica_count(id, replica_count)

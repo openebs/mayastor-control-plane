@@ -60,7 +60,7 @@ impl From<&str> for OutputFormat {
     }
 }
 
-pub fn print_table<T>(output: OutputFormat, obj: Vec<T>)
+pub fn print_table<T>(output: &OutputFormat, obj: Vec<T>)
 where
     T: ser::Serialize,
     Vec<T>: CreateRows,
