@@ -57,6 +57,11 @@ rules:
 - apiGroups: ["storage.k8s.io"]
   resources: ["volumeattachments/status"]
   verbs: ["patch"]
+  # CSI nodes must be listed
+- apiGroups: ["storage.k8s.io"]
+  resources: ["csinodes"]
+  verbs: ["get", "list", "watch"]
+
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
