@@ -4,19 +4,10 @@ use once_cell::sync::OnceCell;
 use tracing::{info, warn};
 
 static NATS_MSG_BUS: OnceCell<NatsMessageBus> = OnceCell::new();
-/// Initialise the Nats Message Bus with the current tokio runtime
-/// (the runtime MUST be setup already or we will panic)
-pub fn message_bus_init_tokio(server: String) {
-    NATS_MSG_BUS.get_or_init(|| {
-        // Waits for the message bus to become ready
-        tokio::runtime::Handle::current().block_on(async {
-            NatsMessageBus::new(&server, BusOptions::new(), TimeoutOptions::new()).await
-        })
-    });
-}
+
 /// Initialise the Nats Message Bus
 pub async fn message_bus_init(server: String) {
-    let nc = NatsMessageBus::new(&server, BusOptions::new(), TimeoutOptions::new()).await;
+    let nc = NatsMessageBus::new(None, &server, BusOptions::new(), TimeoutOptions::new()).await;
     NATS_MSG_BUS
         .set(nc)
         .ok()
@@ -25,9 +16,13 @@ pub async fn message_bus_init(server: String) {
 
 /// Initialise the Nats Message Bus with Options
 /// IGNORES all but the first initialisation of NATS_MSG_BUS
-pub async fn message_bus_init_options(server: String, timeouts: TimeoutOptions) {
+pub async fn message_bus_init_options(
+    client: impl Into<Option<BusClient>>,
+    server: String,
+    timeouts: TimeoutOptions,
+) {
     if NATS_MSG_BUS.get().is_none() {
-        let nc = NatsMessageBus::new(&server, BusOptions::new(), timeouts).await;
+        let nc = NatsMessageBus::new(client.into(), &server, BusOptions::new(), timeouts).await;
         NATS_MSG_BUS.set(nc).ok();
     }
 }
@@ -48,6 +43,7 @@ pub fn bus() -> DynBus {
 pub struct NatsMessageBus {
     timeout_options: TimeoutOptions,
     connection: Connection,
+    client_name: BusClient,
 }
 impl NatsMessageBus {
     /// Connect to the provided server
@@ -78,6 +74,7 @@ impl NatsMessageBus {
 
     /// Connects to the server and returns a new `NatsMessageBus`
     pub async fn new(
+        client_name: Option<BusClient>,
         server: &str,
         _bus_options: BusOptions,
         timeout_options: TimeoutOptions,
@@ -85,6 +82,7 @@ impl NatsMessageBus {
         Self {
             timeout_options,
             connection: Self::connect(server).await,
+            client_name: client_name.unwrap_or(BusClient::Unnamed),
         }
     }
 }
@@ -166,5 +164,12 @@ impl Bus for NatsMessageBus {
             .context(Subscribe {
                 channel: channel.to_string(),
             })
+    }
+
+    fn client_name(&self) -> &BusClient {
+        &self.client_name
+    }
+    fn timeout_opts(&self) -> &TimeoutOptions {
+        &self.timeout_options
     }
 }

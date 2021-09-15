@@ -1,6 +1,9 @@
 use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
-use common_lib::types::v0::message_bus::NodeId;
+use common_lib::{
+    mbus_api::{bus, MessageIdTimeout},
+    types::v0::message_bus::NodeId,
+};
 use rpc::mayastor::mayastor_client::MayastorClient;
 use snafu::ResultExt;
 use std::{
@@ -25,20 +28,26 @@ pub(crate) struct GrpcContext {
 }
 
 impl GrpcContext {
-    pub(crate) fn new(
+    pub(crate) fn new<T: MessageIdTimeout>(
         lock: Arc<tokio::sync::Mutex<()>>,
         node: &NodeId,
         endpoint: &str,
         comms_timeouts: &NodeCommsTimeout,
+        request: Option<T>,
     ) -> Result<Self, SvcError> {
         let uri = format!("http://{}", endpoint);
         let uri = http::uri::Uri::from_str(&uri).context(GrpcConnectUri {
             node_id: node.to_string(),
             uri: uri.clone(),
         })?;
+
+        let timeout = request
+            .map(|r| r.timeout(comms_timeouts.request(), &bus()))
+            .unwrap_or_else(|| comms_timeouts.request());
+
         let endpoint = tonic::transport::Endpoint::from(uri)
             .connect_timeout(comms_timeouts.connect() + Duration::from_millis(500))
-            .timeout(comms_timeouts.request());
+            .timeout(timeout);
 
         Ok(Self {
             node: node.clone(),

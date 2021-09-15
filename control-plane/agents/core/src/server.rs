@@ -9,6 +9,7 @@ use crate::core::registry;
 use common::Service;
 use common_lib::types::v0::message_bus::ChannelVs;
 
+use common_lib::mbus_api::BusClient;
 use structopt::StructOpt;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
@@ -50,12 +51,16 @@ pub(crate) struct CliArgs {
     pub(crate) store_timeout: humantime::Duration,
 
     /// The timeout for every node connection (gRPC)
-    #[structopt(long, default_value = "1s")]
-    pub(crate) connect: humantime::Duration,
+    #[structopt(long, default_value = common_lib::DEFAULT_CONN_TIMEOUT)]
+    pub(crate) connect_timeout: humantime::Duration,
 
-    /// The timeout for every node request operation (gRPC)
-    #[structopt(long, short, default_value = "5s")]
-    pub(crate) request: humantime::Duration,
+    /// The default timeout for node request timeouts (gRPC)
+    #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
+    pub(crate) request_timeout: humantime::Duration,
+
+    /// Don't use minimum timeouts for specific requests
+    #[structopt(long)]
+    no_min_timeouts: bool,
 
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(long, short)]
@@ -123,7 +128,7 @@ async fn server(cli_args: CliArgs) {
 
     let service = Service::builder(cli_args.nats, ChannelVs::Core)
         .with_default_liveness()
-        .connect_message_bus()
+        .connect_message_bus(CliArgs::from_args().no_min_timeouts, BusClient::CoreAgent)
         .await
         .with_shared_state(registry.clone())
         .configure_async(node::configure)

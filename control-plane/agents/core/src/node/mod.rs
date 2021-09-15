@@ -36,8 +36,8 @@ pub(crate) async fn configure(builder: Service) -> Service {
 async fn create_node_service(builder: &Service) -> service::Service {
     let registry = builder.get_shared_state::<Registry>().clone();
     let deadline = CliArgs::from_args().deadline.into();
-    let request = CliArgs::from_args().request.into();
-    let connect = CliArgs::from_args().connect.into();
+    let request = CliArgs::from_args().request_timeout.into();
+    let connect = CliArgs::from_args().connect_timeout.into();
     let service = service::Service::new(registry.clone(), deadline, request, connect);
 
     // attempt to reload the node state based on the specification
@@ -103,10 +103,22 @@ mod tests {
         let nodes = GetNodes::default().request().await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), 1);
+        // still Online because the node is reachable via gRPC!
+        assert_eq!(
+            nodes.0.first().unwrap(),
+            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online)
+        );
+
+        cluster.composer().kill(maya_name.as_str()).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        let nodes = GetNodes::default().request().await.unwrap();
+        tracing::info!("Nodes: {:?}", nodes);
+        assert_eq!(nodes.0.len(), 1);
         assert_eq!(
             nodes.0.first().unwrap(),
             &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Offline)
         );
+        cluster.composer().start(maya_name.as_str()).await.unwrap();
 
         let node = nodes.0.first().cloned().unwrap();
         cluster.composer().restart("core").await.unwrap();

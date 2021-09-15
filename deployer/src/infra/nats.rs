@@ -33,13 +33,14 @@ static NATS_MSG_BUS: OnceCell<NatsMessageBus> = OnceCell::new();
 
 fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::new()
+        .with_req_timeout(None)
         .with_timeout(Duration::from_millis(500))
         .with_timeout_backoff(Duration::from_millis(500))
         .with_max_retries(10)
 }
 async fn message_bus_init_options(server: &str, timeouts: TimeoutOptions) {
     if NATS_MSG_BUS.get().is_none() {
-        let nc = NatsMessageBus::new(server, BusOptions::new(), timeouts).await;
+        let nc = NatsMessageBus::new(None, server, BusOptions::new(), timeouts).await;
         NATS_MSG_BUS.set(nc).ok();
     }
 }

@@ -37,7 +37,8 @@ pub(crate) struct NodeCommsTimeout {
 }
 
 impl NodeCommsTimeout {
-    fn new(connect: std::time::Duration, request: std::time::Duration) -> Self {
+    /// return a new `Self` with the connect and request timeouts
+    pub(crate) fn new(connect: std::time::Duration, request: std::time::Duration) -> Self {
         Self { connect, request }
     }
     /// timeout to establish connection to the node
@@ -76,12 +77,7 @@ impl Service {
         if let Some(node) = state.get(id) {
             let mut node = node.lock().await;
             if node.is_online() {
-                tracing::error!(
-                    "Node id '{}' missed the registration deadline of {:?}",
-                    id,
-                    service.deadline
-                );
-                node.update();
+                node.update_liveness().await;
             }
         }
     }

@@ -100,6 +100,7 @@ fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_max_retries(0)
         .with_timeout(Duration::from_millis(250))
+        .with_req_timeout(None)
 }
 
 /// Get the nexus spec
@@ -115,7 +116,7 @@ async fn nexus_share_transaction() {
         .with_rest(false)
         .with_pools(1)
         .with_agents(vec!["core"])
-        .with_node_timeouts(Duration::from_millis(350), Duration::from_millis(350))
+        .with_req_timeouts(Duration::from_millis(350), Duration::from_millis(350))
         .with_bus_timeouts(bus_timeout_opts())
         .build()
         .await
@@ -247,7 +248,7 @@ async fn nexus_share_transaction_store() {
         .with_rest(false)
         .with_pools(1)
         .with_agents(vec!["core"])
-        .with_node_timeouts(grpc_timeout, grpc_timeout)
+        .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
         .with_bus_timeouts(bus_timeout_opts())
@@ -294,10 +295,10 @@ async fn nexus_share_transaction_store() {
 async fn nexus_child_transaction() {
     let grpc_timeout = Duration::from_millis(350);
     let cluster = ClusterBuilder::builder()
-        .with_rest(false)
+        .with_rest(true)
         .with_pools(1)
         .with_agents(vec!["core"])
-        .with_node_timeouts(grpc_timeout, grpc_timeout)
+        .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_bus_timeouts(bus_timeout_opts())
         .build()
         .await
@@ -382,7 +383,7 @@ async fn nexus_child_transaction_store() {
         .with_rest(false)
         .with_pools(1)
         .with_agents(vec!["core"])
-        .with_node_timeouts(grpc_timeout, grpc_timeout)
+        .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
         .with_bus_timeouts(bus_timeout_opts())

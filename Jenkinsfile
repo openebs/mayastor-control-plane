@@ -129,7 +129,6 @@ pipeline {
           agent { label 'nixos-mayastor' }
           steps {
             sh 'printenv'
-            sh 'nix-shell --run "cargo build --bins"'
             sh 'nix-shell --run "./scripts/bdd-tests.sh"'
           }
         }

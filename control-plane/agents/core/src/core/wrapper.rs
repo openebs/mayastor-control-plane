@@ -20,12 +20,17 @@ use std::cmp::Ordering;
 /// all pools and replicas from the node
 /// a watchdog to keep track of the node's liveness
 /// a lock to serialize mutating gRPC calls
+/// The Node may still be considered online even when the watchdog times out if it still is
+/// responding to gRPC liveness probes.
 #[derive(Debug, Clone)]
 pub(crate) struct NodeWrapper {
     /// inner Node state
     node_state: NodeState,
     /// watchdog to track the node state
     watchdog: Watchdog,
+    /// indicates whether the node has already missed its deadline and in such case we don't
+    /// need to keep posting duplicate error events
+    missed_deadline: bool,
     /// gRPC CRUD lock
     lock: Arc<tokio::sync::Mutex<()>>,
     /// node communication timeouts
@@ -45,6 +50,7 @@ impl NodeWrapper {
         Self {
             node_state: node.clone(),
             watchdog: Watchdog::new(&node.id, deadline),
+            missed_deadline: false,
             lock: Default::default(),
             comms_timeouts,
             states: ResourceStatesLocked::new(),
@@ -56,6 +62,40 @@ impl NodeWrapper {
         GrpcClient::new(&self.grpc_context()?).await
     }
 
+    /// Get `GrpcClient` for this node, and specify the comms timeout
+    async fn grpc_client_timeout(&self, timeout: NodeCommsTimeout) -> Result<GrpcClient, SvcError> {
+        GrpcClient::new(&self.grpc_context_timeout(timeout)?).await
+    }
+
+    /// Get `GrpcContext` for this node
+    /// It will be used to execute the `request` operation
+    pub(crate) fn grpc_context_ext(
+        &self,
+        request: impl MessageIdTimeout,
+    ) -> Result<GrpcContext, SvcError> {
+        GrpcContext::new(
+            self.lock.clone(),
+            &self.id,
+            &self.node_state.grpc_endpoint,
+            &self.comms_timeouts,
+            Some(request),
+        )
+    }
+
+    /// Get `GrpcContext` for this node using the specified timeout
+    pub(crate) fn grpc_context_timeout(
+        &self,
+        timeout: NodeCommsTimeout,
+    ) -> Result<GrpcContext, SvcError> {
+        GrpcContext::new(
+            self.lock.clone(),
+            &self.id,
+            &self.node_state.grpc_endpoint,
+            &timeout,
+            None::<MessageId>,
+        )
+    }
+
     /// Get `GrpcContext` for this node
     pub(crate) fn grpc_context(&self) -> Result<GrpcContext, SvcError> {
         GrpcContext::new(
@@ -63,6 +103,7 @@ impl NodeWrapper {
             &self.id,
             &self.node_state.grpc_endpoint,
             &self.comms_timeouts,
+            None::<MessageId>,
         )
     }
 
@@ -74,29 +115,86 @@ impl NodeWrapper {
     /// On_register callback when the node is registered with the registry
     pub(crate) async fn on_register(&mut self) {
         self.watchdog.pet().await.ok();
+        if self.missed_deadline {
+            tracing::info!(node.uuid=%self.id, "The node had missed the heartbeat deadline but it's now re-registered itself");
+        }
+        self.missed_deadline = false;
         if self.set_status(NodeStatus::Online) != NodeStatus::Online {
             // if a node reappears as online, then reload its information
             self.reload().await.ok();
         }
     }
 
-    /// Update the node state based on the watchdog
-    pub(crate) fn update(&mut self) {
+    /// Update the node liveness if the watchdog's registration expired
+    /// If the node is still responding to gRPC then consider it as online and reset the watchdog.
+    pub(crate) async fn update_liveness(&mut self) {
         if self.registration_expired() {
-            self.set_status(NodeStatus::Offline);
+            if !self.missed_deadline {
+                tracing::error!(
+                    "Node id '{}' missed the registration deadline of {:?}",
+                    self.id,
+                    self.watchdog.deadline()
+                );
+            }
+
+            if self.is_online()
+                && self.liveness_probe().await.is_ok()
+                && self.watchdog.pet().await.is_ok()
+            {
+                if !self.missed_deadline {
+                    tracing::warn!(node.uuid=%self.id, "The node missed the heartbeat deadline but it's still responding to gRPC so we're considering it online");
+                }
+            } else {
+                if self.missed_deadline {
+                    tracing::error!(
+                        "Node id '{}' missed the registration deadline of {:?}",
+                        self.id,
+                        self.watchdog.deadline()
+                    );
+                }
+                self.set_status(NodeStatus::Offline);
+            }
+            self.missed_deadline = true;
         }
+    }
+
+    /// Probe the node for liveness
+    pub(crate) async fn liveness_probe(&mut self) -> Result<(), SvcError> {
+        // use the connect timeout for liveness
+        let timeouts =
+            NodeCommsTimeout::new(self.comms_timeouts.connect(), self.comms_timeouts.connect());
+
+        let mut ctx = self.grpc_client_timeout(timeouts).await?;
+        let _ = ctx
+            .client
+            .get_mayastor_info(rpc::mayastor::Null {})
+            .await
+            .map_err(|_| SvcError::NodeNotOnline {
+                node: self.id.to_owned(),
+            })?;
+        Ok(())
     }
 
     /// Set the node status and return the previous status
     pub(crate) fn set_status(&mut self, state: NodeStatus) -> NodeStatus {
         let previous = self.status.clone();
         if self.node_state.status != state {
-            tracing::info!(
-                "Node '{}' changing from {} to {}",
-                self.node_state.id,
-                self.node_state.status.to_string(),
-                state.to_string(),
-            );
+            if state == NodeStatus::Online {
+                tracing::info!(
+                    "Node '{}' changing from {} to {}",
+                    self.node_state.id,
+                    self.node_state.status.to_string(),
+                    state.to_string(),
+                );
+            } else {
+                tracing::warn!(
+                    "Node '{}' changing from {} to {}",
+                    self.node_state.id,
+                    self.node_state.status.to_string(),
+                    state.to_string(),
+                );
+            }
+
             self.node_state.status = state;
             if self.node_state.status == NodeStatus::Unknown {
                 self.watchdog.disarm()
@@ -371,9 +469,12 @@ use crate::{
     node::service::NodeCommsTimeout,
 };
 use async_trait::async_trait;
-use common_lib::types::v0::{
-    store,
-    store::{nexus::NexusState, replica::ReplicaState},
+use common_lib::{
+    mbus_api::{Message, MessageId, MessageIdTimeout},
+    types::v0::{
+        store,
+        store::{nexus::NexusState, replica::ReplicaState},
+    },
 };
 use std::{ops::Deref, sync::Arc};
 
@@ -411,8 +512,11 @@ pub trait ClientOps {
 /// of the `ClientOps` trait and the `Registry` itself
 #[async_trait]
 pub(crate) trait InternalOps {
-    /// Get the grpc lock and client pair
-    async fn grpc_client_locked(&self) -> Result<GrpcClientLocked, SvcError>;
+    /// Get the grpc lock and client pair to execute the provided `request`
+    async fn grpc_client_locked<T: MessageIdTimeout>(
+        &self,
+        request: T,
+    ) -> Result<GrpcClientLocked, SvcError>;
     /// Get the inner lock, typically used to sync mutating gRPC operations
     async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>>;
 }
@@ -471,8 +575,16 @@ impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
 #[async_trait]
 impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
-    async fn grpc_client_locked(&self) -> Result<GrpcClientLocked, SvcError> {
-        let ctx = self.lock().await.grpc_context()?;
+    async fn grpc_client_locked<T: MessageIdTimeout>(
+        &self,
+        request: T,
+    ) -> Result<GrpcClientLocked, SvcError> {
+        if !self.lock().await.is_online() {
+            return Err(SvcError::NodeNotOnline {
+                node: self.lock().await.id.clone(),
+            });
+        }
+        let ctx = self.lock().await.grpc_context_ext(request)?;
         let client = ctx.connect_locked().await?;
         Ok(client)
     }
@@ -484,7 +596,7 @@ impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 #[async_trait]
 impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_pool =
             ctx.client
                 .create_pool(request.to_rpc())
@@ -500,7 +612,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
     /// Destroy a pool on the node via gRPC
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .destroy_pool(request.to_rpc())
@@ -515,7 +627,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Create a replica on the pool via gRPC
     async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_replica =
             ctx.client
                 .create_replica(request.to_rpc())
@@ -533,7 +645,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Share a replica on the pool via gRPC
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let share = ctx
             .client
             .share_replica(request.to_rpc())
@@ -550,7 +662,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Unshare a replica on the pool via gRPC
     async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let local_uri = ctx
             .client
             .share_replica(request.to_rpc())
@@ -567,7 +679,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Destroy a replica on the pool via gRPC
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .destroy_replica(request.to_rpc())
@@ -583,7 +695,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Create a nexus on the node via gRPC
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_nexus =
             ctx.client
                 .create_nexus(request.to_rpc())
@@ -599,7 +711,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Destroy a nexus on the node via gRPC
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .destroy_nexus(request.to_rpc())
@@ -614,7 +726,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Share a nexus on the node via gRPC
     async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let share = ctx
             .client
             .publish_nexus(request.to_rpc())
@@ -630,7 +742,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Unshare a nexus on the node via gRPC
     async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .unpublish_nexus(request.to_rpc())
@@ -645,7 +757,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Add a child to a nexus via gRPC
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let result = ctx.client.add_child_nexus(request.to_rpc()).await;
         self.lock().await.update_nexus_states().await?;
         let rpc_child = match result {
@@ -676,7 +788,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Remove a child from its parent nexus via gRPC
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let result = ctx.client.remove_child_nexus(request.to_rpc()).await;
         self.lock().await.update_nexus_states().await?;
         match result {

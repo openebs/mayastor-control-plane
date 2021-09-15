@@ -78,6 +78,7 @@ macro_rules! impl_ctrlp_agents {
                 fn from_str(source: &str) -> Result<Self, Self::Err> {
                     Ok(match source.trim().to_ascii_lowercase().as_str() {
                         "" => Self::Empty(Empty::default()),
+                        "empty" => Self::Empty(Empty::default()),
                         $(stringify!([<$name:lower>]) => Self::$name($name::default()),)+
                         _ => return Err(format!(
                             "\"{}\" is an invalid type of agent! Available types: {:?}",
@@ -110,10 +111,13 @@ macro_rules! impl_ctrlp_agents {
                         binary = binary.with_args(vec!["-d", &deadline.to_string()]);
                     }
                     if let Some(timeout) = &options.node_conn_timeout {
-                        binary = binary.with_args(vec!["--connect", &timeout.to_string()]);
+                        binary = binary.with_args(vec!["--connect-timeout", &timeout.to_string()]);
                     }
-                    if let Some(timeout) = &options.node_req_timeout {
-                        binary = binary.with_args(vec!["-r", &timeout.to_string()]);
+                    if let Some(timeout) = &options.request_timeout {
+                        binary = binary.with_args(vec!["--request-timeout", &timeout.to_string()]);
+                    }
+                    if options.no_min_timeouts {
+                        binary = binary.with_arg("--no-min-timeouts");
                     }
                     if let Some(timeout) = &options.store_timeout {
                         binary = binary.with_args(vec!["--store-timeout", &timeout.to_string()]);

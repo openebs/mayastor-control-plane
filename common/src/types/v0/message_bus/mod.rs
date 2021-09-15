@@ -30,10 +30,12 @@ use crate::types::v0::openapi::*;
 use std::fmt::Debug;
 use strum_macros::{EnumString, ToString};
 
+use crate::mbus_api::{BusClient, DynBus, MessageIdTimeout, TimeoutOptions};
 pub use crate::{
     bus_impl_string_id, bus_impl_string_id_inner, bus_impl_string_id_percent_decoding,
     bus_impl_string_uuid,
 };
+use std::time::Duration;
 
 pub const VERSION: &str = "v0";
 
@@ -161,4 +163,41 @@ pub enum MessageIdVs {
     GetSpecs,
     /// Get States
     GetStates,
+}
+
+impl MessageIdTimeout for MessageIdVs {
+    fn timeout_opts(&self, opts: TimeoutOptions, bus: &DynBus) -> TimeoutOptions {
+        let timeout = self.timeout(opts.timeout, bus);
+        opts.with_timeout(timeout)
+    }
+    fn timeout(&self, timeout: Duration, bus: &DynBus) -> Duration {
+        if let Some(min_timeouts) = bus.timeout_opts().request_timeout() {
+            let timeout = Duration::max(
+                timeout,
+                match self {
+                    MessageIdVs::CreateVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
+                    MessageIdVs::DestroyVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
+                    MessageIdVs::PublishVolume => min_timeouts.nexus(),
+                    MessageIdVs::UnpublishVolume => min_timeouts.nexus(),
+
+                    MessageIdVs::CreateNexus => min_timeouts.nexus(),
+                    MessageIdVs::DestroyNexus => min_timeouts.nexus(),
+
+                    MessageIdVs::CreateReplica => min_timeouts.replica(),
+                    MessageIdVs::DestroyReplica => min_timeouts.replica(),
+                    _ => timeout,
+                },
+            )
+            .min(Duration::from_secs(59));
+            match bus.client_name() {
+                // the rest server should have some slack to allow for the CoreAgent to timeout
+                // first
+                BusClient::RestServer => timeout + Duration::from_secs(1),
+                BusClient::CoreAgent => timeout,
+                _ => timeout,
+            }
+        } else {
+            timeout
+        }
+    }
 }

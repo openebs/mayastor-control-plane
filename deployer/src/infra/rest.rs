@@ -23,6 +23,17 @@ impl ComponentAction for Rest {
                 binary.with_arg("--no-auth")
             };
 
+            let mut binary = if let Some(timeout) = &options.request_timeout {
+                binary
+                    .with_arg("--request-timeout")
+                    .with_arg(&timeout.to_string())
+            } else {
+                binary
+            };
+            if options.no_min_timeouts {
+                binary = binary.with_arg("--no-min-timeouts");
+            }
+
             let binary = if !cfg.container_exists("jaeger") {
                 binary
             } else {
