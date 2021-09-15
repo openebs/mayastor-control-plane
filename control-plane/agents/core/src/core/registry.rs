@@ -194,7 +194,10 @@ impl Registry {
             Ok(result) => match result {
                 Ok(_) => Ok(()),
                 // already deleted, no problem
-                Err(StoreError::MissingEntry { .. }) => Ok(()),
+                Err(StoreError::MissingEntry { .. }) => {
+                    tracing::warn!("Entry with key {} missing from store.", key.to_string());
+                    Ok(())
+                }
                 Err(error) => Err(SvcError::from(error)),
             },
             Err(_) => Err(SvcError::from(StoreError::Timeout {

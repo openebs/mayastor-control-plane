@@ -182,6 +182,8 @@ pub enum SvcError {
     },
     #[snafu(display("No suitable replica removal candidates found for Volume '{}'", id))]
     ReplicaRemovalNoCandidates { id: String },
+    #[snafu(display("Failed to create the desired number of replicas for Volume '{}'", id))]
+    ReplicaCreateNumber { id: String },
     #[snafu(display("No online replicas are available for Volume '{}'", id))]
     NoOnlineReplicas { id: String },
     #[snafu(display("Entry with key '{}' not found in the persistent store.", key))]
@@ -506,6 +508,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::NoOnlineReplicas { .. } => ReplyError {
                 kind: ReplyErrorKind::VolumeNoReplicas,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::ReplicaCreateNumber { .. } => ReplyError {
+                kind: ReplyErrorKind::ReplicaCreateNumber,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),

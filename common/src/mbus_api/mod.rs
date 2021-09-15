@@ -342,6 +342,7 @@ pub enum ReplyErrorKind {
     ReplicaCountAchieved,
     ReplicaChangeCount,
     ReplicaIncrease,
+    ReplicaCreateNumber,
     VolumeNoReplicas,
     InUse,
 }
