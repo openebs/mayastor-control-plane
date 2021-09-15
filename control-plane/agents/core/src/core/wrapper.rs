@@ -579,6 +579,11 @@ impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
         &self,
         request: T,
     ) -> Result<GrpcClientLocked, SvcError> {
+        if !self.lock().await.is_online() {
+            return Err(SvcError::NodeNotOnline {
+                node: self.lock().await.id.clone(),
+            });
+        }
         let ctx = self.lock().await.grpc_context_ext(request)?;
         let client = ctx.connect_locked().await?;
         Ok(client)
