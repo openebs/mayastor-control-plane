@@ -20,12 +20,17 @@ use std::cmp::Ordering;
 /// all pools and replicas from the node
 /// a watchdog to keep track of the node's liveness
 /// a lock to serialize mutating gRPC calls
+/// The Node may still be considered online even when the watchdog times out if it still is
+/// responding to gRPC liveness probes.
 #[derive(Debug, Clone)]
 pub(crate) struct NodeWrapper {
     /// inner Node state
     node_state: NodeState,
     /// watchdog to track the node state
     watchdog: Watchdog,
+    /// indicates whether the node has already missed its deadline and in such case we don't
+    /// need to keep posting duplicate error events
+    missed_deadline: bool,
     /// gRPC CRUD lock
     lock: Arc<tokio::sync::Mutex<()>>,
     /// node communication timeouts
@@ -45,6 +50,7 @@ impl NodeWrapper {
         Self {
             node_state: node.clone(),
             watchdog: Watchdog::new(&node.id, deadline),
+            missed_deadline: false,
             lock: Default::default(),
             comms_timeouts,
             states: ResourceStatesLocked::new(),
@@ -54,6 +60,11 @@ impl NodeWrapper {
     /// Get `GrpcClient` for this node
     async fn grpc_client(&self) -> Result<GrpcClient, SvcError> {
         GrpcClient::new(&self.grpc_context()?).await
+    }
+
+    /// Get `GrpcClient` for this node, and specify the comms timeout
+    async fn grpc_client_timeout(&self, timeout: NodeCommsTimeout) -> Result<GrpcClient, SvcError> {
+        GrpcClient::new(&self.grpc_context_timeout(timeout)?).await
     }
 
     /// Get `GrpcContext` for this node
@@ -68,6 +79,20 @@ impl NodeWrapper {
             &self.node_state.grpc_endpoint,
             &self.comms_timeouts,
             Some(request),
+        )
+    }
+
+    /// Get `GrpcContext` for this node using the specified timeout
+    pub(crate) fn grpc_context_timeout(
+        &self,
+        timeout: NodeCommsTimeout,
+    ) -> Result<GrpcContext, SvcError> {
+        GrpcContext::new(
+            self.lock.clone(),
+            &self.id,
+            &self.node_state.grpc_endpoint,
+            &timeout,
+            None::<MessageId>,
         )
     }
 
@@ -90,29 +115,86 @@ impl NodeWrapper {
     /// On_register callback when the node is registered with the registry
     pub(crate) async fn on_register(&mut self) {
         self.watchdog.pet().await.ok();
+        if self.missed_deadline {
+            tracing::info!(node.uuid=%self.id, "The node had missed the heartbeat deadline but it's now re-registered itself");
+        }
+        self.missed_deadline = false;
         if self.set_status(NodeStatus::Online) != NodeStatus::Online {
             // if a node reappears as online, then reload its information
             self.reload().await.ok();
         }
     }
 
-    /// Update the node state based on the watchdog
-    pub(crate) fn update(&mut self) {
+    /// Update the node liveness if the watchdog's registration expired
+    /// If the node is still responding to gRPC then consider it as online and reset the watchdog.
+    pub(crate) async fn update_liveness(&mut self) {
         if self.registration_expired() {
-            self.set_status(NodeStatus::Offline);
+            if !self.missed_deadline {
+                tracing::error!(
+                    "Node id '{}' missed the registration deadline of {:?}",
+                    self.id,
+                    self.watchdog.deadline()
+                );
+            }
+
+            if self.is_online()
+                && self.liveness_probe().await.is_ok()
+                && self.watchdog.pet().await.is_ok()
+            {
+                if !self.missed_deadline {
+                    tracing::warn!(node.uuid=%self.id, "The node missed the heartbeat deadline but it's still responding to gRPC so we're considering it online");
+                }
+            } else {
+                if self.missed_deadline {
+                    tracing::error!(
+                        "Node id '{}' missed the registration deadline of {:?}",
+                        self.id,
+                        self.watchdog.deadline()
+                    );
+                }
+                self.set_status(NodeStatus::Offline);
+            }
+            self.missed_deadline = true;
         }
+    }
+
+    /// Probe the node for liveness
+    pub(crate) async fn liveness_probe(&mut self) -> Result<(), SvcError> {
+        // use the connect timeout for liveness
+        let timeouts =
+            NodeCommsTimeout::new(self.comms_timeouts.connect(), self.comms_timeouts.connect());
+
+        let mut ctx = self.grpc_client_timeout(timeouts).await?;
+        let _ = ctx
+            .client
+            .get_mayastor_info(rpc::mayastor::Null {})
+            .await
+            .map_err(|_| SvcError::NodeNotOnline {
+                node: self.id.to_owned(),
+            })?;
+        Ok(())
     }
 
     /// Set the node status and return the previous status
     pub(crate) fn set_status(&mut self, state: NodeStatus) -> NodeStatus {
         let previous = self.status.clone();
         if self.node_state.status != state {
-            tracing::info!(
-                "Node '{}' changing from {} to {}",
-                self.node_state.id,
-                self.node_state.status.to_string(),
-                state.to_string(),
-            );
+            if state == NodeStatus::Online {
+                tracing::info!(
+                    "Node '{}' changing from {} to {}",
+                    self.node_state.id,
+                    self.node_state.status.to_string(),
+                    state.to_string(),
+                );
+            } else {
+                tracing::warn!(
+                    "Node '{}' changing from {} to {}",
+                    self.node_state.id,
+                    self.node_state.status.to_string(),
+                    state.to_string(),
+                );
+            }
+
             self.node_state.status = state;
             if self.node_state.status == NodeStatus::Unknown {
                 self.watchdog.disarm()

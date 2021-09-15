@@ -24,7 +24,9 @@ impl ComponentAction for Rest {
             };
 
             let mut binary = if let Some(timeout) = &options.request_timeout {
-                binary.with_arg("--timeout").with_arg(&timeout.to_string())
+                binary
+                    .with_arg("--request-timeout")
+                    .with_arg(&timeout.to_string())
             } else {
                 binary
             };
