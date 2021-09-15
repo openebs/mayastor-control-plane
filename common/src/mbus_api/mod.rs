@@ -19,9 +19,7 @@ use crate::types::{
 };
 use async_trait::async_trait;
 use dyn_clonable::clonable;
-pub use mbus_nats::{
-    bus, message_bus_init, message_bus_init_options, message_bus_init_tokio, NatsMessageBus,
-};
+pub use mbus_nats::{bus, message_bus_init, message_bus_init_options, NatsMessageBus};
 pub use receive::*;
 pub use send::*;
 use serde::{de::StdError, Deserialize, Serialize};
@@ -139,6 +137,27 @@ where
 pub enum MessageId {
     /// Version 0
     v0(MessageIdVs),
+}
+
+/// Exposes specific timeouts for different MessageId's
+pub trait MessageIdTimeout: Send {
+    /// Get the default `TimeoutOptions` for this message
+    fn timeout_opts(&self, opts: TimeoutOptions, bus: &DynBus) -> TimeoutOptions;
+    /// Get the default timeout `Duration` for this message
+    fn timeout(&self, timeout: Duration, bus: &DynBus) -> Duration;
+}
+
+impl MessageIdTimeout for MessageId {
+    fn timeout_opts(&self, opts: TimeoutOptions, bus: &DynBus) -> TimeoutOptions {
+        match self {
+            MessageId::v0(id) => id.timeout_opts(opts, bus),
+        }
+    }
+    fn timeout(&self, timeout: Duration, bus: &DynBus) -> Duration {
+        match self {
+            MessageId::v0(id) => id.timeout(timeout, bus),
+        }
+    }
 }
 
 impl Serialize for MessageId {
@@ -394,6 +413,37 @@ pub struct TimeoutOptions {
     pub(crate) timeout_step: std::time::Duration,
     /// max number of retries following the initial attempt's timeout
     pub(crate) max_retries: Option<u32>,
+
+    /// Request specific minimum timeouts
+    request_timeout: Option<RequestMinTimeout>,
+}
+
+/// Request specific minimum timeouts
+/// zeroing replicas on create/destroy takes some time (observed up to 7seconds)
+/// nexus creation by itself can take up to 4 seconds... it can take even longer if etcd is not up
+#[derive(Debug, Clone)]
+pub struct RequestMinTimeout {
+    replica: Duration,
+    nexus: Duration,
+}
+
+impl Default for RequestMinTimeout {
+    fn default() -> Self {
+        Self {
+            replica: Duration::from_secs(10),
+            nexus: Duration::from_secs(30),
+        }
+    }
+}
+impl RequestMinTimeout {
+    /// minimum timeout for a replica operation
+    pub fn replica(&self) -> Duration {
+        self.replica
+    }
+    /// minimum timeout for a nexus operation
+    pub fn nexus(&self) -> Duration {
+        self.nexus
+    }
 }
 
 impl TimeoutOptions {
@@ -406,6 +456,9 @@ impl TimeoutOptions {
     pub(crate) fn default_max_retries() -> u32 {
         6
     }
+    pub(crate) fn default_request_timeouts() -> Option<RequestMinTimeout> {
+        Some(RequestMinTimeout::default())
+    }
 }
 
 impl Default for TimeoutOptions {
@@ -414,6 +467,7 @@ impl Default for TimeoutOptions {
             timeout: Self::default_timeout(),
             timeout_step: Self::default_timeout_step(),
             max_retries: Some(Self::default_max_retries()),
+            request_timeout: Self::default_request_timeouts(),
         }
     }
 }
@@ -422,6 +476,11 @@ impl TimeoutOptions {
     /// New options with default values
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// New options with default values but with no retries
+    pub fn new_no_retries() -> Self {
+        Self::new().with_max_retries(0)
     }
 
     /// Timeout after which we'll either fail the request or start retrying
@@ -442,6 +501,17 @@ impl TimeoutOptions {
     pub fn with_max_retries<M: Into<Option<u32>>>(mut self, max_retries: M) -> Self {
         self.max_retries = max_retries.into();
         self
+    }
+
+    /// Minimum timeouts for specific requests
+    pub fn with_req_timeout(mut self, timeout: impl Into<Option<RequestMinTimeout>>) -> Self {
+        self.request_timeout = timeout.into();
+        self
+    }
+
+    /// Get the minimum request timeouts
+    pub fn request_timeout(&self) -> Option<&RequestMinTimeout> {
+        self.request_timeout.as_ref()
     }
 }
 
@@ -467,4 +537,21 @@ pub trait Bus: Clone + Send + Sync {
     /// polled for messages until it is either explicitly closed or
     /// when the bus is closed
     async fn subscribe(&self, channel: Channel) -> BusResult<BusSubscription>;
+    /// Get this client's name
+    fn client_name(&self) -> &BusClient;
+    /// Get the configured timeout options
+    fn timeout_opts(&self) -> &TimeoutOptions;
+}
+
+/// Identifies which client is using the message bus
+#[derive(Debug, Clone)]
+pub enum BusClient {
+    /// The Rest Server
+    RestServer,
+    /// The Core Agent
+    CoreAgent,
+    /// The JsonGrpc Agent
+    JsonGrpcAgent,
+    /// Not Specified
+    Unnamed,
 }

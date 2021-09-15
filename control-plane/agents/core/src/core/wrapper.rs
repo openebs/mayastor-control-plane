@@ -57,12 +57,28 @@ impl NodeWrapper {
     }
 
     /// Get `GrpcContext` for this node
+    /// It will be used to execute the `request` operation
+    pub(crate) fn grpc_context_ext(
+        &self,
+        request: impl MessageIdTimeout,
+    ) -> Result<GrpcContext, SvcError> {
+        GrpcContext::new(
+            self.lock.clone(),
+            &self.id,
+            &self.node_state.grpc_endpoint,
+            &self.comms_timeouts,
+            Some(request),
+        )
+    }
+
+    /// Get `GrpcContext` for this node
     pub(crate) fn grpc_context(&self) -> Result<GrpcContext, SvcError> {
         GrpcContext::new(
             self.lock.clone(),
             &self.id,
             &self.node_state.grpc_endpoint,
             &self.comms_timeouts,
+            None::<MessageId>,
         )
     }
 
@@ -371,9 +387,12 @@ use crate::{
     node::service::NodeCommsTimeout,
 };
 use async_trait::async_trait;
-use common_lib::types::v0::{
-    store,
-    store::{nexus::NexusState, replica::ReplicaState},
+use common_lib::{
+    mbus_api::{Message, MessageId, MessageIdTimeout},
+    types::v0::{
+        store,
+        store::{nexus::NexusState, replica::ReplicaState},
+    },
 };
 use std::{ops::Deref, sync::Arc};
 
@@ -411,8 +430,11 @@ pub trait ClientOps {
 /// of the `ClientOps` trait and the `Registry` itself
 #[async_trait]
 pub(crate) trait InternalOps {
-    /// Get the grpc lock and client pair
-    async fn grpc_client_locked(&self) -> Result<GrpcClientLocked, SvcError>;
+    /// Get the grpc lock and client pair to execute the provided `request`
+    async fn grpc_client_locked<T: MessageIdTimeout>(
+        &self,
+        request: T,
+    ) -> Result<GrpcClientLocked, SvcError>;
     /// Get the inner lock, typically used to sync mutating gRPC operations
     async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>>;
 }
@@ -471,8 +493,11 @@ impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
 #[async_trait]
 impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
-    async fn grpc_client_locked(&self) -> Result<GrpcClientLocked, SvcError> {
-        let ctx = self.lock().await.grpc_context()?;
+    async fn grpc_client_locked<T: MessageIdTimeout>(
+        &self,
+        request: T,
+    ) -> Result<GrpcClientLocked, SvcError> {
+        let ctx = self.lock().await.grpc_context_ext(request)?;
         let client = ctx.connect_locked().await?;
         Ok(client)
     }
@@ -484,7 +509,7 @@ impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 #[async_trait]
 impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_pool =
             ctx.client
                 .create_pool(request.to_rpc())
@@ -500,7 +525,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     }
     /// Destroy a pool on the node via gRPC
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .destroy_pool(request.to_rpc())
@@ -515,7 +540,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Create a replica on the pool via gRPC
     async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_replica =
             ctx.client
                 .create_replica(request.to_rpc())
@@ -533,7 +558,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Share a replica on the pool via gRPC
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let share = ctx
             .client
             .share_replica(request.to_rpc())
@@ -550,7 +575,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Unshare a replica on the pool via gRPC
     async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let local_uri = ctx
             .client
             .share_replica(request.to_rpc())
@@ -567,7 +592,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Destroy a replica on the pool via gRPC
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .destroy_replica(request.to_rpc())
@@ -583,7 +608,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Create a nexus on the node via gRPC
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_nexus =
             ctx.client
                 .create_nexus(request.to_rpc())
@@ -599,7 +624,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Destroy a nexus on the node via gRPC
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .destroy_nexus(request.to_rpc())
@@ -614,7 +639,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Share a nexus on the node via gRPC
     async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let share = ctx
             .client
             .publish_nexus(request.to_rpc())
@@ -630,7 +655,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Unshare a nexus on the node via gRPC
     async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
             .client
             .unpublish_nexus(request.to_rpc())
@@ -645,7 +670,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Add a child to a nexus via gRPC
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let result = ctx.client.add_child_nexus(request.to_rpc()).await;
         self.lock().await.update_nexus_states().await?;
         let rpc_child = match result {
@@ -676,7 +701,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Remove a child from its parent nexus via gRPC
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
-        let mut ctx = self.grpc_client_locked().await?;
+        let mut ctx = self.grpc_client_locked(request.id()).await?;
         let result = ctx.client.remove_child_nexus(request.to_rpc()).await;
         self.lock().await.update_nexus_states().await?;
         match result {

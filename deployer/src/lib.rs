@@ -5,6 +5,7 @@ use infra::*;
 use composer::{Builder, TEST_LABEL_PREFIX};
 use std::{convert::TryInto, str::FromStr, time::Duration};
 use structopt::StructOpt;
+use strum::VariantNames;
 
 #[derive(Debug, StructOpt)]
 pub struct CliArgs {
@@ -72,6 +73,7 @@ pub struct StartOptions {
         short,
         long,
         default_value = default_agents(),
+        possible_values = ControlPlaneAgent::VARIANTS,
         value_delimiter = ","
     )]
     pub agents: Vec<ControlPlaneAgent>,
@@ -160,13 +162,17 @@ pub struct StartOptions {
     #[structopt(long)]
     pub node_deadline: Option<humantime::Duration>,
 
-    /// Override the node's request timeout
+    /// Override the base request timeout for NATS and GRPC requests
     #[structopt(long)]
-    pub node_req_timeout: Option<humantime::Duration>,
+    pub request_timeout: Option<humantime::Duration>,
 
     /// Override the node's connection timeout
     #[structopt(long)]
     pub node_conn_timeout: Option<humantime::Duration>,
+
+    /// Don't use minimum timeouts for specific requests
+    #[structopt(long)]
+    no_min_timeouts: bool,
 
     /// Override the core agent's store operation timeout
     #[structopt(long)]
@@ -219,9 +225,10 @@ impl StartOptions {
         self.reconcile_idle_period = Some(idle.into());
         self
     }
-    pub fn with_node_timeouts(mut self, connect: Duration, request: Duration) -> Self {
+    pub fn with_req_timeouts(mut self, no_min: bool, connect: Duration, request: Duration) -> Self {
+        self.no_min_timeouts = no_min;
         self.node_conn_timeout = Some(connect.into());
-        self.node_req_timeout = Some(request.into());
+        self.request_timeout = Some(request.into());
         self
     }
     pub fn with_rest(mut self, enabled: bool, jwk: Option<String>) -> Self {

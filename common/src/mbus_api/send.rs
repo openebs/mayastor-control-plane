@@ -298,12 +298,13 @@ where
 
     /// Sends the message and requests a reply.
     pub(crate) async fn request(&self, options: Option<TimeoutOptions>) -> BusResult<R> {
+        let options = self.timeout_opts(options);
         let payload = serde_json::to_vec(&self.payload).context(SerializeSend {
             channel: self.channel.clone(),
         })?;
         let reply = self
             .bus
-            .request(self.channel.clone(), &payload, options)
+            .request(self.channel.clone(), &payload, Some(options))
             .await?
             .data;
         let reply: ReplyPayload<R> =
@@ -312,5 +313,13 @@ where
                 reply: String::from_utf8(reply),
             })?;
         reply.0.context(ReplyWithError {})
+    }
+
+    /// Get the default timeout opts for this message
+    fn timeout_opts(&self, options: Option<TimeoutOptions>) -> TimeoutOptions {
+        let opts = options.unwrap_or_else(|| self.bus.timeout_opts().clone());
+        match &self.payload.id {
+            MessageId::v0(id) => id.timeout_opts(opts, &self.bus),
+        }
     }
 }

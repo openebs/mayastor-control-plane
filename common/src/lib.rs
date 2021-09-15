@@ -25,3 +25,12 @@ impl<F: Into<T>, T> IntoOption<T> for Option<F> {
         self.map(Into::into)
     }
 }
+
+/// Default request timeout for any NATS or GRPC request
+pub const DEFAULT_REQ_TIMEOUT: &str = "5s";
+
+/// Default connection timeout for a GRPC connection
+pub const DEFAULT_CONN_TIMEOUT: &str = "1s";
+
+/// Use a set of minimum timeouts for specific requests
+pub const ENABLE_MIN_TIMEOUTS: bool = true;

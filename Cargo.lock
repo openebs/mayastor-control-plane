@@ -747,6 +747,7 @@ dependencies = [
  "dyn-clonable",
  "env_logger",
  "etcd-client",
+ "humantime",
  "log",
  "nats 0.15.1",
  "once_cell",

@@ -51,20 +51,32 @@ pub(crate) struct CliArgs {
     #[structopt(long, required_unless = "jwk")]
     no_auth: bool,
 
-    /// The timeout for every REST request
-    #[structopt(long, short, default_value = "6s")]
-    pub(crate) timeout: humantime::Duration,
+    /// The default timeout for backend requests issued by the REST Server
+    #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
+    request_timeout: humantime::Duration,
+
+    /// Don't use minimum timeouts for specific requests
+    #[structopt(long)]
+    no_min_timeouts: bool,
 }
 
 /// default timeout options for every bus request
 fn bus_timeout_opts() -> TimeoutOptions {
-    TimeoutOptions::default()
-        .with_max_retries(0)
-        .with_timeout(CliArgs::from_args().timeout.into())
+    let timeout_opts =
+        TimeoutOptions::new_no_retries().with_timeout(CliArgs::from_args().request_timeout.into());
+
+    if CliArgs::from_args().no_min_timeouts {
+        timeout_opts.with_req_timeout(None)
+    } else {
+        timeout_opts.with_req_timeout(RequestMinTimeout::default())
+    }
 }
 
 use actix_web_opentelemetry::RequestTracing;
-use common_lib::{mbus_api, mbus_api::TimeoutOptions};
+use common_lib::{
+    mbus_api,
+    mbus_api::{BusClient, RequestMinTimeout, TimeoutOptions},
+};
 use opentelemetry::{
     global,
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
@@ -182,7 +194,12 @@ async fn main() -> anyhow::Result<()> {
             .configure_api(&v0::configure_api)
     };
 
-    mbus_api::message_bus_init_options(CliArgs::from_args().nats, bus_timeout_opts()).await;
+    mbus_api::message_bus_init_options(
+        BusClient::RestServer,
+        CliArgs::from_args().nats,
+        bus_timeout_opts(),
+    )
+    .await;
     let server =
         HttpServer::new(app).bind_rustls(CliArgs::from_args().https, get_certificates()?)?;
     if let Some(http) = CliArgs::from_args().http {

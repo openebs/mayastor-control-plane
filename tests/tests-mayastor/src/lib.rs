@@ -156,7 +156,8 @@ impl Cluster {
     /// connect to message bus helper for the cargo test code with bus timeouts
     async fn connect_to_bus_timeout(&self, name: &str, bus_timeout: TimeoutOptions) {
         actix_rt::time::timeout(std::time::Duration::from_secs(2), async {
-            mbus_api::message_bus_init_options(self.composer.container_ip(name), bus_timeout).await
+            mbus_api::message_bus_init_options(None, self.composer.container_ip(name), bus_timeout)
+                .await
         })
         .await
         .unwrap();
@@ -404,8 +405,18 @@ impl ClusterBuilder {
         self
     }
     /// Specify the node connect and request timeouts
-    pub fn with_node_timeouts(mut self, connect: Duration, request: Duration) -> Self {
-        self.opts = self.opts.with_node_timeouts(connect, request);
+    pub fn with_req_timeouts(mut self, connect: Duration, request: Duration) -> Self {
+        self.opts = self.opts.with_req_timeouts(true, connect, request);
+        self
+    }
+    /// Specify the node connect and request timeouts and whether to use minimum timeouts or not
+    pub fn with_req_timeouts_min(
+        mut self,
+        no_min: bool,
+        connect: Duration,
+        request: Duration,
+    ) -> Self {
+        self.opts = self.opts.with_req_timeouts(no_min, connect, request);
         self
     }
     /// Specify the message bus timeout options

@@ -27,6 +27,7 @@ impl JsonGrpcSvc {
         let node = node.state().context(NodeNotOnline {
             node: request.node.to_owned(),
         })?;
+        // todo: use the cli argument timeouts
         let mut client = JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
             .await
             .unwrap();

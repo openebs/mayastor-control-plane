@@ -36,8 +36,8 @@ pub(crate) async fn configure(builder: Service) -> Service {
 async fn create_node_service(builder: &Service) -> service::Service {
     let registry = builder.get_shared_state::<Registry>().clone();
     let deadline = CliArgs::from_args().deadline.into();
-    let request = CliArgs::from_args().request.into();
-    let connect = CliArgs::from_args().connect.into();
+    let request = CliArgs::from_args().request_timeout.into();
+    let connect = CliArgs::from_args().connect_timeout.into();
     let service = service::Service::new(registry.clone(), deadline, request, connect);
 
     // attempt to reload the node state based on the specification

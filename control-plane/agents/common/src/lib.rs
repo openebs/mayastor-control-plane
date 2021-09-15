@@ -59,6 +59,7 @@ pub enum ServiceError {
 pub struct Service {
     server: String,
     server_connected: bool,
+    no_min_timeouts: bool,
     channel: Channel,
     subscriptions: HashMap<String, Vec<Box<dyn ServiceSubscriber>>>,
     shared_state: std::sync::Arc<Container![Send + Sync]>,
@@ -72,6 +73,7 @@ impl Default for Service {
             channel: Default::default(),
             subscriptions: Default::default(),
             shared_state: std::sync::Arc::new(<Container![Send + Sync]>::new()),
+            no_min_timeouts: !common_lib::ENABLE_MIN_TIMEOUTS,
         }
     }
 }
@@ -157,16 +159,30 @@ impl Service {
     /// Connect to the provided message bus server immediately
     /// Useful for when dealing with async shared data which might required the
     /// message bus before the builder is complete
-    pub async fn connect_message_bus(mut self) -> Self {
-        self.message_bus_init().await;
+    pub async fn connect_message_bus(
+        mut self,
+        no_min_timeouts: bool,
+        client: impl Into<Option<BusClient>>,
+    ) -> Self {
+        self.message_bus_init(no_min_timeouts, client).await;
         self
     }
 
-    async fn message_bus_init(&mut self) {
+    async fn message_bus_init(
+        &mut self,
+        no_min_timeouts: bool,
+        client: impl Into<Option<BusClient>>,
+    ) {
         if !self.server_connected {
+            let timeout_opts = if no_min_timeouts {
+                TimeoutOptions::new_no_retries().with_req_timeout(None)
+            } else {
+                TimeoutOptions::new_no_retries()
+            };
             // todo: parse connection options when nats has better support
-            mbus_api::message_bus_init(self.server.clone()).await;
+            mbus_api::message_bus_init_options(client, self.server.clone(), timeout_opts).await;
             self.server_connected = true;
+            self.no_min_timeouts = no_min_timeouts;
         }
     }
 
@@ -367,7 +383,8 @@ impl Service {
     pub async fn run(mut self) {
         let mut threads = vec![];
 
-        self.message_bus_init().await;
+        self.message_bus_init(self.no_min_timeouts, BusClient::CoreAgent)
+            .await;
         let bus = mbus_api::bus();
 
         for subscriptions in self.subscriptions.iter() {
