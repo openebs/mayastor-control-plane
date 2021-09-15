@@ -44,7 +44,7 @@ let
       "rpc"
       "tests"
     ];
-    cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" ];
+    cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-controller" ];
 
     cargoLock = {
       lockFile = ../../../Cargo.lock;

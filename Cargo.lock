@@ -931,6 +931,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "csi-controller"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "common-lib",
+ "env_logger",
+ "futures",
+ "git-version",
+ "log",
+ "once_cell",
+ "regex",
+ "reqwest",
+ "rest",
+ "rpc",
+ "serde",
+ "serde_json",
+ "structopt",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "csv"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1507,6 +1533,28 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "wasi 0.10.0+wasi-snapshot-preview1",
+]
+
+[[package]]
+name = "git-version"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6b0decc02f4636b9ccad390dcbe77b722a77efedfa393caf8379a51d5c61899"
+dependencies = [
+ "git-version-macro",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "git-version-macro"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe69f1cbdb6e28af2bac214e943b99ce8a0a06b447d15d3e61161b0423139f3f"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2917,6 +2965,7 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-derive",
+ "prost-types",
  "serde",
  "serde_derive",
  "serde_json",

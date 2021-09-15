@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-controller
+  namespace: mayastor
+  labels:
+    app: csi-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-controller
+  template:
+    metadata:
+      labels:
+        app: csi-controller
+    spec:
+      hostNetwork: true
+      serviceAccount: mayastor-service-account
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: csi-provisioner
+          image: k8s.gcr.io/sig-storage/csi-provisioner:v2.2.1
+          args:
+            - "--v=2"
+            - "--csi-address=$(ADDRESS)"
+            - "--feature-gates=Topology=true"
+            - "--strict-topology=false"
+            - "--default-fstype=ext4"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-attacher
+          image: k8s.gcr.io/sig-storage/csi-attacher:v3.2.1
+          args:
+            - "--v=2"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-controller
+          image: {{ .Values.mayastorCP.registry }}mayadata/csi-controller:{{ .Values.mayastorCP.tag}}
+          imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
+          args:
+            - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
+            - "--rest-endpoint=http://$(REST_SERVICE_HOST):8081"
+            - "--log-level=debug"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+      volumes:
+        - name: socket-dir
+          emptyDir:
+

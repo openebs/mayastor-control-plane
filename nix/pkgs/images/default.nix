@@ -29,6 +29,11 @@ let
     inherit build;
     name = "msp-operator";
   };
+  build-csi-controller-image = { build }: build-control-plane-image {
+    inherit build;
+    name = "csi-controller";
+  };
+
 in
 {
   core = build-agent-image { build = "release"; name = "core"; };
@@ -46,6 +51,13 @@ in
     build = "release";
   };
   msp-operator-dev = build-msp-operator-image {
+    build = "debug";
+  };
+
+  csi-controller = build-csi-controller-image {
+    build = "release";
+  };
+  csi-controller-dev = build-csi-controller-image {
     build = "debug";
   };
 }
