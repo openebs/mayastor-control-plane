@@ -45,7 +45,7 @@ const WHO_AM_I: &str = "Mayastor pool operator";
     shortname = "msp",
     printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
     printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
-    printcolumn = r#"{ "name":"used", "type":"integer", "description":"used bytes", "jsonPath":".status.used"}"#
+    printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#
 )]
 
 /// The pool spec which contains the paramaters we use when creating the pool
@@ -717,6 +717,9 @@ async fn ensure_crd(k8s: Client) {
         match msp.create(&pp, &crd).await {
             Ok(o) => {
                 info!(crd = ?o.name(), "created");
+                // let the CRD settle this purely to avoid errors messages in the console
+                // that are harmless but can cause some confusion maybe.
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
 
             Err(e) => {
