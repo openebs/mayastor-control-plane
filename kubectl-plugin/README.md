@@ -24,31 +24,31 @@ The plugin needs to be able to connect to the REST server in order to make the a
 1. Get Volumes
 ```
 ❯ kubectl mayastor get volumes
- ID                                    PATHS  REPLICAS  PROTOCOL  STATUS  SIZE 
- 18e30e83-b106-4e0d-9fb6-2b04e761e18a  1      4         none      Online  10485761 
- 0c08667c-8b59-4d11-9192-b54e27e0ce0f  1      4         none      Online  10485761 
+ ID                                    REPLICAS  PROTOCOL  STATUS  SIZE
+ 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         none      Online  10485761
+ 0c08667c-8b59-4d11-9192-b54e27e0ce0f  4         none      Online  10485761
 
-``` 
+```
 2. Get Volume by ID
 ```
 ❯ kubectl mayastor get volume 18e30e83-b106-4e0d-9fb6-2b04e761e18a
- ID                                    PATHS  REPLICAS  PROTOCOL  STATUS  SIZE 
- 18e30e83-b106-4e0d-9fb6-2b04e761e18a  1      4         none      Online  10485761 
+ ID                                    REPLICAS  PROTOCOL  STATUS  SIZE
+ 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         none      Online  10485761
 
 ```
 3. Get Pools
 ```
 ❯ kubectl mayastor get pools
- ID               TOTAL CAPACITY  USED CAPACITY  DISKS                                                     NODE      STATUS 
- mayastor-pool-1  5360320512      1111490560     aio:///dev/vdb?uuid=d8a36b4b-0435-4fee-bf76-f2aef980b833  kworker1  Online 
- mayastor-pool-2  5360320512      2172649472     aio:///dev/vdc?uuid=bb12ec7d-8fc3-4644-82cd-dee5b63fc8c5  kworker1  Online 
- mayastor-pool-3  5360320512      3258974208     aio:///dev/vdb?uuid=f324edb7-1aca-41ec-954a-9614527f77e1  kworker2  Online 
+ ID               TOTAL CAPACITY  USED CAPACITY  DISKS                                                     NODE      STATUS
+ mayastor-pool-1  5360320512      1111490560     aio:///dev/vdb?uuid=d8a36b4b-0435-4fee-bf76-f2aef980b833  kworker1  Online
+ mayastor-pool-2  5360320512      2172649472     aio:///dev/vdc?uuid=bb12ec7d-8fc3-4644-82cd-dee5b63fc8c5  kworker1  Online
+ mayastor-pool-3  5360320512      3258974208     aio:///dev/vdb?uuid=f324edb7-1aca-41ec-954a-9614527f77e1  kworker2  Online
 ```
 4. Get Pool by ID
 ```
 ❯ kubectl mayastor get pool mayastor-pool-1
- ID               TOTAL CAPACITY  USED CAPACITY  DISKS                                                     NODE      STATUS 
- mayastor-pool-1  5360320512      1111490560     aio:///dev/vdb?uuid=d8a36b4b-0435-4fee-bf76-f2aef980b833  kworker1  Online 
+ ID               TOTAL CAPACITY  USED CAPACITY  DISKS                                                     NODE      STATUS
+ mayastor-pool-1  5360320512      1111490560     aio:///dev/vdb?uuid=d8a36b4b-0435-4fee-bf76-f2aef980b833  kworker1  Online
 ```
 5. Scale Volume by ID
 ```

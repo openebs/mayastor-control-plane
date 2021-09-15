@@ -7,8 +7,7 @@ pub const JSON_FORMAT: &str = "json";
 
 // Constants to store the table headers of the Tabular output formats.
 lazy_static! {
-    pub static ref VOLUME_HEADERS: Row =
-        row!["ID", "PATHS", "REPLICAS", "PROTOCOL", "STATUS", "SIZE"];
+    pub static ref VOLUME_HEADERS: Row = row!["ID", "REPLICAS", "PROTOCOL", "STATUS", "SIZE"];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",
         "TOTAL CAPACITY",

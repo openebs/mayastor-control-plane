@@ -22,7 +22,6 @@ impl CreateRows for Vec<openapi::models::Volume> {
             let state = volume.state.as_ref().unwrap();
             rows.push(row![
                 state.uuid,
-                volume.spec.num_paths,
                 volume.spec.num_replicas,
                 state.protocol,
                 state.status,
