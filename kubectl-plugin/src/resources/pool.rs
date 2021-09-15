@@ -1,6 +1,10 @@
 use crate::{
     operations::{Get, List},
-    resources::{utils, utils::CreateRows, utils::GetHeaderRow, PoolId},
+    resources::{
+        utils,
+        utils::{CreateRows, GetHeaderRow},
+        PoolId,
+    },
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
