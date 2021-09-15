@@ -3,6 +3,7 @@ import subprocess
 
 from openapi.openapi_client.api.volumes_api import VolumesApi
 from openapi.openapi_client.api.pools_api import PoolsApi
+from openapi.openapi_client.api.specs_api import SpecsApi
 from openapi.openapi_client import api_client
 from openapi.openapi_client import configuration
 import docker
@@ -29,6 +30,12 @@ def get_volumes_api():
 def get_pools_api():
     api = api_client.ApiClient(get_cfg())
     return PoolsApi(api)
+
+
+# Return a SpecsApi object which can be used for performing spec related REST calls.
+def get_specs_api():
+    api = api_client.ApiClient(get_cfg())
+    return SpecsApi(api)
 
 
 # Start containers

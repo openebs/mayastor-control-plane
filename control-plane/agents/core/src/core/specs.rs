@@ -187,7 +187,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         let spec_clone = locked_spec.lock().clone();
 
         // Attempt to delete the spec from the persistent store.
-        match registry.delete_kv(&spec_clone.uuid()).await {
+        match registry.delete_kv(&spec_clone.key().key()).await {
             Ok(_) => {
                 // Delete the spec from the registry.
                 Self::remove_spec(locked_spec, registry);

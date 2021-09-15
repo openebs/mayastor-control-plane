@@ -385,10 +385,9 @@ impl ResourceSpecsLocked {
                     ));
                 }
             }
-            Err(SvcError::from(NotEnough::OfReplicas {
-                have: replicas.len() as u64,
-                need: request.replicas,
-            }))
+            Err(SvcError::ReplicaCreateNumber {
+                id: request.uuid.to_string(),
+            })
         } else {
             Ok(())
         };

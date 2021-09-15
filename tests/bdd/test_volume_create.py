@@ -53,7 +53,12 @@ def create_request():
 @scenario(
     "features/volume/create.feature", "provisioning failure due to missing Mayastor"
 )
-def test_provisioning_failure():
+def test_provisioning_failure_due_to_missing_mayastor():
+    """provisioning failure."""
+
+
+@scenario("features/volume/create.feature", "provisioning failure due to gRPC timeout")
+def test_provisioning_failure_due_to_grpc_timeout():
     """provisioning failure."""
 
 
@@ -103,6 +108,23 @@ def a_request_for_a_volume(create_request):
     create_request[CREATE_REQUEST_KEY] = request
 
 
+@when("a create operation takes longer than the gRPC timeout")
+def a_create_operation_takes_longer_than_the_grpc_timeout():
+    """a create operation takes longer than the gRPC timeout."""
+    # Delete the Mayastor instances to ensure the operation can't complete and so takes longer
+    # than the gRPC timeout.
+    docker_client = docker.from_env()
+    try:
+        mayastors = docker_client.containers.list(
+            all=True, filters={"name": "mayastor"}
+        )
+    except docker.errors.NotFound:
+        raise Exception("No Mayastor instances")
+
+    for mayastor in mayastors:
+        mayastor.kill()
+
+
 @when("the number of suitable pools is less than the number of desired volume replicas")
 def the_number_of_suitable_pools_is_less_than_the_number_of_desired_volume_replicas(
     create_request,
@@ -135,6 +157,44 @@ def there_are_no_available_mayastor_instances():
     docker_client = docker.from_env()
     container = docker_client.containers.get("mayastor-1")
     container.kill()
+
+
+@then("there should not be any specs relating to the volume")
+def there_should_not_be_any_specs_relating_to_the_volume():
+    """there should not be any specs relating to the volume."""
+    # Restart the core agent so that all the specs are reloaded from the persistent store.
+    global specs
+    docker_client = docker.from_env()
+    core = docker_client.containers.get("core")
+    core.restart()
+
+    # After restarting the core container it can take a little time to refresh the specs,
+    # so retry a number of times.
+    for i in range(5):
+        try:
+            specs = common.get_specs_api().get_specs()
+            break
+        except:
+            time.sleep(1)
+
+    assert len(specs["volumes"]) == 0
+    assert len(specs["nexuses"]) == 0
+    assert len(specs["replicas"]) == 0
+
+
+@then("volume creation should fail with a precondition failed error")
+def volume_creation_should_fail_with_a_precondition_failed_error(create_request):
+    """volume creation should fail."""
+    request = create_request[CREATE_REQUEST_KEY]
+    try:
+        common.get_volumes_api().put_volume(VOLUME_UUID, request)
+    except Exception as e:
+        exception_info = e.__dict__
+        assert exception_info["status"] == requests.codes["precondition_failed"]
+
+    # Check that the volume wasn't created.
+    volumes = common.get_volumes_api().get_volumes()
+    assert len(volumes) == 0
 
 
 @then("volume creation should fail with an insufficient storage error")

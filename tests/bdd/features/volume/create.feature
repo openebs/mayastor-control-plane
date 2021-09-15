@@ -16,4 +16,10 @@ Feature: Volume creation
   Scenario: provisioning failure due to missing Mayastor
     Given a request for a volume
     When there are no available Mayastor instances
-    Then volume creation should fail with an insufficient storage error
+    Then volume creation should fail with a precondition failed error
+
+  Scenario: provisioning failure due to gRPC timeout
+    Given a request for a volume
+    When a create operation takes longer than the gRPC timeout
+    Then volume creation should fail with a precondition failed error
+    And there should not be any specs relating to the volume
