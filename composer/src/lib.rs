@@ -1051,11 +1051,11 @@ impl ComposeTest {
 
         let mut binds = vec![
             format!("{}:{}", self.srcdir, self.srcdir),
-            "/nix:/nix:ro".into(),
             "/dev/hugepages:/dev/hugepages:rw".into(),
         ];
         binds.extend(spec.binds());
         if let Some(bin) = &spec.binary {
+            binds.push("/nix:/nix:ro".into());
             let path = std::path::PathBuf::from(&bin.path);
             if !path.starts_with("/nix") || !path.starts_with(&self.srcdir) {
                 binds.push(format!("{}:{}", bin.path, bin.path));
