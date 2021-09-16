@@ -39,6 +39,7 @@ let
       "composer"
       "control-plane"
       "deployer"
+      "kubectl-plugin"
       "openapi"
       "rpc"
       "tests"
