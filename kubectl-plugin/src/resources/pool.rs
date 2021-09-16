@@ -21,16 +21,32 @@ impl CreateRows for Vec<openapi::models::Pool> {
     fn create_rows(&self) -> Vec<Row> {
         let mut rows: Vec<Row> = Vec::new();
         for pool in self {
-            let state = pool.state.as_ref().unwrap();
-            // The disks are joined by a comma and shown in the table, ex /dev/vda, /dev/vdb
+            let mut managed = true;
+            if pool.spec.is_none() {
+                managed = false;
+            }
+            // The spec would be empty if it was not created using
+            // control plane.
+            let spec = pool.spec.clone().unwrap_or_default();
+            // Incase the state is not coming as filled, either due to pool, node lost, fill in spec
+            // data and mark the status as Unknown.
+            let state = pool.state.clone().unwrap_or(openapi::models::PoolState {
+                capacity: 0,
+                disks: spec.disks,
+                id: spec.id,
+                node: spec.node,
+                status: openapi::models::PoolStatus::Unknown,
+                used: 0,
+            });
             let disks = state.disks.join(", ");
             rows.push(row![
-                state.id,
+                pool.id,
                 state.capacity,
                 state.used,
                 disks,
                 state.node,
-                state.status
+                state.status,
+                managed
             ]);
         }
         rows

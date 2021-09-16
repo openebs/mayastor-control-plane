@@ -14,7 +14,8 @@ lazy_static! {
         "USED CAPACITY",
         "DISKS",
         "NODE",
-        "STATUS"
+        "STATUS",
+        "MANAGED"
     ];
 }
 
