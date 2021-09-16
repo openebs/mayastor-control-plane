@@ -155,6 +155,7 @@ async fn create_nexus_replicas() {
         node: cluster.node(1),
         pool: cluster.pool(1, 0),
         uuid: Cluster::replica(1, 0, 0),
+        name: None,
         protocol: v0::ReplicaShareProtocol::Nvmf,
     }
     .request()

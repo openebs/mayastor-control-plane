@@ -2,7 +2,7 @@ use super::*;
 
 use crate::types::v0::store::nexus::ReplicaUri;
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Debug};
+use std::{convert::TryFrom, fmt::Debug, ops::Deref};
 use strum_macros::{EnumString, ToString};
 
 /// Get all the replicas from specific node and pool
@@ -27,6 +27,8 @@ impl GetReplicas {
 pub struct Replica {
     /// id of the mayastor instance
     pub node: NodeId,
+    /// name of the replica
+    pub name: ReplicaName,
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// id of the pool
@@ -47,6 +49,63 @@ impl Replica {
     pub fn online(&self) -> bool {
         self.status.online()
     }
+    /// check if it was created by the control plane
+    pub fn ours(&self) -> bool {
+        let base_name = ReplicaName::new(&self.uuid, None);
+        self.name.0.starts_with(base_name.as_str())
+    }
+}
+
+bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
+
+/// Name of a Replica
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct ReplicaName(String);
+
+impl ReplicaName {
+    /// Derive Self from option or the replica_uuid, todo: needed until we fix CAS-1107
+    pub fn from_opt_uuid(opt: Option<&Self>, replica_uuid: &ReplicaId) -> Self {
+        opt.unwrap_or(&Self::from_uuid(replica_uuid)).clone()
+    }
+    /// Derive Self from a replica_uuid, todo: needed until we fix CAS-1107
+    pub fn from_uuid(replica_uuid: &ReplicaId) -> Self {
+        // CAS-1107 -> replica uuid are not checked to be unique, so until that is fixed
+        // use the name as uuid (since the name is guaranteed to be unique)
+        ReplicaName(replica_uuid.to_string())
+    }
+    /// Create new `Self` derived from the replica and volume id's
+    pub fn new(replica_uuid: &ReplicaId, _volume_uuid: Option<&VolumeId>) -> Self {
+        // CAS-1107 -> replica uuid are not checked to be unique, so until that is fixed
+        // use the name as uuid (since the name is guaranteed to be unique)
+        ReplicaName(replica_uuid.to_string())
+    }
+}
+impl Default for ReplicaName {
+    fn default() -> Self {
+        ReplicaName::new(&ReplicaId::new(), None)
+    }
+}
+impl Deref for ReplicaName {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl From<String> for ReplicaName {
+    fn from(src: String) -> Self {
+        Self(src)
+    }
+}
+impl From<&str> for ReplicaName {
+    fn from(src: &str) -> Self {
+        Self(src.to_string())
+    }
+}
+impl From<ReplicaName> for String {
+    fn from(src: ReplicaName) -> Self {
+        src.0
+    }
 }
 
 impl From<Replica> for models::Replica {
@@ -64,14 +123,13 @@ impl From<Replica> for models::Replica {
     }
 }
 
-bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
-
 impl From<Replica> for DestroyReplica {
     fn from(replica: Replica) -> Self {
         Self {
             node: replica.node,
             pool: replica.pool,
             uuid: replica.uuid,
+            name: replica.name.into(),
             disowners: Default::default(),
         }
     }
@@ -83,6 +141,8 @@ impl From<Replica> for DestroyReplica {
 pub struct CreateReplica {
     /// id of the mayastor instance
     pub node: NodeId,
+    /// name of the replica
+    pub name: Option<ReplicaName>,
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// id of the pool
@@ -109,6 +169,10 @@ impl ReplicaOwners {
     /// Create new owners from the given volume and nexus id's
     pub fn new(volume: Option<VolumeId>, nexuses: Vec<NexusId>) -> Self {
         Self { volume, nexuses }
+    }
+    /// Return the volume owner, if any
+    pub fn volume(&self) -> Option<&VolumeId> {
+        self.volume.as_ref()
     }
     /// Check if this replica is owned by any nexuses or a volume
     pub fn is_owned(&self) -> bool {
@@ -177,16 +241,25 @@ pub struct DestroyReplica {
     pub pool: PoolId,
     /// uuid of the replica
     pub uuid: ReplicaId,
+    /// name of the replica
+    pub name: Option<ReplicaName>,
     /// delete by owners
     pub disowners: ReplicaOwners,
 }
 impl DestroyReplica {
     /// Return a new `Self` from the provided arguments
-    pub fn new(node: &NodeId, pool: &PoolId, uuid: &ReplicaId, disowners: &ReplicaOwners) -> Self {
+    pub fn new(
+        node: &NodeId,
+        pool: &PoolId,
+        name: &ReplicaName,
+        uuid: &ReplicaId,
+        disowners: &ReplicaOwners,
+    ) -> Self {
         Self {
             node: node.clone(),
             pool: pool.clone(),
             uuid: uuid.clone(),
+            name: name.clone().into(),
             disowners: disowners.clone(),
         }
     }
@@ -202,6 +275,8 @@ pub struct ShareReplica {
     pub pool: PoolId,
     /// uuid of the replica
     pub uuid: ReplicaId,
+    /// name of the replica,
+    pub name: Option<ReplicaName>,
     /// protocol used for exposing the replica
     pub protocol: ReplicaShareProtocol,
 }
@@ -212,6 +287,7 @@ impl From<ShareReplica> for UnshareReplica {
             node: share.node,
             pool: share.pool,
             uuid: share.uuid,
+            name: share.name,
         }
     }
 }
@@ -221,16 +297,19 @@ impl From<&Replica> for ShareReplica {
             node: from.node.clone(),
             pool: from.pool.clone(),
             uuid: from.uuid.clone(),
+            name: from.name.clone().into(),
             protocol: ReplicaShareProtocol::Nvmf,
         }
     }
 }
 impl From<&Replica> for UnshareReplica {
     fn from(from: &Replica) -> Self {
+        let from = from.clone();
         Self {
-            node: from.node.clone(),
-            pool: from.pool.clone(),
-            uuid: from.uuid.clone(),
+            node: from.node,
+            pool: from.pool,
+            uuid: from.uuid,
+            name: from.name.into(),
         }
     }
 }
@@ -240,6 +319,7 @@ impl From<UnshareReplica> for ShareReplica {
             node: share.node,
             pool: share.pool,
             uuid: share.uuid,
+            name: share.name,
             protocol: ReplicaShareProtocol::Nvmf,
         }
     }
@@ -255,6 +335,8 @@ pub struct UnshareReplica {
     pub pool: PoolId,
     /// uuid of the replica
     pub uuid: ReplicaId,
+    /// name of the replica
+    pub name: Option<ReplicaName>,
 }
 
 /// The protocol used to share the replica.

@@ -49,7 +49,7 @@ async fn nexus() {
         node: mayastor.clone(),
         uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
         size: 5242880,
-        children: vec![replica.uri.into(), local],
+        children: vec![replica.uri.clone().into(), local],
         ..Default::default()
     }
     .request()
@@ -78,15 +78,7 @@ async fn nexus() {
     .await
     .unwrap();
 
-    DestroyReplica {
-        node: replica.node,
-        pool: replica.pool,
-        uuid: replica.uuid,
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    DestroyReplica::from(replica).request().await.unwrap();
 
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
 }

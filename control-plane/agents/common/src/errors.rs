@@ -188,6 +188,8 @@ pub enum SvcError {
     NoOnlineReplicas { id: String },
     #[snafu(display("Entry with key '{}' not found in the persistent store.", key))]
     StoreMissingEntry { key: String },
+    #[snafu(display("The uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
+    InvalidUuid { uuid: String, kind: ResourceKind },
 }
 
 impl From<StoreError> for SvcError {
@@ -515,6 +517,12 @@ impl From<SvcError> for ReplyError {
             SvcError::ReplicaCreateNumber { .. } => ReplyError {
                 kind: ReplyErrorKind::ReplicaCreateNumber,
                 resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::InvalidUuid { ref kind, .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: kind.clone(),
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

@@ -23,3 +23,5 @@ actix-web-opentelemetry = "0.11.0-beta.5"
 tracing = "0.1.26"
 anyhow = "1.0.43"
 common-lib = { path = "../../common" }
+structopt = "0.3.23"
+

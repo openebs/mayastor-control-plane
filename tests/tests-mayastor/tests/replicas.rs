@@ -101,15 +101,10 @@ async fn create_replica_sizes() {
             .request()
             .await;
             if let Ok(replica) = &result {
-                v0::DestroyReplica {
-                    node: replica.node.clone(),
-                    pool: replica.pool.clone(),
-                    uuid: replica.uuid.clone(),
-                    ..Default::default()
-                }
-                .request()
-                .await
-                .unwrap();
+                v0::DestroyReplica::from(replica.clone())
+                    .request()
+                    .await
+                    .unwrap();
             }
             result
         })

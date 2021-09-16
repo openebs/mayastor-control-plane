@@ -1,7 +1,7 @@
 //! Converts rpc messages to message bus messages and vice versa.
 
 use common_lib::types::v0::{
-    message_bus::{self, ChildState, NexusStatus, Protocol, ReplicaStatus},
+    message_bus::{self, ChildState, NexusStatus, Protocol, ReplicaName, ReplicaStatus},
     openapi::apis::IntoVec,
 };
 use rpc::mayastor as rpc;
@@ -88,11 +88,12 @@ impl RpcToMessageBus for rpc::Pool {
     }
 }
 
-impl RpcToMessageBus for rpc::Replica {
+impl RpcToMessageBus for rpc::ReplicaV2 {
     type BusMessage = message_bus::Replica;
     fn to_mbus(&self) -> Self::BusMessage {
         Self::BusMessage {
             node: Default::default(),
+            name: self.name.clone().into(),
             uuid: self.uuid.clone().into(),
             pool: self.pool.clone().into(),
             thin: self.thin,
@@ -147,9 +148,10 @@ pub trait MessageBusToRpc {
 /// Pool Agent Conversions
 
 impl MessageBusToRpc for message_bus::CreateReplica {
-    type RpcMessage = rpc::CreateReplicaRequest;
+    type RpcMessage = rpc::CreateReplicaRequestV2;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
+            name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             uuid: self.uuid.clone().into(),
             pool: self.pool.clone().into(),
             thin: self.thin,
@@ -163,7 +165,8 @@ impl MessageBusToRpc for message_bus::ShareReplica {
     type RpcMessage = rpc::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
-            uuid: self.uuid.clone().into(),
+            // todo: CAS-1107
+            uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             share: self.protocol as i32,
         }
     }
@@ -173,7 +176,7 @@ impl MessageBusToRpc for message_bus::UnshareReplica {
     type RpcMessage = rpc::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
-            uuid: self.uuid.clone().into(),
+            uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             share: Protocol::None as i32,
         }
     }
@@ -193,7 +196,7 @@ impl MessageBusToRpc for message_bus::DestroyReplica {
     type RpcMessage = rpc::DestroyReplicaRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
-            uuid: self.uuid.clone().into(),
+            uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
         }
     }
 }

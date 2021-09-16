@@ -24,9 +24,9 @@ use common_lib::{
         message_bus::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
             DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, Protocol, PublishVolume,
-            RemoveNexusReplica, Replica, ReplicaId, ReplicaOwners, SetVolumeReplica, ShareNexus,
-            ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume, VolumeId,
-            VolumeState, VolumeStatus,
+            RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
+            ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
+            VolumeId, VolumeState, VolumeStatus,
         },
         store::{
             nexus::{NexusSpec, ReplicaUri},
@@ -139,15 +139,19 @@ pub(crate) async fn get_volume_replica_candidates(
 
     Ok(pools
         .iter()
-        .map(|p| CreateReplica {
-            node: p.node.clone(),
-            uuid: ReplicaId::new(),
-            pool: p.id.clone(),
-            size: request.size,
-            thin: false,
-            share: Protocol::None,
-            managed: true,
-            owners: ReplicaOwners::from_volume(&request.uuid),
+        .map(|p| {
+            let replica_uuid = ReplicaId::new();
+            CreateReplica {
+                node: p.node.clone(),
+                name: Some(ReplicaName::new(&replica_uuid, Some(&request.uuid))),
+                uuid: replica_uuid,
+                pool: p.id.clone(),
+                size: request.size,
+                thin: false,
+                share: Protocol::None,
+                managed: true,
+                owners: ReplicaOwners::from_volume(&request.uuid),
+            }
         })
         .collect::<Vec<_>>())
 }
@@ -318,6 +322,7 @@ impl ResourceSpecsLocked {
             node: node.clone(),
             pool: spec.pool,
             uuid: spec.uuid,
+            name: spec.name.into(),
             disowners: by,
         }
     }

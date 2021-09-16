@@ -25,7 +25,10 @@ use common_lib::{
         BusClient, BusMessage, DynBus, Error, ErrorChain, Message, MessageId, ReceivedMessage,
         ReceivedRawMessage, TimeoutOptions,
     },
-    types::{v0::message_bus::Liveness, Channel},
+    types::{
+        v0::message_bus::{ChannelVs, Liveness},
+        Channel,
+    },
 };
 
 /// Agent level errors
@@ -341,7 +344,9 @@ impl Service {
             tokio::spawn(async move {
                 let context = Context::new(bus, state);
                 let args = Arguments::new(context, &message);
-                debug!("Processing message: {{ {} }}", args.request);
+                if args.request.channel() != Channel::v0(ChannelVs::Registry) {
+                    debug!("Processing message: {{ {} }}", args.request);
+                }
 
                 if let Err(error) = Self::process_message(args, &gated_subs).await {
                     error!("Error processing message: {}", error.full_string());
