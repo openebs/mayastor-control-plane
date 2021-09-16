@@ -1,12 +1,10 @@
 ---
-# Source: mayastor-control-plane/templates/operator-rbac.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: mayastor-service-account
   namespace: mayastor
 ---
-# Source: mayastor-control-plane/templates/operator-rbac.yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -63,8 +61,8 @@ rules:
 - apiGroups: ["storage.k8s.io"]
   resources: ["csinodes"]
   verbs: ["get", "list", "watch"]
+
 ---
-# Source: mayastor-control-plane/templates/operator-rbac.yaml
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:

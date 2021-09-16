@@ -1,5 +1,3 @@
----
-# Source: mayastor-control-plane/templates/core-agents-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,8 +17,8 @@ spec:
     spec:
       containers:
         - name: core
-          image: mayadata/mcp-core:develop
-          imagePullPolicy: Always
+          image: {{ .Values.mayastorCP.registry }}mayadata/mcp-core:{{ .Values.mayastorCP.tag}}
+          imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-smayastor-etcd"
             - "-nnats"

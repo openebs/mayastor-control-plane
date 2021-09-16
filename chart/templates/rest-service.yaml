@@ -1,5 +1,3 @@
----
-# Source: mayastor-control-plane/templates/rest-service.yaml
 apiVersion: v1
 kind: Service
 metadata:
