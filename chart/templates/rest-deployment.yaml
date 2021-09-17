@@ -1,5 +1,3 @@
----
-# Source: mayastor-control-plane/templates/rest-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,8 +17,8 @@ spec:
     spec:
       containers:
         - name: rest
-          image: mayadata/mcp-rest:develop
-          imagePullPolicy: Always
+          image: {{ .Values.mayastorCP.registry }}mayadata/mcp-rest:{{ .Values.mayastorCP.tag}}
+          imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "--dummy-certificates"
             - "--no-auth"
