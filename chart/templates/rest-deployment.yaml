@@ -24,7 +24,7 @@ spec:
             - "--no-auth"
             - "-nnats"
             - "--http=0.0.0.0:8081"
-            - "--timeout=6s"
+            - "--request-timeout=6s"
           ports:
           - containerPort: 8080
           - containerPort: 8081
