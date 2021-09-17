@@ -1,5 +1,5 @@
 { norust ? false
-, nomayastor ? false
+, mayastor ? ""
 }:
 let
   sources = import ./nix/sources.nix;
@@ -13,9 +13,8 @@ in
 with pkgs;
 let
   norust_moth = "You have requested an environment without rust, you should provide it!";
-  nomayastor_moth = "You have requested an environment without mayastor, you should provide it!";
+  mayastor_moth = "Using the following mayastor binary: ${mayastor}";
   channel = import ./nix/lib/rust.nix { inherit sources; };
-  mayastor = import pkgs.mayastor-src { };
   # python environment for tests/bdd
   pytest_inputs = python3.withPackages
     (ps: with ps; [ virtualenv black ]);
@@ -38,9 +37,7 @@ mkShell {
     utillinux
     which
     tini
-  ] ++ pkgs.lib.optional (!norust) channel.nightly
-  ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
-
+  ] ++ pkgs.lib.optional (!norust) channel.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
@@ -50,17 +47,15 @@ mkShell {
   # variables used to easily create containers with docker files
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";
   NATS_BIN = "${pkgs.nats-server}/bin/nats-server";
+  MAYASTOR_BIN = "${mayastor}";
 
   shellHook = ''
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo 'Hint: use rustup tool.'"}
     ${pkgs.lib.optionalString (norust) "echo"}
-    ${pkgs.lib.optionalString (nomayastor) "cowsay ${nomayastor_moth}"}
-    ${pkgs.lib.optionalString (nomayastor) "echo 'Hint: build mayastor from https://github.com/openebs/mayastor.'"}
-    ${pkgs.lib.optionalString (nomayastor) "echo 'After building ensure the output directory is within your $PATH'"}
-    ${pkgs.lib.optionalString (nomayastor) "echo"}
     pre-commit install
     pre-commit install --hook commit-msg
     export MCP_SRC=`pwd`
+    [ ! -z "${mayastor}" ] && cowsay "${mayastor_moth}"
   '';
 }

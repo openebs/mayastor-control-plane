@@ -88,6 +88,7 @@ impl CreateReplicaBody {
     pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId, uuid: ReplicaId) -> CreateReplica {
         CreateReplica {
             node: node_id,
+            name: None,
             uuid,
             pool: pool_id,
             size: self.size,

@@ -961,6 +961,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "rest",
+ "structopt",
  "tracing",
  "tracing-opentelemetry",
 ]

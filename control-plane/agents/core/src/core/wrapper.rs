@@ -382,14 +382,14 @@ impl NodeWrapper {
     /// Fetch all replicas from this node via gRPC
     pub(crate) async fn fetch_replicas(&self) -> Result<Vec<Replica>, SvcError> {
         let mut ctx = self.grpc_client().await?;
-        let rpc_replicas = ctx
-            .client
-            .list_replicas(Null {})
-            .await
-            .context(GrpcRequestError {
-                resource: ResourceKind::Replica,
-                request: "list_replicas",
-            })?;
+        let rpc_replicas =
+            ctx.client
+                .list_replicas_v2(Null {})
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Replica,
+                    request: "list_replicas",
+                })?;
         let rpc_replicas = &rpc_replicas.get_ref().replicas;
         let pools = rpc_replicas
             .iter()
@@ -627,15 +627,21 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
 
     /// Create a replica on the pool via gRPC
     async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
+        if request.uuid == ReplicaId::default() {
+            return Err(SvcError::InvalidUuid {
+                uuid: request.uuid.to_string(),
+                kind: ResourceKind::Replica,
+            });
+        }
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let rpc_replica =
-            ctx.client
-                .create_replica(request.to_rpc())
-                .await
-                .context(GrpcRequestError {
-                    resource: ResourceKind::Replica,
-                    request: "create_replica",
-                })?;
+        let rpc_replica = ctx
+            .client
+            .create_replica_v2(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "create_replica",
+            })?;
 
         let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node);
         self.lock().await.update_replica_states().await?;
@@ -689,12 +695,26 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 request: "destroy_replica",
             })?;
         self.lock().await.update_replica_states().await?;
+        // todo: remove when CAS-1107 is resolved
+        if let Some(replica) = self.lock().await.replica(&request.uuid) {
+            if replica.pool == request.pool {
+                return Err(SvcError::Internal {
+                    details: "replica was not destroyed by mayastor".to_string(),
+                });
+            }
+        }
         self.lock().await.update_pool_states().await?;
         Ok(())
     }
 
     /// Create a nexus on the node via gRPC
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
+        if request.uuid == NexusId::default() {
+            return Err(SvcError::InvalidUuid {
+                uuid: request.uuid.to_string(),
+                kind: ResourceKind::Nexus,
+            });
+        }
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_nexus =
             ctx.client
@@ -822,7 +842,7 @@ fn rpc_pool_to_bus(rpc_pool: &rpc::mayastor::Pool, id: &NodeId) -> PoolState {
 }
 
 /// convert rpc replica to a message bus replica
-fn rpc_replica_to_bus(rpc_replica: &rpc::mayastor::Replica, id: &NodeId) -> Replica {
+fn rpc_replica_to_bus(rpc_replica: &rpc::mayastor::ReplicaV2, id: &NodeId) -> Replica {
     let mut replica = rpc_replica.to_mbus();
     replica.node = id.clone();
     replica

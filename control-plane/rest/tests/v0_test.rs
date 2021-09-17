@@ -151,7 +151,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             models::CreateReplicaBody::new_all(
                 models::ReplicaShareProtocol::Nvmf,
                 12582912u64,
-                true,
+                false,
             ),
         )
         .await

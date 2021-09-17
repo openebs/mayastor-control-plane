@@ -1051,11 +1051,11 @@ impl ComposeTest {
 
         let mut binds = vec![
             format!("{}:{}", self.srcdir, self.srcdir),
-            "/nix:/nix:ro".into(),
             "/dev/hugepages:/dev/hugepages:rw".into(),
         ];
         binds.extend(spec.binds());
         if let Some(bin) = &spec.binary {
+            binds.push("/nix:/nix:ro".into());
             let path = std::path::PathBuf::from(&bin.path);
             if !path.starts_with("/nix") || !path.starts_with(&self.srcdir) {
                 binds.push(format!("{}:{}", bin.path, bin.path));
@@ -1532,41 +1532,5 @@ impl ComposeTest {
 
     pub fn label_prefix(&self) -> String {
         format!("{}.name", self.label_prefix)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rpc::mayastor::Null;
-
-    #[tokio::test]
-    async fn compose() {
-        let test = Builder::new()
-            .name("composer")
-            .network("10.1.0.0/16")
-            .expect("Network should be valid")
-            .add_container_spec(
-                ContainerSpec::from_binary(
-                    "nats",
-                    Binary::from_path("nats-server").with_arg("-DV"),
-                )
-                .with_portmap("4222", "4222"),
-            )
-            .add_container("mayastor")
-            .add_container_bin(
-                "mayastor2",
-                Binary::from_path("mayastor").with_args(vec!["-n", "nats.composer"]),
-            )
-            .with_clean(true)
-            .build()
-            .await
-            .unwrap();
-
-        let mut hdl = test.grpc_handle("mayastor").await.unwrap();
-        hdl.mayastor.list_nexus(Null {}).await.expect("list nexus");
-
-        // run with --nocapture to get the logs
-        test.logs_all().await.unwrap();
     }
 }

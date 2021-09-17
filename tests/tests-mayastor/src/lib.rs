@@ -38,6 +38,7 @@ pub mod v0 {
 }
 
 use std::{collections::HashMap, rc::Rc, time::Duration};
+use structopt::StructOpt;
 
 #[actix_rt::test]
 #[ignore]
@@ -51,7 +52,8 @@ async fn smoke_test() {
 
 /// Default options to create a cluster
 pub fn default_options() -> StartOptions {
-    StartOptions::default()
+    // using from_iter as Default::default would not set the default_value from structopt
+    StartOptions::from_iter(&[""])
         .with_agents(default_agents().split(',').collect())
         .with_jaeger(true)
         .with_mayastors(1)
@@ -93,7 +95,12 @@ impl Cluster {
 
     /// replica id with index for `pool` index and `replica` index
     pub fn replica(node: u32, pool: usize, replica: u32) -> message_bus::ReplicaId {
+        if replica > 254 || pool > 254 || node > 254 {
+            panic!("too large");
+        }
         let mut uuid = message_bus::ReplicaId::default().to_string();
+        // we can't use a uuid with all zeroes, as spdk seems to ignore it and generate new one
+        let replica = replica + 1;
         let _ = uuid.drain(24 .. uuid.len());
         format!(
             "{}{:02x}{:02x}{:08x}",
@@ -547,9 +554,11 @@ impl ClusterBuilder {
                     replicas: vec![],
                 };
                 for replica_index in 0 .. self.replicas.count {
+                    let rep_id = Cluster::replica(*node, pool_index, replica_index);
                     pool.replicas.push(message_bus::CreateReplica {
                         node: pool.node.clone().into(),
-                        uuid: Cluster::replica(*node, pool_index, replica_index),
+                        name: None,
+                        uuid: rep_id,
                         pool: pool.id(),
                         size: self.replicas.size,
                         thin: false,

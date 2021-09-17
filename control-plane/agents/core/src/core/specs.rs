@@ -1,34 +1,30 @@
-use crate::core::registry::Registry;
-use parking_lot::{Mutex, RwLock};
-use std::{ops::Deref, sync::Arc};
-
-use common_lib::types::v0::{
-    message_bus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
-    store::{
-        definitions::{
-            key_prefix, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
-        },
-        nexus::NexusSpec,
-        node::NodeSpec,
-        pool::PoolSpec,
-        replica::ReplicaSpec,
-        volume::VolumeSpec,
-        SpecTransaction,
-    },
-};
-
-use crate::core::resource_map::ResourceMap;
-use async_trait::async_trait;
+use crate::core::{registry::Registry, resource_map::ResourceMap};
 use common::errors::SvcError;
 use common_lib::{
     mbus_api::ResourceKind,
-    types::v0::store::{
-        OperationGuard, OperationMode, OperationSequence, OperationSequencer, SpecStatus,
+    types::v0::{
+        message_bus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
+        openapi::apis::Uuid,
+        store::{
+            definitions::{
+                key_prefix, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
+            },
+            nexus::NexusSpec,
+            node::NodeSpec,
+            pool::PoolSpec,
+            replica::ReplicaSpec,
+            volume::VolumeSpec,
+            OperationGuard, OperationMode, OperationSequence, OperationSequencer, SpecStatus,
+            SpecTransaction,
+        },
     },
 };
+
+use async_trait::async_trait;
+use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 #[derive(Debug, Snafu)]
 enum SpecError {
@@ -72,7 +68,15 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         let guard = locked_spec.operation_guard(mode)?;
         let spec_clone = {
             let mut spec = locked_spec.lock();
-            spec.start_create_inner(request)?;
+            match spec.start_create_inner(request) {
+                Err(SvcError::InvalidUuid { uuid, kind }) => {
+                    drop(spec);
+                    Self::remove_spec(locked_spec, registry);
+                    return Err(SvcError::InvalidUuid { uuid, kind });
+                }
+                Err(error) => Err(error),
+                Ok(_) => Ok(()),
+            }?;
             spec.clone()
         };
         match Self::store_operation_log(registry, locked_spec, &spec_clone).await {
@@ -93,6 +97,12 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
     {
         // we're busy with another request, try again later
         let _ = self.busy()?;
+        if self.uuid() == Uuid::default().to_string() {
+            return Err(SvcError::InvalidUuid {
+                uuid: self.uuid(),
+                kind: self.kind(),
+            });
+        }
         if self.status().creating() {
             if self != request {
                 Err(SvcError::ReCreateMismatch {

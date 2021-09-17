@@ -54,6 +54,7 @@ async fn pool() {
                          * create it like so */
         thin: true,
         share: Protocol::None,
+        name: None,
         ..Default::default()
     }
     .request()
@@ -68,6 +69,7 @@ async fn pool() {
         replica,
         Replica {
             node: mayastor.clone(),
+            name: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
             uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
             pool: "pooloop".into(),
             thin: false,
@@ -83,6 +85,7 @@ async fn pool() {
         uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
         pool: "pooloop".into(),
         protocol: ReplicaShareProtocol::Nvmf,
+        name: None,
     }
     .request()
     .await
@@ -117,6 +120,7 @@ async fn pool() {
         node: mayastor.clone(),
         uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
         pool: "pooloop".into(),
+        name: None,
         ..Default::default()
     }
     .request()

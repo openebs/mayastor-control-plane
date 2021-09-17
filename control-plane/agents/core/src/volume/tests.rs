@@ -443,6 +443,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
     // now add one extra replica (it should be removed)
     CreateReplica {
         node: cluster.node(1),
+        name: Default::default(),
         uuid: ReplicaId::new(),
         pool: cluster.pool(1, 0),
         size: volume.spec().size / 1024 / 1024 + 5,

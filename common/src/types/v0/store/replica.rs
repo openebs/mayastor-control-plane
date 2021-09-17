@@ -3,7 +3,7 @@
 use crate::types::v0::{
     message_bus::{
         self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
-        ReplicaOwners, ReplicaShareProtocol,
+        ReplicaName, ReplicaOwners, ReplicaShareProtocol,
     },
     openapi::models,
     store::{
@@ -66,6 +66,8 @@ impl StorableObject for ReplicaState {
 /// User specification of a replica.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ReplicaSpec {
+    /// name of the replica
+    pub name: ReplicaName,
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// The size that the replica should be.
@@ -211,6 +213,7 @@ impl From<&ReplicaSpec> for message_bus::Replica {
     fn from(replica: &ReplicaSpec) -> Self {
         Self {
             node: NodeId::default(),
+            name: replica.name.clone(),
             uuid: replica.uuid.clone(),
             pool: replica.pool.clone(),
             thin: replica.thin,
@@ -228,6 +231,7 @@ pub type ReplicaSpecStatus = SpecStatus<message_bus::ReplicaStatus>;
 impl From<&CreateReplica> for ReplicaSpec {
     fn from(request: &CreateReplica) -> Self {
         Self {
+            name: ReplicaName::from_opt_uuid(request.name.as_ref(), &request.uuid),
             uuid: request.uuid.clone(),
             size: request.size,
             pool: request.pool.clone(),
