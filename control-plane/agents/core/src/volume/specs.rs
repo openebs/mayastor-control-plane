@@ -592,8 +592,30 @@ impl ResourceSpecsLocked {
             Some(nexus_spec) => {
                 let nexus_clone = nexus_spec.lock().clone();
                 // Destroy the Nexus
-                self.destroy_nexus(registry, &nexus_clone.into(), true, mode)
+                match self
+                    .destroy_nexus(registry, &nexus_clone.clone().into(), true, mode)
                     .await
+                {
+                    Ok(_) => Ok(()),
+                    Err(error) if !request.force() => Err(error),
+                    Err(error) => {
+                        let node_online = match registry.get_node_wrapper(&nexus_clone.node).await {
+                            Ok(node) => {
+                                let mut node = node.lock().await;
+                                node.is_online() && node.liveness_probe().await.is_ok()
+                            }
+                            _ => false,
+                        };
+                        if !node_online {
+                            nexus_clone.warn_span(|| {
+                                tracing::warn!("Force unpublish. Forgetting about the target nexus because the node is not online and it was requested")
+                            });
+                            Ok(())
+                        } else {
+                            Err(error)
+                        }
+                    }
+                }
             }
         };
 

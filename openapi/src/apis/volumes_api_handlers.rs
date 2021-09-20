@@ -81,6 +81,13 @@ pub fn configure<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
 }
 
 #[derive(serde::Deserialize)]
+struct del_volume_targetQueryParams {
+    /// Force unpublish if the node is not online. This should only be used when it is safe to do
+    /// so, eg: when the node is not coming back up.
+    #[serde(rename = "force", skip_serializing_if = "Option::is_none")]
+    pub force: Option<bool>,
+}
+#[derive(serde::Deserialize)]
 struct put_volume_targetQueryParams {
     /// The node where the front-end workload resides. If the workload moves then the volume must
     /// be republished.
@@ -114,10 +121,15 @@ async fn del_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>
 async fn del_volume_target<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
     path: Path<uuid::Uuid>,
+    query: Query<del_volume_targetQueryParams>,
 ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
-    T::del_volume_target(crate::apis::Path(path.into_inner()))
-        .await
-        .map(Json)
+    let query = query.into_inner();
+    T::del_volume_target(
+        crate::apis::Path(path.into_inner()),
+        crate::apis::Query(query.force),
+    )
+    .await
+    .map(Json)
 }
 
 async fn get_node_volumes<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(

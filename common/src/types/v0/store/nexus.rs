@@ -140,10 +140,10 @@ macro_rules! nexus_span {
         match tracing::Span::current().field("nexus.uuid") {
             None => {
                 if let Some(volume_uuid) = &$Self.owner {
-                    let _span = tracing::span!($Level, "log_event", volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid).entered();
+                    let _span = tracing::span!($Level, "log_event", volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid, nexus.node.uuid = %$Self.node).entered();
                     $func();
                 } else {
-                    let _span = tracing::span!($Level, "log_event", nexus.uuid = %$Self.uuid).entered();
+                    let _span = tracing::span!($Level, "log_event", nexus.uuid = %$Self.uuid, nexus.node.uuid = %$Self.node).entered();
                     $func();
                 }
             }

@@ -22,8 +22,9 @@ impl apis::Volumes for RestApi {
 
     async fn del_volume_target(
         Path(volume_id): Path<Uuid>,
+        Query(force): Query<Option<bool>>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
-        let volume = MessageBus::unpublish_volume(volume_id.into()).await?;
+        let volume = MessageBus::unpublish_volume(volume_id.into(), force.unwrap_or(false)).await?;
         Ok(volume.into())
     }
 

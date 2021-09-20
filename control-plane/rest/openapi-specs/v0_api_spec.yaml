@@ -1390,6 +1390,14 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/VolumeId'
+        - in: query
+          name: force
+          description: |-
+            Force unpublish if the node is not online. This should only be used when it is safe to do so, eg: when the node is not coming back up.
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: OK

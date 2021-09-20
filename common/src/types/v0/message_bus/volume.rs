@@ -386,11 +386,22 @@ impl PublishVolume {
 pub struct UnpublishVolume {
     /// uuid of the volume
     pub uuid: VolumeId,
+    /// if the node where the nexus lives is offline then we can force unpublish, forgetting about
+    /// the nexus. Note: this option should be used only when we know the node will not become
+    /// accessible again and it is safe to do so.
+    force: bool,
 }
 impl UnpublishVolume {
     /// Create a new `UnpublishVolume` for the given uuid
-    pub fn new(uuid: VolumeId) -> Self {
-        Self { uuid }
+    pub fn new(uuid: &VolumeId, force: bool) -> Self {
+        Self {
+            uuid: uuid.clone(),
+            force,
+        }
+    }
+    /// It's a force `Self`
+    pub fn force(&self) -> bool {
+        self.force
     }
 }
 
