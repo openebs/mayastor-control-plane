@@ -19,7 +19,17 @@ impl CreateRows for Vec<openapi::models::Volume> {
     fn create_rows(&self) -> Vec<Row> {
         let mut rows: Vec<Row> = Vec::new();
         for volume in self {
-            let state = volume.state.as_ref().unwrap();
+            let state = volume
+                .state
+                .clone()
+                // If the state comes as empty fill in the spec data and mark the status as Unknown.
+                .unwrap_or(openapi::models::VolumeState {
+                    child: None,
+                    protocol: volume.spec.protocol,
+                    size: volume.spec.size,
+                    status: openapi::models::VolumeStatus::Unknown,
+                    uuid: volume.spec.uuid,
+                });
             rows.push(row![
                 state.uuid,
                 volume.spec.num_replicas,
