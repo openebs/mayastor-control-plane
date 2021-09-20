@@ -28,7 +28,7 @@ impl Service {
     }
 
     /// Create new resource watch
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "debug", skip(self), err)]
     pub(super) async fn create_watch(&self, request: &CreateWatch) -> Result<(), SvcError> {
         self.watcher
             .lock()
@@ -43,7 +43,7 @@ impl Service {
     }
 
     /// Get resource watch
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "debug", skip(self), err)]
     pub(super) async fn get_watchers(&self, request: &GetWatchers) -> Result<Watches, SvcError> {
         self.watcher
             .lock()
@@ -53,7 +53,7 @@ impl Service {
     }
 
     /// Delete resource watch
-    #[tracing::instrument(level = "debug", err)]
+    #[tracing::instrument(level = "debug", skip(self), err)]
     pub(super) async fn delete_watch(&self, request: &DeleteWatch) -> Result<(), SvcError> {
         self.watcher
             .lock()

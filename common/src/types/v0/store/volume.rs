@@ -12,12 +12,11 @@ use crate::{
     types::v0::{
         message_bus::{ReplicaId, Topology, VolumeHealPolicy, VolumeStatus},
         openapi::models,
-        store::{OperationSequence, OperationSequencer, UuidString},
+        store::{OperationSequence, OperationSequencer, ResourceUuid},
     },
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 
 type VolumeLabel = String;
 
@@ -194,9 +193,10 @@ impl VolumeSpec {
     }
 }
 
-impl UuidString for VolumeSpec {
-    fn uuid_as_string(&self) -> String {
-        self.uuid.clone().into()
+impl ResourceUuid for VolumeSpec {
+    type Id = VolumeId;
+    fn uuid(&self) -> Self::Id {
+        self.uuid.clone()
     }
 }
 
@@ -389,7 +389,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.size,
             src.status,
             src.target.map(|t| t.node).into_opt(),
-            openapi::apis::Uuid::try_from(src.uuid).unwrap(),
+            src.uuid,
         )
     }
 }

@@ -5,7 +5,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        OperationSequence, OperationSequencer, SpecStatus, SpecTransaction, UuidString,
+        OperationSequence, OperationSequencer, ResourceUuid, SpecStatus, SpecTransaction,
     },
 };
 
@@ -37,9 +37,10 @@ impl From<message_bus::PoolState> for PoolState {
     }
 }
 
-impl UuidString for PoolState {
-    fn uuid_as_string(&self) -> String {
-        self.pool.id.clone().into()
+impl ResourceUuid for PoolState {
+    type Id = PoolId;
+    fn uuid(&self) -> Self::Id {
+        self.pool.id.clone()
     }
 }
 
@@ -113,9 +114,10 @@ impl OperationSequencer for PoolSpec {
     }
 }
 
-impl UuidString for PoolSpec {
-    fn uuid_as_string(&self) -> String {
-        self.id.clone().into()
+impl ResourceUuid for PoolSpec {
+    type Id = PoolId;
+    fn uuid(&self) -> Self::Id {
+        self.id.clone()
     }
 }
 

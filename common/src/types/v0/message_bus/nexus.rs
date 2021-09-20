@@ -53,7 +53,7 @@ impl From<Nexus> for models::Nexus {
             src.share,
             src.size,
             src.status,
-            apis::Uuid::try_from(src.uuid).unwrap(),
+            src.uuid,
         )
     }
 }

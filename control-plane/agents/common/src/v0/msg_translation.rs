@@ -1,12 +1,25 @@
 //! Converts rpc messages to message bus messages and vice versa.
 
-use common_lib::types::v0::{
-    message_bus::{self, ChildState, NexusStatus, Protocol, ReplicaName, ReplicaStatus},
-    openapi::apis::IntoVec,
+use crate::errors::SvcError;
+use common_lib::{
+    mbus_api::ResourceKind,
+    types::v0::{
+        message_bus::{
+            self, ChildState, NexusId, NexusStatus, Protocol, ReplicaId, ReplicaName, ReplicaStatus,
+        },
+        openapi::apis::IntoVec,
+    },
 };
 use rpc::mayastor as rpc;
 use std::convert::TryFrom;
 
+/// Trait for converting rpc messages to message bus messages.
+pub trait TryRpcToMessageBus {
+    /// Message bus message type.
+    type BusMessage;
+    /// Conversion of rpc message to message bus message.
+    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError>;
+}
 /// Trait for converting rpc messages to message bus messages.
 pub trait RpcToMessageBus {
     /// Message bus message type.
@@ -88,32 +101,38 @@ impl RpcToMessageBus for rpc::Pool {
     }
 }
 
-impl RpcToMessageBus for rpc::ReplicaV2 {
+impl TryRpcToMessageBus for rpc::ReplicaV2 {
     type BusMessage = message_bus::Replica;
-    fn to_mbus(&self) -> Self::BusMessage {
-        Self::BusMessage {
+    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
+        Ok(Self::BusMessage {
             node: Default::default(),
             name: self.name.clone().into(),
-            uuid: self.uuid.clone().into(),
+            uuid: ReplicaId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.uuid.to_owned(),
+                kind: ResourceKind::Replica,
+            })?,
             pool: self.pool.clone().into(),
             thin: self.thin,
             size: self.size,
             share: self.share.into(),
             uri: self.uri.clone(),
             status: ReplicaStatus::Online,
-        }
+        })
     }
 }
 
 /// Volume Agent conversions
 
-impl RpcToMessageBus for rpc::Nexus {
+impl TryRpcToMessageBus for rpc::Nexus {
     type BusMessage = message_bus::Nexus;
 
-    fn to_mbus(&self) -> Self::BusMessage {
-        Self::BusMessage {
+    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
+        Ok(Self::BusMessage {
             node: Default::default(),
-            uuid: self.uuid.clone().into(),
+            uuid: NexusId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.uuid.to_owned(),
+                kind: ResourceKind::Nexus,
+            })?,
             size: self.size,
             status: NexusStatus::from(self.state),
             children: self.children.iter().map(|c| c.to_mbus()).collect(),
@@ -121,7 +140,7 @@ impl RpcToMessageBus for rpc::Nexus {
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
             share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::None),
-        }
+        })
     }
 }
 

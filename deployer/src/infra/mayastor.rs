@@ -15,7 +15,6 @@ impl ComponentAction for Mayastor {
             let mut spec = if let Some(binary) = binary {
                 ContainerSpec::from_binary(&name, Binary::from_path(&binary))
             } else {
-                println!("using: {}", options.mayastor_image);
                 ContainerSpec::from_image(&name, &options.mayastor_image)
             }
             .with_args(vec!["-n", &nats])

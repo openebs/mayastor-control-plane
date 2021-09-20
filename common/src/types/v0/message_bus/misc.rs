@@ -120,35 +120,102 @@ macro_rules! bus_impl_string_id {
 }
 
 #[macro_export]
+macro_rules! bus_impl_string_uuid_inner {
+    ($Name:ident, $Doc:literal) => {
+        #[doc = $Doc]
+        #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+        pub struct $Name(uuid::Uuid, String);
+
+        impl std::ops::Deref for $Name {
+            type Target = uuid::Uuid;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl std::fmt::Display for $Name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+
+        impl $Name {
+            /// Build Self from a string trait id
+            pub fn as_str<'a>(&'a self) -> &'a str {
+                self.1.as_str()
+            }
+        }
+
+        impl From<&$Name> for $Name {
+            fn from(id: &$Name) -> $Name {
+                id.clone()
+            }
+        }
+
+        impl From<$Name> for String {
+            fn from(id: $Name) -> String {
+                id.to_string()
+            }
+        }
+        impl From<&$Name> for String {
+            fn from(id: &$Name) -> String {
+                id.to_string()
+            }
+        }
+        impl From<&uuid::Uuid> for $Name {
+            fn from(uuid: &uuid::Uuid) -> $Name {
+                $Name(uuid.clone(), uuid.to_string())
+            }
+        }
+        impl From<uuid::Uuid> for $Name {
+            fn from(uuid: uuid::Uuid) -> $Name {
+                $Name::from(&uuid)
+            }
+        }
+        impl From<$Name> for uuid::Uuid {
+            fn from(src: $Name) -> uuid::Uuid {
+                src.0
+            }
+        }
+        impl From<&$Name> for uuid::Uuid {
+            fn from(src: &$Name) -> uuid::Uuid {
+                src.0.clone()
+            }
+        }
+        impl std::convert::TryFrom<&str> for $Name {
+            type Error = uuid::Error;
+            fn try_from(value: &str) -> Result<Self, Self::Error> {
+                let uuid: uuid::Uuid = std::str::FromStr::from_str(value)?;
+                Ok($Name::from(uuid))
+            }
+        }
+        impl std::convert::TryFrom<String> for $Name {
+            type Error = uuid::Error;
+            fn try_from(value: String) -> Result<Self, Self::Error> {
+                let uuid: uuid::Uuid = std::str::FromStr::from_str(&value)?;
+                Ok($Name::from(uuid))
+            }
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! bus_impl_string_uuid {
     ($Name:ident, $Doc:literal) => {
-        bus_impl_string_id_inner!($Name, $Doc);
+        bus_impl_string_uuid_inner!($Name, $Doc);
         impl Default for $Name {
             /// Generates new blank identifier
             fn default() -> Self {
-                $Name(uuid::Uuid::default().to_string())
+                let uuid = uuid::Uuid::default();
+                $Name(uuid.clone(), uuid.to_string())
             }
         }
         impl $Name {
-            /// Build Self from a string trait id
-            pub fn from<T: Into<String>>(id: T) -> Self {
-                $Name(id.into())
-            }
             /// Generates new random identifier
             pub fn new() -> Self {
-                $Name(uuid::Uuid::new_v4().to_string())
-            }
-        }
-        impl std::convert::TryFrom<&$Name> for uuid::Uuid {
-            type Error = uuid::Error;
-            fn try_from(value: &$Name) -> Result<Self, Self::Error> {
-                value.as_str().parse()
-            }
-        }
-        impl std::convert::TryFrom<$Name> for uuid::Uuid {
-            type Error = uuid::Error;
-            fn try_from(value: $Name) -> Result<Self, Self::Error> {
-                std::convert::TryFrom::try_from(&value)
+                let uuid = uuid::Uuid::new_v4();
+                $Name(uuid.clone(), uuid.to_string())
             }
         }
     };

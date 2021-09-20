@@ -23,14 +23,14 @@ async fn bootstrap_registry() {
 
     let replica = client
         .replicas_api()
-        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .get_replica(&Cluster::replica(0, 0, 0))
         .await
         .unwrap();
     client
         .nexuses_api()
         .put_node_nexus(
             cluster.node(0).as_str(),
-            message_bus::NexusId::new().as_str(),
+            &message_bus::NexusId::new(),
             models::CreateNexusBody::new(vec![replica.uri], size),
         )
         .await

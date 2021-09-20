@@ -1,6 +1,7 @@
 use super::*;
-use common_lib::types::v0::message_bus::{
-    AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild,
+use common_lib::types::v0::{
+    message_bus::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
+    openapi::apis::Uuid,
 };
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
@@ -104,14 +105,14 @@ fn build_child_uri(child_id: ChildUri, query: &str) -> ChildUri {
 impl apis::Children for RestApi {
     async fn del_nexus_child(
         query: &str,
-        Path((nexus_id, child_id)): Path<(String, String)>,
+        Path((nexus_id, child_id)): Path<(Uuid, String)>,
     ) -> Result<(), RestError<RestJsonError>> {
         delete_child_filtered(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn del_node_nexus_child(
         query: &str,
-        Path((node_id, nexus_id, child_id)): Path<(String, String, String)>,
+        Path((node_id, nexus_id, child_id)): Path<(String, Uuid, String)>,
     ) -> Result<(), RestError<RestJsonError>> {
         delete_child_filtered(
             child_id.into(),
@@ -123,20 +124,20 @@ impl apis::Children for RestApi {
 
     async fn get_nexus_child(
         query: &str,
-        Path((nexus_id, child_id)): Path<(String, String)>,
+        Path((nexus_id, child_id)): Path<(Uuid, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
         get_child_response(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn get_nexus_children(
-        Path(nexus_id): Path<String>,
+        Path(nexus_id): Path<Uuid>,
     ) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
         get_children_response(Filter::Nexus(nexus_id.into())).await
     }
 
     async fn get_node_nexus_child(
         query: &str,
-        Path((node_id, nexus_id, child_id)): Path<(String, String, String)>,
+        Path((node_id, nexus_id, child_id)): Path<(String, Uuid, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
         get_child_response(
             child_id.into(),
@@ -147,21 +148,21 @@ impl apis::Children for RestApi {
     }
 
     async fn get_node_nexus_children(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, Uuid)>,
     ) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
         get_children_response(Filter::NodeNexus(node_id.into(), nexus_id.into())).await
     }
 
     async fn put_nexus_child(
         query: &str,
-        Path((nexus_id, child_id)): Path<(String, String)>,
+        Path((nexus_id, child_id)): Path<(Uuid, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
         add_child_filtered(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
     }
 
     async fn put_node_nexus_child(
         query: &str,
-        Path((node_id, nexus_id, child_id)): Path<(String, String, String)>,
+        Path((node_id, nexus_id, child_id)): Path<(String, Uuid, String)>,
     ) -> Result<models::Child, RestError<RestJsonError>> {
         add_child_filtered(
             child_id.into(),

@@ -99,10 +99,7 @@ mod tests {
         let watch_volume = WatchResourceId::Volume(volume.spec().uuid);
         let callback = url::Url::parse("http://10.1.0.1:8082/test").unwrap();
 
-        let watchers = client
-            .get_watch_volume(volume.spec().uuid.as_str())
-            .await
-            .unwrap();
+        let watchers = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
         assert!(watchers.is_empty());
 
         let mut store = Etcd::new("0.0.0.0:2379")
@@ -110,7 +107,7 @@ mod tests {
             .expect("Failed to connect to etcd.");
 
         client
-            .put_watch_volume(volume.spec().uuid.as_str(), callback.as_str())
+            .put_watch_volume(&volume.spec().uuid, callback.as_str())
             .await
             .expect_err("volume does not exist in the store");
 
@@ -120,14 +117,11 @@ mod tests {
             .unwrap();
 
         client
-            .put_watch_volume(volume.spec().uuid.as_str(), callback.as_str())
+            .put_watch_volume(&volume.spec().uuid, callback.as_str())
             .await
             .unwrap();
 
-        let watchers = client
-            .get_watch_volume(volume.spec().uuid.as_str())
-            .await
-            .unwrap();
+        let watchers = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
         assert_eq!(
             watchers.first(),
             Some(&v0::models::RestWatch {
@@ -147,7 +141,7 @@ mod tests {
             .unwrap();
 
         client
-            .del_watch_volume(volume.spec().uuid.as_str(), callback.as_str())
+            .del_watch_volume(&volume.spec().uuid, callback.as_str())
             .await
             .unwrap();
 
@@ -160,10 +154,7 @@ mod tests {
             .await
             .expect_err("should have been deleted so no callback");
 
-        let watchers = client
-            .get_watch_volume(volume.spec().uuid.as_str())
-            .await
-            .unwrap();
+        let watchers = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
         assert!(watchers.is_empty());
     }
 }

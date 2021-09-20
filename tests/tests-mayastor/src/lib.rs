@@ -37,7 +37,7 @@ pub mod v0 {
     pub use models::rest_json_error::Kind as RestJsonErrorKind;
 }
 
-use std::{collections::HashMap, rc::Rc, time::Duration};
+use std::{collections::HashMap, convert::TryInto, rc::Rc, time::Duration};
 use structopt::StructOpt;
 
 #[actix_rt::test]
@@ -106,7 +106,8 @@ impl Cluster {
             "{}{:02x}{:02x}{:08x}",
             uuid, node as u8, pool as u8, replica
         )
-        .into()
+        .try_into()
+        .unwrap()
     }
 
     /// openapi rest client v0

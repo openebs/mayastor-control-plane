@@ -8,7 +8,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        OperationSequence, OperationSequencer, SpecStatus, SpecTransaction, UuidString,
+        OperationSequence, OperationSequencer, ResourceUuid, SpecStatus, SpecTransaction,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -36,9 +36,10 @@ impl From<MbusReplica> for ReplicaState {
     }
 }
 
-impl UuidString for ReplicaState {
-    fn uuid_as_string(&self) -> String {
-        self.replica.uuid.clone().into()
+impl ResourceUuid for ReplicaState {
+    type Id = ReplicaId;
+    fn uuid(&self) -> Self::Id {
+        self.replica.uuid.clone()
     }
 }
 
@@ -101,9 +102,10 @@ impl OperationSequencer for ReplicaSpec {
     }
 }
 
-impl UuidString for ReplicaSpec {
-    fn uuid_as_string(&self) -> String {
-        self.uuid.clone().into()
+impl ResourceUuid for ReplicaSpec {
+    type Id = ReplicaId;
+    fn uuid(&self) -> Self::Id {
+        self.uuid.clone()
     }
 }
 

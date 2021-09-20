@@ -1,7 +1,7 @@
 use super::{super::node::watchdog::Watchdog, grpc::GrpcContext};
 use common::{
     errors::{GrpcRequestError, SvcError},
-    v0::msg_translation::{MessageBusToRpc, RpcToMessageBus},
+    v0::msg_translation::{MessageBusToRpc, RpcToMessageBus, TryRpcToMessageBus},
 };
 use common_lib::{
     mbus_api::ResourceKind,
@@ -393,7 +393,14 @@ impl NodeWrapper {
         let rpc_replicas = &rpc_replicas.get_ref().replicas;
         let pools = rpc_replicas
             .iter()
-            .map(|p| rpc_replica_to_bus(p, &self.id))
+            .map(|p| match rpc_replica_to_bus(p, &self.id) {
+                Ok(r) => Some(r),
+                Err(error) => {
+                    tracing::error!(error=%error, "Could not convert rpc replica");
+                    None
+                }
+            })
+            .flatten()
             .collect();
         Ok(pools)
     }
@@ -429,7 +436,14 @@ impl NodeWrapper {
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
-            .map(|n| rpc_nexus_to_bus(n, &self.id))
+            .map(|n| match rpc_nexus_to_bus(n, &self.id) {
+                Ok(n) => Some(n),
+                Err(error) => {
+                    tracing::error!(error=%error, "Could not convert rpc nexus");
+                    None
+                }
+            })
+            .flatten()
             .collect();
         Ok(nexuses)
     }
@@ -643,7 +657,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 request: "create_replica",
             })?;
 
-        let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node);
+        let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node)?;
         self.lock().await.update_replica_states().await?;
         self.lock().await.update_pool_states().await?;
         Ok(replica)
@@ -724,7 +738,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                     resource: ResourceKind::Nexus,
                     request: "create_nexus",
                 })?;
-        let nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node);
+        let nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node)?;
         self.lock().await.update_nexus_states().await?;
         Ok(nexus)
     }
@@ -842,16 +856,19 @@ fn rpc_pool_to_bus(rpc_pool: &rpc::mayastor::Pool, id: &NodeId) -> PoolState {
 }
 
 /// convert rpc replica to a message bus replica
-fn rpc_replica_to_bus(rpc_replica: &rpc::mayastor::ReplicaV2, id: &NodeId) -> Replica {
-    let mut replica = rpc_replica.to_mbus();
+fn rpc_replica_to_bus(
+    rpc_replica: &rpc::mayastor::ReplicaV2,
+    id: &NodeId,
+) -> Result<Replica, SvcError> {
+    let mut replica = rpc_replica.try_to_mbus()?;
     replica.node = id.clone();
-    replica
+    Ok(replica)
 }
 
-fn rpc_nexus_to_bus(rpc_nexus: &rpc::mayastor::Nexus, id: &NodeId) -> Nexus {
-    let mut nexus = rpc_nexus.to_mbus();
+fn rpc_nexus_to_bus(rpc_nexus: &rpc::mayastor::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
+    let mut nexus = rpc_nexus.try_to_mbus()?;
     nexus.node = id.clone();
-    nexus
+    Ok(nexus)
 }
 
 /// Wrapper over the message bus `Pool` which includes all the replicas

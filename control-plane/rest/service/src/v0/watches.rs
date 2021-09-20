@@ -1,6 +1,9 @@
 use super::*;
-use common_lib::types::v0::message_bus::{
-    CreateWatch, DeleteWatch, GetWatchers, WatchCallback, WatchResourceId, WatchType,
+use common_lib::types::v0::{
+    message_bus::{
+        CreateWatch, DeleteWatch, GetWatchers, WatchCallback, WatchResourceId, WatchType,
+    },
+    openapi::apis::Uuid,
 };
 use mbus_api::Message;
 use std::convert::TryFrom;
@@ -8,7 +11,7 @@ use std::convert::TryFrom;
 #[async_trait::async_trait]
 impl apis::Watches for RestApi {
     async fn del_watch_volume(
-        Path(volume_id): Path<String>,
+        Path(volume_id): Path<Uuid>,
         Query(callback): Query<url::Url>,
     ) -> Result<(), RestError<RestJsonError>> {
         DeleteWatch {
@@ -23,7 +26,7 @@ impl apis::Watches for RestApi {
     }
 
     async fn get_watch_volume(
-        Path(volume_id): Path<String>,
+        Path(volume_id): Path<Uuid>,
     ) -> Result<Vec<models::RestWatch>, RestError<RestJsonError>> {
         let watches = GetWatchers {
             resource: WatchResourceId::Volume(volume_id.into()),
@@ -38,7 +41,7 @@ impl apis::Watches for RestApi {
     }
 
     async fn put_watch_volume(
-        Path(volume_id): Path<String>,
+        Path(volume_id): Path<Uuid>,
         Query(callback): Query<url::Url>,
     ) -> Result<(), RestError<RestJsonError>> {
         CreateWatch {

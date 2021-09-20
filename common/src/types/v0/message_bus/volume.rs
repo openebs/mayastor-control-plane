@@ -2,7 +2,7 @@ use super::*;
 
 use crate::{types::v0::store::volume::VolumeSpec, IntoOption};
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Debug};
+use std::fmt::Debug;
 
 bus_impl_string_uuid!(VolumeId, "UUID of a mayastor volume");
 
@@ -72,7 +72,7 @@ impl From<VolumeState> for models::VolumeState {
             protocol: volume.protocol.into(),
             size: volume.size,
             status: volume.status.into(),
-            uuid: apis::Uuid::try_from(volume.uuid).unwrap(),
+            uuid: volume.uuid.into(),
         }
     }
 }

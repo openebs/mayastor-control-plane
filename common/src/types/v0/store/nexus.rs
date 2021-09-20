@@ -9,7 +9,7 @@ use crate::types::v0::{
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         nexus_child::NexusChild,
-        SpecStatus, SpecTransaction, UuidString,
+        ResourceUuid, SpecStatus, SpecTransaction,
     },
 };
 
@@ -39,9 +39,10 @@ impl From<MbusNexus> for NexusState {
     }
 }
 
-impl UuidString for NexusState {
-    fn uuid_as_string(&self) -> String {
-        self.nexus.uuid.clone().into()
+impl ResourceUuid for NexusState {
+    type Id = NexusId;
+    fn uuid(&self) -> Self::Id {
+        self.nexus.uuid.clone()
     }
 }
 
@@ -177,9 +178,10 @@ impl OperationSequencer for NexusSpec {
     }
 }
 
-impl UuidString for NexusSpec {
-    fn uuid_as_string(&self) -> String {
-        self.uuid.clone().into()
+impl ResourceUuid for NexusSpec {
+    type Id = NexusId;
+    fn uuid(&self) -> Self::Id {
+        self.uuid.clone()
     }
 }
 

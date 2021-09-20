@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::types::v0::store::nexus::ReplicaUri;
+use crate::{types::v0::store::nexus::ReplicaUri, IntoOption};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, ops::Deref};
 use strum_macros::{EnumString, ToString};
@@ -49,14 +49,7 @@ impl Replica {
     pub fn online(&self) -> bool {
         self.status.online()
     }
-    /// check if it was created by the control plane
-    pub fn ours(&self) -> bool {
-        let base_name = ReplicaName::new(&self.uuid, None);
-        self.name.0.starts_with(base_name.as_str())
-    }
 }
-
-bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
 
 /// Name of a Replica
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -122,6 +115,8 @@ impl From<Replica> for models::Replica {
         )
     }
 }
+
+bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
 
 impl From<Replica> for DestroyReplica {
     fn from(replica: Replica) -> Self {
@@ -226,7 +221,7 @@ impl From<ReplicaOwners> for models::ReplicaSpecOwners {
                 .iter()
                 .map(|n| apis::Uuid::try_from(n).unwrap())
                 .collect(),
-            volume: src.volume.map(|n| apis::Uuid::try_from(n).unwrap()),
+            volume: src.volume.into_opt(),
         }
     }
 }
