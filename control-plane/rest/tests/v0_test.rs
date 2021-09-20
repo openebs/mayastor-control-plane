@@ -3,7 +3,6 @@ use common_lib::types::v0::{
     openapi::{apis, models},
 };
 
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use rest_client::ActixRestClient;
 
 use common_lib::types::v0::message_bus::{NexusId, ReplicaId, VolumeId};
@@ -56,12 +55,6 @@ fn bearer_token() -> String {
 
 #[actix_rt::test]
 async fn client() {
-    global::set_text_map_propagator(TraceContextPropagator::new());
-    let _tracer = opentelemetry_jaeger::new_pipeline()
-        .with_service_name("rest-client")
-        .install_simple()
-        .unwrap();
-
     // Run the client test both with and without authentication.
     for auth in &[true, false] {
         let cluster = test_setup(auth).await;

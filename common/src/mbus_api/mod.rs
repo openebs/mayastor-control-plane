@@ -20,12 +20,15 @@ use crate::types::{
 use async_trait::async_trait;
 use dyn_clonable::clonable;
 pub use mbus_nats::{bus, message_bus_init, message_bus_init_options, NatsMessageBus};
+use opentelemetry::propagation::{Extractor, Injector};
 pub use receive::*;
 pub use send::*;
 use serde::{de::StdError, Deserialize, Serialize};
 use smol::io;
 use snafu::{ResultExt, Snafu};
-use std::{fmt::Debug, marker::PhantomData, str::FromStr, time::Duration};
+use std::{
+    collections::HashMap, fmt::Debug, marker::PhantomData, ops::Deref, str::FromStr, time::Duration,
+};
 use strum_macros::{AsRefStr, ToString};
 
 /// Result wrapper for send/receive
@@ -251,16 +254,49 @@ pub trait Message {
 /// by their identifier
 #[derive(Serialize, Deserialize, Debug)]
 struct Preamble {
-    pub(crate) id: MessageId,
+    id: MessageId,
+    sender: SenderId,
+    trace_context: Option<TraceContext>,
+}
+
+/// Opentelemetry trace context
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct TraceContext(HashMap<String, String>);
+impl TraceContext {
+    /// Get an empty `Self`
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+}
+impl Injector for TraceContext {
+    fn set(&mut self, key: &str, value: String) {
+        self.0.insert(key.to_string(), value);
+    }
+}
+impl Extractor for TraceContext {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).map(|s| s.as_str())
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.keys().map(|header| header.as_str()).collect()
+    }
 }
 
 /// Unsolicited (send) messages carry the message identifier, the sender
 /// identifier and finally the message payload itself
 #[derive(Serialize, Deserialize)]
 struct SendPayload<T> {
-    pub(crate) id: MessageId,
-    pub(crate) sender: SenderId,
-    pub(crate) data: T,
+    #[serde(flatten)]
+    preamble: Preamble,
+    data: T,
+}
+
+impl<T> Deref for SendPayload<T> {
+    type Target = Preamble;
+    fn deref(&self) -> &Self::Target {
+        &self.preamble
+    }
 }
 
 /// All the different variants of Resources

@@ -10,6 +10,7 @@ use common::Service;
 use common_lib::types::v0::message_bus::ChannelVs;
 
 use common_lib::mbus_api::BusClient;
+use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use structopt::StructOpt;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
@@ -94,6 +95,7 @@ fn init_tracing() {
 
     match CliArgs::from_args().jaeger {
         Some(jaeger) => {
+            global::set_text_map_propagator(TraceContextPropagator::new());
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_agent_endpoint(jaeger)
                 .with_service_name("core-agent")
@@ -127,6 +129,10 @@ async fn server(cli_args: CliArgs) {
     .await;
 
     let service = Service::builder(cli_args.nats, ChannelVs::Core)
+        .with_shared_state(global::tracer_with_version(
+            "core-agent",
+            env!("CARGO_PKG_VERSION"),
+        ))
         .with_default_liveness()
         .connect_message_bus(CliArgs::from_args().no_min_timeouts, BusClient::CoreAgent)
         .await
@@ -157,16 +163,20 @@ macro_rules! impl_request_handler {
         impl common::ServiceSubscriber for ServiceHandler<$RequestType> {
             async fn handler(&self, args: common::Arguments<'_>) -> Result<(), SvcError> {
                 #[tracing::instrument(skip(args), fields(result, error, request.service = true))]
-                async fn $ServiceFnName(args: common::Arguments<'_>) -> Result<(), SvcError> {
+                async fn $ServiceFnName(
+                    args: common::Arguments<'_>,
+                ) -> Result<<$RequestType as Message>::Reply, SvcError> {
                     let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
                     let service: &service::Service = args.context.get_state()?;
                     match service.$ServiceFnName(&request.inner()).await {
                         Ok(reply) => {
                             if let Ok(result_str) = serde_json::to_string(&reply) {
-                                tracing::Span::current().record("result", &result_str.as_str());
+                                if result_str.len() < 2048 {
+                                    tracing::Span::current().record("result", &result_str.as_str());
+                                }
                             }
                             tracing::Span::current().record("error", &false);
-                            Ok(request.reply(reply).await?)
+                            Ok(reply)
                         }
                         Err(error) => {
                             tracing::Span::current()
@@ -176,7 +186,14 @@ macro_rules! impl_request_handler {
                         }
                     }
                 }
-                $ServiceFnName(args).await
+                use opentelemetry::trace::FutureExt;
+                match $ServiceFnName(args.clone())
+                    .with_context(args.request.context())
+                    .await
+                {
+                    Ok(reply) => Ok(args.request.respond(reply).await?),
+                    Err(error) => Err(error),
+                }
             }
             fn filter(&self) -> Vec<MessageId> {
                 vec![$RequestType::default().id()]

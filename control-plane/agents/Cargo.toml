@@ -45,6 +45,7 @@ opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
 tracing = "0.1.26"
 tracing-subscriber = "0.2.20"
 tracing-futures = "0.2.5"
+opentelemetry-semantic-conventions = "0.8.0"
 
 [dev-dependencies]
 composer = { path = "../../composer" }

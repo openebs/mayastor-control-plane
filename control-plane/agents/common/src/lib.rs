@@ -22,7 +22,7 @@ use crate::errors::SvcError;
 use common_lib::{
     mbus_api,
     mbus_api::{
-        BusClient, BusMessage, DynBus, Error, ErrorChain, Message, MessageId, ReceivedMessage,
+        BusClient, DynBus, Error, ErrorChain, Message, MessageId, ReceivedMessage,
         ReceivedRawMessage, TimeoutOptions,
     },
     types::{
@@ -30,6 +30,7 @@ use common_lib::{
         Channel,
     },
 };
+use opentelemetry::trace::FutureExt;
 
 /// Agent level errors
 pub mod errors;
@@ -87,16 +88,13 @@ pub struct Arguments<'a> {
     /// Service context, like access to the message bus
     pub context: Context,
     /// Access to the actual message bus request
-    pub request: Request<'a>,
+    pub request: Arc<Request<'a>>,
 }
 
 impl<'a> Arguments<'a> {
     /// Returns a new Service Argument to be use by a Service Handler
-    pub fn new(context: Context, msg: &'a BusMessage) -> Self {
-        Self {
-            context,
-            request: msg.into(),
-        }
+    pub fn new(context: Context, request: Arc<ReceivedRawMessage<'a>>) -> Self {
+        Self { context, request }
     }
 }
 
@@ -323,7 +321,7 @@ impl Service {
             channel: channel.clone(),
         })?;
 
-        // Gates access to a subscription. This means we can concurrently handle CreateVolume and
+        // Gated access to a subscription. This means we can concurrently handle CreateVolume and
         // GetVolume but we handle CreateVolume one at a time.
         let gated_subs = Arc::new(
             subscriptions
@@ -343,7 +341,10 @@ impl Service {
 
             tokio::spawn(async move {
                 let context = Context::new(bus, state);
-                let args = Arguments::new(context, &message);
+                let mut req = Request::from(&message);
+                req.set_context(context.get_state().ok());
+
+                let args = Arguments::new(context, Arc::new(req));
                 if args.request.channel() != Channel::v0(ChannelVs::Registry) {
                     debug!("Processing message: {{ {} }}", args.request);
                 }
@@ -376,7 +377,13 @@ impl Service {
             }
         }
 
-        match subscription?.lock().await.handler(arguments.clone()).await {
+        match subscription?
+            .lock()
+            .with_context(arguments.request.context())
+            .await
+            .handler(arguments.clone())
+            .await
+        {
             Ok(_) => Ok(()),
             Err(error) => {
                 let result = ServiceError::HandleMessage {
