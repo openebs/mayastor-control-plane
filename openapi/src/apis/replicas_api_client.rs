@@ -25,29 +25,29 @@ pub trait Replicas: Clone {
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_node_pool_replica_share(
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_pool_replica(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_pool_replica_share(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn get_node_pool_replica(
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>>;
     async fn get_node_pool_replicas(
         &self,
@@ -60,7 +60,7 @@ pub trait Replicas: Clone {
     ) -> Result<Vec<crate::models::Replica>, Error<crate::models::RestJsonError>>;
     async fn get_replica(
         &self,
-        id: &str,
+        id: &uuid::Uuid,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>>;
     async fn get_replicas(
         &self,
@@ -69,25 +69,25 @@ pub trait Replicas: Clone {
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
         create_replica_body: crate::models::CreateReplicaBody,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>>;
     async fn put_node_pool_replica_share(
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<String, Error<crate::models::RestJsonError>>;
     async fn put_pool_replica(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
         create_replica_body: crate::models::CreateReplicaBody,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>>;
     async fn put_pool_replica_share(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<String, Error<crate::models::RestJsonError>>;
 }
 
@@ -97,7 +97,7 @@ impl Replicas for ReplicasClient {
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -146,7 +146,7 @@ impl Replicas for ReplicasClient {
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -194,7 +194,7 @@ impl Replicas for ReplicasClient {
     async fn del_pool_replica(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -241,7 +241,7 @@ impl Replicas for ReplicasClient {
     async fn del_pool_replica_share(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -289,7 +289,7 @@ impl Replicas for ReplicasClient {
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -431,7 +431,7 @@ impl Replicas for ReplicasClient {
     }
     async fn get_replica(
         &self,
-        id: &str,
+        id: &uuid::Uuid,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -520,7 +520,7 @@ impl Replicas for ReplicasClient {
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
         create_replica_body: crate::models::CreateReplicaBody,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -574,7 +574,7 @@ impl Replicas for ReplicasClient {
         &self,
         node_id: &str,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<String, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -623,7 +623,7 @@ impl Replicas for ReplicasClient {
     async fn put_pool_replica(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
         create_replica_body: crate::models::CreateReplicaBody,
     ) -> Result<crate::models::Replica, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -675,7 +675,7 @@ impl Replicas for ReplicasClient {
     async fn put_pool_replica_share(
         &self,
         pool_id: &str,
-        replica_id: &str,
+        replica_id: &uuid::Uuid,
     ) -> Result<String, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;

@@ -21,20 +21,23 @@ impl NexusesClient {
 #[async_trait::async_trait(?Send)]
 #[dyn_clonable::clonable]
 pub trait Nexuses: Clone {
-    async fn del_nexus(&self, nexus_id: &str) -> Result<(), Error<crate::models::RestJsonError>>;
+    async fn del_nexus(
+        &self,
+        nexus_id: &uuid::Uuid,
+    ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_node_nexus(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_node_nexus_share(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn get_nexus(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<crate::models::Nexus, Error<crate::models::RestJsonError>>;
     async fn get_nexuses(
         &self,
@@ -42,7 +45,7 @@ pub trait Nexuses: Clone {
     async fn get_node_nexus(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<crate::models::Nexus, Error<crate::models::RestJsonError>>;
     async fn get_node_nexuses(
         &self,
@@ -51,20 +54,23 @@ pub trait Nexuses: Clone {
     async fn put_node_nexus(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         create_nexus_body: crate::models::CreateNexusBody,
     ) -> Result<crate::models::Nexus, Error<crate::models::RestJsonError>>;
     async fn put_node_nexus_share(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         protocol: crate::models::NexusShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>>;
 }
 
 #[async_trait::async_trait(?Send)]
 impl Nexuses for NexusesClient {
-    async fn del_nexus(&self, nexus_id: &str) -> Result<(), Error<crate::models::RestJsonError>> {
+    async fn del_nexus(
+        &self,
+        nexus_id: &uuid::Uuid,
+    ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
 
@@ -109,7 +115,7 @@ impl Nexuses for NexusesClient {
     async fn del_node_nexus(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -156,7 +162,7 @@ impl Nexuses for NexusesClient {
     async fn del_node_nexus_share(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -202,7 +208,7 @@ impl Nexuses for NexusesClient {
     }
     async fn get_nexus(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<crate::models::Nexus, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -290,7 +296,7 @@ impl Nexuses for NexusesClient {
     async fn get_node_nexus(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<crate::models::Nexus, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -384,7 +390,7 @@ impl Nexuses for NexusesClient {
     async fn put_node_nexus(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         create_nexus_body: crate::models::CreateNexusBody,
     ) -> Result<crate::models::Nexus, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -436,7 +442,7 @@ impl Nexuses for NexusesClient {
     async fn put_node_nexus_share(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         protocol: crate::models::NexusShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;

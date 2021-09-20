@@ -14,33 +14,33 @@ use actix_web::web::Json;
 #[async_trait::async_trait]
 pub trait Nexuses {
     async fn del_nexus(
-        Path(nexus_id): Path<String>,
+        Path(nexus_id): Path<uuid::Uuid>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn del_node_nexus(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, uuid::Uuid)>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn del_node_nexus_share(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, uuid::Uuid)>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_nexus(
-        Path(nexus_id): Path<String>,
+        Path(nexus_id): Path<uuid::Uuid>,
     ) -> Result<crate::models::Nexus, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_nexuses(
     ) -> Result<Vec<crate::models::Nexus>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_nexus(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, uuid::Uuid)>,
     ) -> Result<crate::models::Nexus, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_node_nexuses(
         Path(id): Path<String>,
     ) -> Result<Vec<crate::models::Nexus>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_node_nexus(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, uuid::Uuid)>,
         Body(create_nexus_body): Body<crate::models::CreateNexusBody>,
     ) -> Result<crate::models::Nexus, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_node_nexus_share(
         Path((node_id, nexus_id, protocol)): Path<(
             String,
-            String,
+            uuid::Uuid,
             crate::models::NexusShareProtocol,
         )>,
     ) -> Result<String, crate::apis::RestError<crate::models::RestJsonError>>;
