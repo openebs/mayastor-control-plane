@@ -40,6 +40,7 @@ impl PoolItemLister {
             .map(|n| {
                 n.pool_wrappers()
                     .iter()
+                    .filter(|p| registry.specs().get_pool(&p.id).is_ok())
                     .map(|p| PoolItem::new(n.clone(), p.clone()))
                     .collect::<Vec<_>>()
             })
