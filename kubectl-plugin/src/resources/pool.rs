@@ -28,8 +28,8 @@ impl CreateRows for Vec<openapi::models::Pool> {
             // The spec would be empty if it was not created using
             // control plane.
             let spec = pool.spec.clone().unwrap_or_default();
-            // In case the state is not coming as filled, either due to pool, node lost, fill in spec
-            // data and mark the status as Unknown.
+            // In case the state is not coming as filled, either due to pool, node lost, fill in
+            // spec data and mark the status as Unknown.
             let state = pool.state.clone().unwrap_or(openapi::models::PoolState {
                 capacity: 0,
                 disks: spec.disks,
