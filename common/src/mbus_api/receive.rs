@@ -1,4 +1,11 @@
 use super::*;
+use opentelemetry::{
+    global,
+    global::BoxedTracer,
+    trace::{SpanKind, StatusCode, TraceContextExt, Tracer},
+    KeyValue,
+};
+use std::sync::Arc;
 
 /// Type safe wrapper over a message bus message which decodes the raw
 /// message into the actual payload `S` and allows only for a response type `R`.
@@ -15,7 +22,7 @@ use super::*;
 /// ```
 pub struct ReceivedMessageExt<'a, S, R> {
     request: SendPayload<S>,
-    bus_message: &'a BusMessage,
+    bus_message: Arc<ReceivedRawMessage<'a>>,
     reply_type: PhantomData<R>,
 }
 
@@ -55,19 +62,14 @@ where
     /// May fail if serialization of the reply fails or if the
     /// message bus fails to respond.
     /// Can receive either `R`, `Err()` or `ReplyPayload<R>`.
-    pub async fn reply<T: Into<ReplyPayload<R>>>(&self, reply: T) -> BusResult<()> {
-        let reply: ReplyPayload<R> = reply.into();
-        let payload = serde_json::to_vec(&reply).context(SerializeReply {
-            request: self.request.id.clone(),
-        })?;
-        self.bus_message.respond(&payload).await.context(Reply {
-            request: self.request.id.clone(),
-        })
+    pub async fn reply<T: Serialize + Into<ReplyPayload<R>>>(&self, reply: T) -> BusResult<()> {
+        self.bus_message.respond(&reply).await
     }
 
     /// Create a new received message object which wraps the send and
     /// receive types around a raw bus message.
-    fn new(bus_message: &'a BusMessage) -> Result<Self, Error> {
+    fn new(message: Arc<ReceivedRawMessage<'a>>) -> Result<Self, Error> {
+        let bus_message = message.bus_msg;
         let request: SendPayload<S> =
             serde_json::from_slice(&bus_message.data).context(DeserializeSend {
                 receiver: std::any::type_name::<S>(),
@@ -81,12 +83,12 @@ where
             );
             Ok(Self {
                 request,
-                bus_message,
+                bus_message: message,
                 reply_type: Default::default(),
             })
         } else {
             Err(Error::WrongMessageId {
-                received: request.id,
+                received: request.preamble.id,
                 expected: request.data.id(),
             })
         }
@@ -98,6 +100,7 @@ where
 #[derive(Clone)]
 pub struct ReceivedRawMessage<'a> {
     bus_msg: &'a BusMessage,
+    context: Option<opentelemetry::Context>,
 }
 
 impl std::fmt::Display for ReceivedRawMessage<'_> {
@@ -123,6 +126,54 @@ impl<'a> ReceivedRawMessage<'a> {
                 payload: String::from_utf8(self.bus_msg.data.clone()),
             })?;
         Ok(request.data)
+    }
+
+    /// Get the trace context and message identifier
+    fn trace_context(&self) -> Option<(MessageId, TraceContext)> {
+        let preamble: Preamble = serde_json::from_slice(&self.bus_msg.data).ok()?;
+        let id = preamble.id;
+        let context = preamble.trace_context;
+        context.map(|ctx| (id, ctx))
+    }
+
+    /// Set the tracer context
+    pub fn set_context(&mut self, tracer: Option<&BoxedTracer>) {
+        if let Some((id, trace)) = self.trace_context() {
+            let tracer: &BoxedTracer = match tracer {
+                Some(tracer) => tracer,
+                _ => return,
+            };
+            let parent_context =
+                global::get_text_map_propagator(|propagator| propagator.extract(&trace));
+
+            let mut builder = tracer.span_builder(id.to_string());
+            builder.parent_context = parent_context;
+            builder.span_kind = Some(SpanKind::Server);
+
+            let attributes = vec![
+                KeyValue::new(
+                    opentelemetry_semantic_conventions::trace::MESSAGING_SYSTEM,
+                    "NATS",
+                ),
+                KeyValue::new(
+                    opentelemetry_semantic_conventions::trace::MESSAGING_DESTINATION,
+                    self.bus_msg.subject.clone(),
+                ),
+                KeyValue::new(
+                    opentelemetry_semantic_conventions::trace::MESSAGING_MESSAGE_ID,
+                    id.to_string(),
+                ),
+            ];
+            builder.attributes = Some(attributes);
+
+            let span = tracer.build(builder);
+            self.context = Some(opentelemetry::Context::current_with_span(span));
+        }
+    }
+
+    /// Get a copy of the OpenTelemetry Context
+    pub fn context(&self) -> opentelemetry::Context {
+        self.context.clone().unwrap_or_default()
     }
 
     /// Get the identifier of this message.
@@ -154,6 +205,25 @@ impl<'a> ReceivedRawMessage<'a> {
         let payload = serde_json::to_vec(&reply).context(SerializeReply {
             request: self.id()?,
         })?;
+
+        match &self.context {
+            None => {}
+            Some(ctx) => {
+                let span = ctx.span();
+                match reply.0 {
+                    Ok(_) => {
+                        span.set_status(StatusCode::Ok, "".into());
+                    }
+                    Err(error) => {
+                        span.set_status(
+                            StatusCode::Error,
+                            serde_json::to_string(&error).unwrap_or_default(),
+                        );
+                    }
+                }
+                span.end();
+            }
+        }
         self.bus_msg.respond(&payload).await.context(Reply {
             request: self.id()?,
         })
@@ -162,31 +232,22 @@ impl<'a> ReceivedRawMessage<'a> {
 
 impl<'a> std::convert::From<&'a BusMessage> for ReceivedRawMessage<'a> {
     fn from(value: &'a BusMessage) -> Self {
-        Self { bus_msg: value }
+        Self {
+            bus_msg: value,
+            context: None,
+        }
     }
 }
 
-impl<'a, S, R> std::convert::TryFrom<&'a BusMessage> for ReceivedMessageExt<'a, S, R>
+impl<'a, S, R> std::convert::TryFrom<Arc<ReceivedRawMessage<'a>>> for ReceivedMessageExt<'a, S, R>
 where
     for<'de> S: Deserialize<'de> + 'a + Debug + Clone + Message,
     R: Serialize,
 {
     type Error = Error;
 
-    fn try_from(value: &'a BusMessage) -> Result<Self, Self::Error> {
+    fn try_from(value: Arc<ReceivedRawMessage<'a>>) -> Result<Self, Self::Error> {
         ReceivedMessageExt::<S, R>::new(value)
-    }
-}
-
-impl<'a, S, R> std::convert::TryFrom<ReceivedRawMessage<'a>> for ReceivedMessageExt<'a, S, R>
-where
-    for<'de> S: Deserialize<'de> + 'a + Debug + Clone + Message,
-    R: Serialize,
-{
-    type Error = Error;
-
-    fn try_from(value: ReceivedRawMessage<'a>) -> Result<Self, Self::Error> {
-        ReceivedMessageExt::<S, R>::new(value.bus_msg)
     }
 }
 

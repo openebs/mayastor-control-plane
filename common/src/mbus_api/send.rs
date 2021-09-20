@@ -1,4 +1,10 @@
 use super::*;
+use opentelemetry::{
+    global,
+    propagation::Injector,
+    trace::{SpanKind, StatusCode, TraceContextExt, Tracer},
+    Context, KeyValue,
+};
 
 // todo: replace with proc-macros
 
@@ -205,7 +211,7 @@ where
         channel: C,
         bus: DynBus,
     ) -> BusResult<R> {
-        let msg = SendMessage::<S, R>::new(payload, channel.into(), bus);
+        let mut msg = SendMessage::<S, R>::new(payload, channel.into(), bus);
         msg.request(None).await
     }
 
@@ -219,7 +225,7 @@ where
         bus: DynBus,
         options: TimeoutOptions,
     ) -> BusResult<R> {
-        let msg = SendMessage::<S, R>::new(payload, channel, bus);
+        let mut msg = SendMessage::<S, R>::new(payload, channel, bus);
         msg.request(Some(options)).await
     }
 }
@@ -257,6 +263,18 @@ struct SendMessage<'a, S, R> {
     reply_type: PhantomData<R>,
 }
 
+impl<T> Injector for SendPayload<T> {
+    fn set(&mut self, key: &str, value: String) {
+        if let Some(context) = self.preamble.trace_context.as_mut() {
+            context.set(key, value);
+        } else {
+            let mut ctx = TraceContext::new();
+            ctx.set(key, value);
+            self.preamble.trace_context = Some(ctx);
+        }
+    }
+}
+
 impl<'a, S, R> SendMessage<'a, S, R>
 where
     S: Message + Serialize,
@@ -277,9 +295,12 @@ where
     pub(crate) fn new(payload: &'a S, channel: Channel, bus: DynBus) -> Self {
         Self {
             payload: SendPayload {
-                id: payload.id(),
+                preamble: Preamble {
+                    id: payload.id(),
+                    sender: Self::name(),
+                    trace_context: None,
+                },
                 data: payload,
-                sender: Self::name(),
             },
             reply_type: Default::default(),
             bus,
@@ -296,17 +317,69 @@ where
         self.bus.publish(self.channel.clone(), &payload).await
     }
 
+    fn trace_context(&mut self) -> opentelemetry::Context {
+        let tracer = global::tracer("nats-client");
+        let attributes = vec![
+            KeyValue::new(
+                opentelemetry_semantic_conventions::trace::MESSAGING_SYSTEM,
+                "NATS".to_string(),
+            ),
+            KeyValue::new(
+                opentelemetry_semantic_conventions::trace::MESSAGING_DESTINATION,
+                self.channel.to_string(),
+            ),
+            KeyValue::new(
+                opentelemetry_semantic_conventions::trace::MESSAGING_MESSAGE_ID,
+                self.payload.id.to_string(),
+            ),
+        ];
+
+        let ctx = Context::current();
+        let span = tracer
+            .span_builder(format!(
+                "Request {} {}",
+                self.channel.to_string(),
+                self.payload.id.to_string()
+            ))
+            .with_kind(SpanKind::Client)
+            .with_attributes(attributes)
+            .with_parent_context(ctx.clone())
+            .start(&tracer);
+
+        let context = ctx.with_span(span);
+        global::get_text_map_propagator(|injector| {
+            injector.inject_context(&context, &mut self.payload);
+        });
+        context
+    }
+
     /// Sends the message and requests a reply.
-    pub(crate) async fn request(&self, options: Option<TimeoutOptions>) -> BusResult<R> {
+    pub(crate) async fn request(&mut self, options: Option<TimeoutOptions>) -> BusResult<R> {
+        let context = self.trace_context();
         let options = self.timeout_opts(options);
         let payload = serde_json::to_vec(&self.payload).context(SerializeSend {
             channel: self.channel.clone(),
         })?;
-        let reply = self
+
+        let reply = match self
             .bus
             .request(self.channel.clone(), &payload, Some(options))
-            .await?
-            .data;
+            .await
+        {
+            Ok(reply) => {
+                let span = context.span();
+                span.set_status(StatusCode::Ok, reply.subject);
+                span.end();
+                reply.data
+            }
+            Err(error) => {
+                let span = context.span();
+                span.set_status(StatusCode::Error, error.to_string());
+                span.end();
+                return Err(error);
+            }
+        };
+
         let reply: ReplyPayload<R> =
             serde_json::from_slice(&reply).context(DeserializeReceive {
                 request: serde_json::to_string(&self.payload),
