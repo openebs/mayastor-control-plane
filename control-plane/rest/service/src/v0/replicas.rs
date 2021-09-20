@@ -1,6 +1,7 @@
 use super::*;
-use common_lib::types::v0::message_bus::{
-    DestroyReplica, Filter, ReplicaShareProtocol, ShareReplica, UnshareReplica,
+use common_lib::types::v0::{
+    message_bus::{DestroyReplica, Filter, ReplicaShareProtocol, ShareReplica, UnshareReplica},
+    openapi::apis::Uuid,
 };
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
@@ -151,7 +152,7 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
 #[async_trait::async_trait]
 impl apis::Replicas for RestApi {
     async fn del_node_pool_replica(
-        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+        Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
         destroy_replica(Filter::NodePoolReplica(
             node_id.into(),
@@ -162,7 +163,7 @@ impl apis::Replicas for RestApi {
     }
 
     async fn del_node_pool_replica_share(
-        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+        Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
         unshare_replica(Filter::NodePoolReplica(
             node_id.into(),
@@ -173,19 +174,19 @@ impl apis::Replicas for RestApi {
     }
 
     async fn del_pool_replica(
-        Path((pool_id, replica_id)): Path<(String, String)>,
+        Path((pool_id, replica_id)): Path<(String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
         destroy_replica(Filter::PoolReplica(pool_id.into(), replica_id.into())).await
     }
 
     async fn del_pool_replica_share(
-        Path((pool_id, replica_id)): Path<(String, String)>,
+        Path((pool_id, replica_id)): Path<(String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
         unshare_replica(Filter::PoolReplica(pool_id.into(), replica_id.into())).await
     }
 
     async fn get_node_pool_replica(
-        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+        Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         let replica = MessageBus::get_replica(Filter::NodePoolReplica(
             node_id.into(),
@@ -212,7 +213,7 @@ impl apis::Replicas for RestApi {
     }
 
     async fn get_replica(
-        Path(id): Path<String>,
+        Path(id): Path<Uuid>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         let replica = MessageBus::get_replica(Filter::Replica(id.into())).await?;
         Ok(replica.into())
@@ -224,7 +225,7 @@ impl apis::Replicas for RestApi {
     }
 
     async fn put_node_pool_replica(
-        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+        Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
         Body(create_replica_body): Body<models::CreateReplicaBody>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         put_replica(
@@ -235,7 +236,7 @@ impl apis::Replicas for RestApi {
     }
 
     async fn put_node_pool_replica_share(
-        Path((node_id, pool_id, replica_id)): Path<(String, String, String)>,
+        Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
             Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
@@ -245,7 +246,7 @@ impl apis::Replicas for RestApi {
     }
 
     async fn put_pool_replica(
-        Path((pool_id, replica_id)): Path<(String, String)>,
+        Path((pool_id, replica_id)): Path<(String, Uuid)>,
         Body(create_replica_body): Body<models::CreateReplicaBody>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         put_replica(
@@ -256,7 +257,7 @@ impl apis::Replicas for RestApi {
     }
 
     async fn put_pool_replica_share(
-        Path((pool_id, replica_id)): Path<(String, String)>,
+        Path((pool_id, replica_id)): Path<(String, Uuid)>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
             Filter::PoolReplica(pool_id.into(), replica_id.into()),

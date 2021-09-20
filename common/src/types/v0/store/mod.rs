@@ -72,9 +72,10 @@ pub trait SpecTransaction<Operation> {
     fn set_op_result(&mut self, result: bool);
 }
 
-/// Trait which allows a UUID to be returned as a string.
-pub trait UuidString {
-    fn uuid_as_string(&self) -> String;
+/// Trait which allows a UUID to be returned as the associated type Id.
+pub trait ResourceUuid {
+    type Id;
+    fn uuid(&self) -> Self::Id;
 }
 
 /// Sequence operations for a resource without locking it

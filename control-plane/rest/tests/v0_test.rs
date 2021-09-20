@@ -6,7 +6,12 @@ use common_lib::types::v0::{
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use rest_client::ActixRestClient;
 
-use std::{str::FromStr, time::Duration};
+use common_lib::types::v0::message_bus::{NexusId, ReplicaId, VolumeId};
+use std::{
+    convert::{TryFrom, TryInto},
+    str::FromStr,
+    time::Duration,
+};
 use testlib::{Cluster, ClusterBuilder};
 use tracing::info;
 
@@ -56,6 +61,7 @@ async fn client() {
         .with_service_name("rest-client")
         .install_simple()
         .unwrap();
+
     // Run the client test both with and without authentication.
     for auth in &[true, false] {
         let cluster = test_setup(auth).await;
@@ -145,7 +151,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .put_node_pool_replica(
             &pool.spec.as_ref().unwrap().node,
             &pool.id,
-            "e6e7d39d-e343-42f7-936a-1ab05f1839db",
+            &ReplicaId::try_from("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
             /* actual size will be a multiple of 4MB so just
              * create it like so */
             models::CreateReplicaBody::new_all(
@@ -178,7 +184,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     );
     client
         .replicas_api()
-        .del_node_pool_replica(&replica.node, &replica.pool, &replica.uuid.to_string())
+        .del_node_pool_replica(&replica.node, &replica.pool, &replica.uuid)
         .await
         .unwrap();
 
@@ -191,7 +197,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .nexuses_api()
         .put_node_nexus(
             mayastor1.as_str(),
-            "058a95e5-cee6-4e81-b682-fe864ca99b9c",
+            &NexusId::try_from("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
             models::CreateNexusBody::new(
                 vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"],
                 12582912u64
@@ -205,7 +211,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         nexus,
         models::Nexus {
             node: mayastor1.to_string(),
-            uuid: FromStr::from_str("058a95e5-cee6-4e81-b682-fe864ca99b9c").unwrap(),
+            uuid: NexusId::try_from("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap().into(),
             size: 12582912,
             state: models::NexusState::Online,
             children: vec![models::Child {
@@ -223,7 +229,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .children_api()
         .put_node_nexus_child(
             &nexus.node,
-            &nexus.uuid.to_string(),
+            &nexus.uuid,
             "malloc:///malloc2?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b1",
         )
         .await
@@ -231,7 +237,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     let children = client
         .children_api()
-        .get_nexus_children(&nexus.uuid.to_string())
+        .get_nexus_children(&nexus.uuid)
         .await
         .unwrap();
 
@@ -245,16 +251,17 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     client
         .nexuses_api()
-        .del_node_nexus(&nexus.node, &nexus.uuid.to_string())
+        .del_node_nexus(&nexus.node, &nexus.uuid)
         .await
         .unwrap();
     let nexuses = client.nexuses_api().get_nexuses().await.unwrap();
     assert!(nexuses.is_empty());
+    let volume_uuid: VolumeId = "058a95e5-cee6-4e81-b682-fe864ca99b9c".try_into().unwrap();
 
     let volume = client
         .volumes_api()
         .put_volume(
-            "058a95e5-cee6-4e81-b682-fe864ca99b9c",
+            &volume_uuid,
             models::CreateVolumeBody::new(
                 models::VolumeHealPolicy::default(),
                 1,
@@ -268,17 +275,13 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     tracing::info!("Volume: {:#?}", volume);
     assert_eq!(
         volume,
-        client
-            .volumes_api()
-            .get_volume("058a95e5-cee6-4e81-b682-fe864ca99b9c")
-            .await
-            .unwrap()
+        client.volumes_api().get_volume(&volume_uuid).await.unwrap()
     );
 
     let volume = client
         .volumes_api()
         .put_volume_target(
-            &volume.state.unwrap().uuid.to_string(),
+            &volume.state.unwrap().uuid,
             mayastor1.as_str(),
             models::VolumeShareProtocol::Nvmf,
         )
@@ -290,7 +293,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     let volume = client
         .volumes_api()
-        .put_volume_replica_count(&volume_state.uuid.to_string(), 2)
+        .put_volume_replica_count(&volume_state.uuid, 2)
         .await
         .expect("We have 2 nodes with a pool each");
     tracing::info!("Volume: {:#?}", volume);
@@ -300,7 +303,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     let volume = client
         .volumes_api()
-        .put_volume_replica_count(&volume_state.uuid.to_string(), 1)
+        .put_volume_replica_count(&volume_state.uuid, 1)
         .await
         .expect("Should be able to reduce back to 1");
     tracing::info!("Volume: {:#?}", volume);
@@ -310,16 +313,16 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     let volume = client
         .volumes_api()
-        .del_volume_target(&volume_state.uuid.to_string())
+        .del_volume_target(&volume_state.uuid)
         .await
         .unwrap();
     tracing::info!("Volume: {:#?}", volume);
     let volume_state = volume.state.expect("No volume state");
     assert!(volume_state.child.is_none());
 
-    let volume_uuid = volume_state.uuid.to_string();
+    let volume_uuid = volume_state.uuid;
 
-    let _watch_volume = WatchResourceId::Volume(volume_uuid.clone().into());
+    let _watch_volume = WatchResourceId::Volume(volume_uuid.into());
     let callback = url::Url::parse("http://lala/test").unwrap();
 
     let watchers = client
@@ -348,11 +351,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .unwrap();
     assert!(watchers.is_empty());
 
-    client
-        .volumes_api()
-        .del_volume("058a95e5-cee6-4e81-b682-fe864ca99b9c")
-        .await
-        .unwrap();
+    client.volumes_api().del_volume(&volume_uuid).await.unwrap();
 
     let volumes = client.volumes_api().get_volumes().await.unwrap();
     assert!(volumes.is_empty());
@@ -377,7 +376,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     client
         .block_devices_api()
-        .get_node_block_devices(mayastor1.as_str(), Some(true))
+        .get_node_block_devices(mayastor1.as_str(), Some(false))
         .await
         .expect("Failed to get block devices");
 

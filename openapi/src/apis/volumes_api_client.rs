@@ -21,11 +21,17 @@ impl VolumesClient {
 #[async_trait::async_trait(?Send)]
 #[dyn_clonable::clonable]
 pub trait Volumes: Clone {
-    async fn del_share(&self, volume_id: &str) -> Result<(), Error<crate::models::RestJsonError>>;
-    async fn del_volume(&self, volume_id: &str) -> Result<(), Error<crate::models::RestJsonError>>;
+    async fn del_share(
+        &self,
+        volume_id: &uuid::Uuid,
+    ) -> Result<(), Error<crate::models::RestJsonError>>;
+    async fn del_volume(
+        &self,
+        volume_id: &uuid::Uuid,
+    ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_volume_target(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
     async fn get_node_volumes(
         &self,
@@ -33,31 +39,31 @@ pub trait Volumes: Clone {
     ) -> Result<Vec<crate::models::Volume>, Error<crate::models::RestJsonError>>;
     async fn get_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
     async fn get_volumes(
         &self,
     ) -> Result<Vec<crate::models::Volume>, Error<crate::models::RestJsonError>>;
     async fn put_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         create_volume_body: crate::models::CreateVolumeBody,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
     async fn put_volume_replica_count(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         replica_count: u8,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
     async fn put_volume_share(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         protocol: crate::models::VolumeShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>>;
     /// Create a volume target connectable for front-end IO from the specified node. Due to a
     /// limitation, this must currently be a mayastor storage node.
     async fn put_volume_target(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         node: &str,
         protocol: crate::models::VolumeShareProtocol,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
@@ -65,7 +71,10 @@ pub trait Volumes: Clone {
 
 #[async_trait::async_trait(?Send)]
 impl Volumes for VolumesClient {
-    async fn del_share(&self, volume_id: &str) -> Result<(), Error<crate::models::RestJsonError>> {
+    async fn del_share(
+        &self,
+        volume_id: &uuid::Uuid,
+    ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
 
@@ -107,7 +116,10 @@ impl Volumes for VolumesClient {
             }
         }
     }
-    async fn del_volume(&self, volume_id: &str) -> Result<(), Error<crate::models::RestJsonError>> {
+    async fn del_volume(
+        &self,
+        volume_id: &uuid::Uuid,
+    ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
 
@@ -151,7 +163,7 @@ impl Volumes for VolumesClient {
     }
     async fn del_volume_target(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -243,7 +255,7 @@ impl Volumes for VolumesClient {
     }
     async fn get_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -330,7 +342,7 @@ impl Volumes for VolumesClient {
     }
     async fn put_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         create_volume_body: crate::models::CreateVolumeBody,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -380,7 +392,7 @@ impl Volumes for VolumesClient {
     }
     async fn put_volume_replica_count(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         replica_count: u8,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -428,7 +440,7 @@ impl Volumes for VolumesClient {
     }
     async fn put_volume_share(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         protocol: crate::models::VolumeShareProtocol,
     ) -> Result<String, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -476,7 +488,7 @@ impl Volumes for VolumesClient {
     }
     async fn put_volume_target(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         node: &str,
         protocol: crate::models::VolumeShareProtocol,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {

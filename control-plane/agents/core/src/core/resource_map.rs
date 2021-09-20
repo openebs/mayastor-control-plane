@@ -1,4 +1,4 @@
-use common_lib::{types::v0::store::UuidString, IntoVec};
+use common_lib::{types::v0::store::ResourceUuid, IntoVec};
 use parking_lot::Mutex;
 use std::{
     collections::{hash_map::Values, HashMap},
@@ -13,8 +13,8 @@ pub struct ResourceMap<I, S> {
 
 impl<I, S> ResourceMap<I, S>
 where
-    I: Eq + Hash + From<String>,
-    S: Clone + UuidString,
+    I: Eq + Hash,
+    S: Clone + ResourceUuid<Id = I>,
 {
     /// Get the resource with the given key.
     pub fn get(&self, key: &I) -> Option<&Arc<Mutex<S>>> {
@@ -28,7 +28,7 @@ where
 
     /// Insert an element or update an existing entry in the map.
     pub fn insert(&mut self, value: S) -> Arc<Mutex<S>> {
-        let key = value.uuid_as_string().into();
+        let key = value.uuid();
         match self.map.get(&key) {
             Some(entry) => {
                 let mut e = entry.lock();
@@ -54,8 +54,7 @@ where
     pub fn populate(&mut self, values: impl IntoVec<S>) {
         assert!(self.map.is_empty());
         for value in values.into_vec() {
-            self.map
-                .insert(value.uuid_as_string().into(), Arc::new(Mutex::new(value)));
+            self.map.insert(value.uuid(), Arc::new(Mutex::new(value)));
         }
     }
 

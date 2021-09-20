@@ -5,7 +5,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        UuidString,
+        ResourceUuid,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -64,9 +64,10 @@ impl From<NodeSpec> for models::NodeSpec {
     }
 }
 
-impl UuidString for NodeSpec {
-    fn uuid_as_string(&self) -> String {
-        self.id.clone().into()
+impl ResourceUuid for NodeSpec {
+    type Id = NodeId;
+    fn uuid(&self) -> Self::Id {
+        self.id.clone()
     }
 }
 

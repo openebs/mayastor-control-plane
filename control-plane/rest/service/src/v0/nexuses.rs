@@ -1,5 +1,8 @@
 use super::*;
-use common_lib::types::v0::message_bus::{DestroyNexus, Filter, ShareNexus, UnshareNexus};
+use common_lib::types::v0::{
+    message_bus::{DestroyNexus, Filter, ShareNexus, UnshareNexus},
+    openapi::apis::Uuid,
+};
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
     ReplyErrorKind, ResourceKind,
@@ -37,18 +40,18 @@ async fn destroy_nexus(filter: Filter) -> Result<(), RestError<RestJsonError>> {
 
 #[async_trait::async_trait]
 impl apis::Nexuses for RestApi {
-    async fn del_nexus(Path(nexus_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
+    async fn del_nexus(Path(nexus_id): Path<Uuid>) -> Result<(), RestError<RestJsonError>> {
         destroy_nexus(Filter::Nexus(nexus_id.into())).await
     }
 
     async fn del_node_nexus(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
         destroy_nexus(Filter::NodeNexus(node_id.into(), nexus_id.into())).await
     }
 
     async fn del_node_nexus_share(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
         MessageBus::unshare_nexus(UnshareNexus {
             node: node_id.into(),
@@ -59,7 +62,7 @@ impl apis::Nexuses for RestApi {
     }
 
     async fn get_nexus(
-        Path(nexus_id): Path<String>,
+        Path(nexus_id): Path<Uuid>,
     ) -> Result<models::Nexus, RestError<RestJsonError>> {
         let nexus = MessageBus::get_nexus(Filter::Nexus(nexus_id.into())).await?;
         Ok(nexus.into())
@@ -71,7 +74,7 @@ impl apis::Nexuses for RestApi {
     }
 
     async fn get_node_nexus(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, Uuid)>,
     ) -> Result<models::Nexus, RestError<RestJsonError>> {
         let nexus =
             MessageBus::get_nexus(Filter::NodeNexus(node_id.into(), nexus_id.into())).await?;
@@ -86,7 +89,7 @@ impl apis::Nexuses for RestApi {
     }
 
     async fn put_node_nexus(
-        Path((node_id, nexus_id)): Path<(String, String)>,
+        Path((node_id, nexus_id)): Path<(String, Uuid)>,
         Body(create_nexus_body): Body<models::CreateNexusBody>,
     ) -> Result<models::Nexus, RestError<RestJsonError>> {
         let create =
@@ -96,7 +99,7 @@ impl apis::Nexuses for RestApi {
     }
 
     async fn put_node_nexus_share(
-        Path((node_id, nexus_id, protocol)): Path<(String, String, models::NexusShareProtocol)>,
+        Path((node_id, nexus_id, protocol)): Path<(String, Uuid, models::NexusShareProtocol)>,
     ) -> Result<String, RestError<RestJsonError>> {
         let share = ShareNexus {
             node: node_id.into(),

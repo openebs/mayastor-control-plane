@@ -118,7 +118,7 @@ async fn create_nexus_local_replica() {
     let replica = cluster
         .rest_v00()
         .replicas_api()
-        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .get_replica(&Cluster::replica(0, 0, 0))
         .await
         .unwrap();
 
@@ -148,7 +148,7 @@ async fn create_nexus_replicas() {
     let local = cluster
         .rest_v00()
         .replicas_api()
-        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .get_replica(&Cluster::replica(0, 0, 0))
         .await
         .unwrap();
     let remote = v0::ShareReplica {
@@ -188,25 +188,19 @@ async fn create_nexus_replica_not_available() {
     let local = cluster
         .rest_v00()
         .replicas_api()
-        .get_replica(Cluster::replica(0, 0, 0).as_str())
+        .get_replica(&Cluster::replica(0, 0, 0))
         .await
         .unwrap();
     let remote = cluster
         .rest_v00()
         .replicas_api()
-        .put_pool_replica_share(
-            cluster.pool(1, 0).as_str(),
-            Cluster::replica(1, 0, 0).as_str(),
-        )
+        .put_pool_replica_share(cluster.pool(1, 0).as_str(), &Cluster::replica(1, 0, 0))
         .await
         .unwrap();
     cluster
         .rest_v00()
         .replicas_api()
-        .del_pool_replica_share(
-            cluster.pool(1, 0).as_str(),
-            Cluster::replica(1, 0, 0).as_str(),
-        )
+        .del_pool_replica_share(cluster.pool(1, 0).as_str(), &Cluster::replica(1, 0, 0))
         .await
         .unwrap();
     cluster
@@ -214,7 +208,7 @@ async fn create_nexus_replica_not_available() {
         .nexuses_api()
         .put_node_nexus(
             cluster.node(0).as_str(),
-            v0::NexusId::new().as_str(),
+            &v0::NexusId::new(),
             models::CreateNexusBody::new(vec![local.uri, remote], size),
         )
         .await

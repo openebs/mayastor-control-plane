@@ -93,7 +93,7 @@ struct put_volume_targetQueryParams {
 
 async fn del_share<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<String>,
+    path: Path<uuid::Uuid>,
 ) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_share(crate::apis::Path(path.into_inner()))
         .await
@@ -103,7 +103,7 @@ async fn del_share<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
 
 async fn del_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<String>,
+    path: Path<uuid::Uuid>,
 ) -> Result<NoContent, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_volume(crate::apis::Path(path.into_inner()))
         .await
@@ -113,7 +113,7 @@ async fn del_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>
 
 async fn del_volume_target<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<String>,
+    path: Path<uuid::Uuid>,
 ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::del_volume_target(crate::apis::Path(path.into_inner()))
         .await
@@ -132,7 +132,7 @@ async fn get_node_volumes<T: crate::apis::Volumes + 'static, A: FromRequest + 's
 
 async fn get_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<String>,
+    path: Path<uuid::Uuid>,
 ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::get_volume(crate::apis::Path(path.into_inner()))
         .await
@@ -148,7 +148,7 @@ async fn get_volumes<T: crate::apis::Volumes + 'static, A: FromRequest + 'static
 
 async fn put_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<String>,
+    path: Path<uuid::Uuid>,
     Json(create_volume_body): Json<crate::models::CreateVolumeBody>,
 ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_volume(
@@ -161,7 +161,7 @@ async fn put_volume<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>
 
 async fn put_volume_replica_count<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<(String, u8)>,
+    path: Path<(uuid::Uuid, u8)>,
 ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_volume_replica_count(crate::apis::Path(path.into_inner()))
         .await
@@ -170,7 +170,7 @@ async fn put_volume_replica_count<T: crate::apis::Volumes + 'static, A: FromRequ
 
 async fn put_volume_share<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<(String, crate::models::VolumeShareProtocol)>,
+    path: Path<(uuid::Uuid, crate::models::VolumeShareProtocol)>,
 ) -> Result<Json<String>, crate::apis::RestError<crate::models::RestJsonError>> {
     T::put_volume_share(crate::apis::Path(path.into_inner()))
         .await
@@ -181,7 +181,7 @@ async fn put_volume_share<T: crate::apis::Volumes + 'static, A: FromRequest + 's
 /// limitation, this must currently be a mayastor storage node.
 async fn put_volume_target<T: crate::apis::Volumes + 'static, A: FromRequest + 'static>(
     _token: A,
-    path: Path<String>,
+    path: Path<uuid::Uuid>,
     query: Query<put_volume_targetQueryParams>,
 ) -> Result<Json<crate::models::Volume>, crate::apis::RestError<crate::models::RestJsonError>> {
     let query = query.into_inner();

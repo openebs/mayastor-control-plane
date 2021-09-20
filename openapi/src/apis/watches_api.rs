@@ -14,14 +14,14 @@ use actix_web::web::Json;
 #[async_trait::async_trait]
 pub trait Watches {
     async fn del_watch_volume(
-        Path(volume_id): Path<String>,
+        Path(volume_id): Path<uuid::Uuid>,
         Query(callback): Query<url::Url>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
     async fn get_watch_volume(
-        Path(volume_id): Path<String>,
+        Path(volume_id): Path<uuid::Uuid>,
     ) -> Result<Vec<crate::models::RestWatch>, crate::apis::RestError<crate::models::RestJsonError>>;
     async fn put_watch_volume(
-        Path(volume_id): Path<String>,
+        Path(volume_id): Path<uuid::Uuid>,
         Query(callback): Query<url::Url>,
     ) -> Result<(), crate::apis::RestError<crate::models::RestJsonError>>;
 }

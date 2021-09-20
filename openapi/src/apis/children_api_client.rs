@@ -23,44 +23,44 @@ impl ChildrenClient {
 pub trait Children: Clone {
     async fn del_nexus_child(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn del_node_nexus_child(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn get_nexus_child(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>>;
     async fn get_nexus_children(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<Vec<crate::models::Child>, Error<crate::models::RestJsonError>>;
     async fn get_node_nexus_child(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>>;
     async fn get_node_nexus_children(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<Vec<crate::models::Child>, Error<crate::models::RestJsonError>>;
     async fn put_nexus_child(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>>;
     async fn put_node_nexus_child(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>>;
 }
@@ -69,7 +69,7 @@ pub trait Children: Clone {
 impl Children for ChildrenClient {
     async fn del_nexus_child(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -117,7 +117,7 @@ impl Children for ChildrenClient {
     async fn del_node_nexus_child(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -165,7 +165,7 @@ impl Children for ChildrenClient {
     }
     async fn get_nexus_child(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -213,7 +213,7 @@ impl Children for ChildrenClient {
     }
     async fn get_nexus_children(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<Vec<crate::models::Child>, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -260,7 +260,7 @@ impl Children for ChildrenClient {
     async fn get_node_nexus_child(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -310,7 +310,7 @@ impl Children for ChildrenClient {
     async fn get_node_nexus_children(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
     ) -> Result<Vec<crate::models::Child>, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -357,7 +357,7 @@ impl Children for ChildrenClient {
     }
     async fn put_nexus_child(
         &self,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -406,7 +406,7 @@ impl Children for ChildrenClient {
     async fn put_node_nexus_child(
         &self,
         node_id: &str,
-        nexus_id: &str,
+        nexus_id: &uuid::Uuid,
         child_id: &str,
     ) -> Result<crate::models::Child, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;

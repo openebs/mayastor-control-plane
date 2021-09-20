@@ -17,8 +17,10 @@ impl RestClient {
         let mut url = url.clone();
         url.set_scheme("http")
             .map_err(|_| anyhow::anyhow!("Failed to set REST client scheme"))?;
-        url.set_port(Some(30011))
-            .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;
+        if url.port().is_none() {
+            url.set_port(Some(30011))
+                .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;
+        }
         REST_SERVER.get_or_init(|| url);
         Ok(())
     }

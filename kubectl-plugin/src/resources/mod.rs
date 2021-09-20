@@ -4,7 +4,7 @@ pub mod volume;
 
 use structopt::StructOpt;
 
-pub(crate) type VolumeId = String;
+pub(crate) type VolumeId = openapi::apis::Uuid;
 pub(crate) type ReplicaCount = u8;
 pub(crate) type PoolId = String;
 

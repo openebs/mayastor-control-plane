@@ -6,13 +6,14 @@ use common_lib::{
     mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
-            GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaShareProtocol, ReplicaStatus,
+            GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol,
+            ReplicaStatus,
         },
         store::replica::ReplicaSpec,
     },
 };
 use itertools::Itertools;
-use std::time::Duration;
+use std::{convert::TryFrom, time::Duration};
 use testlib::{
     v0::{
         models::{CreateVolumeBody, Pool, PoolState, Topology, VolumeHealPolicy},
@@ -48,7 +49,7 @@ async fn pool() {
 
     let replica = CreateReplica {
         node: mayastor.clone(),
-        uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
+        uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
         pool: "pooloop".into(),
         size: 12582912, /* actual size will be a multiple of 4MB so just
                          * create it like so */
@@ -69,8 +70,8 @@ async fn pool() {
         replica,
         Replica {
             node: mayastor.clone(),
-            name: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
-            uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
+            name: ReplicaName::from("cf36a440-74c6-4042-b16c-4f7eddfc24da"),
+            uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
             pool: "pooloop".into(),
             thin: false,
             size: 12582912,
@@ -82,7 +83,7 @@ async fn pool() {
 
     let uri = ShareReplica {
         node: mayastor.clone(),
-        uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
+        uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
         pool: "pooloop".into(),
         protocol: ReplicaShareProtocol::Nvmf,
         name: None,
@@ -118,7 +119,7 @@ async fn pool() {
 
     DestroyReplica {
         node: mayastor.clone(),
-        uuid: "cf36a440-74c6-4042-b16c-4f7eddfc24da".into(),
+        uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
         pool: "pooloop".into(),
         name: None,
         ..Default::default()
@@ -381,7 +382,7 @@ async fn missing_pool_state(cluster: &Cluster) {
         let body =
             CreateVolumeBody::new(VolumeHealPolicy::default(), 1, 8388608u64, Topology::new());
         let volume = VolumeId::new();
-        volumes_api.put_volume(volume.as_str(), body).await.unwrap();
+        volumes_api.put_volume(&volume, body).await.unwrap();
     }
     let replicas = client.replicas_api().get_replicas().await.unwrap();
 

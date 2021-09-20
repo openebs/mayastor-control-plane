@@ -5,13 +5,13 @@ use common_lib::{
     types::v0::{
         message_bus::{
             AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, GetNexuses,
-            GetNodes, GetSpecs, Nexus, NexusShareProtocol, Protocol, RemoveNexusChild, ReplicaId,
-            ShareNexus, UnshareNexus,
+            GetNodes, GetSpecs, Nexus, NexusId, NexusShareProtocol, Protocol, RemoveNexusChild,
+            ReplicaId, ShareNexus, UnshareNexus,
         },
         store::nexus::NexusSpec,
     },
 };
-use std::time::Duration;
+use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};
 
 #[actix_rt::test]
@@ -47,7 +47,7 @@ async fn nexus() {
 
     let nexus = CreateNexus {
         node: mayastor.clone(),
-        uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec![replica.uri.clone().into(), local],
         ..Default::default()
@@ -62,7 +62,7 @@ async fn nexus() {
 
     ShareNexus {
         node: mayastor.clone(),
-        uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         key: None,
         protocol: NexusShareProtocol::Nvmf,
     }
@@ -72,7 +72,7 @@ async fn nexus() {
 
     DestroyNexus {
         node: mayastor.clone(),
-        uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
     }
     .request()
     .await
@@ -121,7 +121,7 @@ async fn nexus_share_transaction() {
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
     let nexus = CreateNexus {
         node: mayastor.clone(),
-        uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec![local],
         ..Default::default()
@@ -252,7 +252,7 @@ async fn nexus_share_transaction_store() {
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
     let nexus = CreateNexus {
         node: mayastor.clone(),
-        uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec![local],
         ..Default::default()
@@ -303,7 +303,7 @@ async fn nexus_child_transaction() {
     let child2 = "malloc:///ch2?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b";
     let nexus = CreateNexus {
         node: mayastor.clone(),
-        uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
         ..Default::default()
@@ -386,7 +386,7 @@ async fn nexus_child_transaction_store() {
 
     let nexus = CreateNexus {
         node: mayastor.clone(),
-        uuid: "f086f12c-1728-449e-be32-9415051090d6".into(),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
         ..Default::default()

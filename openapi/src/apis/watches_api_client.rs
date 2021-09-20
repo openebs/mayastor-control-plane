@@ -23,16 +23,16 @@ impl WatchesClient {
 pub trait Watches: Clone {
     async fn del_watch_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         callback: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
     async fn get_watch_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
     ) -> Result<Vec<crate::models::RestWatch>, Error<crate::models::RestJsonError>>;
     async fn put_watch_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         callback: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>>;
 }
@@ -41,7 +41,7 @@ pub trait Watches: Clone {
 impl Watches for WatchesClient {
     async fn del_watch_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         callback: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
@@ -90,7 +90,7 @@ impl Watches for WatchesClient {
     }
     async fn get_watch_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
     ) -> Result<Vec<crate::models::RestWatch>, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -138,7 +138,7 @@ impl Watches for WatchesClient {
     }
     async fn put_watch_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         callback: &str,
     ) -> Result<(), Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;

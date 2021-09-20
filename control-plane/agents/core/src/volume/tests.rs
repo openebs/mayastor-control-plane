@@ -36,7 +36,11 @@ use common_lib::{
         store::{definitions::StorableObject, volume::VolumeSpec},
     },
 };
-use std::{str::FromStr, time::Duration};
+use std::{
+    convert::{TryFrom, TryInto},
+    str::FromStr,
+    time::Duration,
+};
 
 #[actix_rt::test]
 async fn volume() {
@@ -114,7 +118,7 @@ async fn volume_nexus_reconcile() {
 /// At this point, we'll have a state again and the volume will be Online!
 async fn missing_nexus_reconcile(cluster: &Cluster) {
     let volume = CreateVolume {
-        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 1,
         ..Default::default()
@@ -128,7 +132,7 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
 
     let volume = volumes_api
         .put_volume_target(
-            volume.spec().uuid.as_str(),
+            &volume.spec().uuid,
             cluster.node(0).as_str(),
             models::VolumeShareProtocol::Nvmf,
         )
@@ -147,7 +151,7 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
     let curr_nexus = wait_till_nexus_state(cluster, &nexus.uuid, Some(&nexus)).await;
     assert_eq!(Some(nexus), curr_nexus);
 
-    let volume_id = volume_state.uuid.to_string();
+    let volume_id = volume_state.uuid;
     let volume = volumes_api.get_volume(&volume_id).await.unwrap();
     assert_eq!(volume.state.unwrap().status, models::VolumeStatus::Online);
 
@@ -165,9 +169,9 @@ async fn wait_till_nexus_state(
     let nexuses_api = client.nexuses_api();
     let start = std::time::Instant::now();
     loop {
-        let nexus = nexuses_api.get_nexus(nexus_id.to_string().as_str()).await;
+        let nexus = nexuses_api.get_nexus(nexus_id).await;
 
-        match nexuses_api.get_nexus(nexus_id.to_string().as_str()).await {
+        match nexuses_api.get_nexus(nexus_id).await {
             Ok(nexus) => {
                 if let Some(state) = state {
                     if nexus.share != models::Protocol::None
@@ -198,7 +202,7 @@ async fn wait_till_nexus_state(
 /// Faults a volume nexus replica and waits for it to be replaced with a new one
 async fn hotspare_faulty_children(cluster: &Cluster) {
     let volume = CreateVolume {
-        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
@@ -292,7 +296,7 @@ async fn volume_children(volume: &VolumeId) -> Vec<Child> {
 /// Adds a child to the volume nexus (under the control plane) and waits till it gets removed
 async fn hotspare_unknown_children(cluster: &Cluster) {
     let volume = CreateVolume {
-        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
@@ -359,7 +363,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
 /// Remove a child from a volume nexus (under the control plane) and waits till it gets added back
 async fn hotspare_missing_children(cluster: &Cluster) {
     let volume = CreateVolume {
-        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
@@ -417,7 +421,7 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 /// Remove a replica that belongs to a volume. Another should be created.
 async fn hotspare_replica_count(cluster: &Cluster) {
     let volume = CreateVolume {
-        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
@@ -464,7 +468,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
 /// Remove a replica that belongs to a volume. Another should be created.
 async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     let volume = CreateVolume {
-        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
@@ -566,7 +570,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     tracing::debug!("arguments ({:?}, {:?}, {:?})", local, remote, fault);
 
     let volume = CreateVolume {
-        uuid: "6e3cf927-80c2-47a8-adf0-95c486bdd7b7".into(),
+        uuid: "6e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
         topology: Topology {
@@ -712,7 +716,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
 
 async fn publishing_test(cluster: &Cluster) {
     let volume = CreateVolume {
-        uuid: "359b7e1a-b724-443b-98b4-e6d97fabbb40".into(),
+        uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
@@ -898,7 +902,7 @@ async fn wait_for_volume_online(volume: &VolumeState) -> Result<VolumeState, ()>
 
 async fn replica_count_test() {
     let volume = CreateVolume {
-        uuid: "359b7e1a-b724-443b-98b4-e6d97fabbb40".into(),
+        uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
@@ -1054,7 +1058,7 @@ async fn replica_count_test() {
 
 async fn smoke_test() {
     let volume = CreateVolume {
-        uuid: "359b7e1a-b724-443b-98b4-e6d97fabbb40".into(),
+        uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
         size: 5242880,
         replicas: 2,
         ..Default::default()
