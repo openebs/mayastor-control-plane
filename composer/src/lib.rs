@@ -849,7 +849,8 @@ impl ComposeTest {
                 // reuse the same network
                 self.network_id = first.id.unwrap();
                 // but clean up the existing containers
-                self.remove_network_containers(&self.name).await?;
+                self.prune_network_containers(&self.name, self.prune)
+                    .await?;
                 return Ok(self.network_id.clone());
             } else {
                 self.network_remove_labeled().await?;
@@ -882,11 +883,14 @@ impl ComposeTest {
     }
 
     async fn network_remove_labeled(&self) -> Result<(), Error> {
+        self.network_prune_labeled(true).await
+    }
+    async fn network_prune_labeled(&self, prune: bool) -> Result<(), Error> {
         let our_networks = self.network_list_labeled().await?;
         for network in our_networks {
             let name = &network.name.unwrap();
-            self.remove_network_containers(name).await?;
-            if self.prune {
+            self.prune_network_containers(name, prune).await?;
+            if prune {
                 self.network_remove(name).await?;
             }
         }
@@ -895,11 +899,15 @@ impl ComposeTest {
 
     /// remove all containers from the network
     pub async fn remove_network_containers(&self, network: &str) -> Result<(), Error> {
+        self.prune_network_containers(network, true).await
+    }
+    /// remove all containers from the network
+    pub async fn prune_network_containers(&self, network: &str, prune: bool) -> Result<(), Error> {
         let containers = self.list_network_containers(network).await?;
         for k in &containers {
             let name = k.id.clone().unwrap();
             tracing::trace!("Lookup container for removal: {:?}", k.names);
-            if self.prune || (self.prune_matching && self.containers.get(&name).is_some()) {
+            if prune || (self.prune_matching && self.containers.get(&name).is_some()) {
                 self.remove_container(&name).await?;
                 while let Ok(_c) = self.docker.inspect_container(&name, None).await {
                     tokio::time::sleep(Duration::from_millis(500)).await;

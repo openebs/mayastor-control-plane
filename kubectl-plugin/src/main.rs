@@ -22,18 +22,27 @@ use yaml_rust::YamlLoader;
 #[derive(StructOpt, Debug)]
 struct CliArgs {
     /// The rest endpoint, parsed from KUBECONFIG, if left empty .
-    #[structopt(long, short)]
+    #[structopt(global = true, long, short)]
     rest: Option<Url>,
     /// The operation to be performed.
     #[structopt(subcommand)]
     operations: Operations,
     /// The Output, viz yaml, json.
-    #[structopt(default_value = "none", short, long, possible_values=&["yaml", "json", "none"], parse(from_str))]
+    #[structopt(global = true, default_value = "none", short, long, possible_values=&["yaml", "json", "none"], parse(from_str))]
     output: utils::OutputFormat,
+}
+
+fn init_tracing() {
+    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
+        tracing_subscriber::fmt().with_env_filter(filter).init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter("info").init();
+    }
 }
 
 #[actix_rt::main]
 async fn main() {
+    init_tracing();
     let cli_args = &CliArgs::from_args();
 
     // Initialise the REST client.
@@ -76,7 +85,7 @@ fn url_from_kubeconfig() -> Result<Url> {
         Err(_) => {
             // Look for kubeconfig file in default location.
             let default_path = format!("{}/.kube/config", env::var("HOME")?);
-            match Path::new(&default_path.clone()).exists() {
+            match Path::new(&default_path).exists() {
                 true => Some(default_path),
                 false => None,
             }
@@ -90,7 +99,11 @@ fn url_from_kubeconfig() -> Result<Url> {
             let master_ip = cfg_yaml["clusters"][0]["cluster"]["server"]
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("Failed to convert IP of master node to string"))?;
-            Ok(Url::parse(master_ip)?)
+            let mut url = Url::parse(master_ip)?;
+            url.set_port(None)
+                .map_err(|_| anyhow::anyhow!("Failed to unset port"))?;
+            tracing::debug!(url=%url, "Found URL from the kubeconfig file,");
+            Ok(url)
         }
         None => Err(anyhow::anyhow!(
             "Failed to get URL of master node from kubeconfig file."
