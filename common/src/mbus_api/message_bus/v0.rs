@@ -240,8 +240,8 @@ pub trait MessageBusTrait: Sized {
 
     /// unpublish the given volume uuid
     #[tracing::instrument(level = "debug", err)]
-    async fn unpublish_volume(uuid: VolumeId) -> BusResult<Volume> {
-        let request = UnpublishVolume::new(uuid);
+    async fn unpublish_volume(uuid: VolumeId, force: bool) -> BusResult<Volume> {
+        let request = UnpublishVolume::new(&uuid, force);
         Ok(request.request().await?)
     }
 

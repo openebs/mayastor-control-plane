@@ -32,6 +32,7 @@ pub trait Volumes: Clone {
     async fn del_volume_target(
         &self,
         volume_id: &uuid::Uuid,
+        force: Option<bool>,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>>;
     async fn get_node_volumes(
         &self,
@@ -164,6 +165,7 @@ impl Volumes for VolumesClient {
     async fn del_volume_target(
         &self,
         volume_id: &uuid::Uuid,
+        force: Option<bool>,
     ) -> Result<crate::models::Volume, Error<crate::models::RestJsonError>> {
         let configuration = &self.configuration;
         let local_var_client = &configuration.client;
@@ -176,6 +178,11 @@ impl Volumes for VolumesClient {
         let mut local_var_req_builder =
             local_var_client.request(awc::http::Method::DELETE, local_var_uri_str.as_str());
 
+        let mut query_params = vec![];
+        if let Some(ref local_var_str) = force {
+            query_params.push(("force", local_var_str.to_string()));
+        }
+        local_var_req_builder = local_var_req_builder.query(&query_params)?;
         if let Some(ref local_var_user_agent) = configuration.user_agent {
             local_var_req_builder = local_var_req_builder
                 .insert_header((awc::http::header::USER_AGENT, local_var_user_agent.clone()));

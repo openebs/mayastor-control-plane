@@ -75,7 +75,7 @@ Name | Type | Description  | Required | Notes
 
 ## del_volume_target
 
-> crate::models::Volume del_volume_target(volume_id)
+> crate::models::Volume del_volume_target(volume_id, force)
 
 
 ### Parameters
@@ -84,6 +84,7 @@ Name | Type | Description  | Required | Notes
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **volume_id** | [**uuid::Uuid**](.md) |  | [required] |
+**force** | Option<**bool**> | Force unpublish if the node is not online. This should only be used when it is safe to do so, eg: when the node is not coming back up. |  |[default to false]
 
 ### Return type
 

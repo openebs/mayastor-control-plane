@@ -32,6 +32,7 @@ use common_lib::{
         openapi::{
             apis::client::{Error, ResponseContent},
             models,
+            models::NodeStatus,
         },
         store::{definitions::StorableObject, volume::VolumeSpec},
     },
@@ -602,12 +603,10 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     tracing::info!("Nexus: {:?}", nexus);
     let nexus_uuid = nexus.uuid.clone();
 
-    UnpublishVolume {
-        uuid: volume_state.uuid.clone(),
-    }
-    .request()
-    .await
-    .unwrap();
+    UnpublishVolume::new(&volume_state.uuid, false)
+        .request()
+        .await
+        .unwrap();
 
     let mut store = Etcd::new("0.0.0.0:2379")
         .await
@@ -781,12 +780,10 @@ async fn publishing_test(cluster: &Cluster) {
     .await
     .expect_err("The Volume cannot be published again because it's already published");
 
-    UnpublishVolume {
-        uuid: volume_state.uuid.clone(),
-    }
-    .request()
-    .await
-    .unwrap();
+    UnpublishVolume::new(&volume_state.uuid, false)
+        .request()
+        .await
+        .unwrap();
 
     let volume = PublishVolume {
         uuid: volume_state.uuid.clone(),
@@ -824,12 +821,10 @@ async fn publishing_test(cluster: &Cluster) {
     .await
     .expect_err("The volume is already published");
 
-    UnpublishVolume {
-        uuid: volume_state.uuid.clone(),
-    }
-    .request()
-    .await
-    .unwrap();
+    UnpublishVolume::new(&volume_state.uuid, false)
+        .request()
+        .await
+        .unwrap();
 
     let volume = PublishVolume {
         uuid: volume_state.uuid.clone(),
@@ -861,6 +856,26 @@ async fn publishing_test(cluster: &Cluster) {
         Some(Some(cluster.node(1)))
     );
 
+    let target_node = first_volume_state.target_node().flatten().unwrap();
+    cluster.composer().kill(target_node.as_str()).await.unwrap();
+
+    UnpublishVolume::new(&volume_state.uuid, false)
+        .request()
+        .await
+        .expect_err("The node is not online...");
+
+    UnpublishVolume::new(&volume_state.uuid, true)
+        .request()
+        .await
+        .expect("With force comes great responsibility...");
+
+    cluster
+        .composer()
+        .start(target_node.as_str())
+        .await
+        .unwrap();
+    wait_for_node_online(cluster, &target_node).await;
+
     DestroyVolume {
         uuid: volume_state.uuid,
     }
@@ -881,6 +896,26 @@ async fn get_volume(volume: &VolumeState) -> Volume {
     .await
     .unwrap();
     request.into_inner().first().cloned().unwrap()
+}
+
+async fn wait_for_node_online(cluster: &Cluster, node: &NodeId) {
+    let client = cluster.rest_v00();
+
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    loop {
+        if let Ok(node) = client.nodes_api().get_node(node.as_str()).await {
+            let status = node.state.map(|n| n.status).unwrap_or(NodeStatus::Unknown);
+            if status == NodeStatus::Online {
+                return;
+            }
+        }
+
+        if std::time::Instant::now() > (start + timeout) {
+            panic!("Timeout waiting for the node to become online");
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
 }
 
 async fn wait_for_volume_online(volume: &VolumeState) -> Result<VolumeState, ()> {
@@ -1028,12 +1063,10 @@ async fn replica_count_test() {
     tracing::info!("Volume: {:?}", volume);
 
     let volume_state = volume.state().unwrap();
-    UnpublishVolume {
-        uuid: volume_state.uuid.clone(),
-    }
-    .request()
-    .await
-    .unwrap();
+    UnpublishVolume::new(&volume_state.uuid, false)
+        .request()
+        .await
+        .unwrap();
 
     let volume = SetVolumeReplica {
         uuid: volume_state.uuid.clone(),

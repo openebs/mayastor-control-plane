@@ -306,7 +306,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     let volume = client
         .volumes_api()
-        .del_volume_target(&volume_state.uuid)
+        .del_volume_target(&volume_state.uuid, None)
         .await
         .unwrap();
     tracing::info!("Volume: {:#?}", volume);

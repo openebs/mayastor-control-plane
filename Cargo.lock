@@ -1910,6 +1910,8 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "structopt",
+ "tracing",
+ "tracing-subscriber",
  "yaml-rust",
 ]
 

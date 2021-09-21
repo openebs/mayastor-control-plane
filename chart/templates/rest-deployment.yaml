@@ -15,6 +15,10 @@ spec:
       labels:
         app: rest
     spec:
+      imagePullSecrets:
+        {{- include "base_pull_secrets" . }}
+      initContainers:
+        {{- include "base_init_containers" . }}
       containers:
         - name: rest
           image: {{ .Values.mayastorCP.registry }}mayadata/mcp-rest:{{ .Values.mayastorCP.tag}}
@@ -24,9 +28,6 @@ spec:
             - "--no-auth"
             - "-nnats"
             - "--http=0.0.0.0:8081"
-            - "--request-timeout=6s"
           ports:
           - containerPort: 8080
           - containerPort: 8081
-      imagePullSecrets:
-        - name: regcred
