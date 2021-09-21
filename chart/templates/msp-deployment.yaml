@@ -16,15 +16,13 @@ spec:
         app: msp-operator
     spec:
       serviceAccount: mayastor-service-account
+      imagePullSecrets:
+        {{- include "base_pull_secrets" . }}
+      initContainers:
+        {{- include "base_init_containers" . }}
       containers:
         - name: msp-operator
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "500Mi"
-            limits:
-              cpu: "1000m"
-              memory: "1Gi"
+          resources: {{- .Values.operators.pool.resources | toYaml | nindent 12 }}
           image: {{ .Values.mayastorCP.registry }}mayadata/mcp-msp-operator:{{ .Values.mayastorCP.tag}}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
@@ -32,5 +30,3 @@ spec:
           env:
             - name: RUST_LOG
               value: info,msp_operator={{ .Values.mayastorCP.logLevel }}
-      imagePullSecrets:
-        - name: regcred

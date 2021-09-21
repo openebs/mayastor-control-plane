@@ -15,6 +15,10 @@ spec:
       labels:
         app: core-agents
     spec:
+      imagePullSecrets:
+        {{- include "base_pull_secrets" . }}
+      initContainers:
+        {{- include "base_init_containers" . }}
       containers:
         - name: core
           image: {{ .Values.mayastorCP.registry }}mayadata/mcp-core:{{ .Values.mayastorCP.tag}}
@@ -22,6 +26,3 @@ spec:
           args:
             - "-smayastor-etcd"
             - "-nnats"
-
-      imagePullSecrets:
-        - name: regcred
