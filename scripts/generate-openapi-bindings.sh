@@ -45,4 +45,3 @@ rm -rf "$tmpd"
 
 # If the openapi bindings were modified then fail the check
 git diff --exit-code "$TARGET"
-

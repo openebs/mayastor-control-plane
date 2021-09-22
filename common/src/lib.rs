@@ -41,3 +41,6 @@ pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:655ffa91eb87";
 /// Mayastor environment variable that points to a mayastor binary
 /// This must be in sync with shell.nix
 pub const MAYASTOR_BINARY: &str = "MAYASTOR_BIN";
+
+/// The period at which a component updates its resource cache
+pub const CACHE_POLL_PERIOD: &str = "30s";

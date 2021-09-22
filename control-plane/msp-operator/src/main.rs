@@ -25,11 +25,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::Snafu;
-use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+use std::{collections::HashMap, io::Write, ops::Deref, sync::Arc, time::Duration};
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use url::Url;
+
 const WHO_AM_I: &str = "Mayastor pool operator";
+const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
 
 #[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
 #[kube(
@@ -45,7 +47,9 @@ const WHO_AM_I: &str = "Mayastor pool operator";
     shortname = "msp",
     printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
     printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
-    printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#
+    printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
+    printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
+    printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
 )]
 
 /// The pool spec which contains the paramaters we use when creating the pool
@@ -82,15 +86,21 @@ pub enum PoolState {
 pub struct MayastorPoolStatus {
     /// The state of the pool
     state: PoolState,
+    /// Capacity as number of bytes
+    capacity: u64,
     /// Used number of bytes
     used: u64,
+    /// Available number of bytes
+    available: u64,
 }
 
 impl Default for MayastorPoolStatus {
     fn default() -> Self {
         Self {
             state: PoolState::Creating,
+            capacity: 0,
             used: 0,
+            available: 0,
         }
     }
 }
@@ -99,22 +109,35 @@ impl MayastorPoolStatus {
     fn error() -> Self {
         Self {
             state: PoolState::Error,
+            capacity: 0,
             used: 0,
+            available: 0,
         }
     }
     fn created() -> Self {
         Self {
             state: PoolState::Created,
+            capacity: 0,
             used: 0,
+            available: 0,
         }
     }
 }
 
 impl From<Pool> for MayastorPoolStatus {
     fn from(p: Pool) -> Self {
+        let state = p.state.expect("pool does not have state");
+        // todo: Should we set the pool to some sort of error state?
+        let free = if state.capacity > state.used {
+            state.capacity - state.used
+        } else {
+            0
+        };
         Self {
             state: PoolState::Online,
-            used: p.state.expect("pool does not have state").used,
+            capacity: state.capacity,
+            used: state.used,
+            available: free,
         }
     }
 }
@@ -579,17 +602,13 @@ impl ResourceContext {
         }
 
         if let Ok(p) = p.json::<Pool>().await {
-            if let Some(state) = p.state {
+            if p.state.is_some() {
                 if let Some(status) = &self.status {
-                    if status.used != state.used {
+                    let new_status = MayastorPoolStatus::from(p);
+                    if status != &new_status {
                         // update the usage state such that users can see the values changes
                         // as replica's are added and/or removed.
-                        let _ = self
-                            .patch_status(MayastorPoolStatus {
-                                state: PoolState::Online,
-                                used: state.used,
-                            })
-                            .await;
+                        let _ = self.patch_status(new_status).await;
                     }
                 }
             } else {
@@ -828,8 +847,9 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
         interval: args
             .value_of("interval")
             .unwrap()
-            .parse::<u64>()
-            .expect("interval value is invalid"),
+            .parse::<humantime::Duration>()
+            .expect("interval value is invalid")
+            .as_secs(),
         retries: args
             .value_of("retries")
             .unwrap()
@@ -859,6 +879,20 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Generate the mayastor pool CRD file allowing users to register them with kubernetes
+/// before the pool operator starts running.
+/// Can also be used to unregister the CRDs on uninstall.
+fn write_msp_crd(name: Option<&str>) -> anyhow::Result<()> {
+    let file = std::path::Path::new(name.unwrap_or(CRD_FILE_NAME));
+    let mut file = std::fs::File::create(file)?;
+
+    let crd = MayastorPool::crd();
+    let str = serde_json::to_string_pretty(&crd)?;
+    file.write_all(str.as_ref())?;
+
+    Ok(())
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let matches = App::new("Mayastor k8s pool operator")
@@ -872,7 +906,7 @@ async fn main() -> anyhow::Result<()> {
             Arg::with_name("interval")
                 .short("i")
                 .env("INTERVAL")
-                .default_value("5")
+                .default_value(common_lib::CACHE_POLL_PERIOD)
                 .help("specify timer based reconciliation loop"),
         )
         .arg(
@@ -904,6 +938,16 @@ async fn main() -> anyhow::Result<()> {
                 .env("JAEGER_ENDPOINT")
                 .help("enable open telemetry and forward to jaeger"),
         )
+        .arg(
+            Arg::with_name("write_crd")
+                .short("-w")
+                .long("write-crd")
+                .default_value(CRD_FILE_NAME)
+                .takes_value(true)
+                .help(
+                    "writes out the CRD file to current directory with the optional name and exits",
+                ),
+        )
         .get_matches();
 
     let filter = EnvFilter::try_from_default_env()
@@ -924,6 +968,10 @@ async fn main() -> anyhow::Result<()> {
         subscriber.with(telemetry).init();
     } else {
         subscriber.init();
+    }
+
+    if matches.occurrences_of("write_crd") > 0 {
+        return write_msp_crd(matches.value_of("write_crd"));
     }
 
     pool_controller(matches).await?;

@@ -25,7 +25,7 @@ pub(crate) struct CliArgs {
 
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
-    #[structopt(long, short, default_value = "30s")]
+    #[structopt(long, short, default_value = common_lib::CACHE_POLL_PERIOD)]
     pub(crate) cache_period: humantime::Duration,
 
     /// The period at which the reconcile loop checks for new work
