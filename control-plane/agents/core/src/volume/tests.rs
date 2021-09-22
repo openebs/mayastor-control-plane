@@ -574,13 +574,10 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
         uuid: "6e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
-        topology: Topology {
-            labelled: None,
-            explicit: Some(ExplicitTopology {
-                allowed_nodes: vec![local.clone(), remote.clone()],
-                preferred_nodes: vec![],
-            }),
-        },
+        topology: Some(Topology::Explicit(ExplicitTopology {
+            allowed_nodes: vec![local.clone(), remote.clone()],
+            preferred_nodes: vec![],
+        })),
         ..Default::default()
     }
     .request()

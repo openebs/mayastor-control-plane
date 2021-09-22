@@ -10,46 +10,13 @@ use crate::types::v0::{
 
 use crate::{
     types::v0::{
-        message_bus::{ReplicaId, Topology, VolumeHealPolicy, VolumeStatus},
+        message_bus::{ReplicaId, Topology, VolumeLabels, VolumePolicy, VolumeStatus},
         openapi::models,
         store::{OperationSequence, OperationSequencer, ResourceUuid},
     },
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
-
-type VolumeLabel = String;
-
-/// Volume information
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct Volume {
-    /// Current state of the volume.
-    pub state: Option<VolumeState>,
-    /// Desired volume specification.
-    pub spec: VolumeSpec,
-}
-
-/// Runtime state of the volume.
-/// This should eventually satisfy the VolumeSpec.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct VolumeState {
-    /// Volume Id
-    pub uuid: VolumeId,
-    /// Volume size.
-    pub size: u64,
-    /// Volume labels.
-    pub labels: Vec<VolumeLabel>,
-    /// Number of replicas.
-    pub num_replicas: u8,
-    /// Protocol that the volume is shared over.
-    pub protocol: Protocol,
-    /// Nexuses that make up the volume.
-    pub nexuses: Vec<NexusId>,
-    /// Number of front-end paths.
-    pub num_paths: u8,
-    /// Status of the volume.
-    pub status: message_bus::VolumeStatus,
-}
 
 /// Key used by the store to uniquely identify a VolumeState structure.
 pub struct VolumeStateKey(VolumeId);
@@ -67,14 +34,6 @@ impl ObjectKey for VolumeStateKey {
 
     fn key_uuid(&self) -> String {
         self.0.to_string()
-    }
-}
-
-impl StorableObject for VolumeState {
-    type Key = VolumeStateKey;
-
-    fn key(&self) -> Self::Key {
-        VolumeStateKey(self.uuid.clone())
     }
 }
 
@@ -109,7 +68,7 @@ pub struct VolumeSpec {
     /// Size that the volume should be.
     pub size: u64,
     /// Volume labels.
-    pub labels: Vec<VolumeLabel>,
+    pub labels: Option<VolumeLabels>,
     /// Number of children the volume should have.
     pub num_replicas: u8,
     /// Protocol that the volume should be shared over.
@@ -118,10 +77,10 @@ pub struct VolumeSpec {
     pub status: VolumeSpecStatus,
     /// The target where front-end IO will be sent to
     pub target: Option<VolumeTarget>,
-    /// volume healing policy
-    pub policy: VolumeHealPolicy,
-    /// replica placement topology
-    pub topology: Topology,
+    /// volume policy
+    pub policy: VolumePolicy,
+    /// replica placement topology for the volume creation only
+    pub topology: Option<Topology>,
     /// Update of the state in progress
     #[serde(skip)]
     pub sequencer: OperationSequence,
@@ -174,11 +133,13 @@ impl OperationSequencer for VolumeSpec {
 impl VolumeSpec {
     /// explicitly selected allowed_nodes
     pub fn allowed_nodes(&self) -> Vec<NodeId> {
-        self.topology
-            .explicit
-            .clone()
-            .unwrap_or_default()
-            .allowed_nodes
+        match &self.topology {
+            None => vec![],
+            Some(t) => t
+                .explicit()
+                .map(|t| t.allowed_nodes.clone())
+                .unwrap_or_default(),
+        }
     }
     /// desired volume replica count if during `SetReplica` operation
     /// or otherwise the current num_replicas
@@ -334,7 +295,7 @@ impl From<&CreateVolume> for VolumeSpec {
         Self {
             uuid: request.uuid.clone(),
             size: request.size,
-            labels: vec![],
+            labels: request.labels.clone(),
             num_replicas: request.replicas as u8,
             protocol: Protocol::None,
             status: VolumeSpecStatus::Creating,
@@ -390,6 +351,8 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.status,
             src.target.map(|t| t.node).into_opt(),
             src.uuid,
+            src.topology.into_opt(),
+            src.policy,
         )
     }
 }

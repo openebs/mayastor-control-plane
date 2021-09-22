@@ -28,7 +28,7 @@ pub mod v0 {
                 DestroyVolume, Filter, GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node,
                 NodeId, Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica,
                 ReplicaId, ReplicaShareProtocol, ShareNexus, ShareReplica, Specs, Topology,
-                UnshareNexus, UnshareReplica, VolumeHealPolicy, VolumeId, Watch, WatchCallback,
+                UnshareNexus, UnshareReplica, VolumeId, VolumePolicy, Watch, WatchCallback,
                 WatchResourceId,
             },
             openapi::{apis, models},

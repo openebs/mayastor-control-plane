@@ -21,6 +21,7 @@ from openapi.openapi_client.model.protocol import Protocol
 from openapi.openapi_client.model.spec_status import SpecStatus
 from openapi.openapi_client.model.volume_state import VolumeState
 from openapi.openapi_client.model.volume_status import VolumeStatus
+from openapi_client.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -102,9 +103,7 @@ def a_control_plane_a_mayastor_instance_and_a_pool():
 @given("a request for a volume")
 def a_request_for_a_volume(create_request):
     """a request for a volume."""
-    policy = {"self_heal": False, "topology": None}
-    topology = {"explicit": None, "labelled": None}
-    request = CreateVolumeBody(policy, NUM_VOLUME_REPLICAS, VOLUME_SIZE, topology)
+    request = CreateVolumeBody(VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE)
     create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -217,12 +216,12 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
     """volume creation should succeed with a returned volume object."""
     cfg = common.get_cfg()
     expected_spec = VolumeSpec(
-        [],
         1,
         Protocol("none"),
         VOLUME_SIZE,
         SpecStatus("Created"),
         VOLUME_UUID,
+        VolumePolicy(False),
         _configuration=cfg,
     )
     expected_state = VolumeState(

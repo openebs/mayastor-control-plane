@@ -1894,43 +1894,39 @@ components:
         explicit: null
         labelled: null
       description: |-
-        topology to choose a replacement replica for self healing
-         (overrides the initial creation topology)
+        Used to determine how to place/distribute the data during volume creation and replica replacement.
+         If left empty then the control plane will select from all available resources.
       type: object
       properties:
         explicit:
-          description: 'volume topology, explicitly selected'
+          description: volume topology, explicitly selected
           allOf:
             - $ref: '#/components/schemas/ExplicitTopology'
         labelled:
           description: volume topology definition through labels
           allOf:
             - $ref: '#/components/schemas/LabelledTopology'
-    VolumeHealPolicy:
+      additionalProperties: false
+      oneOf:
+        - required:
+            - explicit
+        - required:
+            - labelled
+    VolumePolicy:
       example:
-        self_heal: false
-        topology: null
-      description: Volume Healing policy used to determine if and how to replace a replica
+        self_heal: true
+      description: Volume policy used to determine if and how to replace a replica
       type: object
       properties:
         self_heal:
-          description: |-
-            the server will attempt to heal the volume by itself
-             the client should not attempt to do the same if this is enabled
+          description: If true the control plane will attempt to heal the volume by itself
           type: boolean
-        topology:
-          description: |-
-            topology to choose a replacement replica for self healing
-             (overrides the initial creation topology)
-          allOf:
-            - $ref: '#/components/schemas/Topology'
       required:
         - self_heal
     CreateVolumeBody:
       example:
         policy:
           self_heal: true
-          topology: null
         replicas: 1
         size: 10485761
         topology:
@@ -1940,9 +1936,7 @@ components:
       type: object
       properties:
         policy:
-          description: Volume Healing policy used to determine if and how to replace a replica
-          allOf:
-            - $ref: '#/components/schemas/VolumeHealPolicy'
+          $ref: '#/components/schemas/VolumePolicy'
         replicas:
           description: number of storage replicas
           type: integer
@@ -1955,17 +1949,16 @@ components:
           format: int64
           minimum: 0
         topology:
-          description: |-
-            Volume topology used to determine how to place/distribute the data.
-             Should either be labelled or explicit, not both.
-             If neither is used then the control plane will select from all available resources.
-          allOf:
-            - $ref: '#/components/schemas/Topology'
+          $ref: '#/components/schemas/Topology'
+        labels:
+          description: Optionally used to store custom volume information
+          type: object
+          additionalProperties:
+            type: string
       required:
         - policy
         - replicas
         - size
-        - topology
     JsonGeneric:
       description: 'Generic JSON value eg: { "size": 1024 }'
       type: object
@@ -2470,9 +2463,7 @@ components:
         - uuid
     VolumeSpec:
       example:
-        labels: null
         num_replicas: 2
-        operation: null
         protocol: none
         size: 80241024
         state: Created
@@ -2482,9 +2473,9 @@ components:
       type: object
       properties:
         labels:
-          description: Volume labels.
-          type: array
-          items:
+          description: Optionally used to store custom volume information
+          type: object
+          additionalProperties:
             type: string
         num_replicas:
           description: Number of children the volume should have.
@@ -2532,14 +2523,18 @@ components:
           description: Volume Id
           type: string
           format: uuid
+        topology:
+          $ref: '#/components/schemas/Topology'
+        policy:
+          $ref: '#/components/schemas/VolumePolicy'
       required:
-        - labels
         - num_paths
         - num_replicas
         - protocol
         - size
         - status
         - uuid
+        - policy
     SpecStatus:
       description: Common base state for a resource
       type: string

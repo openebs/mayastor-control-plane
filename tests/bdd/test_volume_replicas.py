@@ -14,6 +14,7 @@ from openapi.openapi_client.model.create_pool_body import CreatePoolBody
 from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
 from openapi.openapi_client.model.protocol import Protocol
 from openapi.openapi_client.exceptions import ApiValueError
+from openapi_client.model.volume_policy import VolumePolicy
 
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
@@ -38,10 +39,8 @@ def init():
     common.get_pools_api().put_node_pool(
         NODE_2_NAME, POOL_2_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
     )
-    policy = {"self_heal": False, "topology": None}
-    topology = {"explicit": None, "labelled": None}
     common.get_volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(policy, 1, VOLUME_SIZE, topology)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
     )
 
     # Publish volume so that there is a nexus to add a replica to.

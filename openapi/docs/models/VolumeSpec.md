@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**labels** | **Vec<String>** | Volume labels. | 
+**labels** | Option<**::std::collections::HashMap<String, String>**> | Optionally used to store custom volume information | [optional]
 **num_replicas** | **u8** | Number of children the volume should have. | 
 **operation** | Option<[**crate::models::VolumeSpecOperation**](VolumeSpec_operation.md)> |  | [optional]
 **protocol** | [**crate::models::Protocol**](Protocol.md) |  | 
@@ -12,6 +12,8 @@ Name | Type | Description | Notes
 **status** | [**crate::models::SpecStatus**](SpecStatus.md) |  | 
 **target_node** | Option<**String**> | The node where front-end IO will be sent to | [optional]
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | Volume Id | 
+**topology** | Option<[**crate::models::Topology**](Topology.md)> |  | [optional]
+**policy** | [**crate::models::VolumePolicy**](VolumePolicy.md) |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

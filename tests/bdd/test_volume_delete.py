@@ -14,6 +14,7 @@ import common
 from openapi.openapi_client.model.create_pool_body import CreatePoolBody
 from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
 from openapi.openapi_client.model.protocol import Protocol
+from openapi_client.model.volume_policy import VolumePolicy
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -30,10 +31,8 @@ def init():
     common.get_pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
     )
-    policy = {"self_heal": False, "topology": None}
-    topology = {"explicit": None, "labelled": None}
     common.get_volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(policy, 1, 10485761, topology)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, 10485761)
     )
     yield
     common.deployer_stop()
