@@ -1,7 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
 use super::super::ActixRestClient;
 
-use common_lib::IntoVec;
 pub use common_lib::{
     mbus_api,
     types::v0::{
@@ -10,12 +9,14 @@ pub use common_lib::{
             CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
             GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri,
             PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol,
-            ShareNexus, ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica,
-            VolumeHealPolicy, VolumeId, Watch, WatchCallback, WatchResourceId,
+            ShareNexus, ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica, VolumeId,
+            VolumeLabels, VolumePolicy, Watch, WatchCallback, WatchResourceId,
         },
         openapi::{apis, models},
     },
 };
+
+use common_lib::{IntoOption, IntoVec};
 pub use models::rest_json_error::Kind as RestJsonErrorKind;
 
 use serde::{Deserialize, Serialize};
@@ -148,11 +149,12 @@ pub struct CreateVolumeBody {
     pub size: u64,
     /// number of storage replicas
     pub replicas: u64,
-    // docs will be auto generated from the actual types
-    #[allow(missing_docs)]
-    pub policy: VolumeHealPolicy,
-    #[allow(missing_docs)]
-    pub topology: Topology,
+    /// Volume policy used to determine if and how to replace a replica
+    pub policy: VolumePolicy,
+    /// Volume topology used to determine how to place/distribute the data
+    pub topology: Option<Topology>,
+    /// Volume labels, used ot store custom volume information
+    pub labels: Option<VolumeLabels>,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -160,7 +162,8 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             size: src.size as u64,
             replicas: src.replicas as u64,
             policy: src.policy.into(),
-            topology: src.topology.into(),
+            topology: src.topology.into_opt(),
+            labels: src.labels,
         }
     }
 }
@@ -171,6 +174,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             replicas: create.replicas,
             policy: create.policy,
             topology: create.topology,
+            labels: create.labels,
         }
     }
 }
@@ -183,6 +187,7 @@ impl CreateVolumeBody {
             replicas: self.replicas,
             policy: self.policy.clone(),
             topology: self.topology.clone(),
+            labels: self.labels.clone(),
         }
     }
 }

@@ -2,7 +2,7 @@ use super::*;
 
 use crate::{types::v0::store::volume::VolumeSpec, IntoOption};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 bus_impl_string_uuid!(VolumeId, "UUID of a mayastor volume");
 
@@ -144,23 +144,45 @@ impl From<models::LabelledTopology> for LabelledTopology {
         }
     }
 }
-
-/// Volume topology used to determine how to place/distribute the data
-/// Should either be labelled or explicit, not both.
-/// If neither is used then the control plane will select from all available resources.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct Topology {
-    /// volume topology using labels
-    pub labelled: Option<LabelledTopology>,
-    /// volume topology, explicitly selected
-    pub explicit: Option<ExplicitTopology>,
+impl From<LabelledTopology> for models::LabelledTopology {
+    fn from(src: LabelledTopology) -> Self {
+        Self::new(src.node_topology, src.pool_topology)
+    }
 }
 
+/// Volume topology used to determine how to place/distribute the data
+/// If no topology is used then the control plane will select from all available resources.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub enum Topology {
+    /// volume topology using labels
+    Labelled(LabelledTopology),
+    /// volume topology, explicitly selected
+    Explicit(ExplicitTopology),
+}
+
+impl Topology {
+    /// Get a reference to the explicit topology
+    pub fn explicit(&self) -> Option<&ExplicitTopology> {
+        match self {
+            Topology::Labelled(_) => None,
+            Topology::Explicit(topology) => Some(topology),
+        }
+    }
+}
+
+impl From<Topology> for models::Topology {
+    fn from(src: Topology) -> Self {
+        match src {
+            Topology::Explicit(topology) => models::Topology::explicit(topology.into()),
+            Topology::Labelled(topology) => models::Topology::labelled(topology.into()),
+        }
+    }
+}
 impl From<models::Topology> for Topology {
     fn from(src: models::Topology) -> Self {
-        Self {
-            labelled: src.labelled.map(From::from),
-            explicit: src.explicit.map(From::from),
+        match src {
+            models::Topology::explicit(topology) => Self::Explicit(topology.into()),
+            models::Topology::labelled(topology) => Self::Labelled(topology.into()),
         }
     }
 }
@@ -171,17 +193,7 @@ impl From<models::Topology> for Topology {
 /// A node with "Zone: A" would not be paired up with a node with "Zone: A",
 /// but it could be paired up with a node with "Zone: B"
 /// exclusive label NAME in the form "NAME", and not "NAME: VALUE"
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct ExclusiveLabel(
-    /// inner label
-    pub String,
-);
-
-impl From<String> for ExclusiveLabel {
-    fn from(src: String) -> Self {
-        Self(src)
-    }
-}
+pub type ExclusiveLabel = String;
 
 /// Includes resources with the same $label or $label:$value eg:
 /// if label is "Zone: A":
@@ -191,17 +203,7 @@ impl From<String> for ExclusiveLabel {
 /// A resource with "Zone: A" would be paired up with a resource with "Zone: B",
 /// but not with a resource with "OtherLabel: B"
 /// inclusive label key value in the form "NAME: VALUE"
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct InclusiveLabel(
-    /// inner label
-    pub String,
-);
-
-impl From<String> for InclusiveLabel {
-    fn from(src: String) -> Self {
-        Self(src)
-    }
-}
+pub type InclusiveLabel = String;
 
 /// Placement node topology used by volume operations
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -222,6 +224,11 @@ impl From<models::NodeTopology> for NodeTopology {
         }
     }
 }
+impl From<NodeTopology> for models::NodeTopology {
+    fn from(src: NodeTopology) -> Self {
+        Self::new_all(src.exclusion, src.inclusion)
+    }
+}
 
 /// Placement pool topology used by volume operations
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -236,6 +243,11 @@ impl From<models::PoolTopology> for PoolTopology {
         Self {
             inclusion: src.inclusion.into_iter().map(From::from).collect(),
         }
+    }
+}
+impl From<PoolTopology> for models::PoolTopology {
+    fn from(src: PoolTopology) -> Self {
+        Self::new_all(src.inclusion)
     }
 }
 
@@ -258,33 +270,36 @@ impl From<models::ExplicitTopology> for ExplicitTopology {
         }
     }
 }
-
-/// Volume Healing policy used to determine if and how to replace a replica
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct VolumeHealPolicy {
-    /// the server will attempt to heal the volume by itself
-    /// the client should not attempt to do the same if this is enabled
-    pub self_heal: bool,
-    /// topology to choose a replacement replica for self healing
-    /// (overrides the initial creation topology)
-    pub topology: Option<Topology>,
-}
-
-impl Default for VolumeHealPolicy {
-    fn default() -> Self {
-        Self {
-            self_heal: true,
-            topology: None,
-        }
+impl From<ExplicitTopology> for models::ExplicitTopology {
+    fn from(src: ExplicitTopology) -> Self {
+        Self::new(src.allowed_nodes, src.preferred_nodes)
     }
 }
 
-impl From<models::VolumeHealPolicy> for VolumeHealPolicy {
-    fn from(src: models::VolumeHealPolicy) -> Self {
+/// Volume policy used to determine if and how to replace a replica
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct VolumePolicy {
+    /// the server will attempt to heal the volume by itself
+    /// the client should not attempt to do the same if this is enabled
+    pub self_heal: bool,
+}
+
+impl Default for VolumePolicy {
+    fn default() -> Self {
+        Self { self_heal: true }
+    }
+}
+
+impl From<models::VolumePolicy> for VolumePolicy {
+    fn from(src: models::VolumePolicy) -> Self {
         Self {
             self_heal: src.self_heal,
-            topology: src.topology.map(From::from),
         }
+    }
+}
+impl From<VolumePolicy> for models::VolumePolicy {
+    fn from(src: VolumePolicy) -> Self {
+        Self::new_all(src.self_heal)
     }
 }
 
@@ -314,20 +329,27 @@ pub struct CreateVolume {
     pub size: u64,
     /// number of storage replicas
     pub replicas: u64,
-    /// volume healing policy
-    pub policy: VolumeHealPolicy,
+    /// volume policy
+    pub policy: VolumePolicy,
     /// initial replica placement topology
-    pub topology: Topology,
+    pub topology: Option<Topology>,
+    /// volume labels
+    pub labels: Option<VolumeLabels>,
 }
+
+/// Volume label information
+pub type VolumeLabels = HashMap<String, String>;
 
 impl CreateVolume {
     /// explicitly selected allowed_nodes
     pub fn allowed_nodes(&self) -> Vec<NodeId> {
-        self.topology
-            .explicit
-            .clone()
-            .unwrap_or_default()
-            .allowed_nodes
+        match &self.topology {
+            None => vec![],
+            Some(t) => t
+                .explicit()
+                .map(|t| t.allowed_nodes.clone())
+                .unwrap_or_default(),
+        }
     }
 }
 

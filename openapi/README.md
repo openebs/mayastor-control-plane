@@ -122,7 +122,7 @@ Class | Method | HTTP request | Description
  - [Specs](docs/models/Specs.md)
  - [Topology](docs/models/Topology.md)
  - [Volume](docs/models/Volume.md)
- - [VolumeHealPolicy](docs/models/VolumeHealPolicy.md)
+ - [VolumePolicy](docs/models/VolumePolicy.md)
  - [VolumeShareProtocol](docs/models/VolumeShareProtocol.md)
  - [VolumeSpec](docs/models/VolumeSpec.md)
  - [VolumeSpecOperation](docs/models/VolumeSpecOperation.md)

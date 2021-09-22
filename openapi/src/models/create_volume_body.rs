@@ -19,49 +19,50 @@ use crate::apis::IntoVec;
 /// Create Volume Body JSON
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreateVolumeBody {
-    /// Volume Healing policy used to determine if and how to replace a replica
     #[serde(rename = "policy")]
-    pub policy: crate::models::VolumeHealPolicy,
+    pub policy: crate::models::VolumePolicy,
     /// number of storage replicas
     #[serde(rename = "replicas")]
     pub replicas: u8,
     /// size of the volume in bytes
     #[serde(rename = "size")]
     pub size: u64,
-    /// Volume topology used to determine how to place/distribute the data.  Should either be
-    /// labelled or explicit, not both.  If neither is used then the control plane will select from
-    /// all available resources.
-    #[serde(rename = "topology")]
-    pub topology: crate::models::Topology,
+    #[serde(rename = "topology", skip_serializing_if = "Option::is_none")]
+    pub topology: Option<crate::models::Topology>,
+    /// Optionally used to store custom volume information
+    #[serde(rename = "labels", skip_serializing_if = "Option::is_none")]
+    pub labels: Option<::std::collections::HashMap<String, String>>,
 }
 
 impl CreateVolumeBody {
     /// CreateVolumeBody using only the required fields
     pub fn new(
-        policy: impl Into<crate::models::VolumeHealPolicy>,
+        policy: impl Into<crate::models::VolumePolicy>,
         replicas: impl Into<u8>,
         size: impl Into<u64>,
-        topology: impl Into<crate::models::Topology>,
     ) -> CreateVolumeBody {
         CreateVolumeBody {
             policy: policy.into(),
             replicas: replicas.into(),
             size: size.into(),
-            topology: topology.into(),
+            topology: None,
+            labels: None,
         }
     }
     /// CreateVolumeBody using all fields
     pub fn new_all(
-        policy: impl Into<crate::models::VolumeHealPolicy>,
+        policy: impl Into<crate::models::VolumePolicy>,
         replicas: impl Into<u8>,
         size: impl Into<u64>,
-        topology: impl Into<crate::models::Topology>,
+        topology: impl Into<Option<crate::models::Topology>>,
+        labels: impl Into<Option<::std::collections::HashMap<String, String>>>,
     ) -> CreateVolumeBody {
         CreateVolumeBody {
             policy: policy.into(),
             replicas: replicas.into(),
             size: size.into(),
             topology: topology.into(),
+            labels: labels.into(),
         }
     }
 }

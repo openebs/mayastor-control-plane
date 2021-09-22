@@ -16,7 +16,7 @@ use itertools::Itertools;
 use std::{convert::TryFrom, time::Duration};
 use testlib::{
     v0::{
-        models::{CreateVolumeBody, Pool, PoolState, Topology, VolumeHealPolicy},
+        models::{CreateVolumeBody, Pool, PoolState, VolumePolicy},
         VolumeId,
     },
     Cluster, ClusterBuilder,
@@ -379,8 +379,7 @@ async fn missing_pool_state(cluster: &Cluster) {
 
     // create volume to fill up some of the pool space
     for _ in 0 .. 10 {
-        let body =
-            CreateVolumeBody::new(VolumeHealPolicy::default(), 1, 8388608u64, Topology::new());
+        let body = CreateVolumeBody::new(VolumePolicy::default(), 1, 8388608u64);
         let volume = VolumeId::new();
         volumes_api.put_volume(&volume, body).await.unwrap();
     }

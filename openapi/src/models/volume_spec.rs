@@ -19,9 +19,9 @@ use crate::apis::IntoVec;
 /// User specification of a volume.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct VolumeSpec {
-    /// Volume labels.
-    #[serde(rename = "labels")]
-    pub labels: Vec<String>,
+    /// Optionally used to store custom volume information
+    #[serde(rename = "labels", skip_serializing_if = "Option::is_none")]
+    pub labels: Option<::std::collections::HashMap<String, String>>,
     /// Number of children the volume should have.
     #[serde(rename = "num_replicas")]
     pub num_replicas: u8,
@@ -40,20 +40,24 @@ pub struct VolumeSpec {
     /// Volume Id
     #[serde(rename = "uuid")]
     pub uuid: uuid::Uuid,
+    #[serde(rename = "topology", skip_serializing_if = "Option::is_none")]
+    pub topology: Option<crate::models::Topology>,
+    #[serde(rename = "policy")]
+    pub policy: crate::models::VolumePolicy,
 }
 
 impl VolumeSpec {
     /// VolumeSpec using only the required fields
     pub fn new(
-        labels: impl IntoVec<String>,
         num_replicas: impl Into<u8>,
         protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
         status: impl Into<crate::models::SpecStatus>,
         uuid: impl Into<uuid::Uuid>,
+        policy: impl Into<crate::models::VolumePolicy>,
     ) -> VolumeSpec {
         VolumeSpec {
-            labels: labels.into_vec(),
+            labels: None,
             num_replicas: num_replicas.into(),
             operation: None,
             protocol: protocol.into(),
@@ -61,11 +65,13 @@ impl VolumeSpec {
             status: status.into(),
             target_node: None,
             uuid: uuid.into(),
+            topology: None,
+            policy: policy.into(),
         }
     }
     /// VolumeSpec using all fields
     pub fn new_all(
-        labels: impl IntoVec<String>,
+        labels: impl Into<Option<::std::collections::HashMap<String, String>>>,
         num_replicas: impl Into<u8>,
         operation: impl Into<Option<crate::models::VolumeSpecOperation>>,
         protocol: impl Into<crate::models::Protocol>,
@@ -73,9 +79,11 @@ impl VolumeSpec {
         status: impl Into<crate::models::SpecStatus>,
         target_node: impl Into<Option<String>>,
         uuid: impl Into<uuid::Uuid>,
+        topology: impl Into<Option<crate::models::Topology>>,
+        policy: impl Into<crate::models::VolumePolicy>,
     ) -> VolumeSpec {
         VolumeSpec {
-            labels: labels.into_vec(),
+            labels: labels.into(),
             num_replicas: num_replicas.into(),
             operation: operation.into(),
             protocol: protocol.into(),
@@ -83,6 +91,8 @@ impl VolumeSpec {
             status: status.into(),
             target_node: target_node.into(),
             uuid: uuid.into(),
+            topology: topology.into(),
+            policy: policy.into(),
         }
     }
 }

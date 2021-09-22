@@ -255,12 +255,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .volumes_api()
         .put_volume(
             &volume_uuid,
-            models::CreateVolumeBody::new(
-                models::VolumeHealPolicy::default(),
-                1,
-                12582912u64,
-                models::Topology::default(),
-            ),
+            models::CreateVolumeBody::new(models::VolumePolicy::default(), 1, 12582912u64),
         )
         .await
         .unwrap();
