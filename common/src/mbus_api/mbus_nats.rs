@@ -65,7 +65,7 @@ impl NatsMessageBus {
                         warn!("Error connection: {}. Quietly retrying...", error);
                         log_error = false;
                     }
-                    smol::Timer::after(interval).await;
+                    tokio::time::sleep(interval).await;
                     continue;
                 }
             }
