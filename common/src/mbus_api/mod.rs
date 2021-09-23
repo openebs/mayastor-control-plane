@@ -24,10 +24,10 @@ use opentelemetry::propagation::{Extractor, Injector};
 pub use receive::*;
 pub use send::*;
 use serde::{de::StdError, Deserialize, Serialize};
-use smol::io;
 use snafu::{ResultExt, Snafu};
 use std::{
-    collections::HashMap, fmt::Debug, marker::PhantomData, ops::Deref, str::FromStr, time::Duration,
+    collections::HashMap, fmt::Debug, io, marker::PhantomData, ops::Deref, str::FromStr,
+    time::Duration,
 };
 use strum_macros::{AsRefStr, ToString};
 

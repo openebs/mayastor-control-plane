@@ -33,6 +33,7 @@ Options:
   --debug                    Build debug version of images where possible.
   --skip-build               Don't perform nix-build.
   --skip-publish             Don't publish built images.
+  --skip-tag                 Don't publish built images with the git tag.
   --image                    Specify what image to build.
   --alias-tag                Explicit alias for short commit hash tag.
 
@@ -51,6 +52,7 @@ IMAGES=
 UPLOAD=
 SKIP_PUBLISH=
 SKIP_BUILD=
+SKIP_TAG_PUBLISH=
 REGISTRY=
 ALIAS=
 DEBUG=
@@ -104,6 +106,10 @@ while [ "$#" -gt 0 ]; do
       SKIP_PUBLISH="yes"
       shift
       ;;
+    --skip-tag)
+      SKIP_TAG_PUBLISH="yes"
+      shift
+      ;;
     --debug)
       DEBUG="yes"
       shift
@@ -153,11 +159,13 @@ for name in $IMAGES; do
 done
 
 if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
-  # Upload them
-  for img in $UPLOAD; do
-    echo "Uploading $img:$TAG to registry ..."
-    $DOCKER push $img:$TAG
-  done
+  if [ -n "$SKIP_TAG_PUBLISH" ]; then
+      # Upload them
+      for img in $UPLOAD; do
+          echo "Uploading $img:$TAG to registry ..."
+          $DOCKER push $img:$TAG
+      done
+  fi
 
   # Create alias
   alias_tag=
