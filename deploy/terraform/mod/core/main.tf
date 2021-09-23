@@ -2,10 +2,13 @@ variable "image" {}
 variable "registry" {}
 variable "tag" {}
 variable "control_node" {}
-
+variable "res_limits" {}
+variable "res_requests" {}
+variable "request_timeout" {}
+variable "cache_period" {}
 variable "credentials" {}
 
-resource "kubernetes_deployment" "core_deployment" {
+resource "kubernetes_stateful_set" "core_deployment" {
   metadata {
     labels = {
       app = "core"
@@ -14,12 +17,14 @@ resource "kubernetes_deployment" "core_deployment" {
     namespace = "mayastor"
   }
   spec {
+    service_name = "core-agents"
     replicas = 1
     selector {
       match_labels = {
         app = "core-agents"
       }
     }
+
     template {
       metadata {
         labels = {
@@ -31,20 +36,16 @@ resource "kubernetes_deployment" "core_deployment" {
         container {
           args = [
             "-smayastor-etcd",
-            "-nnats"
+            "-nnats",
+            "--request-timeout=${var.request_timeout}",
+            "--cache-period=${var.cache_period}"
           ]
           image             = format("%s/%s:%s", var.registry, var.image, var.tag)
           image_pull_policy = "Always"
-          name              = "core"
+          name              = "core-agent"
           resources {
-            limits = {
-              cpu    = "1000m"
-              memory = "1Gi"
-            }
-            requests = {
-              cpu    = "250m"
-              memory = "500Mi"
-            }
+            limits = var.res_limits
+            requests = var.res_requests
           }
         }
 
@@ -70,5 +71,4 @@ resource "kubernetes_deployment" "core_deployment" {
       }
     }
   }
-
 }

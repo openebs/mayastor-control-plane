@@ -1,4 +1,5 @@
 variable "cpus" {}
+variable "cpu_list" {}
 variable "memory" {}
 variable "hugepages" {}
 
@@ -88,7 +89,7 @@ resource "kubernetes_daemonset" "mayastor" {
             "-N$(MY_NODE_NAME)",
             "-g$(MY_POD_IP)",
             "-nnats",
-            "-l2,3",
+            format("-l%s", var.cpu_list),
             "-pmayastor-etcd"
           ]
 
@@ -186,5 +187,4 @@ resource "kubernetes_daemonset" "mayastor" {
 
     min_ready_seconds = 10
   }
-
 }

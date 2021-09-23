@@ -3,6 +3,9 @@ variable "registry" {}
 variable "tag" {}
 variable "control_node" {}
 variable "credentials" {}
+variable "res_limits" {}
+variable "res_requests" {}
+variable "cache_period" {}
 
 resource "kubernetes_deployment" "deployment_msp_operator" {
   metadata {
@@ -30,6 +33,7 @@ resource "kubernetes_deployment" "deployment_msp_operator" {
         container {
           args = [
             "-e http://$(REST_SERVICE_HOST):8081",
+            "--interval=${var.cache_period}"
           ]
           env {
             name  = "RUST_LOG"
@@ -41,16 +45,9 @@ resource "kubernetes_deployment" "deployment_msp_operator" {
 
           image_pull_policy = "Always"
           resources {
-            limits = {
-              cpu    = "1000m"
-              memory = "1Gi"
-            }
-            requests = {
-              cpu    = "250m"
-              memory = "500Mi"
-            }
+            limits = var.res_limits
+            requests = var.res_requests
           }
-
         }
         affinity {
           node_affinity {

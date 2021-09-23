@@ -3,6 +3,10 @@ variable "registry" {}
 variable "tag" {}
 variable "control_node" {}
 variable "credentials" {}
+variable "res_limits" {}
+variable "request_timeout" {}
+variable "res_requests" {}
+
 resource "kubernetes_service" "service_mayastor_rest" {
   metadata {
     labels = {
@@ -61,7 +65,7 @@ resource "kubernetes_deployment" "rest_deployment" {
             "--no-auth",
             "-nnats",
             "--http=0.0.0.0:8081",
-            "--request-timeout=30s",
+            "--request-timeout=${var.request_timeout}",
           ]
           port {
             name           = "https"
@@ -74,7 +78,7 @@ resource "kubernetes_deployment" "rest_deployment" {
 
           env {
             name  = "RUST_LOG"
-            value = "info,msp_operator=info"
+            value = "info,rest=info"
           }
 
           image             = format("%s/%s:%s", var.registry, var.image, var.tag)
@@ -82,14 +86,8 @@ resource "kubernetes_deployment" "rest_deployment" {
           name              = "rest-service"
 
           resources {
-            limits = {
-              cpu    = "1000m"
-              memory = "1Gi"
-            }
-            requests = {
-              cpu    = "250m"
-              memory = "500Mi"
-            }
+            limits = var.res_limits
+            requests = var.res_requests
           }
         }
         affinity {
