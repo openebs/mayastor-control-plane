@@ -49,7 +49,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-controller
-          image: mayadata/csi-controller:develop
+          image: mayadata/mcp-csi-controller:develop
           imagePullPolicy: Always
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
