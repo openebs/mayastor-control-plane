@@ -60,7 +60,7 @@ impl From<&str> for OutputFormat {
     }
 }
 
-pub fn print_table<T>(output: &OutputFormat, obj: Vec<T>)
+pub fn print_table<T>(output: &OutputFormat, obj: Vec<T>, call_type: &str)
 where
     T: ser::Serialize,
     Vec<T>: CreateRows,
@@ -69,12 +69,20 @@ where
     match output {
         OutputFormat::Yaml => {
             // Show the YAML form output if output format is YAML.
-            let s = serde_yaml::to_string(&obj).unwrap();
+            let s = if call_type == "get" {
+                serde_yaml::to_string(&(obj[0])).unwrap()
+            } else {
+                serde_yaml::to_string(&obj).unwrap()
+            };
             println!("{}", s);
         }
         OutputFormat::Json => {
             // Show the JSON form output if output format is JSON.
-            let s = serde_json::to_string(&obj).unwrap();
+            let s = if call_type == "get" {
+                serde_json::to_string(&(obj[0])).unwrap()
+            } else {
+                serde_json::to_string(&obj).unwrap()
+            };
             println!("{}", s);
         }
         OutputFormat::NoFormat => {

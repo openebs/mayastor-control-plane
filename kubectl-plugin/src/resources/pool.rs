@@ -67,7 +67,7 @@ impl List for Pools {
         match RestClient::client().pools_api().get_pools().await {
             Ok(pools) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Pool>(output, pools);
+                utils::print_table::<openapi::models::Pool>(output, pools, "list");
             }
             Err(e) => {
                 println!("Failed to list pools. Error {}", e)
@@ -90,7 +90,7 @@ impl Get for Pool {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Pool>(output, vec![pool]);
+                utils::print_table::<openapi::models::Pool>(output, vec![pool], "get");
             }
             Err(e) => {
                 println!("Failed to get pool {}. Error {}", id, e)
