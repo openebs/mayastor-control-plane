@@ -86,6 +86,7 @@ impl Registry {
         reconcile_idle_period: std::time::Duration,
     ) -> Self {
         let store_endpoint = Self::format_store_endpoint(&store_url);
+        tracing::info!("Connecting to persistent store at {}", store_endpoint);
         let store = Etcd::new(&store_endpoint)
             .await
             .expect("Should connect to the persistent store");

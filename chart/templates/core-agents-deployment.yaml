@@ -21,8 +21,10 @@ spec:
         {{- include "base_init_containers" . }}
       containers:
         - name: core
-          image: {{ .Values.mayastorCP.registry }}mayadata/mcp-core:{{ .Values.mayastorCP.tag}}
+          image: {{ .Values.mayastorCP.registry }}mayadata/mcp-core:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-smayastor-etcd"
             - "-nnats"
+            - "--request-timeout={{ .Values.base.default_req_timeout }}"
+            - "--cache-period={{ .Values.base.cache_poll_period }}"

@@ -23,10 +23,11 @@ spec:
       containers:
         - name: msp-operator
           resources: {{- .Values.operators.pool.resources | toYaml | nindent 12 }}
-          image: {{ .Values.mayastorCP.registry }}mayadata/mcp-msp-operator:{{ .Values.mayastorCP.tag}}
+          image: {{ .Values.mayastorCP.registry }}mayadata/mcp-msp-operator:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-e http://$(REST_SERVICE_HOST):8081"
+            - "--interval={{ .Values.base.cache_poll_period }}"
           env:
             - name: RUST_LOG
               value: info,msp_operator={{ .Values.mayastorCP.logLevel }}

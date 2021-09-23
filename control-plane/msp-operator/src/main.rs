@@ -910,6 +910,7 @@ async fn main() -> anyhow::Result<()> {
         .arg(
             Arg::with_name("interval")
                 .short("i")
+                .long("interval")
                 .env("INTERVAL")
                 .default_value(constants::CACHE_POLL_PERIOD)
                 .help("specify timer based reconciliation loop"),

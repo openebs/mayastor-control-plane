@@ -47,7 +47,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-controller
-          image: {{ .Values.mayastorCP.registry }}mayadata/csi-controller:{{ .Values.mayastorCP.tag}}
+          image: {{ .Values.mayastorCP.registry }}mayadata/csi-controller:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
