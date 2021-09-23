@@ -4,8 +4,6 @@ use serde::ser;
 // Constant to specify the output formats, these should work irrespective of case.
 pub const YAML_FORMAT: &str = "yaml";
 pub const JSON_FORMAT: &str = "json";
-pub const GET: &str = "get";
-pub const LIST: &str = "list";
 
 // Constants to store the table headers of the Tabular output formats.
 lazy_static! {
@@ -62,29 +60,42 @@ impl From<&str> for OutputFormat {
     }
 }
 
-pub fn print_table<T>(output: &OutputFormat, obj: Vec<T>, call_type: &str)
+impl<T> CreateRows for Vec<T>
+where
+    T: CreateRows,
+{
+    fn create_rows(&self) -> Vec<Row> {
+        let mut rows = vec![];
+        self.iter().for_each(|i| rows.extend(i.create_rows()));
+        rows
+    }
+}
+
+// GetHeaderRow trait to be implemented by Volume/Pool to fetch the corresponding headers.
+impl<T> GetHeaderRow for Vec<T>
+where
+    T: GetHeaderRow,
+{
+    fn get_header_row(&self) -> Row {
+        self[0].get_header_row()
+    }
+}
+
+pub fn print_table<T>(output: &OutputFormat, obj: T)
 where
     T: ser::Serialize,
-    Vec<T>: CreateRows,
-    Vec<T>: GetHeaderRow,
+    T: CreateRows,
+    T: GetHeaderRow,
 {
     match output {
         OutputFormat::Yaml => {
             // Show the YAML form output if output format is YAML.
-            let s = if call_type == GET {
-                serde_yaml::to_string(&(obj[0])).unwrap()
-            } else {
-                serde_yaml::to_string(&obj).unwrap()
-            };
+            let s = serde_yaml::to_string(&obj).unwrap();
             println!("{}", s);
         }
         OutputFormat::Json => {
             // Show the JSON form output if output format is JSON.
-            let s = if call_type == GET {
-                serde_json::to_string(&(obj[0])).unwrap()
-            } else {
-                serde_json::to_string(&obj).unwrap()
-            };
+            let s = serde_json::to_string(&obj).unwrap();
             println!("{}", s);
         }
         OutputFormat::NoFormat => {
