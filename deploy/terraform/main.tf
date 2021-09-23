@@ -69,6 +69,22 @@ module "csi-agent" {
   grace_period   = var.csi_agent_grace_period
 }
 
+module "csi-controller" {
+  source = "./mod/csi-controller"
+  depends_on = [
+    module.core,
+    module.rest,
+    module.mayastor
+  ]
+  image        = var.csi_controller_image
+  registry     = var.registry
+  tag          = var.tag
+  control_node = var.control_node
+  csi_provisioner = var.csi_provisioner
+  csi_attacher_image = var.csi_attacher_image
+  credentials  = kubernetes_secret.regcred.metadata[0].name
+}
+
 module "msp-operator" {
   source = "./mod/k8s-operator"
   depends_on = [

@@ -1,6 +1,6 @@
 variable "registry" {
   type        = string
-  description = "The docker registery to pull from"
+  description = "The docker registry to pull from"
   default     = "mayadata"
 }
 
@@ -19,7 +19,7 @@ variable "etcd_image" {
 variable "control_node" {
   type        = string
   default     = "ksnode-1"
-  description = "The on which control plane components are scheduled soft requirement"
+  description = "The node on which control plane components are scheduled - soft requirement"
 }
 
 variable "control_resource_limits" {
@@ -84,7 +84,7 @@ variable "mayastor_cpu_list" {
 
 variable "mayastor_memory" {
   type        = string
-  description = "number of CPUs to use"
+  description = "amount of memory to request for mayastor"
   default     = "4Gi"
 }
 
@@ -116,6 +116,12 @@ variable "csi_provisioner" {
   type        = string
   default     = "quay.io/k8scsi/csi-provisioner:v2.1.1"
   description = "csi-provisioner to use"
+}
+
+variable "csi_controller_image" {
+  type        = string
+  description = "mayastor CSI controller image to use"
+  default     = "mcp-csi-controller"
 }
 
 variable "control_request_timeout" {

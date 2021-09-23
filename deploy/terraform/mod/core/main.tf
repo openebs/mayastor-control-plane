@@ -8,7 +8,7 @@ variable "request_timeout" {}
 variable "cache_period" {}
 variable "credentials" {}
 
-resource "kubernetes_stateful_set" "core_deployment" {
+resource "kubernetes_stateful_set" "core_stateful_set" {
   metadata {
     labels = {
       app = "core"
