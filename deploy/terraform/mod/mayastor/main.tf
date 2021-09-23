@@ -78,7 +78,7 @@ resource "kubernetes_daemonset" "mayastor" {
         init_container {
           name    = "message-bus-probe"
           image   = "busybox:latest"
-          command = ["sh", "-c", "until nc -vz nats 4222; do echo \"Waiting for message bus...\"; sleep 1; done;"]
+          command = ["sh", "-c", "trap 'exit 1' TERM; until nc -vz nats 4222; do echo \"Waiting for message bus...\"; sleep 1; done;"]
         }
 
         container {

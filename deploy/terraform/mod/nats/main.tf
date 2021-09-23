@@ -165,6 +165,7 @@ resource "kubernetes_stateful_set" "nats" {
 
             initial_delay_seconds = 10
             timeout_seconds       = 5
+            period_seconds        = 5
           }
 
           readiness_probe {
@@ -175,6 +176,7 @@ resource "kubernetes_stateful_set" "nats" {
 
             initial_delay_seconds = 10
             timeout_seconds       = 5
+            period_seconds        = 5
           }
 
           lifecycle {
