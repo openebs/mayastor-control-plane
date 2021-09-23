@@ -4,6 +4,8 @@ use serde::ser;
 // Constant to specify the output formats, these should work irrespective of case.
 pub const YAML_FORMAT: &str = "yaml";
 pub const JSON_FORMAT: &str = "json";
+pub const GET: &str = "get";
+pub const LIST: &str = "list";
 
 // Constants to store the table headers of the Tabular output formats.
 lazy_static! {
@@ -69,7 +71,7 @@ where
     match output {
         OutputFormat::Yaml => {
             // Show the YAML form output if output format is YAML.
-            let s = if call_type == "get" {
+            let s = if call_type == GET {
                 serde_yaml::to_string(&(obj[0])).unwrap()
             } else {
                 serde_yaml::to_string(&obj).unwrap()
@@ -78,7 +80,7 @@ where
         }
         OutputFormat::Json => {
             // Show the JSON form output if output format is JSON.
-            let s = if call_type == "get" {
+            let s = if call_type == GET {
                 serde_json::to_string(&(obj[0])).unwrap()
             } else {
                 serde_json::to_string(&obj).unwrap()

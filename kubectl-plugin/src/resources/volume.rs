@@ -56,7 +56,7 @@ impl List for Volumes {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Volume>(output, volumes, "list");
+                utils::print_table::<openapi::models::Volume>(output, volumes, utils::LIST);
             }
             Err(e) => {
                 println!("Failed to list volumes. Error {}", e)
@@ -81,7 +81,7 @@ impl Get for Volume {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Volume>(output, vec![volume], "get");
+                utils::print_table::<openapi::models::Volume>(output, vec![volume], utils::GET);
             }
             Err(e) => {
                 println!("Failed to get volume {}. Error {}", id, e)
@@ -102,7 +102,7 @@ impl Scale for Volume {
             Ok(volume) => match output {
                 OutputFormat::Yaml | OutputFormat::Json => {
                     // Print json or yaml based on output format.
-                    utils::print_table::<openapi::models::Volume>(output, vec![volume], "get");
+                    utils::print_table::<openapi::models::Volume>(output, vec![volume], utils::GET);
                 }
                 OutputFormat::NoFormat => {
                     // Incase the output format is not specified, show a success message.
