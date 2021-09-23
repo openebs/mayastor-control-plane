@@ -38,3 +38,7 @@ pub mod mayastor {
 
     include!(concat!(env!("OUT_DIR"), "/mayastor.rs"));
 }
+
+pub mod csi {
+    include!(concat!(env!("OUT_DIR"), "/csi.v1.rs"));
+}

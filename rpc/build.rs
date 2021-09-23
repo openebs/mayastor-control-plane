@@ -22,4 +22,12 @@ fn main() {
             &["mayastor-api/protobuf"],
         )
         .unwrap_or_else(|e| panic!("mayastor protobuf compilation failed: {}", e));
+
+    tonic_build::configure()
+        .build_server(true)
+        .compile(
+            &["mayastor-api/protobuf/csi.proto"],
+            &["mayastor-api/protobuf"],
+        )
+        .unwrap_or_else(|e| panic!("CSI protobuf compilation failed: {}", e));
 }

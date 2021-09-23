@@ -21,6 +21,7 @@ let
     core = agent { inherit src; name = "core"; };
     rest = agent { inherit src; name = "rest"; suffix = "api"; };
     msp-operator = agent { inherit src; name = "msp-operator"; };
+    csi-controller = agent { inherit src; name = "csi-controller"; };
   };
 in
 {
