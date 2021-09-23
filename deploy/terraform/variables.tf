@@ -1,6 +1,6 @@
 variable "registry" {
   type        = string
-  description = "The docker registery to pull from"
+  description = "The docker registry to pull from"
   default     = "mayadata"
 }
 
@@ -19,7 +19,22 @@ variable "etcd_image" {
 variable "control_node" {
   type        = string
   default     = "ksnode-1"
-  description = "The on which control plane components are scheduled soft requirement"
+  description = "The node on which control plane components are scheduled - soft requirement"
+}
+
+variable "control_resource_limits" {
+  type    = map
+  default = {
+    "cpu"    = "1000m"
+    "memory" = "1Gi"
+  }
+}
+variable "control_resource_requests" {
+  type    = map
+  default = {
+    "cpu"    = "250m"
+    "memory" = "500Mi"
+  }
 }
 
 variable "nats_image" {
@@ -61,10 +76,15 @@ variable "mayastor_cpus" {
   description = "number of CPUs to use"
   default     = 2
 }
+variable "mayastor_cpu_list" {
+  type        = string
+  description = "List of cores to run on, eg: 2,3"
+  default     = "2,3"
+}
 
 variable "mayastor_memory" {
   type        = string
-  description = "number of CPUs to use"
+  description = "amount of memory to request for mayastor"
   default     = "4Gi"
 }
 
@@ -72,6 +92,12 @@ variable "csi_agent_image" {
   type        = string
   description = "mayastor CSI agent image to use"
   default     = "mayastor-csi"
+}
+
+variable "csi_agent_grace_period" {
+  type        = string
+  description = "termination grace period in seconds for the mayastor CSI pod"
+  default     = 30
 }
 
 variable "csi_registar_image" {
@@ -90,4 +116,22 @@ variable "csi_provisioner" {
   type        = string
   default     = "quay.io/k8scsi/csi-provisioner:v2.1.1"
   description = "csi-provisioner to use"
+}
+
+variable "csi_controller_image" {
+  type        = string
+  description = "mayastor CSI controller image to use"
+  default     = "mcp-csi-controller"
+}
+
+variable "control_request_timeout" {
+  type        = string
+  description = "default request timeout for any NATS or GRPC request"
+  default     = "5s"
+}
+
+variable "control_cache_period" {
+  type        = string
+  description = "the period at which a component updates its resource cache"
+  default     = "30s"
 }

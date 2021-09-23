@@ -66,6 +66,23 @@ module "csi-agent" {
   tag            = var.tag
   registry       = var.registry
   registar_image = var.csi_registar_image
+  grace_period   = var.csi_agent_grace_period
+}
+
+module "csi-controller" {
+  source = "./mod/csi-controller"
+  depends_on = [
+    module.core,
+    module.rest,
+    module.mayastor
+  ]
+  image        = var.csi_controller_image
+  registry     = var.registry
+  tag          = var.tag
+  control_node = var.control_node
+  csi_provisioner = var.csi_provisioner
+  csi_attacher_image = var.csi_attacher_image
+  credentials  = kubernetes_secret.regcred.metadata[0].name
 }
 
 module "msp-operator" {
@@ -73,12 +90,16 @@ module "msp-operator" {
   depends_on = [
     module.rbac,
     module.core,
-    module.rest
+    module.rest,
+    module.mayastor
   ]
   image        = var.msp_operator_image
   registry     = var.registry
   tag          = var.tag
   control_node = var.control_node
+  res_limits   = var.control_resource_limits
+  res_requests = var.control_resource_requests
+  cache_period = var.control_cache_period
   credentials  = kubernetes_secret.regcred.metadata[0].name
 }
 
@@ -94,7 +115,9 @@ module "rest" {
   tag          = var.tag
   control_node = var.control_node
   credentials  = kubernetes_secret.regcred.metadata[0].name
-
+  res_limits   = var.control_resource_limits
+  res_requests = var.control_resource_requests
+  request_timeout = var.control_request_timeout
 }
 
 module "core" {
@@ -107,6 +130,10 @@ module "core" {
   registry     = var.registry
   tag          = var.tag
   control_node = var.control_node
+  res_limits   = var.control_resource_limits
+  res_requests = var.control_resource_requests
+  request_timeout = var.control_request_timeout
+  cache_period = var.control_cache_period
   credentials  = kubernetes_secret.regcred.metadata[0].name
 }
 
@@ -128,6 +155,7 @@ module "mayastor" {
   ]
   hugepages = var.mayastor_hugepages_2Mi
   cpus      = var.mayastor_cpus
+  cpu_list  = var.mayastor_cpu_list
   memory    = var.mayastor_memory
   image     = var.mayastor_image
   registry  = var.registry

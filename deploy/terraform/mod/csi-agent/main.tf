@@ -2,6 +2,7 @@ variable "image" {
 }
 variable "tag" {}
 variable "registry" {}
+variable "grace_period" {}
 
 variable "registar_image" {
 }
@@ -30,6 +31,8 @@ resource "kubernetes_daemonset" "mayastor_csi_agent" {
       }
 
       spec {
+        termination_grace_period_seconds = var.grace_period
+
         volume {
           name = "device"
 

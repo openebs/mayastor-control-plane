@@ -1,4 +1,5 @@
 variable "cpus" {}
+variable "cpu_list" {}
 variable "memory" {}
 variable "hugepages" {}
 
@@ -77,7 +78,7 @@ resource "kubernetes_daemonset" "mayastor" {
         init_container {
           name    = "message-bus-probe"
           image   = "busybox:latest"
-          command = ["sh", "-c", "until nc -vz nats 4222; do echo \"Waiting for message bus...\"; sleep 1; done;"]
+          command = ["sh", "-c", "trap 'exit 1' TERM; until nc -vz nats 4222; do echo \"Waiting for message bus...\"; sleep 1; done;"]
         }
 
         container {
@@ -88,7 +89,7 @@ resource "kubernetes_daemonset" "mayastor" {
             "-N$(MY_NODE_NAME)",
             "-g$(MY_POD_IP)",
             "-nnats",
-            "-l2,3",
+            format("-l%s", var.cpu_list),
             "-pmayastor-etcd"
           ]
 
@@ -186,5 +187,4 @@ resource "kubernetes_daemonset" "mayastor" {
 
     min_ready_seconds = 10
   }
-
 }

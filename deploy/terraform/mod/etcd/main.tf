@@ -150,9 +150,9 @@ resource "kubernetes_stateful_set" "mayastor" {
               command = ["/opt/bitnami/scripts/etcd/healthcheck.sh"]
             }
 
-            initial_delay_seconds = 60
+            initial_delay_seconds = 10
             timeout_seconds       = 5
-            period_seconds        = 30
+            period_seconds        = 5
             success_threshold     = 1
             failure_threshold     = 5
           }
@@ -162,9 +162,9 @@ resource "kubernetes_stateful_set" "mayastor" {
               command = ["/opt/bitnami/scripts/etcd/healthcheck.sh"]
             }
 
-            initial_delay_seconds = 60
+            initial_delay_seconds = 10
             timeout_seconds       = 5
-            period_seconds        = 10
+            period_seconds        = 5
             success_threshold     = 1
             failure_threshold     = 5
           }
