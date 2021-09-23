@@ -33,6 +33,11 @@ use url::Url;
 const WHO_AM_I: &str = "Mayastor pool operator";
 const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
 
+/// Various common constants used by the control plane
+pub mod constants {
+    include!("../../../common/src/constants.rs");
+}
+
 #[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
 #[kube(
     group = "openebs.io",
@@ -906,7 +911,7 @@ async fn main() -> anyhow::Result<()> {
             Arg::with_name("interval")
                 .short("i")
                 .env("INTERVAL")
-                .default_value(common_lib::CACHE_POLL_PERIOD)
+                .default_value(constants::CACHE_POLL_PERIOD)
                 .help("specify timer based reconciliation loop"),
         )
         .arg(
