@@ -28,13 +28,13 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
         }
       }
       spec {
-        host_network = true
+        host_network         = true
         service_account_name = "mayastor-service-account"
-        dns_policy = "ClusterFirstWithHostNet"
+        dns_policy           = "ClusterFirstWithHostNet"
 
         volume {
           name = "socket-dir"
-          empty_dir { }
+          empty_dir {}
         }
 
         container {
@@ -48,9 +48,10 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
             "--default-fstype=ext4"
           ]
           env {
-            name = "ADDRESS"
+            name  = "ADDRESS"
             value = "/var/lib/csi/sockets/pluginproxy/csi.sock"
           }
+
           image_pull_policy = "IfNotPresent"
 
           volume_mount {
@@ -67,7 +68,7 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
             "--csi-address=$(ADDRESS)"
           ]
           env {
-            name = "ADDRESS"
+            name  = "ADDRESS"
             value = "/var/lib/csi/sockets/pluginproxy/csi.sock"
           }
           image_pull_policy = "IfNotPresent"
@@ -79,18 +80,21 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
         }
 
         container {
-          name  = "csi-controller"
-          image = format("%s/%s:%s", var.registry, var.image, var.tag)
+          name = "csi-controller"
+          #image = format("%s/%s:%s", var.registry, var.image, var.tag)
+          image             = "192.168.1.4:5000/mayadata/mcp-csi-controller:develop"
           image_pull_policy = "Always"
 
           args = [
             "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock",
             "--rest-endpoint=http://$(REST_SERVICE_HOST):8081",
-            "--log-level=debug"
           ]
-
           env {
-            name = "ADDRESS"
+            name  = "RUST_LOG"
+            value = "info,csi_controller=trace"
+          }
+          env {
+            name  = "ADDRESS"
             value = "/var/lib/csi/sockets/pluginproxy/csi.sock"
           }
 

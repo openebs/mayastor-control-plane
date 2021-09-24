@@ -45,7 +45,7 @@ resource "kubernetes_deployment" "deployment_msp_operator" {
 
           image_pull_policy = "Always"
           resources {
-            limits = var.res_limits
+            limits   = var.res_limits
             requests = var.res_requests
           }
         }
