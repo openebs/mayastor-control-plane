@@ -3,7 +3,7 @@ use regex::Regex;
 use rpc::csi::*;
 use std::collections::HashMap;
 use tonic::{Response, Status};
-use tracing::instrument;
+use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
 
 use common_lib::types::v0::openapi::models::{
@@ -194,7 +194,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<CreateVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
 
-        debug!("Request to create volume: {:?}", args);
         if args.volume_content_source.is_some() {
             return Err(Status::invalid_argument(
                 "Source for create volume is not supported",
@@ -354,14 +353,13 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             volume: Some(volume),
         }))
     }
-
+    #[instrument]
     async fn delete_volume(
         &self,
         request: tonic::Request<DeleteVolumeRequest>,
     ) -> Result<tonic::Response<DeleteVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
 
-        debug!("Request to delete volume: {:?}", args);
         MayastorApiClient::get_client()
             .delete_volume(&args.volume_id)
             .await
@@ -372,17 +370,16 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 ))
             })?;
 
-        debug!("Volume {} deleted", &args.volume_id);
         Ok(Response::new(DeleteVolumeResponse {}))
     }
 
+    #[instrument]
     async fn controller_publish_volume(
         &self,
         request: tonic::Request<ControllerPublishVolumeRequest>,
     ) -> Result<tonic::Response<ControllerPublishVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
 
-        debug!("Request to publish volume: {:?}", args);
         if args.readonly {
             return Err(Status::invalid_argument(
                 "Read-only volumes are not supported",
@@ -508,7 +505,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<ControllerUnpublishVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
 
-        debug!("Request to unpublish volume: {:?}", args);
         // Check if target volume exists.
         let volume = match MayastorApiClient::get_client()
             .get_volume(&args.volume_id)
@@ -607,8 +603,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<ListVolumesResponse>, tonic::Status> {
         let args = request.into_inner();
 
-        debug!("Request to list volumes: {:?}", args);
-
         let max_entries = args.max_entries;
         if max_entries < 0 {
             return Err(Status::invalid_argument("max_entries can't be negative"));
@@ -657,8 +651,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<GetCapacityRequest>,
     ) -> Result<tonic::Response<GetCapacityResponse>, tonic::Status> {
         let args = request.into_inner();
-
-        debug!("Request to get storage capacity: {:?}", args);
 
         // Check capabilities.
         check_volume_capabilities(&args.volume_capabilities)?;
@@ -717,8 +709,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         &self,
         _request: tonic::Request<ControllerGetCapabilitiesRequest>,
     ) -> Result<tonic::Response<ControllerGetCapabilitiesResponse>, tonic::Status> {
-        debug!("Request to get controller capabilities");
-
         let capabilities = vec![
             controller_service_capability::rpc::Type::CreateDeleteVolume,
             controller_service_capability::rpc::Type::PublishUnpublishVolume,

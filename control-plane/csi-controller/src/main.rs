@@ -1,55 +1,82 @@
-use env_logger::{Builder, Env};
-use git_version::git_version;
-use structopt::StructOpt;
+use tracing::info;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
+
+use clap::{App, Arg};
 
 mod client;
-pub mod controller;
-pub mod identity;
-pub use client::{ApiClientError, MayastorApiClient};
+mod controller;
+mod identity;
+use client::{ApiClientError, MayastorApiClient};
 mod server;
-
-#[macro_use]
-extern crate log;
-extern crate env_logger;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 
-#[derive(Debug, Clone, StructOpt)]
-#[structopt(
-    name = "Mayastor CSI Controller",
-    about = "CSI controller for Mayastor",
-    version = git_version!(args = ["--tags", "--abbrev=12"], fallback="unkown"),
-    setting(structopt::clap::AppSettings::ColoredHelp)
-)]
-
-struct CsiControllerCliArgs {
-    #[structopt(short = "r", long = "rest-endpoint")]
-    pub rest_endpoint: String,
-    #[structopt(short="c", long="csi-socket", default_value=CSI_SOCKET)]
-    pub csi_socket: String,
-    #[structopt(short="l", long="log-level", default_value="info", possible_values=&["info", "debug", "trace"])]
-    pub log_level: String,
-}
-
-fn setup_logger(log_level: String) {
-    let filter_expr = format!("{}={}", module_path!(), log_level);
-    let mut builder = Builder::from_env(Env::default().default_filter_or(filter_expr));
-    builder.init();
-}
-
 #[tokio::main(worker_threads = 2)]
 pub async fn main() -> Result<(), String> {
-    let args = CsiControllerCliArgs::from_args();
-    trace!("{:?}", args);
+    let args = App::new("Mayastor k8s pool operator")
+        .author(clap::crate_authors!())
+        .version(clap::crate_version!())
+        .settings(&[
+            clap::AppSettings::ColoredHelp,
+            clap::AppSettings::ColorAlways,
+        ])
+        .arg(
+            Arg::with_name("endpoint")
+                .long("rest-endpoint")
+                .short("-r")
+                .env("ENDPOINT")
+                .default_value("http://ksnode-1:30011")
+                .help("an URL endpoint to the mayastor control plane"),
+        )
+        .arg(
+            Arg::with_name("socket")
+                .long("csi-socket")
+                .short("-c")
+                .env("CSI_SOCKET")
+                .default_value(CSI_SOCKET)
+                .help("CSI socket path"),
+        )
+        .arg(
+            Arg::with_name("jaeger")
+                .short("-j")
+                .env("JAEGER_ENDPOINT")
+                .help("enable open telemetry and forward to jaeger"),
+        )
+        .get_matches();
 
-    setup_logger(args.log_level.to_string());
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .expect("failed to init tracing filter");
 
-    info!(
-        "Starting Mayastor CSI Controller, Control Plane REST API endpoint is {}",
-        args.rest_endpoint
-    );
+    let subscriber = Registry::default()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().pretty());
 
-    MayastorApiClient::initialize(args.rest_endpoint.to_string())
+    if let Some(jaeger) = args.value_of("jaeger") {
+        let tracer = opentelemetry_jaeger::new_pipeline()
+            .with_agent_endpoint(jaeger)
+            .with_service_name("msp-operator")
+            .install_batch(opentelemetry::runtime::TokioCurrentThread)
+            .expect("Should be able to initialise the exporter");
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        subscriber.with(telemetry).init();
+    } else {
+        subscriber.init();
+    }
+
+    let rest_endpoint = args
+        .value_of("endpoint")
+        .expect("rest endpoint must be specified");
+
+    info!(?rest_endpoint, "Starting Mayastor CSI Controller");
+
+    MayastorApiClient::initialize(rest_endpoint.into())
         .map_err(|e| format!("Failed to initialize API client, error = {}", e))?;
-    server::CsiServer::run(args.csi_socket.to_string()).await
+
+    server::CsiServer::run(
+        args.value_of("socket")
+            .expect("CSI socket must be specfied")
+            .to_string(),
+    )
+    .await
 }

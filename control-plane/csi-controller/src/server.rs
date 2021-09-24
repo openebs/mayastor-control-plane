@@ -5,6 +5,7 @@ use tokio::{
     net::UnixListener,
 };
 use tonic::transport::{server::Connected, Server};
+use tracing::{debug, error, info};
 
 use std::{
     fs,
@@ -72,7 +73,7 @@ async fn ping_rest_api() {
     info!("Checking REST API endpoint accessibility ...");
 
     match MayastorApiClient::get_client().list_nodes().await {
-        Err(e) => error!("REST API endpoint is not accessible, error = {:?}", e),
+        Err(e) => error!(?e, "REST API endpoint is not accessible"),
         Ok(nodes) => {
             let names: Vec<String> = nodes.into_iter().map(|n| n.id).collect();
             info!(
