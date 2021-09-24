@@ -125,9 +125,9 @@ cd $SCRIPTDIR/..
 
 if [ -z "$IMAGES" ]; then
   if [ -z "$DEBUG" ]; then
-    IMAGES="core jsongrpc rest msp-operator"
+    IMAGES="core jsongrpc rest msp-operator csi-controller"
   else
-    IMAGES="core-dev jsongrpc-dev rest-dev msp-operator-dev"
+    IMAGES="core-dev jsongrpc-dev rest-dev msp-operator-dev csi-controller-dev"
   fi
 fi
 
