@@ -54,7 +54,6 @@ spec:
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
             - "--rest-endpoint=http://$(REST_SERVICE_HOST):8081"
-            - "--log-level=debug"
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/

@@ -80,9 +80,8 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
         }
 
         container {
-          name = "csi-controller"
-          #image = format("%s/%s:%s", var.registry, var.image, var.tag)
-          image             = "192.168.1.4:5000/mayadata/mcp-csi-controller:develop"
+          name              = "csi-controller"
+          image             = format("%s/%s:%s", var.registry, var.image, var.tag)
           image_pull_policy = "Always"
 
           args = [
