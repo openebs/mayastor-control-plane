@@ -17,12 +17,12 @@ name = "common"
 path = "common/src/lib.rs"
 
 [dependencies]
-nats = "0.15.1"
+nats = "0.15.2"
 structopt = "0.3.23"
-tokio = { version = "1.11.0", features = ["full"] }
+tokio = { version = "1.12.0", features = ["full"] }
 tonic = "0.5.2"
 futures = "0.3.17"
-serde_json = "1.0.67"
+serde_json = "1.0.68"
 async-trait = "0.1.51"
 dyn-clonable = "0.9.0"
 smol = "1.2.5"
@@ -31,7 +31,7 @@ lazy_static = "1.4.0"
 humantime = "2.1.0"
 state = "0.5.2"
 rpc =  { path = "../../rpc"}
-http = "0.2.4"
+http = "0.2.5"
 paste = "1.0.5"
 common-lib = { path = "../../common" }
 reqwest = "0.11.4"
@@ -42,8 +42,8 @@ itertools = "0.10.1"
 opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }
 tracing-opentelemetry = "0.15.0"
 opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
-tracing = "0.1.26"
-tracing-subscriber = "0.2.20"
+tracing = "0.1.28"
+tracing-subscriber = "0.2.24"
 tracing-futures = "0.2.5"
 opentelemetry-semantic-conventions = "0.8.0"
 
@@ -51,7 +51,7 @@ opentelemetry-semantic-conventions = "0.8.0"
 composer = { path = "../../composer" }
 ctrlp-tests = { path = "../../tests/tests-mayastor" }
 actix-rt = "2.2.0"
-actix-web = { version = "4.0.0-beta.8", features = ["rustls"] }
+actix-web = { version = "4.0.0-beta.9", features = ["rustls"] }
 url = "2.2.2"
 once_cell = "1.8.0"
 
