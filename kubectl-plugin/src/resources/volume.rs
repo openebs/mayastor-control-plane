@@ -17,7 +17,6 @@ pub(crate) struct Volumes {}
 // Volumes returned from REST call.
 impl CreateRows for openapi::models::Volume {
     fn create_rows(&self) -> Vec<Row> {
-        let mut rows: Vec<Row> = Vec::new();
         let state = self
             .state
             .clone()
@@ -29,13 +28,13 @@ impl CreateRows for openapi::models::Volume {
                 status: openapi::models::VolumeStatus::Unknown,
                 uuid: self.spec.uuid,
             });
-        rows.push(row![
+        let rows = vec![row![
             state.uuid,
             self.spec.num_replicas,
             state.protocol,
             state.status,
             state.size
-        ]);
+        ]];
         rows
     }
 }
@@ -54,7 +53,7 @@ impl List for Volumes {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<Vec<openapi::models::Volume>>(output, volumes);
+                utils::print_table(output, volumes);
             }
             Err(e) => {
                 println!("Failed to list volumes. Error {}", e)
@@ -79,7 +78,7 @@ impl Get for Volume {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Volume>(output, volume);
+                utils::print_table(output, volume);
             }
             Err(e) => {
                 println!("Failed to get volume {}. Error {}", id, e)
@@ -100,7 +99,7 @@ impl Scale for Volume {
             Ok(volume) => match output {
                 OutputFormat::Yaml | OutputFormat::Json => {
                     // Print json or yaml based on output format.
-                    utils::print_table::<openapi::models::Volume>(output, volume);
+                    utils::print_table(output, volume);
                 }
                 OutputFormat::NoFormat => {
                     // Incase the output format is not specified, show a success message.

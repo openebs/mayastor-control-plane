@@ -65,8 +65,7 @@ where
     T: CreateRows,
 {
     fn create_rows(&self) -> Vec<Row> {
-        let mut rows = vec![];
-        self.iter().for_each(|i| rows.extend(i.create_rows()));
+        let rows = self.iter().map(|i| i.create_rows()).flatten().collect();
         rows
     }
 }
@@ -77,7 +76,9 @@ where
     T: GetHeaderRow,
 {
     fn get_header_row(&self) -> Row {
-        self[0].get_header_row()
+        self.get(0)
+            .map(GetHeaderRow::get_header_row)
+            .unwrap_or_default()
     }
 }
 

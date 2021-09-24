@@ -19,7 +19,6 @@ pub struct Pools {}
 // Pools returned from REST call.
 impl CreateRows for openapi::models::Pool {
     fn create_rows(&self) -> Vec<Row> {
-        let mut rows: Vec<Row> = Vec::new();
         let mut managed = true;
         if self.spec.is_none() {
             managed = false;
@@ -38,7 +37,7 @@ impl CreateRows for openapi::models::Pool {
             used: 0,
         });
         let disks = state.disks.join(", ");
-        rows.push(row![
+        let rows = vec![row![
             self.id,
             state.capacity,
             state.used,
@@ -46,7 +45,7 @@ impl CreateRows for openapi::models::Pool {
             state.node,
             state.status,
             managed
-        ]);
+        ]];
         rows
     }
 }
@@ -65,7 +64,7 @@ impl List for Pools {
         match RestClient::client().pools_api().get_pools().await {
             Ok(pools) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<Vec<openapi::models::Pool>>(output, pools);
+                utils::print_table(output, pools);
             }
             Err(e) => {
                 println!("Failed to list pools. Error {}", e)
@@ -88,7 +87,7 @@ impl Get for Pool {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Pool>(output, pool);
+                utils::print_table(output, pool);
             }
             Err(e) => {
                 println!("Failed to get pool {}. Error {}", id, e)
