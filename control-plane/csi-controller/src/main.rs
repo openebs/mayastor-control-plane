@@ -17,7 +17,7 @@ const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
     name = "Mayastor CSI Controller",
-    about = "test",
+    about = "CSI controller for Mayastor",
     version = git_version!(args = ["--tags", "--abbrev=12"], fallback="unkown"),
     setting(structopt::clap::AppSettings::ColoredHelp)
 )]
@@ -37,7 +37,7 @@ fn setup_logger(log_level: String) {
     builder.init();
 }
 
-#[tokio::main]
+#[tokio::main(worker_threads = 2)]
 pub async fn main() -> Result<(), String> {
     let args = CsiControllerCliArgs::from_args();
     trace!("{:?}", args);
