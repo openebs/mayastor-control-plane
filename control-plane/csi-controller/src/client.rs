@@ -8,7 +8,7 @@ use once_cell::sync::OnceCell;
 use reqwest::{Client, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ApiClientError {

@@ -86,7 +86,7 @@ resource "kubernetes_deployment" "rest_deployment" {
           name              = "rest-service"
 
           resources {
-            limits = var.res_limits
+            limits   = var.res_limits
             requests = var.res_requests
           }
         }

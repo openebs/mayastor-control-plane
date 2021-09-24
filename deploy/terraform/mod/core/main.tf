@@ -18,7 +18,7 @@ resource "kubernetes_stateful_set" "core_stateful_set" {
   }
   spec {
     service_name = "core-agents"
-    replicas = 1
+    replicas     = 1
     selector {
       match_labels = {
         app = "core-agents"
@@ -44,7 +44,7 @@ resource "kubernetes_stateful_set" "core_stateful_set" {
           image_pull_policy = "Always"
           name              = "core-agent"
           resources {
-            limits = var.res_limits
+            limits   = var.res_limits
             requests = var.res_requests
           }
         }
