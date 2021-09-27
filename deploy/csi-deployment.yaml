@@ -20,6 +20,8 @@ spec:
       hostNetwork: true
       serviceAccount: mayastor-service-account
       dnsPolicy: ClusterFirstWithHostNet
+      imagePullSecrets:
+        - name: regcred
       containers:
         - name: csi-provisioner
           image: k8s.gcr.io/sig-storage/csi-provisioner:v2.2.1
