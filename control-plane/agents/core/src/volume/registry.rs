@@ -4,6 +4,7 @@ use common_lib::types::v0::message_bus::{
     NexusStatus, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 
+use crate::core::reconciler::PollTriggerEvent;
 use snafu::OptionExt;
 
 impl Registry {
@@ -83,5 +84,12 @@ impl Registry {
             &self.specs().get_volume(id)?,
             &self.get_volume_state(id).await.ok(),
         ))
+    }
+
+    /// Notify the reconcilers if the volume is degraded
+    pub(crate) async fn notify_if_degraded(&self, volume: &Volume, event: PollTriggerEvent) {
+        if volume.status() == Some(VolumeStatus::Degraded) {
+            self.notify(event).await;
+        }
     }
 }

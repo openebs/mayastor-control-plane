@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write};
+use std::io::Write;
 
 type BuildResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -16,7 +16,7 @@ fn main() -> BuildResult {
     std::fs::remove_file(path)?;
 
     let mut file = std::fs::File::create(path)?;
-    let map: HashMap<String, String> = [
+    let mut map: Vec<(String, String)> = [
         (
             stringify!(CACHE_POLL_PERIOD).to_ascii_lowercase(),
             constants::CACHE_POLL_PERIOD.to_string(),
@@ -26,15 +26,14 @@ fn main() -> BuildResult {
             constants::DEFAULT_REQ_TIMEOUT.to_string(),
         ),
     ]
-    .iter()
-    .cloned()
-    .collect();
+    .to_vec();
+    map.sort();
 
     write_constants(&mut file, map)?;
     Ok(())
 }
 
-fn write_constants(file: &mut std::fs::File, constants: HashMap<String, String>) -> BuildResult {
+fn write_constants(file: &mut std::fs::File, constants: Vec<(String, String)>) -> BuildResult {
     file.write_all("base:\n".as_ref())?;
     for (k, v) in constants.into_iter() {
         write_constant(file, "  ", &k, &v)?;

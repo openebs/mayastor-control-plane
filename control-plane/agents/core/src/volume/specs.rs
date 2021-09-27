@@ -1,5 +1,6 @@
 use crate::{
     core::{
+        reconciler::PollTriggerEvent,
         scheduling::{
             nexus::GetPersistedNexusChildren,
             resources::{ChildItem, HealthyChildItems, ReplicaItem},
@@ -565,7 +566,11 @@ impl ResourceSpecsLocked {
         }
 
         SpecOperations::complete_update(registry, result, spec, spec_clone.clone()).await?;
-        registry.get_volume(&request.uuid).await
+        let volume = registry.get_volume(&request.uuid).await?;
+        registry
+            .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
+            .await;
+        Ok(volume)
     }
 
     /// Unpublish a volume based on the given `UnpublishVolume` request

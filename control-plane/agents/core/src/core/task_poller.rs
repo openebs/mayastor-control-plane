@@ -19,6 +19,9 @@ pub(crate) enum PollEvent {
 pub(crate) enum PollTriggerEvent {
     /// A node state has changed to Online
     NodeStateChangeOnline,
+    /// A volume has been published in a Degraded state
+    /// eg: may need replicas to be carved and/or added
+    VolumeDegraded,
 }
 
 /// State of a poller
