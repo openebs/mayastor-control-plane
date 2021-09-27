@@ -479,8 +479,16 @@ impl ResourceContext {
             });
         }
 
-        let mut body = HashMap::new();
-        body.insert("disks", self.spec.disks.clone());
+        let mut labels: HashMap<String, String> = HashMap::new();
+        labels.insert(
+            String::from("openebs.io/created-by"),
+            String::from("mayastor-control-plane"),
+        );
+
+        let body = json!({
+            "disks": self.spec.disks.clone(),
+            "labels": labels
+        });
 
         let res = self
             .put(UrlPath::Pool(self.name()))?

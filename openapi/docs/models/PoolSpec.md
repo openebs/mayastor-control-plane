@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **disks** | **Vec<String>** | absolute disk paths claimed by the pool | 
 **id** | **String** | storage pool identifier | 
-**labels** | **Vec<String>** | Pool labels. | 
+**labels** | Option<**::std::collections::HashMap<String, String>**> | labels to be set on the pools | [optional]
 **node** | **String** | storage node identifier | 
 **status** | [**crate::models::SpecStatus**](SpecStatus.md) |  | 
 

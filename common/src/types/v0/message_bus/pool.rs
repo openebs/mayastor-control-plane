@@ -247,15 +247,23 @@ pub struct CreatePool {
     pub id: PoolId,
     /// disk device paths or URIs to be claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
+    /// labels to be set on the pool
+    pub labels: Option<::std::collections::HashMap<String, String>>,
 }
 
 impl CreatePool {
     /// Create new `Self` from the given parameters
-    pub fn new(node: &NodeId, id: &PoolId, disks: &[PoolDeviceUri]) -> Self {
+    pub fn new(
+        node: &NodeId,
+        id: &PoolId,
+        disks: &[PoolDeviceUri],
+        labels: &Option<::std::collections::HashMap<String, String>>,
+    ) -> Self {
         Self {
             node: node.clone(),
             id: id.clone(),
             disks: disks.to_vec(),
+            labels: labels.clone(),
         }
     }
 }

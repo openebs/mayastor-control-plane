@@ -85,6 +85,7 @@ async fn create_pool_idempotent() {
         node: cluster.node(0),
         id: cluster.pool(0, 0),
         disks: vec!["malloc:///disk?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await
@@ -94,6 +95,7 @@ async fn create_pool_idempotent() {
         node: cluster.node(0),
         id: cluster.pool(0, 0),
         disks: vec!["malloc:///disk?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await
@@ -114,6 +116,7 @@ async fn create_pool_idempotent_same_disk_different_query() {
         node: cluster.node(0),
         id: cluster.pool(0, 0),
         disks: vec!["malloc:///disk?size_mb=100&blk_size=512".into()],
+        labels: None,
     }
     .request()
     .await
@@ -123,6 +126,7 @@ async fn create_pool_idempotent_same_disk_different_query() {
         node: cluster.node(0),
         id: cluster.pool(0, 0),
         disks: vec!["malloc:///disk?size_mb=200&blk_size=4096".into()],
+        labels: None,
     }
     .request()
     .await
@@ -141,6 +145,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
         node: cluster.node(1),
         id: cluster.pool(1, 0),
         disks: vec!["malloc:///disk?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await
@@ -150,6 +155,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
         node: cluster.node(2),
         id: cluster.pool(2, 0),
         disks: vec!["malloc:///disk?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await
@@ -159,6 +165,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
         node: cluster.node(2),
         id: cluster.pool(2, 0),
         disks: vec!["malloc:///disk?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await
@@ -168,6 +175,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
         node: cluster.node(2),
         id: cluster.pool(2, 0),
         disks: vec!["malloc:///disk?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await
