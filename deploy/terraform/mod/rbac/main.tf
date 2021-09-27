@@ -6,6 +6,8 @@ resource "kubernetes_service_account" "mayastor" {
 }
 
 resource "kubernetes_cluster_role" "mayastor" {
+  depends_on = [null_resource.cleanup_leftovers]
+
   metadata {
     name = "mayastor-cluster-role"
   }
@@ -96,6 +98,8 @@ resource "kubernetes_cluster_role" "mayastor" {
 }
 
 resource "kubernetes_cluster_role_binding" "mayastor" {
+  depends_on = [null_resource.cleanup_leftovers]
+
   metadata {
     name = "mayastor-cluster-role-binding"
   }
@@ -111,4 +115,23 @@ resource "kubernetes_cluster_role_binding" "mayastor" {
     kind      = "ClusterRole"
     name      = "mayastor-cluster-role"
   }
+}
+
+## When testing sometimes things get seriously broken and we can't easily use terraform destroy
+## Most things are easy to delete by hand by removing the namespace, but these are not namespaced...
+resource "null_resource" "cleanup_leftovers" {
+  provisioner "local-exec" {
+    command    = "kubectl delete clusterroles.rbac.authorization.k8s.io mayastor-cluster-role"
+    on_failure = continue
+  }
+  provisioner "local-exec" {
+    command    = "kubectl delete clusterrolebindings.rbac.authorization.k8s.io mayastor-cluster-role-binding"
+    on_failure = continue
+  }
+  triggers = {
+    "before" = null_resource.before.id
+  }
+}
+
+resource "null_resource" "before" {
 }

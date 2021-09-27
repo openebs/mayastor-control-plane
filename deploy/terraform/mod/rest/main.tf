@@ -6,6 +6,7 @@ variable "credentials" {}
 variable "res_limits" {}
 variable "request_timeout" {}
 variable "res_requests" {}
+variable "jaeger_agent_argument" {}
 
 resource "kubernetes_service" "service_mayastor_rest" {
   metadata {
@@ -60,13 +61,15 @@ resource "kubernetes_deployment" "rest_deployment" {
       spec {
         service_account_name = "mayastor-service-account"
         container {
-          args = [
+          args = concat([
             "--dummy-certificates",
             "--no-auth",
             "-nnats",
             "--http=0.0.0.0:8081",
             "--request-timeout=${var.request_timeout}",
-          ]
+            ],
+            var.jaeger_agent_argument
+          )
           port {
             name           = "https"
             container_port = 8080

@@ -39,6 +39,7 @@ pub async fn main() -> Result<(), String> {
         .arg(
             Arg::with_name("jaeger")
                 .short("-j")
+                .long("jaeger")
                 .env("JAEGER_ENDPOINT")
                 .help("enable open telemetry and forward to jaeger"),
         )
@@ -55,7 +56,7 @@ pub async fn main() -> Result<(), String> {
     if let Some(jaeger) = args.value_of("jaeger") {
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)
-            .with_service_name("msp-operator")
+            .with_service_name("csi-controller")
             .install_batch(opentelemetry::runtime::TokioCurrentThread)
             .expect("Should be able to initialise the exporter");
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);

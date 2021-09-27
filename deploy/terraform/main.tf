@@ -3,7 +3,15 @@
  */
 
 provider "kubernetes" {
+  experiments {
+    manifest_resource = true
+  }
   config_path = "~/.kube/config"
+}
+provider "helm" {
+  kubernetes {
+    config_path = "~/.kube/config"
+  }
 }
 
 resource "kubernetes_namespace" "mayastor_ns" {
@@ -31,6 +39,12 @@ module "rbac" {
   source = "./mod/rbac"
 }
 
+module "jaegertracing" {
+  depends_on = [kubernetes_namespace.mayastor_ns, module.rbac]
+  source     = "./mod/jaeger"
+  count      = var.with_jaeger ? 1 : 0
+}
+
 /*
  * external services
  */
@@ -39,7 +53,7 @@ module "nats" {
   source = "./mod/nats"
   depends_on = [
     kubernetes_namespace.mayastor_ns,
-    kubernetes_secret.regcred
+    kubernetes_secret.regcred,
   ]
   nats_image   = var.nats_image
   control_node = var.control_node
@@ -76,13 +90,14 @@ module "csi-controller" {
     module.rest,
     module.mayastor
   ]
-  image        = var.csi_controller_image
-  registry     = var.registry
-  tag          = var.tag
-  control_node = var.control_node
-  csi_provisioner = var.csi_provisioner
-  csi_attacher_image = var.csi_attacher_image
-  credentials  = kubernetes_secret.regcred.metadata[0].name
+  image                 = var.csi_controller_image
+  registry              = var.registry
+  tag                   = var.tag
+  control_node          = var.control_node
+  csi_provisioner       = var.csi_provisioner
+  csi_attacher_image    = var.csi_attacher_image
+  jaeger_agent_argument = local.jaeger_agent_argument
+  credentials           = kubernetes_secret.regcred.metadata[0].name
 }
 
 module "msp-operator" {
@@ -93,14 +108,15 @@ module "msp-operator" {
     module.rest,
     module.mayastor
   ]
-  image        = var.msp_operator_image
-  registry     = var.registry
-  tag          = var.tag
-  control_node = var.control_node
-  res_limits   = var.control_resource_limits
-  res_requests = var.control_resource_requests
-  cache_period = var.control_cache_period
-  credentials  = kubernetes_secret.regcred.metadata[0].name
+  image                 = var.msp_operator_image
+  registry              = var.registry
+  tag                   = var.tag
+  control_node          = var.control_node
+  res_limits            = var.control_resource_limits
+  res_requests          = var.control_resource_requests
+  cache_period          = var.control_cache_period
+  credentials           = kubernetes_secret.regcred.metadata[0].name
+  jaeger_agent_argument = local.jaeger_agent_argument
 }
 
 module "rest" {
@@ -108,33 +124,36 @@ module "rest" {
   depends_on = [
     kubernetes_secret.regcred,
     kubernetes_namespace.mayastor_ns,
-    module.core
+    module.core,
   ]
-  image        = var.rest_image
-  registry     = var.registry
-  tag          = var.tag
-  control_node = var.control_node
-  credentials  = kubernetes_secret.regcred.metadata[0].name
-  res_limits   = var.control_resource_limits
-  res_requests = var.control_resource_requests
-  request_timeout = var.control_request_timeout
+  image                 = var.rest_image
+  registry              = var.registry
+  tag                   = var.tag
+  control_node          = var.control_node
+  credentials           = kubernetes_secret.regcred.metadata[0].name
+  res_limits            = var.control_resource_limits
+  res_requests          = var.control_resource_requests
+  request_timeout       = var.control_request_timeout
+  jaeger_agent_argument = local.jaeger_agent_argument
 }
 
 module "core" {
   source = "./mod/core"
   depends_on = [
     module.nats,
-    module.etcd
+    module.etcd,
+    module.jaegertracing
   ]
-  image        = var.core_image
-  registry     = var.registry
-  tag          = var.tag
-  control_node = var.control_node
-  res_limits   = var.control_resource_limits
-  res_requests = var.control_resource_requests
-  request_timeout = var.control_request_timeout
-  cache_period = var.control_cache_period
-  credentials  = kubernetes_secret.regcred.metadata[0].name
+  image                 = var.core_image
+  registry              = var.registry
+  tag                   = var.tag
+  control_node          = var.control_node
+  res_limits            = var.control_resource_limits
+  res_requests          = var.control_resource_requests
+  request_timeout       = var.control_request_timeout
+  cache_period          = var.control_cache_period
+  jaeger_agent_argument = local.jaeger_agent_argument
+  credentials           = kubernetes_secret.regcred.metadata[0].name
 }
 
 module "sc" {
@@ -160,4 +179,8 @@ module "mayastor" {
   image     = var.mayastor_image
   registry  = var.registry
   tag       = var.tag
+}
+
+locals {
+  jaeger_agent_argument = var.with_jaeger ? [module.jaegertracing[0].jaeger_agent_argument] : []
 }
