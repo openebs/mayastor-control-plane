@@ -187,7 +187,7 @@ impl VolumeTopologyMapper {
 
 #[tonic::async_trait]
 impl rpc::csi::controller_server::Controller for CsiControllerSvc {
-    #[instrument]
+    #[instrument(error, fields(volume.uuid = tracing::field::Empty))]
     async fn create_volume(
         &self,
         request: tonic::Request<CreateVolumeRequest>,
@@ -212,6 +212,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 )))
             }
         };
+        tracing::Span::current().record("volume.uuid", &volume_uuid.as_str());
 
         check_volume_capabilities(&args.volume_capabilities)?;
 
@@ -353,7 +354,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             volume: Some(volume),
         }))
     }
-    #[instrument]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
     async fn delete_volume(
         &self,
         request: tonic::Request<DeleteVolumeRequest>,
@@ -373,7 +374,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Ok(Response::new(DeleteVolumeResponse {}))
     }
 
-    #[instrument]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
     async fn controller_publish_volume(
         &self,
         request: tonic::Request<ControllerPublishVolumeRequest>,
@@ -498,7 +499,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
     async fn controller_unpublish_volume(
         &self,
         request: tonic::Request<ControllerUnpublishVolumeRequest>,
@@ -549,7 +550,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Ok(Response::new(ControllerUnpublishVolumeResponse {}))
     }
 
-    #[instrument]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
     async fn validate_volume_capabilities(
         &self,
         request: tonic::Request<ValidateVolumeCapabilitiesRequest>,
@@ -596,7 +597,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Ok(Response::new(response))
     }
 
-    #[instrument]
+    #[instrument(error)]
     async fn list_volumes(
         &self,
         request: tonic::Request<ListVolumesRequest>,
@@ -645,7 +646,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument]
+    #[instrument(error)]
     async fn get_capacity(
         &self,
         request: tonic::Request<GetCapacityRequest>,
@@ -704,7 +705,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument]
+    #[instrument(error)]
     async fn controller_get_capabilities(
         &self,
         _request: tonic::Request<ControllerGetCapabilitiesRequest>,
@@ -728,6 +729,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
+    #[instrument(error)]
     async fn create_snapshot(
         &self,
         _request: tonic::Request<CreateSnapshotRequest>,
@@ -735,6 +737,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Err(Status::unimplemented("Not implemented"))
     }
 
+    #[instrument(error)]
     async fn delete_snapshot(
         &self,
         _request: tonic::Request<DeleteSnapshotRequest>,
@@ -742,6 +745,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Err(Status::unimplemented("Not implemented"))
     }
 
+    #[instrument(error)]
     async fn list_snapshots(
         &self,
         _request: tonic::Request<ListSnapshotsRequest>,
@@ -749,6 +753,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Err(Status::unimplemented("Not implemented"))
     }
 
+    #[instrument(error)]
     async fn controller_expand_volume(
         &self,
         _request: tonic::Request<ControllerExpandVolumeRequest>,
@@ -756,6 +761,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Err(Status::unimplemented("Not implemented"))
     }
 
+    #[instrument(error)]
     async fn controller_get_volume(
         &self,
         _request: tonic::Request<ControllerGetVolumeRequest>,

@@ -69,6 +69,7 @@ impl AsyncWrite for UnixStream {
 
 pub struct CsiServer {}
 
+#[tracing::instrument]
 async fn ping_rest_api() {
     info!("Checking REST API endpoint accessibility ...");
 

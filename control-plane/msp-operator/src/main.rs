@@ -941,6 +941,7 @@ async fn main() -> anyhow::Result<()> {
         .arg(
             Arg::with_name("jaeger")
                 .short("-j")
+                .long("jaeger")
                 .env("JAEGER_ENDPOINT")
                 .help("enable open telemetry and forward to jaeger"),
         )

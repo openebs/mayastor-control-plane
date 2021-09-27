@@ -12,7 +12,6 @@ use common_lib::types::v0::message_bus::ChannelVs;
 use common_lib::mbus_api::BusClient;
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use structopt::StructOpt;
-use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
 #[derive(Debug, StructOpt)]
@@ -110,10 +109,9 @@ fn init_tracing() {
 
 #[tokio::main]
 async fn main() {
-    init_tracing();
-
     let cli_args = CliArgs::from_args();
-    info!("Starting Core Agent with options: {:?}", cli_args);
+    println!("Starting Core Agent with options: {:?}", cli_args);
+    init_tracing();
 
     server(cli_args).await;
 }
@@ -146,6 +144,7 @@ async fn server(cli_args: CliArgs) {
 
     registry.start().await;
     service.run().await;
+    opentelemetry::global::shutdown_tracer_provider();
 }
 
 /// Constructs a service handler for `RequestType` which gets redirected to a

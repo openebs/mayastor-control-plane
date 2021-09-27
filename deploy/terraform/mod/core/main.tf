@@ -7,6 +7,7 @@ variable "res_requests" {}
 variable "request_timeout" {}
 variable "cache_period" {}
 variable "credentials" {}
+variable "jaeger_agent_argument" {}
 
 resource "kubernetes_stateful_set" "core_stateful_set" {
   metadata {
@@ -34,12 +35,14 @@ resource "kubernetes_stateful_set" "core_stateful_set" {
       spec {
         service_account_name = "mayastor-service-account"
         container {
-          args = [
+          args = concat([
             "-smayastor-etcd",
             "-nnats",
             "--request-timeout=${var.request_timeout}",
-            "--cache-period=${var.cache_period}"
-          ]
+            "--cache-period=${var.cache_period}",
+            ],
+            var.jaeger_agent_argument
+          )
           image             = format("%s/%s:%s", var.registry, var.image, var.tag)
           image_pull_policy = "Always"
           name              = "core-agent"

@@ -23,14 +23,14 @@ variable "control_node" {
 }
 
 variable "control_resource_limits" {
-  type    = map
+  type = map(any)
   default = {
     "cpu"    = "1000m"
     "memory" = "1Gi"
   }
 }
 variable "control_resource_requests" {
-  type    = map
+  type = map(any)
   default = {
     "cpu"    = "250m"
     "memory" = "500Mi"
@@ -134,4 +134,10 @@ variable "control_cache_period" {
   type        = string
   description = "the period at which a component updates its resource cache"
   default     = "30s"
+}
+
+variable "with_jaeger" {
+  type        = bool
+  description = "enables or disables the jaegertracing-operator"
+  default     = true
 }

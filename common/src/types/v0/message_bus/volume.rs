@@ -41,6 +41,11 @@ impl Volume {
     pub fn state(&self) -> Option<VolumeState> {
         self.state.clone()
     }
+
+    /// Get the volume status, if any.
+    pub fn status(&self) -> Option<VolumeStatus> {
+        self.state.as_ref().map(|s| s.status.clone())
+    }
 }
 
 impl From<Volume> for models::Volume {
