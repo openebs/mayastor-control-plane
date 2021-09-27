@@ -309,10 +309,10 @@ impl MayastorApiClient {
             .await
     }
 
-    #[instrument]
     /// Create a volume of target size and provision storage resources for it.
     /// This operation is not idempotent, so the caller is responsible for taking
     /// all actions with regards to idempotency.
+    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
     pub async fn create_volume(
         &self,
         volume_id: &str,
@@ -330,7 +330,7 @@ impl MayastorApiClient {
             replicas,
             size,
             topology: Some(topology),
-            policy: VolumePolicy::default(),
+            policy: VolumePolicy::new_all(true),
             labels: None,
         };
 
@@ -338,31 +338,31 @@ impl MayastorApiClient {
             .await
     }
 
-    #[instrument]
     /// Delete volume and reclaim all storage resources associated with it.
     /// This operation is idempotent, so the caller does not see errors indicating
-    /// abscence of the resource.
+    /// absence of the resource.
+    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
     pub async fn delete_volume(&self, volume_id: &str) -> Result<(), ApiClientError> {
         self.do_delete(&UrnType(&[uri::VOLUMES, volume_id]), true)
             .await
     }
 
-    #[instrument]
     /// Get specific volume.
+    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
     pub async fn get_volume(&self, volume_id: &str) -> Result<Volume, ApiClientError> {
         self.get_collection_item(UrnType(&[uri::VOLUMES, volume_id]))
             .await
     }
 
-    #[instrument]
-    /// Unublish volume (i.e. destroy a target which exposes the volume).
+    /// Unpublish volume (i.e. destroy a target which exposes the volume).
+    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
     pub async fn unpublish_volume(&self, volume_id: &str) -> Result<(), ApiClientError> {
         self.do_delete(&UrnType(&[uri::VOLUMES, volume_id, "target"]), true)
             .await
     }
 
-    #[instrument]
     /// Publish volume (i.e. make it accessible via specified protocol by creating a target).
+    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
     pub async fn publish_volume(
         &self,
         volume_id: &str,

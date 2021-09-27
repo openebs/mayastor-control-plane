@@ -1929,9 +1929,7 @@ components:
           self_heal: true
         replicas: 1
         size: 10485761
-        topology:
-          explicit: null
-          labelled: null
+        topology: null
       description: Create Volume Body JSON
       type: object
       properties:
