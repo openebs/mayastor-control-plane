@@ -23,4 +23,4 @@ pub const CACHE_POLL_PERIOD: &str = "30s";
 pub const OPENEBS_CREATED_BY_KEY: &str = "openebs.io/created-by";
 
 /// The value to mark the creation source of a pool to be msp-operator in labels
-pub const MSP_OPERATOR: &str = "openebs.io/created-by";
+pub const MSP_OPERATOR: &str = "msp-operator";
