@@ -60,11 +60,33 @@ impl From<&str> for OutputFormat {
     }
 }
 
-pub fn print_table<T>(output: &OutputFormat, obj: Vec<T>)
+impl<T> CreateRows for Vec<T>
+where
+    T: CreateRows,
+{
+    fn create_rows(&self) -> Vec<Row> {
+        let rows = self.iter().map(|i| i.create_rows()).flatten().collect();
+        rows
+    }
+}
+
+// GetHeaderRow trait to be implemented by Volume/Pool to fetch the corresponding headers.
+impl<T> GetHeaderRow for Vec<T>
+where
+    T: GetHeaderRow,
+{
+    fn get_header_row(&self) -> Row {
+        self.get(0)
+            .map(GetHeaderRow::get_header_row)
+            .unwrap_or_default()
+    }
+}
+
+pub fn print_table<T>(output: &OutputFormat, obj: T)
 where
     T: ser::Serialize,
-    Vec<T>: CreateRows,
-    Vec<T>: GetHeaderRow,
+    T: CreateRows,
+    T: GetHeaderRow,
 {
     match output {
         OutputFormat::Yaml => {

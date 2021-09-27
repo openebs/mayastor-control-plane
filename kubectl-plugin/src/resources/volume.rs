@@ -15,36 +15,33 @@ pub(crate) struct Volumes {}
 
 // CreateRows being trait for Vec<Volume> would create the rows from the list of
 // Volumes returned from REST call.
-impl CreateRows for Vec<openapi::models::Volume> {
+impl CreateRows for openapi::models::Volume {
     fn create_rows(&self) -> Vec<Row> {
-        let mut rows: Vec<Row> = Vec::new();
-        for volume in self {
-            let state = volume
-                .state
-                .clone()
-                // If the state comes as empty fill in the spec data and mark the status as Unknown.
-                .unwrap_or(openapi::models::VolumeState {
-                    child: None,
-                    protocol: volume.spec.protocol,
-                    size: volume.spec.size,
-                    status: openapi::models::VolumeStatus::Unknown,
-                    uuid: volume.spec.uuid,
-                });
-            rows.push(row![
-                state.uuid,
-                volume.spec.num_replicas,
-                state.protocol,
-                state.status,
-                state.size
-            ]);
-        }
+        let state = self
+            .state
+            .clone()
+            // If the state comes as empty fill in the spec data and mark the status as Unknown.
+            .unwrap_or(openapi::models::VolumeState {
+                child: None,
+                protocol: self.spec.protocol,
+                size: self.spec.size,
+                status: openapi::models::VolumeStatus::Unknown,
+                uuid: self.spec.uuid,
+            });
+        let rows = vec![row![
+            state.uuid,
+            self.spec.num_replicas,
+            state.protocol,
+            state.status,
+            state.size
+        ]];
         rows
     }
 }
 
 // GetHeaderRow being trait for Volume would return the Header Row for
 // Volume.
-impl GetHeaderRow for Vec<openapi::models::Volume> {
+impl GetHeaderRow for openapi::models::Volume {
     fn get_header_row(&self) -> Row {
         (&*utils::VOLUME_HEADERS).clone()
     }
@@ -56,7 +53,7 @@ impl List for Volumes {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Volume>(output, volumes);
+                utils::print_table(output, volumes);
             }
             Err(e) => {
                 println!("Failed to list volumes. Error {}", e)
@@ -81,7 +78,7 @@ impl Get for Volume {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table::<openapi::models::Volume>(output, vec![volume]);
+                utils::print_table(output, volume);
             }
             Err(e) => {
                 println!("Failed to get volume {}. Error {}", id, e)
@@ -102,7 +99,7 @@ impl Scale for Volume {
             Ok(volume) => match output {
                 OutputFormat::Yaml | OutputFormat::Json => {
                     // Print json or yaml based on output format.
-                    utils::print_table::<openapi::models::Volume>(output, vec![volume]);
+                    utils::print_table(output, volume);
                 }
                 OutputFormat::NoFormat => {
                     // Incase the output format is not specified, show a success message.
