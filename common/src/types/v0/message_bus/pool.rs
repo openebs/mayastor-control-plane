@@ -237,6 +237,9 @@ impl From<PoolDeviceUri> for String {
     }
 }
 
+// PoolLabel is the type for the labels
+type PoolLabel = ::std::collections::HashMap<String, String>;
+
 /// Create Pool Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -248,7 +251,7 @@ pub struct CreatePool {
     /// disk device paths or URIs to be claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
     /// labels to be set on the pool
-    pub labels: Option<::std::collections::HashMap<String, String>>,
+    pub labels: Option<PoolLabel>,
 }
 
 impl CreatePool {
@@ -257,7 +260,7 @@ impl CreatePool {
         node: &NodeId,
         id: &PoolId,
         disks: &[PoolDeviceUri],
-        labels: &Option<::std::collections::HashMap<String, String>>,
+        labels: &Option<PoolLabel>,
     ) -> Self {
         Self {
             node: node.clone(),

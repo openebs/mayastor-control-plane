@@ -482,7 +482,7 @@ impl ResourceContext {
         let mut labels: HashMap<String, String> = HashMap::new();
         labels.insert(
             String::from("openebs.io/created-by"),
-            String::from("mayastor-control-plane"),
+            String::from("msp-operator"),
         );
 
         let body = json!({

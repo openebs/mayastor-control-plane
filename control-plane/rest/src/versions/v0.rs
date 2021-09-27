@@ -45,13 +45,16 @@ impl From<models::CreateReplicaBody> for CreateReplicaBody {
     }
 }
 
+// PoolLabel is the type for the labels
+type PoolLabel = ::std::collections::HashMap<String, String>;
+
 /// Create Pool Body JSON
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CreatePoolBody {
     /// disk device paths or URIs to be claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
     /// labels to be set on the pool
-    pub labels: Option<::std::collections::HashMap<String, String>>,
+    pub labels: Option<PoolLabel>,
 }
 impl From<models::CreatePoolBody> for CreatePoolBody {
     fn from(src: models::CreatePoolBody) -> Self {

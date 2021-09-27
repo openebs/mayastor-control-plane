@@ -67,6 +67,9 @@ impl PartialEq<CreatePool> for PoolSpec {
     }
 }
 
+// PoolLabel is the type for the labels
+type PoolLabel = ::std::collections::HashMap<String, String>;
+
 /// User specification of a pool.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PoolSpec {
@@ -79,7 +82,7 @@ pub struct PoolSpec {
     /// status of the pool
     pub status: PoolSpecStatus,
     /// labels to be set on the pool
-    pub labels: Option<::std::collections::HashMap<String, String>>,
+    pub labels: Option<PoolLabel>,
     /// Update in progress
     #[serde(skip)]
     pub sequencer: OperationSequence,
