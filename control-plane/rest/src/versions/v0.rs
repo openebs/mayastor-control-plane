@@ -13,6 +13,7 @@ pub use common_lib::{
             VolumeLabels, VolumePolicy, Watch, WatchCallback, WatchResourceId,
         },
         openapi::{apis, models},
+        store::pool::PoolLabel,
     },
 };
 
@@ -44,9 +45,6 @@ impl From<models::CreateReplicaBody> for CreateReplicaBody {
         }
     }
 }
-
-// PoolLabel is the type for the labels
-type PoolLabel = ::std::collections::HashMap<String, String>;
 
 /// Create Pool Body JSON
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]

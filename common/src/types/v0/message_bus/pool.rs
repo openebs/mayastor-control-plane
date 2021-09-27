@@ -1,6 +1,9 @@
 use super::*;
 
-use crate::{types::v0::store::pool::PoolSpec, IntoOption};
+use crate::{
+    types::v0::store::pool::{PoolLabel, PoolSpec},
+    IntoOption,
+};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, ops::Deref};
 use strum_macros::{EnumString, ToString};
@@ -236,9 +239,6 @@ impl From<PoolDeviceUri> for String {
         device.to_string()
     }
 }
-
-// PoolLabel is the type for the labels
-type PoolLabel = ::std::collections::HashMap<String, String>;
 
 /// Create Pool Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]

@@ -9,9 +9,11 @@ use crate::types::v0::{
     },
 };
 
+// PoolLabel is the type for the labels
+pub type PoolLabel = ::std::collections::HashMap<String, String>;
+
 use serde::{Deserialize, Serialize};
 use std::{convert::From, fmt::Debug};
-
 /// Pool data structure used by the persistent store.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Pool {
@@ -66,9 +68,6 @@ impl PartialEq<CreatePool> for PoolSpec {
         &other == self
     }
 }
-
-// PoolLabel is the type for the labels
-type PoolLabel = ::std::collections::HashMap<String, String>;
 
 /// User specification of a pool.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
