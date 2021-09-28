@@ -9,7 +9,7 @@ mod rest_wrapper;
 
 use crate::{
     operations::{Get, List, Scale},
-    resources::{pool, utils, volume, GetResources, ScaleResources},
+    resources::{node, pool, utils, volume, GetResources, ScaleResources},
     rest_wrapper::RestClient,
 };
 use anyhow::Result;
@@ -57,6 +57,8 @@ async fn main() {
             GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
             GetResources::Pools => pool::Pools::list(&cli_args.output).await,
             GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
+            GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
+            GetResources::Node { id } => node::Node::get(id, &cli_args.output).await,
         },
         Operations::Scale(resource) => match resource {
             ScaleResources::Volume { id, replica_count } => {

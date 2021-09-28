@@ -50,13 +50,27 @@ The plugin needs to be able to connect to the REST server in order to make the a
  ID               TOTAL CAPACITY  USED CAPACITY  DISKS                                                     NODE      STATUS  MANAGED
  mayastor-pool-1  5360320512      1111490560     aio:///dev/vdb?uuid=d8a36b4b-0435-4fee-bf76-f2aef980b833  kworker1  Online  true
 ```
-5. Scale Volume by ID
+5. Get Nodes
+```
+❯ kubectl mayastor get nodes
+ ID          GRPC ENDPOINT   STATUS
+ mayastor-2  10.1.0.7:10124  Online
+ mayastor-1  10.1.0.6:10124  Online
+ mayastor-3  10.1.0.8:10124  Online
+```
+6. Get Node by ID
+```
+❯ kubectl mayastor get node mayastor-2
+ ID          GRPC ENDPOINT   STATUS
+ mayastor-2  10.1.0.7:10124  Online
+```
+7. Scale Volume by ID
 ```
 ❯ kubectl mayastor scale volume 0c08667c-8b59-4d11-9192-b54e27e0ce0f 5
 Volume 0c08667c-8b59-4d11-9192-b54e27e0ce0f Scaled Successfully 🚀
 
 ```
-6. Get Volume(s)/Pool(s) to a specific Output Format
+8. Get Volume(s)/Pool(s)/Node(s) to a specific Output Format
 ```
 ❯ kubectl mayastor -ojson get volumes
 [{"spec":{"labels":[],"num_paths":1,"num_replicas":4,"protocol":"none","size":10485761,"status":"Created","uuid":"18e30e83-b106-4e0d-9fb6-2b04e761e18a"},"state":{"children":[],"protocol":"none","size":10485761,"status":"Online","uuid":"18e30e83-b106-4e0d-9fb6-2b04e761e18a"}},{"spec":{"labels":[],"num_paths":1,"num_replicas":5,"protocol":"none","size":10485761,"status":"Created","uuid":"0c08667c-8b59-4d11-9192-b54e27e0ce0f"},"state":{"children":[],"protocol":"none","size":10485761,"status":"Online","uuid":"0c08667c-8b59-4d11-9192-b54e27e0ce0f"}}]

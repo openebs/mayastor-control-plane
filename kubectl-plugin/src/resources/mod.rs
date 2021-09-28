@@ -1,3 +1,4 @@
+pub mod node;
 pub mod pool;
 pub mod utils;
 pub mod volume;
@@ -7,6 +8,7 @@ use structopt::StructOpt;
 pub(crate) type VolumeId = openapi::apis::Uuid;
 pub(crate) type ReplicaCount = u8;
 pub(crate) type PoolId = String;
+pub(crate) type NodeId = String;
 
 /// The types of resources that support the 'list' operation.
 #[derive(StructOpt, Debug)]
@@ -19,6 +21,10 @@ pub(crate) enum GetResources {
     Pools,
     /// Get pool with the given ID.
     Pool { id: PoolId },
+    /// Get all nodes.
+    Nodes,
+    /// Get node with the given ID.
+    Node { id: NodeId },
 }
 
 /// The types of resources that support the 'scale' operation.

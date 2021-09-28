@@ -17,6 +17,7 @@ lazy_static! {
         "STATUS",
         "MANAGED"
     ];
+    pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS",];
 }
 
 // table_printer takes the above defined headers and the rows created at execution,
