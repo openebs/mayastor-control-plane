@@ -61,7 +61,7 @@ def a_volume_that_is_not_sharedpublished(volume_ctx):
     """a volume that is not shared/published."""
     volume = volume_ctx[VOLUME_CTX_KEY]
     assert volume is not None
-    assert str(volume.spec.protocol) == str(Protocol("none"))
+    assert not hasattr(volume.spec, "target")
 
 
 @given("a volume that is shared/published")
@@ -70,7 +70,7 @@ def a_volume_that_is_sharedpublished():
     volume = common.get_volumes_api().put_volume_target(
         VOLUME_UUID, NODE_NAME, Protocol("nvmf")
     )
-    assert str(volume.spec.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
 
 
 @given("an existing volume")

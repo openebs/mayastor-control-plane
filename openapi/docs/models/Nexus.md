@@ -8,7 +8,7 @@ Name | Type | Description | Notes
 **device_uri** | **String** | URI of the device for the volume (missing if not published).  Missing property and empty string are treated the same. | 
 **node** | **String** | id of the mayastor instance | 
 **rebuilds** | **u32** | total number of rebuild tasks | 
-**share** | [**crate::models::Protocol**](Protocol.md) |  | 
+**protocol** | [**crate::models::Protocol**](Protocol.md) |  | 
 **size** | **u64** | size of the volume in bytes | 
 **state** | [**crate::models::NexusState**](NexusState.md) |  | 
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | uuid of the nexus | 

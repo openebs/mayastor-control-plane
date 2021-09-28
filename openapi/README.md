@@ -128,6 +128,7 @@ Class | Method | HTTP request | Description
  - [VolumeSpecOperation](docs/models/VolumeSpecOperation.md)
  - [VolumeState](docs/models/VolumeState.md)
  - [VolumeStatus](docs/models/VolumeStatus.md)
+ - [VolumeTarget](docs/models/VolumeTarget.md)
  - [WatchCallback](docs/models/WatchCallback.md)
 
 

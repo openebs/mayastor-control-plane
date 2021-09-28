@@ -42,8 +42,7 @@ impl Registry {
                     }
                     _ => nexus_state.status.clone(),
                 },
-                protocol: nexus_state.share,
-                child: Some(nexus_state),
+                target: Some(nexus_state),
             }
         } else {
             VolumeState {
@@ -60,8 +59,7 @@ impl Registry {
                 } else {
                     VolumeStatus::Unknown
                 },
-                protocol: volume_spec.protocol,
-                child: None,
+                target: None,
             }
         })
     }
@@ -69,11 +67,10 @@ impl Registry {
     pub(super) async fn get_volumes(&self) -> Vec<Volume> {
         let mut volumes = vec![];
         let volume_specs = self.specs().get_volumes();
-        for spec in &volume_specs {
-            volumes.push(Volume::new(
-                spec,
-                &self.get_volume_state(&spec.uuid).await.ok(),
-            ));
+        for spec in volume_specs {
+            if let Ok(state) = self.get_volume_state(&spec.uuid).await {
+                volumes.push(Volume::new(spec, state));
+            }
         }
         volumes
     }
@@ -81,8 +78,8 @@ impl Registry {
     /// Return a volume object corresponding to the ID.
     pub(crate) async fn get_volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
         Ok(Volume::new(
-            &self.specs().get_volume(id)?,
-            &self.get_volume_state(id).await.ok(),
+            self.specs().get_volume(id)?,
+            self.get_volume_state(id).await?,
         ))
     }
 

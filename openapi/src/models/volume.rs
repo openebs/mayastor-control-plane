@@ -21,22 +21,25 @@ use crate::apis::IntoVec;
 pub struct Volume {
     #[serde(rename = "spec")]
     pub spec: crate::models::VolumeSpec,
-    #[serde(rename = "state", skip_serializing_if = "Option::is_none")]
-    pub state: Option<crate::models::VolumeState>,
+    #[serde(rename = "state")]
+    pub state: crate::models::VolumeState,
 }
 
 impl Volume {
     /// Volume using only the required fields
-    pub fn new(spec: impl Into<crate::models::VolumeSpec>) -> Volume {
+    pub fn new(
+        spec: impl Into<crate::models::VolumeSpec>,
+        state: impl Into<crate::models::VolumeState>,
+    ) -> Volume {
         Volume {
             spec: spec.into(),
-            state: None,
+            state: state.into(),
         }
     }
     /// Volume using all fields
     pub fn new_all(
         spec: impl Into<crate::models::VolumeSpec>,
-        state: impl Into<Option<crate::models::VolumeState>>,
+        state: impl Into<crate::models::VolumeState>,
     ) -> Volume {
         Volume {
             spec: spec.into(),

@@ -58,7 +58,8 @@ def a_published_volume():
     volume = common.get_volumes_api().put_volume_target(
         VOLUME_UUID, NODE_NAME, Protocol("nvmf")
     )
-    assert str(volume.spec.protocol) == str(Protocol("nvmf"))
+    assert hasattr(volume.spec, "target")
+    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
 
 
 @given("an existing volume")
@@ -72,7 +73,7 @@ def an_existing_volume():
 def an_unpublished_volume():
     """an unpublished volume."""
     volume = common.get_volumes_api().get_volume(VOLUME_UUID)
-    assert str(volume.spec.protocol) == str(Protocol("none"))
+    assert not hasattr(volume.spec, "target")
 
 
 @then("publishing the volume should return an already published error")
@@ -96,7 +97,7 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
     volume = common.get_volumes_api().put_volume_target(
         VOLUME_UUID, NODE_NAME, Protocol("nvmf")
     )
-    assert str(volume.spec.protocol) == str(Protocol("nvmf"))
-    assert hasattr(volume.spec, "target_node")
-    assert hasattr(volume.state, "child")
-    assert "nvmf://" in volume.state.child["deviceUri"]
+    assert hasattr(volume.spec, "target")
+    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert hasattr(volume.state, "target")
+    assert "nvmf://" in volume.state.target["deviceUri"]
