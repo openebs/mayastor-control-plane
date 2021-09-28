@@ -531,6 +531,7 @@ impl ClusterBuilder {
                 node: pool.node.clone().into(),
                 id: pool.id(),
                 disks: vec![pool.disk()],
+                labels: None,
             }
             .request()
             .await

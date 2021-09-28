@@ -1767,6 +1767,11 @@ components:
                Can be specified in the form of a file path or a URI
                eg: /dev/sda, aio:///dev/sda, malloc:///disk?size_mb=100
             type: string
+        labels:
+          description: labels to be set on the pools
+          type: object
+          additionalProperties:
+            type: string
       required:
         - disks
     CreateReplicaBody:
@@ -2359,9 +2364,9 @@ components:
         id:
           $ref: '#/components/schemas/PoolId'
         labels:
-          description: Pool labels.
-          type: array
-          items:
+          description: labels to be set on the pools
+          type: object
+          additionalProperties:
             type: string
         node:
           $ref: '#/components/schemas/NodeId'
@@ -2370,7 +2375,6 @@ components:
       required:
         - disks
         - id
-        - labels
         - node
         - status
     ReplicaSpec:

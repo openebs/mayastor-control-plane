@@ -25,9 +25,9 @@ pub struct PoolSpec {
     /// storage pool identifier
     #[serde(rename = "id")]
     pub id: String,
-    /// Pool labels.
-    #[serde(rename = "labels")]
-    pub labels: Vec<String>,
+    /// labels to be set on the pools
+    #[serde(rename = "labels", skip_serializing_if = "Option::is_none")]
+    pub labels: Option<::std::collections::HashMap<String, String>>,
     /// storage node identifier
     #[serde(rename = "node")]
     pub node: String,
@@ -40,14 +40,13 @@ impl PoolSpec {
     pub fn new(
         disks: impl IntoVec<String>,
         id: impl Into<String>,
-        labels: impl IntoVec<String>,
         node: impl Into<String>,
         status: impl Into<crate::models::SpecStatus>,
     ) -> PoolSpec {
         PoolSpec {
             disks: disks.into_vec(),
             id: id.into(),
-            labels: labels.into_vec(),
+            labels: None,
             node: node.into(),
             status: status.into(),
         }
@@ -56,14 +55,14 @@ impl PoolSpec {
     pub fn new_all(
         disks: impl IntoVec<String>,
         id: impl Into<String>,
-        labels: impl IntoVec<String>,
+        labels: impl Into<Option<::std::collections::HashMap<String, String>>>,
         node: impl Into<String>,
         status: impl Into<crate::models::SpecStatus>,
     ) -> PoolSpec {
         PoolSpec {
             disks: disks.into_vec(),
             id: id.into(),
-            labels: labels.into_vec(),
+            labels: labels.into(),
             node: node.into(),
             status: status.into(),
         }

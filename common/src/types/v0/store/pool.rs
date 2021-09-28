@@ -9,11 +9,11 @@ use crate::types::v0::{
     },
 };
 
+// PoolLabel is the type for the labels
+pub type PoolLabel = ::std::collections::HashMap<String, String>;
+
 use serde::{Deserialize, Serialize};
-use std::convert::From;
-
-type PoolLabel = String;
-
+use std::{convert::From, fmt::Debug};
 /// Pool data structure used by the persistent store.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Pool {
@@ -54,7 +54,7 @@ impl From<&CreatePool> for PoolSpec {
             id: request.id.clone(),
             disks: request.disks.clone(),
             status: PoolSpecStatus::Creating,
-            labels: vec![],
+            labels: request.labels.clone(),
             sequencer: OperationSequence::new(request.id.clone()),
             operation: None,
         }
@@ -80,8 +80,8 @@ pub struct PoolSpec {
     pub disks: Vec<PoolDeviceUri>,
     /// status of the pool
     pub status: PoolSpecStatus,
-    /// Pool labels.
-    pub labels: Vec<PoolLabel>,
+    /// labels to be set on the pool
+    pub labels: Option<PoolLabel>,
     /// Update in progress
     #[serde(skip)]
     pub sequencer: OperationSequence,
@@ -123,7 +123,7 @@ impl ResourceUuid for PoolSpec {
 
 impl From<PoolSpec> for models::PoolSpec {
     fn from(src: PoolSpec) -> Self {
-        Self::new(src.disks, src.id, src.labels, src.node, src.status)
+        Self::new_all(src.disks, src.id, src.labels, src.node, src.status)
     }
 }
 

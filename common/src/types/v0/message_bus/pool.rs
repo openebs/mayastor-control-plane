@@ -1,6 +1,9 @@
 use super::*;
 
-use crate::{types::v0::store::pool::PoolSpec, IntoOption};
+use crate::{
+    types::v0::store::pool::{PoolLabel, PoolSpec},
+    IntoOption,
+};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, ops::Deref};
 use strum_macros::{EnumString, ToString};
@@ -247,15 +250,23 @@ pub struct CreatePool {
     pub id: PoolId,
     /// disk device paths or URIs to be claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
+    /// labels to be set on the pool
+    pub labels: Option<PoolLabel>,
 }
 
 impl CreatePool {
     /// Create new `Self` from the given parameters
-    pub fn new(node: &NodeId, id: &PoolId, disks: &[PoolDeviceUri]) -> Self {
+    pub fn new(
+        node: &NodeId,
+        id: &PoolId,
+        disks: &[PoolDeviceUri],
+        labels: &Option<PoolLabel>,
+    ) -> Self {
         Self {
             node: node.clone(),
             id: id.clone(),
             disks: disks.to_vec(),
+            labels: labels.clone(),
         }
     }
 }

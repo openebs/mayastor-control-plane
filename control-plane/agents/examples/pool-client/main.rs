@@ -48,6 +48,7 @@ async fn create_pool(node: &str, pool: &str) {
         node: node.into(),
         id: pool.into(),
         disks: vec!["malloc:///disk0?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await

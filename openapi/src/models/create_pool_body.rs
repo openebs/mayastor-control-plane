@@ -22,6 +22,9 @@ pub struct CreatePoolBody {
     /// disk device paths or URIs to be claimed by the pool
     #[serde(rename = "disks")]
     pub disks: Vec<String>,
+    /// labels to be set on the pools
+    #[serde(rename = "labels", skip_serializing_if = "Option::is_none")]
+    pub labels: Option<::std::collections::HashMap<String, String>>,
 }
 
 impl CreatePoolBody {
@@ -29,12 +32,17 @@ impl CreatePoolBody {
     pub fn new(disks: impl IntoVec<String>) -> CreatePoolBody {
         CreatePoolBody {
             disks: disks.into_vec(),
+            labels: None,
         }
     }
     /// CreatePoolBody using all fields
-    pub fn new_all(disks: impl IntoVec<String>) -> CreatePoolBody {
+    pub fn new_all(
+        disks: impl IntoVec<String>,
+        labels: impl Into<Option<::std::collections::HashMap<String, String>>>,
+    ) -> CreatePoolBody {
         CreatePoolBody {
             disks: disks.into_vec(),
+            labels: labels.into(),
         }
     }
 }

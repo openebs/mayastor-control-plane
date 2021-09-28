@@ -13,6 +13,7 @@ pub use common_lib::{
             VolumeLabels, VolumePolicy, Watch, WatchCallback, WatchResourceId,
         },
         openapi::{apis, models},
+        store::pool::PoolLabel,
     },
 };
 
@@ -50,11 +51,14 @@ impl From<models::CreateReplicaBody> for CreateReplicaBody {
 pub struct CreatePoolBody {
     /// disk device paths or URIs to be claimed by the pool
     pub disks: Vec<PoolDeviceUri>,
+    /// labels to be set on the pool
+    pub labels: Option<PoolLabel>,
 }
 impl From<models::CreatePoolBody> for CreatePoolBody {
     fn from(src: models::CreatePoolBody) -> Self {
         Self {
             disks: src.disks.iter().cloned().map(From::from).collect(),
+            labels: src.labels,
         }
     }
 }
@@ -62,6 +66,7 @@ impl From<CreatePool> for CreatePoolBody {
     fn from(create: CreatePool) -> Self {
         CreatePoolBody {
             disks: create.disks,
+            labels: create.labels,
         }
     }
 }
@@ -72,6 +77,7 @@ impl CreatePoolBody {
             node: node_id,
             id: pool_id,
             disks: self.disks.clone(),
+            labels: self.labels.clone(),
         }
     }
 }

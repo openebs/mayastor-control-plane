@@ -95,7 +95,7 @@ async fn missing_pool_state_reconciler(
 
         pool.warn_span(|| tracing::warn!("Attempting to recreate missing pool"));
 
-        let request = CreatePool::new(&pool.node, &pool.id, &pool.disks);
+        let request = CreatePool::new(&pool.node, &pool.id, &pool.disks, &pool.labels);
         match node.create_pool(&request).await {
             Ok(_) => {
                 pool.info_span(|| tracing::info!("Pool successfully recreated"));
