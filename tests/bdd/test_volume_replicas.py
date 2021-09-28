@@ -47,7 +47,8 @@ def init():
     volume = common.get_volumes_api().put_volume_target(
         VOLUME_UUID, NODE_1_NAME, Protocol("nvmf")
     )
-    assert str(volume.spec.protocol) == str(Protocol("nvmf"))
+    assert hasattr(volume.spec, "target")
+    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
     yield
     common.deployer_stop()
 
@@ -119,8 +120,8 @@ def a_user_attempts_to_increase_the_number_of_volume_replicas(replica_ctx):
 def a_replica_should_be_removed_from_the_volume(replica_ctx):
     """a replica should be removed from the volume."""
     volume = common.get_volumes_api().get_volume(VOLUME_UUID)
-    assert hasattr(volume.state, "child")
-    nexus = volume.state.child
+    assert hasattr(volume.state, "target")
+    nexus = volume.state.target
     assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus["children"])
 
 
@@ -129,8 +130,8 @@ def an_additional_replica_should_be_added_to_the_volume(replica_ctx):
     """an additional replica should be added to the volume."""
     volume = common.get_volumes_api().get_volume(VOLUME_UUID)
     print(volume.state)
-    assert hasattr(volume.state, "child")
-    nexus = volume.state.child
+    assert hasattr(volume.state, "target")
+    nexus = volume.state.target
     assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus["children"])
 
 
@@ -139,7 +140,7 @@ def setting_the_number_of_replicas_to_zero_should_fail_with_a_suitable_error():
     """the replica removal should fail with a suitable error."""
     volumes_api = common.get_volumes_api()
     volume = volumes_api.get_volume(VOLUME_UUID)
-    assert hasattr(volume.state, "child")
+    assert hasattr(volume.state, "target")
     try:
         volumes_api.put_volume_replica_count(VOLUME_UUID, 0)
     except Exception as e:

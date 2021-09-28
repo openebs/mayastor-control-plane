@@ -32,8 +32,8 @@ pub struct Nexus {
     /// total number of rebuild tasks
     #[serde(rename = "rebuilds")]
     pub rebuilds: u32,
-    #[serde(rename = "share")]
-    pub share: crate::models::Protocol,
+    #[serde(rename = "protocol")]
+    pub protocol: crate::models::Protocol,
     /// size of the volume in bytes
     #[serde(rename = "size")]
     pub size: u64,
@@ -51,7 +51,7 @@ impl Nexus {
         device_uri: impl Into<String>,
         node: impl Into<String>,
         rebuilds: impl Into<u32>,
-        share: impl Into<crate::models::Protocol>,
+        protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
         state: impl Into<crate::models::NexusState>,
         uuid: impl Into<uuid::Uuid>,
@@ -61,7 +61,7 @@ impl Nexus {
             device_uri: device_uri.into(),
             node: node.into(),
             rebuilds: rebuilds.into(),
-            share: share.into(),
+            protocol: protocol.into(),
             size: size.into(),
             state: state.into(),
             uuid: uuid.into(),
@@ -73,7 +73,7 @@ impl Nexus {
         device_uri: impl Into<String>,
         node: impl Into<String>,
         rebuilds: impl Into<u32>,
-        share: impl Into<crate::models::Protocol>,
+        protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
         state: impl Into<crate::models::NexusState>,
         uuid: impl Into<uuid::Uuid>,
@@ -83,7 +83,7 @@ impl Nexus {
             device_uri: device_uri.into(),
             node: node.into(),
             rebuilds: rebuilds.into(),
-            share: share.into(),
+            protocol: protocol.into(),
             size: size.into(),
             state: state.into(),
             uuid: uuid.into(),

@@ -17,21 +17,10 @@ pub(crate) struct Volumes {}
 // Volumes returned from REST call.
 impl CreateRows for openapi::models::Volume {
     fn create_rows(&self) -> Vec<Row> {
-        let state = self
-            .state
-            .clone()
-            // If the state comes as empty fill in the spec data and mark the status as Unknown.
-            .unwrap_or(openapi::models::VolumeState {
-                child: None,
-                protocol: self.spec.protocol,
-                size: self.spec.size,
-                status: openapi::models::VolumeStatus::Unknown,
-                uuid: self.spec.uuid,
-            });
+        let state = self.state.clone();
         let rows = vec![row![
             state.uuid,
             self.spec.num_replicas,
-            state.protocol,
             state.status,
             state.size
         ]];

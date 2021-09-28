@@ -15,7 +15,6 @@ from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
 from openapi.openapi_client.model.volume_spec import VolumeSpec
 from openapi.openapi_client.model.volume_state import VolumeState
 from openapi.openapi_client.model.volume_status import VolumeStatus
-from openapi.openapi_client.model.protocol import Protocol
 from openapi.openapi_client.model.spec_status import SpecStatus
 from openapi_client.model.volume_policy import VolumePolicy
 
@@ -72,7 +71,6 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
     cfg = common.get_cfg()
     expected_spec = VolumeSpec(
         1,
-        Protocol("none"),
         VOLUME_SIZE,
         SpecStatus("Created"),
         VOLUME_UUID,
@@ -80,7 +78,6 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         _configuration=cfg,
     )
     expected_state = VolumeState(
-        Protocol("none"),
         VOLUME_SIZE,
         VolumeStatus("Online"),
         VOLUME_UUID,

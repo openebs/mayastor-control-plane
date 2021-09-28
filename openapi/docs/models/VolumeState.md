@@ -4,8 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**child** | Option<[**crate::models::Nexus**](Nexus.md)> | nexus child that exposes the target | [optional]
-**protocol** | [**crate::models::Protocol**](Protocol.md) |  | 
+**target** | Option<[**crate::models::Nexus**](Nexus.md)> | target exposed via a Nexus | [optional]
 **size** | **u64** | size of the volume in bytes | 
 **status** | [**crate::models::VolumeStatus**](VolumeStatus.md) |  | 
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | name of the volume | 

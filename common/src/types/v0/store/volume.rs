@@ -1,7 +1,7 @@
 //! Definition of volume types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{self, CreateVolume, NexusId, NodeId, Protocol, VolumeId, VolumeShareProtocol},
+    message_bus::{self, CreateVolume, NexusId, NodeId, VolumeId, VolumeShareProtocol},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         SpecStatus, SpecTransaction,
@@ -44,11 +44,17 @@ pub struct VolumeTarget {
     node: NodeId,
     /// The identification of the nexus where the frontend-IO will be sent to
     nexus: NexusId,
+    /// The protocol to use on the target
+    protocol: Option<VolumeShareProtocol>,
 }
 impl VolumeTarget {
     /// Create a new `Self` based on the given parameters
-    pub fn new(node: NodeId, nexus: NexusId) -> Self {
-        Self { node, nexus }
+    pub fn new(node: NodeId, nexus: NexusId, protocol: Option<VolumeShareProtocol>) -> Self {
+        Self {
+            node,
+            nexus,
+            protocol,
+        }
     }
     /// Get a reference to the node identification
     pub fn node(&self) -> &NodeId {
@@ -57,6 +63,15 @@ impl VolumeTarget {
     /// Get a reference to the nexus identification
     pub fn nexus(&self) -> &NexusId {
         &self.nexus
+    }
+    /// Get a reference to the volume protocol
+    pub fn protocol(&self) -> Option<&VolumeShareProtocol> {
+        self.protocol.as_ref()
+    }
+}
+impl From<VolumeTarget> for models::VolumeTarget {
+    fn from(src: VolumeTarget) -> Self {
+        Self::new_all(src.node, src.protocol.into_opt())
     }
 }
 
@@ -71,8 +86,6 @@ pub struct VolumeSpec {
     pub labels: Option<VolumeLabels>,
     /// Number of children the volume should have.
     pub num_replicas: u8,
-    /// Protocol that the volume should be shared over.
-    pub protocol: Protocol,
     /// Status that the volume should eventually achieve.
     pub status: VolumeSpecStatus,
     /// The target where front-end IO will be sent to
@@ -191,21 +204,23 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.status = SpecStatus::Created(message_bus::VolumeStatus::Online);
                 }
                 VolumeOperation::Share(share) => {
-                    self.protocol = share.into();
+                    if let Some(target) = &mut self.target {
+                        target.protocol = share.into();
+                    }
                 }
                 VolumeOperation::Unshare => {
-                    self.protocol = Protocol::None;
+                    if let Some(target) = self.target.as_mut() {
+                        target.protocol = None
+                    }
                 }
                 VolumeOperation::SetReplica(count) => self.num_replicas = count,
                 VolumeOperation::RemoveUnusedReplica(_) => {}
-                VolumeOperation::Publish((node, nexus, share)) => {
-                    self.target = Some(VolumeTarget::new(node, nexus.clone()));
+                VolumeOperation::Publish((node, nexus, protocol)) => {
+                    self.target = Some(VolumeTarget::new(node, nexus.clone(), protocol));
                     self.last_nexus_id = Some(nexus);
-                    self.protocol = share.map_or(Protocol::None, Protocol::from);
                 }
                 VolumeOperation::Unpublish => {
                     self.target = None;
-                    self.protocol = Protocol::None;
                 }
             }
         }
@@ -297,7 +312,6 @@ impl From<&CreateVolume> for VolumeSpec {
             size: request.size,
             labels: request.labels.clone(),
             num_replicas: request.replicas as u8,
-            protocol: Protocol::None,
             status: VolumeSpecStatus::Creating,
             target: None,
             policy: request.policy.clone(),
@@ -322,21 +336,20 @@ impl From<&VolumeSpec> for message_bus::VolumeState {
             uuid: spec.uuid.clone(),
             size: spec.size,
             status: message_bus::VolumeStatus::Unknown,
-            protocol: spec.protocol,
-            child: None,
+            target: None,
         }
     }
 }
 impl PartialEq<message_bus::VolumeState> for VolumeSpec {
     fn eq(&self, other: &message_bus::VolumeState) -> bool {
-        self.protocol == other.protocol
-            && match &self.target {
-                None => other.target_node().flatten().is_none(),
-                Some(target) => {
-                    Some(&target.node) == other.target_node().flatten().as_ref()
-                        && other.status == VolumeStatus::Online
-                }
+        match &self.target {
+            None => other.target_node().flatten().is_none(),
+            Some(target) => {
+                target.protocol == other.target_protocol()
+                    && Some(&target.node) == other.target_node().flatten().as_ref()
+                    && other.status == VolumeStatus::Online
             }
+        }
     }
 }
 
@@ -346,10 +359,9 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.labels,
             src.num_replicas,
             src.operation.into_opt(),
-            src.protocol,
             src.size,
             src.status,
-            src.target.map(|t| t.node).into_opt(),
+            src.target.into_opt(),
             src.uuid,
             src.topology.into_opt(),
             src.policy,

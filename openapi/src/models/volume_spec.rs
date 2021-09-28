@@ -27,16 +27,13 @@ pub struct VolumeSpec {
     pub num_replicas: u8,
     #[serde(rename = "operation", skip_serializing_if = "Option::is_none")]
     pub operation: Option<crate::models::VolumeSpecOperation>,
-    #[serde(rename = "protocol")]
-    pub protocol: crate::models::Protocol,
     /// Size that the volume should be.
     #[serde(rename = "size")]
     pub size: u64,
     #[serde(rename = "status")]
     pub status: crate::models::SpecStatus,
-    /// The node where front-end IO will be sent to
-    #[serde(rename = "target_node", skip_serializing_if = "Option::is_none")]
-    pub target_node: Option<String>,
+    #[serde(rename = "target", skip_serializing_if = "Option::is_none")]
+    pub target: Option<crate::models::VolumeTarget>,
     /// Volume Id
     #[serde(rename = "uuid")]
     pub uuid: uuid::Uuid,
@@ -50,7 +47,6 @@ impl VolumeSpec {
     /// VolumeSpec using only the required fields
     pub fn new(
         num_replicas: impl Into<u8>,
-        protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
         status: impl Into<crate::models::SpecStatus>,
         uuid: impl Into<uuid::Uuid>,
@@ -60,10 +56,9 @@ impl VolumeSpec {
             labels: None,
             num_replicas: num_replicas.into(),
             operation: None,
-            protocol: protocol.into(),
             size: size.into(),
             status: status.into(),
-            target_node: None,
+            target: None,
             uuid: uuid.into(),
             topology: None,
             policy: policy.into(),
@@ -74,10 +69,9 @@ impl VolumeSpec {
         labels: impl Into<Option<::std::collections::HashMap<String, String>>>,
         num_replicas: impl Into<u8>,
         operation: impl Into<Option<crate::models::VolumeSpecOperation>>,
-        protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
         status: impl Into<crate::models::SpecStatus>,
-        target_node: impl Into<Option<String>>,
+        target: impl Into<Option<crate::models::VolumeTarget>>,
         uuid: impl Into<uuid::Uuid>,
         topology: impl Into<Option<crate::models::Topology>>,
         policy: impl Into<crate::models::VolumePolicy>,
@@ -86,10 +80,9 @@ impl VolumeSpec {
             labels: labels.into(),
             num_replicas: num_replicas.into(),
             operation: operation.into(),
-            protocol: protocol.into(),
             size: size.into(),
             status: status.into(),
-            target_node: target_node.into(),
+            target: target.into(),
             uuid: uuid.into(),
             topology: topology.into(),
             policy: policy.into(),

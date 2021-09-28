@@ -1,11 +1,11 @@
-# Volume
+# VolumeTarget
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**spec** | [**crate::models::VolumeSpec**](VolumeSpec.md) |  | 
-**state** | [**crate::models::VolumeState**](VolumeState.md) |  | 
+**node** | **String** | The node where front-end IO will be sent to | 
+**protocol** | Option<[**crate::models::VolumeShareProtocol**](VolumeShareProtocol.md)> |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

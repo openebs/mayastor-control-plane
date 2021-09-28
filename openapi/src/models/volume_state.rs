@@ -19,11 +19,9 @@ use crate::apis::IntoVec;
 /// Runtime state of the volume
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct VolumeState {
-    /// nexus child that exposes the target
-    #[serde(rename = "child", skip_serializing_if = "Option::is_none")]
-    pub child: Option<crate::models::Nexus>,
-    #[serde(rename = "protocol")]
-    pub protocol: crate::models::Protocol,
+    /// target exposed via a Nexus
+    #[serde(rename = "target", skip_serializing_if = "Option::is_none")]
+    pub target: Option<crate::models::Nexus>,
     /// size of the volume in bytes
     #[serde(rename = "size")]
     pub size: u64,
@@ -37,14 +35,12 @@ pub struct VolumeState {
 impl VolumeState {
     /// VolumeState using only the required fields
     pub fn new(
-        protocol: impl Into<crate::models::Protocol>,
         size: impl Into<u64>,
         status: impl Into<crate::models::VolumeStatus>,
         uuid: impl Into<uuid::Uuid>,
     ) -> VolumeState {
         VolumeState {
-            child: None,
-            protocol: protocol.into(),
+            target: None,
             size: size.into(),
             status: status.into(),
             uuid: uuid.into(),
@@ -52,15 +48,13 @@ impl VolumeState {
     }
     /// VolumeState using all fields
     pub fn new_all(
-        child: impl Into<Option<crate::models::Nexus>>,
-        protocol: impl Into<crate::models::Protocol>,
+        target: impl Into<Option<crate::models::Nexus>>,
         size: impl Into<u64>,
         status: impl Into<crate::models::VolumeStatus>,
         uuid: impl Into<uuid::Uuid>,
     ) -> VolumeState {
         VolumeState {
-            child: child.into(),
-            protocol: protocol.into(),
+            target: target.into(),
             size: size.into(),
             status: status.into(),
             uuid: uuid.into(),

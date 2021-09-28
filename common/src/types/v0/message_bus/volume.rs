@@ -2,7 +2,7 @@ use super::*;
 
 use crate::{types::v0::store::volume::VolumeSpec, IntoOption};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, convert::TryFrom, fmt::Debug};
 
 bus_impl_string_uuid!(VolumeId, "UUID of a mayastor volume");
 
@@ -15,16 +15,13 @@ pub struct Volume {
     /// Desired specification of the volume.
     spec: VolumeSpec,
     /// Runtime state of the volume.
-    state: Option<VolumeState>,
+    state: VolumeState,
 }
 
 impl Volume {
     /// Construct a new volume.
-    pub fn new(spec: &VolumeSpec, state: &Option<VolumeState>) -> Self {
-        Self {
-            spec: spec.clone(),
-            state: state.clone(),
-        }
+    pub fn new(spec: VolumeSpec, state: VolumeState) -> Self {
+        Self { spec, state }
     }
 
     /// Get the volume spec.
@@ -38,19 +35,19 @@ impl Volume {
     }
 
     /// Get the volume state.
-    pub fn state(&self) -> Option<VolumeState> {
+    pub fn state(&self) -> VolumeState {
         self.state.clone()
     }
 
     /// Get the volume status, if any.
     pub fn status(&self) -> Option<VolumeStatus> {
-        self.state.as_ref().map(|s| s.status.clone())
+        Some(self.state.status.clone())
     }
 }
 
 impl From<Volume> for models::Volume {
     fn from(volume: Volume) -> Self {
-        models::Volume::new_all(volume.spec(), volume.state().into_opt())
+        models::Volume::new_all(volume.spec(), volume.state())
     }
 }
 
@@ -64,20 +61,17 @@ pub struct VolumeState {
     pub size: u64,
     /// current status of the volume
     pub status: VolumeStatus,
-    /// current share protocol
-    pub protocol: Protocol,
-    /// child nexus
-    pub child: Option<Nexus>,
+    /// target nexus that connects to the children
+    pub target: Option<Nexus>,
 }
 
 impl From<VolumeState> for models::VolumeState {
     fn from(volume: VolumeState) -> Self {
         Self {
-            child: volume.child.into_opt(),
-            protocol: volume.protocol.into(),
+            uuid: volume.uuid.into(),
             size: volume.size,
             status: volume.status.into(),
-            uuid: volume.uuid.into(),
+            target: volume.target.into_opt(),
         }
     }
 }
@@ -85,8 +79,17 @@ impl From<VolumeState> for models::VolumeState {
 impl VolumeState {
     /// Get the target node if the volume is published
     pub fn target_node(&self) -> Option<Option<NodeId>> {
-        self.child.as_ref()?;
-        Some(self.child.clone().map(|n| n.node))
+        self.target.as_ref()?;
+        Some(self.target.clone().map(|n| n.node))
+    }
+    /// Get the target protocol if the volume is published
+    pub fn target_protocol(&self) -> Option<VolumeShareProtocol> {
+        match &self.target {
+            None => None,
+            Some(target) => VolumeShareProtocol::try_from(target.share)
+                .map(Some)
+                .unwrap_or_default(),
+        }
     }
 }
 
@@ -98,8 +101,7 @@ impl From<(&VolumeId, &Nexus)> for VolumeState {
             uuid,
             size: nexus.size,
             status: nexus.status.clone(),
-            protocol: nexus.share,
-            child: Some(nexus.clone()),
+            target: Some(nexus.clone()),
         }
     }
 }
@@ -107,6 +109,22 @@ impl From<(&VolumeId, &Nexus)> for VolumeState {
 /// The protocol used to share the volume
 /// Currently it's the same as the nexus
 pub type VolumeShareProtocol = NexusShareProtocol;
+impl From<NexusShareProtocol> for models::VolumeShareProtocol {
+    fn from(src: NexusShareProtocol) -> Self {
+        match src {
+            NexusShareProtocol::Nvmf => Self::Nvmf,
+            NexusShareProtocol::Iscsi => Self::Iscsi,
+        }
+    }
+}
+impl From<models::VolumeShareProtocol> for NexusShareProtocol {
+    fn from(src: models::VolumeShareProtocol) -> Self {
+        match src {
+            models::VolumeShareProtocol::Nvmf => Self::Nvmf,
+            models::VolumeShareProtocol::Iscsi => Self::Iscsi,
+        }
+    }
+}
 
 /// Volume State information
 /// Currently it's the same as the nexus
@@ -119,15 +137,6 @@ impl From<VolumeStatus> for models::VolumeStatus {
             VolumeStatus::Online => models::VolumeStatus::Online,
             VolumeStatus::Degraded => models::VolumeStatus::Degraded,
             VolumeStatus::Faulted => models::VolumeStatus::Faulted,
-        }
-    }
-}
-
-impl From<models::VolumeShareProtocol> for VolumeShareProtocol {
-    fn from(src: models::VolumeShareProtocol) -> Self {
-        match src {
-            models::VolumeShareProtocol::Nvmf => Self::Nvmf,
-            models::VolumeShareProtocol::Iscsi => Self::Iscsi,
         }
     }
 }

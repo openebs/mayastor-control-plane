@@ -84,8 +84,7 @@ fn normalize_hostname(name: String) -> String {
 fn get_volume_share_location(volume: &Volume) -> Option<(String, String)> {
     volume
         .state
-        .as_ref()?
-        .child
+        .target
         .as_ref()
         .map(|nexus| (nexus.node.to_string(), nexus.device_uri.to_string()))
 }
@@ -420,15 +419,14 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume = MayastorApiClient::get_client()
             .get_volume(&volume_id)
             .await?;
-        let uri = if let Some(state) = volume.state.as_ref() {
-            let curr_proto = state.protocol.to_string();
 
-            // Volume is aready published, make sure the protocol matches and get URI.
-            if curr_proto != "none" {
-                if curr_proto != *args.volume_context.get("protocol").unwrap().to_string() {
+        let uri =
+            // Volume is already published, make sure the protocol matches and get URI.
+            if let Some(target) = &volume.spec.target {
+                if target.protocol != Some(protocol) {
                     let m = format!(
                         "Volume {} already shared via different protocol: {:?}",
-                        volume_id, state.protocol,
+                        volume_id, target.protocol,
                     );
                     error!("{}", m);
                     return Err(Status::failed_precondition(m));
@@ -475,12 +473,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     error!("{}", m);
                     return Err(Status::internal(m));
                 }
-            }
-        } else {
-            let m = format!("Volume {} is missing current state", volume_id);
-            error!("{}", m);
-            return Err(Status::internal(m));
-        };
+            };
 
         // Prepare the context for the Mayastor Node CSI plugin.
         let mut publish_context = HashMap::new();

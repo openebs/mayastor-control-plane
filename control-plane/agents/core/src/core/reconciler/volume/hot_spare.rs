@@ -80,7 +80,7 @@ async fn hot_spare_nexus_reconcile(
     let mode = OperationMode::ReconcileStep;
     let mut results = vec![];
 
-    if let Some(nexus) = &volume_state.child {
+    if let Some(nexus) = &volume_state.target {
         let nexus_spec = context.specs().get_nexus(&nexus.uuid);
         let nexus_spec = nexus_spec.context(NexusNotFound {
             nexus_id: nexus.uuid.to_string(),

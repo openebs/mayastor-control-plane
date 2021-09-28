@@ -214,7 +214,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             }],
             device_uri: "".to_string(),
             rebuilds: 0,
-            share: models::Protocol::None
+            protocol: models::Protocol::None
         }
     );
 
@@ -269,14 +269,14 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let volume = client
         .volumes_api()
         .put_volume_target(
-            &volume.state.unwrap().uuid,
+            &volume.state.uuid,
             mayastor1.as_str(),
             models::VolumeShareProtocol::Nvmf,
         )
         .await
         .unwrap();
-    let volume_state = volume.state.expect("Volume state not found.");
-    let nexus = volume_state.child.unwrap();
+    let volume_state = volume.state;
+    let nexus = volume_state.target.unwrap();
     tracing::info!("Published on '{}'", nexus.node);
 
     let volume = client
@@ -285,8 +285,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .await
         .expect("We have 2 nodes with a pool each");
     tracing::info!("Volume: {:#?}", volume);
-    let volume_state = volume.state.expect("No volume state");
-    let nexus = volume_state.child.unwrap();
+    let volume_state = volume.state;
+    let nexus = volume_state.target.unwrap();
     assert_eq!(nexus.children.len(), 2);
 
     let volume = client
@@ -295,8 +295,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .await
         .expect("Should be able to reduce back to 1");
     tracing::info!("Volume: {:#?}", volume);
-    let volume_state = volume.state.expect("No volume state");
-    let nexus = volume_state.child.unwrap();
+    let volume_state = volume.state;
+    let nexus = volume_state.target.unwrap();
     assert_eq!(nexus.children.len(), 1);
 
     let volume = client
@@ -305,8 +305,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .await
         .unwrap();
     tracing::info!("Volume: {:#?}", volume);
-    let volume_state = volume.state.expect("No volume state");
-    assert!(volume_state.child.is_none());
+    let volume_state = volume.state;
+    assert!(volume_state.target.is_none());
 
     let volume_uuid = volume_state.uuid;
 

@@ -1982,7 +1982,7 @@ components:
         deviceUri: null
         node: mayastor-1
         rebuilds: 0
-        share: nvmf
+        protocol: nvmf
         size: 8024024
         state: Online
         uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
@@ -2007,7 +2007,7 @@ components:
           type: integer
           format: int32
           minimum: 0
-        share:
+        protocol:
           $ref: '#/components/schemas/Protocol'
         size:
           description: size of the volume in bytes
@@ -2025,7 +2025,7 @@ components:
         - deviceUri
         - node
         - rebuilds
-        - share
+        - protocol
         - size
         - state
         - uuid
@@ -2466,7 +2466,6 @@ components:
     VolumeSpec:
       example:
         num_replicas: 2
-        protocol: none
         size: 80241024
         state: Created
         target_node: mayastor-1
@@ -2509,8 +2508,6 @@ components:
               type: boolean
           required:
             - operation
-        protocol:
-          $ref: '#/components/schemas/Protocol'
         size:
           description: Size that the volume should be.
           type: integer
@@ -2518,9 +2515,8 @@ components:
           minimum: 0
         status:
           $ref: '#/components/schemas/SpecStatus'
-        target_node:
-          description: The node where front-end IO will be sent to
-          type: string
+        target:
+          $ref: '#/components/schemas/VolumeTarget'
         uuid:
           description: Volume Id
           type: string
@@ -2537,6 +2533,20 @@ components:
         - status
         - uuid
         - policy
+    VolumeTarget:
+      example:
+        node: mayastor-1
+        protocol: nvmf
+      description: Specification of a volume target
+      type: object
+      properties:
+        node:
+          description: The node where front-end IO will be sent to
+          type: string
+        protocol:
+          $ref: '#/components/schemas/VolumeShareProtocol'
+      required:
+        - node
     SpecStatus:
       description: Common base state for a resource
       type: string
@@ -2590,31 +2600,29 @@ components:
             - uri
     VolumeState:
       example:
-        child:
+        target:
           children:
             - rebuildProgress: null
               state: Online
-              uri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:nexus-a76adcd6-9df0-47a1-90a5-2d5bf4151572'
-          deviceUri: ''
+              uri: 'nvmf://10.1.0.6:8420/nqn.2019-05.io.openebs:a76adcd6-9df0-47a1-90a5-2d5bf4151572'
+          deviceUri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:nexus-a76adcd6-9df0-47a1-90a5-2d5bf4151573'
+          protocol: nvmf
           node: mayastor-1
           rebuilds: 0
           share: none
           size: 80241024
           state: Online
           uuid: 61d6afc8-15c6-4127-b0aa-15a570198880
-        protocol: none
         size: 80241024
         status: Online
         uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
       description: Runtime state of the volume
       type: object
       properties:
-        child:
-          description: nexus child that exposes the target
+        target:
+          description: target exposed via a Nexus
           allOf:
             - $ref: '#/components/schemas/Nexus'
-        protocol:
-          $ref: '#/components/schemas/Protocol'
         size:
           description: size of the volume in bytes
           type: integer
@@ -2627,10 +2635,7 @@ components:
           type: string
           format: uuid
       required:
-        - children
-        - protocol
         - size
-        - state
         - uuid
         - status
     Volume:
@@ -2645,6 +2650,7 @@ components:
           $ref: '#/components/schemas/VolumeState'
       required:
         - spec
+        - state
   responses:
     ClientError:
       description: Client side error

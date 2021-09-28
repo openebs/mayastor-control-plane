@@ -88,5 +88,7 @@ pub mod volume_state;
 pub use self::volume_state::VolumeState;
 pub mod volume_status;
 pub use self::volume_status::VolumeStatus;
+pub mod volume_target;
+pub use self::volume_target::VolumeTarget;
 pub mod watch_callback;
 pub use self::watch_callback::WatchCallback;

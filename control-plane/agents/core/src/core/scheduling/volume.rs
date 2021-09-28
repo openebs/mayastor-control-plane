@@ -225,7 +225,7 @@ impl GetChildForRemovalContext {
                         .find(|replica_state| replica_state.uuid == replica_spec.uuid)
                         .map(|replica_state| {
                             self.state
-                                .child
+                                .target
                                 .as_ref()
                                 .map(|nexus_state| {
                                     nexus_state

@@ -483,7 +483,7 @@ impl ResourceSpecsLocked {
         )
         .await?;
 
-        let nexus = state.child.expect("already validated");
+        let nexus = state.target.expect("already validated");
         let result = self
             .share_nexus(
                 registry,
@@ -518,7 +518,7 @@ impl ResourceSpecsLocked {
         )
         .await?;
 
-        let nexus = state.child.expect("Already validated");
+        let nexus = state.target.expect("Already validated");
         let result = self
             .unshare_nexus(registry, &UnshareNexus::from(&nexus), mode)
             .await;
@@ -642,7 +642,7 @@ impl ResourceSpecsLocked {
         for attempt in candidates.iter() {
             let mut attempt = attempt.clone();
 
-            if let Some(nexus) = &state.child {
+            if let Some(nexus) = &state.target {
                 if nexus.node == attempt.node {
                     attempt.share = Protocol::None;
                 }
@@ -697,7 +697,7 @@ impl ResourceSpecsLocked {
         replica: Replica,
         mode: OperationMode,
     ) -> Result<(), SvcError> {
-        if let Some(nexus) = &status.child {
+        if let Some(nexus) = &status.target {
             self.attach_replica_to_nexus(registry, &status.uuid, nexus, &replica, mode)
                 .await
         } else {
@@ -1341,7 +1341,7 @@ async fn get_volume_target_node(
     request: &PublishVolume,
 ) -> Result<NodeId, SvcError> {
     // We can't configure a new target_node if the volume is currently published
-    if let Some(nexus) = &status.child {
+    if let Some(nexus) = &status.target {
         return Err(SvcError::VolumeAlreadyPublished {
             vol_id: status.uuid.to_string(),
             node: nexus.node.to_string(),
@@ -1397,7 +1397,7 @@ impl SpecOperations for VolumeSpec {
             VolumeOperation::Publish(..) | VolumeOperation::Unpublish
         ) {
             // don't attempt to modify the volume parameters if the nexus target is not "stable"
-            if self.target.is_some() != state.child.is_some() {
+            if self.target.is_some() != state.target.is_some() {
                 return Err(SvcError::NotReady {
                     kind: self.kind(),
                     id: self.uuid(),
@@ -1406,34 +1406,41 @@ impl SpecOperations for VolumeSpec {
         }
 
         match &operation {
-            VolumeOperation::Share(_) if self.protocol.shared() => Err(SvcError::AlreadyShared {
-                kind: self.kind(),
-                id: self.uuid(),
-                share: state.protocol.to_string(),
-            }),
-            VolumeOperation::Share(_) if self.target.is_none() => {
-                Err(SvcError::VolumeNotPublished {
+            VolumeOperation::Share(_) => match &self.target {
+                None => Err(SvcError::VolumeNotPublished {
                     vol_id: self.uuid(),
-                })
+                }),
+                Some(target) => match target.protocol() {
+                    None => Ok(()),
+                    Some(protocol) => Err(SvcError::AlreadyShared {
+                        kind: self.kind(),
+                        id: self.uuid(),
+                        share: protocol.to_string(),
+                    }),
+                },
+            },
+            VolumeOperation::Unshare => match &self.target {
+                None => Err(SvcError::NotShared {
+                    kind: self.kind(),
+                    id: self.uuid(),
+                }),
+                Some(target) if target.protocol().is_none() => Err(SvcError::NotShared {
+                    kind: self.kind(),
+                    id: self.uuid(),
+                }),
+                _ => Ok(()),
+            },
+            VolumeOperation::Publish((_, _, _)) => {
+                if let Some(target) = &self.target {
+                    Err(SvcError::VolumeAlreadyPublished {
+                        vol_id: self.uuid(),
+                        node: target.node().to_string(),
+                        protocol: format!("{:?}", target.protocol()),
+                    })
+                } else {
+                    Ok(())
+                }
             }
-            VolumeOperation::Share(_) => Ok(()),
-            VolumeOperation::Unshare if !self.protocol.shared() => Err(SvcError::NotShared {
-                kind: self.kind(),
-                id: self.uuid(),
-            }),
-            VolumeOperation::Unshare => Ok(()),
-            VolumeOperation::Publish((_, _, share_option))
-                if self.target.is_some() || (share_option.is_some() && self.protocol.shared()) =>
-            {
-                let target = self.target.as_ref().map(|t| t.node());
-                Err(SvcError::VolumeAlreadyPublished {
-                    vol_id: self.uuid(),
-                    node: target.map_or("".into(), ToString::to_string),
-                    protocol: self.protocol.to_string(),
-                })
-            }
-
-            VolumeOperation::Publish(_) => Ok(()),
             VolumeOperation::Unpublish if self.target.is_none() => {
                 Err(SvcError::VolumeNotPublished {
                     vol_id: self.uuid(),
