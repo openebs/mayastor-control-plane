@@ -34,20 +34,22 @@ def notifySlackUponStateChange(build) {
   }
 }
 
+run_linter = true
+rust_test = true
+bdd_test = true
+
 // Will ABORT current job for cases when we don't want to build
 if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') &&
     BRANCH_NAME == "develop") {
-    print "INFO: Branch Indexing, aborting job."
-    currentBuild.result = 'ABORTED'
-    return
+    print "INFO: Branch Indexing, skip tests and push the new images."
+    run_linter = false
+    rust_test = false
+    bdd_test = false
+    build_images = true
 }
 
 // Only schedule regular builds on develop branch, so we don't need to guard against it
 String cron_schedule = BRANCH_NAME == "develop" ? "0 2 * * *" : ""
-
-run_linter = true
-rust_test = true
-bdd_test = true
 
 pipeline {
   agent none
