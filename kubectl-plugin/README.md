@@ -24,16 +24,16 @@ The plugin needs to be able to connect to the REST server in order to make the a
 1. Get Volumes
 ```
 ❯ kubectl mayastor get volumes
- ID                                    REPLICAS  STATUS  SIZE
- 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         Online  10485761
- 0c08667c-8b59-4d11-9192-b54e27e0ce0f  4         Online  10485761
+ ID                                    REPLICAS TARGET-NODE  ACCESSIBILITY STATUS  SIZE
+ 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4        mayastor-1   nvmf          Online  10485761
+ 0c08667c-8b59-4d11-9192-b54e27e0ce0f  4        mayastor-2   <none>        Online  10485761
 
 ```
 2. Get Volume by ID
 ```
 ❯ kubectl mayastor get volume 18e30e83-b106-4e0d-9fb6-2b04e761e18a
- ID                                    REPLICAS  STATUS  SIZE
- 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         Online  10485761
+ ID                                    REPLICAS TARGET-NODE  ACCESSIBILITY STATUS  SIZE
+ 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4        mayastor-1   nvmf          Online  10485761
 
 ```
 3. Get Pools

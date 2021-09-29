@@ -6,7 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use structopt::StructOpt;
 
-use crate::resources::utils::{CreateRows, GetHeaderRow, OutputFormat};
+use crate::resources::utils::{optional_cell, CreateRows, GetHeaderRow, OutputFormat};
 use prettytable::Row;
 
 /// Volumes resource.
@@ -21,10 +21,20 @@ impl CreateRows for openapi::models::Volume {
         let rows = vec![row![
             state.uuid,
             self.spec.num_replicas,
+            optional_cell(state.target.clone().map(|t| t.node)),
+            optional_cell(state.target.as_ref().map(|t| target_protocol(t)).flatten()),
             state.status,
             state.size
         ]];
         rows
+    }
+}
+
+/// Retrieve the protocol from a volume target and return it as an option
+fn target_protocol(target: &openapi::models::Nexus) -> Option<openapi::models::Protocol> {
+    match &target.protocol {
+        openapi::models::Protocol::None => None,
+        protocol => Some(*protocol),
     }
 }
 

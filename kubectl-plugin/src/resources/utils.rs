@@ -1,13 +1,28 @@
 use prettytable::{format, Row, Table};
 use serde::ser;
 
-// Constant to specify the output formats, these should work irrespective of case.
+/// Constant to specify the output formats, these should work irrespective of case.
 pub const YAML_FORMAT: &str = "yaml";
 pub const JSON_FORMAT: &str = "json";
 
+const CELL_NO_CONTENT: &str = "<none>";
+/// Optional cells should display `CELL_NO_CONTENT` if Node
+pub fn optional_cell<T: ToString>(field: Option<T>) -> String {
+    field
+        .map(|f| f.to_string())
+        .unwrap_or_else(|| CELL_NO_CONTENT.to_string())
+}
+
 // Constants to store the table headers of the Tabular output formats.
 lazy_static! {
-    pub static ref VOLUME_HEADERS: Row = row!["ID", "REPLICAS", "STATUS", "SIZE"];
+    pub static ref VOLUME_HEADERS: Row = row![
+        "ID",
+        "REPLICAS",
+        "TARGET-NODE",
+        "ACCESSIBILITY",
+        "STATUS",
+        "SIZE"
+    ];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",
         "TOTAL CAPACITY",

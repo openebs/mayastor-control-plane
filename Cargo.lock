@@ -1945,7 +1945,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kubectl-mayastor"
+name = "kubectl-plugin"
 version = "0.1.0"
 dependencies = [
  "actix-rt",
