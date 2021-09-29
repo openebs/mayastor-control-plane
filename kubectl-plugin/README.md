@@ -24,16 +24,16 @@ The plugin needs to be able to connect to the REST server in order to make the a
 1. Get Volumes
 ```
 ❯ kubectl mayastor get volumes
- ID                                    REPLICAS  PROTOCOL  STATUS  SIZE
- 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         none      Online  10485761
- 0c08667c-8b59-4d11-9192-b54e27e0ce0f  4         none      Online  10485761
+ ID                                    REPLICAS  STATUS  SIZE
+ 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         Online  10485761
+ 0c08667c-8b59-4d11-9192-b54e27e0ce0f  4         Online  10485761
 
 ```
 2. Get Volume by ID
 ```
 ❯ kubectl mayastor get volume 18e30e83-b106-4e0d-9fb6-2b04e761e18a
- ID                                    REPLICAS  PROTOCOL  STATUS  SIZE
- 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         none      Online  10485761
+ ID                                    REPLICAS  STATUS  SIZE
+ 18e30e83-b106-4e0d-9fb6-2b04e761e18a  4         Online  10485761
 
 ```
 3. Get Pools
@@ -73,7 +73,7 @@ Volume 0c08667c-8b59-4d11-9192-b54e27e0ce0f Scaled Successfully 🚀
 8. Get Volume(s)/Pool(s)/Node(s) to a specific Output Format
 ```
 ❯ kubectl mayastor -ojson get volumes
-[{"spec":{"labels":[],"num_paths":1,"num_replicas":4,"protocol":"none","size":10485761,"status":"Created","uuid":"18e30e83-b106-4e0d-9fb6-2b04e761e18a"},"state":{"children":[],"protocol":"none","size":10485761,"status":"Online","uuid":"18e30e83-b106-4e0d-9fb6-2b04e761e18a"}},{"spec":{"labels":[],"num_paths":1,"num_replicas":5,"protocol":"none","size":10485761,"status":"Created","uuid":"0c08667c-8b59-4d11-9192-b54e27e0ce0f"},"state":{"children":[],"protocol":"none","size":10485761,"status":"Online","uuid":"0c08667c-8b59-4d11-9192-b54e27e0ce0f"}}]
+[{"spec":{"num_replicas":2,"size":67108864,"status":"Created","target":{"node":"ksnode-2","protocol":"nvmf"},"uuid":"5703e66a-e5e5-4c84-9dbe-e5a9a5c805db","topology":{"explicit":{"allowed_nodes":["ksnode-1","ksnode-3","ksnode-2"],"preferred_nodes":["ksnode-2","ksnode-3","ksnode-1"]}},"policy":{"self_heal":true}},"state":{"target":{"children":[{"state":"Online","uri":"bdev:///ac02cf9e-8f25-45f0-ab51-d2e80bd462f1?uuid=ac02cf9e-8f25-45f0-ab51-d2e80bd462f1"},{"state":"Online","uri":"nvmf://192.168.122.6:8420/nqn.2019-05.io.openebs:7b0519cb-8864-4017-85b6-edd45f6172d8?uuid=7b0519cb-8864-4017-85b6-edd45f6172d8"}],"deviceUri":"nvmf://192.168.122.234:8420/nqn.2019-05.io.openebs:nexus-140a1eb1-62b5-43c1-acef-9cc9ebb29425","node":"ksnode-2","rebuilds":0,"protocol":"nvmf","size":67108864,"state":"Online","uuid":"140a1eb1-62b5-43c1-acef-9cc9ebb29425"},"size":67108864,"status":"Online","uuid":"5703e66a-e5e5-4c84-9dbe-e5a9a5c805db"}}]
 
 ```
 
