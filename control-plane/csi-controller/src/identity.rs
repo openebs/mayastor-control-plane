@@ -60,8 +60,11 @@ impl rpc::csi::identity_server::Identity for CsiIdentitySvc {
     ) -> Result<Response<ProbeResponse>, Status> {
         debug!("Request to probe CSI plugin");
 
-        // Make sure REST API gateway is accessible. Only communication errors
-        // are percieved as precondition failures.
+        // Make sure REST API gateway is accessible.
+        // If a server communication error occurs, return false rather than an error. This
+        // communicates to the Container Orchestrator that the plugin is not yet initialised but
+        // should not be restarted. See the CSI spec:
+        // https://github.com/container-storage-interface/spec/blob/5b0d4540158a260cb3347ef1c87ede8600afb9bf/csi.proto#L252-L256
         let ready = match MayastorApiClient::get_client().list_nodes().await {
             Ok(_) => true,
             Err(ApiClientError::ServerCommunication { .. }) => {
@@ -72,13 +75,6 @@ impl rpc::csi::identity_server::Identity for CsiIdentitySvc {
         };
 
         debug!("CSI plugin ready: {}", ready);
-
-        if ready {
-            Ok(Response::new(ProbeResponse { ready: Some(ready) }))
-        } else {
-            Err(Status::failed_precondition(
-                "REST API gateway is not accessible",
-            ))
-        }
+        Ok(Response::new(ProbeResponse { ready: Some(ready) }))
     }
 }
