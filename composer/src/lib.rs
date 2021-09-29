@@ -824,7 +824,7 @@ impl Drop for ComposeTest {
                     .output()
                     .unwrap();
                 std::process::Command::new("docker")
-                    .args(&["rm", c])
+                    .args(&["rm", "-v", c])
                     .output()
                     .unwrap();
             });
