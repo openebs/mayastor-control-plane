@@ -1,21 +1,6 @@
-resource "null_resource" "before" {
-}
-
 resource "null_resource" "jaegertracing_repo" {
   provisioner "local-exec" {
     command = "helm repo add jaegertracing https://jaegertracing.github.io/helm-charts"
-  }
-  provisioner "local-exec" {
-    command = "kubectl replace -f ${path.module}/crd.yaml --force"
-  }
-  provisioner "local-exec" {
-    when       = destroy
-    command    = "kubectl delete crd jaegers.jaegertracing.io"
-    on_failure = continue
-  }
-
-  triggers = {
-    "before" = null_resource.before.id
   }
 }
 
@@ -49,11 +34,19 @@ resource "helm_release" "jaegertracing-operator" {
   }
 
   provisioner "local-exec" {
+    command = "kubectl replace -f ${path.module}/crd.yaml --force"
+  }
+  provisioner "local-exec" {
     command = "kubectl replace -f ${path.module}/jaeger.yaml --force"
   }
   provisioner "local-exec" {
     when       = destroy
     command    = "kubectl delete -f ${path.module}/jaeger.yaml"
+    on_failure = continue
+  }
+  provisioner "local-exec" {
+    when       = destroy
+    command    = "kubectl delete crd jaegers.jaegertracing.io"
     on_failure = continue
   }
 }
