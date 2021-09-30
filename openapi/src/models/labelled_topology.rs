@@ -14,36 +14,38 @@
 
 use crate::apis::IntoVec;
 
-/// LabelledTopology : volume topology using labels
+/// LabelledTopology : labelled topology
 
-/// volume topology using labels
+/// labelled topology
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct LabelledTopology {
-    #[serde(rename = "node_topology")]
-    pub node_topology: crate::models::NodeTopology,
-    #[serde(rename = "pool_topology")]
-    pub pool_topology: crate::models::PoolTopology,
+    /// exclusive labels
+    #[serde(rename = "exclusion")]
+    pub exclusion: Vec<String>,
+    /// inclusive labels
+    #[serde(rename = "inclusion")]
+    pub inclusion: Vec<String>,
 }
 
 impl LabelledTopology {
     /// LabelledTopology using only the required fields
     pub fn new(
-        node_topology: impl Into<crate::models::NodeTopology>,
-        pool_topology: impl Into<crate::models::PoolTopology>,
+        exclusion: impl IntoVec<String>,
+        inclusion: impl IntoVec<String>,
     ) -> LabelledTopology {
         LabelledTopology {
-            node_topology: node_topology.into(),
-            pool_topology: pool_topology.into(),
+            exclusion: exclusion.into_vec(),
+            inclusion: inclusion.into_vec(),
         }
     }
     /// LabelledTopology using all fields
     pub fn new_all(
-        node_topology: impl Into<crate::models::NodeTopology>,
-        pool_topology: impl Into<crate::models::PoolTopology>,
+        exclusion: impl IntoVec<String>,
+        inclusion: impl IntoVec<String>,
     ) -> LabelledTopology {
         LabelledTopology {
-            node_topology: node_topology.into(),
-            pool_topology: pool_topology.into(),
+            exclusion: exclusion.into_vec(),
+            inclusion: inclusion.into_vec(),
         }
     }
 }

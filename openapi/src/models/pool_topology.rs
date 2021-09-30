@@ -14,27 +14,15 @@
 
 use crate::apis::IntoVec;
 
-/// PoolTopology : pool topology
+/// PoolTopology : Used to determine how to place/distribute the data during volume creation and
+/// replica replacement.  If left empty then the control plane will select from all available
+/// resources.
 
-/// pool topology
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct PoolTopology {
-    /// inclusive labels
-    #[serde(rename = "inclusion")]
-    pub inclusion: Vec<String>,
-}
-
-impl PoolTopology {
-    /// PoolTopology using only the required fields
-    pub fn new(inclusion: impl IntoVec<String>) -> PoolTopology {
-        PoolTopology {
-            inclusion: inclusion.into_vec(),
-        }
-    }
-    /// PoolTopology using all fields
-    pub fn new_all(inclusion: impl IntoVec<String>) -> PoolTopology {
-        PoolTopology {
-            inclusion: inclusion.into_vec(),
-        }
-    }
+/// Used to determine how to place/distribute the data during volume creation and replica
+/// replacement.  If left empty then the control plane will select from all available resources.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum PoolTopology {
+    /// volume pool topology definition through labels
+    #[serde(rename = "labelled")]
+    labelled(crate::models::LabelledTopology),
 }

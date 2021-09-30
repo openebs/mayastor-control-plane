@@ -141,62 +141,53 @@ impl From<VolumeStatus> for models::VolumeStatus {
     }
 }
 
-/// Volume topology using labels to determine how to place/distribute the data
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct LabelledTopology {
-    /// node topology
-    node_topology: NodeTopology,
-    /// pool topology
-    pool_topology: PoolTopology,
+    /// exclusive labels
+    #[serde(default)]
+    pub exclusion: Vec<ExclusiveLabel>,
+    /// inclusive labels
+    #[serde(default)]
+    pub inclusion: Vec<InclusiveLabel>,
 }
 
 impl From<models::LabelledTopology> for LabelledTopology {
     fn from(src: models::LabelledTopology) -> Self {
         Self {
-            node_topology: src.node_topology.into(),
-            pool_topology: src.pool_topology.into(),
+            exclusion: src.exclusion.into(),
+            inclusion: src.inclusion.into(),
         }
     }
 }
 impl From<LabelledTopology> for models::LabelledTopology {
     fn from(src: LabelledTopology) -> Self {
-        Self::new(src.node_topology, src.pool_topology)
+        Self::new(src.inclusion, src.exclusion)
     }
 }
 
 /// Volume topology used to determine how to place/distribute the data
 /// If no topology is used then the control plane will select from all available resources.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub enum Topology {
-    /// volume topology using labels
-    Labelled(LabelledTopology),
-    /// volume topology, explicitly selected
-    Explicit(ExplicitTopology),
+pub struct Topology {
+    node: Option<NodeTopology>,
+    pool: Option<PoolTopology>,
 }
-
 impl Topology {
     /// Get a reference to the explicit topology
-    pub fn explicit(&self) -> Option<&ExplicitTopology> {
-        match self {
-            Topology::Labelled(_) => None,
-            Topology::Explicit(topology) => Some(topology),
-        }
+    pub fn explicit(&self) -> Option<&ExplicitNodeTopology> {
+        self.node.as_ref().map(|n| n.explicit()).flatten()
     }
 }
-
 impl From<Topology> for models::Topology {
     fn from(src: Topology) -> Self {
-        match src {
-            Topology::Explicit(topology) => models::Topology::explicit(topology.into()),
-            Topology::Labelled(topology) => models::Topology::labelled(topology.into()),
-        }
+        Self::new_all(src.node.into_opt(), src.pool.into_opt())
     }
 }
 impl From<models::Topology> for Topology {
     fn from(src: models::Topology) -> Self {
-        match src {
-            models::Topology::explicit(topology) => Self::Explicit(topology.into()),
-            models::Topology::labelled(topology) => Self::Labelled(topology.into()),
+        Self {
+            node: src.node_topology.into_opt(),
+            pool: src.pool_topology.into_opt(),
         }
     }
 }
@@ -219,55 +210,65 @@ pub type ExclusiveLabel = String;
 /// inclusive label key value in the form "NAME: VALUE"
 pub type InclusiveLabel = String;
 
-/// Placement node topology used by volume operations
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct NodeTopology {
-    /// exclusive labels
-    #[serde(default)]
-    pub exclusion: Vec<ExclusiveLabel>,
-    /// inclusive labels
-    #[serde(default)]
-    pub inclusion: Vec<InclusiveLabel>,
+/// Node topology for volumes
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub enum NodeTopology {
+    /// using topology labels
+    Labelled(LabelledTopology),
+    /// explicitly selected
+    Explicit(ExplicitNodeTopology),
 }
 
-impl From<models::NodeTopology> for NodeTopology {
-    fn from(src: models::NodeTopology) -> Self {
-        Self {
-            exclusion: src.exclusion.into_iter().map(From::from).collect(),
-            inclusion: src.inclusion.into_iter().map(From::from).collect(),
+impl NodeTopology {
+    /// Get a reference to the explicit topology
+    pub fn explicit(&self) -> Option<&ExplicitNodeTopology> {
+        match self {
+            Self::Labelled(_) => None,
+            Self::Explicit(topology) => Some(topology),
         }
     }
 }
+
 impl From<NodeTopology> for models::NodeTopology {
     fn from(src: NodeTopology) -> Self {
-        Self::new_all(src.exclusion, src.inclusion)
+        match src {
+            NodeTopology::Explicit(topology) => Self::explicit(topology.into()),
+            NodeTopology::Labelled(topology) => Self::labelled(topology.into()),
+        }
+    }
+}
+impl From<models::NodeTopology> for NodeTopology {
+    fn from(src: models::NodeTopology) -> Self {
+        match src {
+            models::NodeTopology::explicit(topology) => Self::Explicit(topology.into()),
+            models::NodeTopology::labelled(topology) => Self::Labelled(topology.into()),
+        }
     }
 }
 
 /// Placement pool topology used by volume operations
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct PoolTopology {
-    /// inclusive labels
-    #[serde(default)]
-    pub inclusion: Vec<InclusiveLabel>,
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub enum PoolTopology {
+    Labelled(LabelledTopology),
 }
-
 impl From<models::PoolTopology> for PoolTopology {
     fn from(src: models::PoolTopology) -> Self {
-        Self {
-            inclusion: src.inclusion.into_iter().map(From::from).collect(),
+        match src {
+            models::PoolTopology::labelled(topology) => Self::Labelled(topology.into()),
         }
     }
 }
 impl From<PoolTopology> for models::PoolTopology {
     fn from(src: PoolTopology) -> Self {
-        Self::new_all(src.inclusion)
+        match src {
+            PoolTopology::Labelled(topology) => Self::labelled(topology.into()),
+        }
     }
 }
 
 /// Explicit node placement Selection for a volume
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct ExplicitTopology {
+pub struct ExplicitNodeTopology {
     /// replicas can only be placed on these nodes
     #[serde(default)]
     pub allowed_nodes: Vec<NodeId>,
@@ -276,16 +277,16 @@ pub struct ExplicitTopology {
     pub preferred_nodes: Vec<NodeId>,
 }
 
-impl From<models::ExplicitTopology> for ExplicitTopology {
-    fn from(src: models::ExplicitTopology) -> Self {
+impl From<models::ExplicitNodeTopology> for ExplicitNodeTopology {
+    fn from(src: models::ExplicitNodeTopology) -> Self {
         Self {
             allowed_nodes: src.allowed_nodes.into_iter().map(From::from).collect(),
             preferred_nodes: src.preferred_nodes.into_iter().map(From::from).collect(),
         }
     }
 }
-impl From<ExplicitTopology> for models::ExplicitTopology {
-    fn from(src: ExplicitTopology) -> Self {
+impl From<ExplicitNodeTopology> for models::ExplicitNodeTopology {
+    fn from(src: ExplicitNodeTopology) -> Self {
         Self::new(src.allowed_nodes, src.preferred_nodes)
     }
 }

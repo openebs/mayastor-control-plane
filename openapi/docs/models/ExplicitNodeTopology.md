@@ -1,4 +1,4 @@
-# ExplicitTopology
+# ExplicitNodeTopology
 
 ## Properties
 

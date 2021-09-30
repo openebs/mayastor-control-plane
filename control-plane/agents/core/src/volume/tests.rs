@@ -6,7 +6,7 @@ use common_lib::{
     store::etcd::Etcd,
     types::v0::{
         message_bus::{
-            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, ExplicitTopology,
+            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, ExplicitNodeTopology,
             Filter, GetNexuses, GetNodes, GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume,
             SetVolumeReplica, ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume,
             VolumeShareProtocol, VolumeState, VolumeStatus,
@@ -574,7 +574,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
         uuid: "6e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
-        topology: Some(Topology::Explicit(ExplicitTopology {
+        topology: Some(Topology::Explicit(ExplicitNodeTopology {
             allowed_nodes: vec![local.clone(), remote.clone()],
             preferred_nodes: vec![],
         })),

@@ -14,35 +14,18 @@
 
 use crate::apis::IntoVec;
 
-/// NodeTopology : node topology
+/// NodeTopology : Used to determine how to place/distribute the data during volume creation and
+/// replica replacement.  If left empty then the control plane will select from all available
+/// resources.
 
-/// node topology
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct NodeTopology {
-    /// exclusive labels
-    #[serde(rename = "exclusion")]
-    pub exclusion: Vec<String>,
-    /// inclusive labels
-    #[serde(rename = "inclusion")]
-    pub inclusion: Vec<String>,
-}
-
-impl NodeTopology {
-    /// NodeTopology using only the required fields
-    pub fn new(exclusion: impl IntoVec<String>, inclusion: impl IntoVec<String>) -> NodeTopology {
-        NodeTopology {
-            exclusion: exclusion.into_vec(),
-            inclusion: inclusion.into_vec(),
-        }
-    }
-    /// NodeTopology using all fields
-    pub fn new_all(
-        exclusion: impl IntoVec<String>,
-        inclusion: impl IntoVec<String>,
-    ) -> NodeTopology {
-        NodeTopology {
-            exclusion: exclusion.into_vec(),
-            inclusion: inclusion.into_vec(),
-        }
-    }
+/// Used to determine how to place/distribute the data during volume creation and replica
+/// replacement.  If left empty then the control plane will select from all available resources.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum NodeTopology {
+    /// volume topology, explicitly selected
+    #[serde(rename = "explicit")]
+    explicit(crate::models::ExplicitNodeTopology),
+    /// volume topology definition through labels
+    #[serde(rename = "labelled")]
+    labelled(crate::models::LabelledTopology),
 }

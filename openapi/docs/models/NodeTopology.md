@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**exclusion** | **Vec<String>** | exclusive labels | 
-**inclusion** | **Vec<String>** | inclusive labels | 
+**explicit** | Option<[**crate::models::ExplicitNodeTopology**](ExplicitNodeTopology.md)> | volume topology, explicitly selected | [optional]
+**labelled** | Option<[**crate::models::LabelledTopology**](LabelledTopology.md)> | volume topology definition through labels | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

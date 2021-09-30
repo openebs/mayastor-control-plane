@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**explicit** | Option<[**crate::models::ExplicitTopology**](ExplicitTopology.md)> | volume topology, explicitly selected | [optional]
-**labelled** | Option<[**crate::models::LabelledTopology**](LabelledTopology.md)> | volume topology definition through labels | [optional]
+**node_topology** | Option<[**crate::models::NodeTopology**](NodeTopology.md)> |  | [optional]
+**pool_topology** | Option<[**crate::models::PoolTopology**](PoolTopology.md)> |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

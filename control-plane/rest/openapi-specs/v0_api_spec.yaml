@@ -1816,43 +1816,24 @@ components:
          but not with a resource with "OtherLabel: B"
          inclusive label key value in the form "NAME: VALUE"
       type: string
-    NodeTopology:
-      example:
-        exclusion:
-          - ''
-        inclusion:
-          - ''
-      description: node topology
-      type: object
-      properties:
-        exclusion:
-          description: exclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/ExclusiveLabel'
-        inclusion:
-          description: inclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/InclusiveLabel'
-      required:
-        - exclusion
-        - inclusion
     PoolTopology:
       example:
-        inclusion:
-          - ''
-      description: pool topology
+        explicit: null
+        labelled: null
+      description: |-
+        Used to determine how to place/distribute the data during volume creation and replica replacement.
+         If left empty then the control plane will select from all available resources.
       type: object
       properties:
-        inclusion:
-          description: inclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/InclusiveLabel'
-      required:
-        - inclusion
-    ExplicitTopology:
+        labelled:
+          description: volume pool topology definition through labels
+          allOf:
+            - $ref: '#/components/schemas/LabelledTopology'
+      additionalProperties: false
+      oneOf:
+        - required:
+            - labelled
+    ExplicitNodeTopology:
       example:
         allowed_nodes:
           - ''
@@ -1876,25 +1857,35 @@ components:
         - preferred_nodes
     LabelledTopology:
       example:
-        node_topology:
-          exclusion:
-            - ''
-          inclusion:
-            - ''
-        pool_topology:
-          inclusion:
-            - ''
-      description: volume topology using labels
+        exclusion:
+          - ''
+        inclusion:
+          - ''
+      description: labelled topology
+      type: object
+      properties:
+        exclusion:
+          description: exclusive labels
+          type: array
+          items:
+            $ref: '#/components/schemas/ExclusiveLabel'
+        inclusion:
+          description: inclusive labels
+          type: array
+          items:
+            $ref: '#/components/schemas/InclusiveLabel'
+      required:
+        - exclusion
+        - inclusion
+    Topology:
+      description: node and pool topology for volumes
       type: object
       properties:
         node_topology:
           $ref: '#/components/schemas/NodeTopology'
         pool_topology:
           $ref: '#/components/schemas/PoolTopology'
-      required:
-        - node_topology
-        - pool_topology
-    Topology:
+    NodeTopology:
       example:
         explicit: null
         labelled: null
@@ -1906,7 +1897,7 @@ components:
         explicit:
           description: volume topology, explicitly selected
           allOf:
-            - $ref: '#/components/schemas/ExplicitTopology'
+            - $ref: '#/components/schemas/ExplicitNodeTopology'
         labelled:
           description: volume topology definition through labels
           allOf:
