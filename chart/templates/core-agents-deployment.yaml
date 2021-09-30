@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: core-agents
   namespace: mayastor
@@ -10,6 +10,7 @@ spec:
   selector:
     matchLabels:
       app: core-agents
+  service_name: core-agents
   template:
     metadata:
       labels:
