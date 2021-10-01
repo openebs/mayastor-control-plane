@@ -11,3 +11,5 @@
 /result*
 /tests/bdd/__pycache__/
 /tests/bdd/openapi/
+/chart/charts/
+/chart/Chart.lock

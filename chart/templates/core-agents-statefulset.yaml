@@ -6,11 +6,11 @@ metadata:
   labels:
     app: core-agents
 spec:
+  serviceName: core-agents
   replicas: 1
   selector:
     matchLabels:
       app: core-agents
-  service_name: core-agents
   template:
     metadata:
       labels:
@@ -28,4 +28,5 @@ spec:
             - "-smayastor-etcd"
             - "-nnats"
             - "--request-timeout={{ .Values.base.default_req_timeout }}"
-            - "--cache-period={{ .Values.base.cache_poll_period }}"
+            - "--cache-period={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
+            - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}

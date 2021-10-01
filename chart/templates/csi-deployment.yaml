@@ -20,6 +20,8 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       imagePullSecrets:
         {{- include "base_pull_secrets" . }}
+      initContainers:
+        {{- include "jaeger_agent_init_container" . }}
       containers:
         - name: csi-provisioner
           image: k8s.gcr.io/sig-storage/csi-provisioner:v2.2.1
@@ -53,7 +55,8 @@ spec:
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
-            - "--rest-endpoint=http://$(REST_SERVICE_HOST):8081"
+            - "--rest-endpoint=http://$(REST_SERVICE_HOST):8081"{{ if .Values.base.jaeger.enabled }}
+            - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/

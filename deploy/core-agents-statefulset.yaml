@@ -1,5 +1,5 @@
 ---
-# Source: mayastor-control-plane/templates/core-agents-deployment.yaml
+# Source: mayastor-control-plane/templates/core-agents-statefulset.yaml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -8,11 +8,11 @@ metadata:
   labels:
     app: core-agents
 spec:
+  serviceName: core-agents
   replicas: 1
   selector:
     matchLabels:
       app: core-agents
-  service_name: core-agents
   template:
     metadata:
       labels:

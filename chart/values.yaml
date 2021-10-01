@@ -10,7 +10,7 @@ mayastorCP:
 base:
   initContainers:
     enabled: true
-    initContainers:
+    containers:
       - name: nats-probe
         image: busybox:latest
         command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz nats 4222; do echo "Waiting for nats..."; sleep 1; done;' ]
@@ -20,8 +20,19 @@ base:
 
   imagePullSecrets:
     enabled: true
-    imagePullSecrets:
+    secrets:
       - name: regcred
+
+  jaeger:
+    enabled: false
+    initContainer: true
+    agent:
+      name: jaeger-agent
+      port: 6831
+      initContainer:
+        - name: jaeger-probe
+          image: busybox:latest
+          command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz -u {{.Values.base.jaeger.agent.name}} {{.Values.base.jaeger.agent.port}}; do echo "Waiting for jaeger..."; sleep 1; done;' ]
 
 operators:
   pool:
@@ -32,3 +43,12 @@ operators:
       requests:
         cpu: "250m"
         memory: "500Mi"
+
+jaeger-operator:
+  name: "mayastor"
+  crd:
+    install: false
+  jaeger:
+    create: false
+  rbac:
+    clusterRole: true
