@@ -17,6 +17,9 @@ from openapi.openapi_client.model.volume_state import VolumeState
 from openapi.openapi_client.model.volume_status import VolumeStatus
 from openapi.openapi_client.model.spec_status import SpecStatus
 from openapi_client.model.volume_policy import VolumePolicy
+from openapi_client.model.replica_state import ReplicaState
+from openapi_client.model.replica_topology import ReplicaTopology
+
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -77,13 +80,23 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         VolumePolicy(False),
         _configuration=cfg,
     )
+
+    volume = volume_ctx[VOLUME_CTX_KEY]
+    assert str(volume.spec) == str(expected_spec)
+
+    # The key for the replica topology is the replica UUID. This is assigned at replica creation
+    # time, so get the replica UUID from the returned volume object, and use this as the key of
+    # the expected replica topology.
+    expected_replica_toplogy = {}
+    for key, value in volume.state.replica_topology.items():
+        expected_replica_toplogy[key] = ReplicaTopology(
+            ReplicaState("Online"), node="mayastor-1", pool=POOL_UUID
+        )
     expected_state = VolumeState(
         VOLUME_SIZE,
         VolumeStatus("Online"),
         VOLUME_UUID,
+        expected_replica_toplogy,
         _configuration=cfg,
     )
-
-    volume = volume_ctx[VOLUME_CTX_KEY]
-    assert str(volume.spec) == str(expected_spec)
     assert str(volume.state) == str(expected_state)

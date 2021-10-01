@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **size** | **u64** | size of the volume in bytes | 
 **status** | [**crate::models::VolumeStatus**](VolumeStatus.md) |  | 
 **uuid** | [**uuid::Uuid**](uuid::Uuid.md) | name of the volume | 
+**replica_topology** | [**::std::collections::HashMap<String, crate::models::ReplicaTopology>**](ReplicaTopology.md) | replica location information | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

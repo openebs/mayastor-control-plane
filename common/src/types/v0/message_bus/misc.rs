@@ -123,8 +123,27 @@ macro_rules! bus_impl_string_id {
 macro_rules! bus_impl_string_uuid_inner {
     ($Name:ident, $Doc:literal) => {
         #[doc = $Doc]
-        #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+        #[derive(Debug, Clone, Eq, PartialEq, Hash)]
         pub struct $Name(uuid::Uuid, String);
+
+        impl Serialize for $Name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for $Name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let uuid = uuid::Uuid::deserialize(deserializer)?;
+                Ok($Name(uuid, uuid.to_string()))
+            }
+        }
 
         impl std::ops::Deref for $Name {
             type Target = uuid::Uuid;

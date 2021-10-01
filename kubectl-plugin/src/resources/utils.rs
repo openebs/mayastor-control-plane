@@ -33,6 +33,7 @@ lazy_static! {
         "MANAGED"
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS",];
+    pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row!["ID", "NODE", "POOL", "STATUS"];
 }
 
 // table_printer takes the above defined headers and the rows created at execution,

@@ -30,6 +30,9 @@ pub struct VolumeState {
     /// name of the volume
     #[serde(rename = "uuid")]
     pub uuid: uuid::Uuid,
+    /// replica location information
+    #[serde(rename = "replica_topology")]
+    pub replica_topology: ::std::collections::HashMap<String, crate::models::ReplicaTopology>,
 }
 
 impl VolumeState {
@@ -38,12 +41,14 @@ impl VolumeState {
         size: impl Into<u64>,
         status: impl Into<crate::models::VolumeStatus>,
         uuid: impl Into<uuid::Uuid>,
+        replica_topology: impl Into<::std::collections::HashMap<String, crate::models::ReplicaTopology>>,
     ) -> VolumeState {
         VolumeState {
             target: None,
             size: size.into(),
             status: status.into(),
             uuid: uuid.into(),
+            replica_topology: replica_topology.into(),
         }
     }
     /// VolumeState using all fields
@@ -52,12 +57,14 @@ impl VolumeState {
         size: impl Into<u64>,
         status: impl Into<crate::models::VolumeStatus>,
         uuid: impl Into<uuid::Uuid>,
+        replica_topology: impl Into<::std::collections::HashMap<String, crate::models::ReplicaTopology>>,
     ) -> VolumeState {
         VolumeState {
             target: target.into(),
             size: size.into(),
             status: status.into(),
             uuid: uuid.into(),
+            replica_topology: replica_topology.into(),
         }
     }
 }

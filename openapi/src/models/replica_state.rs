@@ -19,23 +19,23 @@ use crate::apis::IntoVec;
 /// state of the replica
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum ReplicaState {
-    #[serde(rename = "unknown")]
+    #[serde(rename = "Unknown")]
     Unknown,
-    #[serde(rename = "online")]
+    #[serde(rename = "Online")]
     Online,
-    #[serde(rename = "degraded")]
+    #[serde(rename = "Degraded")]
     Degraded,
-    #[serde(rename = "faulted")]
+    #[serde(rename = "Faulted")]
     Faulted,
 }
 
 impl ToString for ReplicaState {
     fn to_string(&self) -> String {
         match self {
-            Self::Unknown => String::from("unknown"),
-            Self::Online => String::from("online"),
-            Self::Degraded => String::from("degraded"),
-            Self::Faulted => String::from("faulted"),
+            Self::Unknown => String::from("Unknown"),
+            Self::Online => String::from("Online"),
+            Self::Degraded => String::from("Degraded"),
+            Self::Faulted => String::from("Faulted"),
         }
     }
 }

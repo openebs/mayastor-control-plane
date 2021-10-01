@@ -2130,10 +2130,10 @@ components:
       description: state of the replica
       type: string
       enum:
-        - unknown
-        - online
-        - degraded
-        - faulted
+        - Unknown
+        - Online
+        - Degraded
+        - Faulted
     Replica:
       description: Replica information
       type: object
@@ -2601,6 +2601,11 @@ components:
         size: 80241024
         status: Online
         uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
+        replica_topology:
+          03f0c3f1-4d3e-44e5-b768-4c50e53f7a34:
+            node: mayastor-1
+            pool: pool-1
+            state: Online
       description: Runtime state of the volume
       type: object
       properties:
@@ -2619,10 +2624,16 @@ components:
           description: name of the volume
           type: string
           format: uuid
+        replica_topology:
+          description: replica location information
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ReplicaTopology'
       required:
         - size
         - uuid
         - status
+        - replica_topology
     Volume:
       description: |-
         Volumes
@@ -2635,6 +2646,18 @@ components:
           $ref: '#/components/schemas/VolumeState'
       required:
         - spec
+        - state
+    ReplicaTopology:
+      description: Location of replicas (nodes and pools)
+      type: object
+      properties:
+        node:
+          $ref: '#/components/schemas/NodeId'
+        pool:
+          $ref: '#/components/schemas/PoolId'
+        state:
+          $ref: '#/components/schemas/ReplicaState'
+      required:
         - state
   responses:
     ClientError:
