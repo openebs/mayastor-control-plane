@@ -141,14 +141,15 @@ impl From<VolumeStatus> for models::VolumeStatus {
     }
 }
 
+/// Volume placement topology using resource labels
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct LabelledTopology {
     /// exclusive labels
     #[serde(default)]
-    pub exclusion: Vec<ExclusiveLabel>,
+    pub exclusion: ::std::collections::HashMap<String, String>,
     /// inclusive labels
     #[serde(default)]
-    pub inclusion: Vec<InclusiveLabel>,
+    pub inclusion: ::std::collections::HashMap<String, String>,
 }
 
 impl From<models::LabelledTopology> for LabelledTopology {

@@ -7,7 +7,10 @@ use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
 use reqwest::{Client, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 use tracing::{debug, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -320,17 +323,17 @@ impl MayastorApiClient {
         size: u64,
         allowed_nodes: &[String],
         preferred_nodes: &[String],
-        inclusive_pool_topology: &[String],
+        inclusive_pool_topology: &HashMap<String, String>,
     ) -> Result<Volume, ApiClientError> {
-        let exclusive_label_topology: Vec<String> = Vec::new();
+        let exclusive_label_topology: HashMap<String, String> = HashMap::new();
         let topology = Topology::new_all(
             Some(NodeTopology::explicit(ExplicitNodeTopology::new(
                 allowed_nodes.to_vec(),
                 preferred_nodes.to_vec(),
             ))),
             Some(PoolTopology::labelled(LabelledTopology::new_all(
-                exclusive_label_topology.to_vec(),
-                inclusive_pool_topology.to_vec(),
+                exclusive_label_topology.to_owned(),
+                inclusive_pool_topology.to_owned(),
             ))),
         );
 

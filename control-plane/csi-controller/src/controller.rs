@@ -281,9 +281,12 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         // of what node was chosen for running the app.
         let mut allowed_nodes: Vec<String> = Vec::new();
         let mut preferred_nodes: Vec<String> = Vec::new();
-        let mut inclusive_label_topology: Vec<String> = Vec::new();
+        let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
 
-        inclusive_label_topology.push(format!("{}:{}", OPENEBS_CREATED_BY_KEY, MSP_OPERATOR));
+        inclusive_label_topology.insert(
+            String::from(OPENEBS_CREATED_BY_KEY),
+            String::from(MSP_OPERATOR),
+        );
 
         if let Some(reqs) = args.accessibility_requirements {
             for r in reqs.requisite.iter() {

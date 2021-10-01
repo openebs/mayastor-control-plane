@@ -1794,28 +1794,6 @@ components:
       required:
         - size
         - thin
-    ExclusiveLabel:
-      example: ''
-      description: |-
-        Excludes resources with the same $label name, eg:
-         "Zone" would not allow for resources with the same "Zone" value
-         to be used for a certain operation, eg:
-         A node with "Zone: A" would not be paired up with a node with "Zone: A",
-         but it could be paired up with a node with "Zone: B"
-         exclusive label NAME in the form "NAME", and not "NAME: VALUE"
-      type: string
-    InclusiveLabel:
-      example: ''
-      description: |-
-        Includes resources with the same $label or $label:$value eg:
-         if label is "Zone: A":
-         A resource with "Zone: A" would be paired up with a resource with "Zone: A",
-         but not with a resource with "Zone: B"
-         if label is "Zone":
-         A resource with "Zone: A" would be paired up with a resource with "Zone: B",
-         but not with a resource with "OtherLabel: B"
-         inclusive label key value in the form "NAME: VALUE"
-      type: string
     PoolTopology:
       example:
         explicit: null
@@ -1865,15 +1843,31 @@ components:
       type: object
       properties:
         exclusion:
-          description: exclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/ExclusiveLabel'
+          example: ''
+          description: |-
+            Excludes resources with the same $label name, eg:
+             "Zone" would not allow for resources with the same "Zone" value
+             to be used for a certain operation, eg:
+             A node with "Zone: A" would not be paired up with a node with "Zone: A",
+             but it could be paired up with a node with "Zone: B"
+             exclusive label NAME in the form "NAME", and not "NAME: VALUE"
+          type: object
+          additionalProperties:
+            type: string
         inclusion:
-          description: inclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/InclusiveLabel'
+          example: ''
+          description: |-
+            Includes resources with the same $label or $label:$value eg:
+             if label is "Zone: A":
+             A resource with "Zone: A" would be paired up with a resource with "Zone: A",
+             but not with a resource with "Zone: B"
+             if label is "Zone":
+             A resource with "Zone: A" would be paired up with a resource with "Zone: B",
+             but not with a resource with "OtherLabel: B"
+             inclusive label key value in the form "NAME: VALUE"
+          type: object
+          additionalProperties:
+            type: string
       required:
         - exclusion
         - inclusion

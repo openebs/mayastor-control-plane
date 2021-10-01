@@ -569,10 +569,8 @@ async fn nexus_persistence_test(cluster: &Cluster) {
 }
 async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault: FaultTest) {
     tracing::debug!("arguments ({:?}, {:?}, {:?})", local, remote, fault);
-    let mut allowed_nodes: Vec<String> = Vec::new();
-    let preferred_nodes: Vec<String> = Vec::new();
-    allowed_nodes.push(String::from(local.clone()));
-    allowed_nodes.push(String::from(remote.clone()));
+    let allowed_nodes = vec![local.to_string(), remote.to_string()];
+    let preferred_nodes: Vec<String> = vec![];
     let volume = CreateVolume {
         uuid: "6e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,

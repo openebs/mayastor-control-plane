@@ -9,7 +9,7 @@ use crate::core::scheduling::{
 };
 use common_lib::{
     types::v0::message_bus::{PoolStatus, PoolTopology},
-    MSP_OPERATOR, OPENEBS_CREATED_BY_KEY,
+    OPENEBS_CREATED_BY_KEY,
 };
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 
@@ -75,41 +75,41 @@ impl PoolFilters {
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
     }
-    /// Should only attempt to use pools having msp-operator creation label iff topology has it
+    /// Should only attempt to use pools having specific creation label iff topology has it
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        let creation_label: String = format!("{}:{}", OPENEBS_CREATED_BY_KEY, MSP_OPERATOR);
-        let pool_has_creation_label = match request.registry().specs().get_pool(&item.pool.id) {
-            Ok(spec) => match spec.labels {
-                None => false,
-                Some(label) => {
-                    label.contains_key(&*String::from(OPENEBS_CREATED_BY_KEY))
-                        && label.get(&*String::from(OPENEBS_CREATED_BY_KEY))
-                            == Some(&String::from(MSP_OPERATOR))
-                }
-            },
-            Err(_) => false,
-        };
-        let volume_has_creation_label = match request.topology.clone() {
-            None => false,
+        let volume_creation_label: String;
+        match request.topology.clone() {
+            None => return true,
             Some(topology) => match topology.pool {
-                None => false,
+                None => return true,
                 Some(pool_topology) => match pool_topology {
                     PoolTopology::Labelled(labelled_topology) => {
-                        if labelled_topology.inclusion.is_empty() {
-                            false
-                        } else {
-                            labelled_topology
+                        if labelled_topology
+                            .inclusion
+                            .contains_key(OPENEBS_CREATED_BY_KEY)
+                        {
+                            volume_creation_label = labelled_topology
                                 .inclusion
-                                .into_iter()
-                                .filter(|x| *x == creation_label)
-                                .count()
-                                != 0
+                                .get(OPENEBS_CREATED_BY_KEY)
+                                .unwrap()
+                                .clone();
+                        } else {
+                            return true;
                         }
                     }
                 },
             },
         };
-        !volume_has_creation_label || pool_has_creation_label
+        return match request.registry().specs().get_pool(&item.pool.id) {
+            Ok(spec) => match spec.labels {
+                None => false,
+                Some(label) => {
+                    label.contains_key(OPENEBS_CREATED_BY_KEY)
+                        && label.get(OPENEBS_CREATED_BY_KEY) == Some(&volume_creation_label)
+                }
+            },
+            Err(_) => false,
+        };
     }
 }
 
