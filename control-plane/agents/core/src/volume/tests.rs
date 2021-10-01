@@ -6,10 +6,10 @@ use common_lib::{
     store::etcd::Etcd,
     types::v0::{
         message_bus::{
-            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, ExplicitNodeTopology,
-            Filter, GetNexuses, GetNodes, GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume,
-            SetVolumeReplica, ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume,
-            VolumeShareProtocol, VolumeState, VolumeStatus,
+            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, Filter, GetNexuses,
+            GetNodes, GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica,
+            ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol,
+            VolumeState, VolumeStatus,
         },
         openapi::apis::{StatusCode, Uuid},
         store::{
@@ -569,15 +569,20 @@ async fn nexus_persistence_test(cluster: &Cluster) {
 }
 async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault: FaultTest) {
     tracing::debug!("arguments ({:?}, {:?}, {:?})", local, remote, fault);
-
+    let mut allowed_nodes: Vec<String> = Vec::new();
+    let preferred_nodes: Vec<String> = Vec::new();
+    allowed_nodes.push(String::from(local.clone()));
+    allowed_nodes.push(String::from(remote.clone()));
     let volume = CreateVolume {
         uuid: "6e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
         replicas: 2,
-        topology: Some(Topology::Explicit(ExplicitNodeTopology {
-            allowed_nodes: vec![local.clone(), remote.clone()],
-            preferred_nodes: vec![],
-        })),
+        topology: Some(Topology::from(models::Topology::new_all(
+            Some(models::NodeTopology::explicit(
+                models::ExplicitNodeTopology::new(allowed_nodes, preferred_nodes),
+            )),
+            None,
+        ))),
         ..Default::default()
     }
     .request()

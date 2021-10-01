@@ -154,8 +154,8 @@ pub struct LabelledTopology {
 impl From<models::LabelledTopology> for LabelledTopology {
     fn from(src: models::LabelledTopology) -> Self {
         Self {
-            exclusion: src.exclusion.into(),
-            inclusion: src.inclusion.into(),
+            exclusion: src.exclusion,
+            inclusion: src.inclusion,
         }
     }
 }
@@ -169,8 +169,8 @@ impl From<LabelledTopology> for models::LabelledTopology {
 /// If no topology is used then the control plane will select from all available resources.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Topology {
-    node: Option<NodeTopology>,
-    pool: Option<PoolTopology>,
+    pub node: Option<NodeTopology>,
+    pub pool: Option<PoolTopology>,
 }
 impl Topology {
     /// Get a reference to the explicit topology

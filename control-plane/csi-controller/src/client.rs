@@ -1,6 +1,6 @@
 use common_lib::types::v0::openapi::models::{
-    CreateVolumeBody, ExplicitTopology, Node, Pool, Topology, Volume, VolumePolicy,
-    VolumeShareProtocol,
+    CreateVolumeBody, ExplicitNodeTopology, LabelledTopology, Node, NodeTopology, Pool,
+    PoolTopology, Topology, Volume, VolumePolicy, VolumeShareProtocol,
 };
 
 use anyhow::{anyhow, Result};
@@ -320,11 +320,19 @@ impl MayastorApiClient {
         size: u64,
         allowed_nodes: &[String],
         preferred_nodes: &[String],
+        inclusive_pool_topology: &[String],
     ) -> Result<Volume, ApiClientError> {
-        let topology = Topology::explicit(ExplicitTopology::new(
-            allowed_nodes.to_vec(),
-            preferred_nodes.to_vec(),
-        ));
+        let exclusive_label_topology: Vec<String> = Vec::new();
+        let topology = Topology::new_all(
+            Some(NodeTopology::explicit(ExplicitNodeTopology::new(
+                allowed_nodes.to_vec(),
+                preferred_nodes.to_vec(),
+            ))),
+            Some(PoolTopology::labelled(LabelledTopology::new_all(
+                exclusive_label_topology.to_vec(),
+                inclusive_pool_topology.to_vec(),
+            ))),
+        );
 
         let req = CreateVolumeBody {
             replicas,

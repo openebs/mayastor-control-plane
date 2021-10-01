@@ -7,7 +7,10 @@ use crate::core::scheduling::{
     resources::{ChildItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
-use common_lib::types::v0::message_bus::PoolStatus;
+use common_lib::{
+    types::v0::message_bus::{PoolStatus, PoolTopology},
+    MSP_OPERATOR, OPENEBS_CREATED_BY_KEY,
+};
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 
 #[async_trait::async_trait(?Send)]
@@ -71,6 +74,42 @@ impl PoolFilters {
     /// Should only attempt to use usable (not faulted) pools
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
+    }
+    /// Should only attempt to use pools having msp-operator creation label iff topology has it
+    pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        let creation_label: String = format!("{}:{}", OPENEBS_CREATED_BY_KEY, MSP_OPERATOR);
+        let pool_has_creation_label = match request.registry().specs().get_pool(&item.pool.id) {
+            Ok(spec) => match spec.labels {
+                None => false,
+                Some(label) => {
+                    label.contains_key(&*String::from(OPENEBS_CREATED_BY_KEY))
+                        && label.get(&*String::from(OPENEBS_CREATED_BY_KEY))
+                            == Some(&String::from(MSP_OPERATOR))
+                }
+            },
+            Err(_) => false,
+        };
+        let volume_has_creation_label = match request.topology.clone() {
+            None => false,
+            Some(topology) => match topology.pool {
+                None => false,
+                Some(pool_topology) => match pool_topology {
+                    PoolTopology::Labelled(labelled_topology) => {
+                        if labelled_topology.inclusion.is_empty() {
+                            false
+                        } else {
+                            labelled_topology
+                                .inclusion
+                                .into_iter()
+                                .filter(|x| x.eq(&creation_label))
+                                .count()
+                                == 0
+                        }
+                    }
+                },
+            },
+        };
+        !volume_has_creation_label || pool_has_creation_label
     }
 }
 
