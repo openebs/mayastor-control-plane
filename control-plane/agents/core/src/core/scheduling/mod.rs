@@ -101,9 +101,9 @@ impl PoolFilters {
                             labelled_topology
                                 .inclusion
                                 .into_iter()
-                                .filter(|x| x.eq(&creation_label))
+                                .filter(|x| *x == creation_label)
                                 .count()
-                                == 0
+                                != 0
                         }
                     }
                 },
