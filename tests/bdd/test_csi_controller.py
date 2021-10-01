@@ -1,0 +1,744 @@
+"""CSI Controller Identity RPC tests."""
+from pytest_bdd import (
+    given,
+    scenario,
+    then,
+    when,
+)
+
+import pytest
+import docker
+import common
+import subprocess
+import csi_pb2 as pb
+import csi_pb2_grpc as rpc
+import grpc
+import subprocess
+
+from urllib.parse import urlparse
+import json
+
+from common import CsiHandle
+from openapi.openapi_client.model.create_pool_body import CreatePoolBody
+from openapi.openapi_client.model.spec_status import SpecStatus
+from openapi_client.exceptions import NotFoundException
+
+
+VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
+VOLUME2_UUID = "d8aab0f1-82f4-406c-89ee-14f08b004aea"
+NOT_EXISTING_VOLUME_UUID = "11111111-2222-3333-4444-555555555555"
+PVC_VOLUME1_NAME = "pvc-%s" % VOLUME1_UUID
+PVC_VOLUME2_NAME = "pvc-%s" % VOLUME2_UUID
+POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
+POOL2_UUID = "bcabda21-9e66-4d81-8c75-bf9f3b687cdc"
+NODE1 = "mayastor-1"
+NODE2 = "mayastor-2"
+VOLUME1_SIZE = 1024 * 1024 * 72
+VOLUME2_SIZE = 1024 * 1024 * 32
+
+
+@pytest.fixture(scope="module")
+def setup():
+    common.deployer_stop()
+    common.deployer_start(2)
+    subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
+
+    # Create 2 pools.
+    pool_labels = {"openebs.io/created-by": "msp-operator"}
+    pool_api = common.get_pools_api()
+    pool_api.put_node_pool(
+        NODE1,
+        POOL1_UUID,
+        CreatePoolBody(["malloc:///disk?size_mb=96"], labels=pool_labels),
+    )
+    pool_api.put_node_pool(
+        NODE2,
+        POOL2_UUID,
+        CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
+    )
+    yield
+    pool_api.del_pool(POOL1_UUID)
+    pool_api.del_pool(POOL2_UUID)
+    common.deployer_stop()
+
+
+def csi_rpc_handle():
+    return CsiHandle("unix:///var/tmp/csi.sock")
+
+
+@scenario("features/csi/controller.feature", "get controller capabilities")
+def test_controller_capabilities(setup):
+    """get controller capabilities"""
+
+
+@scenario("features/csi/controller.feature", "get overall storage capacity")
+def test_overall_capacity(setup):
+    """get overall capacity"""
+
+
+@scenario("features/csi/controller.feature", "get node storage capacity")
+def test_node_capacity(setup):
+    """get node capacity"""
+
+
+@scenario("features/csi/controller.feature", "create 1 replica nvmf volume")
+def test_create_1_replica_nvmf_volume(setup):
+    """create 1 replica nvmf volume"""
+
+
+@scenario("features/csi/controller.feature", "volume creation idempotency")
+def test_volume_creation_idempotency(setup):
+    """volume creation idempotency"""
+
+
+@scenario("features/csi/controller.feature", "remove existing volume")
+def test_remove_existing_volume(setup):
+    """remove existing volume"""
+
+
+@scenario("features/csi/controller.feature", "volume removal idempotency")
+def test_volume_removal_idempotency(setup):
+    """volume removal idempotency"""
+
+
+@scenario("features/csi/controller.feature", "list existing volumes")
+def test_list_existing_volumes(setup):
+    """list existing volumes"""
+
+
+@scenario(
+    "features/csi/controller.feature", "validate SINGLE_NODE_WRITER volume capability"
+)
+def test_validate_single_node_writer_capability(setup):
+    """validate SINGLE_NODE_WRITER volume capability"""
+
+
+@scenario(
+    "features/csi/controller.feature",
+    "validate non-SINGLE_NODE_WRITER volume capability",
+)
+def test_validate_non_single_node_writer_capability(setup):
+    """validate non-SINGLE_NODE_WRITER volume capability"""
+
+
+@scenario("features/csi/controller.feature", "publish volume over nvmf")
+def test_publish_volume_over_nvmf(setup):
+    """publish volume over nvmf"""
+
+
+@scenario("features/csi/controller.feature", "publish volume idempotency")
+def test_publish_volume_idempotency(setup):
+    """publish volume idempotency"""
+
+
+@scenario("features/csi/controller.feature", "unpublish volume")
+def test_unpublish_volume(setup):
+    """unpublish volume"""
+
+
+@scenario("features/csi/controller.feature", "unpublish volume idempotency")
+def test_unpublish_volume_idempotency(setup):
+    """unpublish volume idempotency"""
+
+
+@scenario("features/csi/controller.feature", "unpublish volume from a different node")
+def test_unpublish_volume_from_a_different_node(setup):
+    """unpublish volume on a different node"""
+
+
+@scenario("features/csi/controller.feature", "unpublish not existing volume")
+def test_unpublish_not_existing_volume(setup):
+    """unpublish not existing volume"""
+
+
+@scenario(
+    "features/csi/controller.feature", "republish volume with a different protocol"
+)
+def test_republish_volume_with_a_different_protocol(setup):
+    """republish volume with a different protocol"""
+
+
+@scenario("features/csi/controller.feature", "republish volume on a different node")
+def test_republish_volume_on_a_different_node(setup):
+    """republish volume on a different node"""
+
+
+@given("a running CSI controller plugin", target_fixture="csi_instance")
+def a_csi_instance():
+    return csi_rpc_handle()
+
+
+@given("2 Mayastor nodes with one pool on each node", target_fixture="two_pools")
+def two_nodes_with_one_pool_each():
+    pool_api = common.get_pools_api()
+    pool1 = pool_api.get_pool(POOL1_UUID)
+    pool2 = pool_api.get_pool(POOL2_UUID)
+    return [pool1, pool2]
+
+
+@given("2 existing volumes", target_fixture="two_volumes")
+def two_existing_volumes(_create_2_volumes_1_replica):
+    return _create_2_volumes_1_replica
+
+
+@given("a non-existing volume")
+def a_non_existing_volume():
+    with pytest.raises(NotFoundException) as e:
+        common.get_volumes_api().get_volume(NOT_EXISTING_VOLUME_UUID)
+
+
+@given("a volume published on a node", target_fixture="populate_published_volume")
+def populate_published_volume(_create_1_replica_nvmf_volume):
+    do_publish_volume(VOLUME1_UUID, NODE1)
+
+    # Make sure volume is published.
+    volume = common.get_volumes_api().get_volume(VOLUME1_UUID)
+
+    assert (
+        str(volume.spec.target.protocol) == "nvmf"
+    ), "Protocol mismatches for published volume"
+    assert (
+        volume.state.target["protocol"] == "nvmf"
+    ), "Protocol mismatches for published volume"
+    return volume
+
+
+@when(
+    "a ControllerPublishVolume request is sent to CSI controller to re-publish volume using a different protocol",
+    target_fixture="republish_volume_with_a_different_protocol",
+)
+def republish_volume_with_a_different_protocol(populate_published_volume):
+    with pytest.raises(grpc.RpcError) as e:
+        do_publish_volume(VOLUME1_UUID, NODE1, "iscsi")
+    return e.value
+
+
+@when(
+    "a ControllerPublishVolume request is sent to CSI controller to re-publish volume on a different node",
+    target_fixture="republish_volume_on_a_different_node",
+)
+def republish_volume_on_a_different_node(populate_published_volume):
+    with pytest.raises(grpc.RpcError) as e:
+        do_publish_volume(VOLUME1_UUID, NODE2)
+    return e.value
+
+
+@then(
+    "a ControllerPublishVolume request should fail with FAILED_PRECONDITION error mentioning node mismatch"
+)
+def check_republish_volume_on_a_different_node(republish_volume_on_a_different_node):
+    grpc_error = republish_volume_on_a_different_node
+
+    assert (
+        grpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION
+    ), "Unexpected gRPC error code: %s" + str(grpc_error.code())
+    assert "already published on a different node" in grpc_error.details(), (
+        "Error message reflects a different failure: %s" % grpc_error.details()
+    )
+
+
+@then(
+    "a ControllerPublishVolume request should fail with FAILED_PRECONDITION error mentioning protocol mismatch"
+)
+def check_republish_volume_with_a_different_protocol(
+    republish_volume_with_a_different_protocol,
+):
+    grpc_error = republish_volume_with_a_different_protocol
+
+    assert (
+        grpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION
+    ), "Unexpected gRPC error code: %s" + str(grpc_error.code())
+    assert "already shared via different protocol" in grpc_error.details(), (
+        "Error message reflects a different failure: %s" % grpc_error.details()
+    )
+
+
+@when(
+    "a ControllerUnpublishVolume request is sent to CSI controller to unpublish volume from a different node",
+    target_fixture="unpublish_volume_on_a_different_node",
+)
+def unpublish_volume_on_a_different_node(populate_published_volume):
+    with pytest.raises(grpc.RpcError) as e:
+        do_unpublish_volume(VOLUME1_UUID, NODE2)
+    return e.value
+
+
+@when(
+    "a ControllerUnpublishVolume request is sent to CSI controller to unpublish not existing volume",
+    target_fixture="unpublish_not_existing_volume",
+)
+def unpublish_not_existing_volume():
+    return do_unpublish_volume(NOT_EXISTING_VOLUME_UUID, NODE1)
+
+
+@then("a ControllerUnpublishVolume request should fail with NOT_FOUND error")
+def check_unpublish_volume_on_a_different_node(unpublish_volume_on_a_different_node):
+    grpc_error = unpublish_volume_on_a_different_node
+
+    assert (
+        grpc_error.code() == grpc.StatusCode.NOT_FOUND
+    ), "Unexpected gRPC error code: %s" + str(grpc_error.code())
+
+
+@when(
+    "a ControllerUnpublishVolume request is sent to CSI controller to unpublish volume from its node",
+    target_fixture="unpublish_volume_from_its_node",
+)
+def unpublish_volume_from_its_node(populate_published_volume):
+    uri = populate_published_volume.state.target["deviceUri"]
+    # Make sure the volume is still published and is discoverable.
+    assert check_nvmf_target(uri), "Volume is not discoverable over NVMF"
+    do_unpublish_volume(VOLUME1_UUID, NODE1)
+    return uri
+
+
+@when(
+    "a ControllerUnpublishVolume request is sent to CSI controller to unpublish not published volume"
+)
+def unpublish_not_published_volume_from_its_node(existing_volume):
+    # Make sure the volume is not published and is discoverable.
+    volume = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    assert "target" not in volume.spec, "Volume is still published"
+    do_unpublish_volume(VOLUME1_UUID, NODE1)
+
+
+@then("nvmf target which exposes the volume should be destroyed on specified node")
+def check_unpublish_volume_from_its_node(unpublish_volume_from_its_node):
+    assert (
+        check_nvmf_target(unpublish_volume_from_its_node) is False
+    ), "Unpublished volume is still discoverable over NVMF"
+
+
+def do_unpublish_volume(volume_id, node_id):
+    req = pb.ControllerUnpublishVolumeRequest(volume_id=volume_id, node_id=node_id)
+    return csi_rpc_handle().controller.ControllerUnpublishVolume(req)
+
+
+def do_publish_volume(volume_id, node_id, protocol=None):
+    if protocol is None:
+        protocol = "nvmf"
+
+    req = pb.ControllerPublishVolumeRequest(
+        volume_id=volume_id,
+        node_id=node_id,
+        volume_context={"protocol": protocol},
+        volume_capability={
+            "access_mode": pb.VolumeCapability.AccessMode(
+                mode=pb.VolumeCapability.AccessMode.Mode.SINGLE_NODE_WRITER
+            )
+        },
+    )
+    return csi_rpc_handle().controller.ControllerPublishVolume(req)
+
+
+@when(
+    "a ControllerPublishVolume request is sent to CSI controller to publish volume on specified node",
+    target_fixture="publish_nvmf_volume",
+)
+def publish_nvmf_volume():
+    return do_publish_volume(VOLUME1_UUID, NODE1)
+
+
+@when(
+    "a ControllerPublishVolume request is sent to CSI controller to re-publish volume on the same node",
+    target_fixture="publish_nvmf_volume",
+)
+def publish_nvmf_volume():
+    return do_publish_volume(VOLUME1_UUID, NODE1)
+
+
+@then("nvmf target which exposes the volume should be created on specified node")
+def check_publish_nvmf_volume_on_node(publish_nvmf_volume):
+    # Check that Nexus URI is returned.
+    assert (
+        "uri" in publish_nvmf_volume.publish_context
+    ), "No URI provided for shared volume"
+    uri = publish_nvmf_volume.publish_context["uri"]
+    assert uri.startswith("nvmf://"), "Non-nvmf protocol scheme in share URI: " + uri
+    assert check_nvmf_target(uri), "Volume is not discoverable over NVMF"
+
+
+@when(
+    "a ValidateVolumeCapabilities request with non-SINGLE_NODE_WRITER capability is sent to CSI controller",
+    target_fixture="validate_non_snw_capability",
+)
+def validate_non_single_node_writer_capability():
+    req = pb.ValidateVolumeCapabilitiesRequest(
+        volume_id=VOLUME1_UUID,
+        volume_capabilities=[
+            {
+                "access_mode": pb.VolumeCapability.AccessMode(
+                    mode=pb.VolumeCapability.AccessMode.Mode.MULTI_NODE_SINGLE_WRITER
+                )
+            }
+        ],
+    )
+
+    return csi_rpc_handle().controller.ValidateVolumeCapabilities(req)
+
+
+@then("no capabilities should be confirmed for the volume")
+@then("error message should be reported in ValidateVolumeCapabilitiesResponse")
+def check_validate_non_single_node_writer_capability(validate_non_snw_capability):
+    assert (
+        len(validate_non_snw_capability.message) > 0
+    ), "Error not reported for not supported capabilities"
+    caps = validate_non_snw_capability.confirmed.volume_capabilities
+    assert len(caps) == 0, "Not supported capabilities confirmed"
+
+
+@when(
+    "a ValidateVolumeCapabilities request for SINGLE_NODE_WRITER capability is sent to CSI controller",
+    target_fixture="validate_snw_capability",
+)
+def validate_single_node_writer_capability():
+    req = pb.ValidateVolumeCapabilitiesRequest(
+        volume_id=VOLUME1_UUID,
+        volume_capabilities=[
+            {
+                "access_mode": pb.VolumeCapability.AccessMode(
+                    mode=pb.VolumeCapability.AccessMode.Mode.SINGLE_NODE_WRITER
+                )
+            }
+        ],
+    )
+
+    return csi_rpc_handle().controller.ValidateVolumeCapabilities(req)
+
+
+@then("SINGLE_NODE_WRITER capability should be confirmed for the volume")
+@then("no error message should be reported in ValidateVolumeCapabilitiesResponse")
+def check_validate_single_node_writer_capability(validate_snw_capability):
+    assert (
+        len(validate_snw_capability.message) == 0
+    ), "Error reported for fully supported capability"
+    caps = validate_snw_capability.confirmed.volume_capabilities
+    access_mode = pb.VolumeCapability.AccessMode(
+        mode=pb.VolumeCapability.AccessMode.Mode.SINGLE_NODE_WRITER
+    )
+    assert len(caps) == 1, "Wrong number of supported capabilities reported"
+    assert caps[0].access_mode == access_mode, "Reported access mode does not match"
+
+
+@when("a ListVolumesRequest is sent to CSI controller", target_fixture="list_2_volumes")
+def list_all_volumes(two_volumes):
+    vols = csi_rpc_handle().controller.ListVolumes(pb.ListVolumesRequest())
+    return [two_volumes, vols.entries]
+
+
+@then("all 2 volumes are listed")
+def check_list_all_volumes(list_2_volumes):
+    created_volumes = sorted(list_2_volumes[0], key=lambda v: v.volume.volume_id)
+    listed_volumes = sorted(list_2_volumes[1], key=lambda v: v.volume.volume_id)
+
+    for i in range(2):
+        vol1 = created_volumes[i].volume
+        vol2 = created_volumes[i].volume
+
+        assert vol1.volume_id == vol2.volume_id, "Volumes have different UUIDs"
+        assert (
+            vol1.capacity_bytes == vol2.capacity_bytes
+        ), "Volumes have different sizes"
+
+        check_volume_context(vol1.volume_context, vol2.volume_context)
+
+
+@when(
+    "a ControllerGetCapabilities request is sent to CSI controller",
+    target_fixture="get_caps_request",
+)
+def get_controller_capabilities(csi_instance):
+    return csi_instance.controller.ControllerGetCapabilities(
+        pb.ControllerGetCapabilitiesRequest()
+    )
+
+
+@then("CSI controller should report all its capabilities")
+def check_get_controller_capabilities(get_caps_request):
+    all_capabilities = [
+        pb.ControllerServiceCapability.RPC.Type.CREATE_DELETE_VOLUME,
+        pb.ControllerServiceCapability.RPC.Type.PUBLISH_UNPUBLISH_VOLUME,
+        pb.ControllerServiceCapability.RPC.Type.LIST_VOLUMES,
+        pb.ControllerServiceCapability.RPC.Type.GET_CAPACITY,
+    ]
+
+    reported_capabilities = [c.rpc.type for c in get_caps_request.capabilities]
+
+    assert len(reported_capabilities) == len(
+        all_capabilities
+    ), "Wrong amount of plugin capabilities reported"
+
+    for c in all_capabilities:
+        assert c in reported_capabilities, "Capability is missing: %s" % str(c)
+
+
+@when(
+    "a GetCapacity request is sent to the controller",
+    target_fixture="get_overall_capacity",
+)
+def get_overall_capacity(two_pools):
+    capacity = csi_rpc_handle().controller.GetCapacity(pb.GetCapacityRequest())
+    return [
+        two_pools[0].state.capacity + two_pools[1].state.capacity,
+        capacity.available_capacity,
+    ]
+
+
+@then(
+    "CSI controller should report overall capacity equal to aggregated sizes of the pools"
+)
+def check_get_overall_capacity(get_overall_capacity):
+    assert (
+        get_overall_capacity[0] == get_overall_capacity[1]
+    ), "Overall capacity does not match pool sizes"
+
+
+@when(
+    "GetCapacity request with node name is sent to the controller",
+    target_fixture="get_nodes_capacity",
+)
+def get_node_capacity(two_pools):
+    capacity = []
+
+    for n in [NODE1, NODE2]:
+        topology = pb.Topology(segments=[["kubernetes.io/hostname", n]])
+        cap = csi_rpc_handle().controller.GetCapacity(
+            pb.GetCapacityRequest(accessible_topology=topology)
+        )
+        capacity.append(cap.available_capacity)
+    return capacity
+
+
+@then("CSI controller should report capacity for target node")
+def check_get_node_capacity(get_nodes_capacity):
+    pool_api = common.get_pools_api()
+
+    for i, p in enumerate([POOL1_UUID, POOL2_UUID]):
+        pool = pool_api.get_pool(p)
+        assert (
+            pool.state.capacity == get_nodes_capacity[i]
+        ), "Node pool size does not match reported node capacity"
+
+
+def csi_create_1_replica_nvmf_volume1():
+    capacity = pb.CapacityRange(required_bytes=VOLUME1_SIZE, limit_bytes=0)
+    parameters = {
+        "protocol": "nvmf",
+        "ioTimeout": "30",
+        "repl": "1",
+    }
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME1_NAME, capacity_range=capacity, parameters=parameters
+    )
+
+    return csi_rpc_handle().controller.CreateVolume(req)
+
+
+def csi_create_1_replica_nvmf_volume2():
+    capacity = pb.CapacityRange(required_bytes=VOLUME2_SIZE, limit_bytes=0)
+    parameters = {
+        "protocol": "nvmf",
+        "ioTimeout": "30",
+        "repl": "1",
+    }
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME2_NAME, capacity_range=capacity, parameters=parameters
+    )
+
+    return csi_rpc_handle().controller.CreateVolume(req)
+
+
+def check_nvmf_target(uri):
+    """Check whether NVMF target is discoverable via target URI"""
+    # Make sure URI represents nvmf target.
+    assert uri, "URI must not be empty"
+    assert uri.startswith("nvmf://"), "Non-nvmf protocol scheme in share URI: " + uri
+
+    u = urlparse(uri)
+    port = u.port
+    host = u.hostname
+    nqn = u.path[1:]
+
+    command = "sudo nvme discover -t tcp -s {0} -a {1} -o json".format(port, host)
+    status = subprocess.run(
+        command, shell=True, check=True, text=True, capture_output=True
+    )
+
+    # Make sure nvmf target exists.
+    try:
+        records = json.loads(status.stdout)
+    except:
+        # In case no targets are discovered, no parseable JSON exists.
+        return False
+
+    for r in records["records"]:
+        if r["subnqn"] == nqn:
+            return True
+    return False
+
+
+def csi_delete_1_replica_nvmf_volume1():
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=VOLUME1_UUID)
+    )
+
+
+def csi_delete_1_replica_nvmf_volume2():
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=VOLUME2_UUID)
+    )
+
+
+@pytest.fixture
+def _create_1_replica_nvmf_volume():
+    yield csi_create_1_replica_nvmf_volume1()
+    csi_delete_1_replica_nvmf_volume1()
+
+
+@pytest.fixture
+def _create_2_volumes_1_replica():
+    vol1 = csi_create_1_replica_nvmf_volume1()
+    vol2 = csi_create_1_replica_nvmf_volume2()
+
+    yield [vol1, vol2]
+
+    csi_delete_1_replica_nvmf_volume1()
+    csi_delete_1_replica_nvmf_volume2()
+
+
+@when(
+    "a CreateVolume request is sent to create a 1 replica nvmf volume",
+    target_fixture="create_1r_nvmf_volume",
+)
+def create_1_replica_nvmf_volume(_create_1_replica_nvmf_volume):
+    return _create_1_replica_nvmf_volume
+
+
+@then("a new volume of requested size should be successfully created")
+def check_create_1_replica_nvmf_volume(create_1r_nvmf_volume):
+    assert (
+        create_1r_nvmf_volume.volume.capacity_bytes == VOLUME1_SIZE
+    ), "Volume size mismatches"
+    volume = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    assert volume.spec.num_replicas == 1, "Number of volume replicas mismatches"
+    assert volume.spec.size == VOLUME1_SIZE, "Volume size mismatches"
+
+
+def check_volume_context(volume_ctx, target_ctx):
+    for k, v in target_ctx.items():
+        assert k in volume_ctx, "Context key is missing: " + k
+        assert volume_ctx[k] == v, "Context item mismatches"
+
+
+@then("volume context should reflect volume creation parameters")
+def check_create_1_replica_nvmf_volume_context(create_1r_nvmf_volume):
+    check_volume_context(
+        create_1r_nvmf_volume.volume.volume_context,
+        {"protocol": "nvmf", "repl": "1", "ioTimeout": "30"},
+    )
+
+
+@given("an existing unpublished volume", target_fixture="existing_volume")
+def an_existing_volume(_create_1_replica_nvmf_volume):
+    return _create_1_replica_nvmf_volume
+
+
+@when(
+    "a CreateVolume request is sent to create a volume identical to existing volume",
+    target_fixture="create_the_same_volume",
+)
+def create_the_same_volume_again(existing_volume):
+    return [existing_volume, csi_create_1_replica_nvmf_volume1()]
+
+
+def check_volume_specs(volume1, volume2):
+    assert (
+        volume1.capacity_bytes == volume2.capacity_bytes
+    ), "Volumes have different capacity"
+    assert volume1.volume_id == volume2.volume_id, "Volumes have different UUIDs"
+    assert (
+        volume1.volume_context == volume2.volume_context
+    ), "Volumes have different contexts"
+
+    topology1 = sorted(
+        volume1.accessible_topology, key=lambda t: t.segments["kubernetes.io/hostname"]
+    )
+
+    topology2 = sorted(
+        volume2.accessible_topology, key=lambda t: t.segments["kubernetes.io/hostname"]
+    )
+
+    assert topology1 == topology2, "Volumes have different topologies"
+
+
+@then("a CreateVolume request for the identical volume should succeed")
+@then("volume context should be identical to the context of existing volume")
+def check_identical_volume_creation(create_the_same_volume):
+    check_volume_specs(
+        create_the_same_volume[0].volume, create_the_same_volume[1].volume
+    )
+
+
+@when("a DeleteVolume request is sent to CSI controller to delete existing volume")
+def delete_existing_volume():
+    # Make sure volume does exist before removing it.
+    common.get_volumes_api().get_volume(VOLUME1_UUID)
+
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=VOLUME1_UUID)
+    )
+
+
+@then("existing volume should be deleted")
+def check_delete_existing_volume():
+    # Make sure volume does not exist after being removed.
+    with pytest.raises(NotFoundException) as e:
+        common.get_volumes_api().get_volume(VOLUME1_UUID)
+
+
+@when("a DeleteVolume request is sent to CSI controller to delete not existing volume")
+def remove_not_existing_volume():
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=NOT_EXISTING_VOLUME_UUID)
+    )
+
+
+@then("a DeleteVolume request should succeed as if target volume existed")
+def check_remove_not_existing_volume():
+    with pytest.raises(NotFoundException) as e:
+        common.get_volumes_api().get_volume(NOT_EXISTING_VOLUME_UUID)
+
+
+@then(
+    "a ControllerUnpublishVolume request should succeed as if target volume was published"
+)
+def check_unpublish_not_published_volume():
+    pass
+
+
+@then(
+    "a ControllerUnpublishVolume request should succeed as if not existing volume was published"
+)
+def check_unpublish_not_existing_volume(unpublish_not_existing_volume):
+    response = pb.ControllerUnpublishVolumeResponse()
+    assert (
+        response == unpublish_not_existing_volume
+    ), "Volume unpuplishing succeeded with unexpected response"
+
+
+@then("volume should report itself as published")
+def check_volume_status_published():
+    vol = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    assert str(vol.spec.target.protocol) == "nvmf", "Volume protocol mismatches"
+    assert vol.state.target["protocol"] == "nvmf", "Volume protocol mismatches"
+    assert vol.state.target["deviceUri"].startswith(
+        "nvmf://"
+    ), "Volume share URI mismatches"
+
+
+@then("volume should report itself as not published")
+def check_volume_status_not_published():
+    vol = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    assert "target" not in vol.spec, "Volume still published"

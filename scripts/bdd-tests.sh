@@ -17,6 +17,10 @@ cargo build --bins
 rm -rf "$BDD_TEST_DIR"/openapi/test
 
 virtualenv --no-setuptools "$BDD_TEST_DIR"/venv
+
+# Generate gRPC protobuf stubs.
+python -m grpc_tools.protoc --proto_path="$ROOT_DIR"/rpc/mayastor-api/protobuf/ --grpc_python_out="$BDD_TEST_DIR" --python_out="$BDD_TEST_DIR" csi.proto
+
 source "$BDD_TEST_DIR"/venv/bin/activate
 pip install -r "$BDD_TEST_DIR"/requirements.txt
 

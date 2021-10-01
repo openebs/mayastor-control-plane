@@ -109,6 +109,10 @@ pub struct StartOptions {
     #[structopt(long)]
     pub no_rest: bool,
 
+    /// Disable the CSI Controller
+    #[structopt(long)]
+    pub no_csi: bool,
+
     /// Rest Path to JSON Web KEY file used for authenticating REST requests.
     /// Otherwise, no authentication is used
     #[structopt(long, conflicts_with = "no_rest")]
@@ -289,6 +293,10 @@ impl StartOptions {
     pub fn with_rest(mut self, enabled: bool, jwk: Option<String>) -> Self {
         self.no_rest = !enabled;
         self.rest_jwk = jwk;
+        self
+    }
+    pub fn with_csi(mut self, enabled: bool) -> Self {
+        self.no_csi = !enabled;
         self
     }
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {
