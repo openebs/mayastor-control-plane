@@ -93,7 +93,7 @@ pub struct StartOptions {
     pub jaeger: bool,
 
     /// Use an external jaegertracing collector
-    #[structopt(long, requires = "jaeger", env = "EXTERNAL_JAEGER")]
+    #[structopt(long, env = "EXTERNAL_JAEGER")]
     pub external_jaeger: Option<String>,
 
     /// Use the elasticsearch service
@@ -318,20 +318,6 @@ impl StartOptions {
     pub fn with_base_image(mut self, base_image: impl Into<Option<String>>) -> Self {
         self.base_image = base_image.into();
         self
-    }
-    /// Get the jaeger endpoint, if configured
-    pub fn jaeger_endpoint(&self, cfg: &Builder) -> Option<String> {
-        if let Some(external) = &self.external_jaeger {
-            if external.contains(':') {
-                Some(external.to_string())
-            } else {
-                Some(format!("{}:6831", external))
-            }
-        } else if cfg.container_exists("jaeger") {
-            Some(format!("jaeger.{}:6831", cfg.get_name()))
-        } else {
-            None
-        }
     }
 }
 
