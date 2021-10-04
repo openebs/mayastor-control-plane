@@ -1794,65 +1794,24 @@ components:
       required:
         - size
         - thin
-    ExclusiveLabel:
-      example: ''
-      description: |-
-        Excludes resources with the same $label name, eg:
-         "Zone" would not allow for resources with the same "Zone" value
-         to be used for a certain operation, eg:
-         A node with "Zone: A" would not be paired up with a node with "Zone: A",
-         but it could be paired up with a node with "Zone: B"
-         exclusive label NAME in the form "NAME", and not "NAME: VALUE"
-      type: string
-    InclusiveLabel:
-      example: ''
-      description: |-
-        Includes resources with the same $label or $label:$value eg:
-         if label is "Zone: A":
-         A resource with "Zone: A" would be paired up with a resource with "Zone: A",
-         but not with a resource with "Zone: B"
-         if label is "Zone":
-         A resource with "Zone: A" would be paired up with a resource with "Zone: B",
-         but not with a resource with "OtherLabel: B"
-         inclusive label key value in the form "NAME: VALUE"
-      type: string
-    NodeTopology:
-      example:
-        exclusion:
-          - ''
-        inclusion:
-          - ''
-      description: node topology
-      type: object
-      properties:
-        exclusion:
-          description: exclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/ExclusiveLabel'
-        inclusion:
-          description: inclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/InclusiveLabel'
-      required:
-        - exclusion
-        - inclusion
     PoolTopology:
       example:
-        inclusion:
-          - ''
-      description: pool topology
+        explicit: null
+        labelled: null
+      description: |-
+        Used to determine how to place/distribute the data during volume creation and replica replacement.
+         If left empty then the control plane will select from all available resources.
       type: object
       properties:
-        inclusion:
-          description: inclusive labels
-          type: array
-          items:
-            $ref: '#/components/schemas/InclusiveLabel'
-      required:
-        - inclusion
-    ExplicitTopology:
+        labelled:
+          description: volume pool topology definition through labels
+          allOf:
+            - $ref: '#/components/schemas/LabelledTopology'
+      additionalProperties: false
+      oneOf:
+        - required:
+            - labelled
+    ExplicitNodeTopology:
       example:
         allowed_nodes:
           - ''
@@ -1876,25 +1835,51 @@ components:
         - preferred_nodes
     LabelledTopology:
       example:
-        node_topology:
-          exclusion:
-            - ''
-          inclusion:
-            - ''
-        pool_topology:
-          inclusion:
-            - ''
-      description: volume topology using labels
+        exclusion:
+          - ''
+        inclusion:
+          - ''
+      description: labelled topology
+      type: object
+      properties:
+        exclusion:
+          example: ''
+          description: |-
+            Excludes resources with the same $label name, eg:
+             "Zone" would not allow for resources with the same "Zone" value
+             to be used for a certain operation, eg:
+             A node with "Zone: A" would not be paired up with a node with "Zone: A",
+             but it could be paired up with a node with "Zone: B"
+             exclusive label NAME in the form "NAME", and not "NAME: VALUE"
+          type: object
+          additionalProperties:
+            type: string
+        inclusion:
+          example: ''
+          description: |-
+            Includes resources with the same $label or $label:$value eg:
+             if label is "Zone: A":
+             A resource with "Zone: A" would be paired up with a resource with "Zone: A",
+             but not with a resource with "Zone: B"
+             if label is "Zone":
+             A resource with "Zone: A" would be paired up with a resource with "Zone: B",
+             but not with a resource with "OtherLabel: B"
+             inclusive label key value in the form "NAME: VALUE"
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - exclusion
+        - inclusion
+    Topology:
+      description: node and pool topology for volumes
       type: object
       properties:
         node_topology:
           $ref: '#/components/schemas/NodeTopology'
         pool_topology:
           $ref: '#/components/schemas/PoolTopology'
-      required:
-        - node_topology
-        - pool_topology
-    Topology:
+    NodeTopology:
       example:
         explicit: null
         labelled: null
@@ -1906,7 +1891,7 @@ components:
         explicit:
           description: volume topology, explicitly selected
           allOf:
-            - $ref: '#/components/schemas/ExplicitTopology'
+            - $ref: '#/components/schemas/ExplicitNodeTopology'
         labelled:
           description: volume topology definition through labels
           allOf:

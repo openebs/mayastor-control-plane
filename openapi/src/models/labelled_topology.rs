@@ -14,36 +14,42 @@
 
 use crate::apis::IntoVec;
 
-/// LabelledTopology : volume topology using labels
+/// LabelledTopology : labelled topology
 
-/// volume topology using labels
+/// labelled topology
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct LabelledTopology {
-    #[serde(rename = "node_topology")]
-    pub node_topology: crate::models::NodeTopology,
-    #[serde(rename = "pool_topology")]
-    pub pool_topology: crate::models::PoolTopology,
+    /// Excludes resources with the same $label name, eg:  \"Zone\" would not allow for resources with the same \"Zone\" value  to be used for a certain operation, eg:  A node with \"Zone: A\" would not be paired up with a node with \"Zone: A\",  but it could be paired up with a node with \"Zone: B\"  exclusive label NAME in the form \"NAME\", and not \"NAME: VALUE\"
+    #[serde(rename = "exclusion")]
+    pub exclusion: ::std::collections::HashMap<String, String>,
+    /// Includes resources with the same $label or $label:$value eg:  if label is \"Zone: A\":  A
+    /// resource with \"Zone: A\" would be paired up with a resource with \"Zone: A\",  but not
+    /// with a resource with \"Zone: B\"  if label is \"Zone\":  A resource with \"Zone: A\" would
+    /// be paired up with a resource with \"Zone: B\",  but not with a resource with \"OtherLabel:
+    /// B\"  inclusive label key value in the form \"NAME: VALUE\"
+    #[serde(rename = "inclusion")]
+    pub inclusion: ::std::collections::HashMap<String, String>,
 }
 
 impl LabelledTopology {
     /// LabelledTopology using only the required fields
     pub fn new(
-        node_topology: impl Into<crate::models::NodeTopology>,
-        pool_topology: impl Into<crate::models::PoolTopology>,
+        exclusion: impl Into<::std::collections::HashMap<String, String>>,
+        inclusion: impl Into<::std::collections::HashMap<String, String>>,
     ) -> LabelledTopology {
         LabelledTopology {
-            node_topology: node_topology.into(),
-            pool_topology: pool_topology.into(),
+            exclusion: exclusion.into(),
+            inclusion: inclusion.into(),
         }
     }
     /// LabelledTopology using all fields
     pub fn new_all(
-        node_topology: impl Into<crate::models::NodeTopology>,
-        pool_topology: impl Into<crate::models::PoolTopology>,
+        exclusion: impl Into<::std::collections::HashMap<String, String>>,
+        inclusion: impl Into<::std::collections::HashMap<String, String>>,
     ) -> LabelledTopology {
         LabelledTopology {
-            node_topology: node_topology.into(),
-            pool_topology: pool_topology.into(),
+            exclusion: exclusion.into(),
+            inclusion: inclusion.into(),
         }
     }
 }

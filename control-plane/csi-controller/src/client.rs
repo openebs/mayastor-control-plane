@@ -1,13 +1,16 @@
 use common_lib::types::v0::openapi::models::{
-    CreateVolumeBody, ExplicitTopology, Node, Pool, Topology, Volume, VolumePolicy,
-    VolumeShareProtocol,
+    CreateVolumeBody, ExplicitNodeTopology, LabelledTopology, Node, NodeTopology, Pool,
+    PoolTopology, Topology, Volume, VolumePolicy, VolumeShareProtocol,
 };
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
 use reqwest::{Client, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 use tracing::{debug, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -320,11 +323,18 @@ impl MayastorApiClient {
         size: u64,
         allowed_nodes: &[String],
         preferred_nodes: &[String],
+        inclusive_pool_topology: &HashMap<String, String>,
     ) -> Result<Volume, ApiClientError> {
-        let topology = Topology::explicit(ExplicitTopology::new(
-            allowed_nodes.to_vec(),
-            preferred_nodes.to_vec(),
-        ));
+        let topology = Topology::new_all(
+            Some(NodeTopology::explicit(ExplicitNodeTopology::new(
+                allowed_nodes.to_vec(),
+                preferred_nodes.to_vec(),
+            ))),
+            Some(PoolTopology::labelled(LabelledTopology::new(
+                HashMap::new(),
+                inclusive_pool_topology.to_owned(),
+            ))),
+        );
 
         let req = CreateVolumeBody {
             replicas,

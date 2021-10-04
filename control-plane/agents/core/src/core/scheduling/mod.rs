@@ -7,7 +7,7 @@ use crate::core::scheduling::{
     resources::{ChildItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
-use common_lib::types::v0::message_bus::PoolStatus;
+use common_lib::types::v0::message_bus::{PoolStatus, PoolTopology};
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 
 #[async_trait::async_trait(?Send)]
@@ -71,6 +71,37 @@ impl PoolFilters {
     /// Should only attempt to use usable (not faulted) pools
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
+    }
+    /// Should only attempt to use pools having specific creation label iff topology has it
+    pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        let volume_pool_topology_labels: HashMap<String, String>;
+        match request.topology.clone() {
+            None => return true,
+            Some(topology) => match topology.pool {
+                None => return true,
+                Some(pool_topology) => match pool_topology {
+                    PoolTopology::Labelled(labelled_topology) => {
+                        // The labels in Volume Pool Topology should match the pool labels if
+                        // present, otherwise selection of any pool is allowed.
+                        if !labelled_topology.inclusion.is_empty() {
+                            volume_pool_topology_labels = labelled_topology.inclusion
+                        } else {
+                            return true;
+                        }
+                    }
+                },
+            },
+        };
+        // We will reach this part of code only if the volume has pool topology labels.
+        return match request.registry().specs().get_pool(&item.pool.id) {
+            Ok(spec) => match spec.labels {
+                None => false,
+                Some(label) => volume_pool_topology_labels.keys().all(|k| {
+                    label.contains_key(k) && (volume_pool_topology_labels.get(k) == label.get(k))
+                }),
+            },
+            Err(_) => false,
+        };
     }
 }
 

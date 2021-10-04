@@ -14,11 +14,11 @@
 
 use crate::apis::IntoVec;
 
-/// ExplicitTopology : volume topology, explicitly selected
+/// ExplicitNodeTopology : volume topology, explicitly selected
 
 /// volume topology, explicitly selected
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct ExplicitTopology {
+pub struct ExplicitNodeTopology {
     /// replicas can only be placed on these nodes
     #[serde(rename = "allowed_nodes")]
     pub allowed_nodes: Vec<String>,
@@ -27,23 +27,23 @@ pub struct ExplicitTopology {
     pub preferred_nodes: Vec<String>,
 }
 
-impl ExplicitTopology {
-    /// ExplicitTopology using only the required fields
+impl ExplicitNodeTopology {
+    /// ExplicitNodeTopology using only the required fields
     pub fn new(
         allowed_nodes: impl IntoVec<String>,
         preferred_nodes: impl IntoVec<String>,
-    ) -> ExplicitTopology {
-        ExplicitTopology {
+    ) -> ExplicitNodeTopology {
+        ExplicitNodeTopology {
             allowed_nodes: allowed_nodes.into_vec(),
             preferred_nodes: preferred_nodes.into_vec(),
         }
     }
-    /// ExplicitTopology using all fields
+    /// ExplicitNodeTopology using all fields
     pub fn new_all(
         allowed_nodes: impl IntoVec<String>,
         preferred_nodes: impl IntoVec<String>,
-    ) -> ExplicitTopology {
-        ExplicitTopology {
+    ) -> ExplicitNodeTopology {
+        ExplicitNodeTopology {
             allowed_nodes: allowed_nodes.into_vec(),
             preferred_nodes: preferred_nodes.into_vec(),
         }

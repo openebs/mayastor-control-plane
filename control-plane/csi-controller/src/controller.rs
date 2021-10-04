@@ -6,8 +6,9 @@ use tonic::{Response, Status};
 use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
 
-use common_lib::types::v0::openapi::models::{
-    Node, Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol,
+use common_lib::{
+    types::v0::openapi::models::{Node, Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol},
+    MSP_OPERATOR, OPENEBS_CREATED_BY_KEY,
 };
 
 use rpc::csi::Topology as CsiTopology;
@@ -280,6 +281,12 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         // of what node was chosen for running the app.
         let mut allowed_nodes: Vec<String> = Vec::new();
         let mut preferred_nodes: Vec<String> = Vec::new();
+        let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
+
+        inclusive_label_topology.insert(
+            String::from(OPENEBS_CREATED_BY_KEY),
+            String::from(MSP_OPERATOR),
+        );
 
         if let Some(reqs) = args.accessibility_requirements {
             for r in reqs.requisite.iter() {
@@ -331,6 +338,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     size,
                     &allowed_nodes,
                     &preferred_nodes,
+                    &inclusive_label_topology,
                 )
                 .await?;
 

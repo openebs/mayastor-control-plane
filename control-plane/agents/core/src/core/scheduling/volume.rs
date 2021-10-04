@@ -100,6 +100,7 @@ impl AddVolumeReplica {
             .filter(NodeFilters::unused)
             .filter(PoolFilters::usable)
             .filter(PoolFilters::free_space)
+            .filter(PoolFilters::topology)
             // sort pools in order of preference (from least to most number of replicas)
             .sort(PoolSorters::sort_by_replica_count)
     }

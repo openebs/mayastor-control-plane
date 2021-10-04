@@ -92,7 +92,7 @@ Class | Method | HTTP request | Description
  - [CreatePoolBody](docs/models/CreatePoolBody.md)
  - [CreateReplicaBody](docs/models/CreateReplicaBody.md)
  - [CreateVolumeBody](docs/models/CreateVolumeBody.md)
- - [ExplicitTopology](docs/models/ExplicitTopology.md)
+ - [ExplicitNodeTopology](docs/models/ExplicitNodeTopology.md)
  - [LabelledTopology](docs/models/LabelledTopology.md)
  - [Nexus](docs/models/Nexus.md)
  - [NexusShareProtocol](docs/models/NexusShareProtocol.md)
