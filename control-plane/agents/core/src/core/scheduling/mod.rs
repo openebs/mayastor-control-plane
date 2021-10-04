@@ -77,7 +77,7 @@ impl PoolFilters {
     }
     /// Should only attempt to use pools having specific creation label iff topology has it
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        let volume_creation_label: String;
+        let volume_pool_topology_labels: HashMap<String, String>;
         match request.topology.clone() {
             None => return true,
             Some(topology) => match topology.pool {
@@ -90,11 +90,7 @@ impl PoolFilters {
                             .inclusion
                             .contains_key(OPENEBS_CREATED_BY_KEY)
                         {
-                            volume_creation_label = labelled_topology
-                                .inclusion
-                                .get(OPENEBS_CREATED_BY_KEY)
-                                .unwrap()
-                                .clone();
+                            volume_pool_topology_labels = labelled_topology.inclusion
                         } else {
                             return true;
                         }
@@ -102,13 +98,11 @@ impl PoolFilters {
                 },
             },
         };
+        // We will reach this part of code only if the volume has pool topology labels.
         return match request.registry().specs().get_pool(&item.pool.id) {
             Ok(spec) => match spec.labels {
                 None => false,
-                Some(label) => {
-                    label.contains_key(OPENEBS_CREATED_BY_KEY)
-                        && label.get(OPENEBS_CREATED_BY_KEY) == Some(&volume_creation_label)
-                }
+                Some(label) => volume_pool_topology_labels == label,
             },
             Err(_) => false,
         };
