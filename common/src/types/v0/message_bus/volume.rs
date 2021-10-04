@@ -63,6 +63,8 @@ pub struct VolumeState {
     pub status: VolumeStatus,
     /// target nexus that connects to the children
     pub target: Option<Nexus>,
+    /// replica topology information
+    pub replica_topology: HashMap<ReplicaId, ReplicaTopology>,
 }
 
 impl From<VolumeState> for models::VolumeState {
@@ -72,6 +74,11 @@ impl From<VolumeState> for models::VolumeState {
             size: volume.size,
             status: volume.status.into(),
             target: volume.target.into_opt(),
+            replica_topology: volume
+                .replica_topology
+                .iter()
+                .map(|(k, v)| (k.into(), v.into()))
+                .collect(),
         }
     }
 }
@@ -102,6 +109,7 @@ impl From<(&VolumeId, &Nexus)> for VolumeState {
             size: nexus.size,
             status: nexus.status.clone(),
             target: Some(nexus.clone()),
+            replica_topology: HashMap::new(),
         }
     }
 }
@@ -505,5 +513,33 @@ impl DestroyVolume {
     /// Get the volume's identification
     pub fn uuid(&self) -> &VolumeId {
         &self.uuid
+    }
+}
+
+/// Replica topology information
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplicaTopology {
+    /// id of the mayastor instance
+    node: Option<NodeId>,
+    /// id of the pool
+    pool: Option<PoolId>,
+    /// status of the replica
+    status: ReplicaStatus,
+}
+
+impl ReplicaTopology {
+    pub fn new(node: Option<NodeId>, pool: Option<PoolId>, status: ReplicaStatus) -> Self {
+        Self { node, pool, status }
+    }
+}
+
+impl From<&ReplicaTopology> for models::ReplicaTopology {
+    fn from(replica_topology: &ReplicaTopology) -> Self {
+        models::ReplicaTopology::new_all(
+            replica_topology.node.clone().map(Into::into),
+            replica_topology.pool.clone().map(Into::into),
+            replica_topology.status.clone(),
+        )
     }
 }

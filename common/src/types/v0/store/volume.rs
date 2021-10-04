@@ -17,6 +17,7 @@ use crate::{
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Key used by the store to uniquely identify a VolumeState structure.
 pub struct VolumeStateKey(VolumeId);
@@ -337,6 +338,7 @@ impl From<&VolumeSpec> for message_bus::VolumeState {
             size: spec.size,
             status: message_bus::VolumeStatus::Unknown,
             target: None,
+            replica_topology: HashMap::new(),
         }
     }
 }

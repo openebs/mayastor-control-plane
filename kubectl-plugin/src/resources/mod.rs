@@ -10,13 +10,15 @@ pub(crate) type ReplicaCount = u8;
 pub(crate) type PoolId = String;
 pub(crate) type NodeId = String;
 
-/// The types of resources that support the 'list' operation.
+/// The types of resources that support the 'get' operation.
 #[derive(StructOpt, Debug)]
 pub(crate) enum GetResources {
     /// Get all volumes.
     Volumes,
     /// Get volume with the given ID.
     Volume { id: VolumeId },
+    /// Get the replica toplogy for the volume with the given ID
+    VolumeReplicaTopology { id: VolumeId },
     /// Get all pools.
     Pools,
     /// Get pool with the given ID.

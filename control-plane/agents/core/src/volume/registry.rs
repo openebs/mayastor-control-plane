@@ -1,11 +1,13 @@
 use crate::core::registry::Registry;
 use common::errors::{SvcError, VolumeNotFound};
 use common_lib::types::v0::message_bus::{
-    NexusStatus, Volume, VolumeId, VolumeState, VolumeStatus,
+    NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 
 use crate::core::reconciler::PollTriggerEvent;
+use common_lib::types::v0::store::replica::ReplicaSpec;
 use snafu::OptionExt;
+use std::collections::HashMap;
 
 impl Registry {
     /// Get the volume state for the specified volume
@@ -30,6 +32,16 @@ impl Registry {
             }
         };
 
+        // Construct the topological information for the volume replicas.
+        let mut replica_topology = HashMap::new();
+        for spec in &replica_specs {
+            let replica_spec = spec.lock().clone();
+            replica_topology.insert(
+                replica_spec.uuid.clone(),
+                self.replica_topology(&replica_spec).await,
+            );
+        }
+
         Ok(if let Some(nexus_state) = nexus_state {
             VolumeState {
                 uuid: volume_uuid.to_owned(),
@@ -43,6 +55,7 @@ impl Registry {
                     _ => nexus_state.status.clone(),
                 },
                 target: Some(nexus_state),
+                replica_topology,
             }
         } else {
             VolumeState {
@@ -60,9 +73,26 @@ impl Registry {
                     VolumeStatus::Unknown
                 },
                 target: None,
+                replica_topology,
             }
         })
     }
+
+    /// Construct a replica topology from a replica spec.
+    /// If the replica cannot be found, return the default replica topology.
+    async fn replica_topology(&self, spec: &ReplicaSpec) -> ReplicaTopology {
+        match self.get_replica(&spec.uuid).await {
+            Ok(state) => ReplicaTopology::new(Some(state.node), Some(state.pool), state.status),
+            Err(_) => {
+                tracing::error!(
+                    "Replica {} not found. Constructing default replica topology.",
+                    spec.uuid
+                );
+                ReplicaTopology::default()
+            }
+        }
+    }
+
     /// Get all volumes
     pub(super) async fn get_volumes(&self) -> Vec<Volume> {
         let mut volumes = vec![];

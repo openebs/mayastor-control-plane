@@ -64,6 +64,8 @@ pub mod replica_spec_owners;
 pub use self::replica_spec_owners::ReplicaSpecOwners;
 pub mod replica_state;
 pub use self::replica_state::ReplicaState;
+pub mod replica_topology;
+pub use self::replica_topology::ReplicaTopology;
 pub mod rest_json_error;
 pub use self::rest_json_error::RestJsonError;
 pub mod rest_watch;

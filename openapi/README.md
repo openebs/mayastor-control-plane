@@ -116,6 +116,7 @@ Class | Method | HTTP request | Description
  - [ReplicaSpecOperation](docs/models/ReplicaSpecOperation.md)
  - [ReplicaSpecOwners](docs/models/ReplicaSpecOwners.md)
  - [ReplicaState](docs/models/ReplicaState.md)
+ - [ReplicaTopology](docs/models/ReplicaTopology.md)
  - [RestJsonError](docs/models/RestJsonError.md)
  - [RestWatch](docs/models/RestWatch.md)
  - [SpecStatus](docs/models/SpecStatus.md)

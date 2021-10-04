@@ -6,8 +6,12 @@ use crate::{
 use async_trait::async_trait;
 use structopt::StructOpt;
 
-use crate::resources::utils::{optional_cell, CreateRows, GetHeaderRow, OutputFormat};
+use crate::{
+    operations::ReplicaTopology,
+    resources::utils::{optional_cell, CreateRows, GetHeaderRow, OutputFormat},
+};
 use prettytable::Row;
+use std::collections::HashMap;
 
 /// Volumes resource.
 #[derive(StructOpt, Debug)]
@@ -109,5 +113,42 @@ impl Scale for Volume {
                 println!("Failed to scale volume {}. Error {}", id, e)
             }
         }
+    }
+}
+
+#[async_trait(?Send)]
+impl ReplicaTopology for Volume {
+    type ID = VolumeId;
+    async fn topology(id: &Self::ID, output: &OutputFormat) {
+        match RestClient::client().volumes_api().get_volume(id).await {
+            Ok(volume) => {
+                // Print table, json or yaml based on output format.
+                utils::print_table(output, volume.state.replica_topology);
+            }
+            Err(e) => {
+                println!("Failed to get volume {}. Error {}", id, e)
+            }
+        }
+    }
+}
+
+impl GetHeaderRow for HashMap<String, openapi::models::ReplicaTopology> {
+    fn get_header_row(&self) -> Row {
+        (&*utils::REPLICA_TOPOLOGY_HEADERS).clone()
+    }
+}
+
+impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
+    fn create_rows(&self) -> Vec<Row> {
+        let mut rows = vec![];
+        self.iter().for_each(|(id, topology)| {
+            rows.push(row![
+                id,
+                optional_cell(topology.node.as_ref()),
+                optional_cell(topology.pool.as_ref()),
+                topology.state,
+            ])
+        });
+        rows
     }
 }

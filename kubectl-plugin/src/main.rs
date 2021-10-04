@@ -8,7 +8,7 @@ mod resources;
 mod rest_wrapper;
 
 use crate::{
-    operations::{Get, List, Scale},
+    operations::{Get, List, ReplicaTopology, Scale},
     resources::{node, pool, utils, volume, GetResources, ScaleResources},
     rest_wrapper::RestClient,
 };
@@ -55,6 +55,9 @@ async fn main() {
         Operations::Get(resource) => match resource {
             GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
             GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
+            GetResources::VolumeReplicaTopology { id } => {
+                volume::Volume::topology(id, &cli_args.output).await
+            }
             GetResources::Pools => pool::Pools::list(&cli_args.output).await,
             GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
             GetResources::Nodes => node::Nodes::list(&cli_args.output).await,

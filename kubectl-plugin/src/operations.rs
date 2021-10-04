@@ -33,3 +33,11 @@ pub trait Scale {
     type ID;
     async fn scale(id: &Self::ID, replica_count: u8, output: &utils::OutputFormat);
 }
+
+/// Replica topology trait.
+/// To be implemented by resources which support the 'replica-topology' operation
+#[async_trait(?Send)]
+pub trait ReplicaTopology {
+    type ID;
+    async fn topology(id: &Self::ID, output: &utils::OutputFormat);
+}
