@@ -7,10 +7,7 @@ use crate::core::scheduling::{
     resources::{ChildItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
-use common_lib::{
-    types::v0::message_bus::{PoolStatus, PoolTopology},
-    OPENEBS_CREATED_BY_KEY,
-};
+use common_lib::types::v0::message_bus::{PoolStatus, PoolTopology};
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 
 #[async_trait::async_trait(?Send)]
@@ -84,12 +81,9 @@ impl PoolFilters {
                 None => return true,
                 Some(pool_topology) => match pool_topology {
                     PoolTopology::Labelled(labelled_topology) => {
-                        // Currently only creation label is being supported and checked, any other
-                        // labels on the pools would not be considered.
-                        if labelled_topology
-                            .inclusion
-                            .contains_key(OPENEBS_CREATED_BY_KEY)
-                        {
+                        // The labels in Volume Pool Topology should match the pool labels if
+                        // present, otherwise select any pool is allowed.
+                        if !labelled_topology.inclusion.is_empty() {
                             volume_pool_topology_labels = labelled_topology.inclusion
                         } else {
                             return true;
