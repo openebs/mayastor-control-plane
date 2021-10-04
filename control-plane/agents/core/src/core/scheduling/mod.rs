@@ -84,6 +84,8 @@ impl PoolFilters {
                 None => return true,
                 Some(pool_topology) => match pool_topology {
                     PoolTopology::Labelled(labelled_topology) => {
+                        // Currently only creation label is being supported and checked, any other
+                        // labels on the pools would not be considered.
                         if labelled_topology
                             .inclusion
                             .contains_key(OPENEBS_CREATED_BY_KEY)

@@ -162,7 +162,7 @@ impl From<models::LabelledTopology> for LabelledTopology {
 }
 impl From<LabelledTopology> for models::LabelledTopology {
     fn from(src: LabelledTopology) -> Self {
-        Self::new(src.inclusion, src.exclusion)
+        Self::new(src.exclusion, src.inclusion)
     }
 }
 

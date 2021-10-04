@@ -325,14 +325,13 @@ impl MayastorApiClient {
         preferred_nodes: &[String],
         inclusive_pool_topology: &HashMap<String, String>,
     ) -> Result<Volume, ApiClientError> {
-        let exclusive_label_topology: HashMap<String, String> = HashMap::new();
         let topology = Topology::new_all(
             Some(NodeTopology::explicit(ExplicitNodeTopology::new(
                 allowed_nodes.to_vec(),
                 preferred_nodes.to_vec(),
             ))),
-            Some(PoolTopology::labelled(LabelledTopology::new_all(
-                exclusive_label_topology.to_owned(),
+            Some(PoolTopology::labelled(LabelledTopology::new(
+                HashMap::new(),
                 inclusive_pool_topology.to_owned(),
             ))),
         );
