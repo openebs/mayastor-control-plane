@@ -61,29 +61,6 @@ resource "null_resource" "wait_deployment" {
   }
 }
 
-resource "kubernetes_service" "jaeger_node_port" {
-  depends_on = [helm_release.jaegertracing-operator, null_resource.wait_deployment]
-  metadata {
-    labels = {
-      "app" = "jaeger"
-    }
-    name      = "mayastor-jaeger-query-np"
-    namespace = "mayastor"
-  }
-  spec {
-    port {
-      name        = "http-query"
-      node_port   = 30012
-      port        = 16686
-      target_port = 16686
-    }
-    selector = {
-      app = "jaeger"
-    }
-    type = "NodePort"
-  }
-}
-
 output "jaeger_agent_argument" {
-  value = "--jaeger=mayastor-jaeger-agent:6831"
+  value = "--jaeger=jaeger-agent:6831"
 }

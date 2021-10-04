@@ -20,7 +20,21 @@ Usage:
 */}}
 {{- define "base_init_containers" -}}
     {{- if .Values.base.initContainers.enabled }}
-    {{- include "render" (dict "value" .Values.base.initContainers.initContainers "context" $) | nindent 8 }}
+    {{- include "render" (dict "value" .Values.base.initContainers.containers "context" $) | nindent 8 }}
+    {{- end }}
+    {{- include "jaeger_agent_init_container" . }}
+{{- end -}}
+
+{{/*
+Renders the jaeger agent init container, if enabled
+Usage:
+{{ include "jaeger_agent_init_container" . }}
+*/}}
+{{- define "jaeger_agent_init_container" -}}
+    {{- if .Values.base.jaeger.enabled }}
+      {{- if .Values.base.jaeger.initContainer }}
+      {{- include "render" (dict "value" .Values.base.jaeger.agent.initContainer "context" $) | nindent 8 }}
+      {{- end }}
     {{- end }}
 {{- end -}}
 
@@ -31,6 +45,22 @@ Usage:
 */}}
 {{- define "base_pull_secrets" -}}
     {{- if .Values.base.imagePullSecrets.enabled }}
-    {{- include "render" (dict "value" .Values.base.imagePullSecrets.imagePullSecrets "context" $) | nindent 8 }}
+    {{- include "render" (dict "value" .Values.base.imagePullSecrets.secrets "context" $) | nindent 8 }}
+    {{- end }}
+{{- end -}}
+
+{{/*
+Renders the jaeger scheduling rules, if any
+Usage:
+{{ include "jaeger_scheduling" . }}
+*/}}
+{{- define "jaeger_scheduling" -}}
+    {{- if index .Values "jaeger-operator" "affinity" }}
+  affinity:
+    {{- include "render" (dict "value" (index .Values "jaeger-operator" "affinity") "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if index .Values "jaeger-operator" "tolerations" }}
+  tolerations:
+    {{- include "render" (dict "value" (index .Values "jaeger-operator" "tolerations") "context" $) | nindent 4 }}
     {{- end }}
 {{- end -}}

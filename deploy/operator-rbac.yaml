@@ -31,7 +31,6 @@ rules:
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "list", "watch"]
-
   # external provisioner
 - apiGroups: [""]
   resources: ["persistentvolumeclaims"]
@@ -51,7 +50,6 @@ rules:
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "list", "watch"]
-
   # external attacher
 - apiGroups: ["storage.k8s.io"]
   resources: ["volumeattachments"]

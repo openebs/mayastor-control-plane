@@ -1,13 +1,14 @@
 ---
-# Source: mayastor-control-plane/templates/core-agents-deployment.yaml
+# Source: mayastor-control-plane/templates/core-agents-statefulset.yaml
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: core-agents
   namespace: mayastor
   labels:
     app: core-agents
 spec:
+  serviceName: core-agents
   replicas: 1
   selector:
     matchLabels:
