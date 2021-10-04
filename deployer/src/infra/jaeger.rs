@@ -11,7 +11,13 @@ impl ComponentAction for Jaeger {
                 .with_portmap("6831/udp", "6831/udp")
                 .with_portmap("6832/udp", "6832/udp");
 
-            let tags = crate::KeyValues::new(options.tracing_tags.clone());
+            let mut tags = crate::KeyValues::new(options.tracing_tags.clone());
+            if let Ok(run) = std::env::var("BUILD_TAG") {
+                tags.add(crate::KeyValue::new("run", run.replacen("jenkins-", "", 1)));
+            }
+            if let Ok(stage) = std::env::var("STAGE_NAME") {
+                tags.add(crate::KeyValue::new("run.stage", stage));
+            }
             if let Some(args) = tags.into_args() {
                 image = image.with_arg(&format!("--collector.tags={}", args));
             }
