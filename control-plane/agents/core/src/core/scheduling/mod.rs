@@ -82,7 +82,7 @@ impl PoolFilters {
                 Some(pool_topology) => match pool_topology {
                     PoolTopology::Labelled(labelled_topology) => {
                         // The labels in Volume Pool Topology should match the pool labels if
-                        // present, otherwise select any pool is allowed.
+                        // present, otherwise selection of any pool is allowed.
                         if !labelled_topology.inclusion.is_empty() {
                             volume_pool_topology_labels = labelled_topology.inclusion
                         } else {
