@@ -2,8 +2,9 @@ pub mod infra;
 
 use infra::*;
 
+pub(crate) use common_lib::opentelemetry::KeyValue;
 use composer::{Builder, TEST_LABEL_PREFIX};
-use std::{convert::TryInto, str::FromStr, time::Duration};
+use std::{collections::HashMap, convert::TryInto, str::FromStr, time::Duration};
 use structopt::StructOpt;
 use strum::VariantNames;
 
@@ -90,6 +91,10 @@ pub struct StartOptions {
     /// Use the jaegertracing service
     #[structopt(short, long)]
     pub jaeger: bool,
+
+    /// Use an external jaegertracing collector
+    #[structopt(long, requires = "jaeger", env = "EXTERNAL_JAEGER")]
+    pub external_jaeger: Option<String>,
 
     /// Use the elasticsearch service
     #[structopt(short, long)]
@@ -208,6 +213,48 @@ pub struct StartOptions {
     /// Set the developer delayed env flag of the mayastor reactor
     #[structopt(short, long)]
     pub developer_delayed: bool,
+
+    /// Add process service tags to the traces
+    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    tracing_tags: Vec<KeyValue>,
+}
+
+/// List of KeyValues
+#[derive(Default, Debug)]
+pub(crate) struct KeyValues {
+    inner: HashMap<String, String>,
+}
+impl KeyValues {
+    /// return new `Self` from `Vec<KeyValue>`
+    pub(crate) fn new(src: Vec<KeyValue>) -> Self {
+        src.into_iter().fold(Self::default(), |mut acc, key_val| {
+            acc.add(key_val);
+            acc
+        })
+    }
+    /// add if not already there
+    pub(crate) fn add(&mut self, key_val: KeyValue) {
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            self.inner.entry(key_val.key.to_string())
+        {
+            e.insert(key_val.value.to_string());
+        }
+    }
+    /// Convert to args
+    pub(crate) fn into_args(self) -> Option<String> {
+        if !self.inner.is_empty() {
+            let mut arg_start = "".to_string();
+            self.inner.into_iter().for_each(|(k, v)| {
+                if !arg_start.is_empty() {
+                    arg_start.push(',');
+                }
+                arg_start.push_str(&format!("{}={}", k, v));
+            });
+            Some(arg_start)
+        } else {
+            None
+        }
+    }
 }
 
 impl StartOptions {
@@ -271,6 +318,20 @@ impl StartOptions {
     pub fn with_base_image(mut self, base_image: impl Into<Option<String>>) -> Self {
         self.base_image = base_image.into();
         self
+    }
+    /// Get the jaeger endpoint, if configured
+    pub fn jaeger_endpoint(&self, cfg: &Builder) -> Option<String> {
+        if let Some(external) = &self.external_jaeger {
+            if external.contains(':') {
+                Some(external.to_string())
+            } else {
+                Some(format!("{}:6831", external))
+            }
+        } else if cfg.container_exists("jaeger") {
+            Some(format!("jaeger.{}:6831", cfg.get_name()))
+        } else {
+            None
+        }
     }
 }
 

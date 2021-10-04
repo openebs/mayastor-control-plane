@@ -37,6 +37,7 @@ common-lib = { path = "../../common" }
 reqwest = "0.11.4"
 parking_lot = "0.11.2"
 itertools = "0.10.1"
+git-version = "0.3.5"
 
 # Tracing
 opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }

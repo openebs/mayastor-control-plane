@@ -11,6 +11,11 @@ impl ComponentAction for Jaeger {
                 .with_portmap("6831/udp", "6831/udp")
                 .with_portmap("6832/udp", "6832/udp");
 
+            let tags = crate::KeyValues::new(options.tracing_tags.clone());
+            if let Some(args) = tags.into_args() {
+                image = image.with_arg(&format!("--collector.tags={}", args));
+            }
+
             if cfg.container_exists("elastic") {
                 image = image
                     .with_env("SPAN_STORAGE_TYPE", "elasticsearch")

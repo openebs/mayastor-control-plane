@@ -53,7 +53,8 @@ async fn smoke_test() {
 /// Default options to create a cluster
 pub fn default_options() -> StartOptions {
     // using from_iter as Default::default would not set the default_value from structopt
-    StartOptions::from_iter(&[""])
+    let options: StartOptions = StartOptions::from_iter(&[""]);
+    options
         .with_agents(default_agents().split(',').collect())
         .with_jaeger(true)
         .with_mayastors(1)

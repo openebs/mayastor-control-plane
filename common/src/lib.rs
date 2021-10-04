@@ -27,4 +27,7 @@ impl<F: Into<T>, T> IntoOption<T> for Option<F> {
     }
 }
 
+/// Common workspace constants
 pub use constants::*;
+/// OpenTelemetry
+pub mod opentelemetry;

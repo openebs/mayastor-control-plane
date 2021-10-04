@@ -16,7 +16,6 @@ use common_lib::types::v0::message_bus::{
     ChannelVs, Deregister, GetBlockDevices, GetNodes, GetSpecs, GetStates, Register,
 };
 use std::{convert::TryInto, marker::PhantomData};
-use structopt::StructOpt;
 
 pub(crate) async fn configure(builder: Service) -> Service {
     let node_service = create_node_service(&builder).await;
@@ -35,9 +34,9 @@ pub(crate) async fn configure(builder: Service) -> Service {
 
 async fn create_node_service(builder: &Service) -> service::Service {
     let registry = builder.get_shared_state::<Registry>().clone();
-    let deadline = CliArgs::from_args().deadline.into();
-    let request = CliArgs::from_args().request_timeout.into();
-    let connect = CliArgs::from_args().connect_timeout.into();
+    let deadline = CliArgs::args().deadline.into();
+    let request = CliArgs::args().request_timeout.into();
+    let connect = CliArgs::args().connect_timeout.into();
     let service = service::Service::new(registry.clone(), deadline, request, connect);
 
     // attempt to reload the node state based on the specification

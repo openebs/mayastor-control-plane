@@ -34,11 +34,9 @@ impl ComponentAction for Rest {
                 binary = binary.with_arg("--no-min-timeouts");
             }
 
-            let binary = if !cfg.container_exists("jaeger") {
-                binary
-            } else {
+            if cfg.container_exists("jaeger") {
                 let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
-                binary.with_args(vec!["--jaeger", &jaeger_config])
+                binary = binary.with_args(vec!["--jaeger", &jaeger_config])
             };
 
             cfg.add_container_spec(
