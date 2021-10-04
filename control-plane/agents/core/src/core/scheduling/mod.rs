@@ -96,7 +96,9 @@ impl PoolFilters {
         return match request.registry().specs().get_pool(&item.pool.id) {
             Ok(spec) => match spec.labels {
                 None => false,
-                Some(label) => volume_pool_topology_labels == label,
+                Some(label) => volume_pool_topology_labels.keys().all(|k| {
+                    label.contains_key(k) && (volume_pool_topology_labels.get(k) == label.get(k))
+                }),
             },
             Err(_) => false,
         };
