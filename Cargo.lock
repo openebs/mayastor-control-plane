@@ -1309,6 +1309,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
 
 [[package]]
+name = "exit-code"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf4cdb977193f2d7688525ca10d86199fe9bdd9db26b97ef490558128c643dc4"
+
+[[package]]
 name = "fastrand"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1953,6 +1959,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "awc",
+ "exit-code",
  "lazy_static",
  "once_cell",
  "openapi",
