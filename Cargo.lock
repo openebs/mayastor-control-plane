@@ -1977,9 +1977,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "git-version",
  "lazy_static",
  "once_cell",
  "openapi",
+ "opentelemetry",
+ "opentelemetry-jaeger",
  "prettytable-rs",
  "serde",
  "serde_json",
@@ -1987,6 +1990,7 @@ dependencies = [
  "structopt",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "yaml-rust",
 ]

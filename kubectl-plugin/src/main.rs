@@ -14,22 +14,35 @@ use crate::{
 };
 use anyhow::Result;
 use openapi::tower::client::Url;
+use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use operations::Operations;
 use std::{env, path::Path};
 use structopt::StructOpt;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 use yaml_rust::YamlLoader;
+
+/// OpenTelemetry helpers for handling Processor Tags
+pub mod opentelemetry_helper {
+    include!("../../common/src/opentelemetry.rs");
+}
 
 #[derive(StructOpt, Debug)]
 struct CliArgs {
     /// The rest endpoint, parsed from KUBECONFIG, if left empty .
     #[structopt(global = true, long, short)]
     rest: Option<Url>,
+
     /// The operation to be performed.
     #[structopt(subcommand)]
     operations: Operations,
+
     /// The Output, viz yaml, json.
     #[structopt(global = true, default_value = "none", short, long, possible_values=&["yaml", "json", "none"], parse(from_str))]
     output: utils::OutputFormat,
+
+    /// Trace rest requests to the Jaeger endpoint agent
+    #[structopt(global = true, long, short)]
+    jaeger: Option<String>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -37,19 +50,56 @@ impl CliArgs {
     }
 }
 
+fn default_log_filter(current: tracing_subscriber::EnvFilter) -> tracing_subscriber::EnvFilter {
+    let log_level = match current.to_string().as_str() {
+        "debug" => "debug",
+        "trace" => "trace",
+        _ => return current,
+    };
+    let logs = format!("kubectl_mayastor={},error", log_level);
+    tracing_subscriber::EnvFilter::try_new(logs).unwrap()
+}
+
 fn init_tracing() {
-    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
-        tracing_subscriber::fmt().with_env_filter(filter).init();
-    } else {
-        tracing_subscriber::fmt().with_env_filter("info").init();
-    }
+    let filter = default_log_filter(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+    );
+
+    let subscriber = Registry::default()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().pretty());
+
+    match CliArgs::args().jaeger {
+        Some(jaeger) => {
+            global::set_text_map_propagator(TraceContextPropagator::new());
+            let tags = opentelemetry_helper::default_tracing_tags(
+                git_version::git_version!(args = ["--abbrev=12", "--always"]),
+                env!("CARGO_PKG_VERSION"),
+            );
+            let tracer = opentelemetry_jaeger::new_pipeline()
+                .with_agent_endpoint(jaeger)
+                .with_service_name("kubectl-plugin")
+                .with_tags(tags)
+                .install_batch(opentelemetry::runtime::TokioCurrentThread)
+                .expect("Should be able to initialise the exporter");
+            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+            subscriber.with(telemetry).init();
+        }
+        None => subscriber.init(),
+    };
 }
 
 #[tokio::main]
 async fn main() {
     init_tracing();
-    let cli_args = &CliArgs::args();
 
+    execute(CliArgs::args()).await;
+
+    global::shutdown_tracer_provider();
+}
+
+async fn execute(cli_args: CliArgs) {
     // Initialise the REST client.
     if let Err(e) = init_rest(cli_args.rest.as_ref()) {
         println!("Failed to initialise the REST client. Error {}", e);

@@ -21,14 +21,13 @@ impl RestClient {
                 .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;
         }
         url.set_path(&format!("{}/v0", url.path().trim_end_matches('/')));
-        let cfg = Configuration::new(url, Duration::from_secs(5), None, None, false).map_err(
-            |error| {
+        let cfg =
+            Configuration::new(url, Duration::from_secs(5), None, None, true).map_err(|error| {
                 anyhow::anyhow!(
                     "Failed to create openapi configuration, Error: '{:?}'",
                     error
                 )
-            },
-        )?;
+            })?;
         REST_SERVER.get_or_init(|| ApiClient::new(cfg));
         Ok(())
     }
