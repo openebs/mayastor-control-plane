@@ -102,7 +102,7 @@ fn build_child_uri(child_id: ChildUri, query: &str) -> ChildUri {
 }
 
 #[async_trait::async_trait]
-impl apis::Children for RestApi {
+impl apis::actix_server::Children for RestApi {
     async fn del_nexus_child(
         query: &str,
         Path((nexus_id, child_id)): Path<(Uuid, String)>,

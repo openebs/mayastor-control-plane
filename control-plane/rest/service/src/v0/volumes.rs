@@ -6,7 +6,7 @@ use common_lib::types::v0::{
 use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
 
 #[async_trait::async_trait]
-impl apis::Volumes for RestApi {
+impl apis::actix_server::Volumes for RestApi {
     async fn del_share(Path(volume_id): Path<Uuid>) -> Result<(), RestError<RestJsonError>> {
         MessageBus::unshare_volume(volume_id.into()).await?;
         Ok(())

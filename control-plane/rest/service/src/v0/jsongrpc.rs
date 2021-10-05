@@ -7,7 +7,7 @@ use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
 use serde_json::Value;
 
 #[async_trait::async_trait]
-impl apis::JsonGrpc for RestApi {
+impl apis::actix_server::JsonGrpc for RestApi {
     // A PUT request is required so that method parameters can be passed in the
     // body.
     //

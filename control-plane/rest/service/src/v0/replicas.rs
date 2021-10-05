@@ -150,7 +150,7 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
 }
 
 #[async_trait::async_trait]
-impl apis::Replicas for RestApi {
+impl apis::actix_server::Replicas for RestApi {
     async fn del_node_pool_replica(
         Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {

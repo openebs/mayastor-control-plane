@@ -3,7 +3,8 @@ use crate::{
     types::v0::{
         message_bus::ChannelVs,
         openapi::{
-            apis::{RestError, StatusCode},
+            actix::server::RestError,
+            apis::StatusCode,
             models::{rest_json_error::Kind, RestJsonError},
         },
     },
@@ -49,7 +50,7 @@ impl Default for Channel {
     }
 }
 
-impl From<crate::mbus_api::Error> for openapi::apis::RestError<openapi::models::RestJsonError> {
+impl From<crate::mbus_api::Error> for RestError<openapi::models::RestJsonError> {
     fn from(src: crate::mbus_api::Error) -> Self {
         Self::from(ReplyError::from(src))
     }

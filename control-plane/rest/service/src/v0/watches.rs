@@ -9,7 +9,7 @@ use mbus_api::Message;
 use std::convert::TryFrom;
 
 #[async_trait::async_trait]
-impl apis::Watches for RestApi {
+impl apis::actix_server::Watches for RestApi {
     async fn del_watch_volume(
         Path(volume_id): Path<Uuid>,
         Query(callback): Query<url::Url>,

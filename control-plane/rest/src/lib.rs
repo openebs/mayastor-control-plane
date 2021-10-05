@@ -21,7 +21,7 @@ use actix_web::rt::net::TcpStream;
 
 use awc::{http::Uri, Client, ClientBuilder};
 
-use common_lib::types::v0::openapi::apis::{client, configuration};
+use common_lib::types::v0::openapi::actix::client;
 
 use std::{io::BufReader, string::ToString};
 
@@ -97,7 +97,7 @@ impl ActixRestClient {
 
         let rest_client = client.connector(connector).finish();
 
-        let openapi_client_config = configuration::Configuration::new_with_client(
+        let openapi_client_config = client::Configuration::new_with_client(
             &format!("{}/v0", url),
             rest_client,
             bearer_token,
@@ -126,7 +126,7 @@ impl ActixRestClient {
         trace: bool,
     ) -> Self {
         let client = client.finish();
-        let openapi_client_config = configuration::Configuration::new_with_client(
+        let openapi_client_config = client::Configuration::new_with_client(
             &format!("{}/v0", url),
             client,
             bearer_token,

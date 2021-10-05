@@ -1,7 +1,7 @@
 use anyhow::Result;
 use awc::ClientBuilder;
 use once_cell::sync::OnceCell;
-use openapi::apis::{client::ApiClient, configuration::Configuration};
+use openapi::actix::client::{ApiClient, Configuration};
 use reqwest::Url;
 
 static REST_SERVER: OnceCell<Url> = OnceCell::new();
