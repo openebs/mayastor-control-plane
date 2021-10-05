@@ -48,6 +48,7 @@ async fn main() {
     // Initialise the REST client.
     if let Err(e) = init_rest(cli_args.rest.as_ref()) {
         println!("Failed to initialise the REST client. Error {}", e);
+        std::process::exit(exit_code::SERVICE_UNAVAILABLE);
     }
 
     // Perform the operations based on the subcommand, with proper output format.

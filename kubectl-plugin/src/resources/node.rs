@@ -49,7 +49,8 @@ impl List for Nodes {
                 utils::print_table(output, nodes);
             }
             Err(e) => {
-                println!("Failed to list nodes. Error {}", e)
+                println!("Failed to list nodes. Error: '{}'", e);
+                std::process::exit(exit_code::FAILURE);
             }
         }
     }
@@ -72,7 +73,8 @@ impl Get for Node {
                 utils::print_table(output, node);
             }
             Err(e) => {
-                println!("Failed to get node {}. Error {}", id, e)
+                println!("Failed to get node {}. Error: '{}'", id, e);
+                std::process::exit(exit_code::FAILURE);
             }
         }
     }
