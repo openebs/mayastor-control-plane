@@ -56,7 +56,7 @@ impl List for Volumes {
         match RestClient::client().volumes_api().get_volumes().await {
             Ok(volumes) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table(output, volumes);
+                utils::print_table(output, volumes.into_body());
             }
             Err(e) => {
                 println!("Failed to list volumes. Error {}", e)
@@ -81,7 +81,7 @@ impl Get for Volume {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table(output, volume);
+                utils::print_table(output, volume.into_body());
             }
             Err(e) => {
                 println!("Failed to get volume {}. Error {}", id, e)
@@ -102,7 +102,7 @@ impl Scale for Volume {
             Ok(volume) => match output {
                 OutputFormat::Yaml | OutputFormat::Json => {
                     // Print json or yaml based on output format.
-                    utils::print_table(output, volume);
+                    utils::print_table(output, volume.into_body());
                 }
                 OutputFormat::NoFormat => {
                     // Incase the output format is not specified, show a success message.
@@ -123,7 +123,7 @@ impl ReplicaTopology for Volume {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table(output, volume.state.replica_topology);
+                utils::print_table(output, volume.into_body().state.replica_topology);
             }
             Err(e) => {
                 println!("Failed to get volume {}. Error {}", id, e)

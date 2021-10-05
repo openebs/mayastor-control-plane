@@ -1975,19 +1975,17 @@ dependencies = [
 name = "kubectl-plugin"
 version = "0.1.0"
 dependencies = [
- "actix-rt",
  "anyhow",
  "async-trait",
- "awc",
  "lazy_static",
  "once_cell",
  "openapi",
  "prettytable-rs",
- "reqwest",
  "serde",
  "serde_json",
  "serde_yaml",
  "structopt",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "yaml-rust",

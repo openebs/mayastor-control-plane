@@ -13,8 +13,8 @@ use crate::{
     rest_wrapper::RestClient,
 };
 use anyhow::Result;
+use openapi::tower::client::Url;
 use operations::Operations;
-use reqwest::Url;
 use std::{env, path::Path};
 use structopt::StructOpt;
 use yaml_rust::YamlLoader;
@@ -45,7 +45,7 @@ fn init_tracing() {
     }
 }
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() {
     init_tracing();
     let cli_args = &CliArgs::args();

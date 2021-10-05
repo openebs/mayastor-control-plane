@@ -46,7 +46,7 @@ impl List for Nodes {
         match RestClient::client().nodes_api().get_nodes().await {
             Ok(nodes) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table(output, nodes);
+                utils::print_table(output, nodes.into_body());
             }
             Err(e) => {
                 println!("Failed to list nodes. Error {}", e)
@@ -69,7 +69,7 @@ impl Get for Node {
         match RestClient::client().nodes_api().get_node(id).await {
             Ok(node) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table(output, node);
+                utils::print_table(output, node.into_body());
             }
             Err(e) => {
                 println!("Failed to get node {}. Error {}", id, e)
