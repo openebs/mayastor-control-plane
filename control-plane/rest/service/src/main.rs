@@ -55,17 +55,26 @@ pub(crate) struct CliArgs {
     #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
     request_timeout: humantime::Duration,
 
+    /// Add process service tags to the traces
+    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    tracing_tags: Vec<KeyValue>,
+
     /// Don't use minimum timeouts for specific requests
     #[structopt(long)]
     no_min_timeouts: bool,
+}
+impl CliArgs {
+    fn args() -> Self {
+        CliArgs::from_args()
+    }
 }
 
 /// default timeout options for every bus request
 fn bus_timeout_opts() -> TimeoutOptions {
     let timeout_opts =
-        TimeoutOptions::new_no_retries().with_timeout(CliArgs::from_args().request_timeout.into());
+        TimeoutOptions::new_no_retries().with_timeout(CliArgs::args().request_timeout.into());
 
-    if CliArgs::from_args().no_min_timeouts {
+    if CliArgs::args().no_min_timeouts {
         timeout_opts.with_req_timeout(None)
     } else {
         timeout_opts.with_req_timeout(RequestMinTimeout::default())
@@ -76,10 +85,12 @@ use actix_web_opentelemetry::RequestTracing;
 use common_lib::{
     mbus_api,
     mbus_api::{BusClient, RequestMinTimeout, TimeoutOptions},
+    opentelemetry::default_tracing_tags,
 };
 use opentelemetry::{
     global,
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
+    KeyValue,
 };
 
 fn init_tracing() -> Option<Tracer> {
@@ -88,13 +99,21 @@ fn init_tracing() -> Option<Tracer> {
     } else {
         tracing_subscriber::fmt().with_env_filter("info").init();
     }
-    if let Some(agent) = CliArgs::from_args().jaeger {
+    if let Some(agent) = CliArgs::args().jaeger {
+        let mut tracing_tags = CliArgs::args().tracing_tags;
+        tracing_tags.append(&mut default_tracing_tags(
+            git_version::git_version!(args = ["--abbrev=12", "--always"]),
+            env!("CARGO_PKG_VERSION"),
+        ));
+        tracing_tags.dedup();
+        tracing::info!("Using the following tracing tags: {:?}", tracing_tags);
         tracing::info!("Starting jaeger trace pipeline at {}...", agent);
         // Start a new jaeger trace pipeline
         global::set_text_map_propagator(TraceContextPropagator::new());
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(agent)
             .with_service_name("rest-server")
+            .with_tags(tracing_tags)
             .install_batch(opentelemetry::runtime::TokioCurrentThread)
             .expect("Should be able to initialise the exporter");
         Some(tracer)
@@ -132,14 +151,12 @@ where
 }
 
 fn get_certificates() -> anyhow::Result<ServerConfig> {
-    if CliArgs::from_args().dummy_certificates {
+    if CliArgs::args().dummy_certificates {
         get_dummy_certificates()
     } else {
         // guaranteed to be `Some` by the require_unless attribute
-        let cert_file = CliArgs::from_args()
-            .cert_file
-            .expect("cert_file is required");
-        let key_file = CliArgs::from_args().key_file.expect("key_file is required");
+        let cert_file = CliArgs::args().cert_file.expect("cert_file is required");
+        let key_file = CliArgs::args().key_file.expect("key_file is required");
         let cert_file = &mut BufReader::new(File::open(cert_file)?);
         let key_file = &mut BufReader::new(File::open(key_file)?);
         load_certificates(cert_file, key_file)
@@ -172,9 +189,9 @@ fn load_certificates<R: std::io::Read>(
 }
 
 fn get_jwk_path() -> Option<String> {
-    match CliArgs::from_args().jwk {
+    match CliArgs::args().jwk {
         Some(path) => Some(path),
-        None => match CliArgs::from_args().no_auth {
+        None => match CliArgs::args().no_auth {
             true => None,
             false => panic!("Cannot authenticate without a JWK file"),
         },
@@ -196,13 +213,12 @@ async fn main() -> anyhow::Result<()> {
 
     mbus_api::message_bus_init_options(
         BusClient::RestServer,
-        CliArgs::from_args().nats,
+        CliArgs::args().nats,
         bus_timeout_opts(),
     )
     .await;
-    let server =
-        HttpServer::new(app).bind_rustls(CliArgs::from_args().https, get_certificates()?)?;
-    if let Some(http) = CliArgs::from_args().http {
+    let server = HttpServer::new(app).bind_rustls(CliArgs::args().https, get_certificates()?)?;
+    if let Some(http) = CliArgs::args().http {
         server.bind(http).map_err(anyhow::Error::from)?
     } else {
         server

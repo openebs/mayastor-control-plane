@@ -7,6 +7,7 @@ mod client;
 mod controller;
 mod identity;
 use client::{ApiClientError, MayastorApiClient};
+
 mod server;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
@@ -54,9 +55,14 @@ pub async fn main() -> Result<(), String> {
         .with(tracing_subscriber::fmt::layer().pretty());
 
     if let Some(jaeger) = args.value_of("jaeger") {
+        let tags = common_lib::opentelemetry::default_tracing_tags(
+            git_version::git_version!(args = ["--abbrev=12", "--always"]),
+            env!("CARGO_PKG_VERSION"),
+        );
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)
             .with_service_name("csi-controller")
+            .with_tags(tags)
             .install_batch(opentelemetry::runtime::TokioCurrentThread)
             .expect("Should be able to initialise the exporter");
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);

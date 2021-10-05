@@ -31,6 +31,11 @@ struct CliArgs {
     #[structopt(global = true, default_value = "none", short, long, possible_values=&["yaml", "json", "none"], parse(from_str))]
     output: utils::OutputFormat,
 }
+impl CliArgs {
+    fn args() -> Self {
+        CliArgs::from_args()
+    }
+}
 
 fn init_tracing() {
     if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
@@ -43,7 +48,7 @@ fn init_tracing() {
 #[actix_rt::main]
 async fn main() {
     init_tracing();
-    let cli_args = &CliArgs::from_args();
+    let cli_args = &CliArgs::args();
 
     // Initialise the REST client.
     if let Err(e) = init_rest(cli_args.rest.as_ref()) {

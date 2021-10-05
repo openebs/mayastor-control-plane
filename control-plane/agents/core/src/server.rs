@@ -9,8 +9,8 @@ use crate::core::registry;
 use common::Service;
 use common_lib::types::v0::message_bus::ChannelVs;
 
-use common_lib::mbus_api::BusClient;
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
+use common_lib::{mbus_api::BusClient, opentelemetry::default_tracing_tags};
+use opentelemetry::{global, sdk::propagation::TraceContextPropagator, KeyValue};
 use structopt::StructOpt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
@@ -58,6 +58,10 @@ pub(crate) struct CliArgs {
     #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
     pub(crate) request_timeout: humantime::Duration,
 
+    /// Add process service tags to the traces
+    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    tracing_tags: Vec<KeyValue>,
+
     /// Don't use minimum timeouts for specific requests
     #[structopt(long)]
     no_min_timeouts: bool,
@@ -65,6 +69,11 @@ pub(crate) struct CliArgs {
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(long, short)]
     jaeger: Option<String>,
+}
+impl CliArgs {
+    fn args() -> Self {
+        CliArgs::from_args()
+    }
 }
 
 const RUST_LOG_QUIET_DEFAULTS: &str =
@@ -92,12 +101,21 @@ fn init_tracing() {
         .with(filter)
         .with(tracing_subscriber::fmt::layer().pretty());
 
-    match CliArgs::from_args().jaeger {
+    match CliArgs::args().jaeger {
         Some(jaeger) => {
+            let mut tracing_tags = CliArgs::args().tracing_tags;
+            tracing_tags.append(&mut default_tracing_tags(
+                git_version::git_version!(args = ["--abbrev=12", "--always"]),
+                env!("CARGO_PKG_VERSION"),
+            ));
+            tracing_tags.dedup();
+            println!("Using the following tracing tags: {:?}", tracing_tags);
+
             global::set_text_map_propagator(TraceContextPropagator::new());
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_agent_endpoint(jaeger)
                 .with_service_name("core-agent")
+                .with_tags(tracing_tags)
                 .install_batch(opentelemetry::runtime::TokioCurrentThread)
                 .expect("Should be able to initialise the exporter");
             let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -109,7 +127,7 @@ fn init_tracing() {
 
 #[tokio::main]
 async fn main() {
-    let cli_args = CliArgs::from_args();
+    let cli_args = CliArgs::args();
     println!("Starting Core Agent with options: {:?}", cli_args);
     init_tracing();
 
@@ -118,21 +136,21 @@ async fn main() {
 
 async fn server(cli_args: CliArgs) {
     let registry = registry::Registry::new(
-        CliArgs::from_args().cache_period.into(),
-        CliArgs::from_args().store,
-        CliArgs::from_args().store_timeout.into(),
-        CliArgs::from_args().reconcile_period.into(),
-        CliArgs::from_args().reconcile_idle_period.into(),
+        cli_args.cache_period.into(),
+        cli_args.store.clone(),
+        cli_args.store_timeout.into(),
+        cli_args.reconcile_period.into(),
+        cli_args.reconcile_idle_period.into(),
     )
     .await;
 
-    let service = Service::builder(cli_args.nats, ChannelVs::Core)
+    let service = Service::builder(cli_args.nats.clone(), ChannelVs::Core)
         .with_shared_state(global::tracer_with_version(
             "core-agent",
             env!("CARGO_PKG_VERSION"),
         ))
         .with_default_liveness()
-        .connect_message_bus(CliArgs::from_args().no_min_timeouts, BusClient::CoreAgent)
+        .connect_message_bus(cli_args.no_min_timeouts, BusClient::CoreAgent)
         .await
         .with_shared_state(registry.clone())
         .configure_async(node::configure)

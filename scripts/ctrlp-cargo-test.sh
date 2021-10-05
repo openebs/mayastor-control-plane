@@ -3,7 +3,7 @@
 cleanup_handler() {
   for c in $(docker ps -a --filter "label=io.mayastor.test.name" --format '{{.ID}}') ; do
     docker kill "$c" || true
-    docker rm "$c" || true
+    docker rm -v "$c" || true
   done
 
   for n in $(docker network ls --filter "label=io.mayastor.test.name" --format '{{.ID}}') ; do

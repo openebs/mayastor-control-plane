@@ -36,6 +36,7 @@ const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
 /// Various common constants used by the control plane
 pub mod constants {
     include!("../../../common/src/constants.rs");
+    include!("../../../common/src/opentelemetry.rs");
 }
 
 #[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
@@ -974,9 +975,14 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().pretty());
 
     if let Some(jaeger) = matches.value_of("jaeger") {
+        let tags = constants::default_tracing_tags(
+            git_version::git_version!(args = ["--abbrev=12", "--always"]),
+            env!("CARGO_PKG_VERSION"),
+        );
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)
             .with_service_name("msp-operator")
+            .with_tags(tags)
             .install_batch(opentelemetry::runtime::TokioCurrentThread)
             .expect("Should be able to initialise the exporter");
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
