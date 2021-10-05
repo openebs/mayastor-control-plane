@@ -33,6 +33,7 @@ let
     inherit version;
 
     src = whitelistSource ../../../. [
+      ".git"
       "Cargo.lock"
       "Cargo.toml"
       "common"
