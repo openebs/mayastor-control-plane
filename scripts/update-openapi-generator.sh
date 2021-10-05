@@ -5,7 +5,7 @@ set -eu -o pipefail
 SCRIPTDIR=$(dirname "$0")
 owner="openebs";
 repo="openapi-generator";
-branch="rust_actix_server";
+branch="rust_mayastor";
 
 github_rev() {
   curl -sSf "https://api.github.com/repos/$owner/$repo/branches/$branch" | \
