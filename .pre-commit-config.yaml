@@ -10,19 +10,26 @@ repos:
         exclude: openapi/
 -   repo: local
     hooks:
-    -   id: rust-style
-        name: Rust style
-        description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
-        entry: cargo fmt --all -- --check
-        exclude: openapi/
-        pass_filenames: true
-        types: [file, rust]
+    -   id: openapi-check
+        name: OpenApi Code Generator
+        description: Ensures OpenApi bindings are up to date
+        entry: ./scripts/generate-openapi-bindings.sh
+        args: ["--changes"]
+        pass_filenames: false
         language: system
     -   id: rust-lint
         name: Rust lint
         description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
         entry: cargo clippy --all --all-targets -- -D warnings
         pass_filenames: false
+        types: [file, rust]
+        language: system
+    -   id: rust-style
+        name: Rust style
+        description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
+        entry: cargo fmt --all -- --check
+        exclude: openapi/
+        pass_filenames: true
         types: [file, rust]
         language: system
     -   id: commit-lint
@@ -32,13 +39,6 @@ repos:
         entry: bash -c "npm install @commitlint/config-conventional @commitlint/cli; cat $1 | npx commitlint"
         args: [$1]
         stages: [commit-msg]
-    -   id: openapi-check
-        name: OpenApi Code Generator
-        description: Ensures OpenApi bindings are up to date
-        entry: ./scripts/generate-openapi-bindings.sh
-        args: ["--changes"]
-        pass_filenames: false
-        language: system
     -   id: python-check
         name: python lint
         entry: black

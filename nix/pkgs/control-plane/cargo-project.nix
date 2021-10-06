@@ -10,6 +10,7 @@
 , sources
 , pkgs
 , version
+, openapi-generator
 }:
 let
   channel = import ../../lib/rust.nix { inherit sources; };
@@ -44,6 +45,7 @@ let
       "openapi"
       "rpc"
       "tests"
+      "scripts"
     ];
     cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-controller" ];
 
@@ -55,6 +57,7 @@ let
     nativeBuildInputs = [
       clang
       pkg-config
+      openapi-generator
     ];
     buildInputs = [
       llvmPackages.libclang
@@ -62,6 +65,7 @@ let
       openssl
     ];
     doCheck = false;
+    NIX_BUILD = true;
   };
 in
 {
