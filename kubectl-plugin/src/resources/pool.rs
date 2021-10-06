@@ -67,8 +67,7 @@ impl List for Pools {
                 utils::print_table(output, pools);
             }
             Err(e) => {
-                println!("Failed to list pools. Error: '{}'", e);
-                std::process::exit(exit_code::FAILURE);
+                println!("Failed to list pools. Error {}", e)
             }
         }
     }
@@ -91,8 +90,7 @@ impl Get for Pool {
                 utils::print_table(output, pool);
             }
             Err(e) => {
-                println!("Failed to get pool {}. Error: '{}'", id, e);
-                std::process::exit(exit_code::FAILURE);
+                println!("Failed to get pool {}. Error {}", id, e)
             }
         }
     }
