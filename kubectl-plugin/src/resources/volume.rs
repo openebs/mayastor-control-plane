@@ -59,8 +59,7 @@ impl List for Volumes {
                 utils::print_table(output, volumes);
             }
             Err(e) => {
-                println!("Failed to list volumes. Error: '{}'", e);
-                std::process::exit(exit_code::FAILURE);
+                println!("Failed to list volumes. Error {}", e)
             }
         }
     }
@@ -85,8 +84,7 @@ impl Get for Volume {
                 utils::print_table(output, volume);
             }
             Err(e) => {
-                println!("Failed to get volume {}. Error: '{}'", id, e);
-                std::process::exit(exit_code::FAILURE);
+                println!("Failed to get volume {}. Error {}", id, e)
             }
         }
     }
@@ -112,8 +110,7 @@ impl Scale for Volume {
                 }
             },
             Err(e) => {
-                println!("Failed to scale volume {}. Error: '{}'", id, e);
-                std::process::exit(exit_code::FAILURE);
+                println!("Failed to scale volume {}. Error {}", id, e)
             }
         }
     }
@@ -129,8 +126,7 @@ impl ReplicaTopology for Volume {
                 utils::print_table(output, volume.state.replica_topology);
             }
             Err(e) => {
-                println!("Failed to get volume {}. Error: '{}'", id, e);
-                std::process::exit(exit_code::FAILURE);
+                println!("Failed to get volume {}. Error {}", id, e)
             }
         }
     }
