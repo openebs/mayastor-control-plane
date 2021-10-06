@@ -19,8 +19,11 @@ use kube_runtime::{
     controller::{Context, Controller, ReconcilerAction},
     finalizer::{finalizer, Event},
 };
-use openapi::models::{BlockDevice, Pool};
-use reqwest::RequestBuilder;
+use openapi::{
+    clients::{self, tower::Url},
+    models::{CreatePoolBody, Pool, RestJsonError},
+};
+use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -28,7 +31,6 @@ use snafu::Snafu;
 use std::{collections::HashMap, io::Write, ops::Deref, sync::Arc, time::Duration};
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
-use url::Url;
 
 const WHO_AM_I: &str = "Mayastor pool operator";
 const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
@@ -175,20 +177,24 @@ pub enum Error {
     },
     #[snafu(display("HTTP request error: {}", source))]
     Request {
-        source: reqwest::Error,
+        source: clients::tower::RequestError,
     },
-    #[snafu(display("Body missing request error: {}", source))]
-    Request2 {
-        source: reqwest::Error,
+    #[snafu(display("HTTP response error: {}", source))]
+    Response {
+        source: clients::tower::ResponseError<RestJsonError>,
     },
     Noun {},
 }
 
-impl From<reqwest::Error> for Error {
-    fn from(source: reqwest::Error) -> Self {
-        Error::Request { source }
+impl From<clients::tower::Error<RestJsonError>> for Error {
+    fn from(source: clients::tower::Error<RestJsonError>) -> Self {
+        match source {
+            clients::tower::Error::Request(source) => Error::Request { source },
+            clients::tower::Error::Response(source) => Self::Response { source },
+        }
     }
 }
+
 /// converts the pool state into a string
 impl ToString for PoolState {
     fn to_string(&self) -> String {
@@ -206,14 +212,6 @@ impl From<PoolState> for String {
     fn from(p: PoolState) -> Self {
         p.to_string()
     }
-}
-
-#[non_exhaustive]
-enum UrlPath {
-    /// GET for devices
-    BlockDevices,
-    /// GET/ PUT for a specific pool
-    Pool(String),
 }
 
 /// Additional per resource context during the runtime; it is volatile
@@ -242,10 +240,8 @@ pub struct OperatorContext {
     k8s: Client,
     /// Hashtable of name and the full last seen CRD
     inventory: tokio::sync::RwLock<HashMap<String, ResourceContext>>,
-    /// Control plane URL
-    url: Url,
     /// HTTP client
-    http: reqwest::Client,
+    http: clients::tower::ApiClient,
     /// Interval
     interval: u64,
     /// Retries
@@ -346,48 +342,13 @@ impl ResourceContext {
         Api::namespaced(self.ctx.k8s.clone(), &self.namespace().unwrap())
     }
 
-    /// set the path of the URL matching the UrlPath variant
-    fn as_url(&self, n: UrlPath) -> Result<Url, Error> {
-        let mut url = self.ctx.url.clone();
-        match n {
-            UrlPath::BlockDevices => {
-                url.set_path(&format!("v0/nodes/{}/block_devices", self.spec.node))
-            }
-            UrlPath::Pool(name) => {
-                url.set_path(&format!("v0/nodes/{}/pools/{}", self.spec.node, name))
-            }
-        };
-
-        Ok(url)
+    fn pools_api(&self) -> &dyn openapi::apis::pools_api::tower::client::Pools {
+        self.ctx.http.pools_api()
     }
-
-    /// helper function to set the path for the URL we want to perform the GET
-    /// operation on
-    fn get(&self, n: UrlPath) -> Result<RequestBuilder, Error> {
-        let url = self.as_url(n)?;
-        Ok(self.ctx.http.get(url))
-    }
-
-    /// helper for setting the path of the URL we want to PUT operation on.
-    fn put(&self, n: UrlPath) -> Result<RequestBuilder, Error> {
-        // we only do puts for to one specific path
-        if matches!(n, UrlPath::Pool(_)) {
-            let url = self.as_url(n)?;
-            return Ok(self.ctx.http.put(url));
-        }
-
-        Err(Error::Noun {})
-    }
-
-    /// helper for setting the path of the URL we want to DELETE operation on.
-    fn delete(&self, n: UrlPath) -> Result<RequestBuilder, Error> {
-        // we only do delete for to one specific path
-        if matches!(n, UrlPath::Pool(_)) {
-            let url = self.as_url(n)?;
-            return Ok(self.ctx.http.delete(url));
-        }
-
-        Err(Error::Noun {})
+    fn block_devices_api(
+        &self,
+    ) -> &dyn openapi::apis::block_devices_api::tower::client::BlockDevices {
+        self.ctx.http.block_devices_api()
     }
 
     /// Patch the given MSP status to the state provided. When not online the
@@ -458,12 +419,11 @@ impl ResourceContext {
         }
 
         if !self
-            .get(UrlPath::BlockDevices)?
-            .send()
+            .block_devices_api()
+            .get_node_block_devices(&self.spec.node, None)
             .await?
-            .json::<Vec<BlockDevice>>()
-            .await?
-            .iter()
+            .into_body()
+            .into_iter()
             .any(|b| b.devname == self.spec.disks[0])
         {
             self.k8s_notify(
@@ -486,20 +446,15 @@ impl ResourceContext {
             String::from(constants::MSP_OPERATOR),
         );
 
-        let body = json!({
-            "disks": self.spec.disks.clone(),
-            "labels": labels
-        });
-
+        let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
         let res = self
-            .put(UrlPath::Pool(self.name()))?
-            .json(&body)
-            .send()
+            .pools_api()
+            .put_node_pool(&self.spec.node, &self.name(), body)
             .await?;
 
         if matches!(
             res.status(),
-            reqwest::StatusCode::OK | reqwest::StatusCode::UNPROCESSABLE_ENTITY
+            clients::tower::StatusCode::OK | clients::tower::StatusCode::UNPROCESSABLE_ENTITY
         ) {
             self.k8s_notify(
                 "Create or Import",
@@ -538,9 +493,12 @@ impl ResourceContext {
             });
         }
 
-        let res = self.delete(UrlPath::Pool(self.name()))?.send().await?;
+        let res = self
+            .pools_api()
+            .del_node_pool(&self.spec.node, &self.name())
+            .await?;
 
-        if res.status() == reqwest::StatusCode::OK {
+        if res.status().is_success() {
             self.k8s_notify(
                 "Destroyed pool",
                 "Destroy",
@@ -560,15 +518,14 @@ impl ResourceContext {
     /// useful when trouble shooting.
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
     async fn online_pool(self) -> Result<ReconcilerAction, Error> {
-        let p = self
-            .get(UrlPath::Pool(self.name()))?
-            .send()
+        let pool = self
+            .pools_api()
+            .get_node_pool(&self.spec.node, &self.name())
             .await?
-            .json::<Pool>()
-            .await?;
+            .into_body();
 
-        if p.state.is_some() {
-            let _ = self.patch_status(MayastorPoolStatus::from(p)).await?;
+        if pool.state.is_some() {
+            let _ = self.patch_status(MayastorPoolStatus::from(pool)).await?;
 
             self.k8s_notify(
                 "Online pool",
@@ -594,55 +551,62 @@ impl ResourceContext {
     /// field, is not a reliable measure to determine the current usage.
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
     async fn pool_check(&self) -> Result<ReconcilerAction, Error> {
-        let p = self.get(UrlPath::Pool(self.name()))?.send().await?;
-
-        if p.status() == reqwest::StatusCode::NOT_FOUND {
-            if self.metadata.deletion_timestamp.is_some() {
-                tracing::debug!(name = ?self.name(), "deleted stopping checker");
-                return Ok(ReconcilerAction {
-                    requeue_after: None,
-                });
-            } else {
-                tracing::warn!(pool = ?self.name(), "deleted by external event NOT recreating");
-                self.k8s_notify(
-                    "Offline",
-                    "Check",
-                    "The pool has been deleted through an external API request",
-                    "Warning",
-                )
-                .await;
-                return self.mark_error().await;
-            }
-        }
-
-        if let Ok(p) = p.json::<Pool>().await {
-            if p.state.is_some() {
-                if let Some(status) = &self.status {
-                    let new_status = MayastorPoolStatus::from(p);
-                    if status != &new_status {
-                        // update the usage state such that users can see the values changes
-                        // as replica's are added and/or removed.
-                        let _ = self.patch_status(new_status).await;
+        let pool = match self
+            .pools_api()
+            .get_node_pool(&self.spec.node, &self.name())
+            .await
+        {
+            Ok(response) => Ok(response),
+            Err(clients::tower::Error::Response(response)) => {
+                if response.status() == clients::tower::StatusCode::NOT_FOUND {
+                    if self.metadata.deletion_timestamp.is_some() {
+                        tracing::debug!(name = ?self.name(), "deleted stopping checker");
+                        return Ok(ReconcilerAction {
+                            requeue_after: None,
+                        });
+                    } else {
+                        tracing::warn!(pool = ?self.name(), "deleted by external event NOT recreating");
+                        self.k8s_notify(
+                            "Offline",
+                            "Check",
+                            "The pool has been deleted through an external API request",
+                            "Warning",
+                        )
+                        .await;
+                        return self.mark_error().await;
                     }
+                } else {
+                    // any other error is not expected
+                    self.k8s_notify(
+                        "Missing",
+                        "Check",
+                        &format!("The pool information is not available: {}", response),
+                        "Warning",
+                    )
+                        .await;
+                    return self.is_missing().await;
                 }
-            } else {
-                warn!("CRD does not contain the valid fields we except");
             }
+            error => error,
+        }?.into_body();
 
-            // always reschedule though
-            Ok(ReconcilerAction {
-                requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
-            })
+        if pool.state.is_some() {
+            if let Some(status) = &self.status {
+                let new_status = MayastorPoolStatus::from(pool);
+                if status != &new_status {
+                    // update the usage state such that users can see the values changes
+                    // as replica's are added and/or removed.
+                    let _ = self.patch_status(new_status).await;
+                }
+            }
         } else {
-            self.k8s_notify(
-                "Offline",
-                "Check",
-                "The pool has been deleted through an external API request",
-                "Warning",
-            )
-            .await;
-            self.is_missing().await
+            warn!("CRD does not contain the valid fields we except");
         }
+
+        // always reschedule though
+        Ok(ReconcilerAction {
+            requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
+        })
     }
 
     /// Post an event, typically these events are used to indicate that
@@ -848,16 +812,19 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
 
     let msp: Api<MayastorPool> = Api::namespaced(k8s.clone(), namespace);
     let lp = ListParams::default();
+    let url = Url::parse(args.value_of("endpoint").unwrap()).expect("endpoint is not a valid URL");
+    let cfg = clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Failed to create openapi configuration, Error: '{:?}'",
+                error
+            )
+        })?;
 
     let context = Context::new(OperatorContext {
         k8s,
         inventory: tokio::sync::RwLock::new(HashMap::new()),
-        url: Url::parse(args.value_of("endpoint").unwrap()).expect("endpoint is not a valid URL"),
-        http: reqwest::ClientBuilder::new()
-            .timeout(Duration::from_secs(5))
-            .connect_timeout(Duration::from_secs(3))
-            .build()
-            .expect("failed to create HTTP client"),
+        http: clients::tower::ApiClient::new(cfg),
         interval: args
             .value_of("interval")
             .unwrap()
@@ -979,6 +946,7 @@ async fn main() -> anyhow::Result<()> {
             git_version::git_version!(args = ["--abbrev=12", "--always"]),
             env!("CARGO_PKG_VERSION"),
         );
+        global::set_text_map_propagator(TraceContextPropagator::new());
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)
             .with_service_name("msp-operator")
@@ -996,5 +964,6 @@ async fn main() -> anyhow::Result<()> {
     }
 
     pool_controller(matches).await?;
+    global::shutdown_tracer_provider();
     Ok(())
 }
