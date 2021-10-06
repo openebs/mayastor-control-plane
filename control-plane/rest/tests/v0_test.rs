@@ -1,6 +1,6 @@
 use common_lib::types::v0::{
     message_bus::WatchResourceId,
-    openapi::{apis, models},
+    openapi::{actix, apis, models},
 };
 
 use rest_client::ActixRestClient;
@@ -401,7 +401,7 @@ async fn client_invalid_token() {
 
     assert!(matches!(
         error,
-        apis::client::Error::ResponseError(apis::client::ResponseContent {
+        actix::client::Error::ResponseError(actix::client::ResponseContent {
             status: apis::StatusCode::UNAUTHORIZED,
             ..
         })

@@ -36,7 +36,7 @@ async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
 }
 
 #[async_trait::async_trait]
-impl apis::Pools for RestApi {
+impl apis::actix_server::Pools for RestApi {
     async fn del_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
     ) -> Result<(), RestError<RestJsonError>> {

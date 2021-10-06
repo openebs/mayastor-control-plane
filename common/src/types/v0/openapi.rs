@@ -1,5 +1,7 @@
 /// reexport the openapi
 pub use openapi::{
-    apis::{self, client::ApiClient, configuration::Configuration},
-    models,
+    actix,
+    actix::client::{self, configuration::Configuration, ApiClient},
+    actix::server,
+    apis, models,
 };

@@ -1,10 +1,9 @@
 use anyhow::Result;
-use awc::ClientBuilder;
 use once_cell::sync::OnceCell;
-use openapi::apis::{client::ApiClient, configuration::Configuration};
-use reqwest::Url;
+use openapi::tower::client::{ApiClient, Configuration, Url};
+use std::time::Duration;
 
-static REST_SERVER: OnceCell<Url> = OnceCell::new();
+static REST_SERVER: OnceCell<ApiClient> = OnceCell::new();
 
 /// REST client
 pub struct RestClient {}
@@ -21,15 +20,20 @@ impl RestClient {
             url.set_port(Some(30011))
                 .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;
         }
-        REST_SERVER.get_or_init(|| url);
+        url.set_path(&format!("{}/v0", url.path().trim_end_matches('/')));
+        let cfg =
+            Configuration::new(url, Duration::from_secs(5), None, None, true).map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to create openapi configuration, Error: '{:?}'",
+                    error
+                )
+            })?;
+        REST_SERVER.get_or_init(|| ApiClient::new(cfg));
         Ok(())
     }
 
     /// Get an ApiClient to use for REST calls.
-    pub(crate) fn client() -> ApiClient {
-        let client = ClientBuilder::new().finish();
-        let url = REST_SERVER.get().unwrap().join("/v0").unwrap();
-        let cfg = Configuration::new_with_client(url.as_str(), client, None, true);
-        ApiClient::new(cfg)
+    pub(crate) fn client() -> &'static ApiClient {
+        REST_SERVER.get().unwrap()
     }
 }

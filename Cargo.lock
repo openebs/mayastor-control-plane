@@ -983,6 +983,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ct-logs"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1a816186fa68d9e426e3cb4ae4dff1fcd8e4a2c34b781bf7a822574a0d0aac8"
+dependencies = [
+ "sct",
+]
+
+[[package]]
 name = "ctrlp-tests"
 version = "0.1.0"
 dependencies = [
@@ -1675,6 +1684,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-rustls"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f9f7a97316d44c0af9b0301e65010573a853a9fc97046d7331d7f6bc0fd5a64"
+dependencies = [
+ "ct-logs",
+ "futures-util",
+ "hyper",
+ "log",
+ "rustls",
+ "rustls-native-certs",
+ "tokio",
+ "tokio-rustls",
+ "webpki",
+]
+
+[[package]]
 name = "hyper-timeout"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1949,20 +1975,22 @@ dependencies = [
 name = "kubectl-plugin"
 version = "0.1.0"
 dependencies = [
- "actix-rt",
  "anyhow",
  "async-trait",
- "awc",
+ "git-version",
  "lazy_static",
  "once_cell",
  "openapi",
+ "opentelemetry",
+ "opentelemetry-jaeger",
  "prettytable-rs",
- "reqwest",
  "serde",
  "serde_json",
  "serde_yaml",
  "structopt",
+ "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "yaml-rust",
 ]
@@ -2340,18 +2368,34 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openapi"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "actix-web",
  "actix-web-opentelemetry",
  "async-trait",
  "awc",
+ "bytes",
  "dyn-clonable",
+ "futures",
+ "http-body",
+ "hyper",
+ "hyper-rustls",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry-jaeger",
+ "opentelemetry-semantic-conventions",
+ "pin-project 1.0.8",
  "rustls",
  "serde",
  "serde_derive",
  "serde_json",
  "serde_urlencoded",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "url",
  "uuid",
 ]
@@ -2408,6 +2452,19 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+]
+
+[[package]]
+name = "opentelemetry-http"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d50ceb0b0e8b75cb3e388a2571a807c8228dabc5d6670f317b6eb21301095373"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "http",
+ "opentelemetry",
 ]
 
 [[package]]

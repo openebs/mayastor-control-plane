@@ -3,7 +3,7 @@ use common_lib::types::v0::message_bus::GetBlockDevices;
 use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
 
 #[async_trait::async_trait]
-impl apis::BlockDevices for RestApi {
+impl apis::actix_server::BlockDevices for RestApi {
     // Get block devices takes a query parameter 'all' which is used to determine
     // whether to return all found devices or only those that are usable.
     // Omitting the query parameter will result in all block devices being shown.

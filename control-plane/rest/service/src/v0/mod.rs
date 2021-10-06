@@ -26,7 +26,7 @@ use serde::Deserialize;
 use crate::authentication::authenticate;
 pub use common_lib::{
     types::v0::openapi::{
-        apis::{Body, Path, Query, RestError},
+        apis::actix_server::{Body, Path, Query, RestError},
         models::RestJsonError,
     },
     IntoVec,
@@ -44,7 +44,7 @@ fn spec_uri() -> String {
 pub(crate) struct RestApi {}
 
 fn configure(cfg: &mut actix_web::web::ServiceConfig) {
-    apis::configure::<RestApi, BearerToken>(cfg);
+    apis::actix_server::configure::<RestApi, BearerToken>(cfg);
     // todo: remove when the /states is added to the spec
     states::configure(cfg);
 }

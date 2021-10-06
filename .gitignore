@@ -5,11 +5,12 @@
 /.idea
 /default.etcd/
 /node_modules/
-/openapi/Cargo.lock
 /package-lock.json
 /package.json
 /result*
 /tests/bdd/__pycache__/
 /tests/bdd/openapi/
 /chart/charts/
-/chart/Chart.lock
+/openapi/*
+!/openapi/Cargo.toml
+!/openapi/build.rs

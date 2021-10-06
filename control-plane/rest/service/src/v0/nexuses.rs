@@ -39,7 +39,7 @@ async fn destroy_nexus(filter: Filter) -> Result<(), RestError<RestJsonError>> {
 }
 
 #[async_trait::async_trait]
-impl apis::Nexuses for RestApi {
+impl apis::actix_server::Nexuses for RestApi {
     async fn del_nexus(Path(nexus_id): Path<Uuid>) -> Result<(), RestError<RestJsonError>> {
         destroy_nexus(Filter::Nexus(nexus_id.into())).await
     }

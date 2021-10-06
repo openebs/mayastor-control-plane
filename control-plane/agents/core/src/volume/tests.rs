@@ -30,7 +30,7 @@ use common_lib::{
             VolumeId,
         },
         openapi::{
-            apis::client::{Error, ResponseContent},
+            actix::client::{Error, ResponseContent},
             models,
             models::NodeStatus,
         },
