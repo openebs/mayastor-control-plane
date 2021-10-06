@@ -1,16 +1,26 @@
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
 
 mod client;
+mod config;
 mod controller;
 mod identity;
 use client::{ApiClientError, MayastorApiClient};
+use config::CsiControllerConfig;
 
 mod server;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
+
+/// Initialize all components before starting the CSI controller.
+fn initialize_controller(args: &ArgMatches) -> Result<(), String> {
+    CsiControllerConfig::initialize(args);
+    MayastorApiClient::initialize()
+        .map_err(|e| format!("Failed to initialize API client, error = {}", e))?;
+    Ok(())
+}
 
 #[tokio::main(worker_threads = 2)]
 pub async fn main() -> Result<(), String> {
@@ -44,6 +54,13 @@ pub async fn main() -> Result<(), String> {
                 .env("JAEGER_ENDPOINT")
                 .help("enable open telemetry and forward to jaeger"),
         )
+        .arg(
+            Arg::with_name("timeout")
+                .short("-t")
+                .long("rest-timeout")
+                .env("REST_TIMEOUT")
+                .default_value("5s"),
+        )
         .get_matches();
 
     let filter = EnvFilter::try_from_default_env()
@@ -71,14 +88,12 @@ pub async fn main() -> Result<(), String> {
         subscriber.init();
     }
 
-    let rest_endpoint = args
-        .value_of("endpoint")
-        .expect("rest endpoint must be specified");
+    initialize_controller(&args)?;
 
-    info!(?rest_endpoint, "Starting Mayastor CSI Controller");
-
-    MayastorApiClient::initialize(rest_endpoint.into())
-        .map_err(|e| format!("Failed to initialize API client, error = {}", e))?;
+    info!(
+        "Starting Mayastor CSI Controller, REST endpoint = {}",
+        CsiControllerConfig::get_config().rest_endpoint()
+    );
 
     server::CsiServer::run(
         args.value_of("socket")

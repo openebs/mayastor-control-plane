@@ -3,6 +3,7 @@ use common_lib::types::v0::openapi::models::{
     PoolTopology, Topology, Volume, VolumePolicy, VolumeShareProtocol,
 };
 
+use crate::CsiControllerConfig;
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
 use reqwest::{Client, Response, StatusCode, Url};
@@ -11,7 +12,7 @@ use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
 };
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ApiClientError {
@@ -88,18 +89,22 @@ pub struct MayastorApiClient {
 impl MayastorApiClient {
     /// Initialize API client instance. Must be called prior to
     /// obtaining the client instance.
-    pub fn initialize(endpoint: String) -> Result<()> {
+    pub fn initialize() -> Result<()> {
         if REST_CLIENT.get().is_some() {
             return Err(anyhow!("API client already initialized"));
         }
 
+        let cfg = CsiControllerConfig::get_config();
+        let endpoint = cfg.rest_endpoint();
+
         // Make sure endpoint is a well-formed URL.
-        if let Err(u) = Url::parse(&endpoint) {
+        if let Err(u) = Url::parse(endpoint) {
             return Err(anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, u));
         }
 
         let rest_client = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
+            .timeout(cfg.io_timeout())
             .build()
             .expect("Failed to build REST client");
 
@@ -108,7 +113,11 @@ impl MayastorApiClient {
             rest_client,
         });
 
-        debug!("API client is initialized with endpoint {}", endpoint);
+        info!(
+            "API client is initialized with endpoint {}, I/O timeout = {:?}",
+            endpoint,
+            cfg.io_timeout(),
+        );
         Ok(())
     }
 
