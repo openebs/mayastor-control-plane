@@ -90,7 +90,7 @@ impl CsiServer {
     pub async fn run(csi_socket: String) -> Result<(), String> {
         // Remove existing CSI socket from previous runs.
         match fs::remove_file(&csi_socket) {
-            Ok(_) => debug!("Removed stale CSI socket {}", csi_socket),
+            Ok(_) => info!("Removed stale CSI socket {}", csi_socket),
             Err(err) => {
                 if err.kind() != ErrorKind::NotFound {
                     return Err(format!(
@@ -101,10 +101,21 @@ impl CsiServer {
             }
         }
 
-        info!("CSI RPC server is listening on {}", csi_socket);
+        debug!("CSI RPC server is listening on {}", csi_socket);
 
         let incoming = {
-            let uds = UnixListener::bind(csi_socket).map_err(|_e| "Failed to bind CSI socket")?;
+            let uds = UnixListener::bind(&csi_socket).map_err(|_e| "Failed to bind CSI socket")?;
+
+            // Change permissions on CSI socket to allow non-privileged clients to access it
+            // to simplify testing.
+            if let Err(e) = fs::set_permissions(
+                &csi_socket,
+                std::os::unix::fs::PermissionsExt::from_mode(0o777),
+            ) {
+                error!("Failed to change permissions for CSI socket: {:?}", e);
+            } else {
+                debug!("Successfully changed file permissions for CSI socket");
+            }
 
             async_stream::stream! {
                 while let item = uds.accept().map_ok(|(st, _)| UnixStream(st)).await {

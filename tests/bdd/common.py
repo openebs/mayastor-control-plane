@@ -8,6 +8,10 @@ from openapi.openapi_client import api_client
 from openapi.openapi_client import configuration
 import docker
 
+import grpc
+import csi_pb2 as pb
+import csi_pb2_grpc as rpc
+
 REST_SERVER = "http://localhost:8081/v0"
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 NODE_NAME = "mayastor-1"
@@ -64,3 +68,21 @@ def check_container_running(container_name):
         container_state = container.attrs["State"]
         if container_state["Status"] != "running":
             raise Exception("{} container not running", container_name)
+
+
+"""
+Wrapper arount gRPC handle to communicate with CSI controller.
+"""
+
+
+class CsiHandle(object):
+    def __init__(self, csi_socket):
+        self.channel = grpc.insecure_channel(csi_socket)
+        self.controller = rpc.ControllerStub(self.channel)
+        self.identity = rpc.IdentityStub(self.channel)
+
+    def __del__(self):
+        del self.channel
+
+    def close(self):
+        self.__del__()

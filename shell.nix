@@ -17,7 +17,7 @@ let
   channel = import ./nix/lib/rust.nix { inherit sources; };
   # python environment for tests/bdd
   pytest_inputs = python3.withPackages
-    (ps: with ps; [ virtualenv black ]);
+    (ps: with ps; [ virtualenv grpcio grpcio-tools black ]);
 in
 mkShell {
   name = "mayastor-control-plane-shell";

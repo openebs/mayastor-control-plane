@@ -1,3 +1,4 @@
+mod csi;
 pub mod dns;
 mod elastic;
 mod empty;
@@ -420,6 +421,7 @@ impl_component! {
     Rest,       3,
     Mayastor,   4,
     JsonGrpc,   5,
+    Csi,        5,
 }
 
 // Message Bus Control Plane Agents

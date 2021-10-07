@@ -208,6 +208,8 @@ pub struct ContainerSpec {
     binds: HashMap<String, String>,
     /// run the container as privileged
     privileged: Option<bool>,
+    /// use default container mounts (like /tmp and /var/tmp)
+    bypass_default_mounts: bool,
 }
 
 impl ContainerSpec {
@@ -270,6 +272,11 @@ impl ContainerSpec {
                 aliases.push(alias.into());
             }
         };
+        self
+    }
+    /// use or not predefined mounts for the container.
+    pub fn with_bypass_default_mounts(mut self, bypass: bool) -> Self {
+        self.bypass_default_mounts = bypass;
         self
     }
     /// Add environment key-val, eg for setting the RUST_LOG
@@ -1061,6 +1068,7 @@ impl ComposeTest {
             format!("{}:{}", self.srcdir, self.srcdir),
             "/dev/hugepages:/dev/hugepages:rw".into(),
         ];
+
         binds.extend(spec.binds());
         if let Some(bin) = &spec.binary {
             binds.push("/nix:/nix:ro".into());
@@ -1074,9 +1082,9 @@ impl ComposeTest {
                 }
             }
         }
-        let mut host_config = HostConfig {
-            binds: Some(binds),
-            mounts: Some(vec![
+
+        let mounts = if !spec.bypass_default_mounts {
+            vec![
                 // DPDK needs to have a /tmp
                 Mount {
                     target: Some("/tmp".into()),
@@ -1089,7 +1097,14 @@ impl ComposeTest {
                     typ: Some(MountTypeEnum::TMPFS),
                     ..Default::default()
                 },
-            ]),
+            ]
+        } else {
+            vec![]
+        };
+
+        let mut host_config = HostConfig {
+            binds: Some(binds),
+            mounts: Some(mounts),
             cap_add: Some(vec![
                 "SYS_ADMIN".to_string(),
                 "IPC_LOCK".into(),
