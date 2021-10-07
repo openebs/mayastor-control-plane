@@ -20,7 +20,6 @@ impl RestClient {
             url.set_port(Some(30011))
                 .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;
         }
-        url.set_path(&format!("{}/v0", url.path().trim_end_matches('/')));
         let cfg =
             Configuration::new(url, Duration::from_secs(5), None, None, true).map_err(|error| {
                 anyhow::anyhow!(

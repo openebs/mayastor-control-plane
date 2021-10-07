@@ -56,19 +56,21 @@ fn default_log_filter(current: tracing_subscriber::EnvFilter) -> tracing_subscri
         "trace" => "trace",
         _ => return current,
     };
-    let logs = format!("kubectl_mayastor={},error", log_level);
+    let logs = format!("kubectl_mayastor={},warn", log_level);
     tracing_subscriber::EnvFilter::try_new(logs).unwrap()
 }
 
 fn init_tracing() {
     let filter = default_log_filter(
         tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("off")),
     );
 
-    let subscriber = Registry::default()
-        .with(filter)
-        .with(tracing_subscriber::fmt::layer().pretty());
+    let subscriber = Registry::default().with(filter).with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(std::io::stderr)
+            .pretty(),
+    );
 
     match CliArgs::args().jaeger {
         Some(jaeger) => {

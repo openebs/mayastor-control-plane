@@ -2164,7 +2164,6 @@ name = "msp-operator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bytes",
  "chrono",
  "clap",
  "futures",
@@ -2173,25 +2172,18 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "kube-runtime",
- "log",
  "openapi",
  "opentelemetry",
  "opentelemetry-jaeger",
- "prost",
- "prost-derive",
- "reqwest",
  "schemars",
  "serde",
  "serde_json",
  "serde_yaml",
  "snafu",
  "tokio",
- "tonic",
- "tonic-build",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]
