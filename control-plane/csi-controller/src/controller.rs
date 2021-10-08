@@ -73,11 +73,11 @@ fn parse_protocol(proto: &str) -> Result<VolumeShareProtocol, Status> {
 }
 
 /// Transform Kubernetes Mayastor node ID into its real hostname.
-fn normalize_hostname(name: String) -> String {
+fn normalize_hostname(name: &str) -> String {
     if let Some(hostname) = name.strip_prefix(MAYASTOR_NODE_PREFIX) {
         hostname.to_string()
     } else {
-        name
+        name.to_string()
     }
 }
 
@@ -333,7 +333,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         } else {
             MayastorApiClient::get_client()
                 .create_volume(
-                    &volume_uuid,
+                    &u,
                     replica_count,
                     size,
                     &allowed_nodes,
@@ -368,8 +368,12 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<DeleteVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
 
+        let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
+            Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
+        })?;
+
         MayastorApiClient::get_client()
-            .delete_volume(&args.volume_id)
+            .delete_volume(&volume_uuid)
             .await
             .map_err(|e| {
                 Status::internal(format!(
@@ -406,10 +410,14 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         if args.node_id.is_empty() {
             return Err(Status::invalid_argument("Node ID must not be empty"));
         }
+        let node_id = normalize_hostname(&args.node_id);
 
         if args.volume_id.is_empty() {
             return Err(Status::invalid_argument("Volume ID must not be empty"));
         }
+        let volume_id = Uuid::parse_str(&args.volume_id).map_err(|_e| {
+            Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
+        })?;
 
         match args.volume_capability {
             Some(c) => {
@@ -419,9 +427,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 return Err(Status::invalid_argument("Missing volume capability"));
             }
         };
-
-        let node_id = normalize_hostname(args.node_id);
-        let volume_id = args.volume_id.to_string();
 
         // Check if the volume is already published.
         let volume = MayastorApiClient::get_client()
@@ -506,10 +511,12 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<ControllerUnpublishVolumeRequest>,
     ) -> Result<tonic::Response<ControllerUnpublishVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
-
+        let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
+            Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
+        })?;
         // Check if target volume exists.
         let volume = match MayastorApiClient::get_client()
-            .get_volume(&args.volume_id)
+            .get_volume(&volume_uuid)
             .await
         {
             Ok(volume) => volume,
@@ -522,7 +529,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         // Check if target volume is published and the node matches.
         if let Some((node, _)) = get_volume_share_location(&volume) {
-            if !args.node_id.is_empty() && node != normalize_hostname(args.node_id.to_string()) {
+            if !args.node_id.is_empty() && node != normalize_hostname(&args.node_id) {
                 return Err(Status::not_found(format!(
                     "Volume {} is published on a different node: {}",
                     &args.volume_id, node
@@ -538,7 +545,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }
 
         MayastorApiClient::get_client()
-            .unpublish_volume(&args.volume_id)
+            .unpublish_volume(&volume_uuid)
             .await
             .map_err(|e| {
                 Status::not_found(format!(
@@ -559,8 +566,11 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let args = request.into_inner();
 
         debug!("Request to validate volume capabilities: {:?}", args);
+        let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
+            Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
+        })?;
         let _volume = MayastorApiClient::get_client()
-            .get_volume(&args.volume_id)
+            .get_volume(&volume_uuid)
             .await
             .map_err(|_e| Status::unimplemented("Not implemented"))?;
 
