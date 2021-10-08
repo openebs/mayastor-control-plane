@@ -11,6 +11,7 @@
 /tests/bdd/__pycache__/
 /tests/bdd/openapi/
 /chart/charts/
+/chart/Chart.lock
 /openapi/*
 !/openapi/Cargo.toml
 !/openapi/build.rs

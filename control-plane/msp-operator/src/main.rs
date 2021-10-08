@@ -60,7 +60,7 @@ pub mod constants {
     printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
 )]
 
-/// The pool spec which contains the paramaters we use when creating the pool
+/// The pool spec which contains the parameters we use when creating the pool
 pub struct MayastorPoolSpec {
     /// The node the pool is placed on
     node: String,

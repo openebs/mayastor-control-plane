@@ -63,6 +63,7 @@ async fn volume() {
     test_volume(&cluster).await;
 }
 
+#[tracing::instrument(skip(cluster))]
 async fn test_volume(cluster: &Cluster) {
     smoke_test().await;
     publishing_test(cluster).await;
@@ -557,6 +558,7 @@ enum FaultTest {
     Unclean,
 }
 
+#[tracing::instrument(skip(cluster))]
 async fn nexus_persistence_test(cluster: &Cluster) {
     for (local, remote) in &vec![
         (cluster.node(0), cluster.node(1)),
@@ -713,6 +715,7 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
 }
 
+#[tracing::instrument(skip(cluster))]
 async fn publishing_test(cluster: &Cluster) {
     let volume = CreateVolume {
         uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),

@@ -827,6 +827,10 @@ impl Drop for ComposeTest {
         if self.clean && (!thread::panicking() || self.allow_clean_on_panic) {
             self.containers.keys().for_each(|c| {
                 std::process::Command::new("docker")
+                    .args(&["kill", "-s", "term", c])
+                    .output()
+                    .unwrap();
+                std::process::Command::new("docker")
                     .args(&["kill", c])
                     .output()
                     .unwrap();

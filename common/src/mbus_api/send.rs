@@ -334,6 +334,8 @@ where
             ),
         ];
 
+        // todo: investigate difference
+        //let ctx = tracing::Span::current().context();
         let ctx = Context::current();
         let span = tracer
             .span_builder(format!(

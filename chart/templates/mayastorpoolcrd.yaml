@@ -59,7 +59,7 @@
             "description": "Auto-generated derived type for MayastorPoolSpec via `CustomResource`",
             "properties": {
               "spec": {
-                "description": "The pool spec which contains the paramaters we use when creating the pool",
+                "description": "The pool spec which contains the parameters we use when creating the pool",
                 "properties": {
                   "disks": {
                     "description": "The disk device the pool is located on",
