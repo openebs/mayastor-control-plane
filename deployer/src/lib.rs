@@ -327,6 +327,18 @@ impl StartOptions {
         self.base_image = base_image.into();
         self
     }
+    pub fn with_tags(mut self, tags: Vec<KeyValue>) -> Self {
+        self.tracing_tags.extend(tags);
+        self
+    }
+    pub fn with_env_tags(mut self, env: Vec<&str>) -> Self {
+        env.iter().for_each(|env| {
+            if let Ok(val) = std::env::var(env) {
+                self.tracing_tags.push(KeyValue::new(env.to_string(), val));
+            }
+        });
+        self
+    }
 }
 
 impl CliArgs {
