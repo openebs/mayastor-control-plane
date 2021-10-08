@@ -423,6 +423,8 @@ pub struct Builder {
     containers: Vec<(ContainerSpec, Ipv4Addr)>,
     /// existing containers and their (IDs, Ipv4)
     existing_containers: HashMap<ContainerName, (ContainerId, Ipv4Addr)>,
+    /// container shutdown order
+    shutdown_order: Vec<ContainerName>,
     /// the network used by this experiment
     network: Ipv4Network,
     /// reuse existing containers
@@ -465,6 +467,7 @@ impl Builder {
             name: TEST_NET_NAME.to_string(),
             containers: Default::default(),
             existing_containers: Default::default(),
+            shutdown_order: vec![],
             network: TEST_NET_NETWORK.parse().expect("Valid network config"),
             reuse: false,
             label_prefix: TEST_LABEL_PREFIX.to_string(),
@@ -677,6 +680,12 @@ impl Builder {
         self
     }
 
+    /// with the following shutdown order
+    pub fn with_shutdown_order(mut self, shutdown: Vec<String>) -> Builder {
+        self.shutdown_order = shutdown;
+        self
+    }
+
     /// build the config and start the containers
     pub async fn build(self) -> Result<ComposeTest, Box<dyn std::error::Error>> {
         let autorun = self.autorun;
@@ -746,6 +755,7 @@ impl Builder {
             docker,
             network_id: "".to_string(),
             containers: Default::default(),
+            shutdown_order: self.shutdown_order,
             ipam,
             label_prefix: self.label_prefix,
             reuse: self.reuse,
@@ -791,6 +801,8 @@ pub struct ComposeTest {
     /// perhaps not an ideal data structure, but we can improve it later
     /// if we need to
     containers: HashMap<ContainerName, (ContainerId, Ipv4Addr)>,
+    /// container shutdown order
+    shutdown_order: Vec<ContainerName>,
     /// the default network configuration we use for our test cases
     ipam: Ipam,
     /// prefix for labels set on containers and networks
@@ -825,7 +837,18 @@ impl Drop for ComposeTest {
         }
 
         if self.clean && (!thread::panicking() || self.allow_clean_on_panic) {
+            self.shutdown_order.iter().for_each(|c| {
+                std::process::Command::new("docker")
+                    .args(&["kill", "-s", "term", c])
+                    .output()
+                    .unwrap();
+            });
+
             self.containers.keys().for_each(|c| {
+                std::process::Command::new("docker")
+                    .args(&["kill", "-s", "term", c])
+                    .output()
+                    .unwrap();
                 std::process::Command::new("docker")
                     .args(&["kill", c])
                     .output()

@@ -253,6 +253,16 @@ impl Components {
         }
         Ok(())
     }
+    pub fn shutdown_order(&self) -> Vec<String> {
+        let ordered = self
+            .0
+            .iter()
+            .rev()
+            // todo: this is wrong, get the actual name!
+            .map(|c| c.to_string().to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        ordered
+    }
 }
 
 #[macro_export]

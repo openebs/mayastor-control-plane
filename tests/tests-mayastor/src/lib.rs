@@ -6,6 +6,7 @@ use deployer_lib::{
 use opentelemetry::{
     global,
     sdk::{propagation::TraceContextPropagator, trace::Tracer},
+    KeyValue,
 };
 
 pub use common_lib::{
@@ -61,6 +62,7 @@ pub fn default_options() -> StartOptions {
         .with_show_info(true)
         .with_cluster_name("rest_cluster")
         .with_build_all(true)
+        .with_env_tags(vec!["CARGO_PKG_NAME"])
 }
 
 /// Cluster with the composer, the rest client and the jaeger pipeline#
@@ -124,7 +126,6 @@ impl Cluster {
         bearer_token: Option<String>,
         components: Components,
         composer: ComposeTest,
-        jaeger: Tracer,
     ) -> Result<Cluster, Error> {
         let rest_client = ActixRestClient::new_timeout(
             "http://localhost:8081",
@@ -137,6 +138,41 @@ impl Cluster {
         components
             .start_wait(&composer, std::time::Duration::from_secs(30))
             .await?;
+
+        let unknown_module = "unknown".to_string();
+        let mut test_module = None;
+        if let Ok(mcp_root) = std::env::var("MCP_SRC") {
+            backtrace::trace(|frame| {
+                backtrace::resolve_frame(frame, |symbol| {
+                    if let Some(name) = symbol.name() {
+                        if let Some(filename) = symbol.filename() {
+                            if filename.starts_with(&mcp_root) && !filename.ends_with(file!()) {
+                                let name = name.to_string();
+                                let name = match name.split('{').collect::<Vec<_>>().first() {
+                                    Some(name) => {
+                                        let name = name.to_string();
+                                        name.trim_end_matches("::").to_string()
+                                    }
+                                    None => unknown_module.clone(),
+                                };
+                                test_module = Some(name);
+                            }
+                        }
+                    }
+                });
+                test_module.is_none()
+            });
+        }
+
+        global::set_text_map_propagator(TraceContextPropagator::new());
+        let jaeger = opentelemetry_jaeger::new_pipeline()
+            .with_service_name("tests-client")
+            .with_tags(vec![KeyValue::new(
+                "module",
+                test_module.unwrap_or(unknown_module),
+            )])
+            .install_simple()
+            .unwrap();
 
         let cluster = Cluster {
             composer,
@@ -491,12 +527,7 @@ impl ClusterBuilder {
         components: Components,
         compose_builder: Builder,
     ) -> Result<Cluster, Error> {
-        global::set_text_map_propagator(TraceContextPropagator::new());
-        let jaeger = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("tests-client")
-            .install_simple()
-            .unwrap();
-
+        let compose_builder = compose_builder.with_shutdown_order(components.shutdown_order());
         let composer = compose_builder.build().await?;
 
         let cluster = Cluster::new(
@@ -506,7 +537,6 @@ impl ClusterBuilder {
             self.bearer_token.clone(),
             components,
             composer,
-            jaeger,
         )
         .await?;
 

@@ -330,12 +330,26 @@ impl Service {
                 .collect::<Vec<_>>(),
         );
 
+        let mut signal = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate());
         loop {
             let state = state.clone();
             let bus = bus.clone();
             let gated_subs = gated_subs.clone();
 
-            let message = handle.next().await.context(GetMessage {
+            let message = if let Ok(signal) = signal.as_mut() {
+                tokio::select! {
+                    _evt = signal.recv() => {
+                         opentelemetry::global::force_flush_tracer_provider();
+                        return Ok(())
+                    },
+                    message = handle.next() => {
+                        message
+                    }
+                }
+            } else {
+                handle.next().await
+            }
+            .context(GetMessage {
                 channel: channel.clone(),
             })?;
 
