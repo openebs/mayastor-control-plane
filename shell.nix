@@ -37,6 +37,7 @@ mkShell {
     utillinux
     which
     tini
+    nvme-cli
   ] ++ pkgs.lib.optional (!norust) channel.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
