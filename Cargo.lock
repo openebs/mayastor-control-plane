@@ -969,12 +969,8 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "regex",
- "reqwest",
- "rest",
  "rpc",
  "serde",
- "serde_json",
- "structopt",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -2434,6 +2430,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+ "webpki",
 ]
 
 [[package]]
@@ -2991,7 +2988,6 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde",
- "serde_json",
  "serde_urlencoded",
  "tokio",
  "tokio-native-tls",

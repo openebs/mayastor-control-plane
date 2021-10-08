@@ -1,17 +1,17 @@
-use common_lib::types::v0::openapi::models::{
-    CreateVolumeBody, ExplicitNodeTopology, LabelledTopology, Node, NodeTopology, Pool,
-    PoolTopology, Topology, Volume, VolumePolicy, VolumeShareProtocol,
+use common_lib::types::v0::openapi::{
+    clients,
+    clients::tower::StatusCode,
+    models::{
+        CreateVolumeBody, ExplicitNodeTopology, LabelledTopology, Node, NodeTopology, Pool,
+        PoolTopology, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol,
+    },
 };
 
 use crate::CsiControllerConfig;
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
-use reqwest::{Client, Response, StatusCode, Url};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fmt::{Display, Formatter},
-};
+
+use std::{collections::HashMap, time::Duration};
 use tracing::{debug, info, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -31,50 +31,36 @@ pub enum ApiClientError {
     MalformedUrl(String),
 }
 
-static REST_CLIENT: OnceCell<MayastorApiClient> = OnceCell::new();
-
-// REST API URI names for API objects.
-mod uri {
-    pub const VOLUMES: &str = "volumes";
-    pub const POOLS: &str = "pools";
-    pub const NODES: &str = "nodes";
-}
-
-/// Struct for representing URI.
-#[derive(Debug)]
-struct UrnType<'a>(&'a [&'a str]);
-
-impl UrnType<'_> {
-    /// Classifies URI as a tuple (resource type, resource id) based on URI.
-    pub fn classify(&self) -> (String, String) {
-        match self.0.len() {
-            0 | 1 => panic!("Resource URI must contain collection name and resource id"),
-            _ => {
-                let rtype = match self.0[0] {
-                    uri::VOLUMES => "volume",
-                    uri::POOLS => "pool",
-                    uri::NODES => "node",
-                    unknown => panic!("Unknown resource type: {}", unknown),
-                };
-
-                (rtype.to_string(), self.0[1].to_string())
+impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
+    fn from(error: clients::tower::Error<RestJsonError>) -> Self {
+        match error {
+            clients::tower::Error::Request(request) => {
+                Self::ServerCommunication(request.to_string())
             }
+            clients::tower::Error::Response(response) => match response {
+                clients::tower::ResponseError::Expected(_) => {
+                    // TODO: Revisit status codes checks after improving REST API HTTP codes
+                    // (CAS-1124).
+                    if response.status() == StatusCode::NOT_FOUND {
+                        Self::ResourceNotExists(response.to_string())
+                    } else if response.status() == StatusCode::UNPROCESSABLE_ENTITY {
+                        Self::ResourceAlreadyExists(response.to_string())
+                    } else {
+                        Self::GenericOperation(response.to_string())
+                    }
+                }
+                clients::tower::ResponseError::PayloadError { .. } => {
+                    Self::InvalidResponse(response.to_string())
+                }
+                clients::tower::ResponseError::Unexpected(_) => {
+                    Self::InvalidResponse(response.to_string())
+                }
+            },
         }
     }
-
-    /// Transform URI into a full URL based on the given base URL.
-    pub fn get_full_url(&self, base_url: &str) -> Result<Url, ApiClientError> {
-        let u = format!("{}/{}", base_url, self);
-        Url::parse(&u)
-            .map_err(|e| ApiClientError::MalformedUrl(format!("URL parsing error: {:?}", e)))
-    }
 }
 
-impl Display for UrnType<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.join("/"))
-    }
-}
+static REST_CLIENT: OnceCell<MayastorApiClient> = OnceCell::new();
 
 /// Single instance API client for accessing REST API gateway.
 /// Encapsulates communication with REST API by exposing a set of
@@ -82,8 +68,7 @@ impl Display for UrnType<'_> {
 /// of API request/response objects.
 #[derive(Debug)]
 pub struct MayastorApiClient {
-    base_url: String,
-    rest_client: Client,
+    rest_client: clients::tower::ApiClient,
 }
 
 impl MayastorApiClient {
@@ -97,20 +82,19 @@ impl MayastorApiClient {
         let cfg = CsiControllerConfig::get_config();
         let endpoint = cfg.rest_endpoint();
 
-        // Make sure endpoint is a well-formed URL.
-        if let Err(u) = Url::parse(endpoint) {
-            return Err(anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, u));
-        }
-
-        let rest_client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .timeout(cfg.io_timeout())
-            .build()
-            .expect("Failed to build REST client");
+        let url = clients::tower::Url::parse(endpoint)
+            .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
+        let tower =
+            clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Failed to create openapi configuration, Error: '{:?}'",
+                        error
+                    )
+                })?;
 
         REST_CLIENT.get_or_init(|| Self {
-            base_url: format!("{}/v0", endpoint),
-            rest_client,
+            rest_client: clients::tower::ApiClient::new(tower),
         });
 
         info!(
@@ -128,206 +112,38 @@ impl MayastorApiClient {
     }
 }
 
-/// Generate a getter for a given collection URI.
-macro_rules! collection_getter {
-    ($name:ident, $t:ty, $urn:expr) => {
-        pub async fn $name(&self) -> Result<Vec<$t>, ApiClientError> {
-            self.get_collection::<$t>($urn).await
-        }
-    };
-}
-
 impl MayastorApiClient {
-    async fn get_collection_item<R>(&self, urn: UrnType<'_>) -> Result<R, ApiClientError>
-    where
-        for<'a> R: Deserialize<'a>,
-    {
-        let response = self.do_get(&urn).await?;
-
-        // Check HTTP status code.
-        match response.status() {
-            StatusCode::OK => {}
-            StatusCode::NOT_FOUND => {
-                let (rtype, rname) = urn.classify();
-                return Err(ApiClientError::ResourceNotExists(format!(
-                    "{} {} not found",
-                    rtype, rname
-                )));
-            }
-            http_status => {
-                return Err(ApiClientError::GenericOperation(format!(
-                    "Failed to GET {:?}, HTTP error = {}",
-                    urn, http_status,
-                )))
-            }
-        };
-
-        // Get response body if request succeeded.
-        let body = response.bytes().await.map_err(|e| {
-            ApiClientError::InvalidResponse(format!(
-                "Failed to obtain body from HTTP response while getting {}, error = {}",
-                urn, e,
-            ))
-        })?;
-
-        serde_json::from_slice::<R>(&body).map_err(|e| {
-            ApiClientError::InvalidResponse(format!(
-                "Failed to deserialize object {}, error = {}",
-                std::any::type_name::<R>(),
-                e
-            ))
-        })
+    /// List all nodes available in Mayastor cluster.
+    pub async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
+        let response = self.rest_client.nodes_api().get_nodes().await?;
+        Ok(response.into_body())
     }
 
-    // Get one resource instance.
-    async fn do_get(&self, urn: &UrnType<'_>) -> Result<Response, ApiClientError> {
-        self.rest_client
-            .get(urn.get_full_url(&self.base_url)?)
-            .send()
-            .await
-            .map_err(|e| {
-                ApiClientError::ServerCommunication(format!(
-                    "Failed to GET {:?}, error = {}",
-                    urn, e
-                ))
-            })
+    /// List all pools available in Mayastor cluster.
+    pub async fn list_pools(&self) -> Result<Vec<Pool>, ApiClientError> {
+        let response = self.rest_client.pools_api().get_pools().await?;
+        Ok(response.into_body())
     }
 
-    // Perform resource deletion, optionally idempotent.
-    async fn do_delete(&self, urn: &UrnType<'_>, idempotent: bool) -> Result<(), ApiClientError> {
-        let response = self
-            .rest_client
-            .delete(urn.get_full_url(&self.base_url)?)
-            .send()
-            .await
-            .map_err(|e| {
-                ApiClientError::ServerCommunication(format!(
-                    "DELETE {} request failed, error={}",
-                    urn, e
-                ))
-            })?;
-
-        // Check HTTP status code, handle DELETE idempotency transparently.
-        match response.status() {
-            StatusCode::OK => {
-                debug!("Resource {} successfully deleted", urn);
-                Ok(())
-            }
-            // Handle idempotency as requested by the caller.
-            StatusCode::NOT_FOUND | StatusCode::NO_CONTENT | StatusCode::PRECONDITION_FAILED => {
-                if idempotent {
-                    debug!("Resource {} successfully deleted", urn);
-                    Ok(())
-                } else {
-                    let (rtype, rname) = urn.classify();
-                    Err(ApiClientError::ResourceNotExists(format!(
-                        "{} {} not found",
-                        rtype, rname
-                    )))
-                }
-            }
-            code => Err(ApiClientError::GenericOperation(format!(
-                "DELETE {} failed, HTTP status code = {}",
-                urn, code
-            ))),
-        }
+    /// List all volumes available in Mayastor cluster.
+    pub async fn list_volumes(&self) -> Result<Vec<Volume>, ApiClientError> {
+        let response = self.rest_client.volumes_api().get_volumes().await?;
+        Ok(response.into_body())
     }
 
-    async fn do_put<I, O>(&self, urn: &UrnType<'_>, object: I) -> Result<O, ApiClientError>
-    where
-        I: Serialize + Sized,
-        for<'a> O: Deserialize<'a>,
-    {
-        let response = self
-            .rest_client
-            .put(urn.get_full_url(&self.base_url)?)
-            .json(&object)
-            .send()
-            .await
-            .map_err(|e| {
-                ApiClientError::ServerCommunication(format!(
-                    "PUT {} request failed, error={}",
-                    urn, e
-                ))
-            })?;
-
-        // Check HTTP status of the operation.
-        // TODO: Revisit status codes checks after improving REST API HTTP codes (CAS-1124).
-        match response.status() {
-            StatusCode::OK => {}
-            StatusCode::UNPROCESSABLE_ENTITY => {
-                return Err(ApiClientError::ResourceAlreadyExists(format!(
-                    "Resource {} already exists",
-                    urn
-                )));
-            }
-            _ => {
-                return Err(ApiClientError::GenericOperation(format!(
-                    "PUT {} failed, HTTP status = {}",
-                    urn,
-                    response.status()
-                )));
-            }
-        };
-
-        let body = response.bytes().await.map_err(|e| {
-            ApiClientError::InvalidResponse(format!(
-                "Failed to obtain body from HTTP PUT {} response, error = {}",
-                urn, e,
-            ))
-        })?;
-
-        serde_json::from_slice::<O>(&body).map_err(|e| {
-            ApiClientError::InvalidResponse(format!(
-                "Failed to deserialize object {}, error = {}",
-                std::any::type_name::<O>(),
-                e
-            ))
-        })
-    }
-
-    async fn get_collection<R>(&self, urn: UrnType<'_>) -> Result<Vec<R>, ApiClientError>
-    where
-        for<'a> R: Deserialize<'a>,
-    {
-        let body = self.do_get(&urn).await?.bytes().await.map_err(|e| {
-            ApiClientError::InvalidResponse(format!(
-                "Failed to obtain body from HTTP response while listing {:?}, error = {}",
-                urn, e,
-            ))
-        })?;
-
-        serde_json::from_slice::<Vec<R>>(&body).map_err(|e| {
-            ApiClientError::InvalidResponse(format!(
-                "Failed to deserialize objects {}, error = {}",
-                std::any::type_name::<R>(),
-                e
-            ))
-        })
-    }
-
-    // List all nodes available in Mayastor cluster.
-    collection_getter!(list_nodes, Node, UrnType(&[uri::NODES]));
-
-    // List all pools available in Mayastor cluster.
-    collection_getter!(list_pools, Pool, UrnType(&[uri::POOLS]));
-
-    // List all volumes available in Mayastor cluster.
-    collection_getter!(list_volumes, Volume, UrnType(&[uri::VOLUMES]));
-
-    // List pools available on target Mayastor node.
+    /// List pools available on target Mayastor node.
     pub async fn get_node_pools(&self, node: &str) -> Result<Vec<Pool>, ApiClientError> {
-        self.get_collection(UrnType(&[uri::NODES, node, uri::POOLS]))
-            .await
+        let pools = self.rest_client.pools_api().get_node_pools(node).await?;
+        Ok(pools.into_body())
     }
 
     /// Create a volume of target size and provision storage resources for it.
     /// This operation is not idempotent, so the caller is responsible for taking
     /// all actions with regards to idempotency.
-    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
     pub async fn create_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         replicas: u8,
         size: u64,
         allowed_nodes: &[String],
@@ -353,44 +169,87 @@ impl MayastorApiClient {
             labels: None,
         };
 
-        self.do_put(&UrnType(&[uri::VOLUMES, volume_id]), &req)
-            .await
+        let result = self
+            .rest_client
+            .volumes_api()
+            .put_volume(volume_id, req)
+            .await?;
+        Ok(result.into_body())
     }
 
     /// Delete volume and reclaim all storage resources associated with it.
     /// This operation is idempotent, so the caller does not see errors indicating
     /// absence of the resource.
-    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
-    pub async fn delete_volume(&self, volume_id: &str) -> Result<(), ApiClientError> {
-        self.do_delete(&UrnType(&[uri::VOLUMES, volume_id]), true)
-            .await
+    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    pub async fn delete_volume(&self, volume_id: &uuid::Uuid) -> Result<(), ApiClientError> {
+        Self::delete_idempotent(
+            self.rest_client.volumes_api().del_volume(volume_id).await,
+            true,
+        )?;
+        debug!(volume.uuid=%volume_id, "Volume successfully deleted");
+        Ok(())
+    }
+
+    /// Check HTTP status code, handle DELETE idempotency transparently.
+    pub fn delete_idempotent<T>(
+        result: Result<clients::tower::ResponseContent<T>, clients::tower::Error<RestJsonError>>,
+        idempotent: bool,
+    ) -> Result<(), ApiClientError> {
+        match result {
+            Ok(_) => Ok(()),
+            Err(clients::tower::Error::Request(error)) => {
+                Err(clients::tower::Error::Request(error).into())
+            }
+            Err(clients::tower::Error::Response(response)) => match response.status() {
+                // Handle idempotency as requested by the caller.
+                StatusCode::NOT_FOUND
+                | StatusCode::NO_CONTENT
+                | StatusCode::PRECONDITION_FAILED => {
+                    if idempotent {
+                        Ok(())
+                    } else {
+                        Err(clients::tower::Error::Response(response).into())
+                    }
+                }
+                _ => Err(clients::tower::Error::Response(response).into()),
+            },
+        }
     }
 
     /// Get specific volume.
-    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
-    pub async fn get_volume(&self, volume_id: &str) -> Result<Volume, ApiClientError> {
-        self.get_collection_item(UrnType(&[uri::VOLUMES, volume_id]))
-            .await
+    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    pub async fn get_volume(&self, volume_id: &uuid::Uuid) -> Result<Volume, ApiClientError> {
+        let volume = self.rest_client.volumes_api().get_volume(volume_id).await?;
+        Ok(volume.into_body())
     }
 
     /// Unpublish volume (i.e. destroy a target which exposes the volume).
-    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
-    pub async fn unpublish_volume(&self, volume_id: &str) -> Result<(), ApiClientError> {
-        self.do_delete(&UrnType(&[uri::VOLUMES, volume_id, "target"]), true)
-            .await
+    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    pub async fn unpublish_volume(&self, volume_id: &uuid::Uuid) -> Result<(), ApiClientError> {
+        Self::delete_idempotent(
+            self.rest_client
+                .volumes_api()
+                .del_volume_target(volume_id, Some(false))
+                .await,
+            true,
+        )?;
+        debug!(volume.uuid=%volume_id, "Volume target successfully deleted");
+        Ok(())
     }
 
     /// Publish volume (i.e. make it accessible via specified protocol by creating a target).
-    #[instrument(fields(volume.uuid = volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
     pub async fn publish_volume(
         &self,
-        volume_id: &str,
+        volume_id: &uuid::Uuid,
         node: &str,
         protocol: VolumeShareProtocol,
     ) -> Result<Volume, ApiClientError> {
-        let u = format!("target?protocol={}&node={}", protocol.to_string(), node,);
-
-        self.do_put(&UrnType(&[uri::VOLUMES, volume_id, &u]), protocol)
-            .await
+        let volume = self
+            .rest_client
+            .volumes_api()
+            .put_volume_target(volume_id, node, protocol)
+            .await?;
+        Ok(volume.into_body())
     }
 }

@@ -10,6 +10,8 @@
 /result*
 /tests/bdd/__pycache__/
 /tests/bdd/openapi/
+/tests/bdd/csi_pb2.py
+/tests/bdd/csi_pb2_grpc.py
 /chart/charts/
 /chart/Chart.lock
 /openapi/*

@@ -2,6 +2,7 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 use clap::{App, Arg, ArgMatches};
+use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
 mod client;
 mod config;
@@ -72,6 +73,7 @@ pub async fn main() -> Result<(), String> {
         .with(tracing_subscriber::fmt::layer().pretty());
 
     if let Some(jaeger) = args.value_of("jaeger") {
+        global::set_text_map_propagator(TraceContextPropagator::new());
         let tags = common_lib::opentelemetry::default_tracing_tags(
             git_version::git_version!(args = ["--abbrev=12", "--always"]),
             env!("CARGO_PKG_VERSION"),
