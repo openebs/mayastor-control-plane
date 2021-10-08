@@ -940,6 +940,7 @@ dependencies = [
  "common-lib",
  "futures",
  "git-version",
+ "humantime",
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
