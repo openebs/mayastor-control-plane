@@ -10,12 +10,8 @@ pub struct RestClient {}
 
 impl RestClient {
     /// Initialise the URL of the REST server.
-    pub fn init(url: &Url) -> Result<()> {
-        // Only HTTP is supported, so fix up the scheme and port.
-        // TODO: Support HTTPS
-        let mut url = url.clone();
-        url.set_scheme("http")
-            .map_err(|_| anyhow::anyhow!("Failed to set REST client scheme"))?;
+    pub fn init(mut url: Url) -> Result<()> {
+        // TODO: Support HTTPS Certificates
         if url.port().is_none() {
             url.set_port(Some(30011))
                 .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;

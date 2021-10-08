@@ -19,7 +19,7 @@ actix-server = [ "actix" ]
 actix-client = [ "actix", "awc" ]
 actix = [ "actix-web", "actix-web-opentelemetry", "rustls" ]
 tower-client = [ "tower-hyper" ]
-tower-hyper = [ "hyper", "tower", "tower-http", "bytes", "http-body", "futures", "pin-project", "hyper-rustls", "tokio" ]
+tower-hyper = [ "hyper", "tower", "tower-http", "bytes", "http-body", "futures", "pin-project", "hyper-rustls", "tokio", "rustls", "webpki" ]
 tower-trace = [ "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry", "opentelemetry-http", "tracing", "tracing-subscriber", "opentelemetry-semantic-conventions" ]
 
 [dependencies]
@@ -36,7 +36,7 @@ serde_urlencoded = "0.7"
 actix-web = { version = "4.0.0-beta.8", features = ["rustls"], optional = true }
 actix-web-opentelemetry = { version = "0.11.0-beta.4", optional = true }
 awc = { version = "3.0.0-beta.7", optional = true }
-rustls = { version = "0.19.1", optional = true }
+rustls = { version = "0.19.1", optional = true, features = [ "dangerous_configuration" ] }
 
 # tower and hyper dependencies
 hyper = { version = "0.14.13", features = [ "client", "http1", "http2", "tcp", "stream" ], optional = true }
@@ -48,6 +48,7 @@ http-body = { version = "0.4.3", optional = true }
 futures = { version = "0.3.17", optional = true }
 pin-project = { version = "1.0.8", optional = true }
 hyper-rustls = { version = "0.22.1", optional = true }
+webpki = { version = "0.21.4", optional = true }
 # tracing and telemetry
 opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"], optional = true  }
 tracing-opentelemetry = { version = "0.15.0", optional = true }
