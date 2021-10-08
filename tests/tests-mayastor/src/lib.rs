@@ -527,6 +527,7 @@ impl ClusterBuilder {
         components: Components,
         compose_builder: Builder,
     ) -> Result<Cluster, Error> {
+        let compose_builder = compose_builder.with_shutdown_order(components.shutdown_order());
         let composer = compose_builder.build().await?;
 
         let cluster = Cluster::new(
