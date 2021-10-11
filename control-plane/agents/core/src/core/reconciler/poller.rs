@@ -1,5 +1,5 @@
 use crate::core::{
-    reconciler::{nexus, persistent_store::PersistentStoreReconciler, pool, volume},
+    reconciler::{nexus, persistent_store::PersistentStoreReconciler, pool, replica, volume},
     registry::Registry,
     task_poller::{squash_results, PollContext, PollEvent, PollResult, PollerState, TaskPoller},
 };
@@ -28,6 +28,7 @@ impl ReconcilerWorker {
             Box::new(nexus::NexusReconciler::new()),
             Box::new(volume::VolumeReconciler::new()),
             Box::new(PersistentStoreReconciler::new()),
+            Box::new(replica::ReplicaReconciler::new()),
         ];
 
         let event_channel = tokio::sync::mpsc::channel(poll_targets.len());
