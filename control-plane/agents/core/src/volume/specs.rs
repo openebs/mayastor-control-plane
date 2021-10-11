@@ -912,21 +912,35 @@ impl ResourceSpecsLocked {
                 nodes.push(item.state().node.clone());
             }
         }
+        nexus_replicas.truncate(vol_spec.num_replicas as usize);
 
         // Create the nexus on the requested node
-        self.create_nexus(
-            registry,
-            &CreateNexus::new(
-                target_node,
-                nexus_id,
-                vol_spec.size,
-                &nexus_replicas,
-                true,
-                Some(&vol_spec.uuid),
-            ),
-            mode,
-        )
-        .await
+        let nexus = self
+            .create_nexus(
+                registry,
+                &CreateNexus::new(
+                    target_node,
+                    nexus_id,
+                    vol_spec.size,
+                    &nexus_replicas,
+                    true,
+                    Some(&vol_spec.uuid),
+                ),
+                mode,
+            )
+            .await?;
+
+        if nexus.children.len() < vol_spec.num_replicas as usize {
+            vol_spec.warn_span(|| {
+                tracing::warn!(
+                    "Recreated volume target with only {} out of {} desired replicas",
+                    nexus.children.len(),
+                    vol_spec.num_replicas
+                )
+            });
+        }
+
+        Ok(nexus)
     }
 
     /// Attach the specified replica to the volume nexus

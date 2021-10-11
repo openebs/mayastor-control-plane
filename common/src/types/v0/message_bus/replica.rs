@@ -181,6 +181,10 @@ impl ReplicaOwners {
     pub fn owned_by_nexus(&self, id: &NexusId) -> bool {
         self.nexuses.iter().any(|n| n == id)
     }
+    /// Check if this replica is owned by a nexus
+    pub fn owned_by_a_nexus(&self) -> bool {
+        !self.nexuses.is_empty()
+    }
     /// Create new owners from the volume Id
     pub fn from_volume(volume: &VolumeId) -> Self {
         Self {
