@@ -34,6 +34,13 @@ base:
           image: busybox:latest
           command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz -u {{.Values.base.jaeger.agent.name}} {{.Values.base.jaeger.agent.port}}; do echo "Waiting for jaeger..."; sleep 1; done;' ]
 
+  initRestContainer:
+    enabled: true
+    initContainer:
+      - name: rest-probe
+        image: busybox:latest
+        command: ['sh', '-c', 'trap "exit 1" TERM; until nc -vz rest 8081; do echo "Waiting for REST API endpoint to become available"; sleep 1; done;']
+
 operators:
   pool:
     resources:

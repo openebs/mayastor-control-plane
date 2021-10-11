@@ -50,6 +50,17 @@ Usage:
 {{- end -}}
 
 {{/*
+Renders the REST server init container, if enabled
+Usage:
+{{- include "rest_agent_init_container" . }}
+*/}}
+{{- define "rest_agent_init_container" -}}
+    {{- if .Values.base.initRestContainer.enabled }}
+        {{- include "render" (dict "value" .Values.base.initRestContainer.initContainer "context" $) | nindent 8 }}
+    {{- end }}
+{{- end -}}
+
+{{/*
 Renders the jaeger scheduling rules, if any
 Usage:
 {{ include "jaeger_scheduling" . }}

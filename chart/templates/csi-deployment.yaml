@@ -22,6 +22,7 @@ spec:
         {{- include "base_pull_secrets" . }}
       initContainers:
         {{- include "jaeger_agent_init_container" . }}
+        {{- include "rest_agent_init_container" . }}
       containers:
         - name: csi-provisioner
           image: k8s.gcr.io/sig-storage/csi-provisioner:v2.2.1
