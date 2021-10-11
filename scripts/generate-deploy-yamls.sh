@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # This is a wrapper script for helm to generate yaml files for deploying
 # mayastor control plane. It provides reasonable defaults for helm values based on
