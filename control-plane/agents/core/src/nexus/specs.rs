@@ -21,6 +21,7 @@ use common_lib::{
     },
 };
 
+use common_lib::types::v0::store::TraceSpan;
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::sync::Arc;
@@ -420,16 +421,43 @@ impl ResourceSpecsLocked {
                 let request = RemoveNexusReplica::new(&nexus.node, &nexus.uuid, &replica);
                 match self.remove_nexus_replica(registry, &request, mode).await {
                     Ok(_) if destroy_replica => {
-                        if let Err(error) = self
-                            .disown_and_destroy_replica(registry, &nexus.node, replica.uuid())
-                            .await
-                        {
-                            tracing::error!(
-                                "Failed to disown and destroy replica '{}'. Error: '{}'",
-                                replica.uuid(),
-                                error.full_string(),
-                            );
+                        let replica_spec =
+                            self.get_replica(replica.uuid())
+                                .ok_or(SvcError::ReplicaNotFound {
+                                    replica_id: replica.uuid().clone(),
+                                })?;
+                        let replica_spec_clone = replica_spec.lock().clone();
+
+                        match Self::get_replica_node(registry, &replica_spec_clone).await {
+                            Some(node) => {
+                                if let Err(error) = self
+                                    .disown_and_destroy_replica(registry, &node, replica.uuid())
+                                    .await
+                                {
+                                    nexus_spec.lock().clone().error_span(|| {
+                                        tracing::error!(
+                                            replica.uuid = %replica.uuid(),
+                                            error = %error.full_string(),
+                                            "Failed to disown and destroy the replica"
+                                        )
+                                    });
+                                }
+                            }
+                            None => {
+                                // The replica node was not found (perhaps because it is offline).
+                                // The replica can't be destroyed because the node isn't there.
+                                // Instead, disown the replica from the volume and let the garbage
+                                // collector destroy it later.
+                                nexus_spec.lock().clone().warn_span(|| {
+                                    tracing::warn!(
+                                        replica.uuid = %replica.uuid(),
+                                        "Failed to find the node where the replica is hosted"
+                                    )
+                                });
+                                let _ = self.disown_volume_replica(registry, &replica_spec).await;
+                            }
                         }
+
                         Ok(())
                     }
                     result => result,

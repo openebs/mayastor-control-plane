@@ -1179,7 +1179,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Disown replica from its volume
-    async fn disown_volume_replica(
+    pub(crate) async fn disown_volume_replica(
         &self,
         registry: &Registry,
         replica: &Arc<Mutex<ReplicaSpec>>,
