@@ -1,10 +1,10 @@
 use crate::core::{
     reconciler::{PollContext, TaskPoller},
-    specs::SpecOperations,
-    task_poller::{PollEvent, PollResult, PollTimer, PollerState},
+    specs::OperationSequenceGuard,
+    task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
+use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode, TraceSpan};
 
-use common_lib::types::v0::store::volume::VolumeSpec;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -25,11 +25,11 @@ impl GarbageCollector {
 #[async_trait::async_trait]
 impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let volumes = context.specs().get_locked_volumes();
-        for volume in volumes {
-            let _ = garbage_collector_reconcile(volume, context).await;
+        let mut results = vec![];
+        for volume in context.specs().get_locked_volumes() {
+            results.push(disown_unused_nexuses(&volume, context).await);
         }
-        PollResult::Ok(PollerState::Idle)
+        Self::squash_results(results)
     }
 
     async fn poll_timer(&mut self, _context: &PollContext) -> bool {
@@ -39,20 +39,51 @@ impl TaskPoller for GarbageCollector {
     async fn poll_event(&mut self, context: &PollContext) -> bool {
         match context.event() {
             PollEvent::TimedRun => true,
+            PollEvent::Triggered(PollTriggerEvent::VolumeDegraded) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
     }
 }
 
-async fn garbage_collector_reconcile(
-    volume: Arc<Mutex<VolumeSpec>>,
+/// Given a volume
+/// When any of its nexuses are no longer used
+/// Then they should be disowned
+/// And they should eventually be destroyed
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
+async fn disown_unused_nexuses(
+    volume: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    let uuid = volume.lock().uuid.clone();
-    let state = context.registry().get_volume_state(&uuid).await?;
-    if volume.lock().state_synced(&state) {
-        // todo: find all resources related to this volume Id and clean them up, if unused
-        tracing::trace!("Collecting garbage for volume '{}'", uuid);
+    let _guard = match volume.operation_guard(OperationMode::ReconcileStart) {
+        Ok(guard) => guard,
+        Err(_) => return PollResult::Ok(PollerState::Busy),
+    };
+    let mut results = vec![];
+    let volume_clone = volume.lock().clone();
+
+    for nexus in context.specs().get_volume_nexuses(&volume_clone.uuid) {
+        match &volume_clone.target {
+            Some(target) if target.nexus() == &nexus.lock().uuid => continue,
+            _ => {}
+        };
+        let nexus_clone = nexus.lock().clone();
+
+        nexus_clone.warn_span(|| tracing::warn!("Attempting to disown unused nexus"));
+        // the nexus garbage collector will destroy the disowned nexuses
+        match context
+            .specs()
+            .disown_nexus(context.registry(), &nexus)
+            .await
+        {
+            Ok(_) => {
+                nexus_clone.info_span(|| tracing::info!("Successfully disowned unused nexus"));
+            }
+            Err(error) => {
+                nexus_clone.error_span(|| tracing::error!("Failed to disown unused nexus"));
+                results.push(Err(error));
+            }
+        }
     }
-    PollResult::Ok(PollerState::Idle)
+
+    GarbageCollector::squash_results(results)
 }

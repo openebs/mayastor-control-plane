@@ -1189,6 +1189,17 @@ impl ResourceSpecsLocked {
         registry.store_obj(&clone).await
     }
 
+    /// Disown nexus from its owner
+    pub(crate) async fn disown_nexus(
+        &self,
+        registry: &Registry,
+        nexus: &Arc<Mutex<NexusSpec>>,
+    ) -> Result<(), SvcError> {
+        nexus.lock().disowned_by_volume();
+        let clone = nexus.lock().clone();
+        registry.store_obj(&clone).await
+    }
+
     /// Destroy the replica from its volume
     pub(crate) async fn destroy_volume_replica(
         &self,

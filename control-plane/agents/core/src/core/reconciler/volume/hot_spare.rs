@@ -105,7 +105,7 @@ async fn hot_spare_nexus_reconcile(
     squash_results(results)
 }
 
-#[tracing::instrument(skip(context, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid))]
+#[tracing::instrument(skip(context, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
 async fn generic_nexus_reconciler(
     nexus_spec: &Arc<Mutex<NexusSpec>>,
     context: &PollContext,
@@ -157,7 +157,7 @@ async fn missing_children_remover(
 /// Given a degraded volume
 /// When the nexus spec has a different number of children to the number of volume replicas
 /// Then the nexus spec should eventually have as many children as the number of volume replicas
-#[tracing::instrument(skip(context, volume_spec, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid))]
+#[tracing::instrument(skip(context, volume_spec, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
 async fn nexus_replica_count_reconciler(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     nexus_spec: &Arc<Mutex<NexusSpec>>,
@@ -237,7 +237,7 @@ async fn nexus_replica_count_reconciler(
 /// When the number of created volume replicas is different to the required number of replicas
 /// Then the number of created volume replicas should eventually match the required number of
 /// replicas
-#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid))]
+#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
 async fn volume_replica_count_reconciler(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,

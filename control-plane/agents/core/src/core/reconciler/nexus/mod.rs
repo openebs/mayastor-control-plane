@@ -1,3 +1,5 @@
+mod garbage_collector;
+
 use crate::{
     core::{
         scheduling::resources::HealthyChildItems,
@@ -10,7 +12,6 @@ use crate::{
     },
     nexus::scheduling::get_healthy_nexus_children,
 };
-
 use common_lib::{
     mbus_api::ErrorChain,
     types::v0::{
@@ -22,6 +23,8 @@ use common_lib::{
         },
     },
 };
+use garbage_collector::GarbageCollector;
+
 use parking_lot::Mutex;
 use std::{convert::TryFrom, sync::Arc};
 
@@ -29,12 +32,14 @@ use std::{convert::TryFrom, sync::Arc};
 #[derive(Debug)]
 pub struct NexusReconciler {
     counter: PollTimer,
+    poll_targets: Vec<Box<dyn TaskPoller>>,
 }
 impl NexusReconciler {
     /// Return new `Self` with the provided period
     pub fn from(period: PollPeriods) -> Self {
         NexusReconciler {
             counter: PollTimer::from(period),
+            poll_targets: vec![Box::new(GarbageCollector::new())],
         }
     }
     /// Return new `Self` with the default period
@@ -60,6 +65,9 @@ impl TaskPoller for NexusReconciler {
                 Err(_) => return PollResult::Ok(PollerState::Busy),
             };
             results.push(nexus_reconciler(&nexus, context, OperationMode::ReconcileStep).await);
+        }
+        for target in &mut self.poll_targets {
+            results.push(target.try_poll(context).await);
         }
         Self::squash_results(results)
     }
