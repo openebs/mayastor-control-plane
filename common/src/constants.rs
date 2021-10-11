@@ -10,7 +10,7 @@ pub const DEFAULT_CONN_TIMEOUT: &str = "1s";
 pub const ENABLE_MIN_TIMEOUTS: bool = true;
 
 /// Mayastor container image used for testing
-pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:655ffa91eb87";
+pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:98d239db6bf7";
 
 /// Mayastor environment variable that points to a mayastor binary
 /// This must be in sync with shell.nix
