@@ -2,6 +2,7 @@ mod nexus;
 mod persistent_store;
 pub mod poller;
 mod pool;
+mod replica;
 mod volume;
 
 pub(crate) use crate::core::task_poller::PollTriggerEvent;
