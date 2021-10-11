@@ -53,6 +53,10 @@ let
       lockFile = ../../../Cargo.lock;
     };
 
+    preBuild = ''
+      sh ./scripts/generate-openapi-bindings.sh
+    '';
+
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [
       clang
@@ -65,7 +69,6 @@ let
       openssl
     ];
     doCheck = false;
-    NIX_BUILD = true;
   };
 in
 {

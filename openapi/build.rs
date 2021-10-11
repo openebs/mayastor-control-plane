@@ -2,9 +2,9 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
-    if !Path::new("src/lib.rs").exists() || std::env::var("NIX_BUILD").is_ok() {
+    if !Path::new("src/lib.rs").exists() {
         let output = Command::new("sh")
-            .args(&["-c", "../scripts/generate-openapi-bindings.sh"])
+            .args(&["../scripts/generate-openapi-bindings.sh"])
             .output()
             .expect("failed to execute bash command");
 
