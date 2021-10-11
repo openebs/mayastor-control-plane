@@ -47,7 +47,7 @@ def deployer_start(num_mayastors):
     deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
     # Start containers and wait for them to become active.
     subprocess.run(
-        [deployer_path, "start", "-j", "-m", str(num_mayastors), "-w", "10s"]
+        [deployer_path, "start", "--csi", "-j", "-m", str(num_mayastors), "-w", "10s"]
     )
 
 

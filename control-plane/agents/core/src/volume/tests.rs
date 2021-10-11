@@ -26,8 +26,8 @@ use common_lib::{
     mbus_api::TimeoutOptions,
     types::v0::{
         message_bus::{
-            ChannelVs, ChildUri, DestroyReplica, GetSpecs, Liveness, ReplicaId, ReplicaOwners,
-            VolumeId,
+            ChannelVs, ChildUri, CreateNexus, DestroyReplica, GetSpecs, Liveness, NexusId,
+            ReplicaId, ReplicaOwners, VolumeId,
         },
         openapi::{
             actix::client::{Error, ResponseContent},
@@ -114,6 +114,198 @@ async fn volume_nexus_reconcile() {
     missing_nexus_reconcile(&cluster).await;
 }
 
+#[actix_rt::test]
+async fn garbage_collection() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_mayastors(3)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_millis(500), Duration::from_millis(500))
+        .build()
+        .await
+        .unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+
+    unused_nexus_reconcile(&cluster).await;
+    unused_reconcile(&cluster).await;
+}
+
+async fn unused_nexus_reconcile(cluster: &Cluster) {
+    let rest_api = cluster.rest_v00();
+    let volumes_api = rest_api.volumes_api();
+
+    let volume = volumes_api
+        .put_volume(
+            &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
+            models::CreateVolumeBody::new(models::VolumePolicy::default(), 2, 5242880u64),
+        )
+        .await
+        .unwrap();
+
+    let volume = volumes_api
+        .put_volume_target(
+            &volume.spec.uuid,
+            cluster.node(0).as_str(),
+            models::VolumeShareProtocol::Nvmf,
+        )
+        .await
+        .unwrap();
+
+    tracing::info!("Volume: {:?}", volume);
+    let volume_state = volume.state;
+
+    let volume_id = volume_state.uuid;
+    let volume = volumes_api.get_volume(&volume_id).await.unwrap();
+    assert_eq!(volume.state.status, models::VolumeStatus::Online);
+
+    let mut create_nexus = CreateNexus {
+        node: cluster.node(0),
+        uuid: NexusId::new(),
+        size: volume.spec.size,
+        children: vec![
+            "malloc:///test?size_mb=10&uuid=b9558b8c-cb22-47f3-b33b-583db25b5a8c".into(),
+        ],
+        managed: true,
+        owner: None,
+    };
+    let nexus = create_nexus.request().await.unwrap();
+    let nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;
+    assert_eq!(nexus, None, "nexus should be gone");
+
+    create_nexus.owner = Some(VolumeId::new());
+    let nexus = create_nexus.request().await.unwrap();
+    let nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;
+    assert_eq!(nexus, None, "nexus should be gone");
+
+    volumes_api.del_volume(&volume_id).await.unwrap();
+}
+
+async fn unused_reconcile(cluster: &Cluster) {
+    let rest_api = cluster.rest_v00();
+    let volumes_api = rest_api.volumes_api();
+
+    let volume = volumes_api
+        .put_volume(
+            &"22054b1f-cf32-46dc-90ff-d6a5c61429c2".parse().unwrap(),
+            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 2, 5242880u64),
+        )
+        .await
+        .unwrap();
+
+    let data_replicas_nodes = volume
+        .state
+        .replica_topology
+        .values()
+        .map(|r| r.node.clone().unwrap())
+        .collect::<Vec<_>>();
+    let nodes = rest_api.nodes_api().get_nodes().await.unwrap();
+    let unused_node = nodes
+        .iter()
+        .find(|r| !data_replicas_nodes.contains(&r.id))
+        .cloned()
+        .unwrap();
+    let nexus_node = nodes
+        .iter()
+        .find(|n| n.id != unused_node.id)
+        .cloned()
+        .unwrap();
+    let replica_nexus = volume
+        .state
+        .replica_topology
+        .into_iter()
+        .find_map(|(i, r)| {
+            if r.node.as_ref().unwrap() == &nexus_node.id {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    let volume = volumes_api
+        .put_volume_target(
+            &volume.spec.uuid,
+            nexus_node.id.as_str(),
+            models::VolumeShareProtocol::Nvmf,
+        )
+        .await
+        .unwrap();
+    tracing::info!("Volume: {:?}\nUnused Node: {}", volume, unused_node.id);
+
+    // 1. first we kill the node where the nexus is running
+    cluster.composer().kill(&nexus_node.id).await.unwrap();
+    // 2. now we force unpublish the volume
+    volumes_api
+        .del_volume_target(&volume.spec.uuid, Some(true))
+        .await
+        .unwrap();
+    // 3. publish on the previously unused node
+    let volume = volumes_api
+        .put_volume_target(
+            &volume.spec.uuid,
+            unused_node.id.as_str(),
+            models::VolumeShareProtocol::Nvmf,
+        )
+        .await
+        .unwrap();
+    tracing::info!("Volume: {:?}", volume);
+
+    // 4. now wait till the "broken" replica is disowned
+    wait_till_replica_disowned(cluster, replica_nexus.parse().unwrap()).await;
+
+    // 5. now wait till the volume becomes online again
+    // (because we'll add a replica a rebuild)
+    wait_till_volume_status(cluster, &volume.spec.uuid, models::VolumeStatus::Online).await;
+
+    // 6. Bring back the mayastor and the original nexus and replica should be deleted
+    cluster.composer().start(&nexus_node.id).await.unwrap();
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let start = std::time::Instant::now();
+    loop {
+        let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+        if specs.nexuses.len() == 1 && specs.replicas.len() == 2 {
+            break;
+        }
+
+        if std::time::Instant::now() > (start + timeout) {
+            panic!("Timeout waiting for the old nexus and replica to be removed");
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    volumes_api.del_volume(&volume.spec.uuid).await.unwrap();
+}
+
+async fn wait_till_replica_disowned(cluster: &Cluster, replica_id: Uuid) {
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let client = cluster.rest_v00();
+    let specs_api = client.specs_api();
+    let start = std::time::Instant::now();
+    loop {
+        let specs = specs_api.get_specs().await.unwrap();
+        let replica_spec = specs
+            .replicas
+            .into_iter()
+            .find(|r| r.uuid == replica_id)
+            .unwrap();
+
+        if replica_spec.owners.volume.is_none() {
+            return;
+        }
+
+        if std::time::Instant::now() > (start + timeout) {
+            panic!(
+                "Timeout waiting for the replica to be disowned. Actual: '{:#?}'",
+                replica_spec
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
 /// Creates a volume nexus on a mayastor instance, which will have both spec and state.
 /// Stops/Kills the mayastor container. At some point we will have no nexus state, because the node
 /// is gone. We then restart the node and the volume nexus reconciler will then recreate the nexus!
@@ -172,19 +364,18 @@ async fn wait_till_nexus_state(
     let start = std::time::Instant::now();
     loop {
         let nexus = nexuses_api.get_nexus(nexus_id).await;
-
-        match nexuses_api.get_nexus(nexus_id).await {
+        match &nexus {
             Ok(nexus) => {
                 if let Some(state) = state {
                     if nexus.protocol != models::Protocol::None
                         && state.protocol != models::Protocol::None
                     {
-                        return Some(nexus);
+                        return Some(nexus.clone());
                     }
                 }
             }
             Err(Error::ResponseError(ResponseContent { status, .. }))
-                if status == StatusCode::NOT_FOUND && state.is_none() =>
+                if status == &StatusCode::NOT_FOUND && state.is_none() =>
             {
                 return None;
             }
@@ -547,6 +738,26 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize) {
             );
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+}
+
+/// Wait for a volume to reach the provided status
+async fn wait_till_volume_status(cluster: &Cluster, volume: &Uuid, status: models::VolumeStatus) {
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let start = std::time::Instant::now();
+    loop {
+        let volume = cluster.rest_v00().volumes_api().get_volume(volume).await;
+        if volume.as_ref().unwrap().state.status == status {
+            return;
+        }
+
+        if std::time::Instant::now() > (start + timeout) {
+            panic!(
+                "Timeout waiting for the volume to reach the specified status ('{:?}'), current: '{:?}'",
+                status, volume
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
     }
 }
 

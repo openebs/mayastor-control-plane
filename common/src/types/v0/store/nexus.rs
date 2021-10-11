@@ -109,6 +109,10 @@ impl NexusSpec {
             NexusChild::Uri(_) => false,
         })
     }
+    /// Disown nexus by its volume owner
+    pub fn disowned_by_volume(&mut self) {
+        let _ = self.owner.take();
+    }
 }
 
 macro_rules! nexus_log {

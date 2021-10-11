@@ -39,7 +39,6 @@ VOLUME2_SIZE = 1024 * 1024 * 32
 
 @pytest.fixture(scope="module")
 def setup():
-    common.deployer_stop()
     common.deployer_start(2)
     subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
 

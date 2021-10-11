@@ -13,7 +13,7 @@ const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 #[async_trait]
 impl ComponentAction for Csi {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
-        Ok(if options.no_csi {
+        Ok(if !options.csi {
             cfg
         } else {
             if options.build {
@@ -36,14 +36,14 @@ impl ComponentAction for Csi {
         })
     }
     async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
-        if !options.no_csi {
+        if options.csi {
             cfg.start("csi-controller").await?;
         }
         Ok(())
     }
 
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
-        if options.no_csi {
+        if !options.csi {
             return Ok(());
         }
 
