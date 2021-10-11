@@ -72,8 +72,8 @@ async fn missing_pool_state_reconciler(
 
         let warn_missing = |pool_spec: &Arc<Mutex<PoolSpec>>, node_status: NodeStatus| {
             let node_id = pool_spec.lock().node.clone();
-            pool.debug_span(|| {
-                tracing::debug!(
+            pool.trace_span(|| {
+                tracing::trace!(
                     node.uuid = %node_id,
                     node.status = %node_status.to_string(),
                     "Attempted to recreate missing pool state, but the node is not online"
