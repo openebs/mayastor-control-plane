@@ -75,7 +75,7 @@ mod tests {
         )
     }
 
-    #[actix_rt::test]
+    #[tokio::test]
     async fn node() {
         let cluster = ClusterBuilder::builder()
             .with_rest(false)

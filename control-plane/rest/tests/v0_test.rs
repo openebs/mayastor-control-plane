@@ -1,11 +1,14 @@
 use common_lib::types::v0::{
     message_bus::WatchResourceId,
-    openapi::{actix, apis, models},
+    openapi::{apis, models},
 };
 
-use rest_client::ActixRestClient;
+use rest_client::RestClient;
 
-use common_lib::types::v0::message_bus::{NexusId, ReplicaId, VolumeId};
+use common_lib::types::v0::{
+    message_bus::{NexusId, ReplicaId, VolumeId},
+    openapi::clients::tower::{Error, ResponseError},
+};
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
@@ -53,7 +56,7 @@ fn bearer_token() -> String {
     std::fs::read_to_string(token_file).expect("Failed to get bearer token")
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn client() {
     // Run the client test both with and without authentication.
     for auth in &[true, false] {
@@ -64,7 +67,7 @@ async fn client() {
 
 async fn client_test(cluster: &Cluster, auth: &bool) {
     let test = cluster.composer();
-    let client = ActixRestClient::new(
+    let client = RestClient::new(
         "https://localhost:8080",
         true,
         match auth {
@@ -381,7 +384,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     );
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn client_invalid_token() {
     let _cluster = test_setup(&true).await;
 
@@ -389,7 +392,7 @@ async fn client_invalid_token() {
     let mut token = bearer_token();
     token.push_str("invalid");
 
-    let client = ActixRestClient::new("https://localhost:8080", true, Some(token))
+    let client = RestClient::new("https://localhost:8080", true, Some(token))
         .unwrap()
         .v00();
 
@@ -399,11 +402,9 @@ async fn client_invalid_token() {
         .await
         .expect_err("Request should fail with invalid token");
 
-    assert!(matches!(
-        error,
-        actix::client::Error::ResponseError(actix::client::ResponseContent {
-            status: apis::StatusCode::UNAUTHORIZED,
-            ..
-        })
-    ));
+    let unauthorized = match error {
+        Error::Response(ResponseError::Expected(r)) => r.status() == apis::StatusCode::UNAUTHORIZED,
+        _ => false,
+    };
+    assert!(unauthorized);
 }

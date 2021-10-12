@@ -17,7 +17,7 @@ pub use common_lib::{
         openapi::{apis::Uuid, models},
     },
 };
-pub use rest_client::ActixRestClient;
+pub use rest_client::RestClient;
 
 pub mod v0 {
     pub use common_lib::{
@@ -41,7 +41,7 @@ pub mod v0 {
 use std::{collections::HashMap, convert::TryInto, rc::Rc, time::Duration};
 use structopt::StructOpt;
 
-#[actix_rt::test]
+#[tokio::test]
 #[ignore]
 async fn smoke_test() {
     // make sure the cluster can bootstrap properly
@@ -69,7 +69,7 @@ pub fn default_options() -> StartOptions {
 #[allow(unused)]
 pub struct Cluster {
     composer: ComposeTest,
-    rest_client: ActixRestClient,
+    rest_client: RestClient,
     jaeger: Tracer,
     builder: ClusterBuilder,
 }
@@ -114,7 +114,7 @@ impl Cluster {
     }
 
     /// openapi rest client v0
-    pub fn rest_v00(&self) -> common_lib::types::v0::openapi::ApiClient {
+    pub fn rest_v00(&self) -> common_lib::types::v0::openapi::tower::client::direct::ApiClient {
         self.rest_client.v00()
     }
 
@@ -127,7 +127,7 @@ impl Cluster {
         components: Components,
         composer: ComposeTest,
     ) -> Result<Cluster, Error> {
-        let rest_client = ActixRestClient::new_timeout(
+        let rest_client = RestClient::new_timeout(
             "http://localhost:8081",
             trace_rest,
             bearer_token,
@@ -200,7 +200,7 @@ impl Cluster {
 
     /// connect to message bus helper for the cargo test code with bus timeouts
     async fn connect_to_bus_timeout(&self, name: &str, bus_timeout: TimeoutOptions) {
-        actix_rt::time::timeout(std::time::Duration::from_secs(2), async {
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
             mbus_api::message_bus_init_options(None, self.composer.container_ip(name), bus_timeout)
                 .await
         })

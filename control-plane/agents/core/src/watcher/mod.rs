@@ -87,7 +87,7 @@ mod tests {
         TcpStream::connect(&sa).await.unwrap();
     }
 
-    #[actix_rt::test]
+    #[tokio::test]
     async fn watcher() {
         let cluster = ClusterBuilder::builder().with_pools(1).build().await;
         let cluster = cluster.unwrap();

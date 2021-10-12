@@ -14,7 +14,7 @@ use common_lib::{
 use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};
 
-#[actix_rt::test]
+#[tokio::test]
 async fn nexus() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
@@ -102,7 +102,7 @@ async fn nexus_spec(replica: &Nexus) -> Option<NexusSpec> {
 }
 
 /// Tests nexus share and unshare operations as a transaction
-#[actix_rt::test]
+#[tokio::test]
 async fn nexus_share_transaction() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
@@ -231,7 +231,7 @@ async fn nexus_child_op_transaction_store<R>(
 }
 
 /// Tests nexus share and unshare operations when the store is temporarily down
-#[actix_rt::test]
+#[tokio::test]
 async fn nexus_share_transaction_store() {
     let store_timeout = Duration::from_millis(250);
     let reconcile_period = Duration::from_millis(250);
@@ -283,7 +283,7 @@ async fn nexus_share_transaction_store() {
 }
 
 /// Tests child add and remove operations as a transaction
-#[actix_rt::test]
+#[tokio::test]
 async fn nexus_child_transaction() {
     let grpc_timeout = Duration::from_millis(350);
     let cluster = ClusterBuilder::builder()
@@ -366,7 +366,7 @@ async fn nexus_child_transaction() {
 }
 
 /// Tests child add and remove operations when the store is temporarily down
-#[actix_rt::test]
+#[tokio::test]
 async fn nexus_child_transaction_store() {
     let store_timeout = Duration::from_millis(250);
     let reconcile_period = Duration::from_millis(250);

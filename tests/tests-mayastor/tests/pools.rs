@@ -1,7 +1,7 @@
 #![feature(allow_fail)]
 use testlib::*;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_pool_malloc() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
     cluster
@@ -16,7 +16,7 @@ async fn create_pool_malloc() {
         .unwrap();
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_pool_with_missing_disk() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
@@ -32,7 +32,7 @@ async fn create_pool_with_missing_disk() {
         .expect_err("Device should not exist");
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_pool_with_existing_disk() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
@@ -77,7 +77,7 @@ async fn create_pool_with_existing_disk() {
         .expect("Should now be able to create the new pool");
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_pool_idempotent() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
@@ -103,7 +103,7 @@ async fn create_pool_idempotent() {
 }
 
 /// FIXME: CAS-710
-#[actix_rt::test]
+#[tokio::test]
 #[allow_fail]
 async fn create_pool_idempotent_same_disk_different_query() {
     let cluster = ClusterBuilder::builder()
@@ -133,7 +133,7 @@ async fn create_pool_idempotent_same_disk_different_query() {
     .expect_err("Different query not allowed!");
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_pool_idempotent_different_nvmf_host() {
     let cluster = ClusterBuilder::builder()
         .with_options(|opts| opts.with_mayastors(3))
