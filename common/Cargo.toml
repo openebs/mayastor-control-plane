@@ -27,7 +27,7 @@ env_logger = "0.9.0"
 async-trait = "0.1.51"
 dyn-clonable = "0.9.0"
 once_cell = "1.8.0"
-openapi = { path = "../openapi", features = [ "actix-client", "actix-server", "tower-client", "tower-trace" ] }
+openapi = { path = "../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
 parking_lot = "0.11.2"
 async-nats = "0.10.1"
 humantime = "2.1.0"

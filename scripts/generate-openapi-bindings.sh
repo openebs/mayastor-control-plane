@@ -4,6 +4,7 @@ set -e
 
 SCRIPTDIR=$(dirname "$0")
 TARGET="$SCRIPTDIR/../openapi"
+VERSION_FILE="$SCRIPTDIR/../openapi/version.txt"
 RUST_FMT="$SCRIPTDIR/../.rustfmt.toml"
 CARGO_TOML="$TARGET/Cargo.toml"
 SPEC="$SCRIPTDIR/../control-plane/rest/openapi-specs/v0_api_spec.yaml"
@@ -12,15 +13,30 @@ SPEC="$SCRIPTDIR/../control-plane/rest/openapi-specs/v0_api_spec.yaml"
 check_spec="no"
 # Use the Cargo.toml from the openapi-generator
 default_toml="no"
+# skip git diff at the end
+skip_git_diff="no"
 
-case "$1" in
-    --changes)
-        check_spec="yes"
-        ;;
-    --default-toml)
-        default_toml="yes"
-        ;;
-esac
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+      --changes)
+          check_spec="yes"
+          shift
+          ;;
+      --default-toml)
+          default_toml="yes"
+          shift
+          ;;
+      --if-rev-changed)
+          if [[ -f "$VERSION_FILE" ]]; then
+            version=$(cat "$VERSION_FILE")
+            bin_version=$(which openapi-generator-cli)
+            [[ "$version" = "$bin_version" ]] && exit 0
+          fi
+          skip_git_diff="yes"
+          shift
+          ;;
+  esac
+done
 
 if [[ $check_spec = "yes" ]]; then
     git diff --cached --exit-code "$SPEC" 1>/dev/null && exit 0
@@ -49,5 +65,9 @@ rm -rf "$tmpd"/api
 mv "$tmpd"/* "$TARGET"/
 rm -rf "$tmpd"
 
+which openapi-generator-cli > "$VERSION_FILE"
+
 # If the openapi bindings were modified then fail the check
-git diff --exit-code "$TARGET"
+if [[ "$skip_git_diff" = "no" ]]; then
+  git diff --exit-code "$TARGET"
+fi

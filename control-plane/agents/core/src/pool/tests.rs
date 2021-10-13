@@ -22,7 +22,7 @@ use testlib::{
     Cluster, ClusterBuilder,
 };
 
-#[actix_rt::test]
+#[tokio::test]
 async fn pool() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
@@ -166,7 +166,7 @@ async fn replica_spec(replica: &Replica) -> Option<ReplicaSpec> {
 }
 
 /// Tests replica share and unshare operations as a transaction
-#[actix_rt::test]
+#[tokio::test]
 async fn replica_transaction() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
@@ -296,7 +296,7 @@ async fn replica_op_transaction_store<R>(
 }
 
 /// Tests replica share and unshare operations when the store is temporarily down
-#[actix_rt::test]
+#[tokio::test]
 async fn replica_transaction_store() {
     let store_timeout = Duration::from_millis(250);
     let reconcile_period = Duration::from_millis(250);
@@ -348,7 +348,7 @@ const RECONCILE_TIMEOUT_SECS: u64 = 7;
 const POOL_FILE_NAME: &str = "disk1.img";
 const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn reconciler() {
     let disk = testlib::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
 

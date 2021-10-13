@@ -2,7 +2,7 @@
 use common_lib::mbus_api::Message;
 use testlib::*;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_nexus_malloc() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
 
@@ -20,7 +20,7 @@ async fn create_nexus_malloc() {
     .unwrap();
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_nexus_sizes() {
     let cluster = ClusterBuilder::builder()
         .with_rest_timeout(std::time::Duration::from_secs(2))
@@ -105,7 +105,7 @@ async fn create_nexus_sizes() {
     }
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_nexus_local_replica() {
     let size = 10 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()
@@ -134,7 +134,7 @@ async fn create_nexus_local_replica() {
     .unwrap();
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_nexus_replicas() {
     let size = 10 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()
@@ -174,7 +174,7 @@ async fn create_nexus_replicas() {
     .unwrap();
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_nexus_replica_not_available() {
     let size = 10 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()

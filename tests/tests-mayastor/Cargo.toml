@@ -12,10 +12,10 @@ name = "testlib"
 path = "src/lib.rs"
 
 [dependencies]
+tokio = { version = "1.12.0", features = ["full"] }
 composer = { path = "../../composer" }
 deployer = { path = "../../deployer" }
 rest = { path = "../../control-plane/rest" }
-actix-rt = "2.2.0"
 anyhow = "1.0.44"
 common-lib = { path = "../../common" }
 structopt = "0.3.23"

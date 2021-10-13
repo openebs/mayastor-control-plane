@@ -2,7 +2,7 @@
 use testlib::*;
 
 // FIXME: CAS-721
-#[actix_rt::test]
+#[tokio::test]
 #[allow_fail]
 async fn create_replica() {
     let cluster = ClusterBuilder::builder()
@@ -33,7 +33,7 @@ async fn create_replica() {
     assert_eq!(created_replica.share, replica.share);
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_replica_protocols() {
     let cluster = ClusterBuilder::builder()
         .with_pools(1)
@@ -68,7 +68,7 @@ async fn create_replica_protocols() {
     }
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn create_replica_sizes() {
     let size = 100 * 1024 * 1024;
     let disk = format!("malloc:///disk?size_mb={}", size / (1024 * 1024));
@@ -114,7 +114,7 @@ async fn create_replica_sizes() {
 }
 
 // FIXME: CAS-731
-#[actix_rt::test]
+#[tokio::test]
 #[allow_fail]
 async fn create_replica_idempotent_different_sizes() {
     let cluster = ClusterBuilder::builder()
@@ -175,7 +175,7 @@ async fn create_replica_idempotent_different_sizes() {
 }
 
 // FIXME: CAS-731
-#[actix_rt::test]
+#[tokio::test]
 #[allow_fail]
 async fn create_replica_idempotent_different_protocols() {
     let cluster = ClusterBuilder::builder()

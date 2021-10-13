@@ -15,25 +15,16 @@
 /// expose different versions of the client
 pub mod versions;
 
-use actix_http::client::{TcpConnect, TcpConnectError, TcpConnection};
-use actix_service::Service;
-use actix_web::rt::net::TcpStream;
-
-use awc::{http::Uri, Client, ClientBuilder};
-
-use common_lib::types::v0::openapi::actix::client;
-
-use std::{io::BufReader, string::ToString};
+use common_lib::types::v0::openapi::client;
 
 /// Actix Rest Client
 #[derive(Clone)]
-pub struct ActixRestClient {
-    openapi_client_v0: client::ApiClient,
-    url: String,
+pub struct RestClient {
+    openapi_client_v0: client::direct::ApiClient,
     trace: bool,
 }
 
-impl ActixRestClient {
+impl RestClient {
     /// creates a new client which uses the specified `url`
     /// uses the rustls connector if the url has the https scheme
     pub fn new(url: &str, trace: bool, bearer_token: Option<String>) -> anyhow::Result<Self> {
@@ -48,24 +39,10 @@ impl ActixRestClient {
         timeout: std::time::Duration,
     ) -> anyhow::Result<Self> {
         let url: url::Url = url.parse()?;
-        let mut builder = Client::builder().timeout(timeout);
-        if let Some(token) = &bearer_token {
-            builder = builder.bearer_auth(token);
-        }
 
         match url.scheme() {
-            "https" => Self::new_https(
-                builder,
-                url.as_str().trim_end_matches('/'),
-                bearer_token,
-                trace,
-            ),
-            "http" => Ok(Self::new_http(
-                builder,
-                url.as_str().trim_end_matches('/'),
-                bearer_token,
-                trace,
-            )),
+            "https" => Self::new_https(url, timeout, bearer_token, trace),
+            "http" => Self::new_http(url, timeout, bearer_token, trace),
             invalid => {
                 let msg = format!("Invalid url scheme: {}", invalid);
                 Err(anyhow::Error::msg(msg))
@@ -74,69 +51,37 @@ impl ActixRestClient {
     }
     /// creates a new secure client
     fn new_https(
-        client: ClientBuilder<
-            impl Service<
-                    TcpConnect<Uri>,
-                    Response = TcpConnection<Uri, TcpStream>,
-                    Error = TcpConnectError,
-                > + Clone
-                + 'static,
-        >,
-        url: &str,
+        url: url::Url,
+        timeout: std::time::Duration,
         bearer_token: Option<String>,
         trace: bool,
     ) -> anyhow::Result<Self> {
-        let cert_file = &mut BufReader::new(&std::include_bytes!("../certs/rsa/ca.cert")[..]);
+        let cert_file = &std::include_bytes!("../certs/rsa/ca.cert")[..];
 
-        let mut config = rustls::ClientConfig::new();
-        config
-            .root_store
-            .add_pem_file(cert_file)
-            .map_err(|_| anyhow::anyhow!("Add pem file to the root store!"))?;
-        let connector = awc::Connector::new().rustls(std::sync::Arc::new(config));
-
-        let rest_client = client.connector(connector).finish();
-
-        let openapi_client_config = client::Configuration::new_with_client(
-            &format!("{}/v0", url),
-            rest_client,
-            bearer_token,
-            trace,
-        );
-        let openapi_client = client::ApiClient::new(openapi_client_config);
+        let openapi_client_config =
+            client::Configuration::new(url, timeout, bearer_token, Some(cert_file), trace)
+                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
+        let openapi_client = client::direct::ApiClient::new(openapi_client_config);
 
         Ok(Self {
             openapi_client_v0: openapi_client,
-            url: url.to_string(),
             trace,
         })
     }
     /// creates a new client
     fn new_http(
-        client: ClientBuilder<
-            impl Service<
-                    TcpConnect<Uri>,
-                    Response = TcpConnection<Uri, TcpStream>,
-                    Error = TcpConnectError,
-                > + Clone
-                + 'static,
-        >,
-        url: &str,
+        url: url::Url,
+        timeout: std::time::Duration,
         bearer_token: Option<String>,
         trace: bool,
-    ) -> Self {
-        let client = client.finish();
-        let openapi_client_config = client::Configuration::new_with_client(
-            &format!("{}/v0", url),
-            client,
-            bearer_token,
-            trace,
-        );
-        let openapi_client = client::ApiClient::new(openapi_client_config);
-        Self {
+    ) -> anyhow::Result<Self> {
+        let openapi_client_config =
+            client::Configuration::new(url, timeout, bearer_token, None, trace)
+                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
+        let openapi_client = client::direct::ApiClient::new(openapi_client_config);
+        Ok(Self {
             openapi_client_v0: openapi_client,
-            url: url.to_string(),
             trace,
-        }
+        })
     }
 }

@@ -11,6 +11,7 @@
 , pkgs
 , version
 , openapi-generator
+, which
 }:
 let
   channel = import ../../lib/rust.nix { inherit sources; };
@@ -53,15 +54,14 @@ let
       lockFile = ../../../Cargo.lock;
     };
 
-    preBuild = ''
-      sh ./scripts/generate-openapi-bindings.sh
-    '';
+    preBuild = "patchShebangs ./scripts/generate-openapi-bindings.sh";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [
       clang
       pkg-config
       openapi-generator
+      which
     ];
     buildInputs = [
       llvmPackages.libclang

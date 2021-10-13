@@ -8,13 +8,13 @@
 #
 #
 # ${MAYASTOR_SRC} should point to your working tree that contains mayastor
-# 
+#
 # The following variables are set implicitly when using shell.nix:
 #
-# ${MCP_SRC} should point to the source of the mayastor control plane 
+# ${MCP_SRC} should point to the source of the mayastor control plane
 # ${ETCD_BIN} the etcd binary used
 # ${NATS_BIN) the nats binary used
-# 
+#
 #
 
 version: '3'

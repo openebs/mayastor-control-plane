@@ -14,7 +14,7 @@ path = "./examples/clients/tower/main.rs"
 required-features = [ "tower-client", "tower-trace" ]
 
 [features]
-default = [ "actix-server", "actix-client" ]
+default = [ "actix-server" ]
 actix-server = [ "actix" ]
 actix-client = [ "actix", "awc" ]
 actix = [ "actix-web", "actix-web-opentelemetry", "rustls" ]

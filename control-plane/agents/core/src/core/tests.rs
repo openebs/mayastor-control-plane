@@ -7,7 +7,7 @@ use common_lib::{
 use testlib::*;
 
 /// Test that the content of the registry is correctly loaded from the persistent store on start up.
-#[actix_rt::test]
+#[tokio::test]
 async fn bootstrap_registry() {
     let size = 15 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()

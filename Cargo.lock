@@ -1016,7 +1016,6 @@ dependencies = [
 name = "ctrlp-tests"
 version = "0.1.0"
 dependencies = [
- "actix-rt",
  "actix-web-opentelemetry",
  "anyhow",
  "backtrace",
@@ -1027,6 +1026,7 @@ dependencies = [
  "opentelemetry-jaeger",
  "rest",
  "structopt",
+ "tokio",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -3002,14 +3002,11 @@ dependencies = [
 name = "rest"
 version = "0.1.0"
 dependencies = [
- "actix-http",
- "actix-rt",
  "actix-service",
  "actix-web",
  "actix-web-opentelemetry",
  "anyhow",
  "async-trait",
- "awc",
  "common-lib",
  "composer",
  "ctrlp-tests",
@@ -3027,8 +3024,6 @@ dependencies = [
  "serde_yaml",
  "snafu",
  "structopt",
- "strum",
- "strum_macros",
  "tinytemplate",
  "tokio",
  "tracing",

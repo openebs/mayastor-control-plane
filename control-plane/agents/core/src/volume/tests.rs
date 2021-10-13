@@ -29,11 +29,7 @@ use common_lib::{
             ChannelVs, ChildUri, CreateNexus, DestroyReplica, GetSpecs, Liveness, NexusId,
             ReplicaId, ReplicaOwners, VolumeId,
         },
-        openapi::{
-            actix::client::{Error, ResponseContent},
-            models,
-            models::NodeStatus,
-        },
+        openapi::{models, models::NodeStatus, tower::client::Error},
         store::{definitions::StorableObject, volume::VolumeSpec},
     },
 };
@@ -43,7 +39,7 @@ use std::{
     time::Duration,
 };
 
-#[actix_rt::test]
+#[tokio::test]
 async fn volume() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
@@ -73,7 +69,7 @@ async fn test_volume(cluster: &Cluster) {
 
 const RECONCILE_TIMEOUT_SECS: u64 = 7;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn hotspare() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
@@ -96,7 +92,7 @@ async fn hotspare() {
 }
 
 const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
-#[actix_rt::test]
+#[tokio::test]
 async fn volume_nexus_reconcile() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
@@ -114,7 +110,7 @@ async fn volume_nexus_reconcile() {
     missing_nexus_reconcile(&cluster).await;
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn garbage_collection() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
@@ -374,8 +370,8 @@ async fn wait_till_nexus_state(
                     }
                 }
             }
-            Err(Error::ResponseError(ResponseContent { status, .. }))
-                if status == &StatusCode::NOT_FOUND && state.is_none() =>
+            Err(Error::Response(response))
+                if response.status() == StatusCode::NOT_FOUND && state.is_none() =>
             {
                 return None;
             }
