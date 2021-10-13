@@ -533,6 +533,12 @@ pub(crate) trait InternalOps {
     ) -> Result<GrpcClientLocked, SvcError>;
     /// Get the inner lock, typically used to sync mutating gRPC operations
     async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>>;
+    /// Update the node's nexus state information
+    async fn update_nexus_states(&self) -> Result<(), SvcError>;
+    /// Update the node's pool state information
+    async fn update_pool_states(&self) -> Result<(), SvcError>;
+    /// Update the node's replica state information
+    async fn update_replica_states(&self) -> Result<(), SvcError>;
 }
 
 /// Getter operations on a mayastor locked `NodeWrapper` to get copies of its
@@ -552,63 +558,75 @@ pub(crate) trait GetterOps {
 }
 
 #[async_trait]
-impl GetterOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
+impl GetterOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn pools(&self) -> Vec<PoolState> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.pools()
     }
     async fn pool_wrappers(&self) -> Vec<PoolWrapper> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.pool_wrappers()
     }
     async fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.pool(pool_id)
     }
     async fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.pool_wrapper(pool_id)
     }
     async fn replicas(&self) -> Vec<Replica> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.replicas()
     }
     async fn replica(&self, replica: &ReplicaId) -> Option<Replica> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.replica(replica)
     }
     async fn nexuses(&self) -> Vec<Nexus> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.nexuses()
     }
     async fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
-        let node = self.lock().await;
+        let node = self.read().await;
         node.nexus(nexus_id)
     }
 }
 
 #[async_trait]
-impl InternalOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
+impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn grpc_client_locked<T: MessageIdTimeout>(
         &self,
         request: T,
     ) -> Result<GrpcClientLocked, SvcError> {
-        if !self.lock().await.is_online() {
+        if !self.read().await.is_online() {
             return Err(SvcError::NodeNotOnline {
-                node: self.lock().await.id.clone(),
+                node: self.read().await.id.clone(),
             });
         }
-        let ctx = self.lock().await.grpc_context_ext(request)?;
+        let ctx = self.read().await.grpc_context_ext(request)?;
         let client = ctx.connect_locked().await?;
         Ok(client)
     }
     async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>> {
-        self.lock().await.lock.clone()
+        self.write().await.lock.clone()
+    }
+
+    async fn update_nexus_states(&self) -> Result<(), SvcError> {
+        self.read().await.update_nexus_states().await
+    }
+
+    async fn update_pool_states(&self) -> Result<(), SvcError> {
+        self.read().await.update_pool_states().await
+    }
+
+    async fn update_replica_states(&self) -> Result<(), SvcError> {
+        self.read().await.update_replica_states().await
     }
 }
 
 #[async_trait]
-impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
+impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_pool =
@@ -620,8 +638,8 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                     request: "create_pool",
                 })?;
         let pool = rpc_pool_to_bus(&rpc_pool.into_inner(), &request.node);
-        self.lock().await.update_pool_states().await?;
-        self.lock().await.update_replica_states().await?;
+        self.update_pool_states().await?;
+        self.update_replica_states().await?;
         Ok(pool)
     }
     /// Destroy a pool on the node via gRPC
@@ -635,7 +653,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Pool,
                 request: "destroy_pool",
             })?;
-        self.lock().await.update_pool_states().await?;
+        self.update_pool_states().await?;
         Ok(())
     }
 
@@ -658,8 +676,8 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
             })?;
 
         let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node)?;
-        self.lock().await.update_replica_states().await?;
-        self.lock().await.update_pool_states().await?;
+        self.update_replica_states().await?;
+        self.update_pool_states().await?;
         Ok(replica)
     }
 
@@ -676,7 +694,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
             })?
             .into_inner()
             .uri;
-        self.lock().await.update_replica_states().await?;
+        self.update_replica_states().await?;
         Ok(share)
     }
 
@@ -693,7 +711,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
             })?
             .into_inner()
             .uri;
-        self.lock().await.update_replica_states().await?;
+        self.update_replica_states().await?;
         Ok(local_uri)
     }
 
@@ -708,16 +726,16 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Replica,
                 request: "destroy_replica",
             })?;
-        self.lock().await.update_replica_states().await?;
+        self.update_replica_states().await?;
         // todo: remove when CAS-1107 is resolved
-        if let Some(replica) = self.lock().await.replica(&request.uuid) {
+        if let Some(replica) = self.read().await.replica(&request.uuid) {
             if replica.pool == request.pool {
                 return Err(SvcError::Internal {
                     details: "replica was not destroyed by mayastor".to_string(),
                 });
             }
         }
-        self.lock().await.update_pool_states().await?;
+        self.update_pool_states().await?;
         Ok(())
     }
 
@@ -739,7 +757,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                     request: "create_nexus",
                 })?;
         let nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node)?;
-        self.lock().await.update_nexus_states().await?;
+        self.update_nexus_states().await?;
         Ok(nexus)
     }
 
@@ -754,7 +772,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Nexus,
                 request: "destroy_nexus",
             })?;
-        self.lock().await.update_nexus_states().await?;
+        self.update_nexus_states().await?;
         Ok(())
     }
 
@@ -770,7 +788,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 request: "publish_nexus",
             })?;
         let share = share.into_inner().device_uri;
-        self.lock().await.update_nexus_states().await?;
+        self.update_nexus_states().await?;
         Ok(share)
     }
 
@@ -785,7 +803,7 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
                 resource: ResourceKind::Nexus,
                 request: "unpublish_nexus",
             })?;
-        self.lock().await.update_nexus_states().await?;
+        self.update_nexus_states().await?;
         Ok(())
     }
 
@@ -793,12 +811,12 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let result = ctx.client.add_child_nexus(request.to_rpc()).await;
-        self.lock().await.update_nexus_states().await?;
+        self.update_nexus_states().await?;
         let rpc_child = match result {
             Ok(child) => Ok(child),
             Err(error) => {
                 if error.code() == tonic::Code::AlreadyExists {
-                    if let Some(nexus) = self.lock().await.nexus(&request.nexus) {
+                    if let Some(nexus) = self.read().await.nexus(&request.nexus) {
                         if let Some(child) = nexus.children.iter().find(|c| c.uri == request.uri) {
                             tracing::warn!(
                                 "Trying to add Child '{}' which is already part of nexus '{}'. Ok",
@@ -824,11 +842,11 @@ impl ClientOps for Arc<tokio::sync::Mutex<NodeWrapper>> {
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let result = ctx.client.remove_child_nexus(request.to_rpc()).await;
-        self.lock().await.update_nexus_states().await?;
+        self.update_nexus_states().await?;
         match result {
             Ok(_) => Ok(()),
             Err(error) => {
-                if let Some(nexus) = self.lock().await.nexus(&request.nexus) {
+                if let Some(nexus) = self.read().await.nexus(&request.nexus) {
                     if !nexus.contains_child(&request.uri) {
                         tracing::warn!(
                             "Forgetting about Child '{}' which is no longer part of nexus '{}'",

@@ -44,7 +44,7 @@ pub struct Registry {
 }
 
 /// Map that stores the actual state of the nodes
-pub(crate) type NodesMapLocked = Arc<RwLock<HashMap<NodeId, Arc<Mutex<NodeWrapper>>>>>;
+pub(crate) type NodesMapLocked = Arc<RwLock<HashMap<NodeId, Arc<RwLock<NodeWrapper>>>>>;
 
 impl Deref for Registry {
     type Target = Arc<RegistryInner<Etcd>>;
@@ -250,12 +250,12 @@ impl Registry {
                 let lock = node.grpc_lock().await;
                 let _guard = lock.lock().await;
 
-                let mut node_clone = node.lock().await.clone();
+                let mut node_clone = node.write().await.clone();
                 if let Err(e) = node_clone.reload().await {
                     tracing::trace!("Failed to reload node {}. Error {:?}.", node_clone.id, e);
                 }
                 // update node in the registry
-                *node.lock().await = node_clone;
+                *node.write().await = node_clone;
             }
             tokio::time::sleep(self.cache_period).await;
         }
