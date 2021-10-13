@@ -25,9 +25,11 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
 #[cfg(test)]
 mod tests {
     use common_lib::{
+        mbus_api::Message,
         store::etcd::Etcd,
         types::v0::{
             message_bus::{CreateVolume, Volume, VolumeId, WatchResourceId},
+            openapi::models,
             store::definitions::{ObjectKey, Store},
         },
     };
@@ -124,7 +126,7 @@ mod tests {
         let watchers = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
         assert_eq!(
             watchers.first(),
-            Some(&v0::models::RestWatch {
+            Some(&models::RestWatch {
                 resource: watch_volume.to_string(),
                 callback: callback.to_string(),
             })

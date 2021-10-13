@@ -2,7 +2,10 @@
 
 use common_lib::{
     mbus_api::Message,
-    types::v0::message_bus::{self, ChannelVs, Liveness},
+    types::v0::{
+        message_bus::{self, ChannelVs, Liveness},
+        openapi::models,
+    },
 };
 use testlib::*;
 
