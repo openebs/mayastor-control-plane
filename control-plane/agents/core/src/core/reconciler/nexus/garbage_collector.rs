@@ -107,7 +107,7 @@ async fn destroy_disowned_nexus(
 
     let nexus_clone = nexus_spec.lock().clone();
     if nexus_clone.managed && !nexus_clone.owned() {
-        let node_online = matches!(context.registry().get_node_wrapper(&nexus_clone.node).await, Ok(node) if node.lock().await.is_online());
+        let node_online = matches!(context.registry().get_node_wrapper(&nexus_clone.node).await, Ok(node) if node.read().await.is_online());
         if node_online {
             nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy disowned nexus"));
             let request = DestroyNexus::from(nexus_clone.clone());

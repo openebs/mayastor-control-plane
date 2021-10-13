@@ -606,7 +606,7 @@ impl ResourceSpecsLocked {
                     Err(error) => {
                         let node_online = match registry.get_node_wrapper(&nexus_clone.node).await {
                             Ok(node) => {
-                                let mut node = node.lock().await;
+                                let mut node = node.write().await;
                                 node.is_online() && node.liveness_probe().await.is_ok()
                             }
                             _ => false,
@@ -1379,7 +1379,7 @@ async fn get_volume_target_node(
             // auto select a node
             let nodes = registry.get_node_wrappers().await;
             for locked_node in nodes {
-                let node = locked_node.lock().await;
+                let node = locked_node.read().await;
                 // todo: use other metrics in order to make the "best" choice
                 if node.is_online() {
                     return Ok(node.id.clone());
@@ -1391,7 +1391,7 @@ async fn get_volume_target_node(
             // make sure the requested node is available
             // todo: check the max number of nexuses per node is respected
             let node = registry.get_node_wrapper(node).await?;
-            let node = node.lock().await;
+            let node = node.read().await;
             if node.is_online() {
                 Ok(node.id.clone())
             } else {

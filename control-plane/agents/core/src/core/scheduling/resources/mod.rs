@@ -28,7 +28,7 @@ impl PoolItemLister {
         let nodes = registry.get_node_wrappers().await;
         let mut raw_nodes = vec![];
         for node in nodes {
-            let node = node.lock().await;
+            let node = node.read().await;
             raw_nodes.push(node.clone());
         }
         raw_nodes

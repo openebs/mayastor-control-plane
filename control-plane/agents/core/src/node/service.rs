@@ -14,7 +14,6 @@ use common_lib::types::v0::message_bus::{
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::ResultExt;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
 
 /// Node's Service
 #[derive(Debug, Clone)]
@@ -75,7 +74,7 @@ impl Service {
         let registry = service.registry.clone();
         let state = registry.nodes().read().await;
         if let Some(node) = state.get(id) {
-            let mut node = node.lock().await;
+            let mut node = node.write().await;
             if node.is_online() {
                 node.update_liveness().await;
             }
@@ -103,14 +102,14 @@ impl Service {
                 let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
                 if node.load().await.is_ok() {
                     node.watchdog_mut().arm(self.clone());
-                    nodes.insert(node.id.clone(), Arc::new(Mutex::new(node)));
+                    nodes.insert(node.id.clone(), Arc::new(tokio::sync::RwLock::new(node)));
                 }
             }
             Some(node) => {
-                if node.lock().await.status() == &NodeStatus::Online {
+                if node.read().await.status() == &NodeStatus::Online {
                     send_event = false;
                 }
-                node.lock().await.on_register().await;
+                node.write().await.on_register().await;
             }
         }
 
@@ -131,7 +130,7 @@ impl Service {
             // information at this level :(
             // maybe nodes should also be registered/deregistered via REST?
             Some(node) => {
-                node.lock().await.set_status(NodeStatus::Unknown);
+                node.write().await.set_status(NodeStatus::Unknown);
             }
         }
     }
@@ -190,7 +189,7 @@ impl Service {
     ) -> Result<BlockDevices, SvcError> {
         let node = self.registry.get_node_wrapper(&request.node).await?;
 
-        let grpc = node.lock().await.grpc_context()?;
+        let grpc = node.read().await.grpc_context()?;
         let mut client = grpc.connect().await?;
 
         let result = client
@@ -233,7 +232,7 @@ impl Service {
         // Aggregate the state information from each node.
         let nodes = self.registry.nodes().read().await;
         for (_node_id, locked_node_wrapper) in nodes.iter() {
-            let node_wrapper = locked_node_wrapper.lock().await;
+            let node_wrapper = locked_node_wrapper.read().await;
             nexuses.extend(node_wrapper.nexus_states());
             pools.extend(node_wrapper.pool_states());
             replicas.extend(node_wrapper.replica_states());
