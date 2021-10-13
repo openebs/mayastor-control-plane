@@ -1,4 +1,4 @@
-use crate::{ApiClientError, MayastorApiClient};
+use crate::{ApiClientError, CreateVolumeTopology, MayastorApiClient};
 use regex::Regex;
 use rpc::csi::*;
 use std::collections::HashMap;
@@ -36,10 +36,7 @@ mod volume_opts {
     pub fn decode_local_volume_flag(encoded: Option<&String>) -> bool {
         match encoded {
             Some(v) => YAML_TRUE_VALUE.iter().any(|p| p == v),
-            None => {
-                // TODO: As of now all volumes are considered local, (see CAS-1126)
-                true
-            }
+            None => false,
         }
     }
 }
@@ -179,9 +176,12 @@ impl VolumeTopologyMapper {
     }
 
     /// Determines whether target volume is pinned.
-    /// TODO: as of now all volumes are assumed pinned.
-    pub fn is_volume_pinned(_volume: &Volume) -> bool {
-        true
+    pub fn is_volume_pinned(volume: &Volume) -> bool {
+        if let Some(labels) = &volume.spec.labels {
+            volume_opts::decode_local_volume_flag(labels.get(volume_opts::LOCAL_VOLUME))
+        } else {
+            false
+        }
     }
 }
 
@@ -331,15 +331,11 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 volume_uuid
             );
         } else {
+            let volume_topology =
+                CreateVolumeTopology::new(allowed_nodes, preferred_nodes, inclusive_label_topology);
+
             MayastorApiClient::get_client()
-                .create_volume(
-                    &u,
-                    replica_count,
-                    size,
-                    &allowed_nodes,
-                    &preferred_nodes,
-                    &inclusive_label_topology,
-                )
+                .create_volume(&u, replica_count, size, volume_topology, pinned_volume)
                 .await?;
 
             debug!(
