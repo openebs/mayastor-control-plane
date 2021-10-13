@@ -19,7 +19,7 @@ use common_lib::{
 };
 use openapi::apis::Uuid;
 
-use std::{collections::HashMap, convert::TryInto, rc::Rc, time::Duration};
+use std::{collections::HashMap, convert::TryInto, time::Duration};
 use structopt::StructOpt;
 
 #[tokio::test]
@@ -239,7 +239,7 @@ enum PoolDisk {
 /// Temporary "disk" file, which gets deleted on drop
 #[derive(Clone)]
 pub struct TmpDiskFile {
-    inner: Rc<TmpDiskFileInner>,
+    inner: std::sync::Arc<TmpDiskFileInner>,
 }
 
 struct TmpDiskFileInner {
@@ -252,7 +252,7 @@ impl TmpDiskFile {
     /// The file is deleted on drop.
     pub fn new(name: &str, size: u64) -> Self {
         Self {
-            inner: Rc::new(TmpDiskFileInner::new(name, size)),
+            inner: std::sync::Arc::new(TmpDiskFileInner::new(name, size)),
         }
     }
     /// Disk URI to be used by mayastor
