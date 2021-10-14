@@ -420,16 +420,22 @@ impl ResourceContext {
 
         if !self
             .block_devices_api()
-            .get_node_block_devices(&self.spec.node, None)
+            .get_node_block_devices(&self.spec.node, Some(true))
             .await?
             .into_body()
             .into_iter()
-            .any(|b| b.devname == self.spec.disks[0])
+            .any(|b| {
+                b.devname == self.spec.disks[0]
+                    || b.devlinks.iter().any(|d| *d == self.spec.disks[0])
+            })
         {
             self.k8s_notify(
                 "Create or import",
                 "Missing",
-                "The block device(s) can not be found on the host",
+                &format!(
+                    "The block device(s): {} can not be found",
+                    self.spec.disks[0]
+                ),
                 "Warn",
             )
             .await;
