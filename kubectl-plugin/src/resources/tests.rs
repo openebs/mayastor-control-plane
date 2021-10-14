@@ -2,10 +2,13 @@
 use crate::resources::utils::{print_table, CreateRows, GetHeaderRow, OutputFormat};
 use gag::BufferRedirect;
 use once_cell::sync::OnceCell;
-use openapi::models::CreateVolumeBody;
+use openapi::{
+    apis::Uuid,
+    models::{CreateVolumeBody, NodeState, PoolState, VolumeSpec, VolumeState},
+};
 use serde::ser;
 use std::io::Read;
-use testlib::{Cluster, ClusterBuilder, Uuid};
+use testlib::{Cluster, ClusterBuilder};
 
 static CLUSTER: OnceCell<Cluster> = OnceCell::new();
 const VOLUME_UUID: &str = "1e3cf927-80c2-47a8-adf0-95c486bdd7b7";
@@ -60,11 +63,7 @@ async fn get_volumes() {
         .unwrap();
     let volume_state = volumes[0].state.clone();
     let volume_spec = volumes[0].spec.clone();
-    compare(
-        format!(" ID                                    REPLICAS  TARGET-NODE  ACCESSIBILITY  STATUS  SIZE \n {}  {}         {}       {}         {}  {} \n",
-                volume_state.uuid, volume_spec.num_replicas, "<none>", "<none>", volume_state.status.to_string(), volume_state.size),
-        volumes,
-    );
+    compare(volume_output(volume_spec, volume_state), volumes);
 }
 
 #[tokio::test]
@@ -78,11 +77,7 @@ async fn get_volume() {
         .unwrap();
     let volume_state = volume.state.clone();
     let volume_spec = volume.spec.clone();
-    compare(
-        format!(" ID                                    REPLICAS  TARGET-NODE  ACCESSIBILITY  STATUS  SIZE \n {}  {}         {}       {}         {}  {} \n",
-                volume_state.uuid, volume_spec.num_replicas, "<none>", "<none>", volume_state.status.to_string(), volume_state.size),
-        volume,
-    );
+    compare(volume_output(volume_spec, volume_state), volume);
 }
 
 #[tokio::test]
@@ -95,12 +90,7 @@ async fn get_pools() {
         .await
         .unwrap();
     let pool_state = pools[0].state.as_ref().unwrap().clone();
-    let disks = pool_state.disks.join(", ");
-    compare(
-        format!(" ID                 TOTAL CAPACITY  USED CAPACITY  DISKS                                                                  NODE        STATUS  MANAGED \n {}  {}       {}        {}  {}  {}  {} \n",
-                pool_state.id, pool_state.capacity, pool_state.used, disks, pool_state.node, pool_state.status.to_string(),true),
-        pools
-    );
+    compare(pool_output(pool_state), pools);
 }
 
 #[tokio::test]
@@ -113,12 +103,7 @@ async fn get_pool() {
         .await
         .unwrap();
     let pool_state = pool.state.as_ref().unwrap().clone();
-    let disks = pool_state.disks.join(", ");
-    compare(
-        format!(" ID                 TOTAL CAPACITY  USED CAPACITY  DISKS                                                                  NODE        STATUS  MANAGED \n {}  {}       {}        {}  {}  {}  {} \n",
-                pool_state.id, pool_state.capacity, pool_state.used, disks, pool_state.node, pool_state.status.to_string(),true),
-        pool
-    );
+    compare(pool_output(pool_state), pool);
 }
 
 #[tokio::test]
@@ -131,15 +116,7 @@ async fn get_nodes() {
         .await
         .unwrap();
     let node_state = nodes[0].state.as_ref().unwrap().clone();
-    compare(
-        format!(
-            " ID          GRPC ENDPOINT   STATUS \n {}  {}  {} \n",
-            node_state.id,
-            node_state.grpc_endpoint,
-            node_state.status.to_string()
-        ),
-        nodes,
-    );
+    compare(node_output(node_state), nodes);
 }
 
 #[tokio::test]
@@ -152,15 +129,7 @@ async fn get_node() {
         .await
         .unwrap();
     let node_state = node.state.as_ref().unwrap().clone();
-    compare(
-        format!(
-            " ID          GRPC ENDPOINT   STATUS \n {}  {}  {} \n",
-            node_state.id,
-            node_state.grpc_endpoint,
-            node_state.status.to_string()
-        ),
-        node,
-    );
+    compare(node_output(node_state), node);
 }
 
 #[tokio::test]
@@ -176,9 +145,23 @@ async fn get_replica_topology() {
         .replica_topology;
     let replica_ids: Vec<String> = replica_topo.clone().into_keys().collect();
     let replica = replica_topo.get(&*replica_ids[0]).unwrap();
-    compare(format!(" ID                                    NODE        POOL               STATUS \n {}  {}  {}  {} \n",
-                    replica_ids[0], replica.node.as_ref().unwrap(), replica.pool.as_ref().unwrap(), replica.state.to_string()),
-            replica_topo
+    compare(
+        format!(
+            " {:id_width$}{:node_width$}{:pool_width$}STATUS \n",
+            "ID",
+            "NODE",
+            "POOL",
+            id_width = 38,
+            node_width = replica.node.as_ref().unwrap().len() + 2,
+            pool_width = replica.pool.as_ref().unwrap().len() + 2
+        ) + &*format!(
+            " {}  {}  {}  {} \n",
+            replica_ids[0],
+            replica.node.as_ref().unwrap(),
+            replica.pool.as_ref().unwrap(),
+            replica.state.to_string()
+        ),
+        replica_topo,
     );
 }
 
@@ -194,4 +177,57 @@ where
     let mut actual_output = String::new();
     buf.read_to_string(&mut actual_output).unwrap();
     assert_eq!(&actual_output[..], expected_output);
+}
+
+fn pool_output(pool_state: PoolState) -> String {
+    let disks: String = pool_state.disks.join(", ");
+    format!(
+        " {:id_width$}TOTAL CAPACITY  USED CAPACITY  {:disk_width$}{:node_width$}STATUS  MANAGED \n",
+        "ID",
+        "DISKS",
+        "NODE",
+        id_width = pool_state.id.len() + 2,
+        disk_width = disks.len() + 2,
+        node_width = pool_state.node.len() + 2
+    ) + &*format!(
+        " {}  {}       {}        {}  {}  {}  {} \n",
+        pool_state.id,
+        pool_state.capacity,
+        pool_state.used,
+        disks,
+        pool_state.node,
+        pool_state.status.to_string(),
+        true
+    )
+}
+
+fn volume_output(volume_spec: VolumeSpec, volume_state: VolumeState) -> String {
+    format!(
+        " {:width$}REPLICAS  TARGET-NODE  ACCESSIBILITY  STATUS  SIZE \n",
+        "ID",
+        width = 38
+    ) + &*format!(
+        " {}  {}         {}       {}         {}  {} \n",
+        volume_state.uuid,
+        volume_spec.num_replicas,
+        "<none>",
+        "<none>",
+        volume_state.status.to_string(),
+        volume_state.size
+    )
+}
+
+fn node_output(node_state: NodeState) -> String {
+    format!(
+        " {:width_id$}{:width_grpc$}STATUS \n",
+        "ID",
+        "GRPC ENDPOINT",
+        width_id = node_state.id.len() + 2,
+        width_grpc = node_state.grpc_endpoint.len() + 2
+    ) + &*format!(
+        " {}  {}  {} \n",
+        node_state.id,
+        node_state.grpc_endpoint,
+        node_state.status.to_string()
+    )
 }
