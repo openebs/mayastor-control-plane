@@ -8,7 +8,7 @@ mod client;
 mod config;
 mod controller;
 mod identity;
-use client::{ApiClientError, MayastorApiClient};
+use client::{ApiClientError, CreateVolumeTopology, MayastorApiClient};
 use config::CsiControllerConfig;
 
 mod server;

@@ -26,15 +26,19 @@ from openapi_client.exceptions import NotFoundException
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 VOLUME2_UUID = "d8aab0f1-82f4-406c-89ee-14f08b004aea"
+VOLUME3_UUID = "f29b8e73-67d0-4b32-a8ea-a1277d48ef07"
 NOT_EXISTING_VOLUME_UUID = "11111111-2222-3333-4444-555555555555"
 PVC_VOLUME1_NAME = "pvc-%s" % VOLUME1_UUID
 PVC_VOLUME2_NAME = "pvc-%s" % VOLUME2_UUID
+PVC_VOLUME3_NAME = "pvc-%s" % VOLUME3_UUID
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 POOL2_UUID = "bcabda21-9e66-4d81-8c75-bf9f3b687cdc"
 NODE1 = "mayastor-1"
 NODE2 = "mayastor-2"
 VOLUME1_SIZE = 1024 * 1024 * 72
 VOLUME2_SIZE = 1024 * 1024 * 32
+VOLUME3_SIZE = 1024 * 1024 * 48
+K8S_HOSTNAME = "kubernetes.io/hostname"
 
 
 @pytest.fixture(scope="module")
@@ -162,6 +166,16 @@ def test_republish_volume_on_a_different_node(setup):
     """republish volume on a different node"""
 
 
+@scenario("features/csi/controller.feature", "create 1 replica local nvmf volume")
+def test_create_1_replica_local_nvmf_volume(setup):
+    """create 1 replica local nvmf volume"""
+
+
+@scenario("features/csi/controller.feature", "list local volume")
+def test_list_local_volume(setup):
+    """list local volume"""
+
+
 @given("a running CSI controller plugin", target_fixture="csi_instance")
 def a_csi_instance():
     return csi_rpc_handle()
@@ -203,6 +217,14 @@ def populate_published_volume(_create_1_replica_nvmf_volume):
 
 
 @when(
+    "a CreateVolume request is sent to create a 1 replica local nvmf volume (local=true)",
+    target_fixture="create_1_replica_local_nvmf_volume",
+)
+def create_1_replica_local_nvmf_volume(_create_1_replica_local_nvmf_volume):
+    return _create_1_replica_local_nvmf_volume
+
+
+@when(
     "a ControllerPublishVolume request is sent to CSI controller to re-publish volume using a different protocol",
     target_fixture="republish_volume_with_a_different_protocol",
 )
@@ -220,6 +242,34 @@ def republish_volume_on_a_different_node(populate_published_volume):
     with pytest.raises(grpc.RpcError) as e:
         do_publish_volume(VOLUME1_UUID, NODE2)
     return e.value
+
+
+@then("a new local volume of requested size should be successfully created")
+def check_1_replica_local_nvmf_volume(create_1_replica_local_nvmf_volume):
+    assert (
+        create_1_replica_local_nvmf_volume.volume.capacity_bytes == VOLUME3_SIZE
+    ), "Volume size mismatches"
+    volume = common.get_volumes_api().get_volume(VOLUME3_UUID)
+    assert volume.spec.num_replicas == 1, "Number of volume replicas mismatches"
+    assert volume.spec.size == VOLUME3_SIZE, "Volume size mismatches"
+
+
+def check_local_volume_topology(volume):
+    topology = volume.volume.accessible_topology
+    assert len(topology) == 2, "Number of nodes in topology mismatches"
+
+    for n in [NODE1, NODE2]:
+        found = False
+        for t in topology:
+            if t.segments[K8S_HOSTNAME] == n:
+                found = True
+                break
+        assert found, "Node %s is missing in volume topology"
+
+
+@then("local volume must be accessible only from all existing Mayastor nodes")
+def check_1_replica_local_nvmf_volume_topology(create_1_replica_local_nvmf_volume):
+    check_local_volume_topology(create_1_replica_local_nvmf_volume)
 
 
 @then(
@@ -500,7 +550,7 @@ def get_node_capacity(two_pools):
     capacity = []
 
     for n in [NODE1, NODE2]:
-        topology = pb.Topology(segments=[["kubernetes.io/hostname", n]])
+        topology = pb.Topology(segments=[[K8S_HOSTNAME, n]])
         cap = csi_rpc_handle().controller.GetCapacity(
             pb.GetCapacityRequest(accessible_topology=topology)
         )
@@ -529,6 +579,17 @@ def csi_create_1_replica_nvmf_volume1():
 
     req = pb.CreateVolumeRequest(
         name=PVC_VOLUME1_NAME, capacity_range=capacity, parameters=parameters
+    )
+
+    return csi_rpc_handle().controller.CreateVolume(req)
+
+
+def csi_create_1_replica_local_nvmf_volume():
+    capacity = pb.CapacityRange(required_bytes=VOLUME3_SIZE, limit_bytes=0)
+    parameters = {"protocol": "nvmf", "ioTimeout": "30", "repl": "1", "local": "true"}
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME3_NAME, capacity_range=capacity, parameters=parameters
     )
 
     return csi_rpc_handle().controller.CreateVolume(req)
@@ -584,6 +645,12 @@ def csi_delete_1_replica_nvmf_volume1():
     )
 
 
+def csi_delete_1_replica_local_nvmf_volume1():
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=VOLUME3_UUID)
+    )
+
+
 def csi_delete_1_replica_nvmf_volume2():
     csi_rpc_handle().controller.DeleteVolume(
         pb.DeleteVolumeRequest(volume_id=VOLUME2_UUID)
@@ -594,6 +661,13 @@ def csi_delete_1_replica_nvmf_volume2():
 def _create_1_replica_nvmf_volume():
     yield csi_create_1_replica_nvmf_volume1()
     csi_delete_1_replica_nvmf_volume1()
+
+
+@pytest.fixture
+def _create_1_replica_local_nvmf_volume():
+    csi_delete_1_replica_local_nvmf_volume1()
+    yield csi_create_1_replica_local_nvmf_volume()
+    csi_delete_1_replica_local_nvmf_volume1()
 
 
 @pytest.fixture
@@ -644,6 +718,28 @@ def an_existing_volume(_create_1_replica_nvmf_volume):
     return _create_1_replica_nvmf_volume
 
 
+@given("an existing unpublished local volume", target_fixture="existing_local_volume")
+def an_existing_volume(_create_1_replica_local_nvmf_volume):
+    return _create_1_replica_local_nvmf_volume
+
+
+@then("listed local volume must be accessible only from all existing Mayastor nodes")
+def check_local_volume_accessible_from_ms_nodes(list_2_volumes):
+    vols = [v for v in list_2_volumes[1] if v.volume.volume_id == VOLUME3_UUID]
+    assert len(vols) == 1, "Invalid number of local volumes reported"
+    check_local_volume_topology(vols[0])
+
+
+@then("no topology restrictions should be imposed to non-local volumes")
+def check_no_topology_restrictions_for_non_local_volume(list_2_volumes):
+    vols = [v for v in list_2_volumes[1] if v.volume.volume_id != VOLUME3_UUID]
+    assert len(vols) == 2, "Invalid number of non-local volumes reported"
+    for v in vols:
+        assert (
+            len(v.volume.accessible_topology) == 0
+        ), "Non-local volume has topology restrictions"
+
+
 @when(
     "a CreateVolume request is sent to create a volume identical to existing volume",
     target_fixture="create_the_same_volume",
@@ -662,11 +758,11 @@ def check_volume_specs(volume1, volume2):
     ), "Volumes have different contexts"
 
     topology1 = sorted(
-        volume1.accessible_topology, key=lambda t: t.segments["kubernetes.io/hostname"]
+        volume1.accessible_topology, key=lambda t: t.segments[K8S_HOSTNAME]
     )
 
     topology2 = sorted(
-        volume2.accessible_topology, key=lambda t: t.segments["kubernetes.io/hostname"]
+        volume2.accessible_topology, key=lambda t: t.segments[K8S_HOSTNAME]
     )
 
     assert topology1 == topology2, "Volumes have different topologies"

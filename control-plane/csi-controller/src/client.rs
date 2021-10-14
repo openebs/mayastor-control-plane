@@ -31,6 +31,28 @@ pub enum ApiClientError {
     MalformedUrl(String),
 }
 
+/// Placeholder for volume topology for volume creation operation.
+#[derive(Debug)]
+pub struct CreateVolumeTopology {
+    inclusive_label_topology: HashMap<String, String>,
+    allowed_nodes: Vec<String>,
+    preferred_nodes: Vec<String>,
+}
+
+impl CreateVolumeTopology {
+    pub fn new(
+        allowed_nodes: Vec<String>,
+        preferred_nodes: Vec<String>,
+        inclusive_label_topology: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            allowed_nodes,
+            preferred_nodes,
+            inclusive_label_topology,
+        }
+    }
+}
+
 impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
     fn from(error: clients::tower::Error<RestJsonError>) -> Self {
         match error {
@@ -146,27 +168,34 @@ impl MayastorApiClient {
         volume_id: &uuid::Uuid,
         replicas: u8,
         size: u64,
-        allowed_nodes: &[String],
-        preferred_nodes: &[String],
-        inclusive_pool_topology: &HashMap<String, String>,
+        volume_topology: CreateVolumeTopology,
+        pinned_volume: bool,
     ) -> Result<Volume, ApiClientError> {
         let topology = Topology::new_all(
             Some(NodeTopology::explicit(ExplicitNodeTopology::new(
-                allowed_nodes.to_vec(),
-                preferred_nodes.to_vec(),
+                volume_topology.allowed_nodes,
+                volume_topology.preferred_nodes,
             ))),
             Some(PoolTopology::labelled(LabelledTopology::new(
                 HashMap::new(),
-                inclusive_pool_topology.to_owned(),
+                volume_topology.inclusive_label_topology,
             ))),
         );
+
+        let labels = if pinned_volume {
+            let mut labels = HashMap::new();
+            labels.insert("local".to_string(), "true".to_string());
+            Some(labels)
+        } else {
+            None
+        };
 
         let req = CreateVolumeBody {
             replicas,
             size,
             topology: Some(topology),
             policy: VolumePolicy::new_all(true),
-            labels: None,
+            labels,
         };
 
         let result = self
