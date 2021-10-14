@@ -7,20 +7,15 @@ use common_lib::{
     types::v0::{
         message_bus::{
             GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol,
-            ReplicaStatus,
+            ReplicaStatus, VolumeId,
         },
+        openapi::models::{CreateVolumeBody, Pool, PoolState, VolumePolicy},
         store::replica::ReplicaSpec,
     },
 };
 use itertools::Itertools;
 use std::{convert::TryFrom, time::Duration};
-use testlib::{
-    v0::{
-        models::{CreateVolumeBody, Pool, PoolState, VolumePolicy},
-        VolumeId,
-    },
-    Cluster, ClusterBuilder,
-};
+use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn pool() {

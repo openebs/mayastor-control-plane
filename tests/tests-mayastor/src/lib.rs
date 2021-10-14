@@ -1,7 +1,10 @@
-use composer::*;
+pub mod rest_client;
+
+use composer::{Builder, ComposeTest};
 use deployer_lib::{
+    default_agents,
     infra::{Components, Error, Mayastor},
-    *,
+    StartOptions,
 };
 use opentelemetry::{
     global,
@@ -9,34 +12,12 @@ use opentelemetry::{
     KeyValue,
 };
 
-pub use common_lib::{
+use common_lib::{
     mbus_api,
     mbus_api::{Message, TimeoutOptions},
-    types::v0::{
-        message_bus::{self, PoolDeviceUri},
-        openapi::{apis::Uuid, models},
-    },
+    types::v0::message_bus,
 };
-pub use rest_client::RestClient;
-
-pub mod v0 {
-    pub use common_lib::{
-        mbus_api,
-        types::v0::{
-            message_bus::{
-                AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool,
-                CreateReplica, CreateVolume, DestroyNexus, DestroyPool, DestroyReplica,
-                DestroyVolume, Filter, GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node,
-                NodeId, Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica,
-                ReplicaId, ReplicaShareProtocol, ShareNexus, ShareReplica, Specs, Topology,
-                UnshareNexus, UnshareReplica, VolumeId, VolumePolicy, Watch, WatchCallback,
-                WatchResourceId,
-            },
-            openapi::{apis, models},
-        },
-    };
-    pub use models::rest_json_error::Kind as RestJsonErrorKind;
-}
+use openapi::apis::Uuid;
 
 use std::{collections::HashMap, convert::TryInto, rc::Rc, time::Duration};
 use structopt::StructOpt;
@@ -60,16 +41,15 @@ pub fn default_options() -> StartOptions {
         .with_jaeger(true)
         .with_mayastors(1)
         .with_show_info(true)
-        .with_cluster_name("rest_cluster")
         .with_build_all(true)
         .with_env_tags(vec!["CARGO_PKG_NAME"])
 }
 
-/// Cluster with the composer, the rest client and the jaeger pipeline#
+/// Cluster with the composer, the rest client and the jaeger pipeline
 #[allow(unused)]
 pub struct Cluster {
     composer: ComposeTest,
-    rest_client: RestClient,
+    rest_client: rest_client::RestClient,
     jaeger: Tracer,
     builder: ClusterBuilder,
 }
@@ -115,7 +95,7 @@ impl Cluster {
 
     /// openapi rest client v0
     pub fn rest_v00(&self) -> common_lib::types::v0::openapi::tower::client::direct::ApiClient {
-        self.rest_client.v00()
+        self.rest_client.v0()
     }
 
     /// New cluster
@@ -127,7 +107,7 @@ impl Cluster {
         components: Components,
         composer: ComposeTest,
     ) -> Result<Cluster, Error> {
-        let rest_client = RestClient::new_timeout(
+        let rest_client = rest_client::RestClient::new_timeout(
             "http://localhost:8081",
             trace_rest,
             bearer_token,
@@ -186,16 +166,6 @@ impl Cluster {
         cluster.connect_to_bus_timeout("nats", bus_timeout).await;
 
         Ok(cluster)
-    }
-
-    /// connect to message bus helper for the cargo test code
-    #[allow(dead_code)]
-    async fn connect_to_bus(&self, name: &str) {
-        let timeout = TimeoutOptions::new()
-            .with_timeout(Duration::from_millis(500))
-            .with_timeout_backoff(Duration::from_millis(500))
-            .with_max_retries(10);
-        self.connect_to_bus_timeout(name, timeout).await;
     }
 
     /// connect to message bus helper for the cargo test code with bus timeouts
@@ -618,7 +588,7 @@ impl Pool {
     fn id(&self) -> message_bus::PoolId {
         format!("{}-pool-{}", self.node, self.index).into()
     }
-    fn disk(&self) -> PoolDeviceUri {
+    fn disk(&self) -> message_bus::PoolDeviceUri {
         match &self.disk {
             PoolDisk::Malloc(size) => {
                 let size = size / (1024 * 1024);
