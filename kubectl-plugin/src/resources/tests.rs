@@ -1,10 +1,10 @@
 #[cfg(test)]
 use crate::resources::utils::{print_table, CreateRows, GetHeaderRow, OutputFormat};
-use common_lib::{mbus_api::Message, types::v0::message_bus::CreateVolume};
 use gag::BufferRedirect;
 use once_cell::sync::OnceCell;
+use openapi::models::CreateVolumeBody;
 use serde::ser;
-use std::{convert::TryInto, io::Read};
+use std::io::Read;
 use testlib::{Cluster, ClusterBuilder, Uuid};
 
 static CLUSTER: OnceCell<Cluster> = OnceCell::new();
@@ -20,15 +20,21 @@ async fn setup() {
         .await
         .unwrap();
 
-    CreateVolume {
-        uuid: VOLUME_UUID.try_into().unwrap(),
-        size: 5242880,
-        replicas: 1,
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    cluster
+        .rest_v00()
+        .volumes_api()
+        .put_volume(
+            &Uuid::parse_str(VOLUME_UUID).unwrap(),
+            CreateVolumeBody {
+                policy: Default::default(),
+                replicas: 1,
+                size: 5242880,
+                topology: None,
+                labels: None,
+            },
+        )
+        .await
+        .unwrap();
 
     CLUSTER
         .set(cluster)
@@ -36,87 +42,101 @@ async fn setup() {
         .expect("Expect to be initialised only once");
 }
 
-#[tokio::test]
-async fn get_volumes() {
+async fn cluster() -> &'static Cluster {
     if CLUSTER.get().is_none() {
         setup().await;
     }
-    let volumes = CLUSTER
-        .get()
-        .unwrap()
+    CLUSTER.get().unwrap()
+}
+
+#[tokio::test]
+async fn get_volumes() {
+    let volumes = cluster()
+        .await
         .rest_v00()
         .volumes_api()
         .get_volumes()
         .await
         .unwrap();
-    compare(format!(" ID                                    REPLICAS  TARGET-NODE  ACCESSIBILITY  STATUS  SIZE \n {}  1         <none>       <none>         Online  5242880 \n", VOLUME_UUID), volumes);
+    let volume_state = volumes[0].state.clone();
+    let volume_spec = volumes[0].spec.clone();
+    compare(
+        format!(" ID                                    REPLICAS  TARGET-NODE  ACCESSIBILITY  STATUS  SIZE \n {}  {}         {}       {}         {}  {} \n",
+                volume_state.uuid, volume_spec.num_replicas, "<none>", "<none>", volume_state.status.to_string(), volume_state.size),
+        volumes,
+    );
 }
 
 #[tokio::test]
 async fn get_volume() {
-    if CLUSTER.get().is_none() {
-        setup().await;
-    }
-    let volume = CLUSTER
-        .get()
-        .unwrap()
+    let volume = cluster()
+        .await
         .rest_v00()
         .volumes_api()
         .get_volume(&Uuid::parse_str(VOLUME_UUID).unwrap())
         .await
         .unwrap();
-    compare(format!(" ID                                    REPLICAS  TARGET-NODE  ACCESSIBILITY  STATUS  SIZE \n {}  1         <none>       <none>         Online  5242880 \n", VOLUME_UUID), volume);
+    let volume_state = volume.state.clone();
+    let volume_spec = volume.spec.clone();
+    compare(
+        format!(" ID                                    REPLICAS  TARGET-NODE  ACCESSIBILITY  STATUS  SIZE \n {}  {}         {}       {}         {}  {} \n",
+                volume_state.uuid, volume_spec.num_replicas, "<none>", "<none>", volume_state.status.to_string(), volume_state.size),
+        volume,
+    );
 }
 
 #[tokio::test]
 async fn get_pools() {
-    if CLUSTER.get().is_none() {
-        setup().await;
-    }
-    let pools = CLUSTER
-        .get()
-        .unwrap()
+    let pools = cluster()
+        .await
         .rest_v00()
         .pools_api()
         .get_pools()
         .await
         .unwrap();
-    compare(format!(" ID                 TOTAL CAPACITY  USED CAPACITY  DISKS                                                                  NODE        STATUS  MANAGED \n mayastor-1-pool-1  100663296       8388608        {}  mayastor-1  Online  true \n", pools[0].state.as_ref().unwrap().disks[0].clone()), pools);
+    let pool_state = pools[0].state.as_ref().unwrap().clone();
+    let disks = pool_state.disks.join(", ");
+    compare(
+        format!(" ID                 TOTAL CAPACITY  USED CAPACITY  DISKS                                                                  NODE        STATUS  MANAGED \n {}  {}       {}        {}  {}  {}  {} \n",
+                pool_state.id, pool_state.capacity, pool_state.used, disks, pool_state.node, pool_state.status.to_string(),true),
+        pools
+    );
 }
 
 #[tokio::test]
 async fn get_pool() {
-    if CLUSTER.get().is_none() {
-        setup().await;
-    }
-    let pool = CLUSTER
-        .get()
-        .unwrap()
+    let pool = cluster()
+        .await
         .rest_v00()
         .pools_api()
-        .get_pool(CLUSTER.get().unwrap().pool(0, 0).as_str())
+        .get_pool(cluster().await.pool(0, 0).as_str())
         .await
         .unwrap();
-    compare(format!(" ID                 TOTAL CAPACITY  USED CAPACITY  DISKS                                                                  NODE        STATUS  MANAGED \n mayastor-1-pool-1  100663296       8388608        {}  mayastor-1  Online  true \n", pool.state.as_ref().unwrap().disks[0].clone()), pool);
+    let pool_state = pool.state.as_ref().unwrap().clone();
+    let disks = pool_state.disks.join(", ");
+    compare(
+        format!(" ID                 TOTAL CAPACITY  USED CAPACITY  DISKS                                                                  NODE        STATUS  MANAGED \n {}  {}       {}        {}  {}  {}  {} \n",
+                pool_state.id, pool_state.capacity, pool_state.used, disks, pool_state.node, pool_state.status.to_string(),true),
+        pool
+    );
 }
 
 #[tokio::test]
 async fn get_nodes() {
-    if CLUSTER.get().is_none() {
-        setup().await;
-    }
-    let nodes = CLUSTER
-        .get()
-        .unwrap()
+    let nodes = cluster()
+        .await
         .rest_v00()
         .nodes_api()
         .get_nodes()
         .await
         .unwrap();
+    let node_state = nodes[0].state.as_ref().unwrap().clone();
     compare(
         format!(
-            " ID          GRPC ENDPOINT   STATUS \n mayastor-1  {}  Online \n",
-            nodes[0].state.as_ref().unwrap().grpc_endpoint
+            " ID          GRPC ENDPOINT   STATUS \n {}  {}  {} \n",
+            node_state.id,
+            node_state.grpc_endpoint,
+            node_state.status.to_string()
         ),
         nodes,
     );
@@ -124,21 +144,20 @@ async fn get_nodes() {
 
 #[tokio::test]
 async fn get_node() {
-    if CLUSTER.get().is_none() {
-        setup().await;
-    }
-    let node = CLUSTER
-        .get()
-        .unwrap()
+    let node = cluster()
+        .await
         .rest_v00()
         .nodes_api()
-        .get_node(CLUSTER.get().unwrap().node(0).as_str())
+        .get_node(cluster().await.node(0).as_str())
         .await
         .unwrap();
+    let node_state = node.state.as_ref().unwrap().clone();
     compare(
         format!(
-            " ID          GRPC ENDPOINT   STATUS \n mayastor-1  {}  Online \n",
-            node.state.as_ref().unwrap().grpc_endpoint
+            " ID          GRPC ENDPOINT   STATUS \n {}  {}  {} \n",
+            node_state.id,
+            node_state.grpc_endpoint,
+            node_state.status.to_string()
         ),
         node,
     );
@@ -146,12 +165,8 @@ async fn get_node() {
 
 #[tokio::test]
 async fn get_replica_topology() {
-    if CLUSTER.get().is_none() {
-        setup().await;
-    }
-    let replica_topo = CLUSTER
-        .get()
-        .unwrap()
+    let replica_topo = cluster()
+        .await
         .rest_v00()
         .volumes_api()
         .get_volume(&Uuid::parse_str(VOLUME_UUID).unwrap())
@@ -160,7 +175,11 @@ async fn get_replica_topology() {
         .state
         .replica_topology;
     let replica_ids: Vec<String> = replica_topo.clone().into_keys().collect();
-    compare(format!(" ID                                    NODE        POOL               STATUS \n {}  mayastor-1  mayastor-1-pool-1  Online \n", replica_ids[0]), replica_topo);
+    let replica = replica_topo.get(&*replica_ids[0]).unwrap();
+    compare(format!(" ID                                    NODE        POOL               STATUS \n {}  {}  {}  {} \n",
+                    replica_ids[0], replica.node.as_ref().unwrap(), replica.pool.as_ref().unwrap(), replica.state.to_string()),
+            replica_topo
+    );
 }
 
 // Compares the print_table output redirected to buffer with the expected string
