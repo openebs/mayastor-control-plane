@@ -434,12 +434,18 @@ impl ResourceSpecsLocked {
                     if let Err(error) = self
                         .destroy_replica(
                             registry,
-                            &Self::destroy_replica_request(spec, Default::default(), &node),
+                            &Self::destroy_replica_request(spec.clone(), Default::default(), &node),
                             true,
                             mode,
                         )
                         .await
                     {
+                        // Replica destruction has failed but we should still disown it so that the
+                        // garbage collector can destroy it later.
+                        if let Err(e) = self.disown_volume_replica(registry, &replica).await {
+                            tracing::warn!(replica.uuid=%spec.uuid, error=%e, "Failed to disown volume replica. Will attempt to disown again later.");
+                        }
+
                         if first_error.is_ok() {
                             first_error = Err(error);
                         }

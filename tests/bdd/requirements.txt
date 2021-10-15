@@ -1,4 +1,5 @@
 pytest-bdd
 python-dateutil
+retrying
 urllib3
 docker
