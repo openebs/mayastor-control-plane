@@ -25,7 +25,7 @@ impl Deref for ResourceStatesLocked {
 }
 
 /// Resource States
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ResourceStates {
     nexuses: ResourceMap<NexusId, NexusState>,
     pools: ResourceMap<PoolId, PoolState>,

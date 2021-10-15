@@ -6,14 +6,14 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ResourceMap<I, S> {
     map: HashMap<I, Arc<Mutex<S>>>,
 }
 
 impl<I, S> ResourceMap<I, S>
 where
-    I: Eq + Hash,
+    I: Eq + Hash + Clone,
     S: Clone + ResourceUuid<Id = I>,
 {
     /// Get the resource with the given key.

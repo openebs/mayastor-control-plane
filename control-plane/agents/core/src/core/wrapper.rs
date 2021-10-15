@@ -37,6 +37,9 @@ pub(crate) struct NodeWrapper {
     comms_timeouts: NodeCommsTimeout,
     /// runtime state information
     states: ResourceStatesLocked,
+    /// snapshot sync so that we may get a consistent view of the cluster
+    /// should be used only via the Internal Operations trait
+    snap_lock: SnapShotLock,
 }
 
 impl NodeWrapper {
@@ -45,6 +48,7 @@ impl NodeWrapper {
         node: &NodeState,
         deadline: std::time::Duration,
         comms_timeouts: NodeCommsTimeout,
+        snap_lock: SnapShotLock,
     ) -> Self {
         tracing::debug!("Creating new node {:?}", node);
         Self {
@@ -54,6 +58,7 @@ impl NodeWrapper {
             lock: Default::default(),
             comms_timeouts,
             states: ResourceStatesLocked::new(),
+            snap_lock,
         }
     }
 
@@ -334,6 +339,7 @@ impl NodeWrapper {
 
     /// Reload the node by fetching information from mayastor
     pub(crate) async fn reload(&mut self) -> Result<(), SvcError> {
+        self.states = ResourceStatesLocked::new();
         if self.is_online() {
             tracing::trace!(
                 "Reloading node '{}' on endpoint '{}'",
@@ -447,25 +453,6 @@ impl NodeWrapper {
             .collect();
         Ok(nexuses)
     }
-
-    /// Update all the nexus states.
-    async fn update_nexus_states(&self) -> Result<(), SvcError> {
-        let nexuses = self.fetch_nexuses().await?;
-        self.states.write().update_nexuses(nexuses);
-        Ok(())
-    }
-
-    async fn update_pool_states(&self) -> Result<(), SvcError> {
-        let pools = self.fetch_pools().await?;
-        self.states.write().update_pools(pools);
-        Ok(())
-    }
-
-    async fn update_replica_states(&self) -> Result<(), SvcError> {
-        let replicas = self.fetch_replicas().await?;
-        self.states.write().update_replicas(replicas);
-        Ok(())
-    }
 }
 
 impl std::ops::Deref for NodeWrapper {
@@ -478,6 +465,7 @@ impl std::ops::Deref for NodeWrapper {
 use crate::{
     core::{
         grpc::{GrpcClient, GrpcClientLocked},
+        registry::SnapShotLock,
         states::ResourceStatesLocked,
     },
     node::service::NodeCommsTimeout,
@@ -537,8 +525,13 @@ pub(crate) trait InternalOps {
     async fn update_nexus_states(&self) -> Result<(), SvcError>;
     /// Update the node's pool state information
     async fn update_pool_states(&self) -> Result<(), SvcError>;
+    /// Update the node's pool and replica state information in one go
+    /// to make sure the pool/replica information is update consistently
+    async fn update_pool_replica_states(&self) -> Result<(), SvcError>;
     /// Update the node's replica state information
     async fn update_replica_states(&self) -> Result<(), SvcError>;
+    /// Update self from a given `Self`
+    async fn update_all(&self, src: NodeWrapper);
 }
 
 /// Getter operations on a mayastor locked `NodeWrapper` to get copies of its
@@ -613,15 +606,51 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     }
 
     async fn update_nexus_states(&self) -> Result<(), SvcError> {
-        self.read().await.update_nexus_states().await
+        let states = self.read().await.states.clone();
+        let nexuses = self.read().await.fetch_nexuses().await?;
+        let snapshot_lock = self.read().await.snap_lock.clone();
+        let _guard = snapshot_lock.write().await;
+        states.write().update_nexuses(nexuses);
+        Ok(())
     }
 
     async fn update_pool_states(&self) -> Result<(), SvcError> {
-        self.read().await.update_pool_states().await
+        let states = self.read().await.states.clone();
+        let pools = self.read().await.fetch_pools().await?;
+        let snapshot_lock = self.read().await.snap_lock.clone();
+        let _guard = snapshot_lock.write().await;
+        states.write().update_pools(pools);
+        Ok(())
+    }
+    async fn update_pool_replica_states(&self) -> Result<(), SvcError> {
+        let states = self.read().await.states.clone();
+        let pools = self.read().await.fetch_pools().await?;
+        let replicas = self.read().await.fetch_replicas().await?;
+        let snapshot_lock = self.read().await.snap_lock.clone();
+        let _guard = snapshot_lock.write().await;
+        let mut states = states.write();
+        states.update_pools(pools);
+        states.update_replicas(replicas);
+        Ok(())
     }
 
     async fn update_replica_states(&self) -> Result<(), SvcError> {
-        self.read().await.update_replica_states().await
+        let states = self.read().await.states.clone();
+        let replicas = self.read().await.fetch_replicas().await?;
+        let snapshot_lock = self.read().await.snap_lock.clone();
+        let _guard = snapshot_lock.write().await;
+        states.write().update_replicas(replicas);
+        Ok(())
+    }
+
+    async fn update_all(&self, src: NodeWrapper) {
+        {
+            let node = self.read().await;
+            let _guard = node.snap_lock.write();
+            let states = src.states.write().deref().clone();
+            *node.states.write() = states;
+        }
+        self.write().await.node_state.status = src.status.clone();
     }
 }
 
@@ -638,8 +667,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                     request: "create_pool",
                 })?;
         let pool = rpc_pool_to_bus(&rpc_pool.into_inner(), &request.node);
-        self.update_pool_states().await?;
-        self.update_replica_states().await?;
+        self.update_pool_replica_states().await?;
         Ok(pool)
     }
     /// Destroy a pool on the node via gRPC
@@ -676,8 +704,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             })?;
 
         let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node)?;
-        self.update_replica_states().await?;
-        self.update_pool_states().await?;
+        self.update_pool_replica_states().await?;
         Ok(replica)
     }
 
@@ -726,7 +753,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 resource: ResourceKind::Replica,
                 request: "destroy_replica",
             })?;
-        self.update_replica_states().await?;
+        self.update_pool_replica_states().await?;
         // todo: remove when CAS-1107 is resolved
         if let Some(replica) = self.read().await.replica(&request.uuid) {
             if replica.pool == request.pool {
@@ -735,7 +762,6 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 });
             }
         }
-        self.update_pool_states().await?;
         Ok(())
     }
 

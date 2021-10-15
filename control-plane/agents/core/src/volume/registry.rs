@@ -4,24 +4,34 @@ use common_lib::types::v0::message_bus::{
     NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 
-use crate::core::reconciler::PollTriggerEvent;
-use common_lib::types::v0::store::replica::ReplicaSpec;
+use crate::core::{reconciler::PollTriggerEvent, specs::OperationSequenceGuard};
+use common_lib::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec, OperationMode};
+use parking_lot::Mutex;
 use snafu::OptionExt;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 impl Registry {
-    /// Get the volume state for the specified volume
+    /// Get the volume state for the specified volume id
     pub(crate) async fn get_volume_state(
         &self,
         volume_uuid: &VolumeId,
     ) -> Result<VolumeState, SvcError> {
-        let replica_specs = self.specs().get_volume_replicas(volume_uuid);
         let volume_spec = self
             .specs()
             .get_locked_volume(volume_uuid)
             .context(VolumeNotFound {
                 vol_id: volume_uuid.to_string(),
             })?;
+        Ok(self.get_volume_from_spec(volume_spec).await.state())
+    }
+
+    /// Get a consistent volume spec and state
+    pub(crate) async fn get_volume_from_spec(&self, volume_spec: Arc<Mutex<VolumeSpec>>) -> Volume {
+        let _guard = self.snapshot_lock().read().await;
+
+        let volume_uuid = volume_spec.lock().uuid.clone();
+        let replica_specs = self.specs().get_volume_replicas(&volume_uuid);
+
         let volume_spec = volume_spec.lock().clone();
         let nexus_spec = self.specs().get_volume_target_nexus(&volume_spec);
         let nexus_state = match nexus_spec {
@@ -42,7 +52,7 @@ impl Registry {
             );
         }
 
-        Ok(if let Some(nexus_state) = nexus_state {
+        let volume_state = if let Some(nexus_state) = nexus_state {
             VolumeState {
                 uuid: volume_uuid.to_owned(),
                 size: nexus_state.size,
@@ -75,7 +85,8 @@ impl Registry {
                 target: None,
                 replica_topology,
             }
-        })
+        };
+        Volume::new(volume_spec, volume_state)
     }
 
     /// Construct a replica topology from a replica spec.
@@ -104,10 +115,14 @@ impl Registry {
 
     /// Return a volume object corresponding to the ID.
     pub(crate) async fn get_volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
-        Ok(Volume::new(
-            self.specs().get_volume(id)?,
-            self.get_volume_state(id).await?,
-        ))
+        let volume = self.specs().get_locked_volume(id).context(VolumeNotFound {
+            vol_id: id.to_string(),
+        })?;
+        // make sure we get consistent states
+        let _snapshot_guard = self.snapshot_lock().read().await;
+        // make sure no operation gets in after we started
+        let _operation_guard = volume.operation_guard(OperationMode::Exclusive).ok();
+        Ok(self.get_volume_from_spec(volume).await)
     }
 
     /// Notify the reconcilers if the volume is degraded

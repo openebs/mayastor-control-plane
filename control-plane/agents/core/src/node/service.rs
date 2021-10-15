@@ -99,7 +99,12 @@ impl Service {
         let mut nodes = self.registry.nodes().write().await;
         match nodes.get_mut(&node.id) {
             None => {
-                let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
+                let mut node = NodeWrapper::new(
+                    &node,
+                    self.deadline,
+                    self.comms_timeouts.clone(),
+                    self.registry.snapshot_lock().clone(),
+                );
                 if node.load().await.is_ok() {
                     node.watchdog_mut().arm(self.clone());
                     nodes.insert(node.id.clone(), Arc::new(tokio::sync::RwLock::new(node)));

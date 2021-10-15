@@ -45,6 +45,8 @@ pub struct Registry {
 
 /// Map that stores the actual state of the nodes
 pub(crate) type NodesMapLocked = Arc<RwLock<HashMap<NodeId, Arc<RwLock<NodeWrapper>>>>>;
+/// Snapshot Lock allowing multiple getters of the states but only 1 writer for consistency
+pub(crate) type SnapShotLock = Arc<tokio::sync::RwLock<()>>;
 
 impl Deref for Registry {
     type Target = Arc<RegistryInner<Etcd>>;
@@ -59,6 +61,8 @@ impl Deref for Registry {
 pub struct RegistryInner<S: Store> {
     /// the actual state of the nodes
     nodes: NodesMapLocked,
+    /// the snapshot lock which allows us to take a consistent picture of the state information
+    snapshot: SnapShotLock,
     /// spec (aka desired state) of the various resources
     specs: ResourceSpecsLocked,
     /// period to refresh the cache
@@ -94,6 +98,7 @@ impl Registry {
         let registry = Self {
             inner: Arc::new(RegistryInner {
                 nodes: Default::default(),
+                snapshot: Default::default(),
                 specs: ResourceSpecsLocked::new(),
                 cache_period,
                 store: Arc::new(Mutex::new(store.clone())),
@@ -132,6 +137,11 @@ impl Registry {
         &self.config
     }
 
+    /// Get the `SnapShotLock` so we can get a consistent picture of the state information
+    pub(crate) fn snapshot_lock(&self) -> &SnapShotLock {
+        &self.snapshot
+    }
+
     /// reconciliation period when no work is being done
     pub(crate) fn reconcile_idle_period(&self) -> std::time::Duration {
         self.reconcile_idle_period
@@ -159,7 +169,10 @@ impl Registry {
         )
         .await
         {
-            Ok(result) => result.map_err(Into::into),
+            Ok(result) => {
+                let _guard = self.snapshot_lock().write().await;
+                result.map_err(Into::into)
+            }
             Err(_) => Err(StoreError::Timeout {
                 operation: "Put".to_string(),
                 timeout: self.store_timeout,
@@ -250,12 +263,11 @@ impl Registry {
                 let lock = node.grpc_lock().await;
                 let _guard = lock.lock().await;
 
-                let mut node_clone = node.write().await.clone();
+                let mut node_clone = node.write().await.deref().clone();
                 if let Err(e) = node_clone.reload().await {
                     tracing::trace!("Failed to reload node {}. Error {:?}.", node_clone.id, e);
                 }
-                // update node in the registry
-                *node.write().await = node_clone;
+                node.update_all(node_clone).await;
             }
             tokio::time::sleep(self.cache_period).await;
         }
