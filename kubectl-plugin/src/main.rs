@@ -43,6 +43,10 @@ struct CliArgs {
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(global = true, long, short)]
     jaeger: Option<String>,
+
+    /// Timeout for the REST operations
+    #[structopt(long, short, default_value = "10s")]
+    timeout: humantime::Duration,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -103,7 +107,7 @@ async fn main() {
 
 async fn execute(cli_args: CliArgs) {
     // Initialise the REST client.
-    if let Err(e) = init_rest(cli_args.rest.clone()) {
+    if let Err(e) = init_rest(cli_args.rest.clone(), *cli_args.timeout) {
         println!("Failed to initialise the REST client. Error {}", e);
     }
 
@@ -129,13 +133,13 @@ async fn execute(cli_args: CliArgs) {
 }
 
 /// Initialise the REST client.
-fn init_rest(url: Option<Url>) -> Result<()> {
+fn init_rest(url: Option<Url>, timeout: std::time::Duration) -> Result<()> {
     // Use the supplied URL if there is one otherwise obtain one from the kubeconfig file.
     let url = match url {
         Some(url) => url,
         None => url_from_kubeconfig()?,
     };
-    RestClient::init(url)
+    RestClient::init(url, timeout)
 }
 
 /// Get the URL of the master node from the kubeconfig file.
