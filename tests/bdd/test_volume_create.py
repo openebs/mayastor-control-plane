@@ -27,7 +27,6 @@ from openapi_client.model.replica_topology import ReplicaTopology
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
 NUM_VOLUME_REPLICAS = 1
-REST_SERVER = "http://localhost:8081/v0"
 CREATE_REQUEST_KEY = "create_request"
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 NODE_NAME = "mayastor-1"
