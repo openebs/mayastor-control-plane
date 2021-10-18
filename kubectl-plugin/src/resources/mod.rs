@@ -40,3 +40,7 @@ pub(crate) enum ScaleResources {
         replica_count: ReplicaCount,
     },
 }
+
+/// Tabular Output Tests
+#[cfg(test)]
+mod tests;

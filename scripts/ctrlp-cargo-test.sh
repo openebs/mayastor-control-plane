@@ -17,6 +17,6 @@ set -euxo pipefail
 export PATH=$PATH:${HOME}/.cargo/bin
 # test dependencies
 cargo build --bins
-for test in composer agents rest ctrlp-tests; do
+for test in composer agents rest ctrlp-tests kubectl-plugin; do
     cargo test -p ${test} -- --test-threads=1
 done
