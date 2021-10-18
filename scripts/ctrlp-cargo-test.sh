@@ -13,10 +13,13 @@ cleanup_handler() {
 
 trap cleanup_handler ERR INT QUIT TERM HUP
 
-set -euxo pipefail
-export PATH=$PATH:${HOME}/.cargo/bin
-# test dependencies
-cargo build --bins
-for test in composer agents rest ctrlp-tests kubectl-plugin; do
-    cargo test -p ${test} -- --test-threads=1
-done
+(
+  set -euxo pipefail
+  export PATH=$PATH:${HOME}/.cargo/bin
+  # test dependencies
+  cargo build --bins
+  for test in composer agents rest ctrlp-tests kubectl-plugin; do
+      cargo test -p ${test} -- --test-threads=1
+  done
+)
+cleanup_handler

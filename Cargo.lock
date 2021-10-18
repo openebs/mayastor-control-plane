@@ -2043,6 +2043,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "shutdown_hooks",
  "structopt",
  "tokio",
  "tracing",
@@ -3414,6 +3415,12 @@ checksum = "740223c51853f3145fe7c90360d2d4232f2b62e3449489c207eccde818979982"
 dependencies = [
  "lazy_static",
 ]
+
+[[package]]
+name = "shutdown_hooks"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6057adedbec913419c92996f395ba69931acbd50b7d56955394cd3f7bedbfa45"
 
 [[package]]
 name = "signal-hook"
