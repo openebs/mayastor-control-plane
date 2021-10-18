@@ -10,7 +10,7 @@ use serde::ser;
 use std::io::Read;
 use testlib::{Cluster, ClusterBuilder};
 
-static CLUSTER: OnceCell<Cluster> = OnceCell::new();
+static CLUSTER: OnceCell<std::sync::Mutex<Option<std::sync::Arc<Cluster>>>> = OnceCell::new();
 const VOLUME_UUID: &str = "1e3cf927-80c2-47a8-adf0-95c486bdd7b7";
 
 async fn setup() {
@@ -40,16 +40,31 @@ async fn setup() {
         .unwrap();
 
     CLUSTER
-        .set(cluster)
+        .set(std::sync::Mutex::new(Some(std::sync::Arc::new(cluster))))
         .ok()
         .expect("Expect to be initialised only once");
 }
 
-async fn cluster() -> &'static Cluster {
+async fn cluster() -> std::sync::Arc<Cluster> {
     if CLUSTER.get().is_none() {
         setup().await;
+        extern "C" fn cleanup_cluster() {
+            if let Some(initialised) = CLUSTER.get() {
+                let mut cluster = initialised.lock().expect("poisoned").take();
+                // the cluster is cleaned up on Drop
+                let _ = cluster.take();
+            }
+        }
+        shutdown_hooks::add_shutdown_hook(cleanup_cluster);
     }
-    CLUSTER.get().unwrap()
+    CLUSTER
+        .get()
+        .expect("Initialised")
+        .lock()
+        .expect("Not poisoned")
+        .as_ref()
+        .expect("not None")
+        .clone()
 }
 
 #[tokio::test]
