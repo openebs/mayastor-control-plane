@@ -146,6 +146,9 @@ impl SpecOperations for ReplicaSpec {
     fn disown(&mut self, owner: &Self::Owners) {
         self.owners.disown(owner)
     }
+    fn disown_all(&mut self) {
+        self.owners.disown_all();
+    }
 }
 
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
