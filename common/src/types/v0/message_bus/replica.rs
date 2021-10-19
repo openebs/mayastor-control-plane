@@ -208,6 +208,10 @@ impl ReplicaOwners {
             .cloned()
             .collect();
     }
+    pub fn disown_all(&mut self) {
+        self.volume.take();
+        self.nexuses.clear();
+    }
     /// Add new nexus owner
     pub fn add_owner(&mut self, new: &NexusId) {
         match self.nexuses.iter().find(|nexus| nexus == &new) {

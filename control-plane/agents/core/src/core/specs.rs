@@ -289,8 +289,9 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         let spec_clone = {
             let mut spec = locked_spec.lock();
 
-            // once we've started, there's no going back...
+            // once we've started, there's no going back, so disown completely
             spec.set_status(SpecStatus::Deleting);
+            spec.disown_all();
 
             spec.start_destroy_op();
             spec.clone()
@@ -576,6 +577,8 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
     }
     /// Disown resource by owners
     fn disown(&mut self, _owner: &Self::Owners) {}
+    /// Remove all owners from the resource
+    fn disown_all(&mut self) {}
 }
 
 /// Operations are locked

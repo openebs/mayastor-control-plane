@@ -105,6 +105,9 @@ impl SpecOperations for NexusSpec {
     fn owners(&self) -> Option<String> {
         self.owner.clone().map(|o| format!("{:?}", o))
     }
+    fn disown_all(&mut self) {
+        self.owner.take();
+    }
 }
 
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked

@@ -14,3 +14,15 @@ Feature: Volume deletion
     Given a volume that is shared/published
     When a user attempts to delete a volume
     Then the volume should be deleted
+
+  Scenario: delete a shared/published volume whilst a replica node is inaccessible
+    Given a volume that is shared/published
+    And an inaccessible node with a volume replica on it
+    When a user attempts to delete a volume
+    Then the volume should be deleted
+
+  Scenario: delete a shared/published volume whilst the nexus node is inaccessible
+    Given a volume that is shared/published
+    And an inaccessible node with the volume nexus on it
+    When a user attempts to delete a volume
+    Then the volume should be deleted

@@ -402,7 +402,10 @@ impl ResourceSpecsLocked {
         registry.get_volume(&request.uuid).await
     }
 
-    /// Destroy a volume based on the given `DestroyVolume` request
+    /// Destroy a volume based on the given `DestroyVolume` request.
+    /// Volume destruction will succeed even if the nexus or replicas cannot be destroyed (i.e. due
+    /// to an inaccessible node). In this case the resources will be destroyed by the garbage
+    /// collector at a later time.
     pub(crate) async fn destroy_volume(
         &self,
         registry: &Registry,
@@ -413,17 +416,18 @@ impl ResourceSpecsLocked {
         if let Some(volume) = &volume {
             SpecOperations::start_destroy(volume, registry, false, mode).await?;
 
-            let mut first_error = Ok(());
             let nexuses = self.get_volume_nexuses(&request.uuid);
             for nexus in nexuses {
                 let nexus = nexus.lock().deref().clone();
                 if let Err(error) = self
-                    .destroy_nexus(registry, &DestroyNexus::from(nexus), true, mode)
+                    .destroy_nexus(registry, &DestroyNexus::from(nexus.clone()), true, mode)
                     .await
                 {
-                    if first_error.is_ok() {
-                        first_error = Err(error);
-                    }
+                    nexus.warn_span(|| {
+                        tracing::warn!(error=%error,
+                            "Nexus destruction failed. This will be garbage collected later."
+                        )
+                    });
                 }
             }
 
@@ -440,15 +444,9 @@ impl ResourceSpecsLocked {
                         )
                         .await
                     {
-                        // Replica destruction has failed but we should still disown it so that the
-                        // garbage collector can destroy it later.
-                        if let Err(e) = self.disown_volume_replica(registry, &replica).await {
-                            tracing::warn!(replica.uuid=%spec.uuid, error=%e, "Failed to disown volume replica. Will attempt to disown again later.");
-                        }
-
-                        if first_error.is_ok() {
-                            first_error = Err(error);
-                        }
+                        tracing::warn!(replica.uuid=%spec.uuid, error=%error,
+                            "Replica destruction failed. This will be garbage collected later."
+                        );
                     }
                 } else {
                     // the above is able to handle when a pool is moved to a
@@ -457,7 +455,7 @@ impl ResourceSpecsLocked {
                 }
             }
 
-            SpecOperations::complete_destroy(first_error, volume, registry).await
+            SpecOperations::complete_destroy(Ok(()), volume, registry).await
         } else {
             Err(SvcError::VolumeNotFound {
                 vol_id: request.uuid.to_string(),
