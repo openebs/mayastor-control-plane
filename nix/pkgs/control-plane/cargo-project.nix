@@ -16,8 +16,8 @@
 let
   channel = import ../../lib/rust.nix { inherit sources; };
   rustPlatform = makeRustPlatform {
-    rustc = channel.stable;
-    cargo = channel.stable;
+    rustc = channel.default.stable;
+    cargo = channel.default.stable;
   };
   whitelistSource = src: allowedPrefixes:
     builtins.filterSource

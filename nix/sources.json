@@ -1,4 +1,16 @@
 {
+    "naersk": {
+        "branch": "master",
+        "description": "Build rust crates in Nix. No configuration, no code generation, no IFD. Sandbox friendly. [maintainer: @nmattia]",
+        "homepage": "",
+        "owner": "nmattia",
+        "repo": "naersk",
+        "rev": "ee7edec50b49ab6d69b06d62f1de554efccb1ccd",
+        "sha256": "06g37l34hzi81lc7hmk91mzapsa1iak7yi3agxgdzfc69qk9wp17",
+        "type": "tarball",
+        "url": "https://github.com/nmattia/naersk/archive/ee7edec50b49ab6d69b06d62f1de554efccb1ccd.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "niv": {
         "branch": "master",
         "description": "Easy dependency management for Nix projects",

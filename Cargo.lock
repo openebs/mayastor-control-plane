@@ -2029,7 +2029,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "common-lib",
  "ctrlp-tests",
  "gag",
  "git-version",

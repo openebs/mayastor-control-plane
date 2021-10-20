@@ -79,10 +79,12 @@ fn init_tracing() {
     match CliArgs::args().jaeger {
         Some(jaeger) => {
             global::set_text_map_propagator(TraceContextPropagator::new());
-            let tags = opentelemetry_helper::default_tracing_tags(
-                git_version::git_version!(args = ["--abbrev=12", "--always"]),
-                env!("CARGO_PKG_VERSION"),
-            );
+            let git_version = option_env!("GIT_VERSION").unwrap_or(git_version::git_version!(
+                args = ["--abbrev=12", "--always"],
+                fallback = "unknown"
+            ));
+            let tags =
+                opentelemetry_helper::default_tracing_tags(git_version, env!("CARGO_PKG_VERSION"));
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_agent_endpoint(jaeger)
                 .with_service_name("kubectl-plugin")
