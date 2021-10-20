@@ -10,8 +10,8 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-openapi = { path = "../openapi", features = [ "tower-client", "tower-trace" ] }
-tokio = { version = "1.12.0", features = [ "full" ] }
+openapi = { path = "../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
+tokio = { version = "1.12.0" }
 anyhow = "1.0.44"
 async-trait = "0.1.51"
 once_cell = "1.8.0"
@@ -22,11 +22,8 @@ lazy_static = "1.4.0"
 serde = "1.0.130"
 serde_json = "1.0.68"
 serde_yaml = "0.8.21"
-git-version = "0.3.5"
 humantime = "2.1.0"
-common-lib = { path = "../common" }
-gag = "1.0.0"
-ctrlp-tests = { path = "../tests/tests-mayastor" }
+git-version = "0.3.5"
 
 # Tracing
 tracing = "0.1.28"
@@ -36,4 +33,7 @@ opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }
 
 [dev-dependencies]
+# Test dependencies
 shutdown_hooks = "0.1.0"
+ctrlp-tests = { path = "../tests/tests-mayastor" }
+gag = "1.0.0"

@@ -38,12 +38,11 @@ mkShell {
     which
     tini
     nvme-cli
-  ] ++ pkgs.lib.optional (!norust) channel.nightly;
+  ] ++ pkgs.lib.optional (!norust) channel.default.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
-
 
   # variables used to easily create containers with docker files
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";
