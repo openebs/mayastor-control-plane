@@ -472,25 +472,32 @@ impl ResourceContext {
         );
 
         let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
-        let res = self
+        match self
             .pools_api()
             .put_node_pool(&self.spec.node, &self.name(), body)
-            .await?;
+            .await
+        {
+            Ok(_) => {}
+            Err(clients::tower::Error::Response(response))
+                if response.status() == clients::tower::StatusCode::UNPROCESSABLE_ENTITY =>
+            {
+                // UNPROCESSABLE_ENTITY indicates that the pool spec already exists in the control
+                // plane. So we want to update the CRD to 'Created' to reflect this.
+            }
+            Err(e) => {
+                return Err(e.into());
+            }
+        };
 
-        if matches!(
-            res.status(),
-            clients::tower::StatusCode::OK | clients::tower::StatusCode::UNPROCESSABLE_ENTITY
-        ) {
-            self.k8s_notify(
-                "Create or Import",
-                "Created",
-                &format!("Created or imported pool {:?}", self.name()),
-                "Normal",
-            )
-            .await;
+        self.k8s_notify(
+            "Create or Import",
+            "Created",
+            &format!("Created or imported pool {:?}", self.name()),
+            "Normal",
+        )
+        .await;
 
-            let _ = self.patch_status(MayastorPoolStatus::created()).await?;
-        }
+        let _ = self.patch_status(MayastorPoolStatus::created()).await?;
 
         // We are done creating the pool, we patched to created which triggers a
         // new loop. Any error in the loop will call our error handler where we
