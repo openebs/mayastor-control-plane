@@ -101,6 +101,7 @@
                       "Creating",
                       "Created",
                       "Online",
+                      "Unknown",
                       "Error"
                     ],
                     "type": "string"
