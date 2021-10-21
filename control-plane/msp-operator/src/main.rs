@@ -33,6 +33,7 @@ use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 const WHO_AM_I: &str = "Mayastor pool operator";
+const WHO_AM_I_SHORT: &str = "msp-operator";
 const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
 
 /// Various common constants used by the control plane
@@ -657,15 +658,18 @@ impl ResourceContext {
                         name: Some(self.name()),
                         namespace: self.namespace(),
                         resource_version: self.resource_version(),
-                        uid: Some(self.name()),
+                        uid: self.uid(),
                     },
                     action: Some(action.into()),
                     reason: Some(reason.into()),
                     type_: Some(type_.into()),
                     metadata,
-                    reporting_component: Some("MSP-operator".into()),
-                    // should be MY_POD_NAME
-                    reporting_instance: Some("MSP-operator".into()),
+                    reporting_component: Some(WHO_AM_I_SHORT.into()),
+                    reporting_instance: Some(
+                        std::env::var("MY_POD_NAME")
+                            .ok()
+                            .unwrap_or_else(|| WHO_AM_I_SHORT.into()),
+                    ),
                     message: Some(message.into()),
                     ..Default::default()
                 },
