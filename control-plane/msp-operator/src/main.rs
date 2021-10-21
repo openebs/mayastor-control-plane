@@ -82,6 +82,8 @@ pub enum PoolState {
     /// The resource is present, and the pool has been created. The schema MUST
     /// have a status and spec field.
     Online,
+    /// The resource is present but the control plane did not return the pool state.
+    Unknown,
     /// Trying to converge to the next state has exceeded the maximum retry
     /// counts. The retry counts are implemented using an exponential back-off,
     /// which by default is set to 10. Once the error state is entered,
@@ -131,6 +133,14 @@ impl MayastorPoolStatus {
             available: 0,
         }
     }
+    fn unknown() -> Self {
+        Self {
+            state: PoolState::Unknown,
+            capacity: 0,
+            used: 0,
+            available: 0,
+        }
+    }
 }
 
 impl From<Pool> for MayastorPoolStatus {
@@ -162,7 +172,7 @@ pub enum Error {
     ReconcileError {
         name: String,
     },
-    /// Generated when we have a duplicate resource version for a given resouce
+    /// Generated when we have a duplicate resource version for a given resource
     Duplicate {
         timeout: u32,
     },
@@ -203,6 +213,7 @@ impl ToString for PoolState {
             PoolState::Creating => "Creating",
             PoolState::Created => "Created",
             PoolState::Online => "Online",
+            PoolState::Unknown => "Unknown",
             PoolState::Error => "Error",
         }
         .to_string()
@@ -381,7 +392,7 @@ impl ResourceContext {
         })
     }
 
-    /// Mark the resource as errorerd which is its final state. A pool in the
+    /// Mark the resource as errored which is its final state. A pool in the
     /// error state will not be deleted.
     async fn mark_error(&self) -> Result<ReconcilerAction, Error> {
         let _ = self.patch_status(MayastorPoolStatus::error()).await?;
@@ -397,6 +408,13 @@ impl ResourceContext {
         self.patch_status(MayastorPoolStatus::default()).await?;
         Ok(ReconcilerAction {
             requeue_after: None,
+        })
+    }
+    /// patch the resource state to unknown
+    async fn mark_unknown(&self) -> Result<ReconcilerAction, Error> {
+        self.patch_status(MayastorPoolStatus::unknown()).await?;
+        Ok(ReconcilerAction {
+            requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
         })
     }
 
@@ -454,25 +472,32 @@ impl ResourceContext {
         );
 
         let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
-        let res = self
+        match self
             .pools_api()
             .put_node_pool(&self.spec.node, &self.name(), body)
-            .await?;
+            .await
+        {
+            Ok(_) => {}
+            Err(clients::tower::Error::Response(response))
+                if response.status() == clients::tower::StatusCode::UNPROCESSABLE_ENTITY =>
+            {
+                // UNPROCESSABLE_ENTITY indicates that the pool spec already exists in the control
+                // plane. So we want to update the CRD to 'Created' to reflect this.
+            }
+            Err(e) => {
+                return Err(e.into());
+            }
+        };
 
-        if matches!(
-            res.status(),
-            clients::tower::StatusCode::OK | clients::tower::StatusCode::UNPROCESSABLE_ENTITY
-        ) {
-            self.k8s_notify(
-                "Create or Import",
-                "Created",
-                &format!("Created or imported pool {:?}", self.name()),
-                "Normal",
-            )
-            .await;
+        self.k8s_notify(
+            "Create or Import",
+            "Created",
+            &format!("Created or imported pool {:?}", self.name()),
+            "Normal",
+        )
+        .await;
 
-            let _ = self.patch_status(MayastorPoolStatus::created()).await?;
-        }
+        let _ = self.patch_status(MayastorPoolStatus::created()).await?;
 
         // We are done creating the pool, we patched to created which triggers a
         // new loop. Any error in the loop will call our error handler where we
@@ -520,7 +545,7 @@ impl ResourceContext {
         })
     }
 
-    /// Online the pool which is no-op from the dataplane point of view. However
+    /// Online the pool which is no-op from the data plane point of view. However
     /// it does provide us feedback from the k8s side of things which is
     /// useful when trouble shooting.
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
@@ -553,9 +578,12 @@ impl ResourceContext {
         }
     }
 
-    /// When the pool is placed online, we keep checking it to ensure the crd
-    /// goes to offline (say) when a node goes missing. Note that the used
-    /// field, is not a reliable measure to determine the current usage.
+    /// Check the state of the pool.
+    ///
+    /// Get the pool information from the control plane and use this to set the state of the CRD
+    /// accordingly. If the control plane returns a pool state, set the CRD to 'Online'. If the
+    /// control plane does not return a pool state (occurs when a node is missing), set the CRD to
+    /// 'Unknown' and let the reconciler retry later.
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
     async fn pool_check(&self) -> Result<ReconcilerAction, Error> {
         let pool = match self
@@ -580,6 +608,9 @@ impl ResourceContext {
                             "Warning",
                         )
                         .await;
+
+                        // We expected the control plane to have a spec for this pool. It didn't so
+                        // set the CRD to the error state and don't try to recreate it.
                         return self.mark_error().await;
                     }
                 } else {
@@ -607,7 +638,14 @@ impl ResourceContext {
                 }
             }
         } else {
-            warn!("CRD does not contain the valid fields we except");
+            // There is no pool state, so we can't determine the health of the pool. Reflect this in
+            // the CRD as an 'Unknown' state.
+            if let Some(status) = &self.status {
+                if status.state != PoolState::Unknown {
+                    debug!("Pool state is missing. Setting MSP state to 'Unknown'.");
+                }
+            }
+            return self.mark_unknown().await;
         }
 
         // always reschedule though
@@ -796,6 +834,10 @@ async fn reconcile(
 
         Some(MayastorPoolStatus {
             state: PoolState::Online,
+            ..
+        })
+        | Some(MayastorPoolStatus {
+            state: PoolState::Unknown,
             ..
         }) => {
             return msp.pool_check().await;
