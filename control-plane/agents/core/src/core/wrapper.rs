@@ -200,7 +200,18 @@ impl NodeWrapper {
                 self.watchdog.disarm()
             }
         }
+        // Clear the states, otherwise we could temporarily return pools/nexus as online, even
+        // though we report the node otherwise.
+        // We take the approach that no information is better than inconsistent information.
+        if !self.is_online() {
+            self.clear_states();
+        }
         previous
+    }
+
+    /// Clear all states from the node
+    fn clear_states(&mut self) {
+        self.states.write().clear_all();
     }
 
     /// Get a mutable reference to the node's watchdog
@@ -348,10 +359,6 @@ impl NodeWrapper {
                     Ok(())
                 }
                 Err(e) => {
-                    // We failed to fetch all resources from Mayastor so clear all state
-                    // information. We take the approach that no information is better than
-                    // inconsistent information.
-                    self.states.write().clear_all();
                     self.set_status(NodeStatus::Unknown);
                     Err(e)
                 }
@@ -362,7 +369,8 @@ impl NodeWrapper {
                 self.id,
                 self.status
             );
-            self.states.write().clear_all();
+            // should already be cleared
+            self.clear_states();
             Err(SvcError::NodeNotOnline {
                 node: self.id.to_owned(),
             })
