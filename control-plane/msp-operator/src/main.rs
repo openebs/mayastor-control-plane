@@ -492,7 +492,7 @@ impl ResourceContext {
         self.k8s_notify(
             "Create or Import",
             "Created",
-            &format!("Created or imported pool {:?}", self.name()),
+            "Created or imported pool",
             "Normal",
         )
         .await;
@@ -642,7 +642,14 @@ impl ResourceContext {
             // the CRD as an 'Unknown' state.
             if let Some(status) = &self.status {
                 if status.state != PoolState::Unknown {
-                    debug!("Pool state is missing. Setting MSP state to 'Unknown'.");
+                    debug!("Missing pool state. Setting MSP state to 'Unknown'.");
+                    self.k8s_notify(
+                        "Unknown",
+                        "Check",
+                        "Missing pool state. Setting state to 'Unknown'.",
+                        "Warning",
+                    )
+                    .await;
                 }
             }
             return self.mark_unknown().await;
