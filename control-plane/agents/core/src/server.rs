@@ -47,8 +47,12 @@ pub(crate) struct CliArgs {
     pub(crate) store: String,
 
     /// The timeout for store operations
-    #[structopt(long, default_value = "5s")]
+    #[structopt(long, default_value = common_lib::STORE_OP_TIMEOUT)]
     pub(crate) store_timeout: humantime::Duration,
+
+    /// The lease lock ttl for the persistent store after which we'll lose the exclusive access
+    #[structopt(long, default_value = common_lib::STORE_LEASE_LOCK_TTL)]
+    pub(crate) store_lease_ttl: humantime::Duration,
 
     /// The timeout for every node connection (gRPC)
     #[structopt(long, default_value = common_lib::DEFAULT_CONN_TIMEOUT)]
@@ -77,7 +81,7 @@ impl CliArgs {
 }
 
 const RUST_LOG_QUIET_DEFAULTS: &str =
-    "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info";
+    "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
 
 fn rust_log_add_quiet_defaults(
     current: tracing_subscriber::EnvFilter,
@@ -139,6 +143,7 @@ async fn server(cli_args: CliArgs) {
         cli_args.cache_period.into(),
         cli_args.store.clone(),
         cli_args.store_timeout.into(),
+        cli_args.store_lease_ttl.into(),
         cli_args.reconcile_period.into(),
         cli_args.reconcile_idle_period.into(),
     )
@@ -162,6 +167,7 @@ async fn server(cli_args: CliArgs) {
 
     registry.start().await;
     service.run().await;
+    registry.stop().await;
     opentelemetry::global::shutdown_tracer_provider();
 }
 

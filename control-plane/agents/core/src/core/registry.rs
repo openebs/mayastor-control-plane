@@ -26,7 +26,7 @@ use common_lib::{
         message_bus::NodeId,
         store::{
             definitions::{StorableObject, Store, StoreError, StoreKey},
-            registry::{CoreRegistryConfig, NodeRegistration},
+            registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
         },
     },
 };
@@ -82,14 +82,19 @@ impl Registry {
         cache_period: std::time::Duration,
         store_url: String,
         store_timeout: std::time::Duration,
+        store_lease_tll: std::time::Duration,
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
     ) -> Self {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
-        let store = Etcd::new(&store_endpoint)
-            .await
-            .expect("Should connect to the persistent store");
+        let store = Etcd::new_leased(
+            [&store_endpoint],
+            ControlPlaneService::CoreAgent,
+            store_lease_tll,
+        )
+        .await
+        .expect("Should connect to the persistent store");
         tracing::info!("Connected to persistent store at {}", store_endpoint);
         let registry = Self {
             inner: Arc::new(RegistryInner {
@@ -229,6 +234,16 @@ impl Registry {
         });
         let registry = self.clone();
         self.reconciler.start(registry).await;
+    }
+
+    /// Stops the core registry, which at the moment only revokes the persistent store lease
+    pub(crate) async fn stop(&self) {
+        tokio::time::timeout(std::time::Duration::from_secs(1), async move {
+            let store = self.store.lock().await;
+            store.revoke().await;
+        })
+        .await
+        .ok();
     }
 
     /// Initialise the registry with the content of the persistent store.

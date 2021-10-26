@@ -58,6 +58,10 @@ pub enum StoreError {
         operation: String,
         timeout: std::time::Duration,
     },
+    #[snafu(display("Failed to grab the lease lock, reason: '{}'", reason))]
+    FailedLock { reason: String },
+    #[snafu(display("Etcd is not ready, reason: '{}'", reason))]
+    NotReady { reason: String },
 }
 
 /// Representation of a watch event.
@@ -151,10 +155,16 @@ pub enum StorableObjectType {
     ChildSpec,
     ChildState,
     CoreRegistryConfig,
+    StoreLeaseLock,
+    StoreLeaseOwner,
 }
 
 pub fn key_prefix(obj_type: StorableObjectType) -> String {
-    format!("control-plane/{}", obj_type.to_string())
+    format!(
+        "/namespace/{}/control-plane/{}",
+        std::env::var("MY_POD_NAMESPACE").unwrap_or_else(|_| "default".into()),
+        obj_type.to_string()
+    )
 }
 
 /// create a key based on the object's key trait
