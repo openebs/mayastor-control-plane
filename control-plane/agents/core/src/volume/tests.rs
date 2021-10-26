@@ -686,7 +686,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     tracing::info!("VolumeSpec: {:?}", volume_spec);
     store.put_obj(&volume_spec).await.unwrap();
 
-    cluster.composer().restart("core").await.unwrap();
+    cluster.restart_core().await;
 
     Liveness::default()
         .request_on_ext(ChannelVs::Volume, timeout_opts.clone())
@@ -700,7 +700,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     tracing::info!("VolumeSpec: {:?}", volume_spec);
     store.put_obj(&volume_spec).await.unwrap();
 
-    cluster.composer().restart("core").await.unwrap();
+    cluster.restart_core().await;
     Liveness::default()
         .request_on_ext(ChannelVs::Volume, timeout_opts)
         .await

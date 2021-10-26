@@ -120,7 +120,7 @@ mod tests {
         cluster.composer().start(maya_name.as_str()).await.unwrap();
 
         let node = nodes.0.first().cloned().unwrap();
-        cluster.composer().restart("core").await.unwrap();
+        cluster.restart_core().await;
         Liveness {}
             .request_on_ext(ChannelVs::Node, bus_timeout.clone())
             .await
@@ -135,7 +135,7 @@ mod tests {
         );
 
         cluster.composer().stop(maya_name.as_str()).await.unwrap();
-        cluster.composer().restart("core").await.unwrap();
+        cluster.restart_core().await;
         Liveness {}
             .request_on_ext(ChannelVs::Node, bus_timeout)
             .await

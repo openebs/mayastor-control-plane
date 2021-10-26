@@ -19,6 +19,12 @@ use common_lib::{
 };
 use openapi::apis::Uuid;
 
+use common_lib::types::v0::store::{
+    definitions::ObjectKey,
+    registry::{ControlPlaneService, StoreLeaseLockKey},
+};
+pub use etcd_client;
+use etcd_client::DeleteOptions;
 use std::{collections::HashMap, convert::TryInto, time::Duration};
 use structopt::StructOpt;
 
@@ -58,6 +64,26 @@ impl Cluster {
     /// compose utility
     pub fn composer(&self) -> &ComposeTest {
         &self.composer
+    }
+
+    /// restart the core agent
+    pub async fn restart_core(&self) {
+        self.remove_store_lock(ControlPlaneService::CoreAgent).await;
+        self.composer.restart("core").await.unwrap();
+    }
+
+    /// remove etcd store lock for `name` instance
+    pub async fn remove_store_lock(&self, name: ControlPlaneService) {
+        let mut store = etcd_client::Client::connect(["0.0.0.0:2379"], None)
+            .await
+            .expect("Failed to connect to etcd.");
+        store
+            .delete(
+                StoreLeaseLockKey::new(&name).key(),
+                Some(DeleteOptions::new().with_prefix()),
+            )
+            .await
+            .unwrap();
     }
 
     /// node id for `index`
@@ -161,9 +187,11 @@ impl Cluster {
             builder: ClusterBuilder::builder(),
         };
 
-        // the deployer uses a "fake" message bus so now it's time to
-        // connect to the "real" message bus
-        cluster.connect_to_bus_timeout("nats", bus_timeout).await;
+        if components.nats_enabled() {
+            // the deployer uses a "fake" message bus so now it's time to
+            // connect to the "real" message bus
+            cluster.connect_to_bus_timeout("nats", bus_timeout).await;
+        }
 
         Ok(cluster)
     }
@@ -419,6 +447,10 @@ impl ClusterBuilder {
         self.opts = self.opts.with_store_timeout(timeout);
         self
     }
+    pub fn with_store_lease_ttl(mut self, ttl: Duration) -> Self {
+        self.opts = self.opts.with_store_lease_ttl(ttl);
+        self
+    }
     /// Specify the node connect and request timeouts
     pub fn with_req_timeouts(mut self, connect: Duration, request: Duration) -> Self {
         self.opts = self.opts.with_req_timeouts(true, connect, request);
@@ -442,6 +474,16 @@ impl ClusterBuilder {
     /// Specify whether rest is enabled or not
     pub fn with_rest(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_rest(enabled, None);
+        self
+    }
+    /// Specify whether nats is enabled or not
+    pub fn with_nats(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_nats(enabled);
+        self
+    }
+    /// Specify whether jaeger is enabled or not
+    pub fn with_jaeger(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_jaeger(enabled);
         self
     }
     /// Specify whether rest is enabled or not and wether to use authentication or not

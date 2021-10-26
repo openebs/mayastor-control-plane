@@ -195,6 +195,11 @@ pub struct StartOptions {
     #[structopt(long)]
     pub store_timeout: Option<humantime::Duration>,
 
+    /// Override the core agent's lease lock ttl for the persistent store after which it'll loose
+    /// the exclusive access to the store
+    #[structopt(long)]
+    pub store_lease_ttl: Option<humantime::Duration>,
+
     /// Override the core agent's reconcile period
     #[structopt(long)]
     pub reconcile_period: Option<humantime::Duration>,
@@ -279,6 +284,10 @@ impl StartOptions {
         self.store_timeout = Some(timeout.into());
         self
     }
+    pub fn with_store_lease_ttl(mut self, ttl: Duration) -> Self {
+        self.store_lease_ttl = Some(ttl.into());
+        self
+    }
     pub fn with_reconcile_period(mut self, busy: Duration, idle: Duration) -> Self {
         self.reconcile_period = Some(busy.into());
         self.reconcile_idle_period = Some(idle.into());
@@ -301,6 +310,10 @@ impl StartOptions {
     }
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {
         self.jaeger = jaeger;
+        self
+    }
+    pub fn with_nats(mut self, nats: bool) -> Self {
+        self.no_nats = !nats;
         self
     }
     pub fn with_build(mut self, build: bool) -> Self {
