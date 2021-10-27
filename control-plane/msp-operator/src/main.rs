@@ -297,7 +297,6 @@ impl OperatorContext {
 
                 // Its a new resource version which means we will swap it out
                 // to reset the counter.
-                assert!(p.resource_version() < resource.resource_version());
                 let p = i
                     .insert(resource.name(), resource.clone())
                     .expect("existing resource should be present");
