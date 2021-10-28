@@ -443,8 +443,10 @@ impl ResourceContext {
             .into_body()
             .into_iter()
             .any(|b| {
-                b.devname == self.spec.disks[0]
-                    || b.devlinks.iter().any(|d| *d == self.spec.disks[0])
+                b.devname == normalize_disk(&self.spec.disks[0])
+                    || b.devlinks
+                        .iter()
+                        .any(|d| *d == normalize_disk(&self.spec.disks[0]))
             })
         {
             self.k8s_notify(
@@ -452,7 +454,7 @@ impl ResourceContext {
                 "Missing",
                 &format!(
                     "The block device(s): {} can not be found",
-                    self.spec.disks[0]
+                    &self.spec.disks[0]
                 ),
                 "Warn",
             )
@@ -1024,4 +1026,34 @@ async fn main() -> anyhow::Result<()> {
     pool_controller(matches).await?;
     global::shutdown_tracer_provider();
     Ok(())
+}
+
+/// Normalize the disks if they have a schema, we dont want to change anything
+/// or do any error checking -- the loop will converge to the error state eventually
+fn normalize_disk(disk: &str) -> String {
+    Url::parse(disk).map_or(disk.to_string(), |u| {
+        u.to_file_path()
+            .unwrap_or_else(|_| disk.into())
+            .as_path()
+            .display()
+            .to_string()
+    })
+}
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn normalize_disk() {
+        use super::*;
+        let disks = vec![
+            "aio:///dev/null",
+            "uring:///dev/null",
+            "uring://dev/null", // this URL is invalid
+        ];
+
+        assert_eq!(normalize_disk(disks[0]), "/dev/null");
+        assert_eq!(normalize_disk(disks[1]), "/dev/null");
+        assert_eq!(normalize_disk(disks[2]), "uring://dev/null");
+    }
 }
