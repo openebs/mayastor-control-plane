@@ -1,17 +1,28 @@
-use crate::types::v0::store::definitions::{
-    Connect, Delete, DeserialiseValue, Get, GetPrefix, KeyString, ObjectKey, Put, SerialiseValue,
-    StorableObject, Store, StoreError, StoreError::MissingEntry, StoreKey, StoreValue, ValueString,
-    Watch, WatchEvent,
+use crate::{
+    store::etcd_keep_alive::{EtcdSingletonLock, LeaseLockInfo},
+    types::v0::store::{
+        definitions::{
+            Connect, Delete, DeserialiseValue, Get, GetPrefix, KeyString, ObjectKey, Put,
+            SerialiseValue, StorableObject, Store, StoreError, StoreError::MissingEntry, StoreKey,
+            StoreValue, ValueString, Watch, WatchEvent,
+        },
+        registry::ControlPlaneService,
+    },
 };
 use async_trait::async_trait;
-use etcd_client::{Client, EventType, GetOptions, KeyValue, WatchStream, Watcher};
+use etcd_client::{
+    Client, Compare, CompareOp, EventType, GetOptions, KeyValue, Txn, TxnOp, WatchStream, Watcher,
+};
 use serde_json::Value;
 use snafu::ResultExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 /// etcd client
 #[derive(Clone)]
-pub struct Etcd(Client);
+pub struct Etcd {
+    client: Client,
+    lease_lock_info: Option<LeaseLockInfo>,
+}
 
 impl std::fmt::Debug for Etcd {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -22,11 +33,47 @@ impl std::fmt::Debug for Etcd {
 impl Etcd {
     /// Create a new instance of the etcd client
     pub async fn new(endpoint: &str) -> Result<Etcd, StoreError> {
-        Ok(Self(
-            Client::connect([endpoint], None)
+        Ok(Self {
+            client: Client::connect([endpoint], None)
                 .await
                 .context(Connect {})?,
-        ))
+            lease_lock_info: None,
+        })
+    }
+    /// Create `Etcd` from an existing instance of the etcd `Client`
+    pub(crate) fn from(client: &Client, lease_lock_info: Option<LeaseLockInfo>) -> Etcd {
+        Etcd {
+            client: client.clone(),
+            lease_lock_info,
+        }
+    }
+    /// Create a new instance of the etcd client with a lease associated with `service_name`.
+    /// See `EtcdLeaseLockKeeper` for more information.
+    pub async fn new_leased<E: AsRef<str>, S: AsRef<[E]>>(
+        endpoints: S,
+        service_name: ControlPlaneService,
+        lease_time: std::time::Duration,
+    ) -> Result<Etcd, StoreError> {
+        let client = Client::connect(endpoints, None).await.context(Connect {})?;
+
+        let lease_info = EtcdSingletonLock::start(client.clone(), service_name, lease_time).await?;
+        Ok(Self::from(&client, Some(lease_info)))
+    }
+
+    /// Get the lease lock pair, (lease_id, lock_key)
+    /// Returns `StoreError::NotReady` if the lease is not active
+    fn lease_lock(&self) -> Result<Option<(i64, String)>, StoreError> {
+        match &self.lease_lock_info {
+            None => Ok(None),
+            Some(lease_info) => lease_info.lease_lock().map(Some),
+        }
+    }
+
+    /// Revokes the lease and releases the associated lock
+    pub async fn revoke(&self) {
+        if let Some(info) = &self.lease_lock_info {
+            info.revoke().await;
+        }
     }
 }
 
@@ -39,19 +86,41 @@ impl Store for Etcd {
         value: &V,
     ) -> Result<(), StoreError> {
         let vec_value = serde_json::to_vec(value).context(SerialiseValue)?;
-        self.0
-            .put(key.to_string(), vec_value, None)
-            .await
-            .context(Put {
-                key: key.to_string(),
-                value: serde_json::to_string(value).context(SerialiseValue)?,
-            })?;
+        if let Some((lease_id, lock_key)) = self.lease_lock()? {
+            let cmp = Compare::lease(lock_key.clone(), CompareOp::Equal, lease_id);
+            let put = TxnOp::put(key.to_string(), vec_value, None);
+            let resp = self
+                .client
+                .txn(Txn::new().when([cmp]).and_then([put]))
+                .await
+                .context(Put {
+                    key: key.to_string(),
+                    value: serde_json::to_string(value).context(SerialiseValue)?,
+                })?;
+            if !resp.succeeded() {
+                return Err(StoreError::FailedLock {
+                    reason: format!(
+                        "Etcd Txn Compare key '{}' to lease id '{:x}' failed",
+                        lock_key, lease_id
+                    ),
+                });
+            }
+        } else {
+            self.client
+                .put(key.to_string(), vec_value, None)
+                .await
+                .context(Put {
+                    key: key.to_string(),
+                    value: serde_json::to_string(value).context(SerialiseValue)?,
+                })?;
+        };
+
         Ok(())
     }
 
     /// 'Get' the value for the given key from etcd.
     async fn get_kv<K: StoreKey>(&mut self, key: &K) -> Result<Value, StoreError> {
-        let resp = self.0.get(key.to_string(), None).await.context(Get {
+        let resp = self.client.get(key.to_string(), None).await.context(Get {
             key: key.to_string(),
         })?;
         match resp.kvs().first() {
@@ -68,9 +137,33 @@ impl Store for Etcd {
 
     /// 'Delete' the entry with the given key from etcd.
     async fn delete_kv<K: StoreKey>(&mut self, key: &K) -> Result<(), StoreError> {
-        self.0.delete(key.to_string(), None).await.context(Delete {
-            key: key.to_string(),
-        })?;
+        if let Some((lease_id, lock_key)) = self.lease_lock()? {
+            let cmp = Compare::lease(lock_key.clone(), CompareOp::Equal, lease_id);
+            let del = TxnOp::delete(key.to_string(), None);
+            let resp = self
+                .client
+                .txn(Txn::new().when([cmp]).and_then([del]))
+                .await
+                .context(Delete {
+                    key: key.to_string(),
+                })?;
+            if !resp.succeeded() {
+                return Err(StoreError::FailedLock {
+                    reason: format!(
+                        "Etcd Txn Compare key '{}' to lease id '{:x}' failed",
+                        lock_key, lease_id
+                    ),
+                });
+            }
+        } else {
+            self.client
+                .delete(key.to_string(), None)
+                .await
+                .context(Delete {
+                    key: key.to_string(),
+                })?;
+        };
+
         Ok(())
     }
 
@@ -82,9 +175,13 @@ impl Store for Etcd {
         key: &K,
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
         let (sender, receiver) = channel(100);
-        let (watcher, stream) = self.0.watch(key.to_string(), None).await.context(Watch {
-            key: key.to_string(),
-        })?;
+        let (watcher, stream) = self
+            .client
+            .watch(key.to_string(), None)
+            .await
+            .context(Watch {
+                key: key.to_string(),
+            })?;
         watch(watcher, stream, sender);
         Ok(receiver)
     }
@@ -92,16 +189,39 @@ impl Store for Etcd {
     async fn put_obj<O: StorableObject>(&mut self, object: &O) -> Result<(), StoreError> {
         let key = object.key().key();
         let vec_value = serde_json::to_vec(object).context(SerialiseValue)?;
-        self.0.put(key, vec_value, None).await.context(Put {
-            key: object.key().key(),
-            value: serde_json::to_string(object).context(SerialiseValue)?,
-        })?;
+
+        if let Some((lease_id, lock_key)) = self.lease_lock()? {
+            let cmp = Compare::lease(lock_key.clone(), CompareOp::Equal, lease_id);
+            let put = TxnOp::put(key.to_string(), vec_value, None);
+            let resp = self
+                .client
+                .txn(Txn::new().when([cmp]).and_then([put]))
+                .await
+                .context(Put {
+                    key: object.key().key(),
+                    value: serde_json::to_string(object).context(SerialiseValue)?,
+                })?;
+            if !resp.succeeded() {
+                return Err(StoreError::FailedLock {
+                    reason: format!(
+                        "Etcd Txn Compare key '{}' to lease id '{:x}' failed",
+                        lock_key, lease_id
+                    ),
+                });
+            }
+        } else {
+            self.client.put(key, vec_value, None).await.context(Put {
+                key: object.key().key(),
+                value: serde_json::to_string(object).context(SerialiseValue)?,
+            })?;
+        };
+
         Ok(())
     }
 
     async fn get_obj<O: StorableObject>(&mut self, key: &O::Key) -> Result<O, StoreError> {
         let resp = self
-            .0
+            .client
             .get(key.key(), None)
             .await
             .context(Get { key: key.key() })?;
@@ -121,7 +241,7 @@ impl Store for Etcd {
         key_prefix: &str,
     ) -> Result<Vec<(String, Value)>, StoreError> {
         let resp = self
-            .0
+            .client
             .get(key_prefix, Some(GetOptions::new().with_prefix()))
             .await
             .context(GetPrefix { prefix: key_prefix })?;
@@ -144,7 +264,7 @@ impl Store for Etcd {
     ) -> Result<Receiver<Result<WatchEvent, StoreError>>, StoreError> {
         let (sender, receiver) = channel(100);
         let (watcher, stream) = self
-            .0
+            .client
             .watch(key.key(), None)
             .await
             .context(Watch { key: key.key() })?;
@@ -153,7 +273,7 @@ impl Store for Etcd {
     }
 
     async fn online(&mut self) -> bool {
-        self.0.status().await.is_ok()
+        self.client.status().await.is_ok()
     }
 }
 

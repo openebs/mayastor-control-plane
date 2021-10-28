@@ -42,6 +42,14 @@ resource "kubernetes_deployment" "deployment_msp_operator" {
             name  = "RUST_LOG"
             value = "info,msp_operator=info"
           }
+          env {
+            name = "MY_POD_NAME"
+            value_from {
+              field_ref {
+                field_path = "metadata.name"
+              }
+            }
+          }
           name = "msp-operator"
 
           image = format("%s/%s:%s", var.registry, var.image, var.tag)

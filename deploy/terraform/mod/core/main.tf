@@ -9,7 +9,7 @@ variable "cache_period" {}
 variable "credentials" {}
 variable "jaeger_agent_argument" {}
 
-resource "kubernetes_stateful_set" "core_stateful_set" {
+resource "kubernetes_deployment" "core_stateful_set" {
   metadata {
     labels = {
       app = "core"
@@ -18,7 +18,6 @@ resource "kubernetes_stateful_set" "core_stateful_set" {
     namespace = "mayastor"
   }
   spec {
-    service_name = "core-agents"
     replicas     = 1
     selector {
       match_labels = {
@@ -49,6 +48,22 @@ resource "kubernetes_stateful_set" "core_stateful_set" {
           resources {
             limits   = var.res_limits
             requests = var.res_requests
+          }
+          env {
+            name = "MY_POD_NAME"
+            value_from {
+              field_ref {
+                field_path = "metadata.name"
+              }
+            }
+          }
+          env {
+            name = "MY_POD_NAMESPACE"
+            value_from {
+              field_ref {
+                field_path = "metadata.namespace"
+              }
+            }
           }
         }
 

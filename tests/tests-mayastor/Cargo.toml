@@ -20,6 +20,7 @@ anyhow = "1.0.44"
 common-lib = { path = "../../common" }
 structopt = "0.3.23"
 backtrace = "0.3.61"
+etcd-client = "0.7.2"
 
 # Tracing
 tracing = "0.1.28"

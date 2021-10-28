@@ -45,5 +45,8 @@ spec:
             - "--http=0.0.0.0:8081"
             - "--request-timeout=5s"
           ports:
-          - containerPort: 8080
-          - containerPort: 8081
+            - containerPort: 8080
+            - containerPort: 8081
+          env:
+            - name: RUST_LOG
+              value: info
