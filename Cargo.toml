@@ -1,7 +1,3 @@
-[patch.crates-io]
-# Update nix/overlay.nix with the sha256:
-# nix-prefetch-url https://github.com/openebs/Mayastor/tarball/$rev --print-path --unpack
-
 [profile.dev]
 panic = "abort"
 

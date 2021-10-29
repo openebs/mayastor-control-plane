@@ -431,11 +431,11 @@ pub struct ReplyPayload<T>(pub Result<T, ReplyError>);
 
 // todo: implement thin wrappers on these
 /// MessageBus raw Message
-pub type BusMessage = async_nats::Message;
+pub type BusMessage = nats::asynk::Message;
 /// MessageBus subscription
-pub type BusSubscription = async_nats::Subscription;
+pub type BusSubscription = nats::asynk::Subscription;
 /// MessageBus configuration options
-pub type BusOptions = async_nats::Options;
+pub type BusOptions = nats::asynk::Options;
 /// Save on typing
 pub type DynBus = Box<dyn Bus>;
 

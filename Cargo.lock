@@ -255,7 +255,6 @@ dependencies = [
  "humantime",
  "itertools",
  "lazy_static",
- "nats 0.15.2",
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -397,16 +396,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6a8ea61bf9947a1007c5cada31e647dbc77b103c679858150003ba697ea798b"
 dependencies = [
  "event-listener",
-]
-
-[[package]]
-name = "async-nats"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dae854440faecce70f0664f41f09a588de1e7a4366931ec3962ded3d8f903c5"
-dependencies = [
- "blocking",
- "nats 0.10.1",
 ]
 
 [[package]]
@@ -767,7 +756,6 @@ dependencies = [
 name = "common-lib"
 version = "0.1.0"
 dependencies = [
- "async-nats",
  "async-trait",
  "composer",
  "dyn-clonable",
@@ -775,7 +763,7 @@ dependencies = [
  "etcd-client",
  "humantime",
  "log",
- "nats 0.15.2",
+ "nats",
  "once_cell",
  "oneshot",
  "openapi",
@@ -1141,7 +1129,6 @@ dependencies = [
  "composer",
  "futures",
  "humantime",
- "nats 0.15.2",
  "once_cell",
  "paste",
  "reqwest",
@@ -2267,35 +2254,8 @@ dependencies = [
 
 [[package]]
 name = "nats"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c0cfa3903c3e613edddaa4a2f86b2053a1d6fbcf315a3ff352c25ba9f0a8585"
-dependencies = [
- "base64 0.13.0",
- "base64-url",
- "crossbeam-channel",
- "fastrand",
- "itoa",
- "json",
- "libc",
- "log",
- "memchr",
- "nkeys",
- "nuid",
- "once_cell",
- "parking_lot",
- "regex",
- "rustls",
- "rustls-native-certs",
- "webpki",
- "winapi",
-]
-
-[[package]]
-name = "nats"
 version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a3097b182107db2cf690280d61f23f17ee31d49f3994ad152ee6a10261f77c3"
+source = "git+https://github.com/openebs/nats.rs?branch=main_fixes#6fc96e7923b9489cccfa38ebe8d44c1ccf46014d"
 dependencies = [
  "base64 0.13.0",
  "base64-url",

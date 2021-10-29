@@ -1,5 +1,5 @@
 use super::*;
-use async_nats::Connection;
+use nats::asynk::Connection;
 use once_cell::sync::OnceCell;
 use tracing::{info, warn};
 
