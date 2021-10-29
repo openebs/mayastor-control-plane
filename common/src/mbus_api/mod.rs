@@ -449,6 +449,10 @@ pub struct TimeoutOptions {
     pub(crate) timeout_step: std::time::Duration,
     /// max number of retries following the initial attempt's timeout
     pub(crate) max_retries: Option<u32>,
+    /// Server tcp read timeout when no messages are received.
+    /// Shen this timeout is triggered we attempt to send a Ping to the server. If a Pong is not
+    /// received within the same timeout the nats client disconnects from the server.
+    tcp_read_timeout: std::time::Duration,
 
     /// Request specific minimum timeouts
     request_timeout: Option<RequestMinTimeout>,
@@ -483,17 +487,29 @@ impl RequestMinTimeout {
 }
 
 impl TimeoutOptions {
+    /// Default timeout waiting for a reply.
     pub(crate) fn default_timeout() -> Duration {
         Duration::from_secs(6)
     }
+    /// Default time between retries when a timeout is hit.
     pub(crate) fn default_timeout_step() -> Duration {
         Duration::from_secs(1)
     }
+    /// Default max number of retries until the request is given up on.
     pub(crate) fn default_max_retries() -> u32 {
         6
     }
+    /// Default `RequestMinTimeout` which specified timeouts for specific operations.
     pub(crate) fn default_request_timeouts() -> Option<RequestMinTimeout> {
         Some(RequestMinTimeout::default())
+    }
+    /// Default Server tcp read timeout when no messages are received.
+    pub(crate) fn default_tcp_read_timeout() -> Duration {
+        Duration::from_secs(6)
+    }
+    /// Get the tcp read timeout
+    pub(crate) fn tcp_read_timeout(&self) -> Duration {
+        self.tcp_read_timeout
     }
 }
 
@@ -503,6 +519,7 @@ impl Default for TimeoutOptions {
             timeout: Self::default_timeout(),
             timeout_step: Self::default_timeout_step(),
             max_retries: Some(Self::default_max_retries()),
+            tcp_read_timeout: Self::default_tcp_read_timeout(),
             request_timeout: Self::default_request_timeouts(),
         }
     }
