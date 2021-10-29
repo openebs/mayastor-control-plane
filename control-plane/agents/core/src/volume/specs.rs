@@ -445,13 +445,17 @@ impl ResourceSpecsLocked {
                         .await
                     {
                         tracing::warn!(replica.uuid=%spec.uuid, error=%error,
-                            "Replica destruction failed. This will be garbage collected later."
+                            "Replica destruction failed. This will be garbage collected later"
                         );
                     }
                 } else {
-                    // the above is able to handle when a pool is moved to a
-                    // different node but if a pool is
-                    // unplugged, what do we do? Fake an error ReplicaNotFound?
+                    // The above is able to handle when a pool is moved to a different node but if a
+                    // pool is unplugged we should disown the replica and allow the garbage
+                    // collector to destroy it later.
+                    tracing::warn!(replica.uuid=%spec.uuid,"Replica node not found");
+                    if let Err(error) = self.disown_volume_replica(registry, &replica).await {
+                        tracing::error!(replica.uuid=%spec.uuid, error=%error, "Failed to disown volume replica");
+                    }
                 }
             }
 

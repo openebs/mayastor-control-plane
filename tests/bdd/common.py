@@ -5,6 +5,7 @@ from openapi.openapi_client.api.volumes_api import VolumesApi
 from openapi.openapi_client.api.pools_api import PoolsApi
 from openapi.openapi_client.api.specs_api import SpecsApi
 from openapi.openapi_client.api.replicas_api import ReplicasApi
+from openapi.openapi_client.api.nodes_api import NodesApi
 from openapi.openapi_client import api_client
 from openapi.openapi_client import configuration
 import docker
@@ -42,6 +43,11 @@ def get_pools_api():
 # Return a SpecsApi object which can be used for performing spec related REST calls.
 def get_specs_api():
     return SpecsApi(get_api_client())
+
+
+# Return a NodesApi object which can be used for performing node related REST calls.
+def get_nodes_api():
+    return NodesApi(get_api_client())
 
 
 # Return a ReplicasApi object which can be used for performing replica related REST calls.
