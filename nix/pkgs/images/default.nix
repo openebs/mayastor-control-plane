@@ -10,10 +10,11 @@
 , tini
 }:
 let
+  image_suffix = { "release" = ""; "debug" = "-dev"; "cov" = "-cov"; };
   build-control-plane-image = { build, name, config ? { } }: dockerTools.buildImage {
     tag = control-plane.version;
     created = "now";
-    name = "mayadata/mcp-${name}";
+    name = "mayadata/mcp-${name}${image_suffix.${build}}";
     contents = [ tini busybox control-plane.${build}.${name} ];
     config = { Entrypoint = [ "tini" "--" control-plane.${build}.${name}.binary ]; } // config;
   };
@@ -38,13 +39,20 @@ in
 {
   core = build-agent-image { build = "release"; name = "core"; };
   core-dev = build-agent-image { build = "debug"; name = "core"; };
+  core-cov = build-agent-image { build = "cov"; name = "core"; };
+
   jsongrpc = build-agent-image { build = "release"; name = "jsongrpc"; };
   jsongrpc-dev = build-agent-image { build = "debug"; name = "jsongrpc"; };
+  jsongrpc-cov = build-agent-image { build = "cov"; name = "jsongrpc"; };
+
   rest = build-rest-image {
     build = "release";
   };
   rest-dev = build-rest-image {
     build = "debug";
+  };
+  rest-cov = build-rest-image {
+    build = "cov";
   };
 
   msp-operator = build-msp-operator-image {
@@ -53,11 +61,17 @@ in
   msp-operator-dev = build-msp-operator-image {
     build = "debug";
   };
+  msp-operator-cov = build-msp-operator-image {
+    build = "cov";
+  };
 
   csi-controller = build-csi-controller-image {
     build = "release";
   };
   csi-controller-dev = build-csi-controller-image {
     build = "debug";
+  };
+  csi-controller-cov = build-csi-controller-image {
+    build = "cov";
   };
 }

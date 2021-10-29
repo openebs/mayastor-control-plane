@@ -36,6 +36,7 @@ Options:
   --skip-tag                 Don't publish built images with the git tag.
   --image                    Specify what image to build.
   --alias-tag                Explicit alias for short commit hash tag.
+  --coverage                 Build coverage-enabled version of images.
 
 Examples:
   $(basename $0) --registry 127.0.0.1:5000
@@ -56,6 +57,7 @@ SKIP_TAG_PUBLISH=
 REGISTRY=
 ALIAS=
 DEBUG=
+COVERAGE=
 
 # Check if all needed tools are installed
 curl --version >/dev/null
@@ -114,6 +116,10 @@ while [ "$#" -gt 0 ]; do
       DEBUG="yes"
       shift
       ;;
+    --coverage)
+      COVERAGE="yes"
+      shift
+      ;;
     *)
       echo "Unknown option: $1"
       exit 1
@@ -123,9 +129,18 @@ done
 
 cd $SCRIPTDIR/..
 
+if [ -n "$COVERAGE" ] && [ -n "$DEBUG" ]; then
+  echo "cannot specify --coverage and --debug"
+  exit 1
+fi
+
 if [ -z "$IMAGES" ]; then
   if [ -z "$DEBUG" ]; then
-    IMAGES="core jsongrpc rest msp-operator csi-controller"
+    if [ -z "$COVERAGE" ]; then
+        IMAGES="core jsongrpc rest msp-operator csi-controller"
+    else
+        IMAGES="core-cov jsongrpc-cov rest-cov msp-operator-cov csi-controller-cov"
+    fi
   else
     IMAGES="core-dev jsongrpc-dev rest-dev msp-operator-dev csi-controller-dev"
   fi

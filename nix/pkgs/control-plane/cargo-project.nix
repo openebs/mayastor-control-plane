@@ -19,6 +19,10 @@ let
     rustc = channel.default.stable;
     cargo = channel.default.stable;
   };
+  rustNightly = makeRustPlatform {
+    rustc = channel.default.nightly;
+    cargo = channel.default.nightly;
+  };
   whitelistSource = src: allowedPrefixes:
     builtins.filterSource
       (path: type:
@@ -84,6 +88,12 @@ in
   debug = rustPlatform.buildRustPackage
     (buildProps // {
       buildType = "debug";
+      buildInputs = buildProps.buildInputs;
+    });
+  cov = rustNightly.buildRustPackage
+    (buildProps // {
+      RUSTFLAGS = "-Z instrument-coverage";
+      buildType = "release";
       buildInputs = buildProps.buildInputs;
     });
 }
