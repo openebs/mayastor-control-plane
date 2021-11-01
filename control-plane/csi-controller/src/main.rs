@@ -97,10 +97,23 @@ pub async fn main() -> Result<(), String> {
         CsiControllerConfig::get_config().rest_endpoint()
     );
 
-    server::CsiServer::run(
-        args.value_of("socket")
-            .expect("CSI socket must be specfied")
-            .to_string(),
-    )
-    .await
+    let mut signal_term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("Failed to register handler for SIGTERM");
+    let mut signal_int = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        .expect("Failed to register handler for SIGINT");
+
+    tokio::select! {
+        _srv =  server::CsiServer::run(args.value_of("socket")
+            .expect("CSI socket must be specified")
+            .to_string()) => {
+            _srv?
+        }
+        _evt = signal_term.recv() => {
+                opentelemetry::global::force_flush_tracer_provider();
+            }
+        _evt = signal_int.recv() => {
+                opentelemetry::global::force_flush_tracer_provider();
+            }
+    }
+    Ok(())
 }

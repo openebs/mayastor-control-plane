@@ -1045,7 +1045,20 @@ async fn main() -> anyhow::Result<()> {
         return write_msp_crd(matches.value_of("write_crd"));
     }
 
-    pool_controller(matches).await?;
+    let mut signal_term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("Failed to register handler for SIGTERM");
+    let mut signal_int = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        .expect("Failed to register handler for SIGINT");
+
+    tokio::select! {
+        _evt = signal_term.recv() => {
+            }
+        _evt = signal_int.recv() => {
+            }
+        _ps = pool_controller(matches) => {
+            _ps?
+        }
+    }
     global::shutdown_tracer_provider();
     Ok(())
 }
