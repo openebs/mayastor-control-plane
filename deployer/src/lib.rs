@@ -125,11 +125,11 @@ pub struct StartOptions {
     pub mayastors: u32,
 
     /// Use the following docker image for the mayastor instances
-    #[structopt(long, default_value = common_lib::MAYASTOR_IMAGE)]
+    #[structopt(long, env = "MAYASTOR_IMAGE", default_value = common_lib::MAYASTOR_IMAGE)]
     pub mayastor_image: String,
 
     /// Use the following runnable binary for the mayastor instances
-    #[structopt(long, conflicts_with = "mayastor_image")]
+    #[structopt(long, env = "MAYASTOR_BIN", conflicts_with = "mayastor_image")]
     pub mayastor_bin: Option<String>,
 
     /// Add host block devices to the mayastor containers as a docker bind mount
