@@ -34,12 +34,8 @@ impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         for pool in context.specs().get_locked_pools() {
-            if pool.lock().status().created() {
-                results.push(missing_pool_state_reconciler(pool.clone(), context).await)
-            }
-            if pool.lock().status().deleting() {
-                results.push(deleting_pool_spec_reconciler(pool.clone(), context).await)
-            }
+            results.push(missing_pool_state_reconciler(pool.clone(), context).await);
+            results.push(deleting_pool_spec_reconciler(pool.clone(), context).await);
         }
         Self::squash_results(results)
     }
@@ -128,7 +124,11 @@ async fn deleting_pool_spec_reconciler(
         return PollResult::Ok(PollerState::Idle);
     }
     let pool = pool_spec.lock().clone();
-    match context.registry().get_node_wrapper(&pool.node).await {
+    match context
+        .registry()
+        .get_node_wrapper(&pool.node.clone())
+        .await
+    {
         Ok(node) => {
             if !node.read().await.is_online() {
                 return PollResult::Ok(PollerState::Idle);
@@ -137,8 +137,8 @@ async fn deleting_pool_spec_reconciler(
         Err(_) => return PollResult::Ok(PollerState::Idle),
     };
     let request = DestroyPool {
-        node: pool.clone().node,
-        id: pool.clone().id,
+        node: pool.node.clone(),
+        id: pool.id.clone(),
     };
     match context
         .specs()
