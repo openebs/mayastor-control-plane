@@ -61,8 +61,8 @@ def init(create_pool_disk_images):
             "-j",
             "-m=2",
             "-w=10s",
-            "--reconcile-idle-period=1s",
-            "--reconcile-period=1s",
+            "--reconcile-idle-period=500ms",
+            "--reconcile-period=500ms",
             "--cache-period=1s",
         ]
     )
@@ -129,9 +129,9 @@ def the_replica_should_eventually_be_destroyed():
     check_zero_replicas()
 
 
-@retry(wait_fixed=1000, stop_max_attempt_number=5)
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def check_zero_replicas():
-    assert len(common.get_replicas_api().get_replicas()) == 0
+    assert len(common.get_specs_api().get_specs()["replicas"]) == 0
 
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
