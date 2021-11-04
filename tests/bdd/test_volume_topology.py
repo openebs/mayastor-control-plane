@@ -3,7 +3,7 @@
 import docker
 import pytest
 import requests
-from openapi.model.volume_policy import VolumePolicy
+
 from pytest_bdd import (
     given,
     scenario,
@@ -12,11 +12,15 @@ from pytest_bdd import (
 )
 
 import common
+from openapi.model.volume_policy import VolumePolicy
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.spec_status import SpecStatus
 from openapi.model.volume_spec import VolumeSpec
+from openapi.model.topology import Topology
+from openapi.model.pool_topology import PoolTopology
+from openapi.model.labelled_topology import LabelledTopology
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -155,14 +159,13 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
-        topology={
-            "pool_topology": {
-                "labelled": {
-                    "inclusion": {"fake-label-key": "fake-label-value"},
-                    "exclusion": {},
-                }
-            }
-        },
+        topology=Topology(
+            pool_topology=PoolTopology(
+                labelled=LabelledTopology(
+                    exclusion={}, inclusion={"fake-label-key": "fake-label-value"}
+                )
+            )
+        ),
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -174,14 +177,13 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
-        topology={
-            "pool_topology": {
-                "labelled": {
-                    "inclusion": {"openebs.io/created-by": "msp-operator"},
-                    "exclusion": {},
-                }
-            }
-        },
+        topology=Topology(
+            pool_topology=PoolTopology(
+                labelled=LabelledTopology(
+                    exclusion={}, inclusion={"openebs.io/created-by": "msp-operator"}
+                )
+            )
+        ),
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -193,7 +195,6 @@ def a_request_for_a_volume_without_pool_topology(create_request):
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
-        topology={},
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -207,7 +208,6 @@ def an_existing_published_volume_without_pool_topology():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
-            topology={},
         ),
     )
     # Publish volume so that there is a nexus to add a replica to.
@@ -233,14 +233,14 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
-            topology={
-                "pool_topology": {
-                    "labelled": {
-                        "inclusion": {"openebs.io/created-by": "msp-operator"},
-                        "exclusion": {},
-                    }
-                }
-            },
+            topology=Topology(
+                pool_topology=PoolTopology(
+                    labelled=LabelledTopology(
+                        exclusion={},
+                        inclusion={"openebs.io/created-by": "msp-operator"},
+                    )
+                )
+            ),
         ),
     )
     # Publish volume so that there is a nexus to add a replica to.
@@ -258,14 +258,14 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
-            topology={
-                "pool_topology": {
-                    "labelled": {
-                        "inclusion": {"pool1-specific-key": "pool1-specific-value"},
-                        "exclusion": {},
-                    }
-                }
-            },
+            topology=Topology(
+                pool_topology=PoolTopology(
+                    labelled=LabelledTopology(
+                        exclusion={},
+                        inclusion={"pool1-specific-key": "pool1-specific-value"},
+                    )
+                )
+            ),
         ),
     )
     # Publish volume so that there is a nexus to add a replica to.
@@ -325,7 +325,10 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
 ):
     """the number of volume replicas is less than or equal to the number of suitable pools."""
     num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
-    if "pool_topology" in create_request[CREATE_REQUEST_KEY]["topology"]:
+    if (
+        hasattr(create_request[CREATE_REQUEST_KEY], "topology")
+        and "pool_topology" in create_request[CREATE_REQUEST_KEY]["topology"]
+    ):
         no_of_pools = no_of_suitable_pools(
             create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
                 "inclusion"
@@ -458,14 +461,13 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
         SpecStatus("Created"),
         VOLUME_UUID,
         VolumePolicy(False),
-        topology={
-            "pool_topology": {
-                "labelled": {
-                    "inclusion": {"openebs.io/created-by": "msp-operator"},
-                    "exclusion": {},
-                }
-            }
-        },
+        topology=Topology(
+            pool_topology=PoolTopology(
+                labelled=LabelledTopology(
+                    exclusion={}, inclusion={"openebs.io/created-by": "msp-operator"}
+                )
+            )
+        ),
     )
 
     # Check the volume object returned is as expected
@@ -488,7 +490,6 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
         SpecStatus("Created"),
         VOLUME_UUID,
         VolumePolicy(False),
-        topology={},
     )
 
     # Check the volume object returned is as expected
@@ -501,14 +502,20 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
 @then("volume request should not contain any pool topology labels")
 def volume_request_should_not_contain_any_pool_topology_labels(create_request):
     """volume request should not contain any pool topology labels."""
-    assert "pool_topology" not in create_request[CREATE_REQUEST_KEY]["topology"]
+    assert (
+        not hasattr(create_request[CREATE_REQUEST_KEY], "topology")
+        or "pool_topology" not in create_request[CREATE_REQUEST_KEY]["topology"]
+    )
 
 
 @then("volume should not contain any pool topology labels")
 def volume_should_not_contain_any_pool_topology_labels():
     """volume should not contain any pool topology labels."""
     volume = common.get_volumes_api().get_volume(VOLUME_UUID)
-    assert "pool_topology" not in volume["spec"]["topology"]
+    assert (
+        not hasattr(volume["spec"], "topology")
+        or "pool_topology" not in volume["spec"]["topology"]
+    )
 
 
 def no_of_suitable_pools(volume_pool_topology_labels):
