@@ -15,7 +15,7 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
 /// Mayastor container image used for testing
-pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:dd6b34c8b070";
+pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:e2e-nightly";
 
 /// Mayastor environment variable that points to a mayastor binary
 /// This must be in sync with shell.nix
