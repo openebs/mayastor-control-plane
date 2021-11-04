@@ -3,7 +3,7 @@
 import docker
 import pytest
 import requests
-from openapi_client.model.volume_policy import VolumePolicy
+from openapi.model.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
@@ -12,11 +12,11 @@ from pytest_bdd import (
 )
 
 import common
-from openapi.openapi_client.model.create_pool_body import CreatePoolBody
-from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
-from openapi.openapi_client.model.protocol import Protocol
-from openapi.openapi_client.model.spec_status import SpecStatus
-from openapi.openapi_client.model.volume_spec import VolumeSpec
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.protocol import Protocol
+from openapi.model.spec_status import SpecStatus
+from openapi.model.volume_spec import VolumeSpec
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -36,7 +36,6 @@ REPLICA_ERROR = "replica_error"
 # A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    cfg = common.get_cfg()
     common.deployer_start(num_mayastors=NUM_MAYASTORS)
     common.get_pools_api().put_node_pool(
         NODE_1_NAME,
@@ -47,7 +46,6 @@ def init():
                 "pool1-specific-key": "pool1-specific-value",
                 "openebs.io/created-by": "msp-operator",
             },
-            _configuration=cfg,
         ),
     )
     common.get_pools_api().put_node_pool(
@@ -59,7 +57,6 @@ def init():
                 "pool2-specific-key": "pool2-specific-value",
                 "openebs.io/created-by": "msp-operator",
             },
-            _configuration=cfg,
         ),
     )
     yield
@@ -154,7 +151,6 @@ def a_control_plane_two_mayastor_instances_two_pools():
 @given("a request for a volume with topology different from pools")
 def a_request_for_a_volume_with_topology_different_from_pools(create_request):
     """a request for a volume with topology different from pools."""
-    cfg = common.get_cfg()
     request = CreateVolumeBody(
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
@@ -167,7 +163,6 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
                 }
             }
         },
-        _configuration=cfg,
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -175,7 +170,6 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
 @given("a request for a volume with topology same as pool labels")
 def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
     """a request for a volume with topology same as pool labels."""
-    cfg = common.get_cfg()
     request = CreateVolumeBody(
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
@@ -188,7 +182,6 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
                 }
             }
         },
-        _configuration=cfg,
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -196,13 +189,11 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
 @given("a request for a volume without pool topology")
 def a_request_for_a_volume_without_pool_topology(create_request):
     """a request for a volume without pool topology."""
-    cfg = common.get_cfg()
     request = CreateVolumeBody(
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
         topology={},
-        _configuration=cfg,
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -210,7 +201,6 @@ def a_request_for_a_volume_without_pool_topology(create_request):
 @given("an existing published volume without pool topology")
 def an_existing_published_volume_without_pool_topology():
     """an existing published volume without pool topology"""
-    cfg = common.get_cfg()
     common.get_volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
@@ -218,7 +208,6 @@ def an_existing_published_volume_without_pool_topology():
             1,
             VOLUME_SIZE,
             topology={},
-            _configuration=cfg,
         ),
     )
     # Publish volume so that there is a nexus to add a replica to.
@@ -238,7 +227,6 @@ def suitable_available_pools_with_labels():
 @given("an existing published volume with a topology matching pool labels")
 def an_existing_published_volume_with_a_topology_matching_pool_labels():
     """an existing published volume with a topology matching pool labels"""
-    cfg = common.get_cfg()
     common.get_volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
@@ -253,7 +241,6 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
                     }
                 }
             },
-            _configuration=cfg,
         ),
     )
     # Publish volume so that there is a nexus to add a replica to.
@@ -265,7 +252,6 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
 @given("an existing published volume with a topology not matching pool labels")
 def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
     """an existing published volume with a topology not matching pool labels"""
-    cfg = common.get_cfg()
     common.get_volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
@@ -280,7 +266,6 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
                     }
                 }
             },
-            _configuration=cfg,
         ),
     )
     # Publish volume so that there is a nexus to add a replica to.
@@ -467,7 +452,6 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
     create_request,
 ):
     """volume creation should succeed with a returned volume object with topology."""
-    cfg = common.get_cfg()
     expected_spec = VolumeSpec(
         1,
         VOLUME_SIZE,
@@ -482,7 +466,6 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
                 }
             }
         },
-        _configuration=cfg,
     )
 
     # Check the volume object returned is as expected
@@ -499,7 +482,6 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
     create_request,
 ):
     """volume creation should succeed with a returned volume object without pool topology."""
-    cfg = common.get_cfg()
     expected_spec = VolumeSpec(
         1,
         VOLUME_SIZE,
@@ -507,7 +489,6 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
         VOLUME_UUID,
         VolumePolicy(False),
         topology={},
-        _configuration=cfg,
     )
 
     # Check the volume object returned is as expected

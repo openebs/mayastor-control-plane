@@ -14,15 +14,15 @@ import requests
 
 import common
 
-from openapi.openapi_client.model.create_pool_body import CreatePoolBody
-from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
-from openapi.openapi_client.model.volume_spec import VolumeSpec
-from openapi.openapi_client.model.spec_status import SpecStatus
-from openapi.openapi_client.model.volume_state import VolumeState
-from openapi.openapi_client.model.volume_status import VolumeStatus
-from openapi_client.model.volume_policy import VolumePolicy
-from openapi_client.model.replica_state import ReplicaState
-from openapi_client.model.replica_topology import ReplicaTopology
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.volume_spec import VolumeSpec
+from openapi.model.spec_status import SpecStatus
+from openapi.model.volume_state import VolumeState
+from openapi.model.volume_status import VolumeStatus
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.replica_state import ReplicaState
+from openapi.model.replica_topology import ReplicaTopology
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -214,14 +214,12 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
 @then("volume creation should succeed with a returned volume object")
 def volume_creation_should_succeed_with_a_returned_volume_object(create_request):
     """volume creation should succeed with a returned volume object."""
-    cfg = common.get_cfg()
     expected_spec = VolumeSpec(
         1,
         VOLUME_SIZE,
         SpecStatus("Created"),
         VOLUME_UUID,
         VolumePolicy(False),
-        _configuration=cfg,
     )
 
     # Check the volume object returned is as expected
@@ -242,6 +240,5 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
         VolumeStatus("Online"),
         VOLUME_UUID,
         expected_replica_toplogy,
-        _configuration=cfg,
     )
     assert str(volume.state) == str(expected_state)

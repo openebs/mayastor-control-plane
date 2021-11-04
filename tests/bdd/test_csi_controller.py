@@ -19,9 +19,9 @@ from urllib.parse import urlparse
 import json
 
 from common import CsiHandle
-from openapi.openapi_client.model.create_pool_body import CreatePoolBody
-from openapi.openapi_client.model.spec_status import SpecStatus
-from openapi_client.exceptions import NotFoundException
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.spec_status import SpecStatus
+from openapi.exceptions import NotFoundException
 
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"

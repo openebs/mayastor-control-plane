@@ -12,11 +12,11 @@ import requests
 import common
 from retrying import retry
 
-from openapi.openapi_client.model.create_pool_body import CreatePoolBody
-from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
-from openapi.openapi_client.model.protocol import Protocol
-from openapi_client.model.volume_policy import VolumePolicy
-from openapi_client.model.node_status import NodeStatus
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.protocol import Protocol
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.node_status import NodeStatus
 
 POOL1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL2_UUID = "4cc6ee64-7232-497d-a26f-38284a444990"
