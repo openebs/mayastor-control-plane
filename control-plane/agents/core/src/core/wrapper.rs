@@ -435,7 +435,7 @@ impl NodeWrapper {
         let mut ctx = self.grpc_client().await?;
         let rpc_nexuses = ctx
             .client
-            .list_nexus(Null {})
+            .list_nexus_v2(Null {})
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
@@ -444,7 +444,7 @@ impl NodeWrapper {
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
-            .map(|n| match rpc_nexus_to_bus(n, &self.id) {
+            .map(|n| match rpc_nexus_v2_to_bus(n, &self.id) {
                 Ok(n) => Some(n),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
@@ -758,13 +758,16 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_nexus =
             ctx.client
-                .create_nexus(request.to_rpc())
+                .create_nexus_v2(request.to_rpc())
                 .await
                 .context(GrpcRequestError {
                     resource: ResourceKind::Nexus,
                     request: "create_nexus",
                 })?;
-        let nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node)?;
+        let mut nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node)?;
+        // CAS-1107 - create_nexus_v2 returns NexusV1...
+        nexus.name = request.name();
+        nexus.uuid = request.uuid.clone();
         self.update_nexus_states().await?;
         Ok(nexus)
     }
@@ -891,6 +894,11 @@ fn rpc_replica_to_bus(
     Ok(replica)
 }
 
+fn rpc_nexus_v2_to_bus(rpc_nexus: &rpc::mayastor::NexusV2, id: &NodeId) -> Result<Nexus, SvcError> {
+    let mut nexus = rpc_nexus.try_to_mbus()?;
+    nexus.node = id.clone();
+    Ok(nexus)
+}
 fn rpc_nexus_to_bus(rpc_nexus: &rpc::mayastor::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
     let mut nexus = rpc_nexus.try_to_mbus()?;
     nexus.node = id.clone();

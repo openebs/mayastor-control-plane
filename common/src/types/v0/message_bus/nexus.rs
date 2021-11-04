@@ -20,6 +20,8 @@ pub struct GetNexuses {
 pub struct Nexus {
     /// id of the mayastor instance
     pub node: NodeId,
+    /// name of the nexus
+    pub name: String,
     /// uuid of the nexus
     pub uuid: NexusId,
     /// size of the volume in bytes
@@ -31,7 +33,7 @@ pub struct Nexus {
     /// URI of the device for the volume (missing if not published).
     /// Missing property and empty string are treated the same.
     pub device_uri: String,
-    /// total number of rebuild tasks
+    /// number of active rebuild jobs
     pub rebuilds: u32,
     /// protocol used for exposing the nexus
     pub share: Protocol,
@@ -197,6 +199,12 @@ impl CreateNexus {
             managed,
             owner: owner.cloned(),
         }
+    }
+    /// Name of the nexus.
+    /// When part of a volume, it's set to its `VolumeId`. Otherwise it's set to its `NexusId`.
+    pub fn name(&self) -> String {
+        let name = self.owner.as_ref().map(|i| i.to_string());
+        name.unwrap_or_else(|| self.uuid.to_string())
     }
 }
 

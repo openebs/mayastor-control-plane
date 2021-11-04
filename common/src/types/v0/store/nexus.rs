@@ -81,6 +81,8 @@ pub type NexusSpecStatus = SpecStatus<message_bus::NexusStatus>;
 pub struct NexusSpec {
     /// Nexus Id
     pub uuid: NexusId,
+    /// Name of the nexus
+    pub name: String,
     /// Node where the nexus should live.
     pub node: NodeId,
     /// List of children.
@@ -325,6 +327,7 @@ impl From<&CreateNexus> for NexusSpec {
     fn from(request: &CreateNexus) -> Self {
         Self {
             uuid: request.uuid.clone(),
+            name: request.name(),
             node: request.node.clone(),
             children: request.children.clone(),
             size: request.size,
@@ -356,6 +359,7 @@ impl From<&NexusSpec> for message_bus::Nexus {
     fn from(nexus: &NexusSpec) -> Self {
         Self {
             node: nexus.node.clone(),
+            name: nexus.name.clone(),
             uuid: nexus.uuid.clone(),
             size: nexus.size,
             status: message_bus::NexusStatus::Unknown,
