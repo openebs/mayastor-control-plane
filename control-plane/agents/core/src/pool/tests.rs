@@ -9,7 +9,11 @@ use common_lib::{
             GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol,
             ReplicaStatus, VolumeId,
         },
-        openapi::models::{CreateVolumeBody, Pool, PoolState, VolumePolicy},
+        openapi::{
+            apis::StatusCode,
+            clients::tower::Error,
+            models::{CreateVolumeBody, Pool, PoolState, VolumePolicy},
+        },
         store::replica::ReplicaSpec,
     },
 };
@@ -29,7 +33,6 @@ async fn pool() {
 
     let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
-
     CreatePool {
         node: mayastor.clone(),
         id: "pooloop".into(),
@@ -343,8 +346,12 @@ const RECONCILE_TIMEOUT_SECS: u64 = 7;
 const POOL_FILE_NAME: &str = "disk1.img";
 const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 
+/// Creates a pool on a mayastor instance, which will have both spec and state.
+/// Stops/Kills the mayastor container. At some point we will have no pool state, because the node
+/// is gone. We then restart the node and the pool reconciler will then recreate the pool! At this
+/// point, we'll have a state again.
 #[tokio::test]
-async fn reconciler() {
+async fn reconciler_missing_pool_state() {
     let disk = testlib::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
 
     let cluster = ClusterBuilder::builder()
@@ -361,14 +368,6 @@ async fn reconciler() {
     let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
-    missing_pool_state(&cluster).await;
-}
-
-/// Creates a pool on a mayastor instance, which will have both spec and state.
-/// Stops/Kills the mayastor container. At some point we will have no pool state, because the node
-/// is gone. We then restart the node and the pool reconciler will then recreate the pool! At this
-/// point, we'll have a state again.
-async fn missing_pool_state(cluster: &Cluster) {
     let client = cluster.rest_v00();
     let pools_api = client.pools_api();
     let volumes_api = client.volumes_api();
@@ -405,11 +404,11 @@ async fn missing_pool_state(cluster: &Cluster) {
 
     // let's stop the mayastor container, gracefully
     cluster.composer().stop(maya.as_str()).await.unwrap();
-    pool_checker(cluster, pool.state.as_ref()).await;
+    pool_checker(&cluster, pool.state.as_ref()).await;
 
     // now kill it, so there's no deregistration message
     cluster.composer().kill(maya.as_str()).await.unwrap();
-    pool_checker(cluster, pool.state.as_ref()).await;
+    pool_checker(&cluster, pool.state.as_ref()).await;
 
     // we should have also "imported" the same replicas, perhaps in a different order...
     let current_replicas = client.replicas_api().get_replicas().await.unwrap();
@@ -447,4 +446,97 @@ async fn wait_till_pool_state(cluster: &Cluster, pool: (u32, u32), has_state: bo
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
+}
+
+/// Creates a cluster with two nodes, two pools, core and rest with reconciler period 1 for both
+/// busy and idle. Kills node 1 and deletes the pool on it. Somehow the pool is struck in Deleting
+/// state. Now the node 1 is brought back and the reconciler Deletes the pool in Deleting state so
+/// that pools with same spec can be created.
+#[tokio::test]
+async fn reconciler_deleting_pool_on_node_down() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_mayastors(2)
+        .with_pools(2)
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .build()
+        .await
+        .unwrap();
+
+    let nodes = GetNodes::default().request().await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+
+    let pool_1_id = cluster.pool(0, 0);
+    let pool_2_id = cluster.pool(1, 1);
+    let node_1_id = cluster.node(0);
+    let client = cluster.rest_v00();
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let pools_api = client.pools_api();
+    let start = std::time::Instant::now();
+
+    // Kill the mayastor node 1
+    cluster.composer().kill(node_1_id.as_str()).await.unwrap();
+
+    // Delete the pool on the mayastor node 1
+    let _ = cluster
+        .rest_v00()
+        .pools_api()
+        .del_node_pool(node_1_id.as_str(), pool_1_id.as_str())
+        .await;
+
+    let pool_1_status_after_delete = pools_api
+        .get_pool(pool_1_id.as_str())
+        .await
+        .unwrap()
+        .spec
+        .unwrap()
+        .status
+        .to_string();
+
+    let pool_2_status = pools_api
+        .get_pool(pool_2_id.as_str())
+        .await
+        .unwrap()
+        .spec
+        .unwrap()
+        .status
+        .to_string();
+
+    // The below infers only one node is down and one pool is in Deleting state
+    // and the other pools are unaffected.
+    assert_eq!(pool_1_status_after_delete, "Deleting");
+    assert_eq!(pool_2_status, "Created");
+
+    // Start the node once again
+    cluster.composer().start(node_1_id.as_str()).await.unwrap();
+
+    // The reconciler would delete the pool in Deleting state.
+    loop {
+        match pools_api.get_pool(pool_1_id.as_str()).await {
+            Ok(_) => {}
+            Err(err) => {
+                if let Error::Response(err) = err {
+                    if err.status() == StatusCode::NOT_FOUND {
+                        break;
+                    }
+                }
+            }
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            panic!("Timeout waiting for the pool delete");
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    // The other pools are unaffected by reconciler action
+    let pool_2_status_after_reconciler_action = pools_api
+        .get_pool(pool_2_id.as_str())
+        .await
+        .unwrap()
+        .spec
+        .unwrap()
+        .status
+        .to_string();
+    assert_eq!(pool_2_status_after_reconciler_action, "Created");
 }
