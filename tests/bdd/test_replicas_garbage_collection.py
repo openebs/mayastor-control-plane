@@ -16,10 +16,10 @@ import os
 import pytest
 import common
 
-from openapi.openapi_client.model.create_pool_body import CreatePoolBody
-from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
-from openapi.openapi_client.model.protocol import Protocol
-from openapi.openapi_client.model.volume_policy import VolumePolicy
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.protocol import Protocol
+from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -61,8 +61,8 @@ def init(create_pool_disk_images):
             "-j",
             "-m=2",
             "-w=10s",
-            "--reconcile-idle-period=1s",
-            "--reconcile-period=1s",
+            "--reconcile-idle-period=500ms",
+            "--reconcile-period=500ms",
             "--cache-period=1s",
         ]
     )
@@ -80,10 +80,7 @@ def init(create_pool_disk_images):
     )
 
     # Create and publish a volume on node 1
-    cfg = common.get_cfg()
-    request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, _configuration=cfg
-    )
+    request = CreateVolumeBody(VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE)
     common.get_volumes_api().put_volume(VOLUME_UUID, request)
     common.get_volumes_api().put_volume_target(
         VOLUME_UUID, MAYASTOR_1, Protocol("nvmf")
@@ -132,9 +129,9 @@ def the_replica_should_eventually_be_destroyed():
     check_zero_replicas()
 
 
-@retry(wait_fixed=1000, stop_max_attempt_number=5)
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def check_zero_replicas():
-    assert len(common.get_replicas_api().get_replicas()) == 0
+    assert len(common.get_specs_api().get_specs()["replicas"]) == 0
 
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)

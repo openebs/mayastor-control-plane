@@ -10,15 +10,15 @@ from pytest_bdd import (
 import pytest
 import common
 
-from openapi.openapi_client.model.create_pool_body import CreatePoolBody
-from openapi.openapi_client.model.create_volume_body import CreateVolumeBody
-from openapi.openapi_client.model.volume_spec import VolumeSpec
-from openapi.openapi_client.model.volume_state import VolumeState
-from openapi.openapi_client.model.volume_status import VolumeStatus
-from openapi.openapi_client.model.spec_status import SpecStatus
-from openapi_client.model.volume_policy import VolumePolicy
-from openapi_client.model.replica_state import ReplicaState
-from openapi_client.model.replica_topology import ReplicaTopology
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.volume_spec import VolumeSpec
+from openapi.model.volume_state import VolumeState
+from openapi.model.volume_status import VolumeStatus
+from openapi.model.spec_status import SpecStatus
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.replica_state import ReplicaState
+from openapi.model.replica_topology import ReplicaTopology
 
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
@@ -71,14 +71,12 @@ def a_user_issues_a_get_request_for_a_volume(volume_ctx):
 @then("a volume object representing the volume should be returned")
 def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
     """a volume object representing the volume should be returned."""
-    cfg = common.get_cfg()
     expected_spec = VolumeSpec(
         1,
         VOLUME_SIZE,
         SpecStatus("Created"),
         VOLUME_UUID,
         VolumePolicy(False),
-        _configuration=cfg,
     )
 
     volume = volume_ctx[VOLUME_CTX_KEY]
@@ -97,6 +95,5 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         VolumeStatus("Online"),
         VOLUME_UUID,
         expected_replica_toplogy,
-        _configuration=cfg,
     )
     assert str(volume.state) == str(expected_state)

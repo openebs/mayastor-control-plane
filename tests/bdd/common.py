@@ -1,13 +1,13 @@
 import os
 import subprocess
 
-from openapi.openapi_client.api.volumes_api import VolumesApi
-from openapi.openapi_client.api.pools_api import PoolsApi
-from openapi.openapi_client.api.specs_api import SpecsApi
-from openapi.openapi_client.api.replicas_api import ReplicasApi
-from openapi.openapi_client.api.nodes_api import NodesApi
-from openapi.openapi_client import api_client
-from openapi.openapi_client import configuration
+from openapi.api.volumes_api import VolumesApi
+from openapi.api.pools_api import PoolsApi
+from openapi.api.specs_api import SpecsApi
+from openapi.api.replicas_api import ReplicasApi
+from openapi.api.nodes_api import NodesApi
+from openapi import api_client
+from openapi import configuration
 import docker
 
 import grpc
