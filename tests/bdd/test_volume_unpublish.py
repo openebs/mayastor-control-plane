@@ -4,12 +4,13 @@ from pytest_bdd import (
     given,
     scenario,
     then,
-    when,
 )
 
 import pytest
-import common
 import requests
+
+from common.deployer import Deployer
+from common.apiclient import ApiClient
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -28,15 +29,15 @@ VOLUME_SIZE = 10485761
 # A pool and volume are created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    common.deployer_start(1)
-    common.get_pools_api().put_node_pool(
+    Deployer.start(1)
+    ApiClient.pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
     )
-    common.get_volumes_api().put_volume(
+    ApiClient.volumes_api().put_volume(
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
     )
     yield
-    common.deployer_stop()
+    Deployer.stop()
 
 
 @scenario("features/volume/unpublish.feature", "unpublish a published volume")
@@ -54,7 +55,7 @@ def test_unpublish_an_already_unpublished_volume():
 @given("a published volume")
 def a_published_volume():
     """a published volume."""
-    volume = common.get_volumes_api().put_volume_target(
+    volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID, NODE_NAME, Protocol("nvmf")
     )
     assert hasattr(volume.spec, "target")
@@ -64,14 +65,14 @@ def a_published_volume():
 @given("an existing volume")
 def an_existing_volume():
     """an existing volume."""
-    volume = common.get_volumes_api().get_volume(VOLUME_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert volume.spec.uuid == VOLUME_UUID
 
 
 @given("an unpublished volume")
 def an_unpublished_volume():
     """an unpublished volume."""
-    volume = common.get_volumes_api().get_volume(VOLUME_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert not hasattr(volume.spec, "target")
 
 
@@ -79,7 +80,7 @@ def an_unpublished_volume():
 def unpublishing_the_volume_should_return_an_already_unpublished_error():
     """unpublishing the volume should return an already unpublished error."""
     try:
-        common.get_volumes_api().del_volume_target(VOLUME_UUID)
+        ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
     except Exception as e:
         exception_info = e.__dict__
         assert exception_info["status"] == requests.codes["precondition_failed"]
@@ -89,5 +90,5 @@ def unpublishing_the_volume_should_return_an_already_unpublished_error():
 @then("unpublishing the volume should succeed")
 def unpublishing_the_volume_should_succeed():
     """unpublishing the volume should succeed."""
-    volume = common.get_volumes_api().del_volume_target(VOLUME_UUID)
+    volume = ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
     assert not hasattr(volume.spec, "target")

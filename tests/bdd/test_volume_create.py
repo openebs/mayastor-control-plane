@@ -12,7 +12,9 @@ import pytest
 import docker
 import requests
 
-import common
+from common.deployer import Deployer
+from common.apiclient import ApiClient
+from common.docker import Docker
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -37,12 +39,12 @@ NODE_NAME = "mayastor-1"
 # A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    common.deployer_start(1)
-    common.get_pools_api().put_node_pool(
+    Deployer.start(1)
+    ApiClient.pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
     )
     yield
-    common.deployer_stop()
+    Deployer.stop()
 
 
 # Fixture used to pass the volume create request between test steps.
@@ -82,7 +84,7 @@ def a_control_plane_a_mayastor_instance_and_a_pool():
 
     # The control plane comprises the core agents, rest server and etcd instance.
     for component in ["core", "rest", "etcd"]:
-        common.check_container_running(component)
+        Docker.check_container_running(component)
 
     # Check all Mayastor instances are running
     try:
@@ -93,10 +95,10 @@ def a_control_plane_a_mayastor_instance_and_a_pool():
         raise Exception("No Mayastor instances")
 
     for mayastor in mayastors:
-        common.check_container_running(mayastor.attrs["Name"])
+        Docker.check_container_running(mayastor.attrs["Name"])
 
     # Check for a pool
-    pool = common.get_pools_api().get_pool(POOL_UUID)
+    pool = ApiClient.pools_api().get_pool(POOL_UUID)
     assert pool.id == POOL_UUID
 
 
@@ -130,7 +132,7 @@ def the_number_of_suitable_pools_is_less_than_the_number_of_desired_volume_repli
 ):
     """the number of suitable pools is less than the number of desired volume replicas."""
     # Delete the pool so that there aren't enough
-    pools_api = common.get_pools_api()
+    pools_api = ApiClient.pools_api()
     pools_api.del_pool(POOL_UUID)
     num_pools = len(pools_api.get_pools())
     num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
@@ -144,7 +146,7 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
     create_request,
 ):
     """the number of volume replicas is less than or equal to the number of suitable pools."""
-    num_pools = len(common.get_pools_api().get_pools())
+    num_pools = len(ApiClient.pools_api().get_pools())
     num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
     assert num_volume_replicas <= num_pools
 
@@ -171,7 +173,7 @@ def there_should_not_be_any_specs_relating_to_the_volume():
     # so retry a number of times.
     for i in range(5):
         try:
-            specs = common.get_specs_api().get_specs()
+            specs = ApiClient.specs_api().get_specs()
             break
         except:
             time.sleep(1)
@@ -186,13 +188,13 @@ def volume_creation_should_fail_with_a_precondition_failed_error(create_request)
     """volume creation should fail."""
     request = create_request[CREATE_REQUEST_KEY]
     try:
-        common.get_volumes_api().put_volume(VOLUME_UUID, request)
+        ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     except Exception as e:
         exception_info = e.__dict__
         assert exception_info["status"] == requests.codes["precondition_failed"]
 
     # Check that the volume wasn't created.
-    volumes = common.get_volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes()
     assert len(volumes) == 0
 
 
@@ -201,13 +203,13 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
     """volume creation should fail with an insufficient storage error."""
     request = create_request[CREATE_REQUEST_KEY]
     try:
-        common.get_volumes_api().put_volume(VOLUME_UUID, request)
+        ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     except Exception as e:
         exception_info = e.__dict__
         assert exception_info["status"] == requests.codes["insufficient_storage"]
     finally:
         # Check that the volume wasn't created.
-        volumes = common.get_volumes_api().get_volumes()
+        volumes = ApiClient.volumes_api().get_volumes()
         assert len(volumes) == 0
 
 
@@ -224,7 +226,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
 
     # Check the volume object returned is as expected
     request = create_request[CREATE_REQUEST_KEY]
-    volume = common.get_volumes_api().put_volume(VOLUME_UUID, request)
+    volume = ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     assert str(volume.spec) == str(expected_spec)
 
     # The key for the replica topology is the replica UUID. This is assigned at replica creation

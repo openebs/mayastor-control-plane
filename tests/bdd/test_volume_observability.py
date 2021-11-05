@@ -8,7 +8,9 @@ from pytest_bdd import (
 )
 
 import pytest
-import common
+
+from common.deployer import Deployer
+from common.apiclient import ApiClient
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -33,15 +35,15 @@ VOLUME_SIZE = 10485761
 # A pool and volume are created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    common.deployer_start(1)
-    common.get_pools_api().put_node_pool(
+    Deployer.start(1)
+    ApiClient.pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
     )
-    common.get_volumes_api().put_volume(
+    ApiClient.volumes_api().put_volume(
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
     )
     yield
-    common.deployer_stop()
+    Deployer.stop()
 
 
 # Fixture used to pass the volume context between test steps.
@@ -58,14 +60,14 @@ def test_requesting_volume_information():
 @given("an existing volume")
 def an_existing_volume():
     """an existing volume."""
-    volume = common.get_volumes_api().get_volume(VOLUME_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert volume.spec.uuid == VOLUME_UUID
 
 
 @when("a user issues a GET request for a volume")
 def a_user_issues_a_get_request_for_a_volume(volume_ctx):
     """a user issues a GET request for a volume."""
-    volume_ctx[VOLUME_CTX_KEY] = common.get_volumes_api().get_volume(VOLUME_UUID)
+    volume_ctx[VOLUME_CTX_KEY] = ApiClient.volumes_api().get_volume(VOLUME_UUID)
 
 
 @then("a volume object representing the volume should be returned")
