@@ -179,6 +179,89 @@ pub struct CreateNexus {
     pub managed: bool,
     /// Volume which owns this nexus, if any
     pub owner: Option<VolumeId>,
+    /// Nexus Nvmf Configuration
+    pub config: Option<NexusNvmfConfig>,
+}
+
+/// Nvmf Controller Id Range
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NvmfControllerIdRange(std::ops::RangeInclusive<u16>);
+impl NvmfControllerIdRange {
+    /// create `Self` with a random minimum controller id
+    pub fn random_min() -> Self {
+        let min = *Self::controller_id_range().start();
+        let max = *Self::controller_id_range().end();
+        let rand_min = u16::min(rand::random::<u16>() + min, max);
+        Self(rand_min ..= max)
+    }
+    /// minimum controller id
+    pub fn min(&self) -> &u16 {
+        self.0.start()
+    }
+    /// maximum controller id
+    pub fn max(&self) -> &u16 {
+        self.0.end()
+    }
+    fn controller_id_range() -> std::ops::RangeInclusive<u16> {
+        const MIN_CONTROLLER_ID: u16 = 1;
+        const MAX_CONTROLLER_ID: u16 = 0xffef;
+        MIN_CONTROLLER_ID ..= MAX_CONTROLLER_ID
+    }
+}
+impl Default for NvmfControllerIdRange {
+    fn default() -> Self {
+        Self(Self::controller_id_range())
+    }
+}
+
+/// Nexus Nvmf target configuration
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NexusNvmfConfig {
+    /// limits the controller id range
+    controller_id_range: NvmfControllerIdRange,
+    /// persistent reservation key
+    reservation_key: u64,
+    /// preempts this reservation key
+    preempt_reservation_key: Option<u64>,
+}
+
+impl NexusNvmfConfig {
+    /// minimum controller id that can be used by the nvmf target
+    pub fn min_cntl_id(&self) -> u16 {
+        *self.controller_id_range.min()
+    }
+    /// maximum controller id that can be used by the nvmf target
+    pub fn max_cntl_id(&self) -> u16 {
+        *self.controller_id_range.max()
+    }
+    /// persistent reservation key
+    pub fn resv_key(&self) -> u64 {
+        self.reservation_key
+    }
+    /// reservation key to be preempted
+    pub fn preempt_key(&self) -> u64 {
+        self.preempt_reservation_key.unwrap_or_default()
+    }
+}
+
+impl Default for NexusNvmfConfig {
+    fn default() -> Self {
+        if std::env::var("TEST_NEXUS_NVMF_ANA_ENABLE").is_ok() {
+            Self {
+                controller_id_range: NvmfControllerIdRange::random_min(),
+                reservation_key: 1,
+                preempt_reservation_key: None,
+            }
+        } else {
+            Self {
+                controller_id_range: NvmfControllerIdRange::default(),
+                reservation_key: 1,
+                preempt_reservation_key: None,
+            }
+        }
+    }
 }
 
 impl CreateNexus {
@@ -190,6 +273,7 @@ impl CreateNexus {
         children: &[NexusChild],
         managed: bool,
         owner: Option<&VolumeId>,
+        config: Option<NexusNvmfConfig>,
     ) -> Self {
         Self {
             node: node.clone(),
@@ -198,6 +282,7 @@ impl CreateNexus {
             children: children.to_owned(),
             managed,
             owner: owner.cloned(),
+            config,
         }
     }
     /// Name of the nexus.

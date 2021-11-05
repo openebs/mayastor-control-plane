@@ -139,6 +139,14 @@ pub struct StartOptions {
     #[structopt(long)]
     pub mayastor_devices: Vec<String>,
 
+    /// Add the following environment variables to the mayastor containers
+    #[structopt(long, env = "MAYASTOR_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    pub mayastor_env: Option<Vec<KeyValue>>,
+
+    /// Add the following environment variables to the agent containers
+    #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    pub agents_env: Option<Vec<KeyValue>>,
+
     /// Cargo Build each component before deploying
     #[structopt(short, long)]
     pub build: bool,

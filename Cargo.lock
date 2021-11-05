@@ -768,6 +768,7 @@ dependencies = [
  "opentelemetry-semantic-conventions",
  "parking_lot",
  "percent-encoding",
+ "rand 0.8.4",
  "rpc",
  "serde",
  "serde_json",

@@ -166,6 +166,7 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
         ],
         managed: true,
         owner: None,
+        config: None,
     };
     let nexus = create_nexus.request().await.unwrap();
     let nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;
