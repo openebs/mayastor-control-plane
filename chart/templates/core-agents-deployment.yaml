@@ -41,13 +41,3 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: LLVM_PROFILE_FILE
-              value: /var/local/mayastor-coverage/core-agents.profraw
-          volumeMounts:
-            - name: coverage
-              mountPath: /var/local/mayastor-coverage/
-      volumes:
-        - name: coverage
-          hostPath:
-            path: /var/local/mayastor-coverage/
-            type: DirectoryOrCreate
