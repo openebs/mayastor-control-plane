@@ -4,12 +4,13 @@ from pytest_bdd import (
     given,
     scenario,
     then,
-    when,
 )
 
 import pytest
-import common
 import requests
+
+from common.deployer import Deployer
+from common.apiclient import ApiClient
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -28,15 +29,15 @@ VOLUME_SIZE = 10485761
 # A pool and volume are created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    common.deployer_start(1)
-    common.get_pools_api().put_node_pool(
+    Deployer.start(1)
+    ApiClient.pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
     )
-    common.get_volumes_api().put_volume(
+    ApiClient.volumes_api().put_volume(
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
     )
     yield
-    common.deployer_stop()
+    Deployer.stop()
 
 
 @scenario("features/volume/publish.feature", "publish an unpublished volume")
@@ -55,7 +56,7 @@ def test_sharepublish_an_already_sharedpublished_volume():
 @given("a published volume")
 def a_published_volume():
     """a published volume."""
-    volume = common.get_volumes_api().put_volume_target(
+    volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID, NODE_NAME, Protocol("nvmf")
     )
     assert hasattr(volume.spec, "target")
@@ -65,14 +66,14 @@ def a_published_volume():
 @given("an existing volume")
 def an_existing_volume():
     """an existing volume."""
-    volume = common.get_volumes_api().get_volume(VOLUME_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert volume.spec.uuid == VOLUME_UUID
 
 
 @given("an unpublished volume")
 def an_unpublished_volume():
     """an unpublished volume."""
-    volume = common.get_volumes_api().get_volume(VOLUME_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert not hasattr(volume.spec, "target")
 
 
@@ -80,7 +81,7 @@ def an_unpublished_volume():
 def publishing_the_volume_should_return_an_already_published_error():
     """publishing the volume should return an already published error."""
     try:
-        common.get_volumes_api().put_volume_target(
+        ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID, NODE_NAME, Protocol("nvmf")
         )
     except Exception as e:
@@ -94,7 +95,7 @@ def publishing_the_volume_should_return_an_already_published_error():
 )
 def publishing_the_volume_should_succeed_with_a_returned_volume_object_containing_the_share_uri():
     """publishing the volume should succeed with a returned volume object containing the share URI."""
-    volume = common.get_volumes_api().put_volume_target(
+    volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID, NODE_NAME, Protocol("nvmf")
     )
     assert hasattr(volume.spec, "target")

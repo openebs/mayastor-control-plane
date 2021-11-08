@@ -7,20 +7,17 @@ from pytest_bdd import (
 )
 
 import pytest
-import docker
-import common
-import subprocess
 import csi_pb2 as pb
-import csi_pb2_grpc as rpc
 import grpc
 import subprocess
 
 from urllib.parse import urlparse
 import json
 
-from common import CsiHandle
+from common.apiclient import ApiClient
+from common.csi import CsiHandle
+from common.deployer import Deployer
 from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.spec_status import SpecStatus
 from openapi.exceptions import NotFoundException
 
 
@@ -43,12 +40,12 @@ K8S_HOSTNAME = "kubernetes.io/hostname"
 
 @pytest.fixture(scope="module")
 def setup():
-    common.deployer_start(2)
+    Deployer.start(2)
     subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
 
     # Create 2 pools.
     pool_labels = {"openebs.io/created-by": "msp-operator"}
-    pool_api = common.get_pools_api()
+    pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,
         POOL1_UUID,
@@ -62,7 +59,7 @@ def setup():
     yield
     pool_api.del_pool(POOL1_UUID)
     pool_api.del_pool(POOL2_UUID)
-    common.deployer_stop()
+    Deployer.stop()
 
 
 def csi_rpc_handle():
@@ -183,7 +180,7 @@ def a_csi_instance():
 
 @given("2 Mayastor nodes with one pool on each node", target_fixture="two_pools")
 def two_nodes_with_one_pool_each():
-    pool_api = common.get_pools_api()
+    pool_api = ApiClient.pools_api()
     pool1 = pool_api.get_pool(POOL1_UUID)
     pool2 = pool_api.get_pool(POOL2_UUID)
     return [pool1, pool2]
@@ -197,7 +194,7 @@ def two_existing_volumes(_create_2_volumes_1_replica):
 @given("a non-existing volume")
 def a_non_existing_volume():
     with pytest.raises(NotFoundException) as e:
-        common.get_volumes_api().get_volume(NOT_EXISTING_VOLUME_UUID)
+        ApiClient.volumes_api().get_volume(NOT_EXISTING_VOLUME_UUID)
 
 
 @given("a volume published on a node", target_fixture="populate_published_volume")
@@ -205,7 +202,7 @@ def populate_published_volume(_create_1_replica_nvmf_volume):
     do_publish_volume(VOLUME1_UUID, NODE1)
 
     # Make sure volume is published.
-    volume = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
 
     assert (
         str(volume.spec.target.protocol) == "nvmf"
@@ -249,7 +246,7 @@ def check_1_replica_local_nvmf_volume(create_1_replica_local_nvmf_volume):
     assert (
         create_1_replica_local_nvmf_volume.volume.capacity_bytes == VOLUME3_SIZE
     ), "Volume size mismatches"
-    volume = common.get_volumes_api().get_volume(VOLUME3_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME3_UUID)
     assert volume.spec.num_replicas == 1, "Number of volume replicas mismatches"
     assert volume.spec.size == VOLUME3_SIZE, "Volume size mismatches"
 
@@ -346,7 +343,7 @@ def unpublish_volume_from_its_node(populate_published_volume):
 )
 def unpublish_not_published_volume_from_its_node(existing_volume):
     # Make sure the volume is not published and is discoverable.
-    volume = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
     assert "target" not in volume.spec, "Volume is still published"
     do_unpublish_volume(VOLUME1_UUID, NODE1)
 
@@ -560,7 +557,7 @@ def get_node_capacity(two_pools):
 
 @then("CSI controller should report capacity for target node")
 def check_get_node_capacity(get_nodes_capacity):
-    pool_api = common.get_pools_api()
+    pool_api = ApiClient.pools_api()
 
     for i, p in enumerate([POOL1_UUID, POOL2_UUID]):
         pool = pool_api.get_pool(p)
@@ -694,7 +691,7 @@ def check_create_1_replica_nvmf_volume(create_1r_nvmf_volume):
     assert (
         create_1r_nvmf_volume.volume.capacity_bytes == VOLUME1_SIZE
     ), "Volume size mismatches"
-    volume = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    volume = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
     assert volume.spec.num_replicas == 1, "Number of volume replicas mismatches"
     assert volume.spec.size == VOLUME1_SIZE, "Volume size mismatches"
 
@@ -779,7 +776,7 @@ def check_identical_volume_creation(create_the_same_volume):
 @when("a DeleteVolume request is sent to CSI controller to delete existing volume")
 def delete_existing_volume():
     # Make sure volume does exist before removing it.
-    common.get_volumes_api().get_volume(VOLUME1_UUID)
+    ApiClient.volumes_api().get_volume(VOLUME1_UUID)
 
     csi_rpc_handle().controller.DeleteVolume(
         pb.DeleteVolumeRequest(volume_id=VOLUME1_UUID)
@@ -790,7 +787,7 @@ def delete_existing_volume():
 def check_delete_existing_volume():
     # Make sure volume does not exist after being removed.
     with pytest.raises(NotFoundException) as e:
-        common.get_volumes_api().get_volume(VOLUME1_UUID)
+        ApiClient.volumes_api().get_volume(VOLUME1_UUID)
 
 
 @when("a DeleteVolume request is sent to CSI controller to delete not existing volume")
@@ -803,7 +800,7 @@ def remove_not_existing_volume():
 @then("a DeleteVolume request should succeed as if target volume existed")
 def check_remove_not_existing_volume():
     with pytest.raises(NotFoundException) as e:
-        common.get_volumes_api().get_volume(NOT_EXISTING_VOLUME_UUID)
+        ApiClient.volumes_api().get_volume(NOT_EXISTING_VOLUME_UUID)
 
 
 @then(
@@ -825,7 +822,7 @@ def check_unpublish_not_existing_volume(unpublish_not_existing_volume):
 
 @then("volume should report itself as published")
 def check_volume_status_published():
-    vol = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    vol = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
     assert str(vol.spec.target.protocol) == "nvmf", "Volume protocol mismatches"
     assert vol.state.target["protocol"] == "nvmf", "Volume protocol mismatches"
     assert vol.state.target["deviceUri"].startswith(
@@ -835,5 +832,5 @@ def check_volume_status_published():
 
 @then("volume should report itself as not published")
 def check_volume_status_not_published():
-    vol = common.get_volumes_api().get_volume(VOLUME1_UUID)
+    vol = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
     assert "target" not in vol.spec, "Volume still published"

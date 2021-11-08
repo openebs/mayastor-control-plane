@@ -1,20 +1,20 @@
 """Garbage collection of replicas feature tests."""
-import subprocess
-import time
 
 import requests
 from pytest_bdd import (
     given,
     scenario,
     then,
-    when,
 )
 
 from retrying import retry
 
 import os
 import pytest
-import common
+
+from common.deployer import Deployer
+from common.apiclient import ApiClient
+from common.docker import Docker
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -56,7 +56,7 @@ def create_pool_disk_images():
 @pytest.fixture(autouse=True)
 def init(create_pool_disk_images):
     # Shorten the reconcile periods and cache period to speed up the tests.
-    common.deployer_start_with_args(
+    Deployer.start_with_args(
         [
             "-j",
             "-m=2",
@@ -68,12 +68,12 @@ def init(create_pool_disk_images):
     )
 
     # Create pools
-    common.get_pools_api().put_node_pool(
+    ApiClient.pools_api().put_node_pool(
         MAYASTOR_1,
         POOL1_UUID,
         CreatePoolBody(["aio:///host/tmp/{}".format(POOL_DISK1)]),
     )
-    common.get_pools_api().put_node_pool(
+    ApiClient.pools_api().put_node_pool(
         MAYASTOR_2,
         POOL2_UUID,
         CreatePoolBody(["aio:///host/tmp/{}".format(POOL_DISK2)]),
@@ -81,13 +81,11 @@ def init(create_pool_disk_images):
 
     # Create and publish a volume on node 1
     request = CreateVolumeBody(VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE)
-    common.get_volumes_api().put_volume(VOLUME_UUID, request)
-    common.get_volumes_api().put_volume_target(
-        VOLUME_UUID, MAYASTOR_1, Protocol("nvmf")
-    )
+    ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
+    ApiClient.volumes_api().put_volume_target(VOLUME_UUID, MAYASTOR_1, Protocol("nvmf"))
 
     yield
-    common.deployer_stop()
+    Deployer.stop()
 
 
 @scenario(
@@ -102,12 +100,12 @@ def a_replica_which_is_managed_but_does_not_have_any_owners():
     """a replica which is managed but does not have any owners."""
 
     # Kill the Mayastor instance which does not host the nexus.
-    common.kill_container(MAYASTOR_2)
+    Docker.kill_container(MAYASTOR_2)
 
     # Attempt to delete the volume. This will leave a replica behind on the node that is
     # inaccessible.
     try:
-        common.get_volumes_api().del_volume(VOLUME_UUID)
+        ApiClient.volumes_api().del_volume(VOLUME_UUID)
     except Exception as e:
         # A Mayastor node is inaccessible, so deleting the volume will fail because the replica
         # on this node cannot be destroyed. Attempting to do so results in a timeout. This is
@@ -125,19 +123,19 @@ def the_replica_should_eventually_be_destroyed():
 
     # Restart the previously killed Mayastor instance. This makes the previously inaccessible
     # node accessible, allowing the garbage collector to delete the replica.
-    common.restart_container(MAYASTOR_2)
+    Docker.restart_container(MAYASTOR_2)
     check_zero_replicas()
 
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def check_zero_replicas():
-    assert len(common.get_specs_api().get_specs()["replicas"]) == 0
+    assert len(ApiClient.specs_api().get_specs()["replicas"]) == 0
 
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def check_orphaned_replica():
     # There should only be one replica remaining - the one on the node that is inaccessible.
-    replicas = common.get_specs_api().get_specs()["replicas"]
+    replicas = ApiClient.specs_api().get_specs()["replicas"]
     assert len(replicas) == 1
 
     # Check that the replica is an orphan (i.e. it is managed but does not have any owners).
