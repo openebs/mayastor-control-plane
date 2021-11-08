@@ -109,10 +109,8 @@ pub async fn main() -> Result<(), String> {
             _srv?
         }
         _evt = signal_term.recv() => {
-                opentelemetry::global::force_flush_tracer_provider();
             }
         _evt = signal_int.recv() => {
-                opentelemetry::global::force_flush_tracer_provider();
             }
     }
     Ok(())
