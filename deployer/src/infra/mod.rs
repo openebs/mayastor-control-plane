@@ -102,6 +102,11 @@ macro_rules! impl_ctrlp_agents {
                     build_error(&format!("the {} agent", name), status.code())?;
                 }
                 let mut binary = Binary::from_dbg(&name).with_nats("-n");
+                if let Some(env) = &options.agents_env {
+                    for kv in env {
+                        binary = binary.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
+                    }
+                }
                 if name == "core" {
                     let etcd = format!("etcd.{}:2379", options.cluster_label.name());
                     binary = binary.with_args(vec!["--store", &etcd]);

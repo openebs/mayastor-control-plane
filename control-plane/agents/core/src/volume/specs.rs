@@ -933,6 +933,7 @@ impl ResourceSpecsLocked {
                     &nexus_replicas,
                     true,
                     Some(&vol_spec.uuid),
+                    None,
                 ),
                 mode,
             )

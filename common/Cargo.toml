@@ -28,6 +28,7 @@ once_cell = "1.8.0"
 openapi = { path = "../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
 parking_lot = "0.11.2"
 humantime = "2.1.0"
+rand = "0.8.4"
 
 # Tracing
 tracing-futures = "0.2.5"

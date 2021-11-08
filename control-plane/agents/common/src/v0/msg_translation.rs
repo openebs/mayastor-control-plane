@@ -255,14 +255,15 @@ impl MessageBusToRpc for message_bus::DestroyPool {
 impl MessageBusToRpc for message_bus::CreateNexus {
     type RpcMessage = rpc::CreateNexusV2Request;
     fn to_rpc(&self) -> Self::RpcMessage {
+        let nexus_config = self.config.clone().unwrap_or_default();
         Self::RpcMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
             size: self.size,
-            min_cntl_id: 1,
-            max_cntl_id: 0xffef,
-            resv_key: 0x12345678,
-            preempt_key: 0,
+            min_cntl_id: nexus_config.min_cntl_id() as u32,
+            max_cntl_id: nexus_config.max_cntl_id() as u32,
+            resv_key: nexus_config.resv_key(),
+            preempt_key: nexus_config.preempt_key(),
             children: self.children.clone().into_vec(),
         }
     }

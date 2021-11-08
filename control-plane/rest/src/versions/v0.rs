@@ -144,6 +144,7 @@ impl CreateNexusBody {
             children: self.children.clone().into_vec(),
             managed: false,
             owner: None,
+            config: None,
         }
     }
 }

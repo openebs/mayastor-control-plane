@@ -22,6 +22,12 @@ impl ComponentAction for Mayastor {
             .with_args(vec!["-g", &mayastor_socket])
             .with_bind("/tmp", "/host/tmp");
 
+            if let Some(env) = &options.mayastor_env {
+                for kv in env {
+                    spec = spec.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
+                }
+            }
+
             if !options.mayastor_devices.is_empty() {
                 spec = spec.with_privileged(Some(true));
                 for device in options.mayastor_devices.iter() {
