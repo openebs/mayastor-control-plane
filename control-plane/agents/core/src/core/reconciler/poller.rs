@@ -1,7 +1,10 @@
 use crate::core::{
     reconciler::{nexus, persistent_store::PersistentStoreReconciler, pool, replica, volume},
     registry::Registry,
-    task_poller::{squash_results, PollContext, PollEvent, PollResult, PollerState, TaskPoller},
+    task_poller::{
+        squash_results, PollContext, PollEvent, PollResult, PollTriggerEvent, PollerState,
+        TaskPoller,
+    },
 };
 
 /// Reconciliation worker that polls all reconciliation loops
@@ -60,7 +63,7 @@ impl ReconcilerWorker {
     /// The polling will continue until we receive the shutdown signal
     pub(super) async fn poller(mut self, registry: Registry) {
         // kick-off the first run
-        let mut event = PollEvent::TimedRun;
+        let mut event = PollEvent::Triggered(PollTriggerEvent::Start);
         loop {
             let result = match &event {
                 PollEvent::Shutdown => {

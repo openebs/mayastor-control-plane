@@ -22,6 +22,8 @@ pub(crate) enum PollTriggerEvent {
     /// A volume has been published in a Degraded state
     /// eg: may need replicas to be carved and/or added
     VolumeDegraded,
+    /// The Agent is starting up
+    Start,
 }
 
 /// State of a poller

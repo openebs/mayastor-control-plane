@@ -3,7 +3,9 @@ mod tests;
 
 use crate::core::{
     specs::{OperationSequenceGuard, SpecOperations},
-    task_poller::{PollContext, PollEvent, PollResult, PollTimer, PollerState, TaskPoller},
+    task_poller::{
+        PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
+    },
 };
 use common_lib::types::v0::{message_bus::ReplicaOwners, store::OperationMode};
 use std::ops::Deref;
@@ -38,7 +40,7 @@ impl TaskPoller for ReplicaReconciler {
 
     async fn poll_event(&mut self, context: &PollContext) -> bool {
         match context.event() {
-            PollEvent::TimedRun => true,
+            PollEvent::TimedRun | PollEvent::Triggered(PollTriggerEvent::Start) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
     }
