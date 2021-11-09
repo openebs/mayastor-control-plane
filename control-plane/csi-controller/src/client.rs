@@ -254,11 +254,15 @@ impl MayastorApiClient {
 
     /// Unpublish volume (i.e. destroy a target which exposes the volume).
     #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
-    pub async fn unpublish_volume(&self, volume_id: &uuid::Uuid) -> Result<(), ApiClientError> {
+    pub async fn unpublish_volume(
+        &self,
+        volume_id: &uuid::Uuid,
+        force: bool,
+    ) -> Result<(), ApiClientError> {
         Self::delete_idempotent(
             self.rest_client
                 .volumes_api()
-                .del_volume_target(volume_id, Some(false))
+                .del_volume_target(volume_id, Some(force))
                 .await,
             true,
         )?;
