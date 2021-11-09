@@ -36,6 +36,13 @@ spec:
           name: etcd-probe
       containers:
         - name: rest
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 32Mi
           image: mayadata/mcp-rest:develop
           imagePullPolicy: Always
           args:
