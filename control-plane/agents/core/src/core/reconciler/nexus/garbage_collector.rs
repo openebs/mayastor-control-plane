@@ -8,6 +8,7 @@ use common_lib::types::v0::{
     store::{nexus::NexusSpec, OperationMode, TraceSpan},
 };
 
+use crate::core::task_poller::PollTriggerEvent;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -41,7 +42,7 @@ impl TaskPoller for GarbageCollector {
 
     async fn poll_event(&mut self, context: &PollContext) -> bool {
         match context.event() {
-            PollEvent::TimedRun => true,
+            PollEvent::TimedRun | PollEvent::Triggered(PollTriggerEvent::Start) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
     }

@@ -1,5 +1,5 @@
 use crate::types::v0::{
-    message_bus::NexusId,
+    message_bus::{NexusId, ReplicaId},
     store::definitions::{ObjectKey, StorableObject, StorableObjectType},
 };
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,16 @@ pub struct NexusInfo {
     pub clean_shutdown: bool,
     /// Information about children.
     pub children: Vec<ChildInfo>,
+}
+
+impl NexusInfo {
+    /// Check if the provided replica is healthy or not
+    pub fn is_replica_healthy(&self, replica: &ReplicaId) -> bool {
+        match self.children.iter().find(|c| c.uuid == replica.as_str()) {
+            Some(info) => info.healthy,
+            None => false,
+        }
+    }
 }
 
 /// Definition of the child information that gets saved in the persistent
