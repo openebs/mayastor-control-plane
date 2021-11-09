@@ -44,7 +44,7 @@ spec:
             requests:
               cpu: 50m
               memory: 16Mi
-          image: mayadata/mcp-msp-operator:develop
+          image: mayadata/mcp-msp-operator:e2e-nightly
           imagePullPolicy: Always
           args:
             - "-e http://$(REST_SERVICE_HOST):8081"
