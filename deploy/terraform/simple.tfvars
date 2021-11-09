@@ -19,7 +19,7 @@ control_resource_requests = {
   "memory" = "100Mi"
 }
 control_resource_limits = {
-  "cpu"    = "200m"
+  "cpu"    = "1000m"
   "memory" = "250Mi"
 }
 

@@ -36,7 +36,14 @@ spec:
           name: etcd-probe
       containers:
         - name: core
-          image: mayadata/mcp-core:develop
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 32Mi
+            requests:
+              cpu: 500m
+              memory: 16Mi
+          image: mayadata/mcp-core:e2e-nightly
           imagePullPolicy: Always
           args:
             - "-smayastor-etcd"
