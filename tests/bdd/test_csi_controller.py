@@ -13,6 +13,7 @@ import subprocess
 import csi_pb2 as pb
 import csi_pb2_grpc as rpc
 import grpc
+from time import sleep
 import subprocess
 
 from urllib.parse import urlparse
@@ -27,17 +28,20 @@ from openapi_client.exceptions import NotFoundException
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 VOLUME2_UUID = "d8aab0f1-82f4-406c-89ee-14f08b004aea"
 VOLUME3_UUID = "f29b8e73-67d0-4b32-a8ea-a1277d48ef07"
+VOLUME4_UUID = "955a12c4-707e-4040-9c4d-e9682213588f"  # 2 replicas
 NOT_EXISTING_VOLUME_UUID = "11111111-2222-3333-4444-555555555555"
 PVC_VOLUME1_NAME = "pvc-%s" % VOLUME1_UUID
 PVC_VOLUME2_NAME = "pvc-%s" % VOLUME2_UUID
 PVC_VOLUME3_NAME = "pvc-%s" % VOLUME3_UUID
+PVC_VOLUME4_NAME = "pvc-%s" % VOLUME4_UUID
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 POOL2_UUID = "bcabda21-9e66-4d81-8c75-bf9f3b687cdc"
 NODE1 = "mayastor-1"
 NODE2 = "mayastor-2"
-VOLUME1_SIZE = 1024 * 1024 * 72
-VOLUME2_SIZE = 1024 * 1024 * 32
-VOLUME3_SIZE = 1024 * 1024 * 48
+VOLUME1_SIZE = 1024 * 1024 * 32
+VOLUME2_SIZE = 1024 * 1024 * 22
+VOLUME3_SIZE = 1024 * 1024 * 28
+VOLUME4_SIZE = 1024 * 1024 * 32
 K8S_HOSTNAME = "kubernetes.io/hostname"
 
 
@@ -52,7 +56,7 @@ def setup():
     pool_api.put_node_pool(
         NODE1,
         POOL1_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=96"], labels=pool_labels),
+        CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
     )
     pool_api.put_node_pool(
         NODE2,
@@ -60,8 +64,12 @@ def setup():
         CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
     )
     yield
-    pool_api.del_pool(POOL1_UUID)
-    pool_api.del_pool(POOL2_UUID)
+
+    try:
+        pool_api.del_pool(POOL1_UUID)
+        pool_api.del_pool(POOL2_UUID)
+    except:
+        pass
     common.deployer_stop()
 
 
@@ -176,6 +184,13 @@ def test_list_local_volume(setup):
     """list local volume"""
 
 
+@scenario(
+    "features/csi/controller.feature", "unpublish volume when nexus node is offline"
+)
+def test_unpublish_volume_with_offline_nexus_node(setup):
+    """unpublish volume when nexus node is offline"""
+
+
 @given("a running CSI controller plugin", target_fixture="csi_instance")
 def a_csi_instance():
     return csi_rpc_handle()
@@ -214,6 +229,66 @@ def populate_published_volume(_create_1_replica_nvmf_volume):
         volume.state.target["protocol"] == "nvmf"
     ), "Protocol mismatches for published volume"
     return volume
+
+
+@pytest.fixture
+def _create_2_replica_nvmf_volume():
+    yield csi_create_2_replica_nvmf_volume4()
+    csi_delete_2_replica_nvmf_volume4()
+
+
+@pytest.fixture
+def populate_published_2_replica_volume(_create_2_replica_nvmf_volume):
+    do_publish_volume(VOLUME4_UUID, NODE1)
+
+    # Make sure volume is published.
+    volume = common.get_volumes_api().get_volume(VOLUME4_UUID)
+    assert (
+        str(volume.spec.target.protocol) == "nvmf"
+    ), "Protocol mismatches for published volume"
+    assert (
+        volume.state.target["protocol"] == "nvmf"
+    ), "Protocol mismatches for published volume"
+    return volume
+
+
+@pytest.fixture
+def start_stop_ms1():
+    docker_client = docker.from_env()
+    try:
+        node1 = docker_client.containers.list(all=True, filters={"name": NODE1})[0]
+    except docker.errors.NotFound:
+        raise Exception("No Mayastor instance found that hosts the nexus")
+    # Stop the nexus node and wait till nexus offline status is also reflected in volume target info.
+    # Wait at most 60 seconds.
+    node1.stop()
+    state_synced = False
+    for i in range(12):
+        vol = common.get_volumes_api().get_volume(VOLUME4_UUID)
+        if getattr(vol.state, "target", None) is None:
+            state_synced = True
+            break
+        sleep(5)
+    assert state_synced, "Nexus failure is not reflected in volume target info"
+    yield
+    node1.start()
+
+
+@when(
+    "a node that hosts the nexus becomes offline", target_fixture="offline_nexus_node"
+)
+def offline_nexus_node(populate_published_2_replica_volume, start_stop_ms1):
+    pass
+
+
+@then("a ControllerUnpublishVolume request should succeed as if nexus node was online")
+def check_unpublish_volume_for_offline_nexus_node(offline_nexus_node):
+    do_unpublish_volume(VOLUME4_UUID, NODE1)
+
+
+@then("volume should be successfully republished on the other node")
+def check_republish_volume_for_offline_nexus_node(offline_nexus_node):
+    do_publish_volume(VOLUME4_UUID, NODE2)
 
 
 @when(
@@ -584,6 +659,21 @@ def csi_create_1_replica_nvmf_volume1():
     return csi_rpc_handle().controller.CreateVolume(req)
 
 
+def csi_create_2_replica_nvmf_volume4():
+    capacity = pb.CapacityRange(required_bytes=VOLUME4_SIZE, limit_bytes=0)
+    parameters = {
+        "protocol": "nvmf",
+        "ioTimeout": "30",
+        "repl": "2",
+    }
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME4_NAME, capacity_range=capacity, parameters=parameters
+    )
+
+    return csi_rpc_handle().controller.CreateVolume(req)
+
+
 def csi_create_1_replica_local_nvmf_volume():
     capacity = pb.CapacityRange(required_bytes=VOLUME3_SIZE, limit_bytes=0)
     parameters = {"protocol": "nvmf", "ioTimeout": "30", "repl": "1", "local": "true"}
@@ -640,6 +730,12 @@ def check_nvmf_target(uri):
 
 
 def csi_delete_1_replica_nvmf_volume1():
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=VOLUME1_UUID)
+    )
+
+
+def csi_delete_2_replica_nvmf_volume4():
     csi_rpc_handle().controller.DeleteVolume(
         pb.DeleteVolumeRequest(volume_id=VOLUME1_UUID)
     )
