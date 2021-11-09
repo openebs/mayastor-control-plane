@@ -103,10 +103,10 @@ pub async fn main() -> Result<(), String> {
         .expect("Failed to register handler for SIGINT");
 
     tokio::select! {
-        _srv =  server::CsiServer::run(args.value_of("socket")
+        srv =  server::CsiServer::run(args.value_of("socket")
             .expect("CSI socket must be specified")
             .to_string()) => {
-            _srv?
+            srv?
         }
         _evt = signal_term.recv() => {
             }

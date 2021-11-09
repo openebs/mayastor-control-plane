@@ -10,7 +10,7 @@
 , tini
 }:
 let
-  image_suffix = { "release" = ""; "debug" = "-dev"; "cov" = "-cov"; };
+  image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
   build-control-plane-image = { build, name, config ? { } }: dockerTools.buildImage {
     tag = control-plane.version;
     created = "now";
@@ -39,11 +39,11 @@ in
 {
   core = build-agent-image { build = "release"; name = "core"; };
   core-dev = build-agent-image { build = "debug"; name = "core"; };
-  core-cov = build-agent-image { build = "cov"; name = "core"; };
+  core-cov = build-agent-image { build = "coverage"; name = "core"; };
 
   jsongrpc = build-agent-image { build = "release"; name = "jsongrpc"; };
   jsongrpc-dev = build-agent-image { build = "debug"; name = "jsongrpc"; };
-  jsongrpc-cov = build-agent-image { build = "cov"; name = "jsongrpc"; };
+  jsongrpc-cov = build-agent-image { build = "coverage"; name = "jsongrpc"; };
 
   rest = build-rest-image {
     build = "release";
@@ -52,7 +52,7 @@ in
     build = "debug";
   };
   rest-cov = build-rest-image {
-    build = "cov";
+    build = "coverage";
   };
 
   msp-operator = build-msp-operator-image {
@@ -62,7 +62,7 @@ in
     build = "debug";
   };
   msp-operator-cov = build-msp-operator-image {
-    build = "cov";
+    build = "coverage";
   };
 
   csi-controller = build-csi-controller-image {
@@ -72,6 +72,6 @@ in
     build = "debug";
   };
   csi-controller-cov = build-csi-controller-image {
-    build = "cov";
+    build = "coverage";
   };
 }

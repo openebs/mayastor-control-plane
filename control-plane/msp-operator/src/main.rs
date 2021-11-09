@@ -1055,8 +1055,8 @@ async fn main() -> anyhow::Result<()> {
             }
         _evt = signal_int.recv() => {
             }
-        _ps = pool_controller(matches) => {
-            _ps?
+        poolctlr = pool_controller(matches) => {
+            poolctlr?
         }
     }
     global::shutdown_tracer_provider();

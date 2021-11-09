@@ -90,7 +90,7 @@ in
       buildType = "debug";
       buildInputs = buildProps.buildInputs;
     });
-  cov = rustNightly.buildRustPackage
+  coverage = rustNightly.buildRustPackage
     (buildProps // {
       RUSTFLAGS = "-Z instrument-coverage";
       buildType = "release";

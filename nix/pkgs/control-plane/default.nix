@@ -32,5 +32,5 @@ in
 
   release = components { src = project-builder.release; };
   debug = components { src = project-builder.debug; };
-  cov = components { src = project-builder.cov; };
+  coverage = components { src = project-builder.coverage; };
 }
