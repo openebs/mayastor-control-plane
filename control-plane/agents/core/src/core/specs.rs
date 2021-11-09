@@ -1,6 +1,7 @@
 use crate::core::{registry::Registry, resource_map::ResourceMap};
 use common::errors::SvcError;
 use common_lib::{
+    constants::V0,
     mbus_api::ResourceKind,
     types::v0::{
         message_bus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
@@ -700,7 +701,7 @@ impl ResourceSpecsLocked {
         store: &mut S,
         spec_type: StorableObjectType,
     ) -> Result<(), SpecError> {
-        let prefix = key_prefix(spec_type);
+        let prefix = key_prefix(spec_type, String::from(V0));
         let store_entries = store
             .get_values_prefix(&prefix)
             .await

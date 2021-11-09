@@ -1,3 +1,4 @@
+use crate::constants::V0;
 use async_trait::async_trait;
 use etcd_client::Error;
 use serde::{de::DeserializeOwned, Serialize};
@@ -124,6 +125,9 @@ pub trait ObjectKey: Sync + Send {
     }
     fn key_type(&self) -> StorableObjectType;
     fn key_uuid(&self) -> String;
+    fn version(&self) -> String {
+        String::from(V0)
+    }
 }
 
 /// Implemented by objects which get stored in the store, eg: Volume
@@ -159,16 +163,17 @@ pub enum StorableObjectType {
     StoreLeaseOwner,
 }
 
-pub fn key_prefix(obj_type: StorableObjectType) -> String {
+pub fn key_prefix(obj_type: StorableObjectType, version: String) -> String {
     format!(
-        "/namespace/{}/control-plane/{}",
+        "/namespace/{}/control-plane/{}/{}",
         std::env::var("MY_POD_NAMESPACE").unwrap_or_else(|_| "default".into()),
-        obj_type.to_string()
+        version,
+        obj_type.to_string(),
     )
 }
 
 /// create a key based on the object's key trait
 /// todo: version properly
 pub fn get_key<K: ObjectKey + ?Sized>(k: &K) -> String {
-    format!("{}/{}", key_prefix(k.key_type()), k.key_uuid())
+    format!("{}/{}", key_prefix(k.key_type(), k.version()), k.key_uuid())
 }

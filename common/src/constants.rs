@@ -29,3 +29,6 @@ pub const OPENEBS_CREATED_BY_KEY: &str = "openebs.io/created-by";
 
 /// The value to mark the creation source of a pool to be msp-operator in labels
 pub const MSP_OPERATOR: &str = "msp-operator";
+
+/// The value to mark v0 version of resources to be stored in persistent store
+pub const V0: &str = "v0";
