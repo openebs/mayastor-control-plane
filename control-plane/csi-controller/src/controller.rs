@@ -431,38 +431,40 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let uri =
             // Volume is already published, make sure the protocol matches and get URI.
-            if let Some(target) = &volume.spec.target {
-                if target.protocol != Some(protocol) {
-                    let m = format!(
-                        "Volume {} already shared via different protocol: {:?}",
-                        volume_id, target.protocol,
-                    );
-                    error!("{}", m);
-                    return Err(Status::failed_precondition(m));
-                }
-
-                if let Some((node, uri)) = get_volume_share_location(&volume) {
-                    // Make sure volume is published at the same node.
-                    if node_id != node {
+            match &volume.spec.target {
+                Some(target) => {
+                    if target.protocol != Some(protocol) {
                         let m = format!(
-                            "Volume {} already published on a different node: {}",
-                            volume_id, node,
+                            "Volume {} already shared via different protocol: {:?}",
+                            volume_id, target.protocol,
                         );
                         error!("{}", m);
                         return Err(Status::failed_precondition(m));
                     }
 
-                    debug!("Volume {} already published at {}", volume_id, uri);
-                    uri
-                } else {
-                    let m = format!(
-                        "Volume {} reports no info about its publishing status",
-                        volume_id
-                    );
-                    error!("{}", m);
-                    return Err(Status::internal(m));
-                }
-            } else {
+                    if let Some((node, uri)) = get_volume_share_location(&volume) {
+                        // Make sure volume is published at the same node.
+                        if node_id != node {
+                            let m = format!(
+                                "Volume {} already published on a different node: {}",
+                                volume_id, node,
+                            );
+                            error!("{}", m);
+                            return Err(Status::failed_precondition(m));
+                        }
+
+                        debug!("Volume {} already published at {}", volume_id, uri);
+                        uri
+                    } else {
+                        let m = format!(
+                            "Volume {} reports no info about its publishing status",
+                            volume_id
+                        );
+                        error!("{}", m);
+                        return Err(Status::internal(m));
+                    }
+                },
+            _ => {
                 // Volume is not published.
                 let v = MayastorApiClient::get_client()
                     .publish_volume(&volume_id, &node_id, protocol)
@@ -482,7 +484,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     error!("{}", m);
                     return Err(Status::internal(m));
                 }
-            };
+            }
+        };
 
         // Prepare the context for the Mayastor Node CSI plugin.
         let mut publish_context = HashMap::new();
@@ -524,11 +527,11 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         };
 
         // Check if target volume is published and the node matches.
-        if let Some((node, _)) = get_volume_share_location(&volume) {
-            if !args.node_id.is_empty() && node != normalize_hostname(&args.node_id) {
+        if let Some(target) = &volume.spec.target.as_ref() {
+            if !args.node_id.is_empty() && target.node != normalize_hostname(&args.node_id) {
                 return Err(Status::not_found(format!(
                     "Volume {} is published on a different node: {}",
-                    &args.volume_id, node
+                    &args.volume_id, target.node
                 )));
             }
         } else {
@@ -540,8 +543,9 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             return Ok(Response::new(ControllerUnpublishVolumeResponse {}));
         }
 
+        // Do forced volume upublish as Kubernetes already detached the volume.
         MayastorApiClient::get_client()
-            .unpublish_volume(&volume_uuid)
+            .unpublish_volume(&volume_uuid, true)
             .await
             .map_err(|e| {
                 Status::not_found(format!(

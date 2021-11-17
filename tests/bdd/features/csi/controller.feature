@@ -114,3 +114,9 @@ Scenario: list local volume
     When a ListVolumesRequest is sent to CSI controller
     Then listed local volume must be accessible only from all existing Mayastor nodes
     And no topology restrictions should be imposed to non-local volumes
+
+Scenario: unpublish volume when nexus node is offline
+    Given a volume published on a node
+    When a node that hosts the nexus becomes offline
+    Then a ControllerUnpublishVolume request should succeed as if nexus node was online
+    And volume should be successfully republished on the other node
