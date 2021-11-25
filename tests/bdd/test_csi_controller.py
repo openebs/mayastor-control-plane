@@ -159,13 +159,6 @@ def test_unpublish_not_existing_volume(setup):
     """unpublish not existing volume"""
 
 
-@scenario(
-    "features/csi/controller.feature", "republish volume with a different protocol"
-)
-def test_republish_volume_with_a_different_protocol(setup):
-    """republish volume with a different protocol"""
-
-
 @scenario("features/csi/controller.feature", "republish volume on a different node")
 def test_republish_volume_on_a_different_node(setup):
     """republish volume on a different node"""
@@ -297,16 +290,6 @@ def create_1_replica_local_nvmf_volume(_create_1_replica_local_nvmf_volume):
 
 
 @when(
-    "a ControllerPublishVolume request is sent to CSI controller to re-publish volume using a different protocol",
-    target_fixture="republish_volume_with_a_different_protocol",
-)
-def republish_volume_with_a_different_protocol(populate_published_volume):
-    with pytest.raises(grpc.RpcError) as e:
-        do_publish_volume(VOLUME1_UUID, NODE1, "iscsi")
-    return e.value
-
-
-@when(
     "a ControllerPublishVolume request is sent to CSI controller to re-publish volume on a different node",
     target_fixture="republish_volume_on_a_different_node",
 )
@@ -354,22 +337,6 @@ def check_republish_volume_on_a_different_node(republish_volume_on_a_different_n
         grpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION
     ), "Unexpected gRPC error code: %s" + str(grpc_error.code())
     assert "already published on a different node" in grpc_error.details(), (
-        "Error message reflects a different failure: %s" % grpc_error.details()
-    )
-
-
-@then(
-    "a ControllerPublishVolume request should fail with FAILED_PRECONDITION error mentioning protocol mismatch"
-)
-def check_republish_volume_with_a_different_protocol(
-    republish_volume_with_a_different_protocol,
-):
-    grpc_error = republish_volume_with_a_different_protocol
-
-    assert (
-        grpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION
-    ), "Unexpected gRPC error code: %s" + str(grpc_error.code())
-    assert "already shared via different protocol" in grpc_error.details(), (
         "Error message reflects a different failure: %s" % grpc_error.details()
     )
 
