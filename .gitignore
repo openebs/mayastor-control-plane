@@ -17,3 +17,4 @@
 /openapi/*
 !/openapi/Cargo.toml
 !/openapi/build.rs
+/tests/bdd/common/__pycache__

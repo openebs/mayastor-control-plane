@@ -4,7 +4,7 @@ use crate::core::{
     wrapper::ClientOps,
 };
 use common_lib::types::v0::{
-    message_bus::{CreatePool, NodeStatus},
+    message_bus::{CreatePool, DestroyPool, NodeStatus},
     store::{pool::PoolSpec, OperationMode, TraceSpan},
 };
 use parking_lot::Mutex;
@@ -34,9 +34,8 @@ impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         for pool in context.specs().get_locked_pools() {
-            if pool.lock().status().created() {
-                results.push(missing_pool_state_reconciler(pool, context).await)
-            }
+            results.push(missing_pool_state_reconciler(pool.clone(), context).await);
+            results.push(deleting_pool_spec_reconciler(pool.clone(), context).await);
         }
         Self::squash_results(results)
     }
@@ -108,5 +107,51 @@ async fn missing_pool_state_reconciler(
         }
     } else {
         PollResult::Ok(PollerState::Idle)
+    }
+}
+
+/// If a pool is tried to be deleted after its corresponding mayastor node is down,
+/// the pool deletion gets struck in Deleting state, this creates a problem as when
+/// the node comes up we cannot create a pool with same specs, the deleting_pool_spec_reconciler
+/// cleans up any such pool when node comes up.
+#[tracing::instrument(skip(pool_spec, context), fields(pool.uuid = %pool_spec.lock().id))]
+async fn deleting_pool_spec_reconciler(
+    pool_spec: Arc<Mutex<PoolSpec>>,
+    context: &PollContext,
+) -> PollResult {
+    if !pool_spec.lock().status().deleting() {
+        // nothing to do here
+        return PollResult::Ok(PollerState::Idle);
+    }
+    let pool = pool_spec.lock().clone();
+    match context
+        .registry()
+        .get_node_wrapper(&pool.node.clone())
+        .await
+    {
+        Ok(node) => {
+            if !node.read().await.is_online() {
+                return PollResult::Ok(PollerState::Idle);
+            }
+        }
+        Err(_) => return PollResult::Ok(PollerState::Idle),
+    };
+    let request = DestroyPool {
+        node: pool.node.clone(),
+        id: pool.id.clone(),
+    };
+    match context
+        .specs()
+        .destroy_pool(context.registry(), &request, OperationMode::Exclusive)
+        .await
+    {
+        Ok(_) => {
+            pool.info_span(|| tracing::info!("Pool deleted successfully"));
+            PollResult::Ok(PollerState::Idle)
+        }
+        Err(error) => {
+            pool.error_span(|| tracing::error!(error=%error, "Failed to delete the pool"));
+            Err(error)
+        }
     }
 }

@@ -90,12 +90,6 @@ Scenario: unpublish not existing volume
     When a ControllerUnpublishVolume request is sent to CSI controller to unpublish not existing volume
     Then a ControllerUnpublishVolume request should succeed as if not existing volume was published
 
-Scenario: republish volume with a different protocol
-    Given a volume published on a node
-    When a ControllerPublishVolume request is sent to CSI controller to re-publish volume using a different protocol
-    Then a ControllerPublishVolume request should fail with FAILED_PRECONDITION error mentioning protocol mismatch
-    And volume should report itself as published
-
 Scenario: republish volume on a different node
     Given a volume published on a node
     When a ControllerPublishVolume request is sent to CSI controller to re-publish volume on a different node

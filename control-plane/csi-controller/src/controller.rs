@@ -16,7 +16,7 @@ use rpc::csi::Topology as CsiTopology;
 const K8S_HOSTNAME: &str = "kubernetes.io/hostname";
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
-const PROTO_NVMF: &str = "nvmf";
+const SUPPORTED_FS_TYPES: [&str; 2] = ["ext4", "xfs"];
 const MAYASTOR_NODE_PREFIX: &str = "mayastor://";
 const MAX_VOLUMES_TO_LIST: usize = 1024 * 1024;
 
@@ -41,6 +41,15 @@ mod volume_opts {
     }
 }
 
+/// Check whether the passed fs type is supported or not,
+/// if not provided we call it valid as fsType is an optional parameter
+pub fn valid_fs_type(fs_type: Option<&String>) -> bool {
+    match fs_type {
+        Some(fs) => SUPPORTED_FS_TYPES.iter().any(|p| p == fs),
+        None => true,
+    }
+}
+
 /// Check whether target volume capabilites are valid. As of now, only
 /// SingleNodeWriter capability is supported.
 fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), tonic::Status> {
@@ -58,12 +67,11 @@ fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), to
 }
 
 /// Parse string protocol into REST API protocol enum.
-fn parse_protocol(proto: &str) -> Result<VolumeShareProtocol, Status> {
-    match proto {
-        "iscsi" => Ok(VolumeShareProtocol::Iscsi),
-        "nvmf" => Ok(VolumeShareProtocol::Nvmf),
+fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, Status> {
+    match proto.map(|s| s.as_str()) {
+        None | Some("nvmf") => Ok(VolumeShareProtocol::Nvmf),
         _ => Err(Status::invalid_argument(format!(
-            "Invalid protocol: {}",
+            "Invalid protocol: {:?}",
             proto
         ))),
     }
@@ -233,15 +241,17 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             }
         };
 
+        // Check filesystem type.
+        if !valid_fs_type(args.parameters.get("fsType")) {
+            return Err(Status::invalid_argument("Invalid filesystem type"));
+        }
+
         // Check storage protocol.
-        let protocol = match args.parameters.get("protocol") {
-            Some(p) => p.to_string(),
-            None => return Err(Status::invalid_argument("Missing storage protocol")),
-        };
+        let protocol = parse_protocol(args.parameters.get("protocol"))?;
 
         // Check I/O timeout.
         if let Some(io_timeout) = args.parameters.get(volume_opts::IO_TIMEOUT) {
-            if protocol != PROTO_NVMF {
+            if protocol != VolumeShareProtocol::Nvmf {
                 return Err(Status::invalid_argument(
                     "I/O timeout is valid only for nvmf protocol",
                 ));
@@ -394,14 +404,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             ));
         }
 
-        let protocol = match args.volume_context.get("protocol") {
-            Some(p) => parse_protocol(p)?,
-            None => {
-                return Err(Status::invalid_argument(
-                    "No protocol specified for publish volume request",
-                ))
-            }
-        };
+        let protocol = parse_protocol(args.volume_context.get("protocol"))?;
 
         if args.node_id.is_empty() {
             return Err(Status::invalid_argument("Node ID must not be empty"));

@@ -169,6 +169,10 @@ impl ReplicaOwners {
     pub fn volume(&self) -> Option<&VolumeId> {
         self.volume.as_ref()
     }
+    /// Return the nexuses that own the replica
+    pub fn nexuses(&self) -> &Vec<NexusId> {
+        self.nexuses.as_ref()
+    }
     /// Check if this replica is owned by any nexuses or a volume
     pub fn is_owned(&self) -> bool {
         self.volume.is_some() || !self.nexuses.is_empty()
@@ -195,6 +199,10 @@ impl ReplicaOwners {
     /// The replica is no longer part of the volume
     pub fn disowned_by_volume(&mut self) {
         let _ = self.volume.take();
+    }
+    /// The replica is no longer part of the nexus
+    pub fn disowned_by_nexus(&mut self, nexus: &NexusId) {
+        self.nexuses.retain(|n| n != nexus)
     }
     /// The replica is no longer part of the provided owners
     pub fn disown(&mut self, disowner: &Self) {

@@ -1,6 +1,11 @@
+#[cfg(test)]
+mod tests;
+
 use crate::core::{
     specs::{OperationSequenceGuard, SpecOperations},
-    task_poller::{PollContext, PollEvent, PollResult, PollTimer, PollerState, TaskPoller},
+    task_poller::{
+        PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
+    },
 };
 use common_lib::types::v0::{message_bus::ReplicaOwners, store::OperationMode};
 use std::ops::Deref;
@@ -15,7 +20,7 @@ impl ReplicaReconciler {
     /// Return a new `Self`
     pub fn new() -> Self {
         Self {
-            counter: PollTimer::from(1),
+            counter: PollTimer::from(5),
         }
     }
 }
@@ -23,7 +28,10 @@ impl ReplicaReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for ReplicaReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        destroy_orphaned_replicas(context).await
+        let mut results = vec![];
+        results.push(disown_missing_owners(context).await);
+        results.push(destroy_orphaned_replicas(context).await);
+        Self::squash_results(results)
     }
 
     async fn poll_timer(&mut self, _context: &PollContext) -> bool {
@@ -32,10 +40,60 @@ impl TaskPoller for ReplicaReconciler {
 
     async fn poll_event(&mut self, context: &PollContext) -> bool {
         match context.event() {
-            PollEvent::TimedRun => true,
+            PollEvent::TimedRun | PollEvent::Triggered(PollTriggerEvent::Start) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
     }
+}
+
+/// Remove replica owners who no longer exist.
+/// In the event that the replicas become orphaned (have no owners) they will be destroyed by the
+/// 'destroy_orphaned_replicas' reconcile loop.
+async fn disown_missing_owners(context: &PollContext) -> PollResult {
+    let specs = context.specs();
+
+    for replica in specs.get_replicas() {
+        // If we obtain the operation guard no one else can be modifying the replica spec.
+        if let Ok(_guard) = replica.operation_guard(OperationMode::ReconcileStart) {
+            let replica_spec = replica.lock().clone();
+
+            if replica_spec.managed && replica_spec.owned() {
+                let mut owner_removed = false;
+                let owners = &replica_spec.owners;
+
+                if let Some(volume) = owners.volume() {
+                    if specs.get_volume(volume).is_err() {
+                        // The volume no longer exists. Remove it as an owner.
+                        replica.lock().owners.disowned_by_volume();
+                        owner_removed = true;
+                        tracing::info!(replica.uuid=%replica_spec.uuid, volume.uuid=%volume, "Removed volume as replica owner");
+                    }
+                };
+
+                owners.nexuses().iter().for_each(|nexus| {
+                    if specs.get_nexus(nexus).is_none() {
+                        // The nexus no longer exists. Remove it as an owner.
+                        replica.lock().owners.disowned_by_nexus(nexus);
+                        owner_removed = true;
+                        tracing::info!(replica.uuid=%replica_spec.uuid, nexus.uuid=%nexus, "Removed nexus as replica owner");
+                    }
+                });
+
+                if owner_removed {
+                    let replica_clone = replica.lock().clone();
+                    if let Err(error) = context.registry().store_obj(&replica_clone).await {
+                        // Log the fact that we couldn't persist the changes.
+                        // If we reload the stale info from the persistent store (on a restart) we
+                        // will run this reconcile loop again and tidy it up, so no need to retry
+                        // here.
+                        tracing::error!(replica.uuid=%replica_clone.uuid, error=%error, "Failed to persist disowned replica")
+                    }
+                }
+            }
+        }
+    }
+
+    PollResult::Ok(PollerState::Idle)
 }
 
 /// Destroy orphaned replicas.

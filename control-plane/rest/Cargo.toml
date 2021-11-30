@@ -16,7 +16,8 @@ path = "./src/lib.rs"
 
 [dependencies]
 # Actix Server, telemetry
-rustls = "0.19.1"
+rustls = "0.20.0"
+rustls-pemfile = "0.2.1"
 actix-web = { version = "4.0.0-beta.9", features = ["rustls"] }
 actix-service = "2.0.0"
 opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }

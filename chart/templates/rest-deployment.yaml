@@ -21,6 +21,7 @@ spec:
         {{- include "base_init_containers" . }}
       containers:
         - name: rest
+          resources: {{- .Values.rest.resources | toYaml | nindent 12 }}
           image: {{ .Values.mayastorCP.registry }}mayadata/mcp-rest:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
@@ -31,5 +32,8 @@ spec:
             - "--request-timeout={{ .Values.base.default_req_timeout }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
           ports:
-          - containerPort: 8080
-          - containerPort: 8081
+            - containerPort: 8080
+            - containerPort: 8081
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.mayastorCP.logLevel }}

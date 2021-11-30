@@ -15,13 +15,15 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         node: &Register,
     ) -> Result<NodeSpec, SvcError> {
-        let node = {
+        let (changed, node) = {
             let mut specs = self.write();
             match specs.nodes.get(&node.id) {
                 Some(node_spec) => {
                     let mut node_spec = node_spec.lock();
+                    let changed = node_spec.endpoint() != node.grpc_endpoint;
+
                     node_spec.set_endpoint(node.grpc_endpoint.clone());
-                    Ok(node_spec.clone())
+                    (changed, node_spec.clone())
                 }
                 None => {
                     let node = NodeSpec::new(
@@ -30,14 +32,14 @@ impl ResourceSpecsLocked {
                         NodeLabels::new(),
                     );
                     specs.nodes.insert(node.clone());
-                    Ok(node)
+                    (true, node)
                 }
             }
         };
-        if let Ok(node) = &node {
-            registry.store_obj(node).await?;
+        if changed {
+            registry.store_obj(&node).await?;
         }
-        node
+        Ok(node)
     }
 
     /// Get node spec by its `NodeId`

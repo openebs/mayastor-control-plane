@@ -9,8 +9,13 @@ pub const DEFAULT_CONN_TIMEOUT: &str = "1s";
 /// Use a set of minimum timeouts for specific requests
 pub const ENABLE_MIN_TIMEOUTS: bool = true;
 
+/// The timeout for all persistent store operations
+pub const STORE_OP_TIMEOUT: &str = "5s";
+/// The lease lock ttl for the persistent store after which we'll lose the exclusive access
+pub const STORE_LEASE_LOCK_TTL: &str = "30s";
+
 /// Mayastor container image used for testing
-pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:98d239db6bf7";
+pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:e2e-nightly";
 
 /// Mayastor environment variable that points to a mayastor binary
 /// This must be in sync with shell.nix

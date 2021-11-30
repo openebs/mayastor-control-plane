@@ -125,11 +125,11 @@ pub struct StartOptions {
     pub mayastors: u32,
 
     /// Use the following docker image for the mayastor instances
-    #[structopt(long, default_value = common_lib::MAYASTOR_IMAGE)]
+    #[structopt(long, env = "MAYASTOR_IMAGE", default_value = common_lib::MAYASTOR_IMAGE)]
     pub mayastor_image: String,
 
     /// Use the following runnable binary for the mayastor instances
-    #[structopt(long, conflicts_with = "mayastor_image")]
+    #[structopt(long, env = "MAYASTOR_BIN", conflicts_with = "mayastor_image")]
     pub mayastor_bin: Option<String>,
 
     /// Add host block devices to the mayastor containers as a docker bind mount
@@ -138,6 +138,14 @@ pub struct StartOptions {
     /// Note: the mayastor containers will run as `privileged`!
     #[structopt(long)]
     pub mayastor_devices: Vec<String>,
+
+    /// Add the following environment variables to the mayastor containers
+    #[structopt(long, env = "MAYASTOR_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    pub mayastor_env: Option<Vec<KeyValue>>,
+
+    /// Add the following environment variables to the agent containers
+    #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    pub agents_env: Option<Vec<KeyValue>>,
 
     /// Cargo Build each component before deploying
     #[structopt(short, long)]
@@ -194,6 +202,11 @@ pub struct StartOptions {
     /// Override the core agent's store operation timeout
     #[structopt(long)]
     pub store_timeout: Option<humantime::Duration>,
+
+    /// Override the core agent's lease lock ttl for the persistent store after which it'll loose
+    /// the exclusive access to the store
+    #[structopt(long)]
+    pub store_lease_ttl: Option<humantime::Duration>,
 
     /// Override the core agent's reconcile period
     #[structopt(long)]
@@ -279,6 +292,10 @@ impl StartOptions {
         self.store_timeout = Some(timeout.into());
         self
     }
+    pub fn with_store_lease_ttl(mut self, ttl: Duration) -> Self {
+        self.store_lease_ttl = Some(ttl.into());
+        self
+    }
     pub fn with_reconcile_period(mut self, busy: Duration, idle: Duration) -> Self {
         self.reconcile_period = Some(busy.into());
         self.reconcile_idle_period = Some(idle.into());
@@ -301,6 +318,10 @@ impl StartOptions {
     }
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {
         self.jaeger = jaeger;
+        self
+    }
+    pub fn with_nats(mut self, nats: bool) -> Self {
+        self.no_nats = !nats;
         self
     }
     pub fn with_build(mut self, build: bool) -> Self {

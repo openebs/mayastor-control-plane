@@ -7,10 +7,9 @@ use actix_web::{
     middleware, App, HttpServer,
 };
 
-use rustls::{
-    internal::pemfile::{certs, rsa_private_keys},
-    NoClientAuth, ServerConfig,
-};
+use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, rsa_private_keys};
+
 use std::{fs::File, io::BufReader};
 use structopt::StructOpt;
 
@@ -174,7 +173,7 @@ fn load_certificates<R: std::io::Read>(
     cert_file: &mut BufReader<R>,
     key_file: &mut BufReader<R>,
 ) -> anyhow::Result<ServerConfig> {
-    let mut config = ServerConfig::new(NoClientAuth::new());
+    let config = ServerConfig::builder().with_safe_defaults();
     let cert_chain = certs(cert_file).map_err(|_| {
         anyhow::anyhow!("Failed to retrieve certificates from the certificate file",)
     })?;
@@ -184,7 +183,10 @@ fn load_certificates<R: std::io::Read>(
     if keys.is_empty() {
         anyhow::bail!("No keys found in the keys file");
     }
-    config.set_single_cert(cert_chain, keys.remove(0))?;
+    let config = config.with_no_client_auth().with_single_cert(
+        cert_chain.into_iter().map(Certificate).collect(),
+        PrivateKey(keys.remove(0)),
+    )?;
     Ok(config)
 }
 

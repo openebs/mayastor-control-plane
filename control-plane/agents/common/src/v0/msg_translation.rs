@@ -123,16 +123,37 @@ impl TryRpcToMessageBus for rpc::ReplicaV2 {
 
 /// Volume Agent conversions
 
+impl TryRpcToMessageBus for rpc::NexusV2 {
+    type BusMessage = message_bus::Nexus;
+
+    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
+        Ok(Self::BusMessage {
+            node: Default::default(),
+            name: self.name.clone(),
+            uuid: NexusId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.uuid.to_owned(),
+                kind: ResourceKind::Nexus,
+            })?,
+            size: self.size,
+            status: NexusStatus::from(self.state),
+            children: self.children.iter().map(|c| c.to_mbus()).collect(),
+            device_uri: self.device_uri.clone(),
+            rebuilds: self.rebuilds,
+            // todo: do we need an "other" Protocol variant in case we don't recognise it?
+            share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::None),
+        })
+    }
+}
 impl TryRpcToMessageBus for rpc::Nexus {
     type BusMessage = message_bus::Nexus;
 
     fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
         Ok(Self::BusMessage {
             node: Default::default(),
-            uuid: NexusId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
-                uuid: self.uuid.to_owned(),
-                kind: ResourceKind::Nexus,
-            })?,
+            // todo: fix CAS-1107
+            // CreateNexusV2 returns NexusV1... patch it up after this call...
+            name: self.uuid.clone(),
+            uuid: Default::default(),
             size: self.size,
             status: NexusStatus::from(self.state),
             children: self.children.iter().map(|c| c.to_mbus()).collect(),
@@ -232,11 +253,17 @@ impl MessageBusToRpc for message_bus::DestroyPool {
 /// Volume Agent Conversions
 
 impl MessageBusToRpc for message_bus::CreateNexus {
-    type RpcMessage = rpc::CreateNexusRequest;
+    type RpcMessage = rpc::CreateNexusV2Request;
     fn to_rpc(&self) -> Self::RpcMessage {
+        let nexus_config = self.config.clone().unwrap_or_default();
         Self::RpcMessage {
+            name: self.name(),
             uuid: self.uuid.clone().into(),
             size: self.size,
+            min_cntl_id: nexus_config.min_cntl_id() as u32,
+            max_cntl_id: nexus_config.max_cntl_id() as u32,
+            resv_key: nexus_config.resv_key(),
+            preempt_key: nexus_config.preempt_key(),
             children: self.children.clone().into_vec(),
         }
     }

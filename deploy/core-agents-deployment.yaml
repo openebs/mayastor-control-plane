@@ -1,14 +1,13 @@
 ---
-# Source: mayastor-control-plane/templates/core-agents-statefulset.yaml
+# Source: mayastor-control-plane/templates/core-agents-deployment.yaml
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: core-agents
   namespace: mayastor
   labels:
     app: core-agents
 spec:
-  serviceName: core-agents
   replicas: 1
   selector:
     matchLabels:
@@ -37,10 +36,28 @@ spec:
           name: etcd-probe
       containers:
         - name: core
-          image: mayadata/mcp-core:develop
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 32Mi
+            requests:
+              cpu: 500m
+              memory: 16Mi
+          image: mayadata/mcp-core:e2e-nightly
           imagePullPolicy: Always
           args:
             - "-smayastor-etcd"
             - "-nnats"
             - "--request-timeout=5s"
             - "--cache-period=30s"
+          env:
+            - name: RUST_LOG
+              value: info
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

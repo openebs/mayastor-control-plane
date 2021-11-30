@@ -157,7 +157,7 @@ resource "kubernetes_daemonset" "mayastor_csi_agent" {
             mount_propagation = "Bidirectional"
           }
 
-          image_pull_policy = "IfNotPresent"
+          image_pull_policy = "Always"
 
           security_context {
             privileged = true

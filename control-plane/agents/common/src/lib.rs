@@ -330,24 +330,43 @@ impl Service {
                 .collect::<Vec<_>>(),
         );
 
-        let mut signal = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate());
+        let mut signal_term =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate());
+        let mut signal_int =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt());
         loop {
             let state = state.clone();
             let bus = bus.clone();
             let gated_subs = gated_subs.clone();
 
-            let message = if let Ok(signal) = signal.as_mut() {
-                tokio::select! {
-                    _evt = signal.recv() => {
-                         opentelemetry::global::force_flush_tracer_provider();
-                        return Ok(())
-                    },
-                    message = handle.next() => {
-                        message
+            let message = match (signal_term.as_mut(), signal_int.as_mut()) {
+                (Ok(term), Ok(int)) => {
+                    tokio::select! {
+                        _evt = term.recv() => {
+                             opentelemetry::global::force_flush_tracer_provider();
+                            return Ok(())
+                        },
+                        _evt = int.recv() => {
+                             opentelemetry::global::force_flush_tracer_provider();
+                            return Ok(())
+                        },
+                        message = handle.next() => {
+                            message
+                        }
                     }
                 }
-            } else {
-                handle.next().await
+                (Ok(signal), Err(_)) | (Err(_), Ok(signal)) => {
+                    tokio::select! {
+                        _evt = signal.recv() => {
+                             opentelemetry::global::force_flush_tracer_provider();
+                            return Ok(())
+                        },
+                        message = handle.next() => {
+                            message
+                        }
+                    }
+                }
+                _ => handle.next().await,
             }
             .context(GetMessage {
                 channel: channel.clone(),

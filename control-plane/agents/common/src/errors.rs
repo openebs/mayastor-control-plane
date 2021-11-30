@@ -126,7 +126,7 @@ pub enum SvcError {
     InvalidArguments {},
     #[snafu(display("Multiple nexuses not supported"))]
     MultipleNexuses {},
-    #[snafu(display("Storage Error: {}", source.to_string()))]
+    #[snafu(display("Storage Error"))]
     Store { source: StoreError },
     #[snafu(display("Storage Error: {} Config for Resource id {} not committed to the store", kind.to_string(), id))]
     StoreSave { kind: ResourceKind, id: String },
