@@ -8,22 +8,20 @@ from pytest_bdd import (
 
 import pytest
 import docker
-import common
 import subprocess
 import csi_pb2 as pb
-import csi_pb2_grpc as rpc
-import grpc
 
-from common import CsiHandle
+from common.csi import CsiHandle
+from common.deployer import Deployer
+from common.apiclient import ApiClient
 
 
 @pytest.fixture(scope="module")
 def setup():
-    common.deployer_stop()
-    common.deployer_start(1)
+    Deployer.start(1)
     subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
     yield
-    common.deployer_stop()
+    Deployer.stop()
 
 
 @scenario("features/csi/identity.feature", "get plugin information")
@@ -67,7 +65,7 @@ def a_csi_plugin():
 )
 def csi_plugin_and_rest_api():
     # Check REST APi accessibility by listing pools.
-    common.get_pools_api().get_pools()
+    ApiClient.pools_api().get_pools()
     return csi_rpc_handle()
 
 
@@ -94,7 +92,7 @@ def stop_start_rest():
 def csi_plugin_without_rest_api(stop_start_rest):
     # Make sure REST API is not accessible anymore.
     with pytest.raises(Exception) as e:
-        common.get_pools_api().get_pools()
+        ApiClient.pools_api().get_pools()
     return csi_rpc_handle()
 
 

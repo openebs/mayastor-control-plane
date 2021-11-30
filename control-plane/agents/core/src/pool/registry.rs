@@ -37,14 +37,15 @@ impl Registry {
             }
             Some(node_id) => {
                 let mut pools = vec![];
-                let pools_from_state =
-                    self.get_node_pools(&node_id)
-                        .await?
-                        .into_iter()
-                        .map(|state| {
-                            let spec = self.specs().get_pool(&state.id).ok();
-                            Pool::from_state(state, spec)
-                        });
+                let pools_from_state = self
+                    .get_node_pools(&node_id)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|state| {
+                        let spec = self.specs().get_pool(&state.id).ok();
+                        Pool::from_state(state, spec)
+                    });
 
                 pools.extend(pools_from_state);
 

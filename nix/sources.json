@@ -5,10 +5,10 @@
         "homepage": "",
         "owner": "nmattia",
         "repo": "naersk",
-        "rev": "ee7edec50b49ab6d69b06d62f1de554efccb1ccd",
-        "sha256": "06g37l34hzi81lc7hmk91mzapsa1iak7yi3agxgdzfc69qk9wp17",
+        "rev": "0d2ce479df4633dbeb53a8ea96e5098ed37fbcc6",
+        "sha256": "1hry9kxsa59g0z116m7x5zf0l7q1rfqw7a1icv4818bh8j8dhbfp",
         "type": "tarball",
-        "url": "https://github.com/nmattia/naersk/archive/ee7edec50b49ab6d69b06d62f1de554efccb1ccd.tar.gz",
+        "url": "https://github.com/nmattia/naersk/archive/0d2ce479df4633dbeb53a8ea96e5098ed37fbcc6.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {
@@ -17,10 +17,10 @@
         "homepage": "https://github.com/nmattia/niv",
         "owner": "nmattia",
         "repo": "niv",
-        "rev": "1819632b5823e0527da28ad82fecd6be5136c1e9",
-        "sha256": "08jz17756qchq0zrqmapcm33nr4ms9f630mycc06i6zkfwl5yh5i",
+        "rev": "65a61b147f307d24bfd0a5cd56ce7d7b7cc61d2e",
+        "sha256": "17mirpsx5wyw262fpsd6n6m47jcgw8k2bwcp1iwdnrlzy4dhcgqh",
         "type": "tarball",
-        "url": "https://github.com/nmattia/niv/archive/1819632b5823e0527da28ad82fecd6be5136c1e9.tar.gz",
+        "url": "https://github.com/nmattia/niv/archive/65a61b147f307d24bfd0a5cd56ce7d7b7cc61d2e.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs": {
@@ -29,10 +29,10 @@
         "homepage": "https://github.com/NixOS/nixpkgs",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "3600a82711987ac1267a96fd97974437b69f6806",
-        "sha256": "0pyxcf2vb30maw1rnzw1y949q5mq304jbkgjj0rrkp4ibzzyglai",
+        "rev": "c8f8adc5ec85a444618da8280d666af760925b24",
+        "sha256": "073ykvc5i023a8r1wi14b40fkqvj58jssi3na8mm8kmn4x0sdja2",
         "type": "tarball",
-        "url": "https://github.com/NixOS/nixpkgs/archive/3600a82711987ac1267a96fd97974437b69f6806.tar.gz",
+        "url": "https://github.com/NixOS/nixpkgs/archive/c8f8adc5ec85a444618da8280d666af760925b24.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "rust-overlay": {

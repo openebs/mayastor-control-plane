@@ -1,10 +1,7 @@
-use crate::{
-    core::{
-        reconciler::{nexus, PollContext, TaskPoller},
-        specs::OperationSequenceGuard,
-        task_poller::{squash_results, PollResult, PollerState},
-    },
-    volume::specs::get_volume_replica_candidates,
+use crate::core::{
+    reconciler::{nexus, PollContext, TaskPoller},
+    specs::OperationSequenceGuard,
+    task_poller::{squash_results, PollResult, PollerState},
 };
 
 use common::errors::NexusNotFound;
@@ -261,25 +258,27 @@ async fn volume_replica_count_reconciler(
             });
 
             let diff = required_replica_count - current_replica_count;
-            let candidates =
-                get_volume_replica_candidates(context.registry(), &volume_spec_clone).await?;
-
             match context
                 .specs()
-                .create_volume_replicas(
-                    context.registry(),
-                    &volume_spec_clone,
-                    candidates,
-                    diff,
-                    mode,
-                )
-                .await
+                .create_volume_replicas(context.registry(), &volume_spec_clone, diff, mode)
+                .await?
             {
-                result if result > 0 => {
-                    current_replica_count += result;
+                result if !result.is_empty() => {
+                    current_replica_count += result.len();
+                    let replicas = result.iter().fold(String::new(), |acc, replica| {
+                        if acc.is_empty() {
+                            format!("{}", replica)
+                        } else {
+                            format!("{},{}", acc, replica)
+                        }
+                    });
 
                     volume_spec_clone.info_span(|| {
-                        tracing::info!("Successfully created '{}' new replica(s)", result)
+                        tracing::info!(
+                            replicas = %replicas,
+                            "Successfully created '{}' new replica(s)",
+                            result.len()
+                        )
                     });
                 }
                 _ => {

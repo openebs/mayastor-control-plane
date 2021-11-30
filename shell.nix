@@ -38,6 +38,7 @@ mkShell {
     which
     tini
     nvme-cli
+    fio
   ] ++ pkgs.lib.optional (!norust) channel.default.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
@@ -47,7 +48,6 @@ mkShell {
   # variables used to easily create containers with docker files
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";
   NATS_BIN = "${pkgs.nats-server}/bin/nats-server";
-  MAYASTOR_BIN = "${mayastor}";
 
   shellHook = ''
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
@@ -57,5 +57,6 @@ mkShell {
     pre-commit install --hook commit-msg
     export MCP_SRC=`pwd`
     [ ! -z "${mayastor}" ] && cowsay "${mayastor_moth}"
+    [ ! -z "${mayastor}" ] && export MAYASTOR_BIN="${mayastor}"
   '';
 }

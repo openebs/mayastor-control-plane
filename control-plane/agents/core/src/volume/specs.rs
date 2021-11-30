@@ -445,13 +445,17 @@ impl ResourceSpecsLocked {
                         .await
                     {
                         tracing::warn!(replica.uuid=%spec.uuid, error=%error,
-                            "Replica destruction failed. This will be garbage collected later."
+                            "Replica destruction failed. This will be garbage collected later"
                         );
                     }
                 } else {
-                    // the above is able to handle when a pool is moved to a
-                    // different node but if a pool is
-                    // unplugged, what do we do? Fake an error ReplicaNotFound?
+                    // The above is able to handle when a pool is moved to a different node but if a
+                    // pool is unplugged we should disown the replica and allow the garbage
+                    // collector to destroy it later.
+                    tracing::warn!(replica.uuid=%spec.uuid,"Replica node not found");
+                    if let Err(error) = self.disown_volume_replica(registry, &replica).await {
+                        tracing::error!(replica.uuid=%spec.uuid, error=%error, "Failed to disown volume replica");
+                    }
                 }
             }
 
@@ -665,32 +669,50 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         volume_spec: &VolumeSpec,
-        candidates: Vec<CreateReplica>,
         count: usize,
         mode: OperationMode,
-    ) -> usize {
-        let mut created = 0;
-        for attempt in candidates.into_iter() {
-            if created >= count {
+    ) -> Result<Vec<ReplicaId>, SvcError> {
+        let mut created_replicas = Vec::with_capacity(count);
+        let mut candidate_error = None;
+
+        for iter in 0 .. count {
+            let candidates = match get_volume_replica_candidates(registry, volume_spec).await {
+                Ok(candidates) => candidates,
+                Err(error) => {
+                    candidate_error = Some(error);
+                    break;
+                }
+            };
+
+            for attempt in candidates.into_iter() {
+                match self.create_replica(registry, &attempt, mode).await {
+                    Ok(replica) => {
+                        volume_spec
+                            .debug(&format!("Successfully created replica '{}'", replica.uuid));
+                        created_replicas.push(replica.uuid);
+                        break;
+                    }
+                    Err(error) => {
+                        volume_spec.error(&format!(
+                            "Failed to create replica '{:?}', error: '{}'",
+                            attempt,
+                            error.full_string(),
+                        ));
+                    }
+                }
+            }
+
+            if created_replicas.len() <= iter {
                 break;
             }
+        }
 
-            match self.create_replica(registry, &attempt, mode).await {
-                Ok(replica) => {
-                    volume_spec.debug(&format!("Successfully created replica '{}'", replica.uuid));
-
-                    created += 1;
-                }
-                Err(error) => {
-                    volume_spec.error(&format!(
-                        "Failed to created replica '{:?}', error: '{}'",
-                        attempt,
-                        error.full_string(),
-                    ));
-                }
+        if created_replicas.is_empty() {
+            if let Some(error) = candidate_error {
+                return Err(error);
             }
         }
-        created
+        Ok(created_replicas)
     }
 
     /// Add the given replica to the nexus of the given volume
@@ -929,6 +951,7 @@ impl ResourceSpecsLocked {
                     &nexus_replicas,
                     true,
                     Some(&vol_spec.uuid),
+                    None,
                 ),
                 mode,
             )
@@ -1163,7 +1186,6 @@ impl ResourceSpecsLocked {
         let mut candidates =
             get_nexus_child_remove_candidates(&vol_spec_clone, &nexus_spec_clone, registry).await?;
 
-        let mut result = Ok(());
         while let Some(candidate) = candidates.next() {
             if nexus_replica_children <= volume_children {
                 break;
@@ -1189,11 +1211,11 @@ impl ResourceSpecsLocked {
                         child_uri,
                         error.full_string()
                     ));
-                    result = Err(error);
+                    return Err(error);
                 }
             }
         }
-        result
+        Ok(())
     }
 
     /// Disown replica from its volume

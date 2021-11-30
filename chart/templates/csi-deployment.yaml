@@ -52,12 +52,16 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-controller
+          resources: {{- .Values.csi.resources | toYaml | nindent 12 }}
           image: {{ .Values.mayastorCP.registry }}mayadata/mcp-csi-controller:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
             - "--rest-endpoint=http://$(REST_SERVICE_HOST):8081"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.mayastorCP.logLevel }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/

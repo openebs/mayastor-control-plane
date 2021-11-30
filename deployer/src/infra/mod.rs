@@ -102,6 +102,11 @@ macro_rules! impl_ctrlp_agents {
                     build_error(&format!("the {} agent", name), status.code())?;
                 }
                 let mut binary = Binary::from_dbg(&name).with_nats("-n");
+                if let Some(env) = &options.agents_env {
+                    for kv in env {
+                        binary = binary.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
+                    }
+                }
                 if name == "core" {
                     let etcd = format!("etcd.{}:2379", options.cluster_label.name());
                     binary = binary.with_args(vec!["--store", &etcd]);
@@ -122,6 +127,9 @@ macro_rules! impl_ctrlp_agents {
                     }
                     if let Some(timeout) = &options.store_timeout {
                         binary = binary.with_args(vec!["--store-timeout", &timeout.to_string()]);
+                    }
+                    if let Some(ttl) = &options.store_lease_ttl {
+                        binary = binary.with_args(vec!["--store-lease-ttl", &ttl.to_string()]);
                     }
                     if let Some(period) = &options.reconcile_period {
                         binary = binary.with_args(vec!["--reconcile-period", &period.to_string()]);
@@ -262,6 +270,9 @@ impl Components {
             .map(|c| c.to_string().to_ascii_lowercase())
             .collect::<Vec<_>>();
         ordered
+    }
+    pub fn nats_enabled(&self) -> bool {
+        !self.1.no_nats
     }
 }
 

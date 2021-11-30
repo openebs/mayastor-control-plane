@@ -32,3 +32,7 @@ spec:
           env:
             - name: RUST_LOG
               value: info,msp_operator={{ .Values.mayastorCP.logLevel }}
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name

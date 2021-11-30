@@ -4,8 +4,11 @@ use crate::core::{
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 
-use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode, TraceSpan};
+use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode, TraceSpan, TraceStrLog};
 
+use crate::core::specs::SpecOperations;
+use common::errors::SvcError;
+use common_lib::types::v0::store::{nexus_persistence::NexusInfo, replica::ReplicaSpec};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -40,8 +43,9 @@ impl TaskPoller for GarbageCollector {
 
     async fn poll_event(&mut self, context: &PollContext) -> bool {
         match context.event() {
-            PollEvent::TimedRun => true,
-            PollEvent::Triggered(PollTriggerEvent::VolumeDegraded) => true,
+            PollEvent::TimedRun
+            | PollEvent::Triggered(PollTriggerEvent::VolumeDegraded)
+            | PollEvent::Triggered(PollTriggerEvent::Start) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
     }
@@ -91,7 +95,7 @@ async fn disown_unused_nexuses(
 }
 
 /// Given a published volume
-/// When some of its replicas are not online and not used by a nexus
+/// When some of its replicas are not healthy, not online and not used by a nexus
 /// Then they should be disowned
 #[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
 async fn disown_unused_replicas(
@@ -102,14 +106,22 @@ async fn disown_unused_replicas(
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
-    if volume.lock().target.is_none() {
-        // if the volume is not published, then leave the replicas around as they might
-        // still reappear as online by the time we publish
+    let volume_clone = volume.lock().clone();
+    let target = match context.specs().get_volume_target_nexus(&volume_clone) {
+        Some(target) => target,
+        None => {
+            // if the volume is not published, then leave the replicas around as they might
+            // still reappear as online by the time we publish
+            return PollResult::Ok(PollerState::Busy);
+        }
+    };
+    if !target.lock().status().created() {
+        // don't attempt to disown the replicas if the nexus that should own them is not stable
         return PollResult::Ok(PollerState::Busy);
     }
+    let mut nexus_info = None; // defer reading from the persistent store unless we find a candidate
     let mut results = vec![];
 
-    let volume_clone = volume.lock().clone();
     for replica in context.specs().get_volume_replicas(&volume_clone.uuid) {
         let _guard = match replica.operation_guard(OperationMode::ReconcileStart) {
             Ok(guard) => guard,
@@ -119,8 +131,9 @@ async fn disown_unused_replicas(
 
         let replica_online = matches!(context.registry().get_replica(&replica_clone.uuid).await, Ok(state) if state.online());
         if !replica_online
-            && (replica_clone.owners.owned_by(&volume_clone.uuid)
-                && !replica_clone.owners.owned_by_a_nexus())
+            && replica_clone.owners.owned_by(&volume_clone.uuid)
+            && !replica_clone.owners.owned_by_a_nexus()
+            && !is_replica_healthy(context, &mut nexus_info, &replica_clone, &volume_clone).await?
         {
             volume_clone.warn_span(|| tracing::warn!(replica.uuid = %replica_clone.uuid, "Attempting to disown unused replica"));
             // the replica garbage collector will destroy the disowned replica
@@ -141,4 +154,98 @@ async fn disown_unused_replicas(
     }
 
     GarbageCollector::squash_results(results)
+}
+
+async fn is_replica_healthy(
+    context: &PollContext,
+    nexus_info: &mut Option<NexusInfo>,
+    replica_spec: &ReplicaSpec,
+    volume_spec: &VolumeSpec,
+) -> Result<bool, SvcError> {
+    let info = match &nexus_info {
+        None => {
+            *nexus_info = context
+                .registry()
+                .get_nexus_info(volume_spec.last_nexus_id.as_ref(), true)
+                .await?;
+            match nexus_info {
+                Some(info) => info,
+                None => {
+                    // this should not happen unless the persistent store is corrupted somehow
+                    volume_spec.error("Persistent NexusInformation is not available");
+                    return Err(SvcError::Internal {
+                        details: "Persistent NexusInformation is not available".to_string(),
+                    });
+                }
+            }
+        }
+        Some(info) => info,
+    };
+    Ok(info.is_replica_healthy(&replica_spec.uuid))
+}
+
+#[cfg(test)]
+mod tests {
+    use common_lib::types::v0::openapi::models;
+    use std::time::Duration;
+    use testlib::ClusterBuilder;
+
+    #[tokio::test]
+    async fn disown_unused_replicas() {
+        const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+        let reconcile_period = Duration::from_millis(200);
+        let cluster = ClusterBuilder::builder()
+            .with_rest(true)
+            .with_agents(vec!["core"])
+            .with_mayastors(1)
+            .with_tmpfs_pool(POOL_SIZE_BYTES)
+            .with_cache_period("1s")
+            .with_reconcile_period(reconcile_period, reconcile_period)
+            .build()
+            .await
+            .unwrap();
+
+        let rest_api = cluster.rest_v00();
+        let volumes_api = rest_api.volumes_api();
+        let node = cluster.node(0).to_string();
+
+        let volume = volumes_api
+            .put_volume(
+                &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
+                models::CreateVolumeBody::new(models::VolumePolicy::default(), 1, 5242880u64),
+            )
+            .await
+            .unwrap();
+
+        let volume = volumes_api
+            .put_volume_target(&volume.spec.uuid, &node, models::VolumeShareProtocol::Nvmf)
+            .await
+            .unwrap();
+
+        cluster.composer().pause(&node).await.unwrap();
+        volumes_api
+            .del_volume_target(&volume.spec.uuid, Some(false))
+            .await
+            .expect_err("Mayastor is down");
+        cluster.composer().kill(&node).await.unwrap();
+
+        let volume = volumes_api.get_volume(&volume.spec.uuid).await.unwrap();
+        tracing::info!("Volume: {:?}", volume);
+
+        assert!(volume.spec.target.is_some(), "Unpublish failed");
+
+        let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+        let replica = specs.replicas.first().cloned().unwrap();
+        assert!(replica.owners.volume.is_some());
+        assert!(replica.owners.nexuses.is_empty());
+
+        // allow the reconcile to run - it should not disown the replica
+        tokio::time::sleep(reconcile_period * 12).await;
+
+        let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+        let replica = specs.replicas.first().cloned().unwrap();
+        // we should still be part of the volume
+        assert!(replica.owners.volume.is_some());
+        assert!(replica.owners.nexuses.is_empty());
+    }
 }

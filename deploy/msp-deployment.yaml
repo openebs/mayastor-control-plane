@@ -39,12 +39,12 @@ spec:
         - name: msp-operator
           resources:
             limits:
-              cpu: 1000m
-              memory: 1Gi
+              cpu: 100m
+              memory: 32Mi
             requests:
-              cpu: 250m
-              memory: 500Mi
-          image: mayadata/mcp-msp-operator:develop
+              cpu: 50m
+              memory: 16Mi
+          image: mayadata/mcp-msp-operator:e2e-nightly
           imagePullPolicy: Always
           args:
             - "-e http://$(REST_SERVICE_HOST):8081"
@@ -52,3 +52,7 @@ spec:
           env:
             - name: RUST_LOG
               value: info,msp_operator=info
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name

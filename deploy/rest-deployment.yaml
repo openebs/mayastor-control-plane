@@ -36,7 +36,14 @@ spec:
           name: etcd-probe
       containers:
         - name: rest
-          image: mayadata/mcp-rest:develop
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 32Mi
+          image: mayadata/mcp-rest:e2e-nightly
           imagePullPolicy: Always
           args:
             - "--dummy-certificates"
@@ -45,5 +52,8 @@ spec:
             - "--http=0.0.0.0:8081"
             - "--request-timeout=5s"
           ports:
-          - containerPort: 8080
-          - containerPort: 8081
+            - containerPort: 8080
+            - containerPort: 8081
+          env:
+            - name: RUST_LOG
+              value: info

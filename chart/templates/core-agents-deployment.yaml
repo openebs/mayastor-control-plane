@@ -1,12 +1,11 @@
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: core-agents
   namespace: mayastor
   labels:
     app: core-agents
 spec:
-  serviceName: core-agents
   replicas: 1
   selector:
     matchLabels:
@@ -22,6 +21,7 @@ spec:
         {{- include "base_init_containers" . }}
       containers:
         - name: core
+          resources: {{- .Values.core.resources | toYaml | nindent 12 }}
           image: {{ .Values.mayastorCP.registry }}mayadata/mcp-core:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
@@ -30,3 +30,14 @@ spec:
             - "--request-timeout={{ .Values.base.default_req_timeout }}"
             - "--cache-period={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.mayastorCP.logLevel }}
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

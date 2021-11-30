@@ -75,7 +75,7 @@ async fn hotspare() {
         .with_rest(true)
         .with_agents(vec!["core"])
         .with_mayastors(3)
-        .with_pools(1)
+        .with_pools(2)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
@@ -88,6 +88,7 @@ async fn hotspare() {
     hotspare_unknown_children(&cluster).await;
     hotspare_missing_children(&cluster).await;
     hotspare_replica_count(&cluster).await;
+    hotspare_replica_count_spread(&cluster).await;
     hotspare_nexus_replica_count(&cluster).await;
 }
 
@@ -166,6 +167,7 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
         ],
         managed: true,
         owner: None,
+        config: None,
     };
     let nexus = create_nexus.request().await.unwrap();
     let nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;
@@ -607,6 +609,85 @@ async fn hotspare_missing_children(cluster: &Cluster) {
     DestroyVolume::new(volume.uuid()).request().await.unwrap();
 }
 
+/// When more than 1 replicas are faulted at the same time, the new replicas should be spread
+/// across the existing pools, and no pool nor any node should be reused
+async fn hotspare_replica_count_spread(cluster: &Cluster) {
+    let nodes = cluster.rest_v00().nodes_api().get_nodes().await.unwrap();
+    assert!(
+        nodes.len() >= 3,
+        "We need enough nodes to be able to add at least 2 replicas"
+    );
+    let pools = cluster.rest_v00().pools_api().get_pools().await.unwrap();
+    assert!(
+        pools.len() >= nodes.len() * 2,
+        "We need at least 2 pools per node to be able to test the failure case"
+    );
+
+    let replica_count = nodes.len();
+    let volume = CreateVolume {
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+        size: 5242880,
+        replicas: 1,
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
+
+    // stop the core agent, so we can simulate `replica_count-1` data replicas being faulted at once
+    // by increasing the replica count from 1 to `replica_count` under the core agent
+    cluster.composer().stop("core").await.unwrap();
+
+    let mut store = Etcd::new("0.0.0.0:2379")
+        .await
+        .expect("Failed to connect to etcd.");
+
+    let mut volume_spec: VolumeSpec = store.get_obj(&volume.spec().key()).await.unwrap();
+    volume_spec.num_replicas = replica_count as u8;
+    tracing::info!("VolumeSpec: {:?}", volume_spec);
+    store.put_obj(&volume_spec).await.unwrap();
+
+    cluster.restart_core().await;
+
+    let timeout_opts = TimeoutOptions::default()
+        .with_max_retries(10)
+        .with_timeout(Duration::from_millis(200))
+        .with_timeout_backoff(Duration::from_millis(50));
+    Liveness::default()
+        .request_on_ext(ChannelVs::Volume, timeout_opts.clone())
+        .await
+        .expect("Should have restarted by now");
+
+    // check we have the new replica_count
+    wait_till_volume(volume.uuid(), replica_count).await;
+
+    {
+        let volume = cluster
+            .rest_v00()
+            .volumes_api()
+            .get_volume(volume.uuid())
+            .await
+            .unwrap();
+
+        tracing::info!("Replicas: {:?}", volume.state.replica_topology);
+
+        assert_eq!(volume.spec.num_replicas, replica_count as u8);
+        assert_eq!(volume.state.replica_topology.len(), replica_count);
+
+        for node in 0 .. nodes.len() {
+            let node = cluster.node(node as u32);
+            let replicas = volume
+                .state
+                .replica_topology
+                .values()
+                .filter(|r| r.node == Some(node.to_string()));
+            assert_eq!(replicas.count(), 1, "each node should have 1 replica");
+        }
+    }
+
+    DestroyVolume::new(volume.uuid()).request().await.unwrap();
+}
+
 /// Remove a replica that belongs to a volume. Another should be created.
 async fn hotspare_replica_count(cluster: &Cluster) {
     let volume = CreateVolume {
@@ -686,7 +767,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     tracing::info!("VolumeSpec: {:?}", volume_spec);
     store.put_obj(&volume_spec).await.unwrap();
 
-    cluster.composer().restart("core").await.unwrap();
+    cluster.restart_core().await;
 
     Liveness::default()
         .request_on_ext(ChannelVs::Volume, timeout_opts.clone())
@@ -700,7 +781,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     tracing::info!("VolumeSpec: {:?}", volume_spec);
     store.put_obj(&volume_spec).await.unwrap();
 
-    cluster.composer().restart("core").await.unwrap();
+    cluster.restart_core().await;
     Liveness::default()
         .request_on_ext(ChannelVs::Volume, timeout_opts)
         .await

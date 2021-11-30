@@ -59,11 +59,21 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-controller
-          image: mayadata/mcp-csi-controller:develop
+          resources:
+            limits:
+              cpu: 32m
+              memory: 128Mi
+            requests:
+              cpu: 16m
+              memory: 64Mi
+          image: mayadata/mcp-csi-controller:e2e-nightly
           imagePullPolicy: Always
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
             - "--rest-endpoint=http://$(REST_SERVICE_HOST):8081"
+          env:
+            - name: RUST_LOG
+              value: info
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/

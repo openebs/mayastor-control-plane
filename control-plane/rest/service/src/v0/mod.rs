@@ -85,7 +85,6 @@ where
 pub struct BearerToken;
 
 impl FromRequest for BearerToken {
-    type Config = ();
     type Error = RestError<RestJsonError>;
     type Future = Ready<Result<Self, Self::Error>>;
 

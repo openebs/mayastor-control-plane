@@ -52,6 +52,9 @@ let
 
     cargoLock = {
       lockFile = ../../../Cargo.lock;
+      outputHashes = {
+        "nats-0.15.2" = "sha256:1whr0v4yv31q5zwxhcqmx4qykgn5cgzvwlaxgq847mymzajpcsln";
+      };
     };
 
     preBuild = "patchShebangs ./scripts/generate-openapi-bindings.sh";

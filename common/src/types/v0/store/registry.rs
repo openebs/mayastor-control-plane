@@ -75,3 +75,75 @@ impl StorableObject for CoreRegistryConfig {
         self.id.clone()
     }
 }
+
+/// Service Name used by the store client library
+#[derive(Serialize, Deserialize, Debug, Clone, strum_macros::Display)]
+pub enum ControlPlaneService {
+    CoreAgent,
+}
+
+/// Key used by the store lock api to identify the lock.
+/// The key is deleted when the lock is unlocked or if the lease is lost.
+#[derive(Debug)]
+pub struct StoreLeaseLockKey(ControlPlaneService);
+impl StoreLeaseLockKey {
+    /// return new `Self` with `name`
+    pub fn new(name: &ControlPlaneService) -> Self {
+        Self(name.clone())
+    }
+}
+impl ObjectKey for StoreLeaseLockKey {
+    fn key_type(&self) -> StorableObjectType {
+        StorableObjectType::StoreLeaseLock
+    }
+    fn key_uuid(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+/// Key used to store the last owner ref.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StoreLeaseOwnerKey(ControlPlaneService);
+impl StoreLeaseOwnerKey {
+    /// return new `Self` with `kind`
+    pub fn new(kind: &ControlPlaneService) -> Self {
+        Self(kind.clone())
+    }
+}
+impl ObjectKey for StoreLeaseOwnerKey {
+    fn key_type(&self) -> StorableObjectType {
+        StorableObjectType::StoreLeaseOwner
+    }
+    fn key_uuid(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+/// A lease owner is the service instance which owns a lease
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StoreLeaseOwner {
+    kind: ControlPlaneService,
+    lease_id: String,
+    instance_name: String,
+}
+impl StoreLeaseOwner {
+    /// return new `Self` with `kind` and `lease_id`
+    pub fn new(kind: &ControlPlaneService, lease_id: i64) -> Self {
+        Self {
+            kind: kind.clone(),
+            lease_id: format!("{:x}", lease_id),
+            instance_name: std::env::var("MY_POD_NAME").unwrap_or_default(),
+        }
+    }
+    /// Get the `lease_id` as a hex string
+    pub fn lease_id(&self) -> &str {
+        &self.lease_id
+    }
+}
+impl StorableObject for StoreLeaseOwner {
+    type Key = StoreLeaseOwnerKey;
+
+    fn key(&self) -> Self::Key {
+        Self::Key::new(&self.kind)
+    }
+}
