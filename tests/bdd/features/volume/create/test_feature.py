@@ -53,26 +53,22 @@ def create_request():
     return {}
 
 
-@scenario(
-    "features/volume/create.feature", "provisioning failure due to missing Mayastor"
-)
+@scenario("feature.feature", "provisioning failure due to missing Mayastor")
 def test_provisioning_failure_due_to_missing_mayastor():
     """provisioning failure."""
 
 
-@scenario("features/volume/create.feature", "provisioning failure due to gRPC timeout")
+@scenario("feature.feature", "provisioning failure due to gRPC timeout")
 def test_provisioning_failure_due_to_grpc_timeout():
     """provisioning failure."""
 
 
-@scenario(
-    "features/volume/create.feature", "desired number of replicas cannot be created"
-)
+@scenario("feature.feature", "desired number of replicas cannot be created")
 def test_desired_number_of_replicas_cannot_be_created():
     """desired number of replicas cannot be created."""
 
 
-@scenario("features/volume/create.feature", "sufficient suitable pools")
+@scenario("feature.feature", "sufficient suitable pools")
 def test_sufficient_suitable_pools():
     """sufficient suitable pools."""
 

@@ -9,9 +9,11 @@
 set -e
 
 SCRIPTDIR="$(realpath "$(dirname "$0")")"
+ROOTDIR="$SCRIPTDIR"/../../
+CHARTDIR="$ROOTDIR"/chart
 
 # Internal variables tunable by options
-output_dir="$SCRIPTDIR/../deploy"
+output_dir="$ROOTDIR/deploy"
 profile=
 pull_policy=
 registry=
@@ -82,7 +84,7 @@ while [ "$#" -gt 0 ]; do
       helm_flags="$helm_flags --debug"
       ;;
     -c)
-      git diff --cached --exit-code "$SCRIPTDIR/../chart" 1>/dev/null && exit 0
+      git diff --cached --exit-code "$CHARTDIR" 1>/dev/null && exit 0
       ;;
     -*)
       echo "Unknown option: $1"
@@ -136,7 +138,7 @@ if [ ! -d "$output_dir" ]; then
   mkdir -p "$output_dir"
 fi
 
-tmpd=$(mktemp -d /tmp/generate-deploy-yamls.sh.XXXXXXXX)
+tmpd=$(mktemp -d /tmp/generate-yamls.sh.XXXXXXXX)
 # shellcheck disable=SC2064
 trap "rm -fr '$tmpd'" HUP QUIT EXIT TERM INT
 
@@ -153,10 +155,10 @@ if [ -n "$registry" ]; then
 fi
 
 # update helm dependencies
-( cd "$SCRIPTDIR"/../chart && helm dependency update )
+( cd "$CHARTDIR" && helm dependency update )
 # generate the yaml
-helm template --set "$template_params" mayastor "$SCRIPTDIR/../chart" --output-dir="$tmpd" --namespace mayastor \
-  -f "$SCRIPTDIR/../chart/$profile/values.yaml" -f "$SCRIPTDIR/../chart/constants.yaml" -f "$helm_file" \
+helm template --set "$template_params" mayastor "$CHARTDIR" --output-dir="$tmpd" --namespace mayastor \
+  -f "$CHARTDIR/$profile/values.yaml" -f "$CHARTDIR/constants.yaml" -f "$helm_file" \
   --set "$helm_string" $helm_flags
 
 # jaeger-operator yaml files

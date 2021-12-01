@@ -3,6 +3,8 @@
 set -eu -o pipefail
 
 SCRIPTDIR=$(dirname "$0")
+ROOTDIR="$SCRIPTDIR"/../../
+
 owner="openebs";
 repo="openapi-generator";
 branch="rust_mayastor";
@@ -34,7 +36,7 @@ if [ "$sha256" == "" ]; then
   echo "sha256 is not valid!"
   exit 2
 fi
-source_file="$SCRIPTDIR/../nix/pkgs/openapi-generator/source.json"
+source_file="$ROOTDIR/nix/pkgs/openapi-generator/source.json"
 
 echo "Previous Content of source file (``$source_file``):"
 cat "$source_file"

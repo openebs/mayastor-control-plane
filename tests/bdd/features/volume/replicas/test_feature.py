@@ -60,17 +60,17 @@ def replica_ctx():
     return {}
 
 
-@scenario("features/volume/replicas.feature", "setting volume replicas to zero")
+@scenario("feature.feature", "setting volume replicas to zero")
 def test_setting_volume_replicas_to_zero():
     """setting volume replicas to zero."""
 
 
-@scenario("features/volume/replicas.feature", "successfully adding a replica")
+@scenario("feature.feature", "successfully adding a replica")
 def test_successfully_adding_a_replica():
     """successfully adding a replica."""
 
 
-@scenario("features/volume/replicas.feature", "successfully removing a replica")
+@scenario("feature.feature", "successfully removing a replica")
 def test_successfully_removing_a_replica():
     """successfully removing a replica."""
 

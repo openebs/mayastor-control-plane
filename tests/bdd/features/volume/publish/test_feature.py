@@ -40,13 +40,13 @@ def init():
     Deployer.stop()
 
 
-@scenario("features/volume/publish.feature", "publish an unpublished volume")
+@scenario("feature.feature", "publish an unpublished volume")
 def test_publish_an_unpublished_volume():
     """publish an unpublished volume."""
 
 
 @scenario(
-    "features/volume/publish.feature",
+    "feature.feature",
     "share/publish an already shared/published volume",
 )
 def test_sharepublish_an_already_sharedpublished_volume():

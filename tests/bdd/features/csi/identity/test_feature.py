@@ -24,18 +24,18 @@ def setup():
     Deployer.stop()
 
 
-@scenario("features/csi/identity.feature", "get plugin information")
+@scenario("feature.feature", "get plugin information")
 def test_plugin_info(setup):
     """get plugin information"""
 
 
-@scenario("features/csi/identity.feature", "get plugin capabilities")
+@scenario("feature.feature", "get plugin capabilities")
 def test_plugin_capabilities(setup):
     """get plugin capabilities"""
 
 
 @scenario(
-    "features/csi/identity.feature",
+    "feature.feature",
     "probe CSI controller when REST API endpoint is accessible",
 )
 def test_probe_rest_accessible(setup):
@@ -43,7 +43,7 @@ def test_probe_rest_accessible(setup):
 
 
 @scenario(
-    "features/csi/identity.feature",
+    "feature.feature",
     "probe CSI controller when REST API endpoint is not accessible",
 )
 def test_probe_rest_not_accessible(setup):

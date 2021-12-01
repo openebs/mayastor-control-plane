@@ -6,9 +6,9 @@ base:
   jaeger:
     enabled: true
 ```
-One way of doing it is by using the `-s` option with the generate-deploy-yamls script, eg:
+One way of doing it is by using the `-s` option with the generate-yamls script, eg:
 ```shell
-$REPO_ROOT/scripts/generate-deploy-yamls.sh -s base.jaeger.enabled=true develop
+$REPO_ROOT/scripts/deploy/generate-yamls.sh -s base.jaeger.enabled=true develop
 ```
 
 You can now install mayastor+control plane as you'd usually do, except the control plane yaml files now have an init
