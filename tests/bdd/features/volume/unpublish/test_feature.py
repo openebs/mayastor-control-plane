@@ -40,14 +40,12 @@ def init():
     Deployer.stop()
 
 
-@scenario("features/volume/unpublish.feature", "unpublish a published volume")
+@scenario("feature.feature", "unpublish a published volume")
 def test_unpublish_a_published_volume():
     """unpublish a published volume."""
 
 
-@scenario(
-    "features/volume/unpublish.feature", "unpublish an already unpublished volume"
-)
+@scenario("feature.feature", "unpublish an already unpublished volume")
 def test_unpublish_an_already_unpublished_volume():
     """unpublish an already unpublished volume."""
 

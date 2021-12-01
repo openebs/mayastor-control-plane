@@ -55,7 +55,7 @@ def volume_ctx():
 
 
 @scenario(
-    "features/volume/delete.feature",
+    "feature.feature",
     "delete a shared/published volume whilst a replica node is inaccessible and offline",
 )
 def test_delete_a_sharedpublished_volume_whilst_a_replica_node_is_inaccessible_and_offline():
@@ -63,21 +63,19 @@ def test_delete_a_sharedpublished_volume_whilst_a_replica_node_is_inaccessible_a
 
 
 @scenario(
-    "features/volume/delete.feature",
+    "feature.feature",
     "delete a shared/published volume whilst the nexus node is inaccessible",
 )
 def test_delete_a_sharedpublished_volume_whilst_the_nexus_node_is_inaccessible():
     """delete a shared/published volume whilst the nexus node is inaccessible."""
 
 
-@scenario(
-    "features/volume/delete.feature", "delete a volume that is not shared/published"
-)
+@scenario("feature.feature", "delete a volume that is not shared/published")
 def test_delete_a_volume_that_is_not_sharedpublished():
     """delete a volume that is not shared/published."""
 
 
-@scenario("features/volume/delete.feature", "delete a volume that is shared/published")
+@scenario("feature.feature", "delete a volume that is shared/published")
 def test_delete_a_volume_that_is_sharedpublished():
     """delete a volume that is shared/published."""
 

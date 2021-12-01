@@ -83,22 +83,20 @@ def replica_ctx():
 
 
 @scenario(
-    "features/volume/topology.feature",
+    "feature.feature",
     "cannot add a replica to a volume with pool topology labels",
 )
 def test_cannot_add_a_replica_to_a_volume_with_pool_topology_labels():
     """cannot add a replica to a volume with pool topology labels."""
 
 
-@scenario(
-    "features/volume/topology.feature", "desired number of replicas cannot be created"
-)
+@scenario("feature.feature", "desired number of replicas cannot be created")
 def test_desired_number_of_replicas_cannot_be_created():
     """desired number of replicas cannot be created."""
 
 
 @scenario(
-    "features/volume/topology.feature",
+    "feature.feature",
     "successfully adding a replica to a volume with pool topology",
 )
 def test_successfully_adding_a_replica_to_a_volume_with_pool_topology():
@@ -106,7 +104,7 @@ def test_successfully_adding_a_replica_to_a_volume_with_pool_topology():
 
 
 @scenario(
-    "features/volume/topology.feature",
+    "feature.feature",
     "successfully adding a replica to a volume without pool topology",
 )
 def test_successfully_adding_a_replica_to_a_volume_without_pool_topology():
@@ -114,7 +112,7 @@ def test_successfully_adding_a_replica_to_a_volume_without_pool_topology():
 
 
 @scenario(
-    "features/volume/topology.feature",
+    "feature.feature",
     "sufficient suitable pools which contain volume topology labels",
 )
 def test_sufficient_suitable_pools_which_contain_volume_topology_labels():
@@ -122,7 +120,7 @@ def test_sufficient_suitable_pools_which_contain_volume_topology_labels():
 
 
 @scenario(
-    "features/volume/topology.feature",
+    "feature.feature",
     "sufficient suitable pools which do not contain volume pool topology labels",
 )
 def test_sufficient_suitable_pools_which_do_not_contain_volume_topology_labels():

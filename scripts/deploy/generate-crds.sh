@@ -3,8 +3,9 @@
 set -e
 
 SCRIPTDIR=$(dirname "$0")
-TEMPLATES="$SCRIPTDIR/../chart/templates"
-POOL="$SCRIPTDIR/../control-plane/msp-operator"
+ROOTDIR="$SCRIPTDIR"/../../
+TEMPLATES="$ROOTDIR/chart/templates"
+POOL="$ROOTDIR/control-plane/msp-operator"
 POOL_CRD="mayastorpoolcrd.yaml"
 
 # Regenerate the bindings only if the rest src changed

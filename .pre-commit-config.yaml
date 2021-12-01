@@ -13,8 +13,8 @@ repos:
     -   id: openapi-check
         name: OpenApi Code Generator
         description: Ensures OpenApi bindings are up to date
-        entry: ./scripts/generate-openapi-bindings.sh
-        args: ["--changes"]
+        entry: ./scripts/rust/generate-openapi-bindings.sh
+        args: ["--spec-changes"]
         pass_filenames: false
         language: system
     -   id: rust-lint
@@ -49,14 +49,14 @@ repos:
     -   id: crd-check
         name: CRD Generator
         description: Ensures the Operator CRD files are up to date
-        entry: ./scripts/generate-crds.sh
+        entry: ./scripts/deploy/generate-crds.sh
         args: [ "--changes" ]
         pass_filenames: false
         language: system
     -   id: helm-develop-deploy
         name: Helm Generator
         description: Ensures the deploy is updated with the develop yamls
-        entry: ./scripts/generate-deploy-yamls.sh
+        entry: ./scripts/deploy/generate-yamls.sh
         args: [ "-c", "develop" ]
         pass_filenames: false
         language: system
