@@ -22,6 +22,13 @@ class Docker(object):
         container = docker_client.containers.get(name)
         container.kill()
 
+    # Stop a container with the given name.
+    @staticmethod
+    def stop_container(name):
+        docker_client = docker.from_env()
+        container = docker_client.containers.get(name)
+        container.stop()
+
     # Pause a container with the given name.
     @staticmethod
     def pause_container(name):

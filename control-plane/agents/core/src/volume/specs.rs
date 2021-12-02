@@ -17,7 +17,10 @@ use crate::{
 };
 use common::{
     errors,
-    errors::{NotEnough, SvcError, SvcError::VolumeNotFound},
+    errors::{
+        NotEnough, SvcError,
+        SvcError::{ReplicaRemovalNoCandidates, VolumeNotFound},
+    },
 };
 use common_lib::{
     mbus_api::{ErrorChain, ResourceKind},
@@ -812,29 +815,37 @@ impl ResourceSpecsLocked {
     ) -> Result<Volume, SvcError> {
         // Determine which replica is most suitable to be removed
         let result = get_volume_replica_remove_candidate(&spec_clone, &state, registry).await;
-        // Can fail if meanwhile the state of a replica/nexus/child changes, so fail gracefully
-        let remove =
+
+        if let Err(ReplicaRemovalNoCandidates { .. }) = result {
+            // The desired number of replicas is already met. This can occur if a replica has been
+            // removed from the volume due to an error.
+            SpecOperations::complete_update(registry, Ok(()), spec, spec_clone).await?;
+        } else {
+            // Can fail if meanwhile the state of a replica/nexus/child changes, so fail gracefully
+            let remove =
+                SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
+
+            // Remove the replica from its nexus (where it exists as a child)
+            let result = self
+                .remove_volume_child_candidate(&spec_clone, registry, &remove, mode)
+                .await;
             SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
 
-        // Remove the replica from its nexus (where it exists as a child)
-        let result = self
-            .remove_volume_child_candidate(&spec_clone, registry, &remove, mode)
-            .await;
-        SpecOperations::validate_update_step(registry, result, &spec, &spec_clone).await?;
+            // todo: we could ignore it here, since we've already removed it from the nexus
+            // now remove the replica from the pool
+            let result = self
+                .destroy_replica_spec(
+                    registry,
+                    remove.spec(),
+                    ReplicaOwners::from_volume(&state.uuid),
+                    false,
+                    mode,
+                )
+                .await;
 
-        // todo: we could ignore it here, since we've already removed it from the nexus
-        // now remove the replica from the pool
-        let result = self
-            .destroy_replica_spec(
-                registry,
-                remove.spec(),
-                ReplicaOwners::from_volume(&state.uuid),
-                false,
-                mode,
-            )
-            .await;
+            SpecOperations::complete_update(registry, result, spec, spec_clone).await?;
+        }
 
-        SpecOperations::complete_update(registry, result, spec, spec_clone).await?;
         registry.get_volume(&state.uuid).await
     }
 
