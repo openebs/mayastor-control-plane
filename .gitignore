@@ -8,13 +8,11 @@
 /package-lock.json
 /package.json
 /result*
-/tests/bdd/__pycache__/
+__pycache__
 /tests/bdd/openapi/
-/tests/bdd/csi_pb2.py
-/tests/bdd/csi_pb2_grpc.py
 /chart/charts/
 /chart/Chart.lock
 /openapi/*
 !/openapi/Cargo.toml
 !/openapi/build.rs
-/tests/bdd/common/__pycache__
+/tests/bdd/autogen/

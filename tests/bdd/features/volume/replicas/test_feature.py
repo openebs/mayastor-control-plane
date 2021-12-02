@@ -93,7 +93,7 @@ def replica_ctx():
 
 
 @scenario(
-    "features/volume/replicas.feature",
+    "feature.feature",
     "decreasing the replica count when the runtime replica count matches the desired count",
 )
 def test_decreasing_the_replica_count_when_the_runtime_replica_count_matches_the_desired_count(
@@ -102,17 +102,17 @@ def test_decreasing_the_replica_count_when_the_runtime_replica_count_matches_the
     """removing a replica when the runtime replica count matches the desired count."""
 
 
-@scenario("features/volume/replicas.feature", "setting volume replicas to zero")
+@scenario("feature.feature", "setting volume replicas to zero")
 def test_setting_volume_replicas_to_zero(init):
     """setting volume replicas to zero."""
 
 
-@scenario("features/volume/replicas.feature", "successfully adding a replica")
+@scenario("feature.feature", "successfully adding a replica")
 def test_successfully_adding_a_replica(init):
     """successfully adding a replica."""
 
 
-@scenario("features/volume/replicas.feature", "successfully removing a replica")
+@scenario("feature.feature", "successfully removing a replica")
 def test_successfully_removing_a_replica(init):
     """successfully removing a replica."""
 

@@ -91,10 +91,10 @@ pipeline {
       }
       steps {
         sh 'printenv'
-        sh 'nix-shell --run "./scripts/generate-openapi-bindings.sh"'
+        sh 'nix-shell --run "./scripts/rust/generate-openapi-bindings.sh"'
         sh 'nix-shell --run "cargo fmt --all -- --check"'
         sh 'nix-shell --run "cargo clippy --all-targets -- -D warnings"'
-        sh 'nix-shell --run "./scripts/generate-crds.sh --changes"'
+        sh 'nix-shell --run "./scripts/deploy/generate-crds.sh --changes"'
         sh 'nix-shell --run "black tests/bdd"'
       }
     }
@@ -116,7 +116,7 @@ pipeline {
           agent { label 'nixos-mayastor' }
           steps {
             sh 'printenv'
-            sh 'nix-shell --run "./scripts/ctrlp-cargo-test.sh"'
+            sh 'nix-shell --run "./scripts/rust/test.sh"'
           }
           post {
             always {
@@ -132,7 +132,7 @@ pipeline {
           agent { label 'nixos-mayastor' }
           steps {
             sh 'printenv'
-            sh 'nix-shell --run "./scripts/bdd-tests.sh"'
+            sh 'nix-shell --run "./scripts/python/test.sh"'
           }
         }
       }// parallel stages block

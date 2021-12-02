@@ -52,7 +52,7 @@ def volume_ctx():
     return {}
 
 
-@scenario("features/volume/observability.feature", "requesting volume information")
+@scenario("feature.feature", "requesting volume information")
 def test_requesting_volume_information():
     """requesting volume information."""
 

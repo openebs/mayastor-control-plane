@@ -38,7 +38,7 @@ FIO_RUNTIME = 10
 
 
 @scenario(
-    "features/ana/validate-nexus-swap.feature",
+    "validate-nexus-swap.feature",
     "replace failed I/O path on demand for NVMe controller",
 )
 def test_replace_failed_io_path_on_demand_for_nvme_controller():

@@ -88,9 +88,7 @@ def init(create_pool_disk_images):
     Deployer.stop()
 
 
-@scenario(
-    "features/garbage-collection/replicas.feature", "destroying an orphaned replica"
-)
+@scenario("feature.feature", "destroying an orphaned replica")
 def test_destroying_an_orphaned_replica():
     """destroying an orphaned replica."""
 

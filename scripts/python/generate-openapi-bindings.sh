@@ -2,7 +2,7 @@
 
 set -e
 
-ROOT_DIR="$(dirname "$0")/.."
+ROOT_DIR="$(dirname "$0")/../.."
 TARGET="$ROOT_DIR/tests/bdd/openapi"
 SPEC="$ROOT_DIR/control-plane/rest/openapi-specs/v0_api_spec.yaml"
 
