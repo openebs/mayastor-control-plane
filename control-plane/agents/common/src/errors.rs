@@ -503,7 +503,7 @@ impl From<SvcError> for ReplyError {
                 extra: error.full_string(),
             },
             SvcError::ReplicaRemovalNoCandidates { .. } => ReplyError {
-                kind: ReplyErrorKind::ReplicaIncrease,
+                kind: ReplyErrorKind::ReplicaChangeCount,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),
