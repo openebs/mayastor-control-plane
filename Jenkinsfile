@@ -154,6 +154,7 @@ pipeline {
         withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
             sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
         }
+        sh 'printenv'
         sh './scripts/release.sh'
       }
       post {
