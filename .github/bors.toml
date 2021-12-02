@@ -6,3 +6,4 @@ block_labels = [ "DO NOT MERGE", "wip" ]
 cut_body_after = "---"
 committer.name = "mayastor-bors"
 committer.email = "mayastor-bors@noreply.github.com"
+commit_title = "chore(bors): merge pull request ${PR_REFS}"
