@@ -57,7 +57,7 @@ let
       };
     };
 
-    preBuild = "patchShebangs ./scripts/generate-openapi-bindings.sh";
+    preBuild = "patchShebangs ./scripts/rust/generate-openapi-bindings.sh";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [

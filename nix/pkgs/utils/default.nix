@@ -37,8 +37,8 @@ let
       preBuild = ''
         # don't run during the dependency build phase
         if [ ! -f build.rs ]; then
-          patchShebangs ./scripts/generate-openapi-bindings.sh
-          ./scripts/generate-openapi-bindings.sh
+          patchShebangs ./scripts/rust/generate-openapi-bindings.sh
+          ./scripts/rust/generate-openapi-bindings.sh
         fi
         sed -i '/ctrlp-tests.*=/d' ./kubectl-plugin/Cargo.toml
       '';
