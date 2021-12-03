@@ -153,16 +153,16 @@ async fn create_nexus_replicas() {
         .get_replica(&Cluster::replica(0, 0, 0))
         .await
         .unwrap();
-    let remote = v0::ShareReplica {
-        node: cluster.node(1),
-        pool: cluster.pool(1, 0),
-        uuid: Cluster::replica(1, 0, 0),
-        name: None,
-        protocol: v0::ReplicaShareProtocol::Nvmf,
-    }
-    .request()
-    .await
-    .unwrap();
+    let remote = cluster
+        .rest_v00()
+        .replicas_api()
+        .put_node_pool_replica_share(
+            cluster.node(1).as_str(),
+            cluster.pool(1, 0).as_str(),
+            &(Cluster::replica(1, 0, 0).into()),
+        )
+        .await
+        .unwrap();
 
     v0::CreateNexus {
         node: cluster.node(0),

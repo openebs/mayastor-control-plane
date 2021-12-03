@@ -1,24 +1,21 @@
 use super::*;
-use common_lib::types::v0::{
-    message_bus::{DestroyReplica, Filter, ReplicaShareProtocol, ShareReplica, UnshareReplica},
-    openapi::apis::Uuid,
-};
-use mbus_api::{
-    message_bus::v0::{BusError, MessageBus, MessageBusTrait},
-    ReplyErrorKind, ResourceKind,
-};
+use crate::v0::pools::pool;
+use common_lib::{mbus_api::message_bus::v0::BusError, types::v0::openapi::apis::Uuid};
+use grpc::{pool::traits::PoolOperations, replica::traits::ReplicaOperations};
+use mbus_api::{ReplyErrorKind, ResourceKind};
 
 async fn put_replica(
     filter: Filter,
     body: CreateReplicaBody,
 ) -> Result<models::Replica, RestError<RestJsonError>> {
+    let pool_client = CORE_CLIENT.get().unwrap().pool();
     let create = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
             body.bus_request(node_id, pool_id, replica_id)
         }
         Filter::PoolReplica(pool_id, replica_id) => {
-            let node_id = match MessageBus::get_pool(Filter::Pool(pool_id.clone())).await {
-                Ok(pool) => pool.node(),
+            let node_id = match pool_client.get(Filter::Pool(pool_id.clone()), None).await {
+                Ok(pools) => pool(pool_id.to_string(), pools.into_inner().get(0))?.node(),
                 Err(error) => return Err(RestError::from(error)),
             };
             body.bus_request(node_id, pool_id, replica_id)
@@ -32,12 +29,13 @@ async fn put_replica(
             }))
         }
     };
-
-    let replica = MessageBus::create_replica(create).await?;
+    let client = CORE_CLIENT.get().unwrap().replica();
+    let replica = client.create(&create, None).await?;
     Ok(replica.into())
 }
 
 async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>> {
+    let client = CORE_CLIENT.get().unwrap().replica();
     let destroy = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => DestroyReplica {
             node: node_id,
@@ -47,8 +45,8 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
             ..Default::default()
         },
         Filter::PoolReplica(pool_id, replica_id) => {
-            let node_id = match MessageBus::get_replica(filter).await {
-                Ok(replica) => replica.node,
+            let node_id = match client.get(filter, None).await {
+                Ok(replicas) => replica(replica_id.to_string(), replicas.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
             };
 
@@ -69,8 +67,7 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
             }))
         }
     };
-
-    MessageBus::destroy_replica(destroy).await?;
+    client.destroy(&destroy, None).await?;
     Ok(())
 }
 
@@ -78,6 +75,7 @@ async fn share_replica(
     filter: Filter,
     protocol: ReplicaShareProtocol,
 ) -> Result<String, RestError<RestJsonError>> {
+    let client = CORE_CLIENT.get().unwrap().replica();
     let share = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => ShareReplica {
             node: node_id,
@@ -87,8 +85,8 @@ async fn share_replica(
             protocol,
         },
         Filter::PoolReplica(pool_id, replica_id) => {
-            let node_id = match MessageBus::get_replica(filter).await {
-                Ok(replica) => replica.node,
+            let node_id = match client.get(filter, None).await {
+                Ok(replicas) => replica(replica_id.to_string(), replicas.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
             };
 
@@ -109,12 +107,12 @@ async fn share_replica(
             }))
         }
     };
-
-    let share_uri = MessageBus::share_replica(share).await?;
+    let share_uri = client.share(&share, None).await?;
     Ok(share_uri)
 }
 
 async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>> {
+    let client = CORE_CLIENT.get().unwrap().replica();
     let unshare = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => UnshareReplica {
             node: node_id,
@@ -123,8 +121,8 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
             uuid: replica_id,
         },
         Filter::PoolReplica(pool_id, replica_id) => {
-            let node_id = match MessageBus::get_replica(filter).await {
-                Ok(replica) => replica.node,
+            let node_id = match client.get(filter, None).await {
+                Ok(replicas) => replica(replica_id.to_string(), replicas.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
             };
 
@@ -145,7 +143,7 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
         }
     };
 
-    MessageBus::unshare_replica(unshare).await?;
+    client.unshare(&unshare, None).await?;
     Ok(())
 }
 
@@ -188,40 +186,58 @@ impl apis::actix_server::Replicas for RestApi {
     async fn get_node_pool_replica(
         Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
-        let replica = MessageBus::get_replica(Filter::NodePoolReplica(
-            node_id.into(),
-            pool_id.into(),
-            replica_id.into(),
-        ))
-        .await?;
+        let client = CORE_CLIENT.get().unwrap().replica();
+        let replica = replica(
+            replica_id.to_string(),
+            client
+                .get(
+                    Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
+                    None,
+                )
+                .await?
+                .into_inner()
+                .get(0),
+        )?;
         Ok(replica.into())
     }
 
     async fn get_node_pool_replicas(
         Path((node_id, pool_id)): Path<(String, String)>,
     ) -> Result<Vec<models::Replica>, RestError<RestJsonError>> {
-        let replicas =
-            MessageBus::get_replicas(Filter::NodePool(node_id.into(), pool_id.into())).await?;
-        Ok(replicas.into_iter().map(From::from).collect())
+        let client = CORE_CLIENT.get().unwrap().replica();
+        let replicas = client
+            .get(Filter::NodePool(node_id.into(), pool_id.into()), None)
+            .await?;
+        Ok(replicas.into_inner().into_iter().map(From::from).collect())
     }
 
     async fn get_node_replicas(
         Path(id): Path<String>,
     ) -> Result<Vec<models::Replica>, RestError<RestJsonError>> {
-        let replicas = MessageBus::get_replicas(Filter::Node(id.into())).await?;
-        Ok(replicas.into_iter().map(From::from).collect())
+        let client = CORE_CLIENT.get().unwrap().replica();
+        let replicas = client.get(Filter::Node(id.into()), None).await?;
+        Ok(replicas.into_inner().into_iter().map(From::from).collect())
     }
 
     async fn get_replica(
         Path(id): Path<Uuid>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
-        let replica = MessageBus::get_replica(Filter::Replica(id.into())).await?;
+        let client = CORE_CLIENT.get().unwrap().replica();
+        let replica = replica(
+            id.to_string(),
+            client
+                .get(Filter::Replica(id.into()), None)
+                .await?
+                .into_inner()
+                .get(0),
+        )?;
         Ok(replica.into())
     }
 
     async fn get_replicas() -> Result<Vec<models::Replica>, RestError<RestJsonError>> {
-        let replicas = MessageBus::get_replicas(Filter::None).await?;
-        Ok(replicas.into_iter().map(From::from).collect())
+        let client = CORE_CLIENT.get().unwrap().replica();
+        let replicas = client.get(Filter::None, None).await?;
+        Ok(replicas.into_inner().into_iter().map(From::from).collect())
     }
 
     async fn put_node_pool_replica(
@@ -264,5 +280,18 @@ impl apis::actix_server::Replicas for RestApi {
             ReplicaShareProtocol::Nvmf,
         )
         .await
+    }
+}
+
+/// returns replica from pool option and returns an error on non existence
+fn replica(replica_id: String, replica: Option<&Replica>) -> Result<Replica, ReplyError> {
+    match replica {
+        Some(replica) => Ok(replica.clone()),
+        None => Err(ReplyError {
+            kind: ReplyErrorKind::NotFound,
+            resource: ResourceKind::Replica,
+            source: "Requested replica was not found".to_string(),
+            extra: format!("Replica id : {}", replica_id),
+        }),
     }
 }

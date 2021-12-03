@@ -14,6 +14,7 @@ use std::{
 use async_trait::async_trait;
 use dyn_clonable::clonable;
 use futures::{future::join_all, Future};
+
 use snafu::{OptionExt, ResultExt, Snafu};
 use state::Container;
 use tracing::{debug, error};
@@ -30,7 +31,9 @@ use common_lib::{
         Channel,
     },
 };
+
 use opentelemetry::trace::FutureExt;
+use tokio::task::JoinHandle;
 
 /// Agent level errors
 pub mod errors;
@@ -56,6 +59,8 @@ pub enum ServiceError {
         id: MessageId,
         details: String,
     },
+    #[snafu(display("GrpcServer error"))]
+    GrpcServer { source: tonic::transport::Error },
 }
 
 /// Runnable service with N subscriptions which listen on a given
@@ -442,14 +447,29 @@ impl Service {
         }
     }
 
-    /// Runs the server which services all subscribers asynchronously until all
+    /// Runs the server which services all mbus subscribers asynchronously until all
     /// subscribers are closed
+    pub async fn run(self) {
+        join_all(self.mbus_handles().await)
+            .await
+            .iter()
+            .for_each(|result| match result {
+                Err(error) => error!("Failed to wait for thread: {:?}", error),
+                Ok(Err(error)) => {
+                    error!("Error running channel thread: {:?}", error)
+                }
+                _ => {}
+            });
+    }
+
+    /// Get a list of handles to services which run all mbus subscribers asynchronously until all
+    /// subscribers are closed.
     ///
     /// subscribers are sorted according to the channel they subscribe on
     /// each channel benefits from a tokio thread which routes messages
     /// accordingly todo: only one subscriber per message id supported at
-    /// the moment
-    pub async fn run(mut self) {
+    /// the moment.
+    pub async fn mbus_handles(mut self) -> Vec<JoinHandle<Result<(), ServiceError>>> {
         let mut threads = vec![];
 
         self.message_bus_init(self.no_min_timeouts, BusClient::CoreAgent)
@@ -468,16 +488,6 @@ impl Service {
 
             threads.push(handle);
         }
-
-        join_all(threads)
-            .await
-            .iter()
-            .for_each(|result| match result {
-                Err(error) => error!("Failed to wait for thread: {:?}", error),
-                Ok(Err(error)) => {
-                    error!("Error running channel thread: {:?}", error)
-                }
-                _ => {}
-            });
+        threads
     }
 }

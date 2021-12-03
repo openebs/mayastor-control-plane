@@ -149,6 +149,10 @@ pub struct StartOptions {
     #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
     pub agents_env: Option<Vec<KeyValue>>,
 
+    /// Add the following environment variables to the rest container
+    #[structopt(long, env = "REST_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    pub rest_env: Option<Vec<KeyValue>>,
+
     /// Cargo Build each component before deploying
     #[structopt(short, long)]
     pub build: bool,

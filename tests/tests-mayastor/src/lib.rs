@@ -8,28 +8,34 @@ use deployer_lib::{
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
-use common_lib::{
-    mbus_api,
-    mbus_api::{Message, TimeoutOptions},
-    types::v0::message_bus,
-};
+use common_lib::{mbus_api, mbus_api::TimeoutOptions, types::v0::message_bus};
 use openapi::apis::Uuid;
 
 use common_lib::{
+    mbus_api::ReplyError,
     opentelemetry::default_tracing_tags,
-    types::v0::store::{
-        definitions::ObjectKey,
-        registry::{ControlPlaneService, StoreLeaseLockKey},
+    types::v0::{
+        message_bus::CreatePool,
+        store::{
+            definitions::ObjectKey,
+            registry::{ControlPlaneService, StoreLeaseLockKey},
+        },
     },
 };
 pub use etcd_client;
 use etcd_client::DeleteOptions;
+use grpc::{client::CoreClient, pool::traits::PoolOperations, replica::traits::ReplicaOperations};
 use rpc::mayastor::RpcHandle;
 use std::{
-    collections::HashMap, convert::TryInto, net::SocketAddr, str::FromStr, sync::Arc,
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+    net::SocketAddr,
+    str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 use structopt::StructOpt;
+use tonic::transport::Uri;
 use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
 
 const RUST_LOG_QUIET_DEFAULTS: &str =
@@ -63,6 +69,7 @@ pub fn default_options() -> StartOptions {
 pub struct Cluster {
     composer: ComposeTest,
     rest_client: rest_client::RestClient,
+    grpc_client: Option<CoreClient>,
     trace_guard: Arc<tracing::subscriber::DefaultGuard>,
     builder: ClusterBuilder,
 }
@@ -71,6 +78,11 @@ impl Cluster {
     /// compose utility
     pub fn composer(&self) -> &ComposeTest {
         &self.composer
+    }
+
+    /// grpc client for connection
+    pub fn grpc_client(&self) -> &CoreClient {
+        self.grpc_client.as_ref().unwrap()
     }
 
     /// return grpc handle to the container
@@ -218,9 +230,22 @@ impl Cluster {
             false => tracing::subscriber::set_default(subscriber),
         });
 
+        let grpc_client = if components.core_enabled() {
+            Some(
+                CoreClient::new(
+                    Uri::try_from(grpc_addr(composer.container_ip("core"))).unwrap(),
+                    bus_timeout.clone(),
+                )
+                .await,
+            )
+        } else {
+            None
+        };
+
         let cluster = Cluster {
             composer,
             rest_client,
+            grpc_client,
             trace_guard,
             builder: ClusterBuilder::builder(),
         };
@@ -282,6 +307,34 @@ where
             error
         )),
         Ok(_) => Err(anyhow::anyhow!("Expected '{:#?}' but succeeded!", expected)),
+    }
+}
+
+/// Run future and compare result with what's expected, for grpc
+pub async fn test_result_grpc<F, O, E, T>(
+    expected: &Result<O, E>,
+    future: F,
+) -> Result<(), ReplyError>
+where
+    F: std::future::Future<Output = Result<T, ReplyError>>,
+    E: std::fmt::Debug,
+    O: std::fmt::Debug,
+    T: std::fmt::Debug,
+{
+    match future.await {
+        Ok(_) if expected.is_ok() => Ok(()),
+        Err(error) if expected.is_err() => {
+            let ReplyError { .. } = error;
+            Ok(())
+        }
+        Err(error) => Err(ReplyError::invalid_reply_error(format!(
+            "Expected '{:#?}' but failed with '{:?}'!",
+            expected, error
+        ))),
+        Ok(r) => Err(ReplyError::invalid_reply_error(format!(
+            "Expected '{:#?} {:#?}' but succeeded!",
+            expected, r
+        ))),
     }
 }
 
@@ -675,18 +728,23 @@ impl ClusterBuilder {
         }
 
         for pool in &self.pools() {
-            message_bus::CreatePool {
-                node: pool.node.clone().into(),
-                id: pool.id(),
-                disks: vec![pool.disk()],
-                labels: None,
-            }
-            .request()
-            .await
-            .unwrap();
+            let pool_client = cluster.grpc_client().pool();
+            let replica_client = cluster.grpc_client().replica();
+            pool_client
+                .create(
+                    &CreatePool {
+                        node: pool.node.clone().into(),
+                        id: pool.id(),
+                        disks: vec![pool.disk()],
+                        labels: None,
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
 
             for replica in &pool.replicas {
-                replica.request().await.unwrap();
+                replica_client.create(replica, None).await.unwrap();
             }
         }
 
@@ -751,4 +809,8 @@ impl Pool {
             PoolDisk::Tmp(disk) => disk.uri().into(),
         }
     }
+}
+
+fn grpc_addr(ip: String) -> String {
+    format!("https://{}:50051", ip)
 }

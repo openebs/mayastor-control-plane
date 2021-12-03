@@ -30,6 +30,7 @@ use std::{
     time::Duration,
 };
 use strum_macros::{AsRefStr, ToString};
+use tonic::Status;
 
 /// Result wrapper for send/receive
 pub type BusResult<T> = Result<T, Error>;
@@ -342,6 +343,18 @@ pub struct ReplyError {
     pub extra: String,
 }
 
+impl From<tonic::Status> for ReplyError {
+    fn from(status: Status) -> Self {
+        Self::tonic_reply_error(status.to_string(), status.full_string())
+    }
+}
+
+impl From<tonic::transport::Error> for ReplyError {
+    fn from(e: tonic::transport::Error) -> Self {
+        Self::tonic_reply_error(e.to_string(), e.full_string())
+    }
+}
+
 impl StdError for ReplyError {}
 impl ReplyError {
     /// extend error with source
@@ -350,6 +363,42 @@ impl ReplyError {
     pub fn extend(&mut self, source: &str, extra: &str) {
         self.source = format!("{}::{}", source, self.source);
         self.extra = format!("{}::{}", extra, self.extra);
+    }
+    /// useful when the grpc server is dropped due to panic
+    pub fn tonic_reply_error(source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::Aborted,
+            resource: ResourceKind::Unknown,
+            source,
+            extra,
+        }
+    }
+    /// used only for testing, not used in code
+    pub fn invalid_reply_error(msg: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::Aborted,
+            resource: ResourceKind::Unknown,
+            source: "Test Library".to_string(),
+            extra: msg,
+        }
+    }
+    /// used when we get an empty response from the grpc server
+    pub fn invalid_response(resource: ResourceKind) -> Self {
+        Self {
+            kind: ReplyErrorKind::Aborted,
+            resource,
+            source: "Empty response reply received from grpc server".to_string(),
+            extra: "".to_string(),
+        }
+    }
+    /// used when we error while unwrapping
+    pub fn unwrap_err(resource: ResourceKind) -> Self {
+        Self {
+            kind: ReplyErrorKind::Aborted,
+            resource,
+            source: "Error unwrapping to desired type".to_string(),
+            extra: "".to_string(),
+        }
     }
 }
 
@@ -510,6 +559,10 @@ impl TimeoutOptions {
     /// Get the tcp read timeout
     pub(crate) fn tcp_read_timeout(&self) -> Duration {
         self.tcp_read_timeout
+    }
+    /// Get the base timeout
+    pub fn base_timeout(&self) -> Duration {
+        self.timeout
     }
 }
 

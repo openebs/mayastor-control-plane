@@ -11,6 +11,7 @@ use common_lib::{
         store::nexus::NexusSpec,
     },
 };
+use grpc::replica::traits::ReplicaOperations;
 use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};
 
@@ -29,19 +30,24 @@ async fn nexus() {
     let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
-    let replica = CreateReplica {
-        node: cluster.node(1),
-        uuid: ReplicaId::new(),
-        pool: cluster.pool(1, 0),
-        size: 12582912, /* actual size will be a multiple of 4MB so just
-                         * create it like so */
-        thin: true,
-        share: Protocol::Nvmf,
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let rep_client = cluster.grpc_client().replica();
+
+    let replica = rep_client
+        .create(
+            &CreateReplica {
+                node: cluster.node(1),
+                uuid: ReplicaId::new(),
+                pool: cluster.pool(1, 0),
+                size: 12582912, /* actual size will be a multiple of 4MB so just
+                                 * create it like so */
+                thin: true,
+                share: Protocol::Nvmf,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     let local = "malloc:///local?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b".into();
 
@@ -78,7 +84,10 @@ async fn nexus() {
     .await
     .unwrap();
 
-    DestroyReplica::from(replica).request().await.unwrap();
+    rep_client
+        .destroy(&DestroyReplica::from(replica), None)
+        .await
+        .unwrap();
 
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
 }
