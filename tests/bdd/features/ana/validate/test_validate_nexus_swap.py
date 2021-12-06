@@ -104,16 +104,13 @@ def it_should_be_possible_to_remove_the_first_failed_io_path(remove_first_path):
 
 @pytest.fixture
 def background():
-    Deployer.start_with_args(
-        [
-            "-j",
-            "-m=3",
-            "-w=10s",
-            "--cache-period=1s",
-            "--mayastor-env=NEXUS_NVMF_ANA_ENABLE=1,NEXUS_NVMF_RESV_ENABLE=1",
-            "--agents-env=TEST_NEXUS_NVMF_ANA_ENABLE=1",
-        ]
+    Deployer.start(
+        3,
+        cache_period="1s",
+        mayastor_env="NEXUS_NVMF_ANA_ENABLE=1,NEXUS_NVMF_RESV_ENABLE=1",
+        agents_env="TEST_NEXUS_NVMF_ANA_ENABLE=1",
     )
+
     ApiClient.pools_api().put_node_pool(
         POOL_NODE, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=100"])
     )

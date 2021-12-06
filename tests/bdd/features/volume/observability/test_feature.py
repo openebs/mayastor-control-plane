@@ -33,7 +33,7 @@ VOLUME_SIZE = 10485761
 # This fixture will be automatically used by all tests.
 # It starts the deployer which launches all the necessary containers.
 # A pool and volume are created for convenience such that it is available for use by the tests.
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="module")
 def init():
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(

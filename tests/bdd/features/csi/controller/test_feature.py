@@ -45,7 +45,7 @@ K8S_HOSTNAME = "kubernetes.io/hostname"
 
 @pytest.fixture(scope="module")
 def setup():
-    Deployer.start(2)
+    Deployer.start(2, csi=True)
     subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
 
     # Create 2 pools.
