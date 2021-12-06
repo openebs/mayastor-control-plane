@@ -1,8 +1,12 @@
+import json
+
 from openapi.api.volumes_api import VolumesApi
 from openapi.api.pools_api import PoolsApi
 from openapi.api.specs_api import SpecsApi
 from openapi.api.replicas_api import ReplicasApi
 from openapi.api.nodes_api import NodesApi
+from openapi.model.rest_json_error import RestJsonError
+from openapi.exceptions import ApiException
 from openapi import api_client
 from openapi import configuration
 
@@ -48,3 +52,9 @@ class ApiClient(object):
     @staticmethod
     def replicas_api():
         return ReplicasApi(get_api_client())
+
+    @staticmethod
+    def exception_to_error(exception):
+        assert isinstance(exception, ApiException)
+        body = json.loads(exception.body)
+        return RestJsonError(details=body["details"], kind=body["kind"])
