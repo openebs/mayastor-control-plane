@@ -32,5 +32,12 @@ async fn main() {
     let cli_args = CliArgs::from_args();
     tracing::info!("Using options: {:?}", &cli_args);
 
+    composer::initialize(
+        std::path::Path::new(std::env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("Can't get project root path")
+            .to_str()
+            .unwrap(),
+    );
     cli_args.execute().await.unwrap();
 }

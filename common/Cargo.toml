@@ -39,6 +39,5 @@ opentelemetry-semantic-conventions = "0.8.0"
 tracing = "0.1.28"
 
 [dev-dependencies]
-composer = { path = "../composer" }
+composer = { git = "https://github.com/mayadata-io/composer", branch = "develop" }
 oneshot = "0.1.2"
-rpc = { path = "../rpc"}
