@@ -15,6 +15,18 @@ class Docker(object):
             if container_state["Status"] != "running":
                 raise Exception("{} container not running", container_name)
 
+    # Get the status of the container with the given name
+    @staticmethod
+    def container_status(container_name):
+        docker_client = docker.from_env()
+        try:
+            container = docker_client.containers.get(container_name)
+        except docker.errors.NotFound as exc:
+            raise Exception("{} container not found", container_name)
+        else:
+            container_state = container.attrs["State"]
+            return container_state["Status"]
+
     # Kill a container with the given name.
     @staticmethod
     def kill_container(name):
