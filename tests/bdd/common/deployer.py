@@ -13,6 +13,7 @@ class StartOptions:
     cache_period: str = ""
     mayastor_env: str = ""
     agents_env: str = ""
+    node_deadline: str = ""
     jaeger: bool = True
     extra_args: [str] = ()
 
@@ -32,6 +33,8 @@ class StartOptions:
             args.append(f"--reconcile-idle-period={self.reconcile_period}")
         if len(self.cache_period) > 0:
             args.append(f"--cache-period={self.cache_period}")
+        if len(self.node_deadline) > 0:
+            args.append(f"--node-deadline={self.node_deadline}")
         if len(self.mayastor_env) > 0:
             args.append(f"--mayastor-env={self.mayastor_env}")
         if len(self.agents_env) > 0:
@@ -52,6 +55,7 @@ class Deployer(object):
         cache_period="",
         mayastor_env="",
         agents_env="",
+        node_deadline="",
         jaeger=True,
     ):
         options = StartOptions(
@@ -62,6 +66,7 @@ class Deployer(object):
             cache_period=cache_period,
             mayastor_env=mayastor_env,
             agents_env=agents_env,
+            node_deadline=node_deadline,
             jaeger=jaeger,
         )
         Deployer.start_with_opts(options)
