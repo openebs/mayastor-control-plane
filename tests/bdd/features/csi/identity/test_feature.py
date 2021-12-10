@@ -18,7 +18,7 @@ from common.apiclient import ApiClient
 
 @pytest.fixture(scope="module")
 def setup():
-    Deployer.start(1)
+    Deployer.start(1, csi=True)
     subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
     yield
     Deployer.stop()

@@ -27,14 +27,11 @@ VOLUME_SIZE = 10485761
 # This fixture will be automatically used by all tests.
 # It starts the deployer which launches all the necessary containers.
 # A pool and volume are created for convenience such that it is available for use by the tests.
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="module")
 def init():
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
-    )
-    ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
     )
     yield
     Deployer.stop()
@@ -64,10 +61,8 @@ def a_published_volume():
 
 
 @given("an existing volume")
-def an_existing_volume():
+def an_existing_volume(an_existing_volume):
     """an existing volume."""
-    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert volume.spec.uuid == VOLUME_UUID
 
 
 @given("an unpublished volume")
@@ -102,3 +97,13 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
     assert hasattr(volume.state, "target")
     assert "nvmf://" in volume.state.target["deviceUri"]
+
+
+@pytest.fixture
+def an_existing_volume():
+    volume = ApiClient.volumes_api().put_volume(
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
+    )
+    assert volume.spec.uuid == VOLUME_UUID
+    yield
+    ApiClient.volumes_api().del_volume(volume.spec.uuid)

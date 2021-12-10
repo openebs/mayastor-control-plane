@@ -43,3 +43,20 @@ Arguments will be passed directly to pytest. Example running individual tests:
 ```bash
 ../../scripts/python/test.sh features/volume/create/test_feature.py -k test_sufficient_suitable_pools
 ```
+
+## Debugging the Tests
+Typically, the test code cleans up after itself and so it's impossible to debug the test cluster.
+The environmental variable `CLEAN` can be set to `false` to skip tearing down the cluster when a test ends.
+It should be paired with the pytest option `-x` or `--exitfirst` to exit when the first test fails otherwise the other
+tests may end up tearing down the cluster anyway.
+
+Example:
+```bash
+CLEAN=false ../../scripts/python/test.sh features/volume/create/test_feature.py -k test_sufficient_suitable_pools -x
+```
+
+The script `../../scripts/python/test.sh` does a lot of repetitive work of regenerating the auto-generated code.
+This step can be skipped with the `FAST` environment variable to speed up the test cycle:
+```bash
+FAST=true ../../scripts/python/test.sh features/volume/create/test_feature.py -k test_sufficient_suitable_pools -x
+```

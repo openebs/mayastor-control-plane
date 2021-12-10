@@ -56,16 +56,7 @@ def create_pool_disk_images():
 @pytest.fixture(autouse=True)
 def init(create_pool_disk_images):
     # Shorten the reconcile periods and cache period to speed up the tests.
-    Deployer.start_with_args(
-        [
-            "-j",
-            "-m=2",
-            "-w=10s",
-            "--reconcile-idle-period=500ms",
-            "--reconcile-period=500ms",
-            "--cache-period=1s",
-        ]
-    )
+    Deployer.start(2, reconcile_period="500ms", cache_period="1s")
 
     # Create pools
     ApiClient.pools_api().put_node_pool(

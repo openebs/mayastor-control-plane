@@ -37,7 +37,7 @@ REPLICA_CONTEXT_KEY = "replica"
 # The deployer uses the default parameterisation.
 @pytest.fixture()
 def init():
-    Deployer.start(num_mayastors=NUM_MAYASTORS)
+    Deployer.start(NUM_MAYASTORS)
     init_resources()
     yield
     Deployer.stop()
@@ -48,16 +48,7 @@ def init():
 @pytest.fixture()
 def init_parameterised_deployer():
     # Shorten the reconcile periods and cache period to speed up the tests.
-    Deployer.start_with_args(
-        [
-            "-j",
-            f"-m={NUM_MAYASTORS}",
-            "-w=10s",
-            "--reconcile-idle-period=1s",
-            "--reconcile-period=1s",
-            "--cache-period=1s",
-        ]
-    )
+    Deployer.start(NUM_MAYASTORS, reconcile_period="1s", cache_period="1s")
     init_resources()
     yield
     Deployer.stop()

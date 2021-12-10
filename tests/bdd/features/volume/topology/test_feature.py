@@ -43,7 +43,7 @@ REPLICA_ERROR = "replica_error"
 # A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    Deployer.start(num_mayastors=NUM_MAYASTORS)
+    Deployer.start(NUM_MAYASTORS)
     ApiClient.pools_api().put_node_pool(
         NODE_1_NAME,
         POOL_1_UUID,
