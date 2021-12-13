@@ -303,8 +303,7 @@ mod tests {
         message_bus::{NodeState, NodeStatus},
         store::node::{NodeLabels, NodeSpec},
     };
-    use composer::*;
-    use rpc::mayastor::Null;
+    use composer::{rpc::mayastor::Null, *};
 
     async fn bus_init() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::timeout(std::time::Duration::from_secs(2), async {

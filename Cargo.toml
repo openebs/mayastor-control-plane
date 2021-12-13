@@ -4,7 +4,6 @@ panic = "abort"
 [workspace]
 members = [
     "common",
-    "composer",
     "control-plane/agents",
     "control-plane/msp-operator",
     "control-plane/rest",

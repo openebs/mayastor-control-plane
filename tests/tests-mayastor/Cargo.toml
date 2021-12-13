@@ -14,7 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
 openapi = { path = "../../openapi", features = [ "tower-client", "tower-trace" ] }
-composer = { path = "../../composer" }
+composer = { git = "https://github.com/mayadata-io/composer", branch = "develop" }
 deployer = { path = "../../deployer" }
 anyhow = "1.0.44"
 common-lib = { path = "../../common" }

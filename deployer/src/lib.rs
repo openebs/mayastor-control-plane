@@ -3,10 +3,12 @@ pub mod infra;
 use infra::*;
 
 pub(crate) use common_lib::opentelemetry::KeyValue;
-use composer::{Builder, TEST_LABEL_PREFIX};
+use composer::Builder;
 use std::{collections::HashMap, convert::TryInto, str::FromStr, time::Duration};
 use structopt::StructOpt;
 use strum::VariantNames;
+
+const TEST_LABEL_PREFIX: &str = "io.mayastor.test";
 
 #[derive(Debug, StructOpt)]
 pub struct CliArgs {

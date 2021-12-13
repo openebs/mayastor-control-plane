@@ -57,7 +57,7 @@ impl ComponentAction for Mayastor {
         for i in 0 .. options.mayastors {
             let mut hdl = cfg.grpc_handle(&Self::name(i, options)).await.unwrap();
             hdl.mayastor
-                .list_nexus(rpc::mayastor::Null {})
+                .list_nexus(composer::rpc::mayastor::Null {})
                 .await
                 .unwrap();
         }
