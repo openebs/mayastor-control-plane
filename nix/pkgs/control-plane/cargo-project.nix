@@ -39,7 +39,6 @@ let
       "Cargo.lock"
       "Cargo.toml"
       "common"
-      "composer"
       "control-plane"
       "deployer"
       "kubectl-plugin"
@@ -54,6 +53,7 @@ let
       lockFile = ../../../Cargo.lock;
       outputHashes = {
         "nats-0.15.2" = "sha256:1whr0v4yv31q5zwxhcqmx4qykgn5cgzvwlaxgq847mymzajpcsln";
+        "composer-0.1.0" = "sha256:0hrrg9cnbscrrw8f8qbn4nrip56ymbmb5grsycm01i5fi7m4cf3w";
       };
     };
 

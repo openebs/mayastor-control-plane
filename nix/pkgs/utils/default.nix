@@ -16,7 +16,6 @@ let
     "Cargo.lock"
     "Cargo.toml"
     "common"
-    "composer"
     "control-plane"
     "deployer"
     "kubectl-plugin"
