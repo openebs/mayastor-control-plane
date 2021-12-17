@@ -4,11 +4,12 @@
 
 { busybox, dockerTools, lib, utillinux, control-plane, tini }:
 let
+  image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
   build-control-plane-image = { build, name, config ? { } }:
     dockerTools.buildImage {
       tag = control-plane.version;
       created = "now";
-      name = "mayadata/mcp-${name}";
+      name = "mayadata/mcp-${name}${image_suffix.${build}}";
       contents = [ tini busybox control-plane.${build}.${name} ];
       config = {
         Entrypoint = [ "tini" "--" control-plane.${build}.${name}.binary ];
@@ -37,31 +38,40 @@ let
       inherit build;
       name = "csi-controller";
     };
-
+in
+let
+  build-agent-images = { build }: {
+    core = build-agent-image {
+      inherit build;
+      name = "core";
+    };
+    jsongrpc = build-agent-image {
+      inherit build;
+      name = "jsongrpc";
+    };
+  };
+  build-operator-images = { build }: {
+    msp = build-msp-operator-image { inherit build; };
+  };
+  build-csi-images = { build }: {
+    controller = build-csi-controller-image { inherit build; };
+  };
+in
+let
+  build-images = { build }: {
+    agents = build-agent-images { inherit build; } // {
+      recurseForDerivations = true;
+    };
+    operators = build-operator-images { inherit build; } // {
+      recurseForDerivations = true;
+    };
+    csi = build-csi-images { inherit build; } // {
+      recurseForDerivations = true;
+    };
+    rest = build-rest-image { inherit build; };
+  };
 in
 {
-  core = build-agent-image {
-    build = "release";
-    name = "core";
-  };
-  core-dev = build-agent-image {
-    build = "debug";
-    name = "core";
-  };
-  jsongrpc = build-agent-image {
-    build = "release";
-    name = "jsongrpc";
-  };
-  jsongrpc-dev = build-agent-image {
-    build = "debug";
-    name = "jsongrpc";
-  };
-  rest = build-rest-image { build = "release"; };
-  rest-dev = build-rest-image { build = "debug"; };
-
-  msp-operator = build-msp-operator-image { build = "release"; };
-  msp-operator-dev = build-msp-operator-image { build = "debug"; };
-
-  csi-controller = build-csi-controller-image { build = "release"; };
-  csi-controller-dev = build-csi-controller-image { build = "debug"; };
+  release = build-images { build = "release"; };
+  debug = build-images { build = "debug"; };
 }

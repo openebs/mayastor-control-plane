@@ -49,13 +49,14 @@ SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 IMAGES=
+DEFAULT_IMAGES="agents.core agents.jsongrpc operators.msp rest csi.controller"
 UPLOAD=
 SKIP_PUBLISH=
 SKIP_BUILD=
 SKIP_TAG_PUBLISH=
 REGISTRY=
 ALIAS=
-DEBUG=
+BUILD_TYPE="release"
 
 # Check if all needed tools are installed
 curl --version >/dev/null
@@ -66,6 +67,11 @@ fi
 $DOCKER --version >/dev/null
 if [ $? -ne 0 ]; then
   echo "Missing docker - install it and put it to your PATH"
+  exit 1
+fi
+nix --version >/dev/null
+if [ $? -ne 0 ]; then
+  echo "Missing nix - install it and put it to your PATH"
   exit 1
 fi
 
@@ -111,7 +117,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --debug)
-      DEBUG="yes"
+      BUILD_TYPE="debug"
       shift
       ;;
     *)
@@ -123,16 +129,12 @@ done
 
 cd $SCRIPTDIR/..
 
-if [ -z "$IMAGES" ]; then
-  if [ -z "$DEBUG" ]; then
-    IMAGES="core jsongrpc rest msp-operator csi-controller"
-  else
-    IMAGES="core-dev jsongrpc-dev rest-dev msp-operator-dev csi-controller-dev"
-  fi
+if [ -z $IMAGES ]; then
+  IMAGES="$DEFAULT_IMAGES"
 fi
 
 for name in $IMAGES; do
-  image_basename="mayadata/mcp-${name}"
+  image_basename=$(nix eval -f . images.$BUILD_TYPE.$name.imageName | xargs)
   image=$image_basename
   if [ -n "$REGISTRY" ]; then
     image="${REGISTRY}/${image}"
@@ -146,7 +148,7 @@ for name in $IMAGES; do
       continue
     fi
     echo "Building $image:$TAG ..."
-    $NIX_BUILD --out-link $archive-image -A images.$archive
+    $NIX_BUILD --out-link $archive-image -A images.$BUILD_TYPE.$archive
     $DOCKER load -i $archive-image
     $RM $archive-image
     if [ "$image" != "$image_basename" ]; then
