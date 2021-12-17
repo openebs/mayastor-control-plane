@@ -2,7 +2,8 @@
 let
   pkgs =
     import sources.nixpkgs { overlays = [ (import sources.rust-overlay) ]; };
-  static_target = pkgs.rust.toRustTargetSpec pkgs.pkgsStatic.stdenv.hostPlatform;
+  static_target =
+    pkgs.rust.toRustTargetSpec pkgs.pkgsStatic.stdenv.hostPlatform;
 in
 rec {
   rust_default = { override ? { } }: rec {

@@ -23,8 +23,7 @@ let
     builtins.filterSource
       (path: type:
         lib.any
-          (allowedPrefix:
-            lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
+          (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
           allowedPrefixes)
       src;
   LIBCLANG_PATH = "${llvmPackages.libclang}/lib";
@@ -47,43 +46,35 @@ let
       "tests"
       "scripts"
     ];
-    cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-controller" ];
+    cargoBuildFlags =
+      [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-controller" ];
 
     cargoLock = {
       lockFile = ../../../Cargo.lock;
       outputHashes = {
-        "nats-0.15.2" = "sha256:1whr0v4yv31q5zwxhcqmx4qykgn5cgzvwlaxgq847mymzajpcsln";
-        "composer-0.1.0" = "sha256:0hrrg9cnbscrrw8f8qbn4nrip56ymbmb5grsycm01i5fi7m4cf3w";
+        "nats-0.15.2" =
+          "sha256:1whr0v4yv31q5zwxhcqmx4qykgn5cgzvwlaxgq847mymzajpcsln";
+        "composer-0.1.0" =
+          "sha256:0hrrg9cnbscrrw8f8qbn4nrip56ymbmb5grsycm01i5fi7m4cf3w";
       };
     };
 
     preBuild = "patchShebangs ./scripts/rust/generate-openapi-bindings.sh";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
-    nativeBuildInputs = [
-      clang
-      pkg-config
-      openapi-generator
-      which
-    ];
-    buildInputs = [
-      llvmPackages.libclang
-      protobuf
-      openssl
-    ];
+    nativeBuildInputs = [ clang pkg-config openapi-generator which ];
+    buildInputs = [ llvmPackages.libclang protobuf openssl ];
     doCheck = false;
   };
 in
 {
   inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version;
-  release = rustPlatform.buildRustPackage
-    (buildProps // {
-      buildType = "release";
-      buildInputs = buildProps.buildInputs;
-    });
-  debug = rustPlatform.buildRustPackage
-    (buildProps // {
-      buildType = "debug";
-      buildInputs = buildProps.buildInputs;
-    });
+  release = rustPlatform.buildRustPackage (buildProps // {
+    buildType = "release";
+    buildInputs = buildProps.buildInputs;
+  });
+  debug = rustPlatform.buildRustPackage (buildProps // {
+    buildType = "debug";
+    buildInputs = buildProps.buildInputs;
+  });
 }

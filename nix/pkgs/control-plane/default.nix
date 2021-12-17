@@ -1,27 +1,41 @@
-{ stdenv
-, git
-, lib
-, pkgs
-}:
+{ stdenv, git, lib, pkgs }:
 let
   versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
   version = builtins.readFile "${versionDrv}";
-  project-builder = pkgs.callPackage ../control-plane/cargo-project.nix { inherit version; };
-  agent = { name, src, suffix ? "agent" }: stdenv.mkDerivation {
-    inherit src;
-    name = "${name}-${version}";
-    binary = "${name}-${suffix}";
-    installPhase = ''
-      mkdir -p $out/bin
-      cp $src/bin/${name} $out/bin/${name}-${suffix}
-    '';
-  };
+  project-builder =
+    pkgs.callPackage ../control-plane/cargo-project.nix { inherit version; };
+  agent = { name, src, suffix ? "agent" }:
+    stdenv.mkDerivation {
+      inherit src;
+      name = "${name}-${version}";
+      binary = "${name}-${suffix}";
+      installPhase = ''
+        mkdir -p $out/bin
+        cp $src/bin/${name} $out/bin/${name}-${suffix}
+      '';
+    };
   components = { src }: {
-    jsongrpc = agent { inherit src; name = "jsongrpc"; };
-    core = agent { inherit src; name = "core"; };
-    rest = agent { inherit src; name = "rest"; suffix = "api"; };
-    msp-operator = agent { inherit src; name = "msp-operator"; };
-    csi-controller = agent { inherit src; name = "csi-controller"; };
+    jsongrpc = agent {
+      inherit src;
+      name = "jsongrpc";
+    };
+    core = agent {
+      inherit src;
+      name = "core";
+    };
+    rest = agent {
+      inherit src;
+      name = "rest";
+      suffix = "api";
+    };
+    msp-operator = agent {
+      inherit src;
+      name = "msp-operator";
+    };
+    csi-controller = agent {
+      inherit src;
+      name = "csi-controller";
+    };
   };
 in
 {

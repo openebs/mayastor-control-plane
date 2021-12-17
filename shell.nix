@@ -1,18 +1,14 @@
-{ norust ? false
-, mayastor ? ""
-}:
+{ norust ? false, mayastor ? "" }:
 let
   sources = import ./nix/sources.nix;
   pkgs = import sources.nixpkgs {
-    overlays = [
-      (_: _: { inherit sources; })
-      (import ./nix/overlay.nix)
-    ];
+    overlays = [ (_: _: { inherit sources; }) (import ./nix/overlay.nix) ];
   };
 in
 with pkgs;
 let
-  norust_moth = "You have requested an environment without rust, you should provide it!";
+  norust_moth =
+    "You have requested an environment without rust, you should provide it!";
   mayastor_moth = "Using the following mayastor binary: ${mayastor}";
   channel = import ./nix/lib/rust.nix { inherit sources; };
   # python environment for tests/bdd
