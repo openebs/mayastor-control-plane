@@ -207,61 +207,46 @@ impl GetChildForRemovalContext {
                     replica_states
                         .iter()
                         .find(|replica_state| replica_state.uuid == replica_spec.uuid)
-                        .map(|replica_state| {
-                            nexus
-                                .as_ref()
-                                .map(|nexus_spec| {
-                                    nexus_spec
-                                        .lock()
-                                        .children
-                                        .iter()
-                                        .find(|child| child.uri() == replica_state.uri)
-                                        .map(|child| child.uri())
-                                })
-                                .flatten()
-                        })
-                        .flatten(),
+                        .and_then(|replica_state| {
+                            nexus.as_ref().and_then(|nexus_spec| {
+                                nexus_spec
+                                    .lock()
+                                    .children
+                                    .iter()
+                                    .find(|child| child.uri() == replica_state.uri)
+                                    .map(|child| child.uri())
+                            })
+                        }),
                     replica_states
                         .iter()
                         .find(|replica_state| replica_state.uuid == replica_spec.uuid)
-                        .map(|replica_state| {
-                            self.state
-                                .target
-                                .as_ref()
-                                .map(|nexus_state| {
-                                    nexus_state
-                                        .children
-                                        .iter()
-                                        .find(|child| child.uri.as_str() == replica_state.uri)
-                                        .cloned()
-                                })
-                                .flatten()
-                        })
-                        .flatten(),
-                    nexus
-                        .as_ref()
-                        .map(|nexus_spec| {
-                            nexus_spec
-                                .lock()
-                                .children
-                                .iter()
-                                .find(|child| {
-                                    child.as_replica().map(|uri| uri.uuid().clone())
-                                        == Some(replica_spec.uuid.clone())
-                                })
-                                .cloned()
-                        })
-                        .flatten(),
-                    self.nexus_info
-                        .as_ref()
-                        .map(|nexus_info| {
-                            nexus_info
-                                .children
-                                .iter()
-                                .find(|child| child.uuid.as_str() == replica_spec.uuid.as_str())
-                                .cloned()
-                        })
-                        .flatten(),
+                        .and_then(|replica_state| {
+                            self.state.target.as_ref().and_then(|nexus_state| {
+                                nexus_state
+                                    .children
+                                    .iter()
+                                    .find(|child| child.uri.as_str() == replica_state.uri)
+                                    .cloned()
+                            })
+                        }),
+                    nexus.as_ref().and_then(|nexus_spec| {
+                        nexus_spec
+                            .lock()
+                            .children
+                            .iter()
+                            .find(|child| {
+                                child.as_replica().map(|uri| uri.uuid().clone())
+                                    == Some(replica_spec.uuid.clone())
+                            })
+                            .cloned()
+                    }),
+                    self.nexus_info.as_ref().and_then(|nexus_info| {
+                        nexus_info
+                            .children
+                            .iter()
+                            .find(|child| child.uuid.as_str() == replica_spec.uuid.as_str())
+                            .cloned()
+                    }),
                 )
             })
             .collect::<Vec<_>>()
@@ -448,30 +433,24 @@ impl VolumeReplicasForNexusCtx {
                 let replica_state = state_replicas
                     .iter()
                     .find(|state| state.uuid == replica_spec.uuid);
-                let child_info = self
-                    .nexus_info
-                    .as_ref()
-                    .map(|n| {
-                        n.children.iter().find(|c| {
-                            if let Some(replica_state) = replica_state {
-                                ChildUri::from(&replica_state.uri).uuid_str().as_ref()
-                                    == Some(&c.uuid)
-                            } else {
-                                false
-                            }
-                        })
+                let child_info = self.nexus_info.as_ref().and_then(|n| {
+                    n.children.iter().find(|c| {
+                        if let Some(replica_state) = replica_state {
+                            ChildUri::from(&replica_state.uri).uuid_str().as_ref() == Some(&c.uuid)
+                        } else {
+                            false
+                        }
                     })
-                    .flatten();
+                });
 
                 pool_wrappers
                     .iter()
                     .find(|p| p.id == replica_spec.pool)
-                    .map(|pool| {
+                    .and_then(|pool| {
                         replica_state.map(|replica_state| {
                             ChildItem::new(&replica_spec, replica_state, child_info, pool)
                         })
                     })
-                    .flatten()
             })
             .collect()
     }

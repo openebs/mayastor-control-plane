@@ -527,23 +527,27 @@ impl Default for TimeoutOptions {
 
 impl TimeoutOptions {
     /// New options with default values
+    #[must_use]
     pub fn new() -> Self {
         Default::default()
     }
 
     /// New options with default values but with no retries
+    #[must_use]
     pub fn new_no_retries() -> Self {
         Self::new().with_max_retries(0)
     }
 
     /// Timeout after which we'll either fail the request or start retrying
     /// if max_retries is greater than 0 or None
+    #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
     /// Timeout multiplied at each iteration
+    #[must_use]
     pub fn with_timeout_backoff(mut self, timeout: Duration) -> Self {
         self.timeout_step = timeout;
         self
@@ -551,12 +555,14 @@ impl TimeoutOptions {
 
     /// Specify a max number of retries before giving up
     /// None for unlimited retries
+    #[must_use]
     pub fn with_max_retries<M: Into<Option<u32>>>(mut self, max_retries: M) -> Self {
         self.max_retries = max_retries.into();
         self
     }
 
     /// Minimum timeouts for specific requests
+    #[must_use]
     pub fn with_req_timeout(mut self, timeout: impl Into<Option<RequestMinTimeout>>) -> Self {
         self.request_timeout = timeout.into();
         self

@@ -556,7 +556,7 @@ fn grpc_to_reply_error(error: SvcError) -> ReplyError {
                 Code::DataLoss => ReplyErrorKind::Internal,
                 Code::Unauthenticated => ReplyErrorKind::Unauthenticated,
             };
-            let extra = format!("{}::{}", request, source.to_string());
+            let extra = format!("{}::{}", request, source);
             ReplyError {
                 kind,
                 resource,

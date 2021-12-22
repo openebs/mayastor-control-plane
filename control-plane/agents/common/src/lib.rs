@@ -188,6 +188,7 @@ impl Service {
     }
 
     /// Setup default `channel` where `with_subscription` will listen on
+    #[must_use]
     pub fn with_channel(mut self, channel: impl Into<Channel>) -> Self {
         self.channel = channel.into();
         self
@@ -210,6 +211,7 @@ impl Service {
     ///    let more: &More = args.context.get_state()?;
     /// # Ok(())
     /// # }
+    #[must_use]
     pub fn with_shared_state<T: Send + Sync + 'static>(self, state: T) -> Self {
         let type_name = std::any::type_name::<T>();
         tracing::debug!("Adding shared type: {}", type_name);
@@ -249,6 +251,7 @@ impl Service {
     /// # async fn alive() -> bool {
     ///    Liveness{}.request().await.is_ok()
     /// # }
+    #[must_use]
     pub fn with_default_liveness(self) -> Self {
         #[derive(Clone, Default)]
         struct ServiceHandler<T> {
@@ -270,6 +273,7 @@ impl Service {
     }
 
     /// Configure `self` through a configure closure
+    #[must_use]
     pub fn configure<F>(self, configure: F) -> Self
     where
         F: FnOnce(Service) -> Service,
@@ -287,12 +291,14 @@ impl Service {
     }
 
     /// Add a new subscriber on the default channel
+    #[must_use]
     pub fn with_subscription(self, service_subscriber: impl ServiceSubscriber + 'static) -> Self {
         let channel = self.channel.clone();
         self.with_subscription_channel(channel, service_subscriber)
     }
 
     /// Add a new subscriber on the given `channel`
+    #[must_use]
     pub fn with_subscription_channel(
         mut self,
         channel: Channel,

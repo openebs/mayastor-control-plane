@@ -26,19 +26,20 @@ mkShell {
     cowsay
     docker
     etcd
+    fio
+    git
     llvmPackages_11.libclang
     nats-server
+    nvme-cli
     openssl
     pkg-config
     pkgs.openapi-generator
     pre-commit
     pytest_inputs
     python3
+    tini
     utillinux
     which
-    tini
-    nvme-cli
-    fio
   ] ++ pkgs.lib.optional (!norust) channel.default.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";

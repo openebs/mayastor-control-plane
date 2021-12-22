@@ -21,7 +21,6 @@ use common_lib::types::v0::openapi::client;
 #[derive(Clone)]
 pub struct RestClient {
     openapi_client_v0: client::direct::ApiClient,
-    trace: bool,
 }
 
 impl RestClient {
@@ -65,7 +64,6 @@ impl RestClient {
 
         Ok(Self {
             openapi_client_v0: openapi_client,
-            trace,
         })
     }
     /// creates a new client
@@ -81,7 +79,6 @@ impl RestClient {
         let openapi_client = client::direct::ApiClient::new(openapi_client_config);
         Ok(Self {
             openapi_client_v0: openapi_client,
-            trace,
         })
     }
 }

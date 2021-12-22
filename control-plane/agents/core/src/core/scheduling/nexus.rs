@@ -15,6 +15,7 @@ use std::collections::HashMap;
 /// Request to retrieve a list of healthy nexus children which is used for nexus creation
 /// used by `CreateVolumeNexus`
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum GetPersistedNexusChildren {
     Create((VolumeSpec, NodeId)),
     ReCreate(NexusSpec),
@@ -115,29 +116,23 @@ impl GetPersistedNexusChildrenCtx {
                 let replica_state = state_replicas
                     .iter()
                     .find(|state| state.uuid == replica_spec.uuid);
-                let child_info = self
-                    .nexus_info
-                    .as_ref()
-                    .map(|n| {
-                        n.children.iter().find(|c| {
-                            if let Some(replica_state) = replica_state {
-                                ChildUri::from(&replica_state.uri).uuid_str().as_ref()
-                                    == Some(&c.uuid)
-                            } else {
-                                false
-                            }
-                        })
+                let child_info = self.nexus_info.as_ref().and_then(|n| {
+                    n.children.iter().find(|c| {
+                        if let Some(replica_state) = replica_state {
+                            ChildUri::from(&replica_state.uri).uuid_str().as_ref() == Some(&c.uuid)
+                        } else {
+                            false
+                        }
                     })
-                    .flatten();
+                });
                 pool_wrappers
                     .iter()
                     .find(|p| p.id == replica_spec.pool)
-                    .map(|pool| {
+                    .and_then(|pool| {
                         replica_state.map(|replica_state| {
                             ChildItem::new(&replica_spec, replica_state, child_info, pool)
                         })
                     })
-                    .flatten()
             })
             .collect()
     }

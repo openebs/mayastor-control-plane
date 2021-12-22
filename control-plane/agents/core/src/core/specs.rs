@@ -30,7 +30,7 @@ use std::{fmt::Debug, ops::Deref, sync::Arc};
 enum SpecError {
     /// Failed to get entries from the persistent store.
     #[snafu(display("Failed to get entries from store. Error {}", source))]
-    StoreGet { source: StoreError },
+    StoreGet { source: Box<StoreError> },
     /// Failed to get entries from the persistent store.
     #[snafu(display("Failed to deserialise object type {}", obj_type))]
     Deserialise {
@@ -661,10 +661,7 @@ impl ResourceSpecsLocked {
         ];
         for spec in &spec_types {
             if let Err(e) = self.populate_specs(store, *spec).await {
-                panic!(
-                    "Failed to initialise resource specs. Err {}.",
-                    e.to_string()
-                );
+                panic!("Failed to initialise resource specs. Err {}.", e);
             }
         }
     }
@@ -701,10 +698,13 @@ impl ResourceSpecsLocked {
         spec_type: StorableObjectType,
     ) -> Result<(), SpecError> {
         let prefix = key_prefix(spec_type);
-        let store_entries = store
-            .get_values_prefix(&prefix)
-            .await
-            .context(StoreGet {})?;
+        let store_entries =
+            store
+                .get_values_prefix(&prefix)
+                .await
+                .map_err(|e| SpecError::StoreGet {
+                    source: Box::new(e),
+                })?;
         let store_values = store_entries.iter().map(|e| e.1.clone()).collect();
 
         let mut resource_specs = self.0.write();

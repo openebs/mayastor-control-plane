@@ -401,14 +401,13 @@ impl NodeWrapper {
         let rpc_replicas = &rpc_replicas.get_ref().replicas;
         let pools = rpc_replicas
             .iter()
-            .map(|p| match rpc_replica_to_bus(p, &self.id) {
+            .filter_map(|p| match rpc_replica_to_bus(p, &self.id) {
                 Ok(r) => Some(r),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc replica");
                     None
                 }
             })
-            .flatten()
             .collect();
         Ok(pools)
     }
@@ -444,14 +443,13 @@ impl NodeWrapper {
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
-            .map(|n| match rpc_nexus_v2_to_bus(n, &self.id) {
+            .filter_map(|n| match rpc_nexus_v2_to_bus(n, &self.id) {
                 Ok(n) => Some(n),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
                     None
                 }
             })
-            .flatten()
             .collect();
         Ok(nexuses)
     }

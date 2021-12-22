@@ -75,19 +75,19 @@ impl Default for WatchResourceId {
 impl ToString for WatchResourceId {
     fn to_string(&self) -> String {
         match self {
-            WatchResourceId::Node(id) => format!("nodes/{}", id.to_string()),
-            WatchResourceId::Pool(id) => format!("pools/{}", id.to_string()),
+            WatchResourceId::Node(id) => format!("nodes/{}", id),
+            WatchResourceId::Pool(id) => format!("pools/{}", id),
             WatchResourceId::Replica(id) => {
-                format!("replicas/{}", id.to_string())
+                format!("replicas/{}", id)
             }
             WatchResourceId::ReplicaState(id) => {
-                format!("replicas_state/{}", id.to_string())
+                format!("replicas_state/{}", id)
             }
             WatchResourceId::ReplicaSpec(id) => {
-                format!("replicas_spec/{}", id.to_string())
+                format!("replicas_spec/{}", id)
             }
-            WatchResourceId::Nexus(id) => format!("nexuses/{}", id.to_string()),
-            WatchResourceId::Volume(id) => format!("volumes/{}", id.to_string()),
+            WatchResourceId::Nexus(id) => format!("nexuses/{}", id),
+            WatchResourceId::Volume(id) => format!("volumes/{}", id),
         }
     }
 }

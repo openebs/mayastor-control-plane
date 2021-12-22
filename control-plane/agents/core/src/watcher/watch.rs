@@ -65,8 +65,9 @@ struct WatchParams {
 struct WatchParamsCfg {
     /// inner configurable watch parameters
     params: WatchParams,
-    /// handle to the watcher
+    /// handle to the watcher (logic on the drop)
     #[serde(skip)]
+    #[allow(dead_code)]
     handle: Option<WatchHandle>,
 }
 

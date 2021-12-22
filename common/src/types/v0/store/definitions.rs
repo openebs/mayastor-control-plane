@@ -163,7 +163,7 @@ pub fn key_prefix(obj_type: StorableObjectType) -> String {
     format!(
         "/namespace/{}/control-plane/{}",
         std::env::var("MY_POD_NAMESPACE").unwrap_or_else(|_| "default".into()),
-        obj_type.to_string()
+        obj_type
     )
 }
 

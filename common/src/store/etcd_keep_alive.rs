@@ -148,7 +148,7 @@ impl EtcdSingletonLock {
 
         let lock_key =
             String::from_utf8(lock_resp.key().to_vec()).map_err(|e| StoreError::FailedLock {
-                reason: format!("Invalid etcd lock key, error: '{}'", e.to_string()),
+                reason: format!("Invalid etcd lock key, error: '{}'", e),
             })?;
         let lease_id = lease_resp.id();
 
@@ -332,6 +332,7 @@ struct Locked {
 }
 #[derive(Debug)]
 struct KeepAlive {
+    #[allow(dead_code)]
     lock_key: String,
     keeper: LeaseKeeper,
     stream: LeaseKeepAliveStream,
@@ -543,7 +544,7 @@ impl LeaseLockKeeperClocking<Replaced> for EtcdSingletonLock {
     async fn clock(&mut self, _state: Replaced) -> LockStatesResult {
         panic!(
             "Lost lock to another service instance: {}. Giving up...",
-            self.service_name.to_string()
+            self.service_name
         );
     }
 }

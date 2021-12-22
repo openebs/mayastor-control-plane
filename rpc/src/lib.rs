@@ -10,6 +10,7 @@ extern crate tonic;
 #[allow(clippy::unit_arg)]
 #[allow(clippy::redundant_closure)]
 #[allow(clippy::upper_case_acronyms)]
+#[allow(clippy::return_self_not_must_use)]
 pub mod mayastor {
     use std::str::FromStr;
 
@@ -39,6 +40,7 @@ pub mod mayastor {
     include!(concat!(env!("OUT_DIR"), "/mayastor.rs"));
 }
 
+#[allow(clippy::return_self_not_must_use)]
 pub mod csi {
     include!(concat!(env!("OUT_DIR"), "/csi.v1.rs"));
 }

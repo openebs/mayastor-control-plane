@@ -68,7 +68,8 @@ fi
 if [ -f "$RUST_FMT" ]; then
   cp "$RUST_FMT" "$tmpd"
   ( cd "$tmpd" && cargo fmt --all )
-  ( cd "$tmpd"; rm Cargo.lock "$(basename "$RUST_FMT")" )
+  # Cargo.lock is no longer generated when running cargo fmt
+  ( cd "$tmpd"; rm Cargo.lock || true; rm "$(basename "$RUST_FMT")" )
 fi
 
 if [[ "$skip_if_md5_same" = "yes" ]]; then
