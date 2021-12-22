@@ -5,22 +5,23 @@
 { busybox, dockerTools, lib, utillinux, control-plane, tini }:
 let
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
-  build-control-plane-image = { build, name, config ? { } }:
+  build-control-plane-image = { buildType, name, package, config ? { } }:
     dockerTools.buildImage {
       tag = control-plane.version;
       created = "now";
-      name = "mayadata/mcp-${name}${image_suffix.${build}}";
-      contents = [ tini busybox control-plane.${build}.${name} ];
+      name = "mayadata/mcp-${name}${image_suffix.${buildType}}";
+      contents = [ tini busybox package ];
       config = {
-        Entrypoint = [ "tini" "--" control-plane.${build}.${name}.binary ];
+        Entrypoint = [ "tini" "--" package.binary ];
       } // config;
     };
-  build-agent-image = { build, name, config ? { } }:
-    build-control-plane-image { inherit build name; };
-  build-rest-image = { build }:
+  build-agent-image = { buildType, name }:
+    build-control-plane-image { inherit buildType name; package = control-plane.${buildType}.agents.${name}; };
+  build-rest-image = { buildType }:
     build-control-plane-image {
-      inherit build;
+      inherit buildType;
       name = "rest";
+      package = control-plane.${buildType}.rest;
       config = {
         ExposedPorts = {
           "8080/tcp" = { };
@@ -28,50 +29,52 @@ let
         };
       };
     };
-  build-msp-operator-image = { build }:
+  build-operator-image = { buildType, name }:
     build-control-plane-image {
-      inherit build;
-      name = "msp-operator";
+      inherit buildType;
+      name = "${name}-operator";
+      package = control-plane.${buildType}.operators.${name};
     };
-  build-csi-controller-image = { build }:
+  build-csi-image = { buildType, name }:
     build-control-plane-image {
-      inherit build;
-      name = "csi-controller";
+      inherit buildType;
+      name = "csi-${name}";
+      package = control-plane.${buildType}.csi.${name};
     };
 in
 let
-  build-agent-images = { build }: {
+  build-agent-images = { buildType }: {
     core = build-agent-image {
-      inherit build;
+      inherit buildType;
       name = "core";
     };
     jsongrpc = build-agent-image {
-      inherit build;
+      inherit buildType;
       name = "jsongrpc";
     };
   };
-  build-operator-images = { build }: {
-    msp = build-msp-operator-image { inherit build; };
+  build-operator-images = { buildType }: {
+    msp = build-operator-image { inherit buildType; name = "msp"; };
   };
-  build-csi-images = { build }: {
-    controller = build-csi-controller-image { inherit build; };
+  build-csi-images = { buildType }: {
+    controller = build-csi-image { inherit buildType; name = "controller"; };
   };
 in
 let
-  build-images = { build }: {
-    agents = build-agent-images { inherit build; } // {
+  build-images = { buildType }: {
+    agents = build-agent-images { inherit buildType; } // {
       recurseForDerivations = true;
     };
-    operators = build-operator-images { inherit build; } // {
+    operators = build-operator-images { inherit buildType; } // {
       recurseForDerivations = true;
     };
-    csi = build-csi-images { inherit build; } // {
+    csi = build-csi-images { inherit buildType; } // {
       recurseForDerivations = true;
     };
-    rest = build-rest-image { inherit build; };
+    rest = build-rest-image { inherit buildType; };
   };
 in
 {
-  release = build-images { build = "release"; };
-  debug = build-images { build = "debug"; };
+  release = build-images { buildType = "release"; };
+  debug = build-images { buildType = "debug"; };
 }

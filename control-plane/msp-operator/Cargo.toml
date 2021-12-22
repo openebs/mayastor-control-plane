@@ -18,7 +18,7 @@ serde_json = "1.0.68"
 serde_yaml = "0.8.21"
 snafu = "0.6.10"
 tokio = { version = "1.12.0", features = ["full"] }
-openapi = { path = "../../openapi", features = [ "tower-client", "tower-trace" ] }
+openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
 humantime = "2.1.0"
 git-version = "0.3.5"
 

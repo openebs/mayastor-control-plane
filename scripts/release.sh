@@ -36,6 +36,7 @@ Options:
   --skip-tag                 Don't publish built images with the git tag.
   --image                    Specify what image to build.
   --alias-tag                Explicit alias for short commit hash tag.
+  --incremental              Builds components in two stages allowing for faster rebuilds during development.
 
 Examples:
   $(basename $0) --registry 127.0.0.1:5000
@@ -57,6 +58,8 @@ SKIP_TAG_PUBLISH=
 REGISTRY=
 ALIAS=
 BUILD_TYPE="release"
+ALL_IN_ONE="true"
+INCREMENTAL="false"
 
 # Check if all needed tools are installed
 curl --version >/dev/null
@@ -120,6 +123,10 @@ while [ "$#" -gt 0 ]; do
       BUILD_TYPE="debug"
       shift
       ;;
+    --incremental)
+      INCREMENTAL="true"
+      shift
+      ;;
     *)
       echo "Unknown option: $1"
       exit 1
@@ -129,8 +136,16 @@ done
 
 cd $SCRIPTDIR/..
 
-if [ -z $IMAGES ]; then
+if [ -z "$IMAGES" ]; then
   IMAGES="$DEFAULT_IMAGES"
+elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
+  image=$(echo "$IMAGES" | xargs)
+  if nix eval -f . "images.debug.$image.imageName" 2>/dev/null; then
+    if [ "$INCREMENTAL" == "true" ]; then
+      # if we're building a single image incrementally, then build only that image
+      ALL_IN_ONE="false"
+    fi
+  fi
 fi
 
 for name in $IMAGES; do
@@ -148,7 +163,7 @@ for name in $IMAGES; do
       continue
     fi
     echo "Building $image:$TAG ..."
-    $NIX_BUILD --out-link $archive-image -A images.$BUILD_TYPE.$archive
+    $NIX_BUILD --out-link $archive-image -A images.$BUILD_TYPE.$archive --arg allInOne "$ALL_IN_ONE" --arg incremental "$INCREMENTAL"
     $DOCKER load -i $archive-image
     $RM $archive-image
     if [ "$image" != "$image_basename" ]; then

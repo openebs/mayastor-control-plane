@@ -1,10 +1,10 @@
-{ stdenv, git, lib, pkgs }:
+{ stdenv, git, lib, pkgs, allInOne, incremental }:
 let
   versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
   version = builtins.readFile "${versionDrv}";
   project-builder =
-    pkgs.callPackage ../control-plane/cargo-project.nix { inherit version; };
-  agent = { name, src, suffix ? "agent" }:
+    pkgs.callPackage ../control-plane/cargo-project.nix { inherit version allInOne incremental; };
+  installer = { name, src, suffix }:
     stdenv.mkDerivation {
       inherit src;
       name = "${name}-${version}";
@@ -14,27 +14,44 @@ let
         cp $src/bin/${name} $out/bin/${name}-${suffix}
       '';
     };
-  components = { src }: {
-    jsongrpc = agent {
-      inherit src;
-      name = "jsongrpc";
+
+  components = { buildType, builder }: rec {
+    agents = rec {
+      recurseForDerivations = true;
+      agents_builder = { buildType, builder }: builder.build { inherit buildType; cargoBuildFlags = [ "-p agents" ]; };
+      agent_installer = { name, src }: installer { inherit name src; suffix = "agent"; };
+      jsongrpc = agent_installer {
+        src = agents_builder { inherit buildType builder; };
+        name = "jsongrpc";
+      };
+      core = agent_installer {
+        src = agents_builder { inherit buildType builder; };
+        name = "core";
+      };
     };
-    core = agent {
-      inherit src;
-      name = "core";
-    };
-    rest = agent {
-      inherit src;
+
+    rest = installer {
+      src = builder.build { inherit buildType; cargoBuildFlags = [ "-p rest" ]; };
       name = "rest";
       suffix = "api";
     };
-    msp-operator = agent {
-      inherit src;
-      name = "msp-operator";
+
+    operators = rec {
+      operator_installer = { name, src }: installer { inherit name src; suffix = "operator"; };
+      msp = operator_installer {
+        src = builder.build { inherit buildType; cargoBuildFlags = [ "-p msp-operator" ]; };
+        name = "msp-operator";
+      };
+      recurseForDerivations = true;
     };
-    csi-controller = agent {
-      inherit src;
-      name = "csi-controller";
+
+    csi = rec {
+      csi_installer = { name, src }: installer { inherit name src; suffix = "csi"; };
+      controller = csi_installer {
+        src = builder.build { inherit buildType; cargoBuildFlags = [ "-p csi-controller" ]; };
+        name = "csi-controller";
+      };
+      recurseForDerivations = true;
     };
   };
 in
@@ -44,6 +61,6 @@ in
   PROTOC_INCLUDE = project-builder.PROTOC_INCLUDE;
   inherit version;
 
-  release = components { src = project-builder.release; };
-  debug = components { src = project-builder.debug; };
+  release = components { builder = project-builder; buildType = "release"; };
+  debug = components { builder = project-builder; buildType = "debug"; };
 }

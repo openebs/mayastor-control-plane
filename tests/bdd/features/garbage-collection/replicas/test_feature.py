@@ -28,9 +28,9 @@ NUM_VOLUME_REPLICAS = 2
 MAYASTOR_1 = "mayastor-1"
 MAYASTOR_2 = "mayastor-2"
 
-POOL_DISK1 = "disk1.img"
+POOL_DISK1 = "pdisk1.img"
 POOL1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-POOL_DISK2 = "disk2.img"
+POOL_DISK2 = "pdisk2.img"
 POOL2_UUID = "4cc6ee64-7232-497d-a26f-38284a444990"
 
 

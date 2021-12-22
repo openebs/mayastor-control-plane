@@ -2,7 +2,7 @@
 let
   sources = import ./nix/sources.nix;
   pkgs = import sources.nixpkgs {
-    overlays = [ (_: _: { inherit sources; }) (import ./nix/overlay.nix) ];
+    overlays = [ (_: _: { inherit sources; }) (import ./nix/overlay.nix { }) ];
   };
 in
 with pkgs;
