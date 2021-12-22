@@ -82,8 +82,7 @@ where
     T: CreateRows,
 {
     fn create_rows(&self) -> Vec<Row> {
-        let rows = self.iter().map(|i| i.create_rows()).flatten().collect();
-        rows
+        self.iter().flat_map(|i| i.create_rows()).collect()
     }
 }
 

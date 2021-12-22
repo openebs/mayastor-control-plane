@@ -12,7 +12,7 @@ fn rust_log_add_quiet_defaults(
         }
         Some(level) => match level.to_string().as_str() {
             "debug" | "trace" => {
-                format!("{},{}", level.to_string(), RUST_LOG_QUIET_DEFAULTS)
+                format!("{},{}", level, RUST_LOG_QUIET_DEFAULTS)
             }
             _ => return level,
         },

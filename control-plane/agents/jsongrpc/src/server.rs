@@ -19,14 +19,6 @@ struct CliArgs {
     #[structopt(long, short, default_value = "nats://127.0.0.1:4222")]
     nats: String,
 
-    /// The timeout for every node connection (gRPC)
-    #[structopt(long, default_value = common_lib::DEFAULT_CONN_TIMEOUT)]
-    pub(crate) connect: humantime::Duration,
-
-    /// The default timeout for node request timeouts (gRPC)
-    #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
-    pub(crate) request: humantime::Duration,
-
     /// Don't use minimum timeouts for specific requests
     #[structopt(long)]
     no_min_timeouts: bool,

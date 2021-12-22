@@ -70,6 +70,7 @@ impl GrpcContext {
 /// Wrapper over all gRPC Clients types
 #[derive(Clone)]
 pub(crate) struct GrpcClient {
+    #[allow(dead_code)]
     context: GrpcContext,
     /// gRPC Mayastor Client
     pub(crate) client: MayaClient,

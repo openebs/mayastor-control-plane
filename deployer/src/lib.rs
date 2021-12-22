@@ -19,7 +19,7 @@ pub struct CliArgs {
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Deployment actions")]
 pub(crate) enum Action {
-    Start(StartOptions),
+    Start(Box<StartOptions>),
     Stop(StopOptions),
     List(ListOptions),
 }
@@ -277,83 +277,102 @@ impl KeyValues {
 }
 
 impl StartOptions {
+    #[must_use]
     pub fn with_agents(mut self, agents: Vec<&str>) -> Self {
         let agents: ControlPlaneAgents = agents.try_into().unwrap();
         self.agents = agents.into_inner();
         self
     }
+    #[must_use]
     pub fn with_cache_period(mut self, period: &str) -> Self {
         self.cache_period = Some(humantime::Duration::from_str(period).unwrap());
         self
     }
+    #[must_use]
     pub fn with_node_deadline(mut self, deadline: &str) -> Self {
         self.node_deadline = Some(humantime::Duration::from_str(deadline).unwrap());
         self
     }
+    #[must_use]
     pub fn with_store_timeout(mut self, timeout: Duration) -> Self {
         self.store_timeout = Some(timeout.into());
         self
     }
+    #[must_use]
     pub fn with_store_lease_ttl(mut self, ttl: Duration) -> Self {
         self.store_lease_ttl = Some(ttl.into());
         self
     }
+    #[must_use]
     pub fn with_reconcile_period(mut self, busy: Duration, idle: Duration) -> Self {
         self.reconcile_period = Some(busy.into());
         self.reconcile_idle_period = Some(idle.into());
         self
     }
+    #[must_use]
     pub fn with_req_timeouts(mut self, no_min: bool, connect: Duration, request: Duration) -> Self {
         self.no_min_timeouts = no_min;
         self.node_conn_timeout = Some(connect.into());
         self.request_timeout = Some(request.into());
         self
     }
+    #[must_use]
     pub fn with_rest(mut self, enabled: bool, jwk: Option<String>) -> Self {
         self.no_rest = !enabled;
         self.rest_jwk = jwk;
         self
     }
+    #[must_use]
     pub fn with_csi(mut self, enabled: bool) -> Self {
         self.csi = enabled;
         self
     }
+    #[must_use]
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {
         self.jaeger = jaeger;
         self
     }
+    #[must_use]
     pub fn with_nats(mut self, nats: bool) -> Self {
         self.no_nats = !nats;
         self
     }
+    #[must_use]
     pub fn with_build(mut self, build: bool) -> Self {
         self.build = build;
         self
     }
+    #[must_use]
     pub fn with_build_all(mut self, build: bool) -> Self {
         self.build_all = build;
         self
     }
+    #[must_use]
     pub fn with_mayastors(mut self, mayastors: u32) -> Self {
         self.mayastors = mayastors;
         self
     }
+    #[must_use]
     pub fn with_show_info(mut self, show_info: bool) -> Self {
         self.show_info = show_info;
         self
     }
+    #[must_use]
     pub fn with_cluster_name(mut self, cluster_name: &str) -> Self {
         self.cluster_label = format!(".{}", cluster_name).parse().unwrap();
         self
     }
+    #[must_use]
     pub fn with_base_image(mut self, base_image: impl Into<Option<String>>) -> Self {
         self.base_image = base_image.into();
         self
     }
+    #[must_use]
     pub fn with_tags(mut self, tags: Vec<KeyValue>) -> Self {
         self.tracing_tags.extend(tags);
         self
     }
+    #[must_use]
     pub fn with_env_tags(mut self, env: Vec<&str>) -> Self {
         env.iter().for_each(|env| {
             if let Ok(val) = std::env::var(env) {

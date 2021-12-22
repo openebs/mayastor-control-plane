@@ -298,7 +298,7 @@ impl TmpDiskFileInner {
             uri: format!(
                 "aio:///host{}?blk_size=512&uuid={}",
                 path,
-                message_bus::PoolId::new().to_string()
+                message_bus::PoolId::new()
             ),
             path,
         }
@@ -342,6 +342,7 @@ fn bus_timeout_opts() -> TimeoutOptions {
 
 impl ClusterBuilder {
     /// Cluster Builder with default options
+    #[must_use]
     pub fn builder() -> Self {
         ClusterBuilder {
             opts: default_options(),
@@ -354,6 +355,7 @@ impl ClusterBuilder {
         }
     }
     /// Update the start options
+    #[must_use]
     pub fn with_options<F>(mut self, set: F) -> Self
     where
         F: Fn(StartOptions) -> StartOptions,
@@ -362,16 +364,19 @@ impl ClusterBuilder {
         self
     }
     /// Enable/Disable jaeger tracing
+    #[must_use]
     pub fn with_tracing(mut self, enabled: bool) -> Self {
         self.trace = enabled;
         self
     }
     /// Rest request timeout
+    #[must_use]
     pub fn with_rest_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.rest_timeout = timeout;
         self
     }
     /// Add `count` malloc pools (100MiB size) to each node
+    #[must_use]
     pub fn with_pools(mut self, count: u32) -> Self {
         for _ in 0 .. count {
             for node in 0 .. self.opts.mayastors {
@@ -386,6 +391,7 @@ impl ClusterBuilder {
         self
     }
     /// Add pool URI with `disk` to the node `index`
+    #[must_use]
     pub fn with_pool(mut self, index: u32, disk: &str) -> Self {
         if let Some(pools) = self.pools.get_mut(&index) {
             pools.push(PoolDisk::Uri(disk.to_string()));
@@ -396,6 +402,7 @@ impl ClusterBuilder {
         self
     }
     /// Add a tmpfs img pool with `disk` to each mayastor node with the specified `size`
+    #[must_use]
     pub fn with_tmpfs_pool(mut self, size: u64) -> Self {
         for node in 0 .. self.opts.mayastors {
             let disk = TmpDiskFile::new(&Uuid::new_v4().to_string(), size);
@@ -408,28 +415,33 @@ impl ClusterBuilder {
         self
     }
     /// Specify `count` replicas to add to each node per pool
+    #[must_use]
     pub fn with_replicas(mut self, count: u32, size: u64, share: message_bus::Protocol) -> Self {
         self.replicas = Replica { count, size, share };
         self
     }
     /// Specify `count` mayastors for the cluster
+    #[must_use]
     pub fn with_mayastors(mut self, count: u32) -> Self {
         self.opts = self.opts.with_mayastors(count);
         self
     }
     /// Specify which agents to use
+    #[must_use]
     pub fn with_agents(mut self, agents: Vec<&str>) -> Self {
         self.opts = self.opts.with_agents(agents);
         self
     }
     /// Specify the node deadline for the node agent
     /// eg: 2s
+    #[must_use]
     pub fn with_node_deadline(mut self, deadline: &str) -> Self {
         self.opts = self.opts.with_node_deadline(deadline);
         self
     }
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
+    #[must_use]
     pub fn with_cache_period(mut self, period: &str) -> Self {
         self.opts = self.opts.with_cache_period(period);
         self
@@ -438,25 +450,31 @@ impl ClusterBuilder {
     /// With reconcile periods:
     /// `busy` for when there's work that needs to be retried on the next poll
     /// `idle` when there's no work pending
+    #[must_use]
     pub fn with_reconcile_period(mut self, busy: Duration, idle: Duration) -> Self {
         self.opts = self.opts.with_reconcile_period(busy, idle);
         self
     }
     /// With store operation timeout
+    #[must_use]
     pub fn with_store_timeout(mut self, timeout: Duration) -> Self {
         self.opts = self.opts.with_store_timeout(timeout);
         self
     }
+    /// With store lease ttl
+    #[must_use]
     pub fn with_store_lease_ttl(mut self, ttl: Duration) -> Self {
         self.opts = self.opts.with_store_lease_ttl(ttl);
         self
     }
     /// Specify the node connect and request timeouts
+    #[must_use]
     pub fn with_req_timeouts(mut self, connect: Duration, request: Duration) -> Self {
         self.opts = self.opts.with_req_timeouts(true, connect, request);
         self
     }
     /// Specify the node connect and request timeouts and whether to use minimum timeouts or not
+    #[must_use]
     pub fn with_req_timeouts_min(
         mut self,
         no_min: bool,
@@ -467,36 +485,43 @@ impl ClusterBuilder {
         self
     }
     /// Specify the message bus timeout options
+    #[must_use]
     pub fn with_bus_timeouts(mut self, timeout: TimeoutOptions) -> Self {
         self.bus_timeout = timeout;
         self
     }
     /// Specify whether rest is enabled or not
+    #[must_use]
     pub fn with_rest(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_rest(enabled, None);
         self
     }
     /// Specify whether nats is enabled or not
+    #[must_use]
     pub fn with_nats(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_nats(enabled);
         self
     }
     /// Specify whether jaeger is enabled or not
+    #[must_use]
     pub fn with_jaeger(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_jaeger(enabled);
         self
     }
     /// Specify whether rest is enabled or not and wether to use authentication or not
+    #[must_use]
     pub fn with_rest_auth(mut self, enabled: bool, jwk: Option<String>) -> Self {
         self.opts = self.opts.with_rest(enabled, jwk);
         self
     }
     /// Specify whether the components should be cargo built or not
+    #[must_use]
     pub fn with_build(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_build(enabled);
         self
     }
     /// Specify whether the workspace binaries should be cargo built or not
+    #[must_use]
     pub fn with_build_all(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_build_all(enabled);
         self

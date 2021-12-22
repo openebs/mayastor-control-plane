@@ -75,10 +75,7 @@ impl List for Pools {
 
 /// Pool resource.
 #[derive(StructOpt, Debug)]
-pub(crate) struct Pool {
-    /// ID of the pool.
-    id: PoolId,
-}
+pub(crate) struct Pool {}
 
 #[async_trait(?Send)]
 impl Get for Pool {

@@ -14,7 +14,6 @@ use tokio::sync::Mutex;
 
 #[derive(Clone, Debug)]
 pub(super) struct Service {
-    registry: Registry,
     watcher: Arc<Mutex<StoreWatcher>>,
 }
 
@@ -22,8 +21,7 @@ pub(super) struct Service {
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
         Self {
-            watcher: Arc::new(Mutex::new(StoreWatcher::new(registry.clone()))),
-            registry,
+            watcher: Arc::new(Mutex::new(StoreWatcher::new(registry))),
         }
     }
 

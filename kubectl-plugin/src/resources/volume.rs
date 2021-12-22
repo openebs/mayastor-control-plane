@@ -1,6 +1,6 @@
 use crate::{
     operations::{Get, List, Scale},
-    resources::{utils, ReplicaCount, VolumeId},
+    resources::{utils, VolumeId},
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
@@ -26,7 +26,7 @@ impl CreateRows for openapi::models::Volume {
             state.uuid,
             self.spec.num_replicas,
             optional_cell(state.target.clone().map(|t| t.node)),
-            optional_cell(state.target.as_ref().map(|t| target_protocol(t)).flatten()),
+            optional_cell(state.target.as_ref().and_then(target_protocol)),
             state.status,
             state.size
         ]];
@@ -67,12 +67,7 @@ impl List for Volumes {
 
 /// Volume resource.
 #[derive(StructOpt, Debug)]
-pub(crate) struct Volume {
-    /// ID of the volume.
-    id: VolumeId,
-    /// Number of replicas.
-    replica_count: Option<ReplicaCount>,
-}
+pub(crate) struct Volume {}
 
 #[async_trait(?Send)]
 impl Get for Volume {

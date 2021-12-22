@@ -37,14 +37,13 @@ impl PoolItemLister {
         let pools = Self::nodes(registry)
             .await
             .iter()
-            .map(|n| {
+            .flat_map(|n| {
                 n.pool_wrappers()
                     .iter()
                     .filter(|p| registry.specs().get_pool(&p.id).is_ok())
                     .map(|p| PoolItem::new(n.clone(), p.clone()))
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect();
         pools
     }

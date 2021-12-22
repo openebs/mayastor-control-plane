@@ -184,7 +184,7 @@ pub struct Topology {
 impl Topology {
     /// Get a reference to the explicit topology
     pub fn explicit(&self) -> Option<&ExplicitNodeTopology> {
-        self.node.as_ref().map(|n| n.explicit()).flatten()
+        self.node.as_ref().and_then(|n| n.explicit())
     }
 }
 impl From<Topology> for models::Topology {
