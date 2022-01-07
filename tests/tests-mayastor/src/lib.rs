@@ -546,6 +546,8 @@ impl ClusterBuilder {
         Ok(cluster)
     }
     fn build_prepare(&self) -> Result<(Components, Builder), Error> {
+        // Ensure that the composer is initialised with the correct root path.
+        composer::initialize(std::path::Path::new(std::env!("MCP_SRC")).to_str().unwrap());
         let components = Components::new(self.opts.clone());
         let composer = Builder::new()
             .name(&self.opts.cluster_label.name())
