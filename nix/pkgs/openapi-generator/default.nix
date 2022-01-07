@@ -20,13 +20,14 @@ let
       runHook postBuild
     '';
     # keep only *.{pom,jar,sha1,nbm} and delete all ephemeral files with lastModified timestamps inside
-    installPhase = ''find $out/.m2 -type f -regex '.+\(\.lastUpdated\|resolver-status\.properties\|_remote\.repositories\)' -delete'';
+    installPhase =
+      "find $out/.m2 -type f -regex '.+\\(\\.lastUpdated\\|resolver-status\\.properties\\|_remote\\.repositories\\)' -delete";
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
     outputHash = "0f30vfvqrwa4gdgid9c94kvv83yfrgpx6ii1npjxspdawqr3whrj";
   };
-in
 
+in
 stdenv.mkDerivation rec {
   inherit version;
   inherit src;
@@ -58,7 +59,8 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with lib; {
-    description = "Allows generation of API client libraries (SDK generation), server stubs and documentation automatically given an OpenAPI Spec";
+    description =
+      "Allows generation of API client libraries (SDK generation), server stubs and documentation automatically given an OpenAPI Spec";
     homepage = "https://github.com/openebs/openapi-generator";
     license = licenses.asl20;
     maintainers = [ maintainers.tiagolobocastro ];

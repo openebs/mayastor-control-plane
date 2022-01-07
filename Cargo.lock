@@ -781,7 +781,7 @@ dependencies = [
 [[package]]
 name = "composer"
 version = "0.1.0"
-source = "git+https://github.com/mayadata-io/composer?branch=develop#d1d2f731c39f43b1ff7bd9bfcaf55db57ad755de"
+source = "git+https://github.com/mayadata-io/composer?branch=develop#9a5e3669f1e70d42c1d8ba33a4799e7c2d69a176"
 dependencies = [
  "bollard",
  "crossbeam",

@@ -2,62 +2,79 @@
 # avoid dependency on docker tool chain. Though the maturity of OCI
 # builder in nixpkgs is questionable which is why we postpone this step.
 
-{ busybox
-, dockerTools
-, lib
-, utillinux
-, control-plane
-, tini
-}:
+{ busybox, dockerTools, lib, utillinux, control-plane, tini }:
 let
-  build-control-plane-image = { build, name, config ? { } }: dockerTools.buildImage {
-    tag = control-plane.version;
-    created = "now";
-    name = "mayadata/mcp-${name}";
-    contents = [ tini busybox control-plane.${build}.${name} ];
-    config = { Entrypoint = [ "tini" "--" control-plane.${build}.${name}.binary ]; } // config;
+  image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
+  build-control-plane-image = { buildType, name, package, config ? { } }:
+    dockerTools.buildImage {
+      tag = control-plane.version;
+      created = "now";
+      name = "mayadata/mcp-${name}${image_suffix.${buildType}}";
+      contents = [ tini busybox package ];
+      config = {
+        Entrypoint = [ "tini" "--" package.binary ];
+      } // config;
+    };
+  build-agent-image = { buildType, name }:
+    build-control-plane-image { inherit buildType name; package = control-plane.${buildType}.agents.${name}; };
+  build-rest-image = { buildType }:
+    build-control-plane-image {
+      inherit buildType;
+      name = "rest";
+      package = control-plane.${buildType}.rest;
+      config = {
+        ExposedPorts = {
+          "8080/tcp" = { };
+          "8081/tcp" = { };
+        };
+      };
+    };
+  build-operator-image = { buildType, name }:
+    build-control-plane-image {
+      inherit buildType;
+      name = "${name}-operator";
+      package = control-plane.${buildType}.operators.${name};
+    };
+  build-csi-image = { buildType, name }:
+    build-control-plane-image {
+      inherit buildType;
+      name = "csi-${name}";
+      package = control-plane.${buildType}.csi.${name};
+    };
+in
+let
+  build-agent-images = { buildType }: {
+    core = build-agent-image {
+      inherit buildType;
+      name = "core";
+    };
+    jsongrpc = build-agent-image {
+      inherit buildType;
+      name = "jsongrpc";
+    };
   };
-  build-agent-image = { build, name, config ? { } }: build-control-plane-image {
-    inherit build name;
+  build-operator-images = { buildType }: {
+    msp = build-operator-image { inherit buildType; name = "msp"; };
   };
-  build-rest-image = { build }: build-control-plane-image {
-    inherit build;
-    name = "rest";
-    config = { ExposedPorts = { "8080/tcp" = { }; "8081/tcp" = { }; }; };
+  build-csi-images = { buildType }: {
+    controller = build-csi-image { inherit buildType; name = "controller"; };
   };
-  build-msp-operator-image = { build }: build-control-plane-image {
-    inherit build;
-    name = "msp-operator";
+in
+let
+  build-images = { buildType }: {
+    agents = build-agent-images { inherit buildType; } // {
+      recurseForDerivations = true;
+    };
+    operators = build-operator-images { inherit buildType; } // {
+      recurseForDerivations = true;
+    };
+    csi = build-csi-images { inherit buildType; } // {
+      recurseForDerivations = true;
+    };
+    rest = build-rest-image { inherit buildType; };
   };
-  build-csi-controller-image = { build }: build-control-plane-image {
-    inherit build;
-    name = "csi-controller";
-  };
-
 in
 {
-  core = build-agent-image { build = "release"; name = "core"; };
-  core-dev = build-agent-image { build = "debug"; name = "core"; };
-  jsongrpc = build-agent-image { build = "release"; name = "jsongrpc"; };
-  jsongrpc-dev = build-agent-image { build = "debug"; name = "jsongrpc"; };
-  rest = build-rest-image {
-    build = "release";
-  };
-  rest-dev = build-rest-image {
-    build = "debug";
-  };
-
-  msp-operator = build-msp-operator-image {
-    build = "release";
-  };
-  msp-operator-dev = build-msp-operator-image {
-    build = "debug";
-  };
-
-  csi-controller = build-csi-controller-image {
-    build = "release";
-  };
-  csi-controller-dev = build-csi-controller-image {
-    build = "debug";
-  };
+  release = build-images { buildType = "release"; };
+  debug = build-images { buildType = "debug"; };
 }

@@ -4,8 +4,7 @@ let
     builtins.filterSource
       (path: type:
         lib.any
-          (allowedPrefix:
-            lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
+          (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
           allowedPrefixes)
       src;
 in

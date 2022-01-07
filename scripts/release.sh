@@ -36,6 +36,7 @@ Options:
   --skip-tag                 Don't publish built images with the git tag.
   --image                    Specify what image to build.
   --alias-tag                Explicit alias for short commit hash tag.
+  --incremental              Builds components in two stages allowing for faster rebuilds during development.
 
 Examples:
   $(basename $0) --registry 127.0.0.1:5000
@@ -49,13 +50,16 @@ SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 IMAGES=
+DEFAULT_IMAGES="agents.core agents.jsongrpc operators.msp rest csi.controller"
 UPLOAD=
 SKIP_PUBLISH=
 SKIP_BUILD=
 SKIP_TAG_PUBLISH=
 REGISTRY=
 ALIAS=
-DEBUG=
+BUILD_TYPE="release"
+ALL_IN_ONE="true"
+INCREMENTAL="false"
 
 # Check if all needed tools are installed
 curl --version >/dev/null
@@ -66,6 +70,11 @@ fi
 $DOCKER --version >/dev/null
 if [ $? -ne 0 ]; then
   echo "Missing docker - install it and put it to your PATH"
+  exit 1
+fi
+nix --version >/dev/null
+if [ $? -ne 0 ]; then
+  echo "Missing nix - install it and put it to your PATH"
   exit 1
 fi
 
@@ -111,7 +120,11 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --debug)
-      DEBUG="yes"
+      BUILD_TYPE="debug"
+      shift
+      ;;
+    --incremental)
+      INCREMENTAL="true"
       shift
       ;;
     *)
@@ -124,15 +137,19 @@ done
 cd $SCRIPTDIR/..
 
 if [ -z "$IMAGES" ]; then
-  if [ -z "$DEBUG" ]; then
-    IMAGES="core jsongrpc rest msp-operator csi-controller"
-  else
-    IMAGES="core-dev jsongrpc-dev rest-dev msp-operator-dev csi-controller-dev"
+  IMAGES="$DEFAULT_IMAGES"
+elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
+  image=$(echo "$IMAGES" | xargs)
+  if nix eval -f . "images.debug.$image.imageName" 2>/dev/null; then
+    if [ "$INCREMENTAL" == "true" ]; then
+      # if we're building a single image incrementally, then build only that image
+      ALL_IN_ONE="false"
+    fi
   fi
 fi
 
 for name in $IMAGES; do
-  image_basename="mayadata/mcp-${name}"
+  image_basename=$(nix eval -f . images.$BUILD_TYPE.$name.imageName | xargs)
   image=$image_basename
   if [ -n "$REGISTRY" ]; then
     image="${REGISTRY}/${image}"
@@ -146,7 +163,7 @@ for name in $IMAGES; do
       continue
     fi
     echo "Building $image:$TAG ..."
-    $NIX_BUILD --out-link $archive-image -A images.$archive
+    $NIX_BUILD --out-link $archive-image -A images.$BUILD_TYPE.$archive --arg allInOne "$ALL_IN_ONE" --arg incremental "$INCREMENTAL"
     $DOCKER load -i $archive-image
     $RM $archive-image
     if [ "$image" != "$image_basename" ]; then
