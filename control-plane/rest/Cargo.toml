@@ -45,7 +45,7 @@ git-version = "0.3.5"
 
 [dev-dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
-composer = { git = "https://github.com/mayadata-io/composer", branch = "develop" }
+composer = { git = "https://github.com/mayadata-io/composer", default-features = false, branch = "develop" }
 ctrlp-tests = { path = "../../tests/tests-mayastor" }
 
 [dependencies.serde]

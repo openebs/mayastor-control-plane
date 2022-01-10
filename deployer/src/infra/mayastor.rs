@@ -1,4 +1,6 @@
 use super::*;
+use rpc::mayastor::RpcHandle;
+use std::net::{IpAddr, SocketAddr};
 
 #[async_trait]
 impl ComponentAction for Mayastor {
@@ -55,9 +57,12 @@ impl ComponentAction for Mayastor {
     }
     async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         for i in 0 .. options.mayastors {
-            let mut hdl = cfg.grpc_handle(&Self::name(i, options)).await.unwrap();
+            let name = Self::name(i, options);
+            let container_ip = cfg.container_ip_as_ref(&name);
+            let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
+            let mut hdl = RpcHandle::connect(&name, socket).await?;
             hdl.mayastor
-                .list_nexus(composer::rpc::mayastor::Null {})
+                .list_nexus(rpc::mayastor::Null {})
                 .await
                 .unwrap();
         }

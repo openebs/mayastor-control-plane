@@ -3,7 +3,8 @@ mod v0;
 
 use actix_service::ServiceFactory;
 use actix_web::{
-    dev::{MessageBody, ServiceRequest, ServiceResponse},
+    body::MessageBody,
+    dev::{ServiceRequest, ServiceResponse},
     middleware, App, HttpServer,
 };
 
@@ -122,15 +123,15 @@ fn init_tracing() -> Option<Tracer> {
 }
 
 /// Extension trait for actix-web applications.
-pub trait OpenApiExt<T, B> {
+pub trait OpenApiExt<T> {
     /// configures the App with this version's handlers and openapi generation
     fn configure_api(
         self,
-        config: &dyn Fn(actix_web::App<T, B>) -> actix_web::App<T, B>,
-    ) -> actix_web::App<T, B>;
+        config: &dyn Fn(actix_web::App<T>) -> actix_web::App<T>,
+    ) -> actix_web::App<T>;
 }
 
-impl<T, B> OpenApiExt<T, B> for actix_web::App<T, B>
+impl<T, B> OpenApiExt<T> for actix_web::App<T>
 where
     B: MessageBody,
     T: ServiceFactory<
@@ -143,8 +144,8 @@ where
 {
     fn configure_api(
         self,
-        config: &dyn Fn(actix_web::App<T, B>) -> actix_web::App<T, B>,
-    ) -> actix_web::App<T, B> {
+        config: &dyn Fn(actix_web::App<T>) -> actix_web::App<T>,
+    ) -> actix_web::App<T> {
         config(self)
     }
 }

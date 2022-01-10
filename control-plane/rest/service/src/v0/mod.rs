@@ -17,7 +17,8 @@ pub mod watches;
 
 use actix_service::ServiceFactory;
 use actix_web::{
-    dev::{MessageBody, ServiceRequest, ServiceResponse},
+    body::MessageBody,
+    dev::{ServiceRequest, ServiceResponse},
     web, FromRequest, HttpRequest,
 };
 use futures::future::Ready;
@@ -59,7 +60,7 @@ fn json_error(err: impl std::fmt::Display, _req: &actix_web::HttpRequest) -> act
     .into()
 }
 
-pub(super) fn configure_api<T, B>(api: actix_web::App<T, B>) -> actix_web::App<T, B>
+pub(super) fn configure_api<T, B>(api: actix_web::App<T>) -> actix_web::App<T>
 where
     B: MessageBody,
     T: ServiceFactory<

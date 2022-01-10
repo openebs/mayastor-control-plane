@@ -25,7 +25,8 @@ use common_lib::types::v0::store::{
 };
 pub use etcd_client;
 use etcd_client::DeleteOptions;
-use std::{collections::HashMap, convert::TryInto, time::Duration};
+use rpc::mayastor::RpcHandle;
+use std::{collections::HashMap, convert::TryInto, net::SocketAddr, time::Duration};
 use structopt::StructOpt;
 
 #[tokio::test]
@@ -64,6 +65,20 @@ impl Cluster {
     /// compose utility
     pub fn composer(&self) -> &ComposeTest {
         &self.composer
+    }
+
+    /// return grpc handle to the container
+    pub async fn grpc_handle(&self, name: &str) -> Result<RpcHandle, String> {
+        match self.composer.containers().iter().find(|&c| c.0 == name) {
+            Some(container) => Ok(RpcHandle::connect(
+                container.0,
+                format!("{}:10124", container.1 .1)
+                    .parse::<SocketAddr>()
+                    .unwrap(),
+            )
+            .await?),
+            None => Err(format!("Container {} not found!", name)),
+        }
     }
 
     /// restart the core agent
