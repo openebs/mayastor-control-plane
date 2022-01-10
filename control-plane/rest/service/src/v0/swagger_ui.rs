@@ -34,10 +34,17 @@ fn get_swagger_html(spec_uri: &str) -> Result<String, String> {
 #[derive(Clone)]
 struct GetSwaggerUi(Result<String, String>);
 
-impl Handler<(), Ready<Result<HttpResponse, Error>>> for GetSwaggerUi {
-    fn call(&self, _: ()) -> Ready<Result<HttpResponse, Error>> {
+impl Handler<()> for GetSwaggerUi {
+    type Output = Result<HttpResponse, Error>;
+    type Future = Ready<Self::Output>;
+
+    fn call(&self, _: ()) -> Self::Future {
         match &self.0 {
-            Ok(html) => fut_ok(HttpResponse::Ok().content_type("text/html").body(html)),
+            Ok(html) => fut_ok(
+                HttpResponse::Ok()
+                    .content_type("text/html")
+                    .body(html.clone()),
+            ),
             Err(error) => fut_ok(
                 HttpResponse::NotFound()
                     .content_type("application/json")

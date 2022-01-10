@@ -27,9 +27,9 @@ mkShell {
     llvmPackages_11.libclang
     nats-server
     nvme-cli
+    openapi-generator
     openssl
     pkg-config
-    pkgs.openapi-generator
     pre-commit
     pytest_inputs
     python3
