@@ -102,7 +102,7 @@ let
           "nats-0.15.2" =
             "sha256:1whr0v4yv31q5zwxhcqmx4qykgn5cgzvwlaxgq847mymzajpcsln";
           "composer-0.1.0" =
-            "sha256:0ffpdr0aik2bl63vjr6h3grz78xza025wg1c45djx9hqckh46qm0";
+            "sha256:de0fcd053e99641a9317cba1edb8dbc84b3f38bb";
         };
       };
     });
