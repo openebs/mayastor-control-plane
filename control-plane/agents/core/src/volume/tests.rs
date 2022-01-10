@@ -19,7 +19,7 @@ use common_lib::{
     },
 };
 
-use composer::rpc::mayastor::FaultNexusChildRequest;
+use rpc::mayastor::FaultNexusChildRequest;
 use testlib::{Cluster, ClusterBuilder};
 
 use common_lib::{
@@ -411,11 +411,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
     let volume_state = volume.state();
     let nexus = volume_state.target.unwrap().clone();
 
-    let mut rpc_handle = cluster
-        .composer()
-        .grpc_handle(cluster.node(0).as_str())
-        .await
-        .unwrap();
+    let mut rpc_handle = cluster.grpc_handle(cluster.node(0).as_str()).await.unwrap();
 
     let children_before_fault = volume_children(volume.uuid()).await;
     tracing::info!("volume children: {:?}", children_before_fault);
@@ -434,7 +430,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
         "Nexus: {:?}",
         rpc_handle
             .mayastor
-            .list_nexus(composer::rpc::mayastor::Null {})
+            .list_nexus(rpc::mayastor::Null {})
             .await
             .unwrap()
     );
@@ -506,11 +502,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     let volume_state = volume.state();
     let nexus = volume_state.target.unwrap().clone();
 
-    let mut rpc_handle = cluster
-        .composer()
-        .grpc_handle(cluster.node(0).as_str())
-        .await
-        .unwrap();
+    let mut rpc_handle = cluster.grpc_handle(cluster.node(0).as_str()).await.unwrap();
 
     let children_before_fault = volume_children(volume.uuid()).await;
     tracing::info!("volume children: {:?}", children_before_fault);
@@ -525,7 +517,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     // is the reconciler interleaving with the add_child_nexus?
     rpc_handle
         .mayastor
-        .add_child_nexus(composer::rpc::mayastor::AddChildNexusRequest {
+        .add_child_nexus(rpc::mayastor::AddChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: unknown_replica.clone(),
             norebuild: true,
@@ -537,7 +529,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
         "Nexus: {:?}",
         rpc_handle
             .mayastor
-            .list_nexus(composer::rpc::mayastor::Null {})
+            .list_nexus(rpc::mayastor::Null {})
             .await
             .unwrap()
     );
@@ -572,11 +564,7 @@ async fn hotspare_missing_children(cluster: &Cluster) {
     let volume_state = volume.state();
     let nexus = volume_state.target.unwrap().clone();
 
-    let mut rpc_handle = cluster
-        .composer()
-        .grpc_handle(cluster.node(0).as_str())
-        .await
-        .unwrap();
+    let mut rpc_handle = cluster.grpc_handle(cluster.node(0).as_str()).await.unwrap();
 
     let children_before_fault = volume_children(volume.uuid()).await;
     tracing::info!("volume children: {:?}", children_before_fault);
@@ -584,7 +572,7 @@ async fn hotspare_missing_children(cluster: &Cluster) {
     let missing_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
         .mayastor
-        .remove_child_nexus(composer::rpc::mayastor::RemoveChildNexusRequest {
+        .remove_child_nexus(rpc::mayastor::RemoveChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: missing_child.clone(),
         })
@@ -595,7 +583,7 @@ async fn hotspare_missing_children(cluster: &Cluster) {
         "Nexus: {:?}",
         rpc_handle
             .mayastor
-            .list_nexus(composer::rpc::mayastor::Null {})
+            .list_nexus(rpc::mayastor::Null {})
             .await
             .unwrap()
     );

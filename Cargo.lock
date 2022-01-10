@@ -779,7 +779,7 @@ dependencies = [
 [[package]]
 name = "composer"
 version = "0.1.0"
-source = "git+https://github.com/mayadata-io/composer?branch=develop#de0fcd053e99641a9317cba1edb8dbc84b3f38bb"
+source = "git+https://github.com/mayadata-io/composer?branch=develop#a382d6d50f44ac0e3c8533625e14359c6e2eb69d"
 dependencies = [
  "bollard",
  "crossbeam",
@@ -1015,6 +1015,7 @@ dependencies = [
  "openapi",
  "opentelemetry",
  "opentelemetry-jaeger",
+ "rpc",
  "structopt",
  "tokio",
  "tracing",

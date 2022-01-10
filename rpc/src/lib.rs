@@ -11,7 +11,15 @@ extern crate tonic;
 #[allow(clippy::redundant_closure)]
 #[allow(clippy::upper_case_acronyms)]
 pub mod mayastor {
-    use std::str::FromStr;
+    use bdev_rpc_client::BdevRpcClient;
+    use mayastor_client::MayastorClient;
+
+    use std::{
+        net::{SocketAddr, TcpStream},
+        str::FromStr,
+        time::Duration,
+    };
+    use tonic::transport::Channel;
 
     #[derive(Debug)]
     pub enum Error {
@@ -37,6 +45,49 @@ pub mod mayastor {
     }
 
     include!(concat!(env!("OUT_DIR"), "/mayastor.rs"));
+
+    /// Test Rpc Handle to connect to a mayastor instance via an endpoint
+    /// Gives access to the mayastor client and the bdev client
+    #[derive(Clone)]
+    pub struct RpcHandle {
+        pub name: String,
+        pub endpoint: SocketAddr,
+        pub mayastor: MayastorClient<Channel>,
+        pub bdev: BdevRpcClient<Channel>,
+    }
+
+    impl RpcHandle {
+        /// Connect to the container and return a handle to `Self`
+        /// Note: The initial connection with a timeout is using blocking calls
+        pub async fn connect(name: &str, endpoint: SocketAddr) -> Result<Self, String> {
+            let mut attempts = 40;
+            loop {
+                if TcpStream::connect_timeout(&endpoint, Duration::from_millis(100)).is_ok() {
+                    break;
+                } else {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                attempts -= 1;
+                if attempts == 0 {
+                    return Err(format!("Failed to connect to {}/{}", name, endpoint));
+                }
+            }
+
+            let mayastor = MayastorClient::connect(format!("http://{}", endpoint))
+                .await
+                .unwrap();
+            let bdev = BdevRpcClient::connect(format!("http://{}", endpoint))
+                .await
+                .unwrap();
+
+            Ok(Self {
+                name: name.to_string(),
+                mayastor,
+                bdev,
+                endpoint,
+            })
+        }
+    }
 }
 
 pub mod csi {
