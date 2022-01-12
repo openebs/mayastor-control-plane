@@ -11,6 +11,7 @@ use common_lib::types::v0::message_bus::{
     Filter, GetSpecs, Node, NodeId, NodeState, NodeStatus, Specs, States,
 };
 
+use crate::core::wrapper::InternalOps;
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::ResultExt;
 use std::{collections::HashMap, sync::Arc};
@@ -115,14 +116,14 @@ impl Service {
                 let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
                 if node.load().await.is_ok() {
                     node.watchdog_mut().arm(self.clone());
-                    nodes.insert(node.id.clone(), Arc::new(tokio::sync::RwLock::new(node)));
+                    nodes.insert(node.id().clone(), Arc::new(tokio::sync::RwLock::new(node)));
                 }
             }
             Some(node) => {
-                if node.read().await.status() == &NodeStatus::Online {
+                if node.read().await.is_online() {
                     send_event = false;
                 }
-                node.write().await.on_register().await;
+                node.on_register().await;
             }
         }
 
@@ -207,7 +208,7 @@ impl Service {
         let mut client = grpc.connect().await?;
 
         let result = client
-            .client
+            .mayastor
             .list_block_devices(ListBlockDevicesRequest { all: request.all })
             .await;
 

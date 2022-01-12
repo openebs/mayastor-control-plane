@@ -59,7 +59,7 @@ fn bearer_token() -> String {
 #[tokio::test]
 async fn client() {
     // Run the client test both with and without authentication.
-    for auth in &[true, false] {
+    for auth in &[false, true] {
         let cluster = test_setup(auth).await;
         client_test(&cluster, auth).await;
     }

@@ -56,13 +56,27 @@ impl GrpcContext {
             comms_timeouts: comms_timeouts.clone(),
         })
     }
-    pub(crate) async fn lock(&self) -> tokio::sync::OwnedMutexGuard<()> {
+    /// Override the timeout config in the context for the given request
+    fn override_timeout<R: MessageIdTimeout>(&mut self, request: Option<R>) {
+        let timeout = request
+            .map(|r| r.timeout(self.comms_timeouts.request(), &bus()))
+            .unwrap_or_else(|| self.comms_timeouts.request());
+
+        self.endpoint = self
+            .endpoint
+            .clone()
+            .connect_timeout(self.comms_timeouts.connect() + Duration::from_millis(500))
+            .timeout(timeout);
+    }
+    pub(crate) async fn lock(&self) -> GrpcLockGuard {
         self.lock.clone().lock_owned().await
     }
     pub(crate) async fn connect(&self) -> Result<GrpcClient, SvcError> {
         GrpcClient::new(self).await
     }
-    pub(crate) async fn connect_locked(&self) -> Result<GrpcClientLocked, SvcError> {
+    pub(crate) async fn connect_locked(
+        &self,
+    ) -> Result<GrpcClientLocked, (GrpcLockGuard, SvcError)> {
         GrpcClientLocked::new(self).await
     }
 }
@@ -72,7 +86,7 @@ impl GrpcContext {
 pub(crate) struct GrpcClient {
     context: GrpcContext,
     /// gRPC Mayastor Client
-    pub(crate) client: MayaClient,
+    pub(crate) mayastor: MayaClient,
 }
 pub(crate) type MayaClient = MayastorClient<Channel>;
 impl GrpcClient {
@@ -96,23 +110,48 @@ impl GrpcClient {
 
         Ok(Self {
             context: context.clone(),
-            client,
+            mayastor: client,
         })
     }
 }
 
+/// Async Lock guard for gRPC operations
+/// It's used by the GrpcClientLocked to ensure there's only only operation in progress
+/// at at time while still allowing for multiple gRPC clients
+type GrpcLockGuard = tokio::sync::OwnedMutexGuard<()>;
+
 /// Wrapper over all gRPC Clients types with implicit locking for serialization
 pub(crate) struct GrpcClientLocked {
     /// gRPC auto CRUD guard lock
-    _lock: tokio::sync::OwnedMutexGuard<()>,
+    _lock: GrpcLockGuard,
     client: GrpcClient,
 }
 impl GrpcClientLocked {
-    pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
-        let client = GrpcClient::new(context).await?;
+    /// Create new locked client from the given context
+    /// A connection is established with the timeouts specified from the context.
+    /// Only one `Self` is allowed at a time by making use of a lock guard.
+    pub(crate) async fn new(context: &GrpcContext) -> Result<Self, (GrpcLockGuard, SvcError)> {
+        let _lock = context.lock().await;
+
+        let client = match GrpcClient::new(context).await {
+            Ok(client) => client,
+            Err(error) => return Err((_lock, error)),
+        };
+
+        Ok(Self { _lock, client })
+    }
+    /// Reconnect the client to use for the given request
+    /// This is useful when we want to issue the next gRPC using a different timeout
+    /// todo: tower should allow us to handle this better by keeping the same "backend" client
+    /// but modifying the timeout layer?
+    pub(crate) async fn reconnect<R: MessageIdTimeout>(self, request: R) -> Result<Self, SvcError> {
+        let mut context = self.context.clone();
+        context.override_timeout(Some(request));
+
+        let client = GrpcClient::new(&context).await?;
 
         Ok(Self {
-            _lock: context.lock().await,
+            _lock: self._lock,
             client,
         })
     }

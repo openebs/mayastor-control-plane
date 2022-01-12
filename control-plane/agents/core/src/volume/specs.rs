@@ -1422,7 +1422,7 @@ async fn get_volume_target_node(
                 let node = locked_node.read().await;
                 // todo: use other metrics in order to make the "best" choice
                 if node.is_online() {
-                    return Ok(node.id.clone());
+                    return Ok(node.id().clone());
                 }
             }
             Err(SvcError::NoNodes {})
@@ -1433,10 +1433,10 @@ async fn get_volume_target_node(
             let node = registry.get_node_wrapper(node).await?;
             let node = node.read().await;
             if node.is_online() {
-                Ok(node.id.clone())
+                Ok(node.id().clone())
             } else {
                 Err(SvcError::NodeNotOnline {
-                    node: node.id.clone(),
+                    node: node.id().clone(),
                 })
             }
         }
