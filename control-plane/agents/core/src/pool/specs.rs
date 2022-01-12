@@ -197,6 +197,7 @@ impl ResourceSpecsLocked {
         let (_, _g) = SpecOperations::start_create(&pool_spec, registry, request, mode).await?;
 
         let result = node.create_pool(request).await;
+
         let pool_state = SpecOperations::complete_create(result, &pool_spec, registry).await?;
         let pool_spec = pool_spec.lock().clone();
         Ok(Pool::new(pool_spec, pool_state))
