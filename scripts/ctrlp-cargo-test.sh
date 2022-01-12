@@ -13,8 +13,8 @@ cleanup_handler() {
 
 trap cleanup_handler ERR INT QUIT TERM HUP
 
+set -euxo pipefail
 (
-  set -euxo pipefail
   export PATH=$PATH:${HOME}/.cargo/bin
   # test dependencies
   cargo build --bins

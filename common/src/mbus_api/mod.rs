@@ -163,6 +163,18 @@ impl MessageIdTimeout for MessageId {
     }
 }
 
+/// Generic Get Timeouts for Get* operations
+pub struct GetTimeout;
+impl MessageIdTimeout for GetTimeout {
+    fn timeout_opts(&self, opts: TimeoutOptions, bus: &DynBus) -> TimeoutOptions {
+        MessageIdVs::Default.timeout_opts(opts, bus)
+    }
+
+    fn timeout(&self, timeout: Duration, bus: &DynBus) -> Duration {
+        MessageIdVs::Default.timeout(timeout, bus)
+    }
+}
+
 impl Serialize for MessageId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
