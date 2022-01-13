@@ -81,7 +81,7 @@ async fn missing_pool_state_reconciler(
         };
         let node = match context.registry().get_node_wrapper(&pool.node).await {
             Ok(node) if !node.read().await.is_online() => {
-                let node_status = node.read().await.status().clone();
+                let node_status = node.read().await.status();
                 warn_missing(&pool_spec, node_status);
                 return PollResult::Ok(PollerState::Idle);
             }
