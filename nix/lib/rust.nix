@@ -11,5 +11,8 @@ rec {
     stable = pkgs.rust-bin.stable.latest.default.override (override);
   };
   default = rust_default { };
+  default_src = rust_default {
+    override = { extensions = [ "rust-src" ]; };
+  };
   static = rust_default { override = { targets = [ "${static_target}" ]; }; };
 }

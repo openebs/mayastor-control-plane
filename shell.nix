@@ -36,7 +36,7 @@ mkShell {
     tini
     utillinux
     which
-  ] ++ pkgs.lib.optional (!norust) channel.default.nightly;
+  ] ++ pkgs.lib.optional (!norust) channel.default_src.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
