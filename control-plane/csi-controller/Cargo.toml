@@ -1,6 +1,6 @@
 [package]
 name = "csi-controller"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Mikhail Tcymbaliuk <m.tcymbaliuk@mayadata.io>"]
 edition = "2018"
 
