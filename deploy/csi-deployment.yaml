@@ -26,8 +26,7 @@ spec:
         - command:
           - sh
           - -c
-          - trap "exit 1" TERM; until nc -vz rest 8081; do echo "Waiting for REST API endpoint
-            to become available"; sleep 1; done;
+          - trap "exit 1" TERM; until nc -vz rest 8081; do echo "Waiting for REST API endpoint to become available"; sleep 1; done;
           image: busybox:latest
           name: rest-probe
       containers:
@@ -66,8 +65,8 @@ spec:
             requests:
               cpu: 16m
               memory: 64Mi
-          image: mayadata/mcp-csi-controller:e2e-nightly
-          imagePullPolicy: Always
+          image: mayadata/mcp-csi-controller:v1.0.0
+          imagePullPolicy: IfNotPresent
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
             - "--rest-endpoint=http://$(REST_SERVICE_HOST):8081"
