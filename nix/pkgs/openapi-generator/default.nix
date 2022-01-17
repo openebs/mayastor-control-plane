@@ -1,5 +1,4 @@
 { pkgs, lib, stdenv, fetchFromGitHub, maven, jdk, jre, makeWrapper }:
-
 let
   src = fetchFromGitHub (lib.importJSON ./source.json);
   version = "5.2.1-${src.rev}";
@@ -26,7 +25,6 @@ let
     outputHash = "0f30vfvqrwa4gdgid9c94kvv83yfrgpx6ii1npjxspdawqr3whrj";
   };
 in
-
 stdenv.mkDerivation rec {
   inherit version;
   inherit src;

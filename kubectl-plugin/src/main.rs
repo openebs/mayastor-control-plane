@@ -152,7 +152,10 @@ fn url_from_kubeconfig() -> Result<Url> {
         Ok(file_path) => Some(file_path),
         Err(_) => {
             // Look for kubeconfig file in default location.
+            #[cfg(target_os = "linux")]
             let default_path = format!("{}/.kube/config", env::var("HOME")?);
+            #[cfg(target_os = "windows")]
+            let default_path = format!("{}/.kube/config", env::var("USERPROFILE")?);
             match Path::new(&default_path).exists() {
                 true => Some(default_path),
                 false => None,

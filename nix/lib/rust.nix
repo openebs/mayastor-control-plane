@@ -11,4 +11,7 @@ rec {
   };
   default = rust_default { };
   static = rust_default { override = { targets = [ "${static_target}" ]; }; };
+  windows_cross = rust_default {
+    override = { targets = [ "${pkgs.rust.toRustTargetSpec pkgs.pkgsCross.mingwW64.hostPlatform}" ]; };
+  };
 }
