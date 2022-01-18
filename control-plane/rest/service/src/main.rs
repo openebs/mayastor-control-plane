@@ -52,7 +52,7 @@ pub(crate) struct CliArgs {
     no_auth: bool,
 
     /// The default timeout for backend requests issued by the REST Server
-    #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
+    #[structopt(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
     request_timeout: humantime::Duration,
 
     /// Add process service tags to the traces

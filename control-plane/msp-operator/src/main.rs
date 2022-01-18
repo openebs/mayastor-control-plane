@@ -32,13 +32,14 @@ use std::{collections::HashMap, io::Write, ops::Deref, sync::Arc, time::Duration
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
+extern crate utils as mayastor_utils;
+
 const WHO_AM_I: &str = "Mayastor pool operator";
 const WHO_AM_I_SHORT: &str = "msp-operator";
 const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
 
 /// Various common constants used by the control plane
 pub mod constants {
-    include!("../../../common/src/constants.rs");
     include!("../../../common/src/opentelemetry.rs");
 }
 
@@ -467,8 +468,8 @@ impl ResourceContext {
 
                 let mut labels: HashMap<String, String> = HashMap::new();
                 labels.insert(
-                    String::from(constants::OPENEBS_CREATED_BY_KEY),
-                    String::from(constants::MSP_OPERATOR),
+                    String::from(utils::OPENEBS_CREATED_BY_KEY),
+                    String::from(utils::MSP_OPERATOR),
                 );
 
                 let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
@@ -970,7 +971,7 @@ async fn main() -> anyhow::Result<()> {
                 .short("i")
                 .long("interval")
                 .env("INTERVAL")
-                .default_value(constants::CACHE_POLL_PERIOD)
+                .default_value(utils::CACHE_POLL_PERIOD)
                 .help("specify timer based reconciliation loop"),
         )
         .arg(

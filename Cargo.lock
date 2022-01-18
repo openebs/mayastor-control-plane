@@ -270,6 +270,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
  "url",
+ "utils",
 ]
 
 [[package]]
@@ -773,6 +774,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
  "url",
+ "utils",
  "uuid",
 ]
 
@@ -967,6 +969,7 @@ dependencies = [
  "tracing-futures",
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
+ "utils",
  "uuid",
 ]
 
@@ -1144,6 +1147,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber 0.2.25",
+ "utils",
 ]
 
 [[package]]
@@ -2228,6 +2232,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
+ "utils",
 ]
 
 [[package]]
@@ -3007,6 +3012,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
  "url",
+ "utils",
 ]
 
 [[package]]
@@ -4113,6 +4119,13 @@ dependencies = [
  "matches",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "utils"
+version = "0.1.0"
+dependencies = [
+ "git-version",
 ]
 
 [[package]]

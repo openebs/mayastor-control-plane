@@ -77,7 +77,7 @@ impl Default for Service {
             channel: Default::default(),
             subscriptions: Default::default(),
             shared_state: std::sync::Arc::new(<Container![Send + Sync]>::new()),
-            no_min_timeouts: !common_lib::ENABLE_MIN_TIMEOUTS,
+            no_min_timeouts: !utils::ENABLE_MIN_TIMEOUTS,
         }
     }
 }

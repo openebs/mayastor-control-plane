@@ -29,6 +29,7 @@ openapi = { path = "../openapi", features = [ "actix-server", "tower-client", "t
 parking_lot = "0.11.2"
 humantime = "2.1.0"
 rand = "0.8.4"
+utils = { path = "../utils" }
 
 # Tracing
 tracing-futures = "0.2.5"

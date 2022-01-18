@@ -11,7 +11,7 @@ impl ComponentAction for Mayastor {
                 format!("{}:10124", cfg.next_ip_for_name(&Self::name(i, options))?);
             let name = Self::name(i, options);
             let nats = format!("nats.{}:4222", options.cluster_label.name());
-            let bin = common_lib::MAYASTOR_BINARY;
+            let bin = utils::MAYASTOR_BINARY;
             let binary = options.mayastor_bin.clone().or_else(|| Self::binary(bin));
 
             let mut spec = if let Some(binary) = binary {
