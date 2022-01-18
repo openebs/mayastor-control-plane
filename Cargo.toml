@@ -1,15 +1,18 @@
-[patch.crates-io]
-rpc = { git = "https://github.com/openebs/mayastor", rev = "5b4d4726190e176ba006c78582aa3fea5ac3ceb6" }
+[profile.dev]
+panic = "abort"
 
 [workspace]
-
 members = [
-    "control-plane/agents",
-    "control-plane/mbus-api",
+    "common",
     "composer",
+    "control-plane/agents",
+    "control-plane/msp-operator",
     "control-plane/rest",
-    "control-plane/macros",
-    "control-plane/deployer",
+    "control-plane/csi-controller",
+    "deployer",
+    "kubectl-plugin",
+    "openapi",
+    "rpc",
 # Test mayastor through the rest api
-    "tests-mayastor",
+    "tests/tests-mayastor",
 ]

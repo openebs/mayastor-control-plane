@@ -1,16 +1,15 @@
 use super::*;
+use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
 
-pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
-    cfg.service(get_nodes).service(get_node);
-}
+#[async_trait::async_trait]
+impl apis::actix_server::Nodes for RestApi {
+    async fn get_node(Path(id): Path<String>) -> Result<models::Node, RestError<RestJsonError>> {
+        let node = MessageBus::get_node(&id.into()).await?;
+        Ok(node.into())
+    }
 
-#[get("/v0", "/nodes", tags(Nodes))]
-async fn get_nodes() -> Result<web::Json<Vec<Node>>, RestError> {
-    RestRespond::result(MessageBus::get_nodes().await)
-}
-#[get("/v0", "/nodes/{id}", tags(Nodes))]
-async fn get_node(
-    web::Path(node_id): web::Path<NodeId>,
-) -> Result<web::Json<Node>, RestError> {
-    RestRespond::result(MessageBus::get_node(&node_id).await)
+    async fn get_nodes() -> Result<Vec<models::Node>, RestError<RestJsonError>> {
+        let nodes = MessageBus::get_nodes().await?;
+        Ok(nodes.into_vec())
+    }
 }

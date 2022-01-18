@@ -17,7 +17,7 @@ dockerhub_tag_exists() {
 get_tag() {
   vers=`git tag --points-at HEAD`
   if [ -z "$vers" ]; then
-    vers=`git rev-parse --short HEAD`
+    vers=`git rev-parse --short=12 HEAD`
   fi
   echo -n $vers
 }
@@ -33,6 +33,7 @@ Options:
   --debug                    Build debug version of images where possible.
   --skip-build               Don't perform nix-build.
   --skip-publish             Don't publish built images.
+  --skip-tag                 Don't publish built images with the git tag.
   --image                    Specify what image to build.
   --alias-tag                Explicit alias for short commit hash tag.
 
@@ -51,6 +52,7 @@ IMAGES=
 UPLOAD=
 SKIP_PUBLISH=
 SKIP_BUILD=
+SKIP_TAG_PUBLISH=
 REGISTRY=
 ALIAS=
 DEBUG=
@@ -104,6 +106,10 @@ while [ "$#" -gt 0 ]; do
       SKIP_PUBLISH="yes"
       shift
       ;;
+    --skip-tag)
+      SKIP_TAG_PUBLISH="yes"
+      shift
+      ;;
     --debug)
       DEBUG="yes"
       shift
@@ -119,14 +125,14 @@ cd $SCRIPTDIR/..
 
 if [ -z "$IMAGES" ]; then
   if [ -z "$DEBUG" ]; then
-    IMAGES="agents rest"
+    IMAGES="core jsongrpc rest msp-operator csi-controller"
   else
-    IMAGES="agents-dev rest-dev"
+    IMAGES="core-dev jsongrpc-dev rest-dev msp-operator-dev csi-controller-dev"
   fi
 fi
 
 for name in $IMAGES; do
-  image_basename="mayadata/${name}"
+  image_basename="mayadata/mcp-${name}"
   image=$image_basename
   if [ -n "$REGISTRY" ]; then
     image="${REGISTRY}/${image}"
@@ -153,11 +159,13 @@ for name in $IMAGES; do
 done
 
 if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
-  # Upload them
-  for img in $UPLOAD; do
-    echo "Uploading $img:$TAG to registry ..."
-    $DOCKER push $img:$TAG
-  done
+  if [ -n "$SKIP_TAG_PUBLISH" ]; then
+      # Upload them
+      for img in $UPLOAD; do
+          echo "Uploading $img:$TAG to registry ..."
+          $DOCKER push $img:$TAG
+      done
+  fi
 
   # Create alias
   alias_tag=
@@ -170,6 +178,7 @@ if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
   fi
   if [ -n "$alias_tag" ]; then
     for img in $UPLOAD; do
+      echo "Uploading $img:$alias_tag to registry ..."
       $DOCKER tag $img:$TAG $img:$alias_tag
       $DOCKER push $img:$alias_tag
     done

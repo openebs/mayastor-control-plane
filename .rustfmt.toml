@@ -1,15 +1,16 @@
-# changed from 100 to 80
-max_width = 80
+max_width = 100
 # default is false
 wrap_comments = true
-comment_width = 80
-# was true
-struct_lit_single_line = false
-#changed from Mixed
-imports_layout = "HorizontalVertical"
+comment_width = 100
+struct_lit_single_line = true
+imports_layout = "Mixed"
 # changed from Preserve (merge_imports = false)
 imports_granularity="Crate"
 #default false
 spaces_around_ranges = true
 # was 2015
 edition = "2018"
+
+ignore = [
+    "openapi"
+]

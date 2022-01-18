@@ -10,12 +10,14 @@
 , sources
 , pkgs
 , version
+, openapi-generator
+, which
 }:
 let
   channel = import ../../lib/rust.nix { inherit sources; };
   rustPlatform = makeRustPlatform {
-    rustc = channel.stable.rust;
-    cargo = channel.stable.cargo;
+    rustc = channel.default.stable;
+    cargo = channel.default.stable;
   };
   whitelistSource = src: allowedPrefixes:
     builtins.filterSource
@@ -29,31 +31,46 @@ let
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
   buildProps = rec {
-    name = "control-plane";
-    #cargoSha256 = "0000000000000000000000000000000000000000000000000000";
-    cargoSha256 = "059v9yzchri8pcrxqd9splr7dhh3p6mm1sibffi4rnjl767w2dwm";
+    name = "control-plane-${version}";
     inherit version;
 
     src = whitelistSource ../../../. [
+      ".git"
       "Cargo.lock"
       "Cargo.toml"
-      "control-plane"
+      "common"
       "composer"
-      "tests-mayastor"
+      "control-plane"
+      "deployer"
+      "kubectl-plugin"
+      "openapi"
+      "rpc"
+      "tests"
+      "scripts"
     ];
-    cargoBuildFlags = [ "-p mbus_api" "-p agents" "-p rest" ];
+    cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-controller" ];
+
+    cargoLock = {
+      lockFile = ../../../Cargo.lock;
+      outputHashes = {
+        "nats-0.15.2" = "sha256:1whr0v4yv31q5zwxhcqmx4qykgn5cgzvwlaxgq847mymzajpcsln";
+      };
+    };
+
+    preBuild = "patchShebangs ./scripts/generate-openapi-bindings.sh";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [
       clang
       pkg-config
+      openapi-generator
+      which
     ];
     buildInputs = [
       llvmPackages.libclang
       protobuf
       openssl
     ];
-    verifyCargoDeps = false;
     doCheck = false;
   };
 in

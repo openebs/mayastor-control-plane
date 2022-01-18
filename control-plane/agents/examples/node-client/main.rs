@@ -1,4 +1,4 @@
-use mbus_api::{v0::*, *};
+use common_lib::{mbus_api, mbus_api::Message, types::v0::message_bus::GetNodes};
 use structopt::StructOpt;
 use tracing::info;
 
@@ -30,7 +30,7 @@ async fn client() {
     let cli_args = CliArgs::from_args();
     mbus_api::message_bus_init(cli_args.url).await;
 
-    let nodes = GetNodes {}.request().await.unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
 
     info!("Received Nodes: {:?}", nodes);
 }

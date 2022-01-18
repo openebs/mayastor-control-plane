@@ -1,11 +1,16 @@
+use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
-use mbus_api::v0::NodeId;
+use common_lib::{
+    mbus_api::{bus, MessageIdTimeout},
+    types::v0::message_bus::NodeId,
+};
 use rpc::mayastor::mayastor_client::MayastorClient;
 use snafu::ResultExt;
 use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use tonic::transport::Channel;
 
@@ -18,26 +23,37 @@ pub(crate) struct GrpcContext {
     node: NodeId,
     /// gRPC URI endpoint
     endpoint: tonic::transport::Endpoint,
+    /// gRPC connect and request timeouts
+    comms_timeouts: NodeCommsTimeout,
 }
 
 impl GrpcContext {
-    pub(crate) fn new(
+    pub(crate) fn new<T: MessageIdTimeout>(
         lock: Arc<tokio::sync::Mutex<()>>,
         node: &NodeId,
         endpoint: &str,
+        comms_timeouts: &NodeCommsTimeout,
+        request: Option<T>,
     ) -> Result<Self, SvcError> {
         let uri = format!("http://{}", endpoint);
         let uri = http::uri::Uri::from_str(&uri).context(GrpcConnectUri {
             node_id: node.to_string(),
             uri: uri.clone(),
         })?;
+
+        let timeout = request
+            .map(|r| r.timeout(comms_timeouts.request(), &bus()))
+            .unwrap_or_else(|| comms_timeouts.request());
+
         let endpoint = tonic::transport::Endpoint::from(uri)
-            .timeout(std::time::Duration::from_secs(5));
+            .connect_timeout(comms_timeouts.connect() + Duration::from_millis(500))
+            .timeout(timeout);
 
         Ok(Self {
             node: node.clone(),
             lock,
             endpoint,
+            comms_timeouts: comms_timeouts.clone(),
         })
     }
     pub(crate) async fn lock(&self) -> tokio::sync::OwnedMutexGuard<()> {
@@ -46,9 +62,7 @@ impl GrpcContext {
     pub(crate) async fn connect(&self) -> Result<GrpcClient, SvcError> {
         GrpcClient::new(self).await
     }
-    pub(crate) async fn connect_locked(
-        &self,
-    ) -> Result<GrpcClientLocked, SvcError> {
+    pub(crate) async fn connect_locked(&self) -> Result<GrpcClientLocked, SvcError> {
         GrpcClientLocked::new(self).await
     }
 }
@@ -64,17 +78,20 @@ pub(crate) type MayaClient = MayastorClient<Channel>;
 impl GrpcClient {
     pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
         let client = match tokio::time::timeout(
-            std::time::Duration::from_secs(1),
+            context.comms_timeouts.connect(),
             MayaClient::connect(context.endpoint.clone()),
         )
         .await
         {
             Err(_) => Err(SvcError::GrpcConnectTimeout {
                 node_id: context.node.to_string(),
-                endpoint: format!("{:?}", context.endpoint),
-                timeout: std::time::Duration::from_secs(1),
+                endpoint: context.endpoint.uri().to_string(),
+                timeout: context.comms_timeouts.connect(),
             }),
-            Ok(client) => Ok(client.context(GrpcConnect)?),
+            Ok(client) => Ok(client.context(GrpcConnect {
+                node_id: context.node.to_string(),
+                endpoint: context.endpoint.uri().to_string(),
+            })?),
         }?;
 
         Ok(Self {

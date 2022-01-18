@@ -1,5 +1,5 @@
 { norust ? false
-, nomayastor ? false
+, mayastor ? ""
 }:
 let
   sources = import ./nix/sources.nix;
@@ -13,41 +13,50 @@ in
 with pkgs;
 let
   norust_moth = "You have requested an environment without rust, you should provide it!";
-  nomayastor_moth = "You have requested an environment without mayastor, you should provide it!";
+  mayastor_moth = "Using the following mayastor binary: ${mayastor}";
   channel = import ./nix/lib/rust.nix { inherit sources; };
-  mayastor = import pkgs.mayastor-src { };
+  # python environment for tests/bdd
+  pytest_inputs = python3.withPackages
+    (ps: with ps; [ virtualenv grpcio grpcio-tools black ]);
 in
 mkShell {
+  name = "mayastor-control-plane-shell";
   buildInputs = [
     clang
     cowsay
-    fio
-    git
-    llvmPackages.libclang
+    docker
+    etcd
+    llvmPackages_11.libclang
     nats-server
-    nvme-cli
     openssl
     pkg-config
+    pkgs.openapi-generator
     pre-commit
+    pytest_inputs
     python3
     utillinux
     which
-    docker
-  ]
-  ++ pkgs.lib.optional (!norust) channel.nightly.rust
-  ++ pkgs.lib.optional (!nomayastor) mayastor.units.debug.mayastor;
+    tini
+    nvme-cli
+    fio
+  ] ++ pkgs.lib.optional (!norust) channel.default.nightly;
 
-  LIBCLANG_PATH = control-plane.LIBCLANG_PATH;
-  PROTOC = control-plane.PROTOC;
-  PROTOC_INCLUDE = control-plane.PROTOC_INCLUDE;
+  LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
+  PROTOC = "${protobuf}/bin/protoc";
+  PROTOC_INCLUDE = "${protobuf}/include";
+
+  # variables used to easily create containers with docker files
+  ETCD_BIN = "${pkgs.etcd}/bin/etcd";
+  NATS_BIN = "${pkgs.nats-server}/bin/nats-server";
 
   shellHook = ''
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo 'Hint: use rustup tool.'"}
     ${pkgs.lib.optionalString (norust) "echo"}
-    ${pkgs.lib.optionalString (nomayastor) "cowsay ${nomayastor_moth}"}
-    ${pkgs.lib.optionalString (nomayastor) "echo 'Hint: build mayastor from https://github.com/openebs/mayastor.'"}
-    ${pkgs.lib.optionalString (nomayastor) "echo"}
+    pre-commit install
     pre-commit install --hook commit-msg
+    export MCP_SRC=`pwd`
+    [ ! -z "${mayastor}" ] && cowsay "${mayastor_moth}"
+    [ ! -z "${mayastor}" ] && export MAYASTOR_BIN="${mayastor}"
   '';
 }

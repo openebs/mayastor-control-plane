@@ -1,0 +1,9 @@
+status = [ "continuous-integration/jenkins/branch" ]
+timeout_sec = 10000
+required_approvals = 1
+delete_merged_branches = true
+block_labels = [ "DO NOT MERGE", "wip" ]
+cut_body_after = "---"
+committer.name = "mayastor-bors"
+committer.email = "mayastor-bors@noreply.github.com"
+commit_title = "chore(bors): merge pull request ${PR_REFS}"

@@ -2,7 +2,10 @@ pub mod service;
 
 use async_trait::async_trait;
 use common::{errors::SvcError, *};
-use mbus_api::{v0::*, *};
+use common_lib::{
+    mbus_api::*,
+    types::v0::message_bus::{ChannelVs, JsonGrpcRequest},
+};
 use service::*;
 use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
@@ -15,6 +18,18 @@ struct CliArgs {
     /// Default: nats://127.0.0.1:4222
     #[structopt(long, short, default_value = "nats://127.0.0.1:4222")]
     nats: String,
+
+    /// The timeout for every node connection (gRPC)
+    #[structopt(long, default_value = common_lib::DEFAULT_CONN_TIMEOUT)]
+    pub(crate) connect: humantime::Duration,
+
+    /// The default timeout for node request timeouts (gRPC)
+    #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
+    pub(crate) request: humantime::Duration,
+
+    /// Don't use minimum timeouts for specific requests
+    #[structopt(long)]
+    no_min_timeouts: bool,
 }
 
 /// Needed so we can implement the ServiceSubscriber trait for
@@ -31,15 +46,10 @@ macro_rules! impl_service_handler {
     ($RequestType:ident, $ServiceFnName:ident) => {
         #[async_trait]
         impl ServiceSubscriber for ServiceHandler<$RequestType> {
-            async fn handler(
-                &self,
-                args: Arguments<'_>,
-            ) -> Result<(), SvcError> {
-                let request: ReceivedMessage<$RequestType> =
-                    args.request.try_into()?;
+            async fn handler(&self, args: Arguments<'_>) -> Result<(), SvcError> {
+                let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
 
-                let reply =
-                    JsonGrpcSvc::$ServiceFnName(&request.inner()).await?;
+                let reply = JsonGrpcSvc::$ServiceFnName(&request.inner()).await?;
                 Ok(request.reply(reply).await?)
             }
             fn filter(&self) -> Vec<MessageId> {
@@ -71,7 +81,10 @@ async fn main() {
 
 async fn server(cli_args: CliArgs) {
     Service::builder(cli_args.nats, ChannelVs::JsonGrpc)
-        .connect_message_bus()
+        .connect_message_bus(
+            CliArgs::from_args().no_min_timeouts,
+            BusClient::JsonGrpcAgent,
+        )
         .await
         .with_subscription(ServiceHandler::<JsonGrpcRequest>::default())
         .with_default_liveness()

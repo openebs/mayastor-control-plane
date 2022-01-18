@@ -1,26 +1,35 @@
 repos:
 -   repo: https://github.com/nix-community/nixpkgs-fmt
-    rev: master
+    rev: v1.2.0
     hooks:
     -   id: nixpkgs-fmt
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.3.0
+    rev: v4.0.1
     hooks:
     -   id: trailing-whitespace
+        exclude: openapi/
 -   repo: local
     hooks:
-    -   id: rust-style
-        name: Rust style
-        description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
-        entry: cargo fmt --all -- --check
-        pass_filenames: true
-        types: [file, rust]
+    -   id: openapi-check
+        name: OpenApi Code Generator
+        description: Ensures OpenApi bindings are up to date
+        entry: ./scripts/generate-openapi-bindings.sh
+        args: ["--changes"]
+        pass_filenames: false
         language: system
     -   id: rust-lint
         name: Rust lint
         description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
         entry: cargo clippy --all --all-targets -- -D warnings
         pass_filenames: false
+        types: [file, rust]
+        language: system
+    -   id: rust-style
+        name: Rust style
+        description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
+        entry: cargo fmt --all -- --check
+        exclude: openapi/
+        pass_filenames: true
         types: [file, rust]
         language: system
     -   id: commit-lint
@@ -30,11 +39,24 @@ repos:
         entry: bash -c "npm install @commitlint/config-conventional @commitlint/cli; cat $1 | npx commitlint"
         args: [$1]
         stages: [commit-msg]
-    -   id: openapi-check
-        name: OpenApi Generator
-        description: Ensures OpenApi spec is up to date
-        entry: ./scripts/openapi-check.sh
-        args: ["--changes"]
+    -   id: python-check
+        name: python lint
+        entry: black
+        description: runs black against the python code
+        pass_filenames: true
+        types: [file, python]
+        language: system
+    -   id: crd-check
+        name: CRD Generator
+        description: Ensures the Operator CRD files are up to date
+        entry: ./scripts/generate-crds.sh
+        args: [ "--changes" ]
         pass_filenames: false
         language: system
-
+    -   id: helm-develop-deploy
+        name: Helm Generator
+        description: Ensures the deploy is updated with the develop yamls
+        entry: ./scripts/generate-deploy-yamls.sh
+        args: [ "-c", "develop" ]
+        pass_filenames: false
+        language: system

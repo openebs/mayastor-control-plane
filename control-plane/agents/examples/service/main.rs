@@ -1,6 +1,14 @@
 use async_trait::async_trait;
 use common::{errors::SvcError, *};
-use mbus_api::{v0, *};
+use common_lib::{
+    bus_impl_all, bus_impl_message, bus_impl_message_all, bus_impl_publish, bus_impl_request,
+    impl_channel_id,
+    mbus_api::*,
+    types::{
+        v0::message_bus::{ChannelVs, MessageIdVs},
+        Channel,
+    },
+};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
@@ -71,7 +79,7 @@ async fn client() {
 async fn server() {
     let cli_args = CliArgs::from_args();
 
-    Service::builder(cli_args.url, v0::ChannelVs::Default)
+    Service::builder(cli_args.url, ChannelVs::Default)
         .with_subscription(ServiceHandler::<GetSvcName>::default())
         .run()
         .await;

@@ -10,35 +10,54 @@
 , tini
 }:
 let
-  build-control-plane-image = { build, name, binary, config ? { } }: dockerTools.buildImage {
+  build-control-plane-image = { build, name, config ? { } }: dockerTools.buildImage {
     tag = control-plane.version;
     created = "now";
-    name = "mayadata/mayastor-${name}";
+    name = "mayadata/mcp-${name}";
     contents = [ tini busybox control-plane.${build}.${name} ];
-    config = { Entrypoint = [ "tini" "--" "${binary}" ]; } // config;
+    config = { Entrypoint = [ "tini" "--" control-plane.${build}.${name}.binary ]; } // config;
   };
   build-agent-image = { build, name, config ? { } }: build-control-plane-image {
     inherit build name;
-    binary = "${name}-agent";
   };
   build-rest-image = { build }: build-control-plane-image {
     inherit build;
     name = "rest";
-    binary = "rest";
     config = { ExposedPorts = { "8080/tcp" = { }; "8081/tcp" = { }; }; };
   };
-  agent-images = { build }: {
-    core = build-agent-image { inherit build; name = "core"; };
-    jsongrpc = build-agent-image { inherit build; name = "jsongrpc"; };
+  build-msp-operator-image = { build }: build-control-plane-image {
+    inherit build;
+    name = "msp-operator";
   };
+  build-csi-controller-image = { build }: build-control-plane-image {
+    inherit build;
+    name = "csi-controller";
+  };
+
 in
 {
-  agents = agent-images { build = "release"; };
-  agents-dev = agent-images { build = "debug"; };
+  core = build-agent-image { build = "release"; name = "core"; };
+  core-dev = build-agent-image { build = "debug"; name = "core"; };
+  jsongrpc = build-agent-image { build = "release"; name = "jsongrpc"; };
+  jsongrpc-dev = build-agent-image { build = "debug"; name = "jsongrpc"; };
   rest = build-rest-image {
     build = "release";
   };
   rest-dev = build-rest-image {
+    build = "debug";
+  };
+
+  msp-operator = build-msp-operator-image {
+    build = "release";
+  };
+  msp-operator-dev = build-msp-operator-image {
+    build = "debug";
+  };
+
+  csi-controller = build-csi-controller-image {
+    build = "release";
+  };
+  csi-controller-dev = build-csi-controller-image {
     build = "debug";
   };
 }

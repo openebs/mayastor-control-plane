@@ -1,0 +1,30 @@
+---
+# Source: mayastor-control-plane/templates/jaeger-operator/jaeger.yaml
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: jaeger
+  namespace: mayastor
+spec:
+  strategy: allInOne
+  ingress:
+    enabled: false
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node-role.kubernetes.io/master
+            operator: In
+            values:
+            - ""
+  tolerations:
+    - key: node-role.kubernetes.io/master
+  query:
+    serviceType: NodePort
+    nodePort: 30012
+  storage:
+    type: memory
+    options:
+      memory:
+        max-traces: 100000

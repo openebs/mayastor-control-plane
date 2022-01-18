@@ -1,4 +1,8 @@
-use mbus_api::{v0::*, *};
+use common_lib::{
+    mbus_api,
+    mbus_api::Message,
+    types::v0::message_bus::{CreatePool, DestroyPool, GetPools},
+};
 use structopt::StructOpt;
 use tracing::info;
 
@@ -44,6 +48,7 @@ async fn create_pool(node: &str, pool: &str) {
         node: node.into(),
         id: pool.into(),
         disks: vec!["malloc:///disk0?size_mb=100".into()],
+        labels: None,
     }
     .request()
     .await

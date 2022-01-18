@@ -1,6 +1,6 @@
 [package]
 name = "agents"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
 edition = "2018"
 
@@ -17,31 +17,44 @@ name = "common"
 path = "common/src/lib.rs"
 
 [dependencies]
-mbus_api = { path = "../mbus-api" }
-nats = "0.8"
-structopt = "0.3.15"
-tokio = { version = "0.2", features = ["full"] }
-tonic = "0.1"
-futures = "0.3.8"
-serde_json = "1.0"
-async-trait = "0.1.36"
+structopt = "0.3.23"
+tokio = { version = "1.12.0", features = ["full"] }
+tonic = "0.5.2"
+futures = "0.3.17"
+serde_json = "1.0.68"
+async-trait = "0.1.51"
 dyn-clonable = "0.9.0"
-smol = "1.0.0"
-snafu = "0.6"
+smol = "1.2.5"
+snafu = "0.6.10"
 lazy_static = "1.4.0"
-humantime = "2.0.1"
-state = "0.4.2"
-tracing = "0.1"
-tracing-subscriber = "0.2"
-tracing-futures = "0.2.4"
-rpc = "0.1.0"
-url = "2.2.0"
-http = "0.2.3"
-paste = "1.0.4"
+humantime = "2.1.0"
+state = "0.5.2"
+rpc =  { path = "../../rpc"}
+http = "0.2.5"
+paste = "1.0.5"
+common-lib = { path = "../../common" }
+reqwest = "0.11.4"
+parking_lot = "0.11.2"
+itertools = "0.10.1"
+git-version = "0.3.5"
+
+# Tracing
+opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }
+tracing-opentelemetry = "0.15.0"
+opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
+tracing = "0.1.28"
+tracing-subscriber = "0.2.24"
+tracing-futures = "0.2.5"
+opentelemetry-semantic-conventions = "0.8.0"
 
 [dev-dependencies]
 composer = { path = "../../composer" }
+ctrlp-tests = { path = "../../tests/tests-mayastor" }
+actix-rt = "2.2.0"
+actix-web = { version = "4.0.0-beta.9", features = ["rustls"] }
+url = "2.2.2"
+once_cell = "1.8.0"
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0"
+version = "1.0.130"

@@ -2,10 +2,13 @@
 #![allow(clippy::unit_arg)]
 
 use ::rpc::mayastor::{JsonRpcReply, JsonRpcRequest};
-use common::errors::{BusGetNode, JsonRpcDeserialise, SvcError};
-use mbus_api::message_bus::v0::{MessageBus, *};
+use common::errors::{BusGetNode, JsonRpcDeserialise, NodeNotOnline, SvcError};
+use common_lib::{
+    mbus_api::message_bus::v0::{MessageBus, *},
+    types::v0::message_bus::JsonGrpcRequest,
+};
 use rpc::mayastor::json_rpc_client::JsonRpcClient;
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 
 #[derive(Clone, Default)]
 pub(super) struct JsonGrpcSvc {}
@@ -16,16 +19,18 @@ impl JsonGrpcSvc {
     pub(super) async fn json_grpc_call(
         request: &JsonGrpcRequest,
     ) -> Result<serde_json::Value, SvcError> {
-        let node =
-            MessageBus::get_node(&request.node)
-                .await
-                .context(BusGetNode {
-                    node: request.node.clone(),
-                })?;
-        let mut client =
-            JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
-                .await
-                .unwrap();
+        let node = MessageBus::get_node(&request.node)
+            .await
+            .context(BusGetNode {
+                node: request.node.clone(),
+            })?;
+        let node = node.state().context(NodeNotOnline {
+            node: request.node.to_owned(),
+        })?;
+        // todo: use the cli argument timeouts
+        let mut client = JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
+            .await
+            .unwrap();
         let response: JsonRpcReply = client
             .json_rpc_call(JsonRpcRequest {
                 method: request.method.to_string(),
@@ -39,7 +44,6 @@ impl JsonGrpcSvc {
             })?
             .into_inner();
 
-        Ok(serde_json::from_str(&response.result)
-            .context(JsonRpcDeserialise)?)
+        Ok(serde_json::from_str(&response.result).context(JsonRpcDeserialise)?)
     }
 }

@@ -1,5 +1,5 @@
 use crate::node::service::Service;
-use mbus_api::v0::NodeId;
+use common_lib::types::v0::message_bus::NodeId;
 
 /// Watchdog which must be pet within the deadline, otherwise
 /// it triggers the `on_timeout` callback from the node `Service`
@@ -59,9 +59,7 @@ impl Watchdog {
     }
 
     /// meet the deadline
-    pub(crate) async fn pet(
-        &mut self,
-    ) -> Result<(), tokio::sync::mpsc::error::SendError<()>> {
+    pub(crate) async fn pet(&mut self) -> Result<(), tokio::sync::mpsc::error::SendError<()>> {
         self.timestamp = std::time::Instant::now();
         if let Some(chan) = &mut self.pet_chan {
             chan.send(()).await
@@ -76,9 +74,6 @@ impl Watchdog {
     /// stop the watchdog
     pub(crate) fn disarm(&mut self) {
         tracing::debug!("Disarming the watchdog for node '{}'", self.node_id);
-        if let Some(chan) = &mut self.pet_chan {
-            let _ = chan.disarm();
-        }
-        self.pet_chan = None;
+        let _ = self.pet_chan.take();
     }
 }

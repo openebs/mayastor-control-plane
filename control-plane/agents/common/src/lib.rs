@@ -8,22 +8,34 @@
 use std::{
     collections::HashMap,
     convert::{Into, TryInto},
-    ops::Deref,
+    sync::Arc,
 };
 
 use async_trait::async_trait;
 use dyn_clonable::clonable;
-use futures::{future::join_all, stream::StreamExt};
+use futures::{future::join_all, Future};
 use snafu::{OptionExt, ResultExt, Snafu};
 use state::Container;
 use tracing::{debug, error};
 
-use mbus_api::{v0::Liveness, *};
-
 use crate::errors::SvcError;
+use common_lib::{
+    mbus_api,
+    mbus_api::{
+        BusClient, DynBus, Error, ErrorChain, Message, MessageId, ReceivedMessage,
+        ReceivedRawMessage, TimeoutOptions,
+    },
+    types::{
+        v0::message_bus::{ChannelVs, Liveness},
+        Channel,
+    },
+};
+use opentelemetry::trace::FutureExt;
 
 /// Agent level errors
 pub mod errors;
+/// Messages required by a common handler
+pub mod handler;
 /// Version 0 of the message bus types
 pub mod v0;
 
@@ -51,9 +63,10 @@ pub enum ServiceError {
 pub struct Service {
     server: String,
     server_connected: bool,
+    no_min_timeouts: bool,
     channel: Channel,
     subscriptions: HashMap<String, Vec<Box<dyn ServiceSubscriber>>>,
-    shared_state: std::sync::Arc<state::Container>,
+    shared_state: std::sync::Arc<Container![Send + Sync]>,
 }
 
 impl Default for Service {
@@ -63,7 +76,8 @@ impl Default for Service {
             server_connected: false,
             channel: Default::default(),
             subscriptions: Default::default(),
-            shared_state: std::sync::Arc::new(Container::new()),
+            shared_state: std::sync::Arc::new(<Container![Send + Sync]>::new()),
+            no_min_timeouts: !common_lib::ENABLE_MIN_TIMEOUTS,
         }
     }
 }
@@ -72,40 +86,34 @@ impl Default for Service {
 /// Service Arguments for the service handler callback
 pub struct Arguments<'a> {
     /// Service context, like access to the message bus
-    pub context: &'a Context<'a>,
+    pub context: Context,
     /// Access to the actual message bus request
-    pub request: Request<'a>,
+    pub request: Arc<Request<'a>>,
 }
 
 impl<'a> Arguments<'a> {
     /// Returns a new Service Argument to be use by a Service Handler
-    pub fn new(context: &'a Context, msg: &'a BusMessage) -> Self {
-        Self {
-            context,
-            request: msg.into(),
-        }
+    pub fn new(context: Context, request: Arc<ReceivedRawMessage<'a>>) -> Self {
+        Self { context, request }
     }
 }
 
 /// Service handling context
 /// the message bus which triggered the service callback
 #[derive(Clone)]
-pub struct Context<'a> {
-    bus: &'a DynBus,
-    state: &'a Container,
+pub struct Context {
+    bus: Arc<DynBus>,
+    state: Arc<Container![Send + Sync]>,
 }
 
-impl<'a> Context<'a> {
+impl Context {
     /// create a new context
-    pub fn new(bus: &'a DynBus, state: &'a Container) -> Self {
-        Self {
-            bus,
-            state,
-        }
+    pub fn new(bus: Arc<DynBus>, state: Arc<Container![Send + Sync]>) -> Self {
+        Self { bus, state }
     }
     /// get the message bus from the context
-    pub fn get_bus_as_ref(&self) -> &'a DynBus {
-        self.bus
+    pub fn get_bus_as_ref(&self) -> &DynBus {
+        &self.bus
     }
     /// get the shared state of type `T` from the context
     pub fn get_state<T: Send + Sync + 'static>(&self) -> Result<&T, SvcError> {
@@ -118,9 +126,7 @@ impl<'a> Context<'a> {
                     type_name
                 );
                 error!("{}", error_msg);
-                Err(SvcError::Internal {
-                    details: error_msg,
-                })
+                Err(SvcError::Internal { details: error_msg })
             }
         }
     }
@@ -154,16 +160,30 @@ impl Service {
     /// Connect to the provided message bus server immediately
     /// Useful for when dealing with async shared data which might required the
     /// message bus before the builder is complete
-    pub async fn connect_message_bus(mut self) -> Self {
-        self.message_bus_init().await;
+    pub async fn connect_message_bus(
+        mut self,
+        no_min_timeouts: bool,
+        client: impl Into<Option<BusClient>>,
+    ) -> Self {
+        self.message_bus_init(no_min_timeouts, client).await;
         self
     }
 
-    async fn message_bus_init(&mut self) {
+    async fn message_bus_init(
+        &mut self,
+        no_min_timeouts: bool,
+        client: impl Into<Option<BusClient>>,
+    ) {
         if !self.server_connected {
+            let timeout_opts = if no_min_timeouts {
+                TimeoutOptions::new_no_retries().with_req_timeout(None)
+            } else {
+                TimeoutOptions::new_no_retries()
+            };
             // todo: parse connection options when nats has better support
-            mbus_api::message_bus_init(self.server.clone()).await;
+            mbus_api::message_bus_init_options(client, self.server.clone(), timeout_opts).await;
             self.server_connected = true;
+            self.no_min_timeouts = no_min_timeouts;
         }
     }
 
@@ -237,12 +257,8 @@ impl Service {
 
         #[async_trait]
         impl ServiceSubscriber for ServiceHandler<Liveness> {
-            async fn handler(
-                &self,
-                args: Arguments<'_>,
-            ) -> Result<(), SvcError> {
-                let request: ReceivedMessage<Liveness> =
-                    args.request.try_into()?;
+            async fn handler(&self, args: Arguments<'_>) -> Result<(), SvcError> {
+                let request: ReceivedMessage<Liveness> = args.request.try_into()?;
                 Ok(request.reply(()).await?)
             }
             fn filter(&self) -> Vec<MessageId> {
@@ -261,11 +277,17 @@ impl Service {
         configure(self)
     }
 
+    /// Configure `self` through an async configure closure
+    pub async fn configure_async<F, Fut>(self, configure: F) -> Self
+    where
+        F: FnOnce(Service) -> Fut,
+        Fut: Future<Output = Service>,
+    {
+        configure(self).await
+    }
+
     /// Add a new subscriber on the default channel
-    pub fn with_subscription(
-        self,
-        service_subscriber: impl ServiceSubscriber + 'static,
-    ) -> Self {
+    pub fn with_subscription(self, service_subscriber: impl ServiceSubscriber + 'static) -> Self {
         let channel = self.channel.clone();
         self.with_subscription_channel(channel, service_subscriber)
     }
@@ -281,10 +303,8 @@ impl Service {
                 entry.push(Box::from(service_subscriber));
             }
             None => {
-                self.subscriptions.insert(
-                    channel.to_string(),
-                    vec![Box::from(service_subscriber)],
-                );
+                self.subscriptions
+                    .insert(channel.to_string(), vec![Box::from(service_subscriber)]);
             }
         };
         self
@@ -293,57 +313,116 @@ impl Service {
     async fn run_channel(
         bus: DynBus,
         channel: Channel,
-        subscriptions: &[Box<dyn ServiceSubscriber>],
-        state: std::sync::Arc<Container>,
+        subscriptions: Vec<Box<dyn ServiceSubscriber>>,
+        state: std::sync::Arc<Container![Send + Sync]>,
     ) -> Result<(), ServiceError> {
-        let mut handle =
-            bus.subscribe(channel.clone()).await.context(Subscribe {
-                channel: channel.clone(),
-            })?;
+        let bus = Arc::new(bus);
+        let handle = bus.subscribe(channel.clone()).await.context(Subscribe {
+            channel: channel.clone(),
+        })?;
 
+        // Gated access to a subscription. This means we can concurrently handle CreateVolume and
+        // GetVolume but we handle CreateVolume one at a time.
+        let gated_subs = Arc::new(
+            subscriptions
+                .into_iter()
+                .map(tokio::sync::Mutex::new)
+                .collect::<Vec<_>>(),
+        );
+
+        let mut signal_term =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate());
+        let mut signal_int =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt());
         loop {
-            let message = handle.next().await.context(GetMessage {
+            let state = state.clone();
+            let bus = bus.clone();
+            let gated_subs = gated_subs.clone();
+
+            let message = match (signal_term.as_mut(), signal_int.as_mut()) {
+                (Ok(term), Ok(int)) => {
+                    tokio::select! {
+                        _evt = term.recv() => {
+                             opentelemetry::global::force_flush_tracer_provider();
+                            return Ok(())
+                        },
+                        _evt = int.recv() => {
+                             opentelemetry::global::force_flush_tracer_provider();
+                            return Ok(())
+                        },
+                        message = handle.next() => {
+                            message
+                        }
+                    }
+                }
+                (Ok(signal), Err(_)) | (Err(_), Ok(signal)) => {
+                    tokio::select! {
+                        _evt = signal.recv() => {
+                             opentelemetry::global::force_flush_tracer_provider();
+                            return Ok(())
+                        },
+                        message = handle.next() => {
+                            message
+                        }
+                    }
+                }
+                _ => handle.next().await,
+            }
+            .context(GetMessage {
                 channel: channel.clone(),
             })?;
 
-            let context = Context::new(&bus, state.deref());
-            let args = Arguments::new(&context, &message);
-            debug!("Processing message: {{ {} }}", args.request);
+            tokio::spawn(async move {
+                let context = Context::new(bus, state);
+                let mut req = Request::from(&message);
+                req.set_context(context.get_state().ok());
 
-            if let Err(error) =
-                Self::process_message(args, &subscriptions).await
-            {
-                error!("Error processing message: {}", error.full_string());
-            }
+                let args = Arguments::new(context, Arc::new(req));
+                if args.request.channel() != Channel::v0(ChannelVs::Registry) {
+                    debug!("Processing message: {{ {} }}", args.request);
+                }
+
+                if let Err(error) = Self::process_message(args, &gated_subs).await {
+                    error!("Error processing message: {}", error.full_string());
+                }
+            });
         }
     }
 
     async fn process_message(
         arguments: Arguments<'_>,
-        subscriptions: &[Box<dyn ServiceSubscriber>],
+        subscriptions: &Arc<Vec<tokio::sync::Mutex<Box<dyn ServiceSubscriber>>>>,
     ) -> Result<(), ServiceError> {
         let channel = arguments.request.channel();
         let id = &arguments.request.id().context(GetMessageId {
             channel: channel.clone(),
         })?;
 
-        let subscription = subscriptions
-            .iter()
-            .find(|&subscriber| {
-                subscriber.filter().iter().any(|find_id| find_id == id)
-            })
-            .context(FindSubscription {
-                channel: channel.clone(),
-                id: id.clone(),
-            })?;
+        let mut subscription = Err(ServiceError::FindSubscription {
+            channel: channel.clone(),
+            id: id.clone(),
+        });
+        for sub in subscriptions.iter() {
+            let sub_inner = sub.lock().await;
+            if sub_inner.filter().iter().any(|find_id| find_id == id) {
+                subscription = Ok(sub);
+                break;
+            }
+        }
 
-        match subscription.handler(arguments.clone()).await {
+        match subscription?
+            .lock()
+            .with_context(arguments.request.context())
+            .await
+            .handler(arguments.clone())
+            .await
+        {
             Ok(_) => Ok(()),
             Err(error) => {
                 let result = ServiceError::HandleMessage {
                     channel,
                     id: id.clone(),
-                    details: error.to_string(),
+                    details: error.full_string(),
                 };
                 // respond back to the sender with an error, ignore the outcome
                 arguments
@@ -364,10 +443,11 @@ impl Service {
     /// each channel benefits from a tokio thread which routes messages
     /// accordingly todo: only one subscriber per message id supported at
     /// the moment
-    pub async fn run(&mut self) {
+    pub async fn run(mut self) {
         let mut threads = vec![];
 
-        self.message_bus_init().await;
+        self.message_bus_init(self.no_min_timeouts, BusClient::CoreAgent)
+            .await;
         let bus = mbus_api::bus();
 
         for subscriptions in self.subscriptions.iter() {
@@ -377,13 +457,7 @@ impl Service {
             let state = self.shared_state.clone();
 
             let handle = tokio::spawn(async move {
-                Self::run_channel(
-                    bus,
-                    channel.parse().unwrap(),
-                    &subscriptions,
-                    state,
-                )
-                .await
+                Self::run_channel(bus, channel.parse().unwrap(), subscriptions, state).await
             });
 
             threads.push(handle);

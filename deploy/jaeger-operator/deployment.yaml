@@ -1,0 +1,58 @@
+---
+# Source: mayastor-control-plane/charts/jaeger-operator/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mayastor-jaeger-operator
+  namespace: mayastor
+  labels:
+    app.kubernetes.io/name: jaeger-operator
+    app.kubernetes.io/instance: mayastor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger-operator
+      app.kubernetes.io/instance: mayastor
+  template:
+    metadata:
+      name: mayastor-jaeger-operator
+      labels:
+        app.kubernetes.io/name: jaeger-operator
+        app.kubernetes.io/instance: mayastor
+    spec:
+      serviceAccountName: mayastor-jaeger-operator
+      containers:
+        - name: mayastor-jaeger-operator
+          image: "jaegertracing/jaeger-operator:1.24.0"
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 8383
+            name: metrics
+          args: ["start"]
+          env:
+            - name: WATCH_NAMESPACE
+              value: ""
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPERATOR_NAME
+              value: "mayastor-jaeger-operator"
+          resources:
+            {}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: In
+                values:
+                - ""
+      tolerations:
+        - key: node-role.kubernetes.io/master

@@ -34,19 +34,22 @@ def notifySlackUponStateChange(build) {
   }
 }
 
+run_linter = true
+rust_test = true
+bdd_test = true
+
 // Will ABORT current job for cases when we don't want to build
 if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') &&
     BRANCH_NAME == "develop") {
-    print "INFO: Branch Indexing, aborting job."
-    currentBuild.result = 'ABORTED'
-    return
+    print "INFO: Branch Indexing, skip tests and push the new images."
+    run_linter = false
+    rust_test = false
+    bdd_test = false
+    build_images = true
 }
 
 // Only schedule regular builds on develop branch, so we don't need to guard against it
 String cron_schedule = BRANCH_NAME == "develop" ? "0 2 * * *" : ""
-
-run_linter = true
-rust_test = true
 
 pipeline {
   agent none
@@ -54,7 +57,7 @@ pipeline {
     timeout(time: 1, unit: 'HOURS')
   }
   parameters {
-    booleanParam(defaultValue: false, name: 'build_images')
+    booleanParam(defaultValue: true, name: 'build_images')
   }
   triggers {
     cron(cron_schedule)
@@ -87,9 +90,12 @@ pipeline {
         }
       }
       steps {
+        sh 'printenv'
+        sh 'nix-shell --run "./scripts/generate-openapi-bindings.sh"'
         sh 'nix-shell --run "cargo fmt --all -- --check"'
         sh 'nix-shell --run "cargo clippy --all-targets -- -D warnings"'
-        sh 'nix-shell --run "./scripts/openapi-check.sh"'
+        sh 'nix-shell --run "./scripts/generate-crds.sh --changes"'
+        sh 'nix-shell --run "black tests/bdd"'
       }
     }
     stage('test') {
@@ -119,9 +125,19 @@ pipeline {
             }
           }
         }
+        stage('BDD tests') {
+          when{
+            expression { bdd_test == true }
+          }
+          agent { label 'nixos-mayastor' }
+          steps {
+            sh 'printenv'
+            sh 'nix-shell --run "./scripts/bdd-tests.sh"'
+          }
+        }
       }// parallel stages block
     }// end of test stage
-    stage('build images') {
+    stage('build and push images') {
       agent { label 'nixos-mayastor' }
       when {
         beforeAgent true
@@ -135,7 +151,10 @@ pipeline {
         }
       }
       steps {
-        sh './scripts/release.sh --skip-publish'
+        withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+        }
+        sh './scripts/release.sh'
       }
       post {
         always {

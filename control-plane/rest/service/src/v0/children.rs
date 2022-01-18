@@ -1,123 +1,32 @@
 use super::*;
-
-pub(super) fn configure(cfg: &mut paperclip::actix::web::ServiceConfig) {
-    cfg.service(get_nexus_children)
-        .service(get_nexus_child)
-        .service(get_node_nexus_children)
-        .service(get_node_nexus_child)
-        .service(add_nexus_child)
-        .service(add_node_nexus_child)
-        .service(delete_nexus_child)
-        .service(delete_node_nexus_child);
-}
-
-#[get("/v0", "/nexuses/{nexus_id}/children", tags(Children))]
-async fn get_nexus_children(
-    web::Path(nexus_id): web::Path<NexusId>,
-) -> Result<web::Json<Vec<Child>>, RestError> {
-    get_children_response(Filter::Nexus(nexus_id)).await
-}
-#[get("/v0", "/nodes/{node_id}/nexuses/{nexus_id}/children", tags(Children))]
-async fn get_node_nexus_children(
-    web::Path((node_id, nexus_id)): web::Path<(NodeId, NexusId)>,
-) -> Result<web::Json<Vec<Child>>, RestError> {
-    get_children_response(Filter::NodeNexus(node_id, nexus_id)).await
-}
-
-#[get("/v0", "/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
-async fn get_nexus_child(
-    web::Path((nexus_id, child_id)): web::Path<(NexusId, ChildUri)>,
-    req: HttpRequest,
-) -> Result<web::Json<Child>, RestError> {
-    get_child_response(child_id, req, Filter::Nexus(nexus_id)).await
-}
-#[get(
-    "/v0",
-    "/nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*}",
-    tags(Children)
-)]
-async fn get_node_nexus_child(
-    web::Path((node_id, nexus_id, child_id)): web::Path<(
-        NodeId,
-        NexusId,
-        ChildUri,
-    )>,
-    req: HttpRequest,
-) -> Result<web::Json<Child>, RestError> {
-    get_child_response(child_id, req, Filter::NodeNexus(node_id, nexus_id))
-        .await
-}
-
-#[put("/v0", "/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
-async fn add_nexus_child(
-    web::Path((nexus_id, child_id)): web::Path<(NexusId, ChildUri)>,
-    req: HttpRequest,
-) -> Result<web::Json<Child>, RestError> {
-    add_child_filtered(child_id, req, Filter::Nexus(nexus_id)).await
-}
-#[put(
-    "/v0",
-    "/nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*}",
-    tags(Children)
-)]
-async fn add_node_nexus_child(
-    web::Path((node_id, nexus_id, child_id)): web::Path<(
-        NodeId,
-        NexusId,
-        ChildUri,
-    )>,
-    req: HttpRequest,
-) -> Result<web::Json<Child>, RestError> {
-    add_child_filtered(child_id, req, Filter::NodeNexus(node_id, nexus_id))
-        .await
-}
-
-#[delete("/v0", "/nexuses/{nexus_id}/children/{child_id:.*}", tags(Children))]
-async fn delete_nexus_child(
-    web::Path((nexus_id, child_id)): web::Path<(NexusId, ChildUri)>,
-    req: HttpRequest,
-) -> Result<web::Json<()>, RestError> {
-    delete_child_filtered(child_id, req, Filter::Nexus(nexus_id)).await
-}
-#[delete(
-    "/v0",
-    "/nodes/{node_id}/nexuses/{nexus_id}/children/{child_id:.*}",
-    tags(Children)
-)]
-async fn delete_node_nexus_child(
-    web::Path((node_id, nexus_id, child_id)): web::Path<(
-        NodeId,
-        NexusId,
-        ChildUri,
-    )>,
-    req: HttpRequest,
-) -> Result<web::Json<()>, RestError> {
-    delete_child_filtered(child_id, req, Filter::NodeNexus(node_id, nexus_id))
-        .await
-}
+use common_lib::types::v0::{
+    message_bus::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
+    openapi::apis::Uuid,
+};
+use mbus_api::{
+    message_bus::v0::{BusError, MessageBus, MessageBusTrait},
+    ReplyErrorKind, ResourceKind,
+};
 
 async fn get_children_response(
     filter: Filter,
-) -> Result<web::Json<Vec<Child>>, RestError> {
+) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
     let nexus = MessageBus::get_nexus(filter).await?;
-    RestRespond::ok(nexus.children)
+    Ok(nexus.children.into_iter().map(From::from).collect())
 }
 
 async fn get_child_response(
     child_id: ChildUri,
-    req: HttpRequest,
+    query: &str,
     filter: Filter,
-) -> Result<web::Json<Child>, RestError> {
-    let child_id = build_child_uri(child_id, req);
+) -> Result<models::Child, RestError<RestJsonError>> {
+    let child_id = build_child_uri(child_id, query);
     let nexus = MessageBus::get_nexus(filter).await?;
     let child = find_nexus_child(&nexus, &child_id)?;
-    RestRespond::ok(child)
+    Ok(child.into())
 }
 
-fn find_nexus_child(
-    nexus: &Nexus,
-    child_uri: &ChildUri,
-) -> Result<Child, BusError> {
+fn find_nexus_child(nexus: &Nexus, child_uri: &ChildUri) -> Result<Child, BusError> {
     if let Some(child) = nexus.children.iter().find(|&c| &c.uri == child_uri) {
         Ok(child.clone())
     } else {
@@ -132,10 +41,10 @@ fn find_nexus_child(
 
 async fn add_child_filtered(
     child_id: ChildUri,
-    req: HttpRequest,
+    query: &str,
     filter: Filter,
-) -> Result<web::Json<Child>, RestError> {
-    let child_uri = build_child_uri(child_id, req);
+) -> Result<models::Child, RestError<RestJsonError>> {
+    let child_uri = build_child_uri(child_id, query);
 
     let nexus = match MessageBus::get_nexus(filter).await {
         Ok(nexus) => nexus,
@@ -148,15 +57,16 @@ async fn add_child_filtered(
         uri: child_uri,
         auto_rebuild: true,
     };
-    RestRespond::result(MessageBus::add_nexus_child(create).await)
+    let child = MessageBus::add_nexus_child(create).await?;
+    Ok(child.into())
 }
 
 async fn delete_child_filtered(
     child_id: ChildUri,
-    req: HttpRequest,
+    query: &str,
     filter: Filter,
-) -> Result<web::Json<()>, RestError> {
-    let child_uri = build_child_uri(child_id, req);
+) -> Result<(), RestError<RestJsonError>> {
+    let child_uri = build_child_uri(child_id, query);
 
     let nexus = match MessageBus::get_nexus(filter).await {
         Ok(nexus) => nexus,
@@ -168,17 +78,20 @@ async fn delete_child_filtered(
         nexus: nexus.uuid,
         uri: child_uri,
     };
-    RestRespond::result(MessageBus::remove_nexus_child(destroy).await)
+    MessageBus::remove_nexus_child(destroy).await?;
+    Ok(())
 }
 
-fn build_child_uri(child_id: ChildUri, req: HttpRequest) -> ChildUri {
+/// The child uri should be in the "percent-encode" format, but if it's not try to use
+/// the query string to build up the url
+fn build_child_uri(child_id: ChildUri, query: &str) -> ChildUri {
     let child_id = child_id.to_string();
     ChildUri::from(match url::Url::parse(child_id.as_str()) {
         Ok(_) => {
-            if req.query_string().is_empty() {
+            if query.is_empty() {
                 child_id
             } else {
-                format!("{}?{}", child_id, req.query_string())
+                format!("{}?{}", child_id, query)
             }
         }
         _ => {
@@ -186,4 +99,76 @@ fn build_child_uri(child_id: ChildUri, req: HttpRequest) -> ChildUri {
             format!("aio://{}", child_id)
         }
     })
+}
+
+#[async_trait::async_trait]
+impl apis::actix_server::Children for RestApi {
+    async fn del_nexus_child(
+        query: &str,
+        Path((nexus_id, child_id)): Path<(Uuid, String)>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        delete_child_filtered(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
+    }
+
+    async fn del_node_nexus_child(
+        query: &str,
+        Path((node_id, nexus_id, child_id)): Path<(String, Uuid, String)>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        delete_child_filtered(
+            child_id.into(),
+            query,
+            Filter::NodeNexus(node_id.into(), nexus_id.into()),
+        )
+        .await
+    }
+
+    async fn get_nexus_child(
+        query: &str,
+        Path((nexus_id, child_id)): Path<(Uuid, String)>,
+    ) -> Result<models::Child, RestError<RestJsonError>> {
+        get_child_response(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
+    }
+
+    async fn get_nexus_children(
+        Path(nexus_id): Path<Uuid>,
+    ) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
+        get_children_response(Filter::Nexus(nexus_id.into())).await
+    }
+
+    async fn get_node_nexus_child(
+        query: &str,
+        Path((node_id, nexus_id, child_id)): Path<(String, Uuid, String)>,
+    ) -> Result<models::Child, RestError<RestJsonError>> {
+        get_child_response(
+            child_id.into(),
+            query,
+            Filter::NodeNexus(node_id.into(), nexus_id.into()),
+        )
+        .await
+    }
+
+    async fn get_node_nexus_children(
+        Path((node_id, nexus_id)): Path<(String, Uuid)>,
+    ) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
+        get_children_response(Filter::NodeNexus(node_id.into(), nexus_id.into())).await
+    }
+
+    async fn put_nexus_child(
+        query: &str,
+        Path((nexus_id, child_id)): Path<(Uuid, String)>,
+    ) -> Result<models::Child, RestError<RestJsonError>> {
+        add_child_filtered(child_id.into(), query, Filter::Nexus(nexus_id.into())).await
+    }
+
+    async fn put_node_nexus_child(
+        query: &str,
+        Path((node_id, nexus_id, child_id)): Path<(String, Uuid, String)>,
+    ) -> Result<models::Child, RestError<RestJsonError>> {
+        add_child_filtered(
+            child_id.into(),
+            query,
+            Filter::NodeNexus(node_id.into(), nexus_id.into()),
+        )
+        .await
+    }
 }

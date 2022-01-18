@@ -1,0 +1,18 @@
+mayastorCP:
+  tag: e2e-nightly
+
+jaeger:
+  enabled: false
+
+jaeger-operator:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: In
+                values:
+                  - ""
+  tolerations:
+    - key: node-role.kubernetes.io/master

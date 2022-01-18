@@ -1,0 +1,25 @@
+name: "Release Artifacts"
+on:
+  push:
+    branches:
+      - master
+      - 'release/**'
+
+jobs:
+  kubectl-plugin:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2.4.0
+    - uses: cachix/install-nix-action@v15
+      with:
+        nix_path: nixpkgs=channel:nixos
+    - run: nix-build -A utils.release.linux-musl.kubectl-plugin
+    - uses: actions/upload-artifact@v2
+      with:
+        name: kubectl-mayastor
+        path: ./result/bin/kubectl-mayastor
+    - run: nix-build -A utils.release.windows-gnu.kubectl-plugin
+    - uses: actions/upload-artifact@v2
+      with:
+        name: kubectl-mayastor.exe
+        path: ./result/bin/kubectl-mayastor.exe
