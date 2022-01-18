@@ -15,7 +15,7 @@ rls = [ "openapi/tower-client-rls" ]
 tls = [ "openapi/tower-client-tls" ]
 
 [dependencies]
-openapi = { path = "../openapi", default-features = false }
+openapi = { path = "../openapi", default-features = false, features = [ "tower-trace" ] }
 tokio = { version = "1.12.0" }
 anyhow = "1.0.44"
 async-trait = "0.1.51"
