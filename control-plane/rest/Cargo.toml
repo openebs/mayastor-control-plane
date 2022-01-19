@@ -26,7 +26,6 @@ opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
 actix-web-opentelemetry = "0.11.0-beta.5"
 tracing = "0.1.28"
 tracing-subscriber = "0.2.24"
-tracing-futures = "0.2.5"
 
 async-trait = "0.1.51"
 serde_json = { version = "1.0.68", features = ["preserve_order"] }
