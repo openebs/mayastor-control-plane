@@ -32,8 +32,6 @@ use std::{collections::HashMap, io::Write, ops::Deref, sync::Arc, time::Duration
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
-extern crate utils as mayastor_utils;
-
 const WHO_AM_I: &str = "Mayastor pool operator";
 const WHO_AM_I_SHORT: &str = "msp-operator";
 const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
@@ -961,7 +959,7 @@ fn write_msp_crd(name: Option<&str>) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     let matches = App::new("Mayastor k8s pool operator")
         .author(clap::crate_authors!())
-        .version(clap::crate_version!())
+        .version(utils::package_info!())
         .settings(&[
             clap::AppSettings::ColoredHelp,
             clap::AppSettings::ColorAlways,
@@ -1016,6 +1014,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .get_matches();
 
+    utils::print_package_info!();
+
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .expect("failed to init tracing filter");
@@ -1025,10 +1025,7 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().pretty());
 
     if let Some(jaeger) = matches.value_of("jaeger") {
-        let tags = constants::default_tracing_tags(
-            git_version::git_version!(args = ["--abbrev=12", "--always"]),
-            env!("CARGO_PKG_VERSION"),
-        );
+        let tags = constants::default_tracing_tags(utils::git_version(), env!("CARGO_PKG_VERSION"));
         global::set_text_map_propagator(TraceContextPropagator::new());
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)

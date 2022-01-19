@@ -13,8 +13,10 @@ use common_lib::{mbus_api::BusClient, opentelemetry::default_tracing_tags};
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator, KeyValue};
 use structopt::StructOpt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+use utils::package_info;
 
 #[derive(Debug, StructOpt)]
+#[structopt(version = package_info!())]
 pub(crate) struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)
@@ -109,7 +111,7 @@ fn init_tracing() {
         Some(jaeger) => {
             let mut tracing_tags = CliArgs::args().tracing_tags;
             tracing_tags.append(&mut default_tracing_tags(
-                git_version::git_version!(args = ["--abbrev=12", "--always"]),
+                utils::git_version(),
                 env!("CARGO_PKG_VERSION"),
             ));
             tracing_tags.dedup();
@@ -132,9 +134,9 @@ fn init_tracing() {
 #[tokio::main]
 async fn main() {
     let cli_args = CliArgs::args();
-    println!("Starting Core Agent with options: {:?}", cli_args);
+    utils::print_package_info!();
+    println!("Using options: {:?}", &cli_args);
     init_tracing();
-
     server(cli_args).await;
 }
 

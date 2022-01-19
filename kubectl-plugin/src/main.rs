@@ -9,7 +9,7 @@ mod rest_wrapper;
 
 use crate::{
     operations::{Get, List, ReplicaTopology, Scale},
-    resources::{node, pool, utils, volume, GetResources, ScaleResources},
+    resources::{node, pool, volume, GetResources, ScaleResources},
     rest_wrapper::RestClient,
 };
 use anyhow::Result;
@@ -27,6 +27,7 @@ pub mod opentelemetry_helper {
 }
 
 #[derive(StructOpt, Debug)]
+#[structopt(version = utils::package_info!())]
 struct CliArgs {
     /// The rest endpoint, parsed from KUBECONFIG, if left empty .
     #[structopt(global = true, long, short)]
@@ -38,7 +39,7 @@ struct CliArgs {
 
     /// The Output, viz yaml, json.
     #[structopt(global = true, default_value = "none", short, long, possible_values=&["yaml", "json", "none"], parse(from_str))]
-    output: utils::OutputFormat,
+    output: crate::resources::utils::OutputFormat,
 
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(global = true, long, short)]
@@ -79,10 +80,7 @@ fn init_tracing() {
     match CliArgs::args().jaeger {
         Some(jaeger) => {
             global::set_text_map_propagator(TraceContextPropagator::new());
-            let git_version = option_env!("GIT_VERSION").unwrap_or(git_version::git_version!(
-                args = ["--abbrev=12", "--always"],
-                fallback = "unknown"
-            ));
+            let git_version = option_env!("GIT_VERSION").unwrap_or_else(utils::git_version);
             let tags =
                 opentelemetry_helper::default_tracing_tags(git_version, env!("CARGO_PKG_VERSION"));
             let tracer = opentelemetry_jaeger::new_pipeline()
