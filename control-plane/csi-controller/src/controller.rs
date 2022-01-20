@@ -6,10 +6,10 @@ use tonic::{Response, Status};
 use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
 
-use common_lib::{
-    types::v0::openapi::models::{Node, Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol},
-    MSP_OPERATOR, OPENEBS_CREATED_BY_KEY,
+use common_lib::types::v0::openapi::models::{
+    Node, Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol,
 };
+use utils::{MSP_OPERATOR, OPENEBS_CREATED_BY_KEY};
 
 use rpc::csi::Topology as CsiTopology;
 

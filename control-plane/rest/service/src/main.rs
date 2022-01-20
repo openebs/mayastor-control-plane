@@ -15,6 +15,7 @@ use std::{fs::File, io::BufReader};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
+#[structopt(version = utils::package_info!())]
 pub(crate) struct CliArgs {
     /// The bind address for the REST interface (with HTTPS)
     /// Default: 0.0.0.0:8080
@@ -52,7 +53,7 @@ pub(crate) struct CliArgs {
     no_auth: bool,
 
     /// The default timeout for backend requests issued by the REST Server
-    #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
+    #[structopt(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
     request_timeout: humantime::Duration,
 
     /// Add process service tags to the traces
@@ -102,7 +103,7 @@ fn init_tracing() -> Option<Tracer> {
     if let Some(agent) = CliArgs::args().jaeger {
         let mut tracing_tags = CliArgs::args().tracing_tags;
         tracing_tags.append(&mut default_tracing_tags(
-            git_version::git_version!(args = ["--abbrev=12", "--always"]),
+            utils::git_version(),
             env!("CARGO_PKG_VERSION"),
         ));
         tracing_tags.dedup();
@@ -205,6 +206,7 @@ fn get_jwk_path() -> Option<String> {
 async fn main() -> anyhow::Result<()> {
     // need to keep the jaeger pipeline tracer alive, if enabled
     let _tracer = init_tracing();
+    utils::print_package_info!();
 
     let app = move || {
         App::new()

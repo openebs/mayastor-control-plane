@@ -1,4 +1,3 @@
-pub mod constants;
 pub mod mbus_api;
 pub mod store;
 pub mod types;
@@ -27,7 +26,5 @@ impl<F: Into<T>, T> IntoOption<T> for Option<F> {
     }
 }
 
-/// Common workspace constants
-pub use constants::*;
 /// OpenTelemetry
 pub mod opentelemetry;

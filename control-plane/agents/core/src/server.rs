@@ -13,8 +13,10 @@ use common_lib::{mbus_api::BusClient, opentelemetry::default_tracing_tags};
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator, KeyValue};
 use structopt::StructOpt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+use utils::package_info;
 
 #[derive(Debug, StructOpt)]
+#[structopt(version = package_info!())]
 pub(crate) struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)
@@ -24,7 +26,7 @@ pub(crate) struct CliArgs {
 
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
-    #[structopt(long, short, default_value = common_lib::CACHE_POLL_PERIOD)]
+    #[structopt(long, short, default_value = utils::CACHE_POLL_PERIOD)]
     pub(crate) cache_period: humantime::Duration,
 
     /// The period at which the reconcile loop checks for new work
@@ -47,19 +49,19 @@ pub(crate) struct CliArgs {
     pub(crate) store: String,
 
     /// The timeout for store operations
-    #[structopt(long, default_value = common_lib::STORE_OP_TIMEOUT)]
+    #[structopt(long, default_value = utils::STORE_OP_TIMEOUT)]
     pub(crate) store_timeout: humantime::Duration,
 
     /// The lease lock ttl for the persistent store after which we'll lose the exclusive access
-    #[structopt(long, default_value = common_lib::STORE_LEASE_LOCK_TTL)]
+    #[structopt(long, default_value = utils::STORE_LEASE_LOCK_TTL)]
     pub(crate) store_lease_ttl: humantime::Duration,
 
     /// The timeout for every node connection (gRPC)
-    #[structopt(long, default_value = common_lib::DEFAULT_CONN_TIMEOUT)]
+    #[structopt(long, default_value = utils::DEFAULT_CONN_TIMEOUT)]
     pub(crate) connect_timeout: humantime::Duration,
 
     /// The default timeout for node request timeouts (gRPC)
-    #[structopt(long, short, default_value = common_lib::DEFAULT_REQ_TIMEOUT)]
+    #[structopt(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
     pub(crate) request_timeout: humantime::Duration,
 
     /// Add process service tags to the traces
@@ -109,7 +111,7 @@ fn init_tracing() {
         Some(jaeger) => {
             let mut tracing_tags = CliArgs::args().tracing_tags;
             tracing_tags.append(&mut default_tracing_tags(
-                git_version::git_version!(args = ["--abbrev=12", "--always"]),
+                utils::git_version(),
                 env!("CARGO_PKG_VERSION"),
             ));
             tracing_tags.dedup();
@@ -132,9 +134,9 @@ fn init_tracing() {
 #[tokio::main]
 async fn main() {
     let cli_args = CliArgs::args();
-    println!("Starting Core Agent with options: {:?}", cli_args);
+    utils::print_package_info!();
+    println!("Using options: {:?}", &cli_args);
     init_tracing();
-
     server(cli_args).await;
 }
 

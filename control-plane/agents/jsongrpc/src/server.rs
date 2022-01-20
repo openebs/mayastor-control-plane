@@ -12,6 +12,7 @@ use structopt::StructOpt;
 use tracing::info;
 
 #[derive(Debug, StructOpt)]
+#[structopt(version = utils::package_info!())]
 struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)
@@ -63,11 +64,11 @@ fn init_tracing() {
 
 #[tokio::main]
 async fn main() {
-    init_tracing();
-
     let cli_args = CliArgs::from_args();
+    utils::print_package_info!();
     info!("Using options: {:?}", &cli_args);
 
+    init_tracing();
     server(cli_args).await;
 }
 

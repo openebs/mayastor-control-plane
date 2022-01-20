@@ -38,7 +38,6 @@ const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
 
 /// Various common constants used by the control plane
 pub mod constants {
-    include!("../../../common/src/constants.rs");
     include!("../../../common/src/opentelemetry.rs");
 }
 
@@ -467,8 +466,8 @@ impl ResourceContext {
 
                 let mut labels: HashMap<String, String> = HashMap::new();
                 labels.insert(
-                    String::from(constants::OPENEBS_CREATED_BY_KEY),
-                    String::from(constants::MSP_OPERATOR),
+                    String::from(utils::OPENEBS_CREATED_BY_KEY),
+                    String::from(utils::MSP_OPERATOR),
                 );
 
                 let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
@@ -960,7 +959,7 @@ fn write_msp_crd(name: Option<&str>) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     let matches = App::new("Mayastor k8s pool operator")
         .author(clap::crate_authors!())
-        .version(clap::crate_version!())
+        .version(utils::package_info!())
         .settings(&[
             clap::AppSettings::ColoredHelp,
             clap::AppSettings::ColorAlways,
@@ -970,7 +969,7 @@ async fn main() -> anyhow::Result<()> {
                 .short("i")
                 .long("interval")
                 .env("INTERVAL")
-                .default_value(constants::CACHE_POLL_PERIOD)
+                .default_value(utils::CACHE_POLL_PERIOD)
                 .help("specify timer based reconciliation loop"),
         )
         .arg(
@@ -1015,6 +1014,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .get_matches();
 
+    utils::print_package_info!();
+
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .expect("failed to init tracing filter");
@@ -1024,10 +1025,7 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().pretty());
 
     if let Some(jaeger) = matches.value_of("jaeger") {
-        let tags = constants::default_tracing_tags(
-            git_version::git_version!(args = ["--abbrev=12", "--always"]),
-            env!("CARGO_PKG_VERSION"),
-        );
+        let tags = constants::default_tracing_tags(utils::git_version(), env!("CARGO_PKG_VERSION"));
         global::set_text_map_propagator(TraceContextPropagator::new());
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)

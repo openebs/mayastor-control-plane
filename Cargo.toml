@@ -12,6 +12,7 @@ members = [
     "kubectl-plugin",
     "openapi",
     "rpc",
+    "utils",
 # Test mayastor through the rest api
     "tests/tests-mayastor",
 ]

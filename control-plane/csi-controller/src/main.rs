@@ -25,9 +25,9 @@ fn initialize_controller(args: &ArgMatches) -> Result<(), String> {
 
 #[tokio::main(worker_threads = 2)]
 pub async fn main() -> Result<(), String> {
-    let args = App::new("Mayastor k8s pool operator")
+    let args = App::new("Mayastor k8s CSI controller")
         .author(clap::crate_authors!())
-        .version(clap::crate_version!())
+        .version(utils::package_info!())
         .settings(&[
             clap::AppSettings::ColoredHelp,
             clap::AppSettings::ColorAlways,
@@ -64,6 +64,8 @@ pub async fn main() -> Result<(), String> {
         )
         .get_matches();
 
+    utils::print_package_info!();
+
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .expect("failed to init tracing filter");
@@ -75,7 +77,7 @@ pub async fn main() -> Result<(), String> {
     if let Some(jaeger) = args.value_of("jaeger") {
         global::set_text_map_propagator(TraceContextPropagator::new());
         let tags = common_lib::opentelemetry::default_tracing_tags(
-            git_version::git_version!(args = ["--abbrev=12", "--always"]),
+            utils::git_version(),
             env!("CARGO_PKG_VERSION"),
         );
         let tracer = opentelemetry_jaeger::new_pipeline()
