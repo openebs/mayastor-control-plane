@@ -18,6 +18,8 @@ in
 mkShell {
   name = "mayastor-control-plane-shell";
   buildInputs = [
+    cargo-expand
+    cargo-udeps
     clang
     cowsay
     docker
