@@ -110,7 +110,7 @@ let
   builder = if incremental then build_with_naersk else build_with_default;
 in
 {
-  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src_folders;
+  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src_list;
 
   build = { buildType, cargoBuildFlags ? [ ] }:
     if allInOne then
