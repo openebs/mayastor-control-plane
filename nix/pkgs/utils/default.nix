@@ -3,7 +3,8 @@ let
   versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
   version = builtins.readFile "${versionDrv}";
   channel = import ../../lib/rust.nix { inherit sources; };
-
+  project-builder =
+    pkgs.callPackage ../control-plane/cargo-project.nix { inherit version; };
   whitelistSource = src: allowedPrefixes:
     builtins.filterSource
       (path: type:
@@ -11,20 +12,7 @@ let
           (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
           allowedPrefixes)
       src;
-  src = whitelistSource ../../../. [
-    ".git"
-    "Cargo.lock"
-    "Cargo.toml"
-    "common"
-    "composer"
-    "control-plane"
-    "deployer"
-    "kubectl-plugin"
-    "openapi"
-    "rpc"
-    "tests"
-    "scripts"
-  ];
+  src = whitelistSource ../../../. project-builder.src_list;
 
   naersk_package = channel: pkgs.callPackage sources.naersk {
     rustc = channel.stable;
@@ -42,8 +30,8 @@ let
         preBuild = ''
           # don't run during the dependency build phase
           if [ ! -f build.rs ]; then
-            patchShebangs ./scripts/generate-openapi-bindings.sh
-            ./scripts/generate-openapi-bindings.sh
+            patchShebangs ./scripts/rust/generate-openapi-bindings.sh
+            ./scripts/rust/generate-openapi-bindings.sh
           fi
           sed -i '/ctrlp-tests.*=/d' ./kubectl-plugin/Cargo.toml
           export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C link-args=''$(echo $NIX_LDFLAGS | tr ' ' '\n' | grep -- '^-L' | tr '\n' ' ')"
@@ -70,8 +58,8 @@ let
         preBuild = ''
           # don't run during the dependency build phase
           if [ ! -f build.rs ]; then
-            patchShebangs ./scripts/generate-openapi-bindings.sh
-            ./scripts/generate-openapi-bindings.sh
+            patchShebangs ./scripts/rust/generate-openapi-bindings.sh
+            ./scripts/rust/generate-openapi-bindings.sh
           fi
           sed -i '/ctrlp-tests.*=/d' ./kubectl-plugin/Cargo.toml
         '';

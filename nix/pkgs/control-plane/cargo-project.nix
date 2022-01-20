@@ -47,27 +47,28 @@ let
   LIBCLANG_PATH = "${llvmPackages.libclang}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
-
+  src_list = [
+    ".git"
+    "Cargo.lock"
+    "Cargo.toml"
+    "common"
+    "control-plane"
+    "deployer"
+    "kubectl-plugin"
+    "openapi"
+    "rpc"
+    "tests"
+    "scripts"
+    "utils"
+  ];
   buildProps = rec {
     name = "control-plane-${version}";
     inherit version;
 
-    src = whitelistSource ../../../. [
-      ".git"
-      "Cargo.lock"
-      "Cargo.toml"
-      "common"
-      "control-plane"
-      "deployer"
-      "kubectl-plugin"
-      "openapi"
-      "rpc"
-      "tests"
-      "scripts"
-    ];
+    src = whitelistSource ../../../. src_list;
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
-    nativeBuildInputs = [ clang pkg-config openapi-generator which git pkgs.breakpointHook ];
+    nativeBuildInputs = [ clang pkg-config openapi-generator which git ];
     buildInputs = [ llvmPackages.libclang protobuf openssl ];
     doCheck = false;
   };
@@ -109,7 +110,7 @@ let
   builder = if incremental then build_with_naersk else build_with_default;
 in
 {
-  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version;
+  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src_folders;
 
   build = { buildType, cargoBuildFlags ? [ ] }:
     if allInOne then
