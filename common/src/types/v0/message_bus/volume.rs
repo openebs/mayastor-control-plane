@@ -529,8 +529,19 @@ pub struct ReplicaTopology {
 }
 
 impl ReplicaTopology {
+    /// Create a new instance of ReplicaTopology.
     pub fn new(node: Option<NodeId>, pool: Option<PoolId>, status: ReplicaStatus) -> Self {
         Self { node, pool, status }
+    }
+
+    /// Get the ReplicaTopology node ID.
+    pub fn node(&self) -> &Option<NodeId> {
+        &self.node
+    }
+
+    /// Get the ReplicaTopology pool ID.
+    pub fn pool(&self) -> &Option<PoolId> {
+        &self.pool
     }
 }
 
