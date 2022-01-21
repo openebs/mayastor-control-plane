@@ -785,7 +785,6 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize) {
     let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
     loop {
-        // the volume state does not carry replica information, so inspect the replica spec instead.
         let specs = GetSpecs::default().request().await.unwrap();
         let replica_specs = specs
             .replicas
@@ -793,9 +792,10 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize) {
             .filter(|r| r.owners.owned_by(volume))
             .collect::<Vec<_>>();
 
-        if replica_specs.len() == replicas {
+        if replica_specs.len() == replicas && existing_replicas(volume).await == replicas {
             return;
         }
+
         if std::time::Instant::now() > (start + timeout) {
             panic!(
                 "Timeout waiting for the volume to reach the specified replica ('{}'), current: '{}'",
@@ -804,6 +804,30 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize) {
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
+}
+
+/// Return the number of replicas that exist and have a state.
+async fn existing_replicas(volume_id: &VolumeId) -> usize {
+    let volumes = GetVolumes::new(volume_id).request().await.unwrap();
+
+    // Get volumes with the given uuid.
+    // There should only be one.
+    let filtered_volumes: Vec<Volume> = volumes
+        .into_inner()
+        .into_iter()
+        .filter(|v| v.uuid() == volume_id)
+        .collect();
+    assert_eq!(filtered_volumes.len(), 1);
+
+    let volume = filtered_volumes[0].clone();
+
+    // A replica is deemed to exist if its topology indicates a valid node and pool.
+    volume
+        .state()
+        .replica_topology
+        .into_iter()
+        .filter(|(_id, topology)| topology.node().is_some() && topology.pool().is_some())
+        .count()
 }
 
 /// Wait for a volume to reach the provided status
