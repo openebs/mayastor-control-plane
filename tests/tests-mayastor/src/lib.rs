@@ -335,6 +335,7 @@ pub struct ClusterBuilder {
     pools: HashMap<u32, Vec<PoolDisk>>,
     replicas: Replica,
     trace: bool,
+    setup_tracing: bool,
     bearer_token: Option<String>,
     rest_timeout: std::time::Duration,
     bus_timeout: TimeoutOptions,
@@ -364,6 +365,7 @@ impl ClusterBuilder {
             pools: Default::default(),
             replicas: Default::default(),
             trace: true,
+            setup_tracing: true,
             bearer_token: None,
             rest_timeout: std::time::Duration::from_secs(5),
             bus_timeout: bus_timeout_opts(),
@@ -376,6 +378,12 @@ impl ClusterBuilder {
         F: Fn(StartOptions) -> StartOptions,
     {
         self.opts = set(self.opts);
+        self
+    }
+    /// Enable/Disable the default tokio tracing setup
+    #[must_use]
+    pub fn with_default_tracing(mut self, enabled: bool) -> Self {
+        self.setup_tracing = enabled;
         self
     }
     /// Enable/Disable jaeger tracing
@@ -569,11 +577,15 @@ impl ClusterBuilder {
             .configure(components.clone())?
             .with_base_image(self.opts.base_image.clone())
             .autorun(false)
-            .with_default_tracing()
             .with_clean(true)
             // test script will clean up containers if ran on CI/CD
             .with_clean_on_panic(false)
             .with_logs(true);
+        let composer = if self.setup_tracing {
+            composer.with_default_tracing()
+        } else {
+            composer
+        };
         Ok((components, composer))
     }
     async fn new_cluster(

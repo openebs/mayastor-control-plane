@@ -2465,6 +2465,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "parse-size"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "944553dd59c802559559161f9816429058b869003836120e262e8caec061b7ae"
+
+[[package]]
 name = "paste"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2663,6 +2669,22 @@ checksum = "603bbd6394701d13f3f25aada59c7de9d35a6a5887cfc156181234a44002771b"
 dependencies = [
  "bytes",
  "prost",
+]
+
+[[package]]
+name = "pstor-usage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ctrlp-tests",
+ "etcd-client",
+ "openapi",
+ "parse-size",
+ "prettytable-rs",
+ "structopt",
+ "tokio",
+ "utils",
 ]
 
 [[package]]
