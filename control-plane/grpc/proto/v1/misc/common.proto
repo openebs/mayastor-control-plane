@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package v1.common;
+
+// Enum defining the various statuses that a resource spec can be in.
+enum SpecStatus {
+  Creating = 0;
+  Created = 1;
+  Deleting = 2;
+  Deleted = 3;
+}
+
+// StringMapValue is the type having a hashmap
+message StringMapValue {
+  map<string, string> value = 1;
+}
+
+// ReplyError to be used for all error propagation to and from grpc calls
+message ReplyError {
+  ReplyErrorKind kind = 1;
+  ResourceKind resource = 2;
+  string source = 3;
+  string extra = 4;
+}
+
+// ReplyErrorKind for the kind of the occurred error
+enum ReplyErrorKind {
+  WithMessage = 0;
+  DeserializeReq = 1;
+  Internal = 2;
+  Timeout = 3;
+  InvalidArgument = 4;
+  DeadlineExceeded = 5;
+  NotFound = 6;
+  AlreadyExists = 7;
+  PermissionDenied = 8;
+  ResourceExhausted = 9;
+  FailedPrecondition = 10;
+  Aborted = 11;
+  OutOfRange = 12;
+  Unimplemented = 13;
+  Unavailable = 14;
+  Unauthenticated = 15;
+  Unauthorized = 16;
+  Conflict = 17;
+  FailedPersist = 18;
+  NotShared = 19;
+  AlreadyShared = 20;
+  NotPublished = 21;
+  AlreadyPublished = 22;
+  IsDeleting = 23;
+  ReplicaCountAchieved = 24;
+  ReplicaChangeCount = 25;
+  ReplicaIncrease = 26;
+  ReplicaCreateNumber = 27;
+  VolumeNoReplicas = 28;
+  InUse = 29;
+}
+
+// ResourceKind for the resource which has undergone this error
+enum ResourceKind {
+  // Unknown or unspecified resource
+  Unknown = 0;
+  // Node resource
+  Node = 1;
+  // Pool resource
+  Pool = 2;
+  // Replica resource
+  Replica = 3;
+  // Replica state
+  ReplicaState = 4;
+  // Replica spec
+  ReplicaSpec = 5;
+  // Nexus resource
+  Nexus = 6;
+  // Child resource
+  Child = 7;
+  // Volume resource
+  Volume = 8;
+  // Json Grpc methods
+  JsonGrpc = 9;
+  // Block devices
+  Block = 10;
+  // Watch
+  Watch = 11;
+}
+
+// Filter by Node and Replica id
+message NodeReplicaFilter{
+  string node_id = 1;
+  string replica_id = 2;
+}
+
+// Filter by Node and Replica id
+message NodePoolReplicaFilter{
+  string node_id = 1;
+  string pool_id = 2;
+  string replica_id = 3;
+}
+
+// Filter by Node and Replica id
+message PoolReplicaFilter{
+  string pool_id = 1;
+  string replica_id = 2;
+}
+
+// Filter by Node and Replica id
+message ReplicaFilter{
+  string replica_id = 1;
+}
+
+// Filter by VolumeId
+message VolumeFilter{
+  string volume_id = 1;
+}
+
+// Filter by Node id
+message NodeFilter{
+  string node_id = 1;
+}
+
+// Filter by Pool id
+message PoolFilter{
+  string pool_id = 1;
+}
+
+// Filter by Node and Pool id
+message NodePoolFilter{
+  string node_id = 1;
+  string pool_id = 2;
+}

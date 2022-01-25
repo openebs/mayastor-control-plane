@@ -14,6 +14,7 @@ members = [
     "rpc",
     "utils/utils-lib",
     "utils/pstor-usage",
-# Test mayastor through the rest api
+    "control-plane/grpc",
+    # Test mayastor through the rest api
     "tests/tests-mayastor",
 ]

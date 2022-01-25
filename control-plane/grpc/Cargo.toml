@@ -1,0 +1,16 @@
+[package]
+name = "grpc"
+version = "0.1.0"
+edition = "2018"
+authors = ["Abhinandan Purkait <abhinandan.purkait@mayadata.io>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tonic = "0.5.2"
+prost = "0.8.0"
+prost-types = "0.8.0"
+
+[build-dependencies]
+tonic-build = "0.5.2"
+prost-build = "0.8.0"

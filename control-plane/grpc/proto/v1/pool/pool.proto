@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+package v1.pool;
+
+// A Mayastor Storage Pool
+// It may have a spec which is the specification provided by the creator
+// It may have a state if such state is retrieved from a mayastor storage node
+message Pool {
+  // Desired specification of the pool and metadata
+  optional PoolDefinition definition = 1;
+  // Runtime state of the pool.
+  optional PoolState state = 2;
+}
+
+// Multiple pools
+message Pools {
+  repeated Pool pools = 1;
+}
+
+// Desired spec and the control plane related data
+message PoolDefinition {
+  // Client specification of the pool
+  PoolSpec spec = 1;
+  // Control plane related data for the pool
+  Metadata metadata = 2;
+}
+
+// uuid and the status of pool spec for the control plane use
+message Metadata {
+  // uuid of the pool
+  google.protobuf.StringValue uuid = 2;
+  // spec status of the pool
+  common.SpecStatus status = 4;
+}
+
+// User specification of a pool.
+message PoolSpec {
+  // id of the mayastor instance
+  string node_id = 1;
+  // id of the pool
+  string pool_id = 2;
+  // absolute disk paths claimed by the pool
+  repeated string disks = 3;
+  // labels to be set on the pool
+  optional common.StringMapValue labels = 5;
+}
+
+// Pool information
+message PoolState {
+  // id of the mayastor instance
+  string node_id = 1;
+  // id of the pool
+  string pool_id = 2;
+  // absolute disk paths claimed by the pool
+  repeated string disks_uri = 3;
+  // current status of the pool
+  PoolStatus status = 4;
+  // size of the pool in bytes
+  uint64 capacity = 5;
+  // used bytes from the pool
+  uint64 used = 6;
+}
+
+// status of the pool
+enum PoolStatus {
+  // unknown state
+  Unknown = 0;
+  // the pool is in normal working order
+  Online = 1;
+  // the pool has experienced a failure but can still function
+  Degraded = 2;
+  // the pool is unable to be used
+  Faulted = 3;
+}
+
+// Get all pools based on the filter criteria
+message GetPoolsRequest {
+  oneof filter {
+    common.NodeFilter node = 1;
+    common.PoolFilter pool = 2;
+    common.NodePoolFilter node_pool = 3;
+  }
+}
+
+// Create Pool Request
+message CreatePoolRequest {
+  // id of the mayastor instance
+  string node_id = 1;
+  // id of the pool
+  string pool_id = 2;
+  // disk device paths or URIs to be claimed by the pool
+  repeated string disks = 3;
+  // labels to be set on the pool
+  optional common.StringMapValue labels = 5;
+}
+
+// Destroy Pool Request
+message DestroyPoolRequest {
+  // id of the pool
+  string pool_id = 1;
+  // node id of the pool
+  string node_id = 2;
+}
+
+// Reply type for a CreatePool request
+message CreatePoolReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a DestroyPool request
+message DestroyPoolReply {
+  optional common.ReplyError error = 2;
+}
+
+// Reply type for a GetPools request
+message GetPoolsReply {
+  oneof reply {
+    Pools pools = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Service for managing storage pools
+service PoolGrpc {
+  rpc CreatePool (CreatePoolRequest) returns (CreatePoolReply) {}
+  rpc DestroyPool (DestroyPoolRequest) returns (DestroyPoolReply) {}
+  rpc GetPools (GetPoolsRequest) returns (GetPoolsReply) {}
+}
