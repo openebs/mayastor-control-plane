@@ -1,0 +1,19 @@
+[package]
+name = "pstor-usage"
+version = "0.1.0"
+edition = "2018"
+authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.12.0", features = ["full"] }
+openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
+ctrlp-tests = { path = "../../tests/tests-mayastor" }
+utils = { path = "../utils-lib" }
+anyhow = "1.0.52"
+structopt = "0.3.25"
+parse-size = "1.0.0"
+async-trait = "0.1.52"
+etcd-client = "0.7.2"
+prettytable-rs = "0.8.0"
