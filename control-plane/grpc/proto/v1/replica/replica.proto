@@ -1,0 +1,187 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+package v1.replica;
+
+// Replica information
+message Replica{
+  // id of the mayastor instance
+  string node_id = 1;
+  // name of the replica
+  string name = 2;
+  // uuid of the replica
+  google.protobuf.StringValue replica_id = 3;
+  // id of the pool
+  string pool_id = 4;
+  // thin provisioning
+  bool thin = 5;
+  // size of the replica in bytes
+  uint64 size = 6;
+  // protocol used for exposing the replica
+  Protocol share = 7;
+  // uri usable by nexus to access it
+  string uri = 8;
+  // status of the replica
+  ReplicaStatus status = 9;
+}
+
+// Multiple replicas
+message Replicas {
+  repeated Replica replicas = 1;
+}
+
+// State of the Replica
+enum ReplicaStatus {
+  // unknown state
+  Unknown = 0;
+  // the replica is in normal working order
+  Online = 1;
+  // the replica has experienced a failure but can still function
+  Degraded = 2;
+  // the replica is unable to be used
+  Faulted = 3;
+}
+
+enum Protocol {
+  // not shared by any of the variants
+  None = 0;
+  // shared as NVMe-oF TCP
+  Nvmf = 1;
+  // shared as iSCSI
+  Iscsi = 2;
+  // shared as NBD
+  Nbd = 3;
+}
+
+// Create Replica Request
+message CreateReplicaRequest{
+  // id of the mayastor instance
+  string node_id = 1;
+  // name of the replica
+  optional string name = 2;
+  // uuid of the replica
+  google.protobuf.StringValue replica_id = 3;
+  // id of the pool
+  string pool_id = 4;
+  // thin provisioning
+  bool thin = 5;
+  // size of the replica in bytes
+  uint64 size = 6;
+  // protocol to expose the replica over
+  Protocol share = 7;
+  // Managed by our control plane
+  bool managed = 8;
+  // Owners of the resource
+  ReplicaOwners owners = 9;
+}
+
+// Replica owners which is a volume or none and a list of nexuses
+message ReplicaOwners {
+  optional google.protobuf.StringValue volume = 1;
+  repeated google.protobuf.StringValue nexuses = 2;
+}
+
+// Destroy Replica Request
+message DestroyReplicaRequest{
+  // id of the mayastor instance
+  string node_id = 1;
+  // name of the replica
+  optional string name = 2;
+  // uuid of the replica
+  google.protobuf.StringValue replica_id = 3;
+  // id of the pool
+  string pool_id = 4;
+  // delete by owners
+  ReplicaOwners disowners = 5;
+}
+
+message ShareReplicaRequest {
+  // id of the mayastor instance
+  string node_id = 1;
+  // name of the replica
+  optional string name = 2;
+  // uuid of the replica
+  google.protobuf.StringValue replica_id = 3;
+  // id of the pool
+  string pool_id = 4;
+  // protocol used for exposing the replica
+  ReplicaShareProtocol protocol = 5;
+}
+
+// The protocol used to share the replica.
+enum ReplicaShareProtocol{
+  NvmfProtocol = 0;
+}
+
+message UnshareReplicaRequest {
+  // id of the mayastor instance
+  string node_id = 1;
+  // name of the replica
+  optional string name = 2;
+  // uuid of the replica
+  google.protobuf.StringValue replica_id = 3;
+  // id of the pool
+  string pool_id = 4;
+}
+
+// Reply type for a CreateReplica request
+message CreateReplicaReply {
+  oneof reply {
+    Replica replica = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a GetReplicas request
+message GetReplicasReply {
+  oneof reply {
+    Replicas replicas = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a DestroyReplica request
+message DestroyReplicaReply {
+  optional common.ReplyError error = 1;
+}
+
+// Reply type for a ShareReplica request
+message ShareReplicaReply {
+  oneof reply {
+    string response = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a UnshareReplica request
+message UnshareReplicaReply {
+  optional common.ReplyError error = 1;
+}
+
+// Get all the replicas from specific node and pool
+// or None for all nodes or all pools
+message GetReplicasRequest {
+  // Filter request
+  oneof filter {
+    common.NodeFilter node = 1;
+    common.NodePoolFilter node_pool = 2;
+    common.PoolFilter pool = 3;
+    common.NodePoolReplicaFilter node_pool_replica = 4;
+    common.NodeReplicaFilter node_replica = 5;
+    common.PoolReplicaFilter pool_replica = 6;
+    common.ReplicaFilter replica = 7;
+    common.VolumeFilter volume = 8;
+  }
+}
+
+// Service for managing replicas
+service ReplicaGrpc {
+  rpc CreateReplica (CreateReplicaRequest) returns (CreateReplicaReply) {}
+  rpc DestroyReplica (DestroyReplicaRequest) returns (DestroyReplicaReply) {}
+  rpc GetReplicas (GetReplicasRequest) returns (GetReplicasReply) {}
+  rpc ShareReplica (ShareReplicaRequest) returns (ShareReplicaReply) {}
+  rpc UnshareReplica (UnshareReplicaRequest) returns (UnshareReplicaReply) {}
+}
