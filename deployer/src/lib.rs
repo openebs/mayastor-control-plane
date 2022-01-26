@@ -216,6 +216,10 @@ pub struct StartOptions {
     #[structopt(long)]
     pub reconcile_idle_period: Option<humantime::Duration>,
 
+    /// Override the core agent's reconcile idle period
+    #[structopt(long, env = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE")]
+    pub otel_max_batch_size: Option<String>,
+
     /// Amount of time to wait for all containers to start.
     #[structopt(short, long)]
     pub wait_timeout: Option<humantime::Duration>,
