@@ -54,7 +54,7 @@ impl EtcdSampler {
 impl Sampler for EtcdSampler {
     async fn sample<T: ResourceMgr>(
         &self,
-        client: ApiClient,
+        client: &ApiClient,
         count: u32,
         resource_mgr: &T,
     ) -> anyhow::Result<(Vec<T::Output>, ResourceSamples)> {
@@ -69,7 +69,7 @@ impl Sampler for EtcdSampler {
         let base = self.etcd.db_size().await?;
         let mut acc = base;
         for _ in 1 ..= self.steps {
-            created.push(resource_mgr.create(client.clone(), count).await?);
+            created.push(resource_mgr.create(client, count).await?);
             let usage = self.etcd.db_size().await? - acc;
 
             count_vec.push(count as u64);

@@ -5,9 +5,9 @@ use openapi::clients::tower::direct::ApiClient;
 pub(crate) trait ResourceMgr: Send + Sync {
     type Output: ResourceDelete;
     /// Create `count` resources.
-    async fn create(&self, client: ApiClient, count: u32) -> anyhow::Result<Self::Output>;
+    async fn create(&self, client: &ApiClient, count: u32) -> anyhow::Result<Self::Output>;
     /// Delete the created resources.
-    async fn delete(&self, client: ApiClient, created: Self::Output) -> anyhow::Result<()>;
+    async fn delete(&self, client: &ApiClient, created: Self::Output) -> anyhow::Result<()>;
     /// Prepare a sample from the given data points.
     fn prepare_sample(&self, points: Vec<u64>) -> Box<dyn ResourceSample>;
 }
@@ -15,14 +15,14 @@ pub(crate) trait ResourceMgr: Send + Sync {
 /// Resources that are deletable and should be deleted.
 #[async_trait::async_trait]
 pub(crate) trait ResourceDelete: Send + Sync + Clone {
-    async fn delete(&self, client: ApiClient) -> anyhow::Result<()>;
+    async fn delete(&self, client: &ApiClient) -> anyhow::Result<()>;
 }
 
 #[async_trait::async_trait]
 impl<T: ResourceDelete> ResourceDelete for Vec<T> {
-    async fn delete(&self, client: ApiClient) -> anyhow::Result<()> {
+    async fn delete(&self, client: &ApiClient) -> anyhow::Result<()> {
         for e in self.iter() {
-            e.delete(client.clone()).await?;
+            e.delete(client).await?;
         }
         Ok(())
     }
@@ -33,7 +33,7 @@ impl<T: ResourceDelete> ResourceDelete for Vec<T> {
 pub(crate) trait Sampler {
     async fn sample<T: ResourceMgr>(
         &self,
-        client: ApiClient,
+        client: &ApiClient,
         count: u32,
         resource_mgr: &T,
     ) -> anyhow::Result<(Vec<T::Output>, ResourceSamples)>;

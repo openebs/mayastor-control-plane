@@ -58,8 +58,8 @@ struct CliArgs {
 
     /// Skip the output of the total storage usage after allocation of all resources and also after
     /// those resources have been deleted.
-    #[structopt(long)]
-    pub no_total_stats: bool,
+    #[structopt(long = "no-total-stats", parse(from_flag = std::ops::Not::not))]
+    pub total_stats: bool,
 }
 
 #[tokio::main]
@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(rest_url) => (None, rest_url.clone()),
     };
-    let cleanup = _cluster.is_none() || !args.no_total_stats;
+    let cleanup = _cluster.is_none() || args.total_stats;
 
     let etcd = Etcd::new(Url::parse("http://0.0.0.0:2379")?).await?;
     let openapi_client_config =
@@ -96,11 +96,14 @@ async fn main() -> anyhow::Result<()> {
     if (volume_size % four_mb) != 0 {
         volume_size += four_mb - (volume_size % four_mb);
     }
+    let pools = if args.volumes > 0 && args.vol_samples > 0 {
+        args.volume_replicas as u32
+    } else {
+        0
+    };
     let pool_size = args.vol_samples as u64 * args.volumes as u64 * (volume_size + four_mb); // 4M for the metadata
-    let pool_mgr = PoolMgr::new_mgr(client.clone(), pool_size, args.pool_use_malloc).await?;
-    let vol_pools = pool_mgr
-        .create(client.clone(), args.volume_replicas as u32)
-        .await?;
+    let pool_mgr = PoolMgr::new_mgr(&client, pool_size, args.pool_use_malloc).await?;
+    let vol_pools = pool_mgr.create(&client, pools).await?;
 
     // capture the initial database size
     let initial = etcd.db_size().await?;
@@ -109,14 +112,14 @@ async fn main() -> anyhow::Result<()> {
     // sample how much space the volumes take up
     let vol_mgr = VolMgr::new_mgr(args.volume_replicas, args.volume_size).await?;
     let (volumes, vol_results) = EtcdSampler::new_sampler(etcd.clone(), args.vol_samples)
-        .sample(client.clone(), args.volumes, &vol_mgr)
+        .sample(&client, args.volumes, &vol_mgr)
         .await?;
     printer.print(&vol_results);
 
     // sample how much space the pools take up
-    let pool_mgr = PoolMgr::new_mgr(client.clone(), args.pool_size, args.pool_use_malloc).await?;
+    let pool_mgr = PoolMgr::new_mgr(&client, args.pool_size, args.pool_use_malloc).await?;
     let (pools, mut pool_results) = EtcdSampler::new_sampler(etcd.clone(), args.pool_samples)
-        .sample(client.clone(), args.pools, &pool_mgr)
+        .sample(&client, args.pools, &pool_mgr)
         .await?;
     printer.print(&pool_results);
 
@@ -131,15 +134,15 @@ async fn main() -> anyhow::Result<()> {
 
     // clean up created resources
     if cleanup {
-        volumes.delete(client.clone()).await?;
-        pools.delete(client.clone()).await?;
-        vol_pools.delete(client).await?;
+        volumes.delete(&client).await?;
+        pools.delete(&client).await?;
+        vol_pools.delete(&client).await?;
     }
 
     // capture the database size after we've deleted the resources
     let after_cleanup = etcd.db_size().await?;
 
-    if !args.no_total_stats {
+    if args.total_stats {
         printer.print(&RunStats {
             initial,
             after_alloc,

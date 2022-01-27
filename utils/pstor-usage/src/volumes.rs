@@ -21,7 +21,7 @@ impl VolMgr {
 #[async_trait::async_trait]
 impl ResourceMgr for VolMgr {
     type Output = Vec<models::Volume>;
-    async fn create(&self, client: ApiClient, count: u32) -> anyhow::Result<Self::Output> {
+    async fn create(&self, client: &ApiClient, count: u32) -> anyhow::Result<Self::Output> {
         let mut created_volumes = Vec::with_capacity(count as usize);
         for _ in 0 .. count {
             let volume = client
@@ -39,7 +39,7 @@ impl ResourceMgr for VolMgr {
         }
         Ok(created_volumes)
     }
-    async fn delete(&self, client: ApiClient, created: Self::Output) -> anyhow::Result<()> {
+    async fn delete(&self, client: &ApiClient, created: Self::Output) -> anyhow::Result<()> {
         created.delete(client).await
     }
 
@@ -51,7 +51,7 @@ impl ResourceMgr for VolMgr {
 
 #[async_trait::async_trait]
 impl ResourceDelete for Vec<models::Volume> {
-    async fn delete(&self, client: ApiClient) -> anyhow::Result<()> {
+    async fn delete(&self, client: &ApiClient) -> anyhow::Result<()> {
         for volume in self {
             client.volumes_api().del_volume(&volume.spec.uuid).await?;
         }
