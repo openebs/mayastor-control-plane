@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
         None => {
             // cluster will be terminated on drop
             let cluster = testlib::ClusterBuilder::builder()
-                .with_default_tracing(false)
+                .with_silence_test_traces()
                 .with_build(false)
                 .with_build_all(false)
                 .with_mayastors(args.volume_replicas.into())

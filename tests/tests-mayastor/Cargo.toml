@@ -17,6 +17,7 @@ openapi = { path = "../../openapi", features = [ "tower-client", "tower-trace" ]
 composer = { git = "https://github.com/mayadata-io/composer", default-features = false, branch = "develop" }
 deployer = { path = "../../deployer" }
 rpc = { path = "../../rpc" }
+utils = { path = "../../utils/utils-lib" }
 anyhow = "1.0.44"
 common-lib = { path = "../../common" }
 structopt = "0.3.23"
