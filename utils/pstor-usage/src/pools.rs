@@ -1,4 +1,6 @@
-use crate::resources::{ResourceDelete, ResourceMgr, ResourceSample};
+use crate::resources::{
+    FormatSamples, ResourceDelete, ResourceMgr, ResourceSample, ResourceUpdates,
+};
 use anyhow::anyhow;
 use openapi::{
     apis::{Url, Uuid},
@@ -8,6 +10,7 @@ use openapi::{
 
 type NodeId = String;
 /// Resource manager for pools.
+#[derive(Default)]
 pub(crate) struct PoolMgr {
     node_ids: Vec<NodeId>,
     size_bytes: u64,
@@ -104,8 +107,10 @@ impl ResourceMgr for PoolMgr {
     async fn delete(&self, client: &ApiClient, created: Self::Output) -> anyhow::Result<()> {
         created.delete(client).await
     }
-
-    fn prepare_sample(&self, points: Vec<u64>) -> Box<dyn ResourceSample> {
+}
+#[async_trait::async_trait]
+impl FormatSamples for PoolMgr {
+    fn format(&self, points: Vec<u64>) -> Box<dyn ResourceSample> {
         Box::new(PoolCount { points })
     }
 }
@@ -117,6 +122,19 @@ impl ResourceDelete for Vec<models::Pool> {
             client.pools_api().del_pool(&pool.id).await?;
         }
         Ok(())
+    }
+}
+
+impl FormatSamples for Vec<models::Pool> {
+    fn format(&self, _points: Vec<u64>) -> Box<dyn ResourceSample> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceUpdates for Vec<models::Pool> {
+    async fn modify(&self, _client: &ApiClient, _count: u32) -> anyhow::Result<()> {
+        panic!("Pools cannot be directly modified as of yet, but they will!")
     }
 }
 

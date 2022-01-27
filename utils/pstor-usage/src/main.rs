@@ -1,3 +1,5 @@
+extern crate core;
+
 mod etcd;
 mod pools;
 mod printer;
@@ -8,11 +10,14 @@ use crate::{
     etcd::{Etcd, EtcdSampler},
     pools::PoolMgr,
     printer::{PrettyPrinter, Printer, TabledData},
-    resources::{ResourceDelete, ResourceMgr, ResourceSamples, Sampler},
+    resources::{ResourceDelete, ResourceMgr, ResourceSamples, ResourceUpdates, Sampler},
     volumes::VolMgr,
 };
 use anyhow::anyhow;
-use openapi::{apis::Url, clients::tower::direct::ApiClient, tower::client};
+use openapi::{
+    apis::Url,
+    clients::tower::{direct::ApiClient, Configuration},
+};
 use std::time::Duration;
 use structopt::StructOpt;
 
@@ -28,7 +33,7 @@ struct CliArgs {
     pub pool_size: u64,
 
     /// Size of the volumes.
-    #[structopt(long, parse(try_from_str = parse_size::parse_size), default_value = "1MiB")]
+    #[structopt(long, parse(try_from_str = parse_size::parse_size), default_value = "5MiB")]
     pub volume_size: u64,
 
     /// Number of volume replicas.
@@ -51,6 +56,13 @@ struct CliArgs {
     #[structopt(long, default_value = "10")]
     pub vol_samples: u32,
 
+    /// Modifies `N` volumes from each volume samples.
+    /// In other words, we will publish/unpublish each `N` volumes from each list of samples.
+    /// Please note that this can take quite some time; it's very slow to create
+    /// nexuses with remote replicas.
+    #[structopt(long, default_value = "2")]
+    pub volume_mods: u32,
+
     /// Use ram based pools instead of files (useful for debugging with small pool allocation).
     /// When using files the /tmp/pool directory will be used.
     #[structopt(long)]
@@ -67,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::from_args();
     utils::print_package_info!();
 
-    let (_cluster, rest_url) = match &args.rest_url {
+    let (client, _cluster) = match &args.rest_url {
         None => {
             // cluster will be terminated on drop
             let cluster = testlib::ClusterBuilder::builder()
@@ -78,17 +90,22 @@ async fn main() -> anyhow::Result<()> {
                 .build()
                 .await
                 .map_err(|e| anyhow!("Failed to build cluster: {}", e))?;
-            (Some(cluster), Url::parse("http://localhost:8081")?)
+
+            (cluster.rest_v00(), Some(cluster))
         }
-        Some(rest_url) => (None, rest_url.clone()),
+        Some(rest_url) => {
+            let openapi_client_config =
+                Configuration::new(rest_url.clone(), Duration::from_secs(5), None, None, true)
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to create rest client config: '{:?}'", e)
+                    })?;
+            let client = ApiClient::new(openapi_client_config);
+            (client, None)
+        }
     };
     let cleanup = _cluster.is_none() || args.total_stats;
 
     let etcd = Etcd::new(Url::parse("http://0.0.0.0:2379")?).await?;
-    let openapi_client_config =
-        client::Configuration::new(rest_url, Duration::from_secs(5), None, None, true)
-            .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
-    let client = ApiClient::new(openapi_client_config);
 
     // create some pools as backing for the volumes
     let four_mb = 4096 * 1024;
@@ -132,6 +149,16 @@ async fn main() -> anyhow::Result<()> {
     // capture the database size after we've completed allocating new resources
     let after_alloc = etcd.db_size().await?;
 
+    if args.volume_mods > 0 {
+        let mod_results = EtcdSampler::new_sampler(etcd.clone(), args.vol_samples)
+            .sample_mods(&client, args.volume_mods, &volumes)
+            .await?;
+        printer.print(&mod_results);
+    }
+
+    // capture the database size after we've churned the volumes
+    let after_mod = etcd.db_size().await?;
+
     // clean up created resources
     if cleanup {
         volumes.delete(&client).await?;
@@ -146,6 +173,7 @@ async fn main() -> anyhow::Result<()> {
         printer.print(&RunStats {
             initial,
             after_alloc,
+            after_mod,
             after_cleanup,
         });
     }
@@ -156,6 +184,7 @@ async fn main() -> anyhow::Result<()> {
 struct RunStats {
     initial: u64,
     after_alloc: u64,
+    after_mod: u64,
     after_cleanup: u64,
 }
 impl TabledData for RunStats {
@@ -163,15 +192,21 @@ impl TabledData for RunStats {
 
     fn titles(&self) -> Self::Row {
         prettytable::Row::new(vec![
-            prettytable::Cell::new("After Creation"),
-            prettytable::Cell::new("After Cleanup"),
+            prettytable::Cell::new("Creation"),
+            prettytable::Cell::new("Modification"),
+            prettytable::Cell::new("Cleanup"),
+            prettytable::Cell::new("Total"),
+            prettytable::Cell::new("Current"),
         ])
     }
 
     fn rows(&self) -> Vec<Self::Row> {
         vec![prettytable::Row::new(vec![
             prettytable::Cell::new(&Etcd::bytes_to_units(self.after_alloc - self.initial)),
+            prettytable::Cell::new(&Etcd::bytes_to_units(self.after_mod - self.after_alloc)),
+            prettytable::Cell::new(&Etcd::bytes_to_units(self.after_cleanup - self.after_mod)),
             prettytable::Cell::new(&Etcd::bytes_to_units(self.after_cleanup - self.initial)),
+            prettytable::Cell::new(&Etcd::bytes_to_units(self.after_cleanup)),
         ])]
     }
 }
