@@ -6,11 +6,7 @@ use deployer_lib::{
     infra::{Components, Error, Mayastor},
     StartOptions,
 };
-use opentelemetry::{
-    global,
-    sdk::{propagation::TraceContextPropagator, trace::Tracer},
-    KeyValue,
-};
+use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
 use common_lib::{
     mbus_api,
@@ -19,15 +15,25 @@ use common_lib::{
 };
 use openapi::apis::Uuid;
 
-use common_lib::types::v0::store::{
-    definitions::ObjectKey,
-    registry::{ControlPlaneService, StoreLeaseLockKey},
+use common_lib::{
+    opentelemetry::default_tracing_tags,
+    types::v0::store::{
+        definitions::ObjectKey,
+        registry::{ControlPlaneService, StoreLeaseLockKey},
+    },
 };
 pub use etcd_client;
 use etcd_client::DeleteOptions;
 use rpc::mayastor::RpcHandle;
-use std::{collections::HashMap, convert::TryInto, net::SocketAddr, time::Duration};
+use std::{
+    collections::HashMap, convert::TryInto, net::SocketAddr, str::FromStr, sync::Arc,
+    time::Duration,
+};
 use structopt::StructOpt;
+use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
+
+const RUST_LOG_QUIET_DEFAULTS: &str =
+    "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info,bollard=info,composer=info";
 
 #[tokio::test]
 #[ignore]
@@ -57,7 +63,7 @@ pub fn default_options() -> StartOptions {
 pub struct Cluster {
     composer: ComposeTest,
     rest_client: rest_client::RestClient,
-    jaeger: Tracer,
+    trace_guard: Arc<tracing::subscriber::DefaultGuard>,
     builder: ClusterBuilder,
 }
 
@@ -141,7 +147,8 @@ impl Cluster {
 
     /// New cluster
     async fn new(
-        trace_rest: bool,
+        trace: bool,
+        env_filter: Option<EnvFilter>,
         timeout_rest: std::time::Duration,
         bus_timeout: TimeoutOptions,
         bearer_token: Option<String>,
@@ -150,7 +157,7 @@ impl Cluster {
     ) -> Result<Cluster, Error> {
         let rest_client = rest_client::RestClient::new_timeout(
             "http://localhost:8081",
-            trace_rest,
+            trace,
             bearer_token,
             timeout_rest,
         )
@@ -185,20 +192,36 @@ impl Cluster {
             });
         }
 
-        global::set_text_map_propagator(TraceContextPropagator::new());
-        let jaeger = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("tests-client")
-            .with_tags(vec![KeyValue::new(
-                "module",
-                test_module.unwrap_or(unknown_module),
-            )])
-            .install_simple()
-            .unwrap();
+        let subscriber = Registry::default()
+            // todo: add env filter as an optional layer
+            .with(env_filter.unwrap())
+            .with(tracing_subscriber::fmt::layer());
+
+        let mut tracing_tags = vec![];
+        let trace_guard = Arc::new(match trace {
+            true => {
+                tracing_tags.append(&mut default_tracing_tags(
+                    utils::git_version(),
+                    env!("CARGO_PKG_VERSION"),
+                ));
+                tracing_tags.dedup();
+
+                global::set_text_map_propagator(TraceContextPropagator::new());
+                let tracer = opentelemetry_jaeger::new_pipeline()
+                    .with_service_name("cluster-client")
+                    .with_tags(tracing_tags)
+                    .install_simple()
+                    .expect("Should be able to initialise the exporter");
+                let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+                tracing::subscriber::set_default(subscriber.with(telemetry))
+            }
+            false => tracing::subscriber::set_default(subscriber),
+        });
 
         let cluster = Cluster {
             composer,
             rest_client,
-            jaeger,
+            trace_guard,
             builder: ClusterBuilder::builder(),
         };
 
@@ -335,7 +358,7 @@ pub struct ClusterBuilder {
     pools: HashMap<u32, Vec<PoolDisk>>,
     replicas: Replica,
     trace: bool,
-    setup_tracing: bool,
+    env_filter: Option<EnvFilter>,
     bearer_token: Option<String>,
     rest_timeout: std::time::Duration,
     bus_timeout: TimeoutOptions,
@@ -365,11 +388,12 @@ impl ClusterBuilder {
             pools: Default::default(),
             replicas: Default::default(),
             trace: true,
-            setup_tracing: true,
+            env_filter: None,
             bearer_token: None,
             rest_timeout: std::time::Duration::from_secs(5),
             bus_timeout: bus_timeout_opts(),
         }
+        .with_default_tracing()
     }
     /// Update the start options
     #[must_use]
@@ -380,16 +404,47 @@ impl ClusterBuilder {
         self.opts = set(self.opts);
         self
     }
-    /// Enable/Disable the default tokio tracing setup
+    /// Enable/Disable the default tokio tracing setup.
     #[must_use]
-    pub fn with_default_tracing(mut self, enabled: bool) -> Self {
-        self.setup_tracing = enabled;
+    pub fn with_default_tracing(self) -> Self {
+        self.with_tracing_filter(
+            Self::rust_log_add_quiet_defaults(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+            )
+            .to_string()
+            .as_str(),
+        )
+    }
+    /// Silence common_lib and testlib traces by setting them to WARN.
+    #[must_use]
+    pub fn with_silence_test_traces(mut self) -> Self {
+        self.env_filter = self.env_filter.map(|f| {
+            f.add_directive(Directive::from_str("common_lib=warn").unwrap())
+                .add_directive(Directive::from_str("testlib=warn").unwrap())
+        });
         self
     }
-    /// Enable/Disable jaeger tracing
+    fn rust_log_add_quiet_defaults(
+        current: tracing_subscriber::EnvFilter,
+    ) -> tracing_subscriber::EnvFilter {
+        let main = match current.to_string().as_str() {
+            "debug" => "debug",
+            "trace" => "trace",
+            _ => return current,
+        };
+        let logs = format!("{},{}", main, RUST_LOG_QUIET_DEFAULTS);
+        tracing_subscriber::EnvFilter::new(logs)
+    }
+    /// Enable/Disable jaeger tracing.
     #[must_use]
-    pub fn with_tracing(mut self, enabled: bool) -> Self {
+    pub fn with_jaeger_tracing(mut self, enabled: bool) -> Self {
         self.trace = enabled;
+        self
+    }
+    /// Use the provided filter for tracing.
+    #[must_use]
+    pub fn with_tracing_filter<'a>(mut self, filter: impl Into<Option<&'a str>>) -> Self {
+        self.env_filter = filter.into().map(tracing_subscriber::EnvFilter::new);
         self
     }
     /// Rest request timeout
@@ -551,7 +606,7 @@ impl ClusterBuilder {
     }
     /// Build into the resulting Cluster using a composer closure, eg:
     /// .compose_build(|c| c.with_logs(false))
-    pub async fn compose_build<F>(self, set: F) -> Result<Cluster, Error>
+    pub async fn compose_build<F>(mut self, set: F) -> Result<Cluster, Error>
     where
         F: Fn(Builder) -> Builder,
     {
@@ -562,7 +617,7 @@ impl ClusterBuilder {
         Ok(cluster)
     }
     /// Build into the resulting Cluster
-    pub async fn build(self) -> Result<Cluster, Error> {
+    pub async fn build(mut self) -> Result<Cluster, Error> {
         let (components, composer) = self.build_prepare()?;
         let mut cluster = self.new_cluster(components, composer).await?;
         cluster.builder = self;
@@ -581,15 +636,10 @@ impl ClusterBuilder {
             // test script will clean up containers if ran on CI/CD
             .with_clean_on_panic(false)
             .with_logs(true);
-        let composer = if self.setup_tracing {
-            composer.with_default_tracing()
-        } else {
-            composer
-        };
         Ok((components, composer))
     }
     async fn new_cluster(
-        &self,
+        &mut self,
         components: Components,
         compose_builder: Builder,
     ) -> Result<Cluster, Error> {
@@ -598,6 +648,7 @@ impl ClusterBuilder {
 
         let cluster = Cluster::new(
             self.trace,
+            self.env_filter.take(),
             self.rest_timeout,
             self.bus_timeout.clone(),
             self.bearer_token.clone(),

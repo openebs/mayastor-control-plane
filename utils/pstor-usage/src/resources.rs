@@ -2,41 +2,69 @@ use openapi::clients::tower::direct::ApiClient;
 
 /// Resource Manager that handles creating and deleting resources.
 #[async_trait::async_trait]
-pub(crate) trait ResourceMgr: Send + Sync {
-    type Output: ResourceDelete;
+pub(crate) trait ResourceMgr: Send + Sync + FormatSamples {
+    type Output: ResourceDelete + ResourceUpdates;
     /// Create `count` resources.
-    async fn create(&self, client: ApiClient, count: u32) -> anyhow::Result<Self::Output>;
+    async fn create(&self, client: &ApiClient, count: u32) -> anyhow::Result<Self::Output>;
     /// Delete the created resources.
-    async fn delete(&self, client: ApiClient, created: Self::Output) -> anyhow::Result<()>;
-    /// Prepare a sample from the given data points.
-    fn prepare_sample(&self, points: Vec<u64>) -> Box<dyn ResourceSample>;
+    async fn delete(&self, client: &ApiClient, created: Self::Output) -> anyhow::Result<()>;
+}
+
+/// Formats collected points into a ResourceSample.
+pub(crate) trait FormatSamples: Send + Sync {
+    /// Format a sample from the given data points.
+    fn format(&self, points: Vec<u64>) -> Box<dyn ResourceSample>;
 }
 
 /// Resources that are deletable and should be deleted.
 #[async_trait::async_trait]
 pub(crate) trait ResourceDelete: Send + Sync + Clone {
-    async fn delete(&self, client: ApiClient) -> anyhow::Result<()>;
+    async fn delete(&self, client: &ApiClient) -> anyhow::Result<()>;
+}
+
+/// Resource updates/modifications that can be performed by a user.
+#[async_trait::async_trait]
+pub(crate) trait ResourceUpdates: Send + Sync + FormatSamples + Default {
+    /// Update/Modify a resource `count` times
+    async fn modify(&self, client: &ApiClient, count: u32) -> anyhow::Result<()>;
 }
 
 #[async_trait::async_trait]
 impl<T: ResourceDelete> ResourceDelete for Vec<T> {
-    async fn delete(&self, client: ApiClient) -> anyhow::Result<()> {
+    async fn delete(&self, client: &ApiClient) -> anyhow::Result<()> {
         for e in self.iter() {
-            e.delete(client.clone()).await?;
+            e.delete(client).await?;
         }
         Ok(())
+    }
+}
+
+impl<T: FormatSamples + Default> FormatSamples for [T] {
+    fn format(&self, points: Vec<u64>) -> Box<dyn ResourceSample> {
+        match self.first() {
+            None => T::default().format(points),
+            Some(first) => first.format(points),
+        }
     }
 }
 
 /// Sample `count` data points from a given `ResourceMgr`.
 #[async_trait::async_trait]
 pub(crate) trait Sampler {
+    /// Samples `count` resource allocations returning both the allocated resources and the samples.
     async fn sample<T: ResourceMgr>(
         &self,
-        client: ApiClient,
+        client: &ApiClient,
         count: u32,
         resource_mgr: &T,
     ) -> anyhow::Result<(Vec<T::Output>, ResourceSamples)>;
+    /// Samples `count` resource modifications returning the collected samples.
+    async fn sample_mods<T: ResourceUpdates>(
+        &self,
+        client: &ApiClient,
+        count: u32,
+        resources: &[T],
+    ) -> anyhow::Result<ResourceSamples>;
 }
 
 /// A sample of data points, if you will.

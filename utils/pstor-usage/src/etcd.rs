@@ -1,4 +1,7 @@
-use crate::resources::{ResourceMgr, ResourceSample, ResourceSamples, Sampler};
+use crate::{
+    resources::{FormatSamples, ResourceMgr, ResourceSample, ResourceSamples, Sampler},
+    ResourceUpdates,
+};
 use etcd_client::StatusResponse;
 use openapi::{apis::Url, clients::tower::direct::ApiClient};
 
@@ -54,7 +57,7 @@ impl EtcdSampler {
 impl Sampler for EtcdSampler {
     async fn sample<T: ResourceMgr>(
         &self,
-        client: ApiClient,
+        client: &ApiClient,
         count: u32,
         resource_mgr: &T,
     ) -> anyhow::Result<(Vec<T::Output>, ResourceSamples)> {
@@ -69,7 +72,7 @@ impl Sampler for EtcdSampler {
         let base = self.etcd.db_size().await?;
         let mut acc = base;
         for _ in 1 ..= self.steps {
-            created.push(resource_mgr.create(client.clone(), count).await?);
+            created.push(resource_mgr.create(client, count).await?);
             let usage = self.etcd.db_size().await? - acc;
 
             count_vec.push(count as u64);
@@ -78,10 +81,43 @@ impl Sampler for EtcdSampler {
             acc += usage;
         }
 
-        let count_r = resource_mgr.prepare_sample(count_vec);
+        let count_r = resource_mgr.format(count_vec);
         let usage_r = Box::new(DiskUsage { points: usage_vec });
 
         Ok((created, ResourceSamples::new(vec![count_r, usage_r])))
+    }
+
+    async fn sample_mods<T: ResourceUpdates>(
+        &self,
+        client: &ApiClient,
+        count: u32,
+        resources: &[T],
+    ) -> anyhow::Result<ResourceSamples> {
+        if count == 0 {
+            return Ok(ResourceSamples::new(vec![]));
+        }
+
+        let mut count_vec = Vec::with_capacity((self.steps * count) as usize);
+        let mut usage_vec = Vec::with_capacity((self.steps * count) as usize);
+
+        let base = self.etcd.db_size().await?;
+        let mut acc = base;
+
+        for each in resources {
+            each.modify(client, count).await?;
+
+            let usage = self.etcd.db_size().await? - acc;
+
+            count_vec.push(count as u64);
+            usage_vec.push(usage);
+
+            acc += usage;
+        }
+
+        let count_r = resources.format(count_vec);
+        let usage_r = Box::new(DiskUsage { points: usage_vec });
+
+        Ok(ResourceSamples::new(vec![count_r, usage_r]))
     }
 }
 

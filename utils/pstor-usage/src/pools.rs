@@ -1,4 +1,6 @@
-use crate::resources::{ResourceDelete, ResourceMgr, ResourceSample};
+use crate::resources::{
+    FormatSamples, ResourceDelete, ResourceMgr, ResourceSample, ResourceUpdates,
+};
 use anyhow::anyhow;
 use openapi::{
     apis::{Url, Uuid},
@@ -8,6 +10,7 @@ use openapi::{
 
 type NodeId = String;
 /// Resource manager for pools.
+#[derive(Default)]
 pub(crate) struct PoolMgr {
     node_ids: Vec<NodeId>,
     size_bytes: u64,
@@ -16,7 +19,7 @@ pub(crate) struct PoolMgr {
 impl PoolMgr {
     /// New `ResourceMgr` that creates pools with `size_bytes` in bytes.
     pub(crate) async fn new_mgr(
-        client: ApiClient,
+        client: &ApiClient,
         size_bytes: u64,
         use_malloc: bool,
     ) -> anyhow::Result<impl ResourceMgr> {
@@ -75,9 +78,13 @@ impl PoolMgr {
 #[async_trait::async_trait]
 impl ResourceMgr for PoolMgr {
     type Output = Vec<models::Pool>;
-    async fn create(&self, client: ApiClient, count: u32) -> anyhow::Result<Self::Output> {
+    async fn create(&self, client: &ApiClient, count: u32) -> anyhow::Result<Self::Output> {
         let mut created_pools = Vec::with_capacity(count as usize);
         loop {
+            if created_pools.len() >= count as usize {
+                return Ok(created_pools);
+            }
+
             for node_id in self.node_ids.iter() {
                 let pool_id = Uuid::new_v4();
                 let pool_disk = self.uri(&pool_id)?;
@@ -94,29 +101,40 @@ impl ResourceMgr for PoolMgr {
                     std::fs::remove_file(file)?;
                 }
                 created_pools.push(pool);
-
-                if created_pools.len() >= count as usize {
-                    return Ok(created_pools);
-                }
             }
         }
     }
-    async fn delete(&self, client: ApiClient, created: Self::Output) -> anyhow::Result<()> {
+    async fn delete(&self, client: &ApiClient, created: Self::Output) -> anyhow::Result<()> {
         created.delete(client).await
     }
-
-    fn prepare_sample(&self, points: Vec<u64>) -> Box<dyn ResourceSample> {
+}
+#[async_trait::async_trait]
+impl FormatSamples for PoolMgr {
+    fn format(&self, points: Vec<u64>) -> Box<dyn ResourceSample> {
         Box::new(PoolCount { points })
     }
 }
 
 #[async_trait::async_trait]
 impl ResourceDelete for Vec<models::Pool> {
-    async fn delete(&self, client: ApiClient) -> anyhow::Result<()> {
+    async fn delete(&self, client: &ApiClient) -> anyhow::Result<()> {
         for pool in self {
             client.pools_api().del_pool(&pool.id).await?;
         }
         Ok(())
+    }
+}
+
+impl FormatSamples for Vec<models::Pool> {
+    fn format(&self, _points: Vec<u64>) -> Box<dyn ResourceSample> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceUpdates for Vec<models::Pool> {
+    async fn modify(&self, _client: &ApiClient, _count: u32) -> anyhow::Result<()> {
+        panic!("Pools cannot be directly modified as of yet, but they will!")
     }
 }
 
