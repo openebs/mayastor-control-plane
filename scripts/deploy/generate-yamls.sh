@@ -21,6 +21,7 @@ tag=
 helm_string=
 helm_file=
 helm_flags=
+namespace="mayastor"
 
 help() {
   cat <<EOF
@@ -36,6 +37,7 @@ Common options:
   -f <file>        Specify values in a YAML file or a URL (can specify multiple)
   -d               Debug the helm command by specifying --debug
   -c               Run this script only if the helm template directory has changes
+  -n               Namespace of the generated YAML files
 
 Profiles:
   develop:   Used by developers of mayastor.
@@ -79,6 +81,10 @@ while [ "$#" -gt 0 ]; do
     -t)
       shift
       tag=$1
+      ;;
+    -n)
+      shift
+      namespace=$1
       ;;
     -d)
       helm_flags="$helm_flags --debug"
@@ -157,7 +163,7 @@ fi
 # update helm dependencies
 ( cd "$CHARTDIR" && helm dependency update )
 # generate the yaml
-helm template --set "$template_params" mayastor "$CHARTDIR" --output-dir="$tmpd" --namespace mayastor \
+helm template --set "$template_params" mayastor "$CHARTDIR" --output-dir="$tmpd" --namespace $namespace \
   -f "$CHARTDIR/$profile/values.yaml" -f "$CHARTDIR/constants.yaml" -f "$helm_file" \
   --set "$helm_string" $helm_flags
 

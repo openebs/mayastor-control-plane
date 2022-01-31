@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: mayastor-service-account
-  namespace: mayastor
+  namespace: {{ .Release.Namespace }}
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -70,7 +70,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: mayastor-service-account
-  namespace: mayastor
+  namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: mayastor-cluster-role
