@@ -48,7 +48,10 @@ impl ReconcilerControl {
     }
 
     /// Send an event signal to the poller's main loop
+    /// todo: don't requeque duplicate events
     pub(crate) async fn notify(&self, event: PollEvent) {
-        self.event_channel.send(event).await.ok();
+        if let Err(error) = self.event_channel.try_send(event) {
+            tracing::warn!(error=?error, "Failed to send event to reconcile worker");
+        }
     }
 }

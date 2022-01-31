@@ -53,17 +53,30 @@ impl NodeCommsTimeout {
 impl Service {
     /// New Node Service which uses the `registry` as its node cache and sets
     /// the `deadline` to each node's watchdog
-    pub(super) fn new(
+    pub(super) async fn new(
         registry: Registry,
         deadline: std::time::Duration,
         request: std::time::Duration,
         connect: std::time::Duration,
     ) -> Self {
-        Self {
+        let service = Self {
             registry,
             deadline,
             comms_timeouts: NodeCommsTimeout::new(connect, request),
+        };
+        // attempt to reload the node state based on the specification
+        for node in service.registry.specs().get_nodes() {
+            service
+                .register_state(
+                    &Register {
+                        id: node.id().clone(),
+                        grpc_endpoint: node.endpoint().to_string(),
+                    },
+                    true,
+                )
+                .await;
         }
+        service
     }
     fn specs(&self) -> &ResourceSpecsLocked {
         self.registry.specs()
@@ -84,11 +97,11 @@ impl Service {
     /// Register a new node through the register information
     pub(super) async fn register(&self, registration: &Register) {
         self.registry.register_node_spec(registration).await;
-        self.register_state(registration).await;
+        self.register_state(registration, false).await;
     }
 
     /// Attempt to Register a new node state through the register information
-    pub(super) async fn register_state(&self, registration: &Register) {
+    pub(super) async fn register_state(&self, registration: &Register, startup: bool) {
         let node = NodeState {
             id: registration.id.clone(),
             grpc_endpoint: registration.grpc_endpoint.clone(),
@@ -113,7 +126,8 @@ impl Service {
             }
         }
 
-        if send_event {
+        // don't send these events on startup as the reconciler will start working afterwards anyway
+        if send_event && !startup {
             self.registry
                 .notify(PollTriggerEvent::NodeStateChangeOnline)
                 .await;
