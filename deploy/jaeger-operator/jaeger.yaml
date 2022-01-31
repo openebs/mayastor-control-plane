@@ -9,17 +9,6 @@ spec:
   strategy: allInOne
   ingress:
     enabled: false
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: node-role.kubernetes.io/master
-            operator: In
-            values:
-            - ""
-  tolerations:
-    - key: node-role.kubernetes.io/master
   query:
     serviceType: NodePort
     nodePort: 30012

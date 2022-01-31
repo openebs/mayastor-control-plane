@@ -158,6 +158,7 @@ pub struct CreateReplica {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct ReplicaOwners {
     volume: Option<VolumeId>,
+    #[serde(skip)]
     nexuses: Vec<NexusId>,
 }
 impl ReplicaOwners {

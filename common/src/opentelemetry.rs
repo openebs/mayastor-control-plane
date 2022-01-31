@@ -19,3 +19,18 @@ pub fn default_tracing_tags(git_commit: &str, cargo_version: &str) -> Vec<KeyVal
         KeyValue::new("crate.version", cargo_version.to_string()),
     ]
 }
+
+/// Name of the OTEL_BSP_MAX_EXPORT_BATCH_SIZE variable
+pub const OTEL_BSP_MAX_EXPORT_BATCH_SIZE_NAME: &str = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE";
+/// The value of OTEL_BSP_MAX_EXPORT_BATCH_SIZE to be used with JAEGER
+pub const OTEL_BSP_MAX_EXPORT_BATCH_SIZE_JAEGER: &str = "64";
+/// Set the OTEL variables for a jaeger configuration
+pub fn set_jaeger_env() {
+    // if not set, default it to our jaeger value
+    if std::env::var(OTEL_BSP_MAX_EXPORT_BATCH_SIZE_NAME).is_err() {
+        std::env::set_var(
+            OTEL_BSP_MAX_EXPORT_BATCH_SIZE_NAME,
+            OTEL_BSP_MAX_EXPORT_BATCH_SIZE_JAEGER,
+        );
+    }
+}
