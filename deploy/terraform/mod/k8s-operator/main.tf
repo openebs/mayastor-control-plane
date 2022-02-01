@@ -33,7 +33,7 @@ resource "kubernetes_deployment" "deployment_msp_operator" {
         service_account_name = "mayastor-service-account"
         container {
           args = concat([
-            "-e http://$(REST_SERVICE_HOST):8081",
+            "-e http://rest:8081",
             "--interval=${var.cache_period}"
             ],
             var.jaeger_agent_argument
