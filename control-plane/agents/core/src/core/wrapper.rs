@@ -259,7 +259,7 @@ impl NodeWrapper {
         self.node_state().status().clone()
     }
 
-    /// Get the node gprc endpoint as string
+    /// Get the node grpc endpoint as string.
     pub(crate) fn endpoint_str(&self) -> String {
         self.node_state().grpc_endpoint.clone()
     }
