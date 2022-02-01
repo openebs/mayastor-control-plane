@@ -581,7 +581,8 @@ pub(crate) trait InternalOps {
     /// Update all node state information
     async fn update_all(&self, setting_online: bool) -> Result<(), SvcError>;
     /// OnRegister callback when a node is re-registered with the registry via its heartbeat
-    async fn on_register(&self);
+    /// On success returns where it's reset the node as online or not.
+    async fn on_register(&self) -> Result<bool, SvcError>;
 }
 
 /// Getter operations on a mayastor locked `NodeWrapper` to get copies of its
@@ -671,7 +672,7 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         }
     }
 
-    async fn on_register(&self) {
+    async fn on_register(&self) -> Result<bool, SvcError> {
         let setting_online = {
             let mut node = self.write().await;
             node.pet().await;
@@ -679,7 +680,9 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         };
         // if the node was not previously online then let's update all states right away
         if setting_online {
-            self.update_all(setting_online).await.ok();
+            self.update_all(setting_online).await.map(|_| true)
+        } else {
+            Ok(false)
         }
     }
 }
