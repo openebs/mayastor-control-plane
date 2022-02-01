@@ -1,20 +1,42 @@
 use super::{super::node::watchdog::Watchdog, grpc::GrpcContext};
+use crate::{
+    core::{
+        grpc::{GrpcClient, GrpcClientLocked},
+        states::{ResourceStates, ResourceStatesLocked},
+    },
+    node::service::NodeCommsTimeout,
+};
+
 use common::{
     errors::{GrpcRequestError, SvcError},
     v0::msg_translation::{MessageBusToRpc, RpcToMessageBus, TryRpcToMessageBus},
 };
 use common_lib::{
-    mbus_api::ResourceKind,
-    types::v0::message_bus::{
-        AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
-        DestroyReplica, Nexus, NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState,
-        PoolStatus, Protocol, RemoveNexusChild, Replica, ReplicaId, ShareNexus, ShareReplica,
-        UnshareNexus, UnshareReplica,
+    mbus_api::{Message, MessageId, MessageIdTimeout, ResourceKind},
+    types::v0::{
+        message_bus::{
+            AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
+            DestroyPool, DestroyReplica, MessageIdVs, Nexus, NexusId, NodeId, NodeState,
+            NodeStatus, PoolId, PoolState, PoolStatus, Protocol, RemoveNexusChild, Replica,
+            ReplicaId, ShareNexus, ShareReplica, UnshareNexus, UnshareReplica,
+        },
+        store,
+        store::{nexus::NexusState, replica::ReplicaState},
     },
 };
+
+use async_trait::async_trait;
 use rpc::mayastor::Null;
 use snafu::ResultExt;
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
+
+type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
+/// Default timeout for GET* gRPC requests (ex: GetPools, GetNexuses, etc..)
+const GETS_TIMEOUT: MessageIdVs = MessageIdVs::Default;
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
 /// all pools and replicas from the node
@@ -75,8 +97,8 @@ impl NodeWrapper {
     ) -> Result<GrpcContext, SvcError> {
         GrpcContext::new(
             self.lock.clone(),
-            &self.id,
-            &self.node_state.grpc_endpoint,
+            self.id(),
+            &self.endpoint_str(),
             &self.comms_timeouts,
             Some(request),
         )
@@ -89,8 +111,8 @@ impl NodeWrapper {
     ) -> Result<GrpcContext, SvcError> {
         GrpcContext::new(
             self.lock.clone(),
-            &self.id,
-            &self.node_state.grpc_endpoint,
+            self.id(),
+            &self.endpoint_str(),
             &timeout,
             None::<MessageId>,
         )
@@ -100,8 +122,8 @@ impl NodeWrapper {
     pub(crate) fn grpc_context(&self) -> Result<GrpcContext, SvcError> {
         GrpcContext::new(
             self.lock.clone(),
-            &self.id,
-            &self.node_state.grpc_endpoint,
+            self.id(),
+            &self.endpoint_str(),
             &self.comms_timeouts,
             None::<MessageId>,
         )
@@ -112,17 +134,13 @@ impl NodeWrapper {
         self.watchdog.timestamp().elapsed() > self.watchdog.deadline()
     }
 
-    /// On_register callback when the node is registered with the registry
-    pub(crate) async fn on_register(&mut self) {
+    /// "Pet" the node to meet the node's watchdog timer deadline
+    pub(crate) async fn pet(&mut self) {
         self.watchdog.pet().await.ok();
         if self.missed_deadline {
-            tracing::info!(node.uuid=%self.id, "The node had missed the heartbeat deadline but it's now re-registered itself");
+            tracing::info!(node.uuid=%self.id(), "The node had missed the heartbeat deadline but it's now re-registered itself");
         }
         self.missed_deadline = false;
-        if self.set_status(NodeStatus::Online) != NodeStatus::Online {
-            // if a node reappears as online, then reload its information
-            self.reload().await.ok();
-        }
     }
 
     /// Update the node liveness if the watchdog's registration expired
@@ -132,7 +150,7 @@ impl NodeWrapper {
             if !self.missed_deadline {
                 tracing::error!(
                     "Node id '{}' missed the registration deadline of {:?}",
-                    self.id,
+                    self.id(),
                     self.watchdog.deadline()
                 );
             }
@@ -142,13 +160,13 @@ impl NodeWrapper {
                 && self.watchdog.pet().await.is_ok()
             {
                 if !self.missed_deadline {
-                    tracing::warn!(node.uuid=%self.id, "The node missed the heartbeat deadline but it's still responding to gRPC so we're considering it online");
+                    tracing::warn!(node.uuid=%self.id(), "The node missed the heartbeat deadline but it's still responding to gRPC so we're considering it online");
                 }
             } else {
                 if self.missed_deadline {
                     tracing::error!(
                         "Node id '{}' missed the registration deadline of {:?}",
-                        self.id,
+                        self.id(),
                         self.watchdog.deadline()
                     );
                 }
@@ -166,38 +184,38 @@ impl NodeWrapper {
 
         let mut ctx = self.grpc_client_timeout(timeouts).await?;
         let _ = ctx
-            .client
+            .mayastor
             .get_mayastor_info(rpc::mayastor::Null {})
             .await
             .map_err(|_| SvcError::NodeNotOnline {
-                node: self.id.to_owned(),
+                node: self.id().to_owned(),
             })?;
         Ok(())
     }
 
     /// Set the node status and return the previous status
-    pub(crate) fn set_status(&mut self, state: NodeStatus) -> NodeStatus {
-        let previous = self.status.clone();
-        if self.node_state.status != state {
-            if state == NodeStatus::Online {
+    pub(crate) fn set_status(&mut self, next: NodeStatus) -> NodeStatus {
+        let previous = self.status();
+        if previous != next {
+            if next == NodeStatus::Online {
                 tracing::info!(
                     "Node '{}' changing from {} to {}",
-                    self.node_state.id,
-                    self.node_state.status.to_string(),
-                    state.to_string(),
+                    self.id(),
+                    previous.to_string(),
+                    next.to_string(),
                 );
             } else {
                 tracing::warn!(
                     "Node '{}' changing from {} to {}",
-                    self.node_state.id,
-                    self.node_state.status.to_string(),
-                    state.to_string(),
+                    self.id(),
+                    previous.to_string(),
+                    next.to_string(),
                 );
             }
 
-            self.node_state.status = state;
+            self.node_state.status = next;
             if self.node_state.status == NodeStatus::Unknown {
-                self.watchdog.disarm()
+                self.watchdog_mut().disarm()
             }
         }
         // Clear the states, otherwise we could temporarily return pools/nexus as online, even
@@ -211,7 +229,17 @@ impl NodeWrapper {
 
     /// Clear all states from the node
     fn clear_states(&mut self) {
-        self.states.write().clear_all();
+        self.resources_mut().clear_all();
+    }
+
+    /// Get the inner states
+    fn resources(&self) -> parking_lot::RwLockReadGuard<ResourceStates> {
+        self.states.read()
+    }
+
+    /// Get the inner resource states
+    fn resources_mut(&self) -> parking_lot::RwLockWriteGuard<ResourceStates> {
+        self.states.write()
     }
 
     /// Get a mutable reference to the node's watchdog
@@ -222,10 +250,22 @@ impl NodeWrapper {
     pub(crate) fn node_state(&self) -> &NodeState {
         &self.node_state
     }
+    /// Get the node `NodeId`
+    pub(crate) fn id(&self) -> &NodeId {
+        self.node_state().id()
+    }
+    /// Get the node `NodeStatus`
+    pub(crate) fn status(&self) -> NodeStatus {
+        self.node_state().status().clone()
+    }
+
+    /// Get the node grpc endpoint as string.
+    pub(crate) fn endpoint_str(&self) -> String {
+        self.node_state().grpc_endpoint.clone()
+    }
     /// Get all pools
     pub(crate) fn pools(&self) -> Vec<PoolState> {
-        self.states
-            .read()
+        self.resources()
             .get_pool_states()
             .iter()
             .map(|p| p.pool.clone())
@@ -233,9 +273,8 @@ impl NodeWrapper {
     }
     /// Get all pool wrappers
     pub(crate) fn pool_wrappers(&self) -> Vec<PoolWrapper> {
-        let state = self.states.read();
-        let pools = state.get_pool_states();
-        let replicas = state.get_replica_states();
+        let pools = self.resources().get_pool_states();
+        let replicas = self.resources().get_replica_states();
         pools
             .into_iter()
             .map(|p| {
@@ -250,15 +289,15 @@ impl NodeWrapper {
     }
     /// Get all pool states
     pub(crate) fn pool_states(&self) -> Vec<store::pool::PoolState> {
-        self.states.read().get_pool_states()
+        self.resources().get_pool_states()
     }
     /// Get pool from `pool_id` or None
     pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
-        self.states.read().get_pool_state(pool_id).map(|p| p.pool)
+        self.resources().get_pool_state(pool_id).map(|p| p.pool)
     }
     /// Get a PoolWrapper for the pool ID.
     pub(crate) fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
-        let r = self.states.read();
+        let r = self.resources();
         match r.get_pool_states().iter().find(|p| &p.pool.id == pool_id) {
             Some(pool_state) => {
                 let replicas: Vec<Replica> = self
@@ -273,8 +312,7 @@ impl NodeWrapper {
     }
     /// Get all replicas
     pub(crate) fn replicas(&self) -> Vec<Replica> {
-        self.states
-            .read()
+        self.resources()
             .get_replica_states()
             .iter()
             .map(|r| r.replica.clone())
@@ -282,12 +320,11 @@ impl NodeWrapper {
     }
     /// Get all replica states
     pub(crate) fn replica_states(&self) -> Vec<ReplicaState> {
-        self.states.read().get_replica_states()
+        self.resources().get_replica_states()
     }
     /// Get all nexuses
     fn nexuses(&self) -> Vec<Nexus> {
-        self.states
-            .read()
+        self.resources()
             .get_nexus_states()
             .iter()
             .map(|nexus_state| nexus_state.nexus.clone())
@@ -295,47 +332,44 @@ impl NodeWrapper {
     }
     /// Get all nexus states
     pub(crate) fn nexus_states(&self) -> Vec<NexusState> {
-        self.states.read().get_nexus_states()
+        self.resources().get_nexus_states()
     }
     /// Get nexus
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
-        self.states
-            .read()
-            .get_nexus_state(nexus_id)
-            .map(|s| s.nexus)
+        self.resources().get_nexus_state(nexus_id).map(|s| s.nexus)
     }
     /// Get replica from `replica_id`
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
-        self.states
-            .read()
+        self.resources()
             .get_replica_state(replica_id)
             .map(|r| r.replica)
     }
     /// Is the node online
     pub(crate) fn is_online(&self) -> bool {
-        self.node_state.status == NodeStatus::Online
+        self.status() == NodeStatus::Online
     }
 
     /// Load the node by fetching information from mayastor
     pub(crate) async fn load(&mut self) -> Result<(), SvcError> {
         tracing::info!(
             "Preloading node '{}' on endpoint '{}'",
-            self.id,
-            self.grpc_endpoint
+            self.id(),
+            self.endpoint_str()
         );
 
-        match self.fetch_resources().await {
+        let mut client = self.grpc_client().await?;
+        match self.fetch_resources(&mut client).await {
             Ok((replicas, pools, nexuses)) => {
-                let mut states = self.states.write();
+                let mut states = self.resources_mut();
                 states.update(pools, replicas, nexuses);
                 Ok(())
             }
             Err(error) => {
-                self.node_state.status = NodeStatus::Unknown;
+                self.set_status(NodeStatus::Unknown);
                 tracing::error!(
                     "Preloading of node '{}' on endpoint '{}' failed with error: {:?}",
-                    self.id,
-                    self.grpc_endpoint,
+                    self.id(),
+                    self.endpoint_str(),
                     error
                 );
                 Err(error)
@@ -343,36 +377,45 @@ impl NodeWrapper {
         }
     }
 
-    /// Reload the node by fetching information from mayastor
-    pub(crate) async fn reload(&mut self) -> Result<(), SvcError> {
-        if self.is_online() {
+    /// Update the node by updating its state from the states fetched from mayastor
+    fn update(
+        &mut self,
+        setting_online: bool,
+        fetch_result: Result<NodeResourceStates, SvcError>,
+    ) -> Result<(), SvcError> {
+        if self.is_online() || setting_online {
             tracing::trace!(
                 "Reloading node '{}' on endpoint '{}'",
-                self.id,
-                self.grpc_endpoint
+                self.id(),
+                self.endpoint_str()
             );
 
-            match self.fetch_resources().await {
+            match fetch_result {
                 Ok((replicas, pools, nexuses)) => {
-                    let mut states = self.states.write();
-                    states.update(pools, replicas, nexuses);
+                    self.resources_mut().update(pools, replicas, nexuses);
+                    if setting_online {
+                        // we only set it as online after we've updated the resource states
+                        // so an online node should be "up-to-date"
+                        self.set_status(NodeStatus::Online);
+                    }
                     Ok(())
                 }
-                Err(e) => {
+                Err(error) => {
                     self.set_status(NodeStatus::Unknown);
-                    Err(e)
+                    tracing::trace!("Failed to reload node {}. Error {:?}.", self.id(), error);
+                    Err(error)
                 }
             }
         } else {
             tracing::trace!(
                 "Skipping reload of node '{}' since it's '{:?}'",
-                self.id,
-                self.status
+                self.id(),
+                self.node_state()
             );
             // should already be cleared
             self.clear_states();
             Err(SvcError::NodeNotOnline {
-                node: self.id.to_owned(),
+                node: self.id().to_owned(),
             })
         }
     }
@@ -380,43 +423,49 @@ impl NodeWrapper {
     /// Fetch the various resources from Mayastor.
     async fn fetch_resources(
         &self,
-    ) -> Result<(Vec<Replica>, Vec<PoolState>, Vec<Nexus>), SvcError> {
-        let replicas = self.fetch_replicas().await?;
-        let pools = self.fetch_pools().await?;
-        let nexuses = self.fetch_nexuses().await?;
+        client: &mut GrpcClient,
+    ) -> Result<NodeResourceStates, SvcError> {
+        let replicas = self.fetch_replicas(client).await?;
+        let pools = self.fetch_pools(client).await?;
+        let nexuses = self.fetch_nexuses(client).await?;
         Ok((replicas, pools, nexuses))
     }
 
     /// Fetch all replicas from this node via gRPC
-    pub(crate) async fn fetch_replicas(&self) -> Result<Vec<Replica>, SvcError> {
-        let mut ctx = self.grpc_client().await?;
+    pub(crate) async fn fetch_replicas(
+        &self,
+        client: &mut GrpcClient,
+    ) -> Result<Vec<Replica>, SvcError> {
         let rpc_replicas =
-            ctx.client
+            client
+                .mayastor
                 .list_replicas_v2(Null {})
                 .await
                 .context(GrpcRequestError {
                     resource: ResourceKind::Replica,
                     request: "list_replicas",
                 })?;
+
         let rpc_replicas = &rpc_replicas.get_ref().replicas;
         let pools = rpc_replicas
             .iter()
-            .map(|p| match rpc_replica_to_bus(p, &self.id) {
+            .filter_map(|p| match rpc_replica_to_bus(p, self.id()) {
                 Ok(r) => Some(r),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc replica");
                     None
                 }
             })
-            .flatten()
             .collect();
         Ok(pools)
     }
     /// Fetch all pools from this node via gRPC
-    pub(crate) async fn fetch_pools(&self) -> Result<Vec<PoolState>, SvcError> {
-        let mut ctx = self.grpc_client().await?;
-        let rpc_pools = ctx
-            .client
+    pub(crate) async fn fetch_pools(
+        &self,
+        client: &mut GrpcClient,
+    ) -> Result<Vec<PoolState>, SvcError> {
+        let rpc_pools = client
+            .mayastor
             .list_pools(Null {})
             .await
             .context(GrpcRequestError {
@@ -426,84 +475,71 @@ impl NodeWrapper {
         let rpc_pools = &rpc_pools.get_ref().pools;
         let pools = rpc_pools
             .iter()
-            .map(|p| rpc_pool_to_bus(p, &self.id))
+            .map(|p| rpc_pool_to_bus(p, self.id()))
             .collect();
         Ok(pools)
     }
     /// Fetch all nexuses from the node via gRPC
-    pub(crate) async fn fetch_nexuses(&self) -> Result<Vec<Nexus>, SvcError> {
-        let mut ctx = self.grpc_client().await?;
-        let rpc_nexuses = ctx
-            .client
-            .list_nexus_v2(Null {})
-            .await
-            .context(GrpcRequestError {
-                resource: ResourceKind::Nexus,
-                request: "list_nexus",
-            })?;
+    pub(crate) async fn fetch_nexuses(
+        &self,
+        client: &mut GrpcClient,
+    ) -> Result<Vec<Nexus>, SvcError> {
+        let rpc_nexuses =
+            client
+                .mayastor
+                .list_nexus_v2(Null {})
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Nexus,
+                    request: "list_nexus",
+                })?;
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
-            .map(|n| match rpc_nexus_v2_to_bus(n, &self.id) {
+            .filter_map(|n| match rpc_nexus_v2_to_bus(n, self.id()) {
                 Ok(n) => Some(n),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
                     None
                 }
             })
-            .flatten()
             .collect();
         Ok(nexuses)
     }
 
     /// Update all the nexus states.
-    async fn update_nexus_states(&self) -> Result<(), SvcError> {
-        let nexuses = self.fetch_nexuses().await?;
-        self.states.write().update_nexuses(nexuses);
+    async fn update_nexus_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
+        let nexuses = self.fetch_nexuses(client).await?;
+        self.resources_mut().update_nexuses(nexuses);
         Ok(())
     }
 
-    async fn update_pool_states(&self) -> Result<(), SvcError> {
-        let pools = self.fetch_pools().await?;
-        self.states.write().update_pools(pools);
+    /// Update all the pool states.
+    async fn update_pool_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
+        let pools = self.fetch_pools(client).await?;
+        self.resources_mut().update_pools(pools);
         Ok(())
     }
 
-    async fn update_replica_states(&self) -> Result<(), SvcError> {
-        let replicas = self.fetch_replicas().await?;
-        self.states.write().update_replicas(replicas);
+    /// Update all the replica states.
+    async fn update_replica_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
+        let replicas = self.fetch_replicas(client).await?;
+        self.resources_mut().update_replicas(replicas);
         Ok(())
     }
 }
-
-impl std::ops::Deref for NodeWrapper {
-    type Target = NodeState;
-    fn deref(&self) -> &Self::Target {
-        &self.node_state
-    }
-}
-
-use crate::{
-    core::{
-        grpc::{GrpcClient, GrpcClientLocked},
-        states::ResourceStatesLocked,
-    },
-    node::service::NodeCommsTimeout,
-};
-use async_trait::async_trait;
-use common_lib::{
-    mbus_api::{Message, MessageId, MessageIdTimeout},
-    types::v0::{
-        store,
-        store::{nexus::NexusState, replica::ReplicaState},
-    },
-};
-use std::{ops::Deref, sync::Arc};
 
 /// CRUD Operations on a locked mayastor `NodeWrapper` such as:
 /// pools, replicas, nexuses and their children
 #[async_trait]
-pub trait ClientOps {
+pub(crate) trait ClientOps {
+    /// Get the grpc lock and client pair to execute the provided `request`
+    /// NOTE: Only available when the node status is online
+    async fn grpc_client_locked<T: MessageIdTimeout>(
+        &self,
+        request: T,
+    ) -> Result<GrpcClientLocked, SvcError>;
+    /// Create a pool on the node via gRPC
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError>;
     /// Destroy a pool on the node via gRPC
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError>;
@@ -534,19 +570,19 @@ pub trait ClientOps {
 /// of the `ClientOps` trait and the `Registry` itself
 #[async_trait]
 pub(crate) trait InternalOps {
-    /// Get the grpc lock and client pair to execute the provided `request`
-    async fn grpc_client_locked<T: MessageIdTimeout>(
-        &self,
-        request: T,
-    ) -> Result<GrpcClientLocked, SvcError>;
     /// Get the inner lock, typically used to sync mutating gRPC operations
     async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>>;
     /// Update the node's nexus state information
-    async fn update_nexus_states(&self) -> Result<(), SvcError>;
+    async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update the node's pool state information
-    async fn update_pool_states(&self) -> Result<(), SvcError>;
+    async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update the node's replica state information
-    async fn update_replica_states(&self) -> Result<(), SvcError>;
+    async fn update_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    /// Update all node state information
+    async fn update_all(&self, setting_online: bool) -> Result<(), SvcError>;
+    /// OnRegister callback when a node is re-registered with the registry via its heartbeat
+    /// On success returns where it's reset the node as online or not.
+    async fn on_register(&self) -> Result<bool, SvcError>;
 }
 
 /// Getter operations on a mayastor locked `NodeWrapper` to get copies of its
@@ -603,42 +639,73 @@ impl GetterOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
 #[async_trait]
 impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>> {
+        self.write().await.lock.clone()
+    }
+
+    async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
+        self.read().await.update_nexus_states(ctx.deref_mut()).await
+    }
+
+    async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
+        self.read().await.update_pool_states(ctx.deref_mut()).await
+    }
+
+    async fn update_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
+        let node = self.read().await;
+        node.update_replica_states(ctx.deref_mut()).await
+    }
+
+    async fn update_all(&self, setting_online: bool) -> Result<(), SvcError> {
+        let ctx = self.read().await.grpc_context_ext(GETS_TIMEOUT)?;
+        match ctx.connect_locked().await {
+            Ok(mut lock) => {
+                let results = self.read().await.fetch_resources(lock.deref_mut()).await;
+
+                let mut node = self.write().await;
+                node.update(setting_online, results)
+            }
+            Err((_guard, error)) => {
+                self.write().await.set_status(NodeStatus::Unknown);
+                Err(error)
+            }
+        }
+    }
+
+    async fn on_register(&self) -> Result<bool, SvcError> {
+        let setting_online = {
+            let mut node = self.write().await;
+            node.pet().await;
+            !node.is_online()
+        };
+        // if the node was not previously online then let's update all states right away
+        if setting_online {
+            self.update_all(setting_online).await.map(|_| true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+#[async_trait]
+impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn grpc_client_locked<T: MessageIdTimeout>(
         &self,
         request: T,
     ) -> Result<GrpcClientLocked, SvcError> {
         if !self.read().await.is_online() {
             return Err(SvcError::NodeNotOnline {
-                node: self.read().await.id.clone(),
+                node: self.read().await.id().clone(),
             });
         }
         let ctx = self.read().await.grpc_context_ext(request)?;
-        let client = ctx.connect_locked().await?;
-        Ok(client)
-    }
-    async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>> {
-        self.write().await.lock.clone()
+        ctx.connect_locked().await.map_err(|(_, error)| error)
     }
 
-    async fn update_nexus_states(&self) -> Result<(), SvcError> {
-        self.read().await.update_nexus_states().await
-    }
-
-    async fn update_pool_states(&self) -> Result<(), SvcError> {
-        self.read().await.update_pool_states().await
-    }
-
-    async fn update_replica_states(&self) -> Result<(), SvcError> {
-        self.read().await.update_replica_states().await
-    }
-}
-
-#[async_trait]
-impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_pool =
-            ctx.client
+            ctx.mayastor
                 .create_pool(request.to_rpc())
                 .await
                 .context(GrpcRequestError {
@@ -646,22 +713,24 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                     request: "create_pool",
                 })?;
         let pool = rpc_pool_to_bus(&rpc_pool.into_inner(), &request.node);
-        self.update_pool_states().await?;
-        self.update_replica_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_pool_states(ctx.deref_mut()).await?;
+        self.update_replica_states(ctx.deref_mut()).await?;
         Ok(pool)
     }
     /// Destroy a pool on the node via gRPC
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .client
+            .mayastor
             .destroy_pool(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Pool,
                 request: "destroy_pool",
             })?;
-        self.update_pool_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_pool_states(ctx.deref_mut()).await?;
         Ok(())
     }
 
@@ -675,7 +744,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         }
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_replica = ctx
-            .client
+            .mayastor
             .create_replica_v2(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -684,8 +753,9 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             })?;
 
         let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node)?;
-        self.update_replica_states().await?;
-        self.update_pool_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_replica_states(ctx.deref_mut()).await?;
+        self.update_pool_states(ctx.deref_mut()).await?;
         Ok(replica)
     }
 
@@ -693,7 +763,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let share = ctx
-            .client
+            .mayastor
             .share_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -702,7 +772,8 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             })?
             .into_inner()
             .uri;
-        self.update_replica_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_replica_states(ctx.deref_mut()).await?;
         Ok(share)
     }
 
@@ -710,7 +781,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let local_uri = ctx
-            .client
+            .mayastor
             .share_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -719,7 +790,8 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             })?
             .into_inner()
             .uri;
-        self.update_replica_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_replica_states(ctx.deref_mut()).await?;
         Ok(local_uri)
     }
 
@@ -727,14 +799,15 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .client
+            .mayastor
             .destroy_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
                 request: "destroy_replica",
             })?;
-        self.update_replica_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_replica_states(ctx.deref_mut()).await?;
         // todo: remove when CAS-1107 is resolved
         if let Some(replica) = self.read().await.replica(&request.uuid) {
             if replica.pool == request.pool {
@@ -743,7 +816,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 });
             }
         }
-        self.update_pool_states().await?;
+        self.update_pool_states(ctx.deref_mut()).await?;
         Ok(())
     }
 
@@ -756,19 +829,20 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             });
         }
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let rpc_nexus =
-            ctx.client
-                .create_nexus_v2(request.to_rpc())
-                .await
-                .context(GrpcRequestError {
-                    resource: ResourceKind::Nexus,
-                    request: "create_nexus",
-                })?;
+        let rpc_nexus = ctx
+            .mayastor
+            .create_nexus_v2(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Nexus,
+                request: "create_nexus",
+            })?;
         let mut nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node)?;
         // CAS-1107 - create_nexus_v2 returns NexusV1...
         nexus.name = request.name();
         nexus.uuid = request.uuid.clone();
-        self.update_nexus_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
         Ok(nexus)
     }
 
@@ -776,30 +850,32 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .client
+            .mayastor
             .destroy_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "destroy_nexus",
             })?;
-        self.update_nexus_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
         Ok(())
     }
 
     /// Share a nexus on the node via gRPC
     async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let share = ctx
-            .client
-            .publish_nexus(request.to_rpc())
-            .await
-            .context(GrpcRequestError {
-                resource: ResourceKind::Nexus,
-                request: "publish_nexus",
-            })?;
+        let share =
+            ctx.mayastor
+                .publish_nexus(request.to_rpc())
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Nexus,
+                    request: "publish_nexus",
+                })?;
         let share = share.into_inner().device_uri;
-        self.update_nexus_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
         Ok(share)
     }
 
@@ -807,22 +883,24 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .client
+            .mayastor
             .unpublish_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "unpublish_nexus",
             })?;
-        self.update_nexus_states().await?;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
         Ok(())
     }
 
     /// Add a child to a nexus via gRPC
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let result = ctx.client.add_child_nexus(request.to_rpc()).await;
-        self.update_nexus_states().await?;
+        let result = ctx.mayastor.add_child_nexus(request.to_rpc()).await;
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
         let rpc_child = match result {
             Ok(child) => Ok(child),
             Err(error) => {
@@ -852,8 +930,10 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Remove a child from its parent nexus via gRPC
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let result = ctx.client.remove_child_nexus(request.to_rpc()).await;
-        self.update_nexus_states().await?;
+        let result = ctx.mayastor.remove_child_nexus(request.to_rpc()).await;
+
+        let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
         match result {
             Ok(_) => Ok(()),
             Err(error) => {
@@ -986,7 +1066,7 @@ impl PoolWrapper {
 
 impl From<&NodeWrapper> for NodeState {
     fn from(node: &NodeWrapper) -> Self {
-        node.node_state.clone()
+        node.node_state().clone()
     }
 }
 

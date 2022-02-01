@@ -11,6 +11,7 @@ use common_lib::types::v0::message_bus::{
     Filter, GetSpecs, Node, NodeId, NodeState, NodeStatus, Specs, States,
 };
 
+use crate::core::wrapper::InternalOps;
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::ResultExt;
 use std::{collections::HashMap, sync::Arc};
@@ -100,31 +101,51 @@ impl Service {
         self.register_state(registration, false).await;
     }
 
-    /// Attempt to Register a new node state through the register information
+    /// Attempt to Register a new node state through the register information.
+    /// todo: if we enable concurrent registrations when we move to gRPC, we'll want
+    /// to make sure we don't process registrations for the same node in parallel.
     pub(super) async fn register_state(&self, registration: &Register, startup: bool) {
-        let node = NodeState {
+        let node_state = NodeState {
             id: registration.id.clone(),
             grpc_endpoint: registration.grpc_endpoint.clone(),
             status: NodeStatus::Online,
         };
 
-        let mut send_event = true;
-        let mut nodes = self.registry.nodes().write().await;
-        match nodes.get_mut(&node.id) {
+        let nodes = self.registry.nodes();
+        let node = nodes.write().await.get_mut(&node_state.id).cloned();
+        let send_event = match node {
             None => {
-                let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
-                if node.load().await.is_ok() {
-                    node.watchdog_mut().arm(self.clone());
-                    nodes.insert(node.id.clone(), Arc::new(tokio::sync::RwLock::new(node)));
+                let mut node =
+                    NodeWrapper::new(&node_state, self.deadline, self.comms_timeouts.clone());
+
+                let mut result = node.liveness_probe().await;
+                if result.is_ok() {
+                    result = node.load().await;
+                }
+                match result {
+                    Ok(_) => {
+                        let mut nodes = self.registry.nodes().write().await;
+                        if nodes.get_mut(&node_state.id).is_none() {
+                            node.watchdog_mut().arm(self.clone());
+                            let node = Arc::new(tokio::sync::RwLock::new(node));
+                            nodes.insert(node_state.id().clone(), node);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            node = %node_state.id(),
+                            error = %error,
+                            "Failed to register node"
+                        );
+                        false
+                    }
                 }
             }
-            Some(node) => {
-                if node.read().await.status() == &NodeStatus::Online {
-                    send_event = false;
-                }
-                node.write().await.on_register().await;
-            }
-        }
+            Some(node) => matches!(node.on_register().await, Ok(true)),
+        };
 
         // don't send these events on startup as the reconciler will start working afterwards anyway
         if send_event && !startup {
@@ -207,7 +228,7 @@ impl Service {
         let mut client = grpc.connect().await?;
 
         let result = client
-            .client
+            .mayastor
             .list_block_devices(ListBlockDevicesRequest { all: request.all })
             .await;
 

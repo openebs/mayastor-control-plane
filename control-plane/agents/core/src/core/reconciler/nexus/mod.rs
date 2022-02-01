@@ -245,7 +245,7 @@ pub(super) async fn missing_nexus_recreate(
 
     let node = match context.registry().get_node_wrapper(&nexus.node).await {
         Ok(node) if !node.read().await.is_online() => {
-            let node_status = node.read().await.status().clone();
+            let node_status = node.read().await.status();
             warn_missing(&nexus, node_status);
             return PollResult::Ok(PollerState::Idle);
         }
