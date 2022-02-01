@@ -53,10 +53,3 @@ repos:
         args: [ "--changes" ]
         pass_filenames: false
         language: system
-    -   id: helm-develop-deploy
-        name: Helm Generator
-        description: Ensures the deploy is updated with the develop yamls
-        entry: ./scripts/generate-deploy-yamls.sh
-        args: [ "-c", "develop" ]
-        pass_filenames: false
-        language: system
