@@ -1,11 +1,9 @@
-variable "image" {
-}
+variable "image" {}
 variable "tag" {}
 variable "registry" {}
 variable "grace_period" {}
-
-variable "registar_image" {
-}
+variable "registar_image" {}
+variable "rust_log" {}
 
 resource "kubernetes_daemonset" "mayastor_csi_agent" {
   metadata {
@@ -124,6 +122,11 @@ resource "kubernetes_daemonset" "mayastor_csi_agent" {
           env {
             name  = "RUST_BACKTRACE"
             value = "1"
+          }
+
+          env {
+            name  = "RUST_LOG"
+            value = var.rust_log
           }
 
           volume_mount {

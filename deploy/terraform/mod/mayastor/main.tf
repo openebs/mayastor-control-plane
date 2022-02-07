@@ -7,6 +7,8 @@ variable "image" {}
 variable "registry" {}
 variable "tag" {}
 
+variable "rust_log" {}
+
 resource "kubernetes_daemonset" "mayastor" {
   metadata {
     name      = "mayastor"
@@ -101,7 +103,7 @@ resource "kubernetes_daemonset" "mayastor" {
 
           env {
             name  = "RUST_LOG"
-            value = "mayastor=trace"
+            value = var.rust_log
           }
 
           env {

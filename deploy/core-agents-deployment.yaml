@@ -50,6 +50,8 @@ spec:
             - "-nnats"
             - "--request-timeout=5s"
             - "--cache-period=30s"
+          ports:
+            - containerPort: 50051
           env:
             - name: RUST_LOG
               value: info

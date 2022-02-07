@@ -8,11 +8,37 @@ variable "request_timeout" {}
 variable "cache_period" {}
 variable "credentials" {}
 variable "jaeger_agent_argument" {}
+variable "rust_log" {}
 
-resource "kubernetes_deployment" "core_stateful_set" {
+resource "kubernetes_service" "core" {
+  metadata {
+    name      = "core"
+    namespace = "mayastor"
+
+    labels = {
+      app = "core-agents"
+    }
+  }
+
+  spec {
+    port {
+      name = "grpc"
+      port = 50051
+      target_port = 50051
+    }
+
+    selector = {
+      app = "core-agents"
+    }
+
+    cluster_ip = "None"
+  }
+}
+
+resource "kubernetes_deployment" "core_deployment" {
   metadata {
     labels = {
-      app = "core"
+      app = "core-agents"
     }
     name      = "core-agents"
     namespace = "mayastor"
@@ -64,6 +90,15 @@ resource "kubernetes_deployment" "core_stateful_set" {
                 field_path = "metadata.namespace"
               }
             }
+          }
+          env {
+            name  = "RUST_LOG"
+            value = var.rust_log
+          }
+          port {
+            name           = "grpc"
+            container_port = 50051
+            host_port      = 50051
           }
         }
 

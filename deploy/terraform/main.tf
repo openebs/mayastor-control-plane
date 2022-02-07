@@ -81,6 +81,7 @@ module "csi-agent" {
   registry       = var.registry
   registar_image = var.csi_registar_image
   grace_period   = var.csi_agent_grace_period
+  rust_log       = var.control_rust_log
 }
 
 module "csi-controller" {
@@ -98,10 +99,11 @@ module "csi-controller" {
   csi_attacher_image    = var.csi_attacher_image
   jaeger_agent_argument = local.jaeger_agent_argument
   credentials           = kubernetes_secret.regcred.metadata[0].name
+  rust_log              = var.control_rust_log
 }
 
 module "msp-operator" {
-  source = "./mod/k8s-operator"
+  source = "./mod/msp-operator"
   depends_on = [
     module.rbac,
     module.core,
@@ -117,6 +119,7 @@ module "msp-operator" {
   cache_period          = var.control_cache_period
   credentials           = kubernetes_secret.regcred.metadata[0].name
   jaeger_agent_argument = local.jaeger_agent_argument
+  rust_log              = var.control_rust_log
 }
 
 module "rest" {
@@ -135,6 +138,7 @@ module "rest" {
   res_requests          = var.control_resource_requests
   request_timeout       = var.control_request_timeout
   jaeger_agent_argument = local.jaeger_agent_argument
+  rust_log              = var.control_rust_log
 }
 
 module "core" {
@@ -154,6 +158,7 @@ module "core" {
   cache_period          = var.control_cache_period
   jaeger_agent_argument = local.jaeger_agent_argument
   credentials           = kubernetes_secret.regcred.metadata[0].name
+  rust_log              = var.control_rust_log
 }
 
 module "sc" {
@@ -179,6 +184,7 @@ module "mayastor" {
   image     = var.mayastor_image
   registry  = var.registry
   tag       = var.tag
+  rust_log  = var.mayastor_rust_log
 }
 
 locals {

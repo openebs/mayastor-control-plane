@@ -5,7 +5,7 @@
 # mayastor daemon options
 mayastor_hugepages_2Mi = "1Gi"
 mayastor_cpus          = 1
-mayastor_memory        = "2Gi"
+mayastor_memory        = "1Gi"
 mayastor_cpu_list      = "1"
 
 # global registry and tag options

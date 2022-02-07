@@ -7,6 +7,7 @@ variable "res_limits" {}
 variable "request_timeout" {}
 variable "res_requests" {}
 variable "jaeger_agent_argument" {}
+variable "rust_log" {}
 
 resource "kubernetes_service" "service_mayastor_rest" {
   metadata {
@@ -67,6 +68,7 @@ resource "kubernetes_deployment" "rest_deployment" {
             "-nnats",
             "--http=0.0.0.0:8081",
             "--request-timeout=${var.request_timeout}",
+            "--core-grpc=https://core:50051"
             ],
             var.jaeger_agent_argument
           )
@@ -81,7 +83,7 @@ resource "kubernetes_deployment" "rest_deployment" {
 
           env {
             name  = "RUST_LOG"
-            value = "info,rest=info"
+            value = var.rust_log
           }
 
           image             = format("%s/%s:%s", var.registry, var.image, var.tag)
