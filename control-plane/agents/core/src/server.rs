@@ -1,4 +1,6 @@
 pub mod core;
+/// Services to launch the grpc server
+pub mod lib;
 pub mod nexus;
 pub mod node;
 pub mod pool;
@@ -6,14 +8,14 @@ pub mod volume;
 pub mod watcher;
 
 use crate::core::registry;
-use common::Service;
 use common_lib::types::v0::message_bus::ChannelVs;
+use http::Uri;
 
 use common_lib::{mbus_api::BusClient, opentelemetry::default_tracing_tags};
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator, KeyValue};
 use structopt::StructOpt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
-use utils::package_info;
+use utils::{package_info, DEFAULT_GRPC_SERVER_ADDR};
 
 #[derive(Debug, StructOpt)]
 #[structopt(version = package_info!())]
@@ -75,6 +77,10 @@ pub(crate) struct CliArgs {
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(long, short)]
     jaeger: Option<String>,
+    /// The GRPC Server URLs to connect to
+    /// (supports the http/https schema)
+    #[structopt(long, short, default_value = DEFAULT_GRPC_SERVER_ADDR)]
+    pub(crate) grpc_server_addr: Uri,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -151,7 +157,7 @@ async fn server(cli_args: CliArgs) {
     )
     .await;
 
-    let service = Service::builder(cli_args.nats.clone(), ChannelVs::Core)
+    let base_service = common::Service::builder(cli_args.nats.clone(), ChannelVs::Core)
         .with_shared_state(global::tracer_with_version(
             "core-agent",
             env!("CARGO_PKG_VERSION"),
@@ -160,13 +166,16 @@ async fn server(cli_args: CliArgs) {
         .connect_message_bus(cli_args.no_min_timeouts, BusClient::CoreAgent)
         .await
         .with_shared_state(registry.clone())
+        .with_shared_state(cli_args.grpc_server_addr.clone())
         .configure_async(node::configure)
         .await
-        .configure(pool::configure)
+        .configure_async(pool::configure)
+        .await
         .configure(nexus::configure)
         .configure(volume::configure)
         .configure(watcher::configure);
 
+    let service = lib::Service::new(base_service);
     registry.start().await;
     service.run().await;
     registry.stop().await;

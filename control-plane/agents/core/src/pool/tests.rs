@@ -2,12 +2,12 @@
 
 use super::*;
 use common_lib::{
-    mbus_api,
     mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
-            GetNodes, GetSpecs, Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol,
-            ReplicaStatus, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetNodes, GetSpecs,
+            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
+            ShareReplica, UnshareReplica, VolumeId,
         },
         openapi::{
             apis::StatusCode,
@@ -17,6 +17,7 @@ use common_lib::{
         store::replica::ReplicaSpec,
     },
 };
+use grpc::{grpc_opts::Context, pool::traits::PoolOperations, replica::traits::ReplicaOperations};
 use itertools::Itertools;
 use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};
@@ -29,39 +30,51 @@ async fn pool() {
         .build()
         .await
         .unwrap();
-    let mayastor = cluster.node(0);
 
+    let mayastor = cluster.node(0);
     let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
-    CreatePool {
-        node: mayastor.clone(),
-        id: "pooloop".into(),
-        disks: vec!["malloc:///disk0?size_mb=100".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .unwrap();
 
-    let pools = GetPools::default().request().await.unwrap();
+    let pool_client = cluster.grpc_client().pool();
+    let rep_client = cluster.grpc_client().replica();
+
+    let pool = pool_client
+        .create(
+            &CreatePool {
+                node: mayastor.clone(),
+                id: "pooloop".into(),
+                disks: vec!["malloc:///disk0?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    tracing::info!("Pools: {:?}", pool);
+
+    let pools = pool_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Pools: {:?}", pools);
 
-    let replica = CreateReplica {
-        node: mayastor.clone(),
-        uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
-        pool: "pooloop".into(),
-        size: 12582912, /* actual size will be a multiple of 4MB so just
-                         * create it like so */
-        thin: true,
-        share: Protocol::None,
-        name: None,
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let replica = rep_client
+        .create(
+            &CreateReplica {
+                node: mayastor.clone(),
+                uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+                pool: "pooloop".into(),
+                size: 12582912, /* actual size will be a multiple of 4MB so just
+                                 * create it like so */
+                thin: true,
+                share: Protocol::None,
+                name: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    tracing::info!("Replicas: {:?}", replica);
 
-    let replicas = GetReplicas::default().request().await.unwrap();
+    let replicas = rep_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Replicas: {:?}", replicas);
 
     let uri = replica.uri.clone();
@@ -80,64 +93,84 @@ async fn pool() {
         }
     );
 
-    let uri = ShareReplica {
-        node: mayastor.clone(),
-        uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
-        pool: "pooloop".into(),
-        protocol: ReplicaShareProtocol::Nvmf,
-        name: None,
-    }
-    .request()
-    .await
-    .unwrap();
+    let uri = rep_client
+        .share(
+            &ShareReplica {
+                node: mayastor.clone(),
+                uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+                pool: "pooloop".into(),
+                protocol: ReplicaShareProtocol::Nvmf,
+                name: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     let mut replica_updated = replica;
     replica_updated.uri = uri;
     replica_updated.share = Protocol::Nvmf;
-    let replica = GetReplicas::default().request().await.unwrap();
+    let replica = rep_client.get(Filter::None, None).await.unwrap();
     let replica = replica.0.first().unwrap();
     assert_eq!(replica, &replica_updated);
 
-    let error = DestroyPool {
-        node: mayastor.clone(),
-        id: "pooloop".into(),
-    }
-    .request()
-    .await
-    .expect_err("Should fail to destroy a pool that is in use.");
+    let error = pool_client
+        .destroy(
+            &DestroyPool {
+                node: mayastor.clone(),
+                id: "pooloop".into(),
+            },
+            None,
+        )
+        .await
+        .expect_err("Should fail to destroy a pool that is in use.");
+
     assert!(matches!(
         error,
-        mbus_api::Error::ReplyWithError {
-            source: ReplyError {
-                kind: ReplyErrorKind::InUse,
-                resource: ResourceKind::Pool,
-                ..
-            }
+        ReplyError {
+            kind: ReplyErrorKind::InUse,
+            resource: ResourceKind::Pool,
+            ..
         }
     ));
+    rep_client
+        .destroy(
+            &DestroyReplica {
+                node: mayastor.clone(),
+                uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+                pool: "pooloop".into(),
+                name: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    DestroyReplica {
-        node: mayastor.clone(),
-        uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
-        pool: "pooloop".into(),
-        name: None,
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    assert!(rep_client
+        .get(Filter::None, None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
 
-    assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+    pool_client
+        .destroy(
+            &DestroyPool {
+                node: mayastor.clone(),
+                id: "pooloop".into(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    DestroyPool {
-        node: mayastor.clone(),
-        id: "pooloop".into(),
-    }
-    .request()
-    .await
-    .unwrap();
-
-    assert!(GetPools::default().request().await.unwrap().0.is_empty());
+    assert!(pool_client
+        .get(Filter::None, None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
 }
 
 /// The tests below revolve around transactions and are dependent on the core agent's command line
@@ -177,24 +210,30 @@ async fn replica_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
 
+    let pool_client = cluster.grpc_client().pool();
+    let rep_client = cluster.grpc_client().replica();
+
     let nodes = GetNodes::default().request().await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
-    let pools = GetPools::default().request().await.unwrap();
+    let pools = pool_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Pools: {:?}", pools);
 
-    let replica = CreateReplica {
-        node: mayastor.clone(),
-        uuid: ReplicaId::new(),
-        pool: cluster.pool(0, 0),
-        size: 12582912,
-        thin: false,
-        share: Protocol::None,
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let replica = rep_client
+        .create(
+            &CreateReplica {
+                node: mayastor.clone(),
+                uuid: ReplicaId::new(),
+                pool: cluster.pool(0, 0),
+                size: 12582912,
+                thin: false,
+                share: Protocol::None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     async fn check_operation(replica: &Replica, protocol: Protocol) {
         // operation in progress
@@ -208,8 +247,11 @@ async fn replica_transaction() {
     // pause mayastor
     cluster.composer().pause(mayastor.as_str()).await.unwrap();
 
-    ShareReplica::from(&replica)
-        .request_ext(bus_timeout_opts())
+    let _ = rep_client
+        .share(
+            &ShareReplica::from(&replica),
+            Some(Context::new(bus_timeout_opts())),
+        )
         .await
         .expect_err("mayastor down");
 
@@ -219,13 +261,19 @@ async fn replica_transaction() {
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
     // now it should be shared successfully
-    let uri = ShareReplica::from(&replica).request().await.unwrap();
+    let uri = rep_client
+        .share(&ShareReplica::from(&replica), None)
+        .await
+        .unwrap();
     println!("Share uri: {}", uri);
 
     cluster.composer().pause(mayastor.as_str()).await.unwrap();
 
-    UnshareReplica::from(&replica)
-        .request_ext(bus_timeout_opts())
+    let _ = rep_client
+        .unshare(
+            &UnshareReplica::from(&replica),
+            Some(Context::new(bus_timeout_opts())),
+        )
         .await
         .expect_err("mayastor down");
 
@@ -233,7 +281,10 @@ async fn replica_transaction() {
 
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
-    UnshareReplica::from(&replica).request().await.unwrap();
+    let _ = rep_client
+        .unshare(&UnshareReplica::from(&replica), None)
+        .await
+        .unwrap();
 
     assert_eq!(replica_spec(&replica).await.unwrap().share, Protocol::None);
 }
@@ -241,24 +292,33 @@ async fn replica_transaction() {
 /// Tests Store Write Failures for Replica Operations
 /// As it stands, the tests expects the operation to not be undone, and
 /// a reconcile thread should eventually sync the specs when the store reappears
-async fn replica_op_transaction_store<R>(
+async fn replica_op_transaction_store(
     replica: &Replica,
     cluster: &Cluster,
     (store_timeout, reconcile_period, grpc_timeout): (Duration, Duration, Duration),
-    (request, protocol): (R, Protocol),
-) where
-    R: Message,
-    R::Reply: std::fmt::Debug,
-{
+    protocol: Protocol,
+    share: Option<ShareReplica>,
+    unshare: Option<UnshareReplica>,
+) {
     let mayastor = cluster.node(0);
 
     // pause mayastor
     cluster.composer().pause(mayastor.as_str()).await.unwrap();
 
-    request
-        .request_ext(bus_timeout_opts())
-        .await
-        .expect_err("mayastor down");
+    let rep_client = cluster.grpc_client().replica();
+
+    if share.clone().is_some() {
+        rep_client
+            .share(&share.as_ref().unwrap().clone(), None)
+            .await
+            .expect_err("mayastor down");
+    }
+    if unshare.clone().is_some() {
+        rep_client
+            .unshare(&unshare.as_ref().unwrap().clone(), None)
+            .await
+            .expect_err("mayastor down");
+    }
 
     // ensure the share will succeed but etcd store will fail
     // by pausing etcd and releasing mayastor
@@ -287,10 +347,18 @@ async fn replica_op_transaction_store<R>(
     let spec = replica_spec(replica).await.unwrap();
     assert!(spec.operation.is_none() && spec.share == protocol);
 
-    request
-        .request_ext(bus_timeout_opts())
-        .await
-        .expect_err("already done");
+    if share.clone().is_some() {
+        rep_client
+            .share(&share.as_ref().unwrap().clone(), None)
+            .await
+            .expect_err("already done");
+    }
+    if unshare.clone().is_some() {
+        rep_client
+            .unshare(&unshare.as_ref().unwrap().clone(), None)
+            .await
+            .expect_err("already done");
+    }
 }
 
 /// Tests replica share and unshare operations when the store is temporarily down
@@ -310,26 +378,32 @@ async fn replica_transaction_store() {
         .build()
         .await
         .unwrap();
+    let rep_client = cluster.grpc_client().replica();
     let mayastor = cluster.node(0);
 
-    let replica = CreateReplica {
-        node: mayastor.clone(),
-        uuid: ReplicaId::new(),
-        pool: cluster.pool(0, 0),
-        size: 12582912,
-        thin: false,
-        share: Protocol::None,
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let replica = rep_client
+        .create(
+            &CreateReplica {
+                node: mayastor.clone(),
+                uuid: ReplicaId::new(),
+                pool: cluster.pool(0, 0),
+                size: 12582912,
+                thin: false,
+                share: Protocol::None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     replica_op_transaction_store(
         &replica,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (ShareReplica::from(&replica), Protocol::Nvmf),
+        Protocol::Nvmf,
+        Some(ShareReplica::from(&replica)),
+        None,
     )
     .await;
 
@@ -337,7 +411,9 @@ async fn replica_transaction_store() {
         &replica,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (UnshareReplica::from(&replica), Protocol::None),
+        Protocol::None,
+        None,
+        Some(UnshareReplica::from(&replica)),
     )
     .await;
 }

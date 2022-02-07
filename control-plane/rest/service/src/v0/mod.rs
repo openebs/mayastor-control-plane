@@ -15,16 +15,13 @@ pub mod swagger_ui;
 pub mod volumes;
 pub mod watches;
 
+use crate::authentication::authenticate;
 use actix_service::ServiceFactory;
 use actix_web::{
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
     web, FromRequest, HttpRequest,
 };
-use futures::future::Ready;
-use serde::Deserialize;
-
-use crate::authentication::authenticate;
 pub use common_lib::{
     types::v0::openapi::{
         apis::actix_server::{Body, Path, Query, RestError},
@@ -32,8 +29,16 @@ pub use common_lib::{
     },
     IntoVec,
 };
+use futures::future::Ready;
+use grpc::client::CoreClient;
 use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
+use once_cell::sync::OnceCell;
 use rest_client::versions::v0::*;
+use serde::Deserialize;
+
+/// once cell static variable to store the grpc client and initialise
+/// once at startup
+pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
 
 fn version() -> String {
     "v0".into()

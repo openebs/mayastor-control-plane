@@ -1,6 +1,7 @@
 #![feature(allow_fail)]
 
-use common_lib::{mbus_api::Message, types::v0::message_bus as v0};
+use common_lib::types::v0::message_bus as v0;
+use grpc::pool::traits::PoolOperations;
 use openapi::models;
 use testlib::ClusterBuilder;
 
@@ -83,26 +84,33 @@ async fn create_pool_with_existing_disk() {
 #[tokio::test]
 async fn create_pool_idempotent() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
+    let pool_client = cluster.grpc_client().pool();
 
-    v0::CreatePool {
-        node: cluster.node(0),
-        id: cluster.pool(0, 0),
-        disks: vec!["malloc:///disk?size_mb=100".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .unwrap();
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(0),
+                id: cluster.pool(0, 0),
+                disks: vec!["malloc:///disk?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    v0::CreatePool {
-        node: cluster.node(0),
-        id: cluster.pool(0, 0),
-        disks: vec!["malloc:///disk?size_mb=100".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .expect_err("already exists");
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(0),
+                id: cluster.pool(0, 0),
+                disks: vec!["malloc:///disk?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .expect_err("already exists");
 }
 
 /// FIXME: CAS-710
@@ -114,26 +122,32 @@ async fn create_pool_idempotent_same_disk_different_query() {
         .compose_build(|c| c.with_logs(false))
         .await
         .unwrap();
+    let pool_client = cluster.grpc_client().pool();
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(0),
+                id: cluster.pool(0, 0),
+                disks: vec!["malloc:///disk?size_mb=100&blk_size=512".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    v0::CreatePool {
-        node: cluster.node(0),
-        id: cluster.pool(0, 0),
-        disks: vec!["malloc:///disk?size_mb=100&blk_size=512".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .unwrap();
-
-    v0::CreatePool {
-        node: cluster.node(0),
-        id: cluster.pool(0, 0),
-        disks: vec!["malloc:///disk?size_mb=200&blk_size=4096".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .expect_err("Different query not allowed!");
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(0),
+                id: cluster.pool(0, 0),
+                disks: vec!["malloc:///disk?size_mb=200&blk_size=4096".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .expect_err("Different query not allowed!");
 }
 
 #[tokio::test]
@@ -143,44 +157,56 @@ async fn create_pool_idempotent_different_nvmf_host() {
         .build()
         .await
         .unwrap();
+    let pool_client = cluster.grpc_client().pool();
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(1),
+                id: cluster.pool(1, 0),
+                disks: vec!["malloc:///disk?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    v0::CreatePool {
-        node: cluster.node(1),
-        id: cluster.pool(1, 0),
-        disks: vec!["malloc:///disk?size_mb=100".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .unwrap();
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(2),
+                id: cluster.pool(2, 0),
+                disks: vec!["malloc:///disk?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    v0::CreatePool {
-        node: cluster.node(2),
-        id: cluster.pool(2, 0),
-        disks: vec!["malloc:///disk?size_mb=100".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .unwrap();
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(2),
+                id: cluster.pool(2, 0),
+                disks: vec!["malloc:///disk?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .expect_err("Pool Already exists!");
 
-    v0::CreatePool {
-        node: cluster.node(2),
-        id: cluster.pool(2, 0),
-        disks: vec!["malloc:///disk?size_mb=100".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .expect_err("Pool Already exists!");
-
-    v0::CreatePool {
-        node: cluster.node(2),
-        id: cluster.pool(2, 0),
-        disks: vec!["malloc:///disk?size_mb=100".into()],
-        labels: None,
-    }
-    .request()
-    .await
-    .expect_err("Pool disk already used by another pool!");
+    pool_client
+        .create(
+            &v0::CreatePool {
+                node: cluster.node(2),
+                id: cluster.pool(2, 0),
+                disks: vec!["malloc:///disk?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .expect_err("Pool disk already used by another pool!");
 }

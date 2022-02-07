@@ -34,6 +34,12 @@ impl ComponentAction for Rest {
                 binary = binary.with_arg("--no-min-timeouts");
             }
 
+            if let Some(env) = &options.rest_env {
+                for kv in env {
+                    binary = binary.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
+                }
+            }
+
             if cfg.container_exists("jaeger") {
                 let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
                 binary = binary.with_args(vec!["--jaeger", &jaeger_config])

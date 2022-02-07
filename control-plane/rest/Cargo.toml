@@ -26,7 +26,7 @@ opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
 actix-web-opentelemetry = "0.11.0-beta.5"
 tracing = "0.1.28"
 tracing-subscriber = "0.2.24"
-
+once_cell = "1.9.0"
 async-trait = "0.1.51"
 serde_json = { version = "1.0.68", features = ["preserve_order"] }
 serde_yaml = "0.8.21"
@@ -41,6 +41,8 @@ jsonwebtoken = "7.2.0"
 common-lib = { path = "../../common" }
 utils = { path = "../../utils/utils-lib" }
 humantime = "2.1.0"
+git-version = "0.3.5"
+grpc = { path = "../grpc" }
 
 [dev-dependencies]
 tokio = { version = "1.12.0", features = ["full"] }

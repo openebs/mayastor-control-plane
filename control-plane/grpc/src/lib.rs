@@ -1,3 +1,9 @@
+pub mod client;
+pub mod grpc_opts;
+pub mod misc;
+pub mod pool;
+pub mod replica;
+
 // Common module for all the misc operations
 // TODO: move this to its respective directory structure
 pub(crate) mod common {

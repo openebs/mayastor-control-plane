@@ -29,3 +29,9 @@ pub const OPENEBS_CREATED_BY_KEY: &str = "openebs.io/created-by";
 
 /// The value to mark the creation source of a pool to be msp-operator in labels
 pub const MSP_OPERATOR: &str = "msp-operator";
+
+/// The default value to be assigned as GRPC server addr if not overridden
+pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";
+
+/// The default value to be assigned as GRPC client addr if not overridden
+pub const DEFAULT_GRPC_CLIENT_ADDR: &str = "https://core:50051";

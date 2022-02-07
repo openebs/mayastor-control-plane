@@ -1,7 +1,10 @@
 use crate::core::{registry::Registry, specs::ResourceSpecsLocked, wrapper::GetterOps};
 use common::errors::{PoolNotFound, ReplicaNotFound, SvcError};
 use common_lib::{
-    mbus_api::message_bus::v0::{Pools, Replicas},
+    mbus_api::{
+        message_bus::v0::{Pools, Replicas},
+        ReplyError,
+    },
     types::v0::{
         message_bus::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
@@ -10,11 +13,97 @@ use common_lib::{
         store::OperationMode,
     },
 };
+use grpc::{
+    grpc_opts::Context,
+    pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
+    replica::traits::{
+        CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ShareReplicaInfo,
+        UnshareReplicaInfo,
+    },
+};
 use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
     registry: Registry,
+}
+
+#[tonic::async_trait]
+impl PoolOperations for Service {
+    async fn create(
+        &self,
+        pool: &dyn CreatePoolInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Pool, ReplyError> {
+        let req = pool.into();
+        let pool = self.create_pool(&req).await?;
+        Ok(pool)
+    }
+
+    async fn destroy(
+        &self,
+        pool: &dyn DestroyPoolInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let req = pool.into();
+        self.destroy_pool(&req).await?;
+        Ok(())
+    }
+
+    async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Pools, ReplyError> {
+        let req = GetPools { filter };
+        let pools = self.get_pools(&req).await?;
+        Ok(pools)
+    }
+}
+
+#[tonic::async_trait]
+impl ReplicaOperations for Service {
+    async fn create(
+        &self,
+        req: &dyn CreateReplicaInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Replica, ReplyError> {
+        let create_replica = req.into();
+        let replica = self.create_replica(&create_replica).await?;
+        Ok(replica)
+    }
+
+    async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Replicas, ReplyError> {
+        let req = GetReplicas { filter };
+        let replicas = self.get_replicas(&req).await?;
+        Ok(replicas)
+    }
+
+    async fn destroy(
+        &self,
+        req: &dyn DestroyReplicaInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let destroy_replica = req.into();
+        self.destroy_replica(&destroy_replica).await?;
+        Ok(())
+    }
+
+    async fn share(
+        &self,
+        req: &dyn ShareReplicaInfo,
+        _ctx: Option<Context>,
+    ) -> Result<String, ReplyError> {
+        let share_replica = req.into();
+        let response = self.share_replica(&share_replica).await?;
+        Ok(response)
+    }
+
+    async fn unshare(
+        &self,
+        req: &dyn UnshareReplicaInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let unshare_replica = req.into();
+        self.unshare_replica(&unshare_replica).await?;
+        Ok(())
+    }
 }
 
 impl Service {

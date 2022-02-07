@@ -33,6 +33,8 @@ use common_lib::{
         store::{definitions::StorableObject, volume::VolumeSpec},
     },
 };
+use grpc::replica::traits::ReplicaOperations;
+
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
@@ -61,9 +63,9 @@ async fn volume() {
 
 #[tracing::instrument(skip(cluster))]
 async fn test_volume(cluster: &Cluster) {
-    smoke_test().await;
+    smoke_test(cluster).await;
     publishing_test(cluster).await;
-    replica_count_test().await;
+    replica_count_test(cluster).await;
     nexus_persistence_test(cluster).await;
 }
 
@@ -678,6 +680,7 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
 
 /// Remove a replica that belongs to a volume. Another should be created.
 async fn hotspare_replica_count(cluster: &Cluster) {
+    let replica_client = cluster.grpc_client().replica();
     let volume = CreateVolume {
         uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
         size: 5242880,
@@ -691,32 +694,41 @@ async fn hotspare_replica_count(cluster: &Cluster) {
     let specs = GetSpecs::default().request().await.unwrap();
 
     let replica_spec = specs.replicas.first().cloned().unwrap();
-    let replicas = GetReplicas::new(&replica_spec.uuid).request().await;
-    let replica = replicas.unwrap().0.first().unwrap().clone();
+    let replicas = replica_client
+        .get(GetReplicas::new(&replica_spec.uuid).filter, None)
+        .await
+        .unwrap();
+    let replica = replicas.0.first().unwrap().clone();
 
     // forcefully destroy a volume replica
     let mut destroy = DestroyReplica::from(replica);
     destroy.disowners = ReplicaOwners::from_volume(volume.uuid());
-    destroy.request().await.unwrap();
+    match replica_client.destroy(&destroy, None).await {
+        Ok(_) => tracing::info!("replica destroyed forcefully"),
+        Err(_) => tracing::error!("could not destroy replica forcefully"),
+    }
 
     // check we have 2 replicas
     wait_till_volume(volume.uuid(), 2).await;
 
     // now add one extra replica (it should be removed)
-    CreateReplica {
-        node: cluster.node(1),
-        name: Default::default(),
-        uuid: ReplicaId::new(),
-        pool: cluster.pool(1, 0),
-        size: volume.spec().size / 1024 / 1024 + 5,
-        thin: false,
-        share: Default::default(),
-        managed: true,
-        owners: ReplicaOwners::from_volume(volume.uuid()),
-    }
-    .request()
-    .await
-    .unwrap();
+    replica_client
+        .create(
+            &CreateReplica {
+                node: cluster.node(1),
+                name: Default::default(),
+                uuid: ReplicaId::new(),
+                pool: cluster.pool(1, 0),
+                size: volume.spec().size / 1024 / 1024 + 5,
+                thin: false,
+                share: Default::default(),
+                managed: true,
+                owners: ReplicaOwners::from_volume(volume.uuid()),
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     wait_till_volume(volume.uuid(), 2).await;
 
@@ -865,11 +877,17 @@ async fn nexus_persistence_test(cluster: &Cluster) {
         (cluster.node(1), cluster.node(0)),
     ] {
         for test in vec![FaultTest::Local, FaultTest::Remote, FaultTest::Unclean] {
-            nexus_persistence_test_iteration(local, remote, test).await;
+            nexus_persistence_test_iteration(local, remote, test, cluster).await;
         }
     }
 }
-async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault: FaultTest) {
+async fn nexus_persistence_test_iteration(
+    local: &NodeId,
+    remote: &NodeId,
+    fault: FaultTest,
+    cluster: &Cluster,
+) {
+    let replica_client = cluster.grpc_client().replica();
     tracing::debug!("arguments ({:?}, {:?}, {:?})", local, remote, fault);
     let allowed_nodes = vec![local.to_string(), remote.to_string()];
     let preferred_nodes: Vec<String> = vec![];
@@ -920,12 +938,10 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     nexus_info.uuid = nexus_uuid.clone();
     tracing::info!("NexusInfo: {:?}", nexus_info);
 
-    let replicas = GetReplicas {
-        filter: Filter::Volume(volume_state.uuid.clone()),
-    }
-    .request()
-    .await
-    .unwrap();
+    let replicas = replica_client
+        .get(Filter::Volume(volume_state.uuid.clone()), None)
+        .await
+        .unwrap();
 
     let node_child = |node: &NodeId, nexus: &Nexus, replicas: Replicas| {
         let replica = replicas.into_inner().into_iter().find(|r| &r.node == node);
@@ -979,12 +995,10 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
     tracing::info!("Nexus: {:?}", nexus);
     assert_eq!(nexus.children.len(), 1);
 
-    let replicas = GetReplicas {
-        filter: Filter::Volume(volume_state.uuid.clone()),
-    }
-    .request()
-    .await
-    .unwrap();
+    let replicas = replica_client
+        .get(Filter::Volume(volume_state.uuid.clone()), None)
+        .await
+        .unwrap();
 
     let child = nexus.children.first().unwrap();
     match fault {
@@ -1012,11 +1026,17 @@ async fn nexus_persistence_test_iteration(local: &NodeId, remote: &NodeId, fault
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
-    assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+    assert!(replica_client
+        .get(GetReplicas::default().filter, None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
 }
 
 #[tracing::instrument(skip(cluster))]
 async fn publishing_test(cluster: &Cluster) {
+    let replica_client = cluster.grpc_client().replica();
     let volume = CreateVolume {
         uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
         size: 5242880,
@@ -1197,7 +1217,12 @@ async fn publishing_test(cluster: &Cluster) {
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
-    assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+    assert!(replica_client
+        .get(GetReplicas::default().filter, None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
 }
 
 async fn get_volume(volume: &VolumeState) -> Volume {
@@ -1247,7 +1272,8 @@ async fn wait_for_volume_online(volume: &VolumeState) -> Result<VolumeState, ()>
     }
 }
 
-async fn replica_count_test() {
+async fn replica_count_test(cluster: &Cluster) {
+    let replica_client = cluster.grpc_client().replica();
     let volume = CreateVolume {
         uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
         size: 5242880,
@@ -1398,10 +1424,16 @@ async fn replica_count_test() {
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
-    assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+    assert!(replica_client
+        .get(GetReplicas::default().filter, None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
 }
 
-async fn smoke_test() {
+async fn smoke_test(cluster: &Cluster) {
+    let replica_client = cluster.grpc_client().replica();
     let volume = CreateVolume {
         uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
         size: 5242880,
@@ -1424,5 +1456,10 @@ async fn smoke_test() {
 
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
-    assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+    assert!(replica_client
+        .get(GetReplicas::default().filter, None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
 }
