@@ -1,8 +1,8 @@
 use crate::{
     common,
     grpc_opts::Context,
-    pool_grpc,
-    pool_grpc::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
+    pool,
+    pool::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
 };
 use common_lib::{
     mbus_api::{v0::Pools, ReplyError, ResourceKind},
@@ -32,16 +32,16 @@ pub trait PoolOperations: Send + Sync {
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Pools, ReplyError>;
 }
 
-impl TryFrom<pool_grpc::Pool> for Pool {
+impl TryFrom<pool::Pool> for Pool {
     type Error = ReplyError;
-    fn try_from(pool: pool_grpc::Pool) -> Result<Self, Self::Error> {
+    fn try_from(pool: pool::Pool) -> Result<Self, Self::Error> {
         let pool_state = match pool.state {
             None => None,
             Some(pool_state) => Some(PoolState {
                 node: pool_state.node_id.into(),
                 id: pool_state.pool_id.into(),
                 disks: pool_state.disks_uri.iter().map(|i| i.into()).collect(),
-                status: match pool_grpc::PoolStatus::from_i32(pool_state.status) {
+                status: match pool::PoolStatus::from_i32(pool_state.status) {
                     Some(status) => status.into(),
                     None => return Err(ReplyError::unwrap_err(ResourceKind::Pool)),
                 },
@@ -94,14 +94,14 @@ impl TryFrom<pool_grpc::Pool> for Pool {
     }
 }
 
-impl From<Pool> for pool_grpc::Pool {
+impl From<Pool> for pool::Pool {
     fn from(pool: Pool) -> Self {
         let pool_definition = match pool.spec() {
             None => None,
             Some(pool_spec) => {
                 let status: common::SpecStatus = pool_spec.status.into();
-                Some(pool_grpc::PoolDefinition {
-                    spec: Some(pool_grpc::PoolSpec {
+                Some(pool::PoolDefinition {
+                    spec: Some(pool::PoolSpec {
                         node_id: pool_spec.node.to_string(),
                         pool_id: pool_spec.id.to_string(),
                         disks: pool_spec.disks.iter().map(|i| i.to_string()).collect(),
@@ -109,7 +109,7 @@ impl From<Pool> for pool_grpc::Pool {
                             .labels
                             .map(|labels| crate::common::StringMapValue { value: labels }),
                     }),
-                    metadata: Some(pool_grpc::Metadata {
+                    metadata: Some(pool::Metadata {
                         uuid: None,
                         status: status as i32,
                     }),
@@ -118,7 +118,7 @@ impl From<Pool> for pool_grpc::Pool {
         };
         let pool_state = match pool.state() {
             None => None,
-            Some(pool_state) => Some(pool_grpc::PoolState {
+            Some(pool_state) => Some(pool::PoolState {
                 node_id: pool_state.node.to_string(),
                 pool_id: pool_state.id.to_string(),
                 disks_uri: pool_state.disks.iter().map(|i| i.to_string()).collect(),
@@ -127,16 +127,16 @@ impl From<Pool> for pool_grpc::Pool {
                 used: pool_state.used,
             }),
         };
-        pool_grpc::Pool {
+        pool::Pool {
             definition: pool_definition,
             state: pool_state,
         }
     }
 }
 
-impl TryFrom<pool_grpc::Pools> for Pools {
+impl TryFrom<pool::Pools> for Pools {
     type Error = ReplyError;
-    fn try_from(grpc_pool_type: pool_grpc::Pools) -> Result<Self, Self::Error> {
+    fn try_from(grpc_pool_type: pool::Pools) -> Result<Self, Self::Error> {
         let mut pools: Vec<Pool> = vec![];
         for pool in grpc_pool_type.pools {
             pools.push(Pool::try_from(pool.clone())?)
@@ -145,9 +145,9 @@ impl TryFrom<pool_grpc::Pools> for Pools {
     }
 }
 
-impl From<Pools> for pool_grpc::Pools {
+impl From<Pools> for pool::Pools {
     fn from(pools: Pools) -> Self {
-        pool_grpc::Pools {
+        pool::Pools {
             pools: pools
                 .into_inner()
                 .iter()
@@ -291,18 +291,18 @@ impl From<&dyn DestroyPoolInfo> for DestroyPool {
     }
 }
 
-impl From<pool_grpc::PoolStatus> for message_bus::PoolStatus {
-    fn from(src: pool_grpc::PoolStatus) -> Self {
+impl From<pool::PoolStatus> for message_bus::PoolStatus {
+    fn from(src: pool::PoolStatus) -> Self {
         match src {
-            pool_grpc::PoolStatus::Online => Self::Online,
-            pool_grpc::PoolStatus::Degraded => Self::Degraded,
-            pool_grpc::PoolStatus::Faulted => Self::Faulted,
-            pool_grpc::PoolStatus::Unknown => Self::Unknown,
+            pool::PoolStatus::Online => Self::Online,
+            pool::PoolStatus::Degraded => Self::Degraded,
+            pool::PoolStatus::Faulted => Self::Faulted,
+            pool::PoolStatus::Unknown => Self::Unknown,
         }
     }
 }
 
-impl From<message_bus::PoolStatus> for pool_grpc::PoolStatus {
+impl From<message_bus::PoolStatus> for pool::PoolStatus {
     fn from(pool_status: message_bus::PoolStatus) -> Self {
         match pool_status {
             message_bus::PoolStatus::Unknown => Self::Unknown,

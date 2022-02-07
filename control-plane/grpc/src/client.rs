@@ -1,4 +1,4 @@
-use crate::{
+use crate::operations::{
     pool::{client::PoolClient, traits::PoolOperations},
     replica::{client::ReplicaClient, traits::ReplicaOperations},
 };

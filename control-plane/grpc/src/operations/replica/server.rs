@@ -1,6 +1,6 @@
 use crate::{
-    replica::traits::ReplicaOperations,
-    replica_grpc::{
+    operations::replica::traits::ReplicaOperations,
+    replica::{
         create_replica_reply, get_replicas_reply,
         replica_grpc_server::{ReplicaGrpc, ReplicaGrpcServer},
         share_replica_reply, CreateReplicaReply, CreateReplicaRequest, DestroyReplicaReply,

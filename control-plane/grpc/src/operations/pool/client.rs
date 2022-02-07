@@ -1,8 +1,8 @@
 use crate::{
     common::{NodeFilter, NodePoolFilter, PoolFilter},
     grpc_opts::{timeout_grpc, Context},
-    pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
-    pool_grpc::{
+    operations::pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
+    pool::{
         create_pool_reply, get_pools_reply, get_pools_request, pool_grpc_client::PoolGrpcClient,
         CreatePoolRequest, DestroyPoolRequest, GetPoolsRequest,
     },

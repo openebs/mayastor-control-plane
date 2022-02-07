@@ -1,6 +1,6 @@
 use super::*;
 use common_lib::types::v0::message_bus::{DestroyPool, Filter};
-use grpc::pool::traits::PoolOperations;
+use grpc::operations::pool::traits::PoolOperations;
 use mbus_api::{message_bus::v0::BusError, ReplyErrorKind, ResourceKind};
 
 async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {

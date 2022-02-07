@@ -11,7 +11,7 @@ use common_lib::{
         store::nexus::NexusSpec,
     },
 };
-use grpc::replica::traits::ReplicaOperations;
+use grpc::operations::replica::traits::ReplicaOperations;
 use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};
 

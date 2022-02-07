@@ -1,7 +1,7 @@
 #![feature(allow_fail)]
 
 use common_lib::types::v0::message_bus as v0;
-use grpc::pool::traits::PoolOperations;
+use grpc::operations::pool::traits::PoolOperations;
 use openapi::models;
 use testlib::ClusterBuilder;
 

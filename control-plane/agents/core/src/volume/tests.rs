@@ -33,7 +33,7 @@ use common_lib::{
         store::{definitions::StorableObject, volume::VolumeSpec},
     },
 };
-use grpc::replica::traits::ReplicaOperations;
+use grpc::operations::replica::traits::ReplicaOperations;
 
 use std::{
     convert::{TryFrom, TryInto},
