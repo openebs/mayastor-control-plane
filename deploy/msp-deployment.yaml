@@ -47,7 +47,7 @@ spec:
           image: mayadata/mcp-msp-operator:e2e-nightly
           imagePullPolicy: Always
           args:
-            - "-e http://$(REST_SERVICE_HOST):8081"
+            - "-e http://rest:8081"
             - "--interval=30s"
           env:
             - name: RUST_LOG

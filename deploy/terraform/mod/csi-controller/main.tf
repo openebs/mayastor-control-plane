@@ -6,6 +6,7 @@ variable "credentials" {}
 variable "csi_provisioner" {}
 variable "csi_attacher_image" {}
 variable "jaeger_agent_argument" {}
+variable "rust_log" {}
 
 resource "kubernetes_deployment" "deployment_csi_controller" {
   metadata {
@@ -87,11 +88,11 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
 
           args = concat([
             "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock",
-            "--rest-endpoint=http://$(REST_SERVICE_HOST):8081",
+            "--rest-endpoint=http://rest:8081",
           ], var.jaeger_agent_argument)
           env {
             name  = "RUST_LOG"
-            value = "info,csi_controller=trace"
+            value = var.rust_log
           }
           env {
             name  = "ADDRESS"

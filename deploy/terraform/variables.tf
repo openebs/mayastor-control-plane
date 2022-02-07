@@ -39,7 +39,7 @@ variable "control_resource_requests" {
 
 variable "nats_image" {
   type        = string
-  description = "amount of hugepages to allocate for mayastor"
+  description = "nats image used by the nats deployment"
   default     = "nats:2.2.6-alpine3.13"
 }
 
@@ -86,6 +86,12 @@ variable "mayastor_memory" {
   type        = string
   description = "amount of memory to request for mayastor"
   default     = "4Gi"
+}
+
+variable "mayastor_rust_log" {
+  type        = string
+  description = "The RUST_LOG environment filter for mayastor"
+  default     = "debug"
 }
 
 variable "csi_agent_image" {
@@ -140,4 +146,10 @@ variable "with_jaeger" {
   type        = bool
   description = "enables or disables the jaegertracing-operator"
   default     = true
+}
+
+variable "control_rust_log" {
+  type        = string
+  description = "The RUST_LOG environment filter for all control-plane components"
+  default     = "info,core=debug,rest=debug,csi_controller=debug,mayastor_csi=debug,msp_operator=debug,common_lib=debug,grpc=debug"
 }

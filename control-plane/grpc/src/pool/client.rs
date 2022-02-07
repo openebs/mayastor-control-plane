@@ -15,7 +15,7 @@ use std::{convert::TryFrom, time::Duration};
 use tonic::transport::{Channel, Endpoint, Uri};
 use utils::DEFAULT_REQ_TIMEOUT;
 
-// RPC Pool Client
+/// RPC Pool Client
 #[derive(Clone)]
 pub struct PoolClient {
     base_timeout: Duration,
@@ -87,7 +87,7 @@ impl PoolOperations for PoolClient {
                 create_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
                 create_pool_reply::Reply::Error(err) => Err(err.into()),
             },
-            None => Err(ReplyError::invalid_response(ResourceKind::Replica)),
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }
     }
 
@@ -133,7 +133,7 @@ impl PoolOperations for PoolClient {
                 get_pools_reply::Reply::Pools(pools) => Ok(Pools::try_from(pools)?),
                 get_pools_reply::Reply::Error(err) => Err(err.into()),
             },
-            None => Err(ReplyError::invalid_response(ResourceKind::Replica)),
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }
     }
 }

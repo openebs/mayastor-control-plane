@@ -7,6 +7,7 @@ variable "res_limits" {}
 variable "res_requests" {}
 variable "cache_period" {}
 variable "jaeger_agent_argument" {}
+variable "rust_log" {}
 
 resource "kubernetes_deployment" "deployment_msp_operator" {
   metadata {
@@ -33,14 +34,14 @@ resource "kubernetes_deployment" "deployment_msp_operator" {
         service_account_name = "mayastor-service-account"
         container {
           args = concat([
-            "-e http://$(REST_SERVICE_HOST):8081",
+            "-e http://rest:8081",
             "--interval=${var.cache_period}"
             ],
             var.jaeger_agent_argument
           )
           env {
             name  = "RUST_LOG"
-            value = "info,msp_operator=info"
+            value = var.rust_log
           }
           env {
             name = "MY_POD_NAME"

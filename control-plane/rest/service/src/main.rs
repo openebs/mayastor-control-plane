@@ -11,7 +11,7 @@ use actix_web::{
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, rsa_private_keys};
 
-use std::{convert::TryFrom, fs::File, io::BufReader};
+use std::{fs::File, io::BufReader};
 use structopt::StructOpt;
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
@@ -26,13 +26,13 @@ pub(crate) struct CliArgs {
     #[structopt(long)]
     http: Option<String>,
     /// The Nats Server URL or address to connect to
-    /// Default: nats://0.0.0.0:4222
     #[structopt(long, short, default_value = "nats://0.0.0.0:4222")]
     nats: String,
 
-    /// The CORE Server URL or address to connect to
+    /// The CORE gRPC Server URL or address to connect to which exposes both the Pool and Replica
+    /// services.
     #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
-    grpc_client_addr: String,
+    core_grpc: Uri,
 
     /// Path to the certificate file
     #[structopt(long, short, required_unless = "dummy-certificates")]
@@ -232,13 +232,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialise the core client to be used in rest
     CORE_CLIENT
-        .set(
-            CoreClient::new(
-                Uri::try_from(CliArgs::args().grpc_client_addr).unwrap(),
-                None,
-            )
-            .await,
-        )
+        .set(CoreClient::new(CliArgs::args().core_grpc, None).await)
         .ok()
         .expect("Expect to be initialised only once");
 

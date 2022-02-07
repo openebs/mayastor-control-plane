@@ -25,7 +25,7 @@ use common_lib::{
 };
 use utils::DEFAULT_REQ_TIMEOUT;
 
-// RPC Replica Client
+/// RPC Replica Client
 #[derive(Clone)]
 pub struct ReplicaClient {
     base_timeout: Duration,
