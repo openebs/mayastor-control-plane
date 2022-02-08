@@ -10,7 +10,7 @@ use crate::{
         DestroyReplicaRequest, GetReplicasRequest, ShareReplicaRequest, UnshareReplicaRequest,
     },
 };
-use std::time::Duration;
+use std::{convert::TryFrom, time::Duration};
 use tonic::transport::{Channel, Endpoint, Uri};
 
 use crate::{
@@ -92,7 +92,7 @@ impl ReplicaOperations for ReplicaClient {
         let response = client.clone().create_replica(req).await?.into_inner();
         match response.reply {
             Some(create_replica_reply) => match create_replica_reply {
-                create_replica_reply::Reply::Replica(replica) => Ok(replica.into()),
+                create_replica_reply::Reply::Replica(replica) => Ok(Replica::try_from(replica)?),
                 create_replica_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Replica)),
@@ -158,7 +158,7 @@ impl ReplicaOperations for ReplicaClient {
         let response = client.clone().get_replicas(req).await?.into_inner();
         match response.reply {
             Some(get_replicas_reply) => match get_replicas_reply {
-                get_replicas_reply::Reply::Replicas(replicas) => Ok(replicas.into()),
+                get_replicas_reply::Reply::Replicas(replicas) => Ok(Replicas::try_from(replicas)?),
                 get_replicas_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Replica)),

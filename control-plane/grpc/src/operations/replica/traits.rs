@@ -1,4 +1,5 @@
 use crate::{
+    common,
     grpc_opts::Context,
     replica,
     replica::{
@@ -7,7 +8,7 @@ use crate::{
     },
 };
 use common_lib::{
-    mbus_api::{v0::Replicas, ReplyError},
+    mbus_api::{v0::Replicas, ReplyError, ResourceKind},
     types::v0::{
         message_bus,
         message_bus::{
@@ -46,7 +47,7 @@ pub trait ReplicaOperations: Send + Sync {
 
 impl From<Replica> for replica::Replica {
     fn from(replica: Replica) -> Self {
-        let share: replica::Protocol = replica.share.into();
+        let share: common::Protocol = replica.share.into();
         let status: replica::ReplicaStatus = replica.status.into();
         replica::Replica {
             node_id: replica.node.into(),
@@ -62,21 +63,32 @@ impl From<Replica> for replica::Replica {
     }
 }
 
-impl From<replica::Replica> for Replica {
-    fn from(replica: replica::Replica) -> Self {
-        Replica {
+impl TryFrom<replica::Replica> for Replica {
+    type Error = ReplyError;
+    fn try_from(replica: replica::Replica) -> Result<Self, Self::Error> {
+        Ok(Replica {
             node: replica.node_id.into(),
             name: replica.name.into(),
-            uuid: ReplicaId::try_from(replica.replica_id.unwrap()).unwrap(),
+            uuid: match replica.replica_id {
+                Some(string) => match ReplicaId::try_from(string) {
+                    Ok(replica_id) => replica_id,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+                },
+                None => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+            },
             pool: replica.pool_id.into(),
             thin: replica.thin,
             size: replica.size,
-            share: replica::Protocol::from_i32(replica.share).unwrap().into(),
+            share: match common::Protocol::from_i32(replica.share) {
+                Some(share) => share.into(),
+                None => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+            },
             uri: replica.uri,
-            status: replica::ReplicaStatus::from_i32(replica.status)
-                .unwrap()
-                .into(),
-        }
+            status: match replica::ReplicaStatus::from_i32(replica.status) {
+                Some(status) => status.into(),
+                None => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+            },
+        })
     }
 }
 
@@ -118,15 +130,14 @@ impl From<get_replicas_request::Filter> for Filter {
     }
 }
 
-impl From<replica::Replicas> for Replicas {
-    fn from(replicas: replica::Replicas) -> Self {
-        Replicas(
-            replicas
-                .replicas
-                .iter()
-                .map(|replica| replica.clone().into())
-                .collect(),
-        )
+impl TryFrom<replica::Replicas> for Replicas {
+    type Error = ReplyError;
+    fn try_from(grpc_replicas_type: replica::Replicas) -> Result<Self, Self::Error> {
+        let mut replicas: Vec<Replica> = vec![];
+        for replica in grpc_replicas_type.replicas {
+            replicas.push(Replica::try_from(replica.clone())?)
+        }
+        Ok(Replicas(replicas))
     }
 }
 
@@ -220,7 +231,7 @@ impl CreateReplicaInfo for CreateReplicaRequest {
     }
 
     fn share(&self) -> message_bus::Protocol {
-        replica::Protocol::from_i32(self.share).unwrap().into()
+        common::Protocol::from_i32(self.share).unwrap().into()
     }
 
     fn managed(&self) -> bool {
@@ -415,7 +426,7 @@ impl UnshareReplicaInfo for UnshareReplicaRequest {
 
 impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
     fn from(data: &dyn CreateReplicaInfo) -> Self {
-        let share: replica::Protocol = data.share().into();
+        let share: common::Protocol = data.share().into();
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool().to_string(),
@@ -533,18 +544,18 @@ impl From<&dyn UnshareReplicaInfo> for UnshareReplica {
     }
 }
 
-impl From<replica::Protocol> for message_bus::Protocol {
-    fn from(src: replica::Protocol) -> Self {
+impl From<common::Protocol> for message_bus::Protocol {
+    fn from(src: common::Protocol) -> Self {
         match src {
-            replica::Protocol::None => Self::None,
-            replica::Protocol::Nvmf => Self::Nvmf,
-            replica::Protocol::Iscsi => Self::Iscsi,
-            replica::Protocol::Nbd => Self::Nbd,
+            common::Protocol::None => Self::None,
+            common::Protocol::Nvmf => Self::Nvmf,
+            common::Protocol::Iscsi => Self::Iscsi,
+            common::Protocol::Nbd => Self::Nbd,
         }
     }
 }
 
-impl From<message_bus::Protocol> for replica::Protocol {
+impl From<message_bus::Protocol> for common::Protocol {
     fn from(src: message_bus::Protocol) -> Self {
         match src {
             message_bus::Protocol::None => Self::None,
