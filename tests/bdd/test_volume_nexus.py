@@ -1,0 +1,167 @@
+"""Managing a Volume Nexus Target feature tests."""
+import os
+
+from pytest_bdd import given, scenario, then, when
+import pytest
+from retrying import retry
+
+from common.deployer import Deployer
+from common.apiclient import ApiClient
+from common.docker import Docker
+
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.protocol import Protocol
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.nexus_state import NexusState
+from openapi.model.topology import Topology
+from openapi.model.pool_topology import PoolTopology
+from openapi.model.labelled_topology import LabelledTopology
+
+
+@scenario("features/volume/nexus.feature", "the target nexus is faulted")
+def test_the_target_nexus_is_faulted():
+    """the target nexus is faulted."""
+
+
+@given("a control plane, two Mayastor instances, two pools")
+def a_control_plane_two_mayastor_instances_two_pools(init):
+    """a control plane, two Mayastor instances, two pools."""
+
+
+@given("a published self-healing volume")
+def a_published_selfhealing_volume():
+    """a published self-healing volume."""
+    request = CreateVolumeBody(
+        VolumePolicy(True),
+        NUM_VOLUME_REPLICAS,
+        VOLUME_SIZE,
+        topology=Topology(
+            pool_topology=PoolTopology(
+                labelled=LabelledTopology(exclusion={}, inclusion={"node": MAYASTOR_2})
+            )
+        ),
+    )
+    ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
+    ApiClient.volumes_api().put_volume_target(VOLUME_UUID, MAYASTOR_1, Protocol("nvmf"))
+
+
+@when("its nexus target is faulted")
+def its_nexus_target_is_faulted():
+    """its nexus target is faulted."""
+    # Kill remote mayastor instance, which should fault the volume nexus child
+    Docker.kill_container(MAYASTOR_2)
+    check_target_faulted()
+
+
+@when("one or more of its healthy replicas are back online")
+def one_or_more_of_its_healthy_replicas_are_back_online():
+    """one or more of its healthy replicas are back online."""
+    # Brings back the mayastor instance, which should expose the replicas upon pool import
+    Docker.restart_container(MAYASTOR_2)
+    check_replicas_online()
+
+
+@then("it shall be recreated")
+def it_shall_be_recreated():
+    """it shall be recreated."""
+    check_nexus_online()
+
+
+@then("the nexus target shall be removed from its associated node")
+def the_nexus_target_shall_be_removed_from_its_associated_node():
+    """the nexus shall be removed from its associated node."""
+    check_nexus_removed()
+
+
+""" ... """
+
+VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
+VOLUME_SIZE = 10485761
+NUM_VOLUME_REPLICAS = 1
+
+MAYASTOR_1 = "mayastor-1"
+MAYASTOR_2 = "mayastor-2"
+
+POOL_DISK1 = "cdisk1.img"
+POOL1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
+POOL_DISK2 = "cdisk2.img"
+POOL2_UUID = "4cc6ee64-7232-497d-a26f-38284a444990"
+
+
+@pytest.fixture(scope="function")
+def create_pool_disk_images():
+    # When starting Mayastor instances with the deployer a bind mount is created from /tmp to
+    # /host/tmp, so create disk images in /tmp
+    for disk in [POOL_DISK1, POOL_DISK2]:
+        path = f"/tmp/{disk}"
+        with open(path, "w") as file:
+            file.truncate(20 * 1024 * 1024)
+
+    yield
+    for disk in [POOL_DISK1, POOL_DISK2]:
+        path = f"/tmp/{disk}"
+        if os.path.exists(path):
+            os.remove(path)
+
+
+@pytest.fixture(scope="function")
+def init(create_pool_disk_images):
+    # Shorten the reconcile periods and cache period to speed up the tests.
+    Deployer.start_with_args(
+        [
+            "-j",
+            "-m=2",
+            "-w=10s",
+            "--reconcile-idle-period=500ms",
+            "--reconcile-period=500ms",
+            "--cache-period=1s",
+        ]
+    )
+
+    # Create pools
+    ApiClient.pools_api().put_node_pool(
+        MAYASTOR_2,
+        POOL2_UUID,
+        CreatePoolBody([f"aio:///host/tmp/{POOL_DISK2}"], labels={"node": MAYASTOR_2}),
+    )
+
+    yield
+    Deployer.stop()
+
+
+@retry(wait_fixed=200, stop_max_delay=5000)
+def check_target_faulted():
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    assert NexusState(volume.state.target["state"]) == NexusState("Faulted")
+
+
+@retry(wait_fixed=200, stop_max_attempt_number=30)
+def check_nexus_online():
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    nexus_uuid = volume.state.target["uuid"]
+    nexus = ApiClient.nexuses_api().get_nexus(nexus_uuid)
+    assert nexus.state == NexusState("Online")
+
+
+@retry(wait_fixed=200, stop_max_delay=5000)
+def check_nexus_removed():
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    assert (
+        not hasattr(volume.state, "target")
+        # or it might have been recreated if we lost the "race"...
+        or NexusState(volume.state.target["state"]) == NexusState("Online")
+        or NexusState(volume.state.target["state"]) == NexusState("Degraded")
+    )
+
+
+@retry(wait_fixed=200, stop_max_delay=5000)
+def check_replicas_online():
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    online_replicas = list(
+        filter(
+            lambda uuid: str(volume.state.replica_topology[uuid].state) == "Online",
+            list(volume.state.replica_topology),
+        )
+    )
+    assert len(online_replicas) > 0

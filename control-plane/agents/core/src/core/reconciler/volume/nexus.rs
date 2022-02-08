@@ -9,6 +9,7 @@ use crate::core::{
 
 use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode};
 
+use crate::core::reconciler::nexus::faulted_nexus_remover;
 use common_lib::types::v0::message_bus::VolumeStatus;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -64,7 +65,12 @@ async fn volume_nexus_reconcile(
                 return PollResult::Ok(PollerState::Idle);
             }
 
-            missing_nexus_recreate(&nexus_spec, context, mode).await?;
+            let volume_state = context.registry().get_volume_state(&volume.uuid).await?;
+
+            if volume_state.status != VolumeStatus::Online {
+                faulted_nexus_remover(&nexus_spec, context, mode).await?;
+                missing_nexus_recreate(&nexus_spec, context, mode).await?;
+            }
             fixup_nexus_protocol(&nexus_spec, context, mode).await
         }
         None => PollResult::Ok(PollerState::Idle),

@@ -25,9 +25,11 @@ use common_lib::{
 };
 use garbage_collector::GarbageCollector;
 
+use crate::core::wrapper::NodeWrapper;
 use common_lib::types::v0::message_bus::NexusStatus;
 use parking_lot::Mutex;
 use std::{convert::TryFrom, sync::Arc};
+use tokio::sync::RwLock;
 use tracing::Instrument;
 
 /// Nexus Reconciler loop
@@ -111,7 +113,8 @@ pub(super) async fn faulted_children_remover(
     let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
     let child_count = nexus_state.children.len();
 
-    if child_count > 1 {
+    // Remove faulted children only from a degraded nexus with other healthy children left
+    if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
         async {
             for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
                 nexus_spec_clone
@@ -402,6 +405,57 @@ pub(super) async fn fixup_nexus_protocol(
                         });
                     }
                 }
+            }
+        }
+    }
+
+    PollResult::Ok(PollerState::Idle)
+}
+
+/// Given a published self-healing volume
+/// When its nexus target is faulted
+/// And one or more of its healthy replicas are back online
+/// Then the nexus shall be removed from its associated node
+pub(super) async fn faulted_nexus_remover(
+    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    context: &PollContext,
+    _mode: OperationMode,
+) -> PollResult {
+    let nexus = nexus_spec.lock().clone();
+    let nexus_uuid = nexus.uuid.clone();
+
+    if let Ok(nexus_state) = context.registry().get_nexus(&nexus_uuid).await {
+        if nexus_state.status == NexusStatus::Faulted {
+            let healthy_children = get_healthy_nexus_children(&nexus, context.registry()).await?;
+            let node = context.registry().get_node_wrapper(&nexus.node).await?;
+
+            #[tracing::instrument(skip(nexus, node), fields(nexus.uuid = %nexus.uuid, request.reconcile = true))]
+            async fn faulted_nexus_remover(
+                nexus: NexusSpec,
+                node: Arc<RwLock<NodeWrapper>>,
+            ) -> PollResult {
+                nexus.warn(
+                    "Removing Faulted Nexus so it can be recreated with its healthy children",
+                );
+
+                // destroy the nexus - it will be recreated by the missing_nexus reconciler!
+                match node.destroy_nexus(&nexus.clone().into()).await {
+                    Ok(_) => {
+                        nexus.info("Faulted Nexus successfully removed");
+                    }
+                    Err(error) => {
+                        nexus.info_span(|| tracing::error!(error=%error.full_string(), "Failed to remove Faulted Nexus"));
+                        return Err(error);
+                    }
+                }
+
+                PollResult::Ok(PollerState::Idle)
+            }
+
+            let node_online = node.read().await.is_online();
+            // only remove the faulted nexus when the children are available again
+            if node_online && !healthy_children.candidates().is_empty() {
+                faulted_nexus_remover(nexus, node).await?;
             }
         }
     }

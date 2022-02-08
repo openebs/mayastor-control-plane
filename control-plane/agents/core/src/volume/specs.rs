@@ -927,8 +927,8 @@ impl ResourceSpecsLocked {
     ) -> Result<Nexus, SvcError> {
         let children = get_healthy_volume_replicas(vol_spec, target_node, registry).await?;
         let (count, items) = match children {
-            HealthyChildItems::One(candidates) => (1, candidates),
-            HealthyChildItems::All(candidates) => (candidates.len(), candidates),
+            HealthyChildItems::One(_, candidates) => (1, candidates),
+            HealthyChildItems::All(_, candidates) => (candidates.len(), candidates),
         };
 
         let mut nexus_replicas = vec![];
