@@ -9,6 +9,7 @@ use crate::core::{
 
 use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode};
 
+use common_lib::types::v0::message_bus::VolumeStatus;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -36,7 +37,7 @@ impl TaskPoller for VolumeNexusReconciler {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "trace", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
 async fn volume_nexus_reconcile(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
