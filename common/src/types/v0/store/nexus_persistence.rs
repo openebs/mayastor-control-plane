@@ -26,6 +26,10 @@ impl NexusInfo {
             None => false,
         }
     }
+    /// Check if no replica is healthy
+    pub fn no_healthy_replicas(&self) -> bool {
+        self.children.iter().all(|c| !c.healthy) || self.children.is_empty()
+    }
 }
 
 /// Definition of the child information that gets saved in the persistent
