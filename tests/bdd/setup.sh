@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DIR_NAME="$(dirname "$(pwd)/${BASH_SOURCE[0]}")"
+DIR_NAME="$(dirname "$0")"
 
 virtualenv --no-setuptools "$DIR_NAME"/venv
 

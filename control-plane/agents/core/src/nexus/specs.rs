@@ -394,7 +394,7 @@ impl ResourceSpecsLocked {
             .await?;
 
             let result = node.remove_child(&request.into()).await;
-            self.on_remove_disown_replica(registry, request).await;
+            self.on_remove_disown_replica(request, &result);
 
             SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
         } else {
@@ -477,13 +477,17 @@ impl ResourceSpecsLocked {
         }
     }
 
-    async fn on_remove_disown_replica(&self, registry: &Registry, request: &RemoveNexusReplica) {
-        if let Some(replica) = self.get_replica(request.replica.uuid()) {
-            replica
-                .lock()
-                .disown(&ReplicaOwners::new(None, vec![request.nexus.clone()]));
-            let clone = replica.lock().clone();
-            let _ = registry.store_obj(&clone).await;
+    fn on_remove_disown_replica(
+        &self,
+        request: &RemoveNexusReplica,
+        result: &Result<(), SvcError>,
+    ) {
+        if result.is_ok() {
+            if let Some(replica) = self.get_replica(request.replica.uuid()) {
+                replica
+                    .lock()
+                    .disown(&ReplicaOwners::new(None, vec![request.nexus.clone()]));
+            }
         }
     }
 
