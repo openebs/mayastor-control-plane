@@ -1,7 +1,7 @@
 use crate::{
     grpc_opts::Context,
-    replica_grpc,
-    replica_grpc::{
+    replica,
+    replica::{
         get_replicas_request, CreateReplicaRequest, DestroyReplicaRequest, ShareReplicaRequest,
         UnshareReplicaRequest,
     },
@@ -44,11 +44,11 @@ pub trait ReplicaOperations: Send + Sync {
     ) -> Result<(), ReplyError>;
 }
 
-impl From<Replica> for replica_grpc::Replica {
+impl From<Replica> for replica::Replica {
     fn from(replica: Replica) -> Self {
-        let share: replica_grpc::Protocol = replica.share.into();
-        let status: replica_grpc::ReplicaStatus = replica.status.into();
-        replica_grpc::Replica {
+        let share: replica::Protocol = replica.share.into();
+        let status: replica::ReplicaStatus = replica.status.into();
+        replica::Replica {
             node_id: replica.node.into(),
             name: replica.name.into(),
             replica_id: Some(replica.uuid.into()),
@@ -62,8 +62,8 @@ impl From<Replica> for replica_grpc::Replica {
     }
 }
 
-impl From<replica_grpc::Replica> for Replica {
-    fn from(replica: replica_grpc::Replica) -> Self {
+impl From<replica::Replica> for Replica {
+    fn from(replica: replica::Replica) -> Self {
         Replica {
             node: replica.node_id.into(),
             name: replica.name.into(),
@@ -71,11 +71,9 @@ impl From<replica_grpc::Replica> for Replica {
             pool: replica.pool_id.into(),
             thin: replica.thin,
             size: replica.size,
-            share: replica_grpc::Protocol::from_i32(replica.share)
-                .unwrap()
-                .into(),
+            share: replica::Protocol::from_i32(replica.share).unwrap().into(),
             uri: replica.uri,
-            status: replica_grpc::ReplicaStatus::from_i32(replica.status)
+            status: replica::ReplicaStatus::from_i32(replica.status)
                 .unwrap()
                 .into(),
         }
@@ -120,8 +118,8 @@ impl From<get_replicas_request::Filter> for Filter {
     }
 }
 
-impl From<replica_grpc::Replicas> for Replicas {
-    fn from(replicas: replica_grpc::Replicas) -> Self {
+impl From<replica::Replicas> for Replicas {
+    fn from(replicas: replica::Replicas) -> Self {
         Replicas(
             replicas
                 .replicas
@@ -132,9 +130,9 @@ impl From<replica_grpc::Replicas> for Replicas {
     }
 }
 
-impl From<Replicas> for replica_grpc::Replicas {
+impl From<Replicas> for replica::Replicas {
     fn from(replicas: Replicas) -> Self {
-        replica_grpc::Replicas {
+        replica::Replicas {
             replicas: replicas
                 .into_inner()
                 .iter()
@@ -222,7 +220,7 @@ impl CreateReplicaInfo for CreateReplicaRequest {
     }
 
     fn share(&self) -> message_bus::Protocol {
-        replica_grpc::Protocol::from_i32(self.share).unwrap().into()
+        replica::Protocol::from_i32(self.share).unwrap().into()
     }
 
     fn managed(&self) -> bool {
@@ -364,7 +362,7 @@ impl ShareReplicaInfo for ShareReplicaRequest {
     }
 
     fn protocol(&self) -> message_bus::ReplicaShareProtocol {
-        replica_grpc::ReplicaShareProtocol::from_i32(self.protocol)
+        replica::ReplicaShareProtocol::from_i32(self.protocol)
             .unwrap()
             .into()
     }
@@ -417,7 +415,7 @@ impl UnshareReplicaInfo for UnshareReplicaRequest {
 
 impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
     fn from(data: &dyn CreateReplicaInfo) -> Self {
-        let share: replica_grpc::Protocol = data.share().into();
+        let share: replica::Protocol = data.share().into();
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool().to_string(),
@@ -427,7 +425,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
             size: data.size(),
             share: share as i32,
             managed: data.managed(),
-            owners: Some(replica_grpc::ReplicaOwners {
+            owners: Some(replica::ReplicaOwners {
                 volume: data.owners().volume().map(|id| id.to_string()),
                 nexuses: data
                     .owners()
@@ -463,7 +461,7 @@ impl From<&dyn DestroyReplicaInfo> for DestroyReplicaRequest {
             pool_id: data.pool().to_string(),
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
-            disowners: Some(replica_grpc::ReplicaOwners {
+            disowners: Some(replica::ReplicaOwners {
                 volume: data.disowners().volume().map(|id| id.to_string()),
                 nexuses: data
                     .disowners()
@@ -490,7 +488,7 @@ impl From<&dyn DestroyReplicaInfo> for DestroyReplica {
 
 impl From<&dyn ShareReplicaInfo> for ShareReplicaRequest {
     fn from(data: &dyn ShareReplicaInfo) -> Self {
-        let protocol: replica_grpc::ReplicaShareProtocol = data.protocol().into();
+        let protocol: replica::ReplicaShareProtocol = data.protocol().into();
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool().to_string(),
@@ -535,18 +533,18 @@ impl From<&dyn UnshareReplicaInfo> for UnshareReplica {
     }
 }
 
-impl From<replica_grpc::Protocol> for message_bus::Protocol {
-    fn from(src: replica_grpc::Protocol) -> Self {
+impl From<replica::Protocol> for message_bus::Protocol {
+    fn from(src: replica::Protocol) -> Self {
         match src {
-            replica_grpc::Protocol::None => Self::None,
-            replica_grpc::Protocol::Nvmf => Self::Nvmf,
-            replica_grpc::Protocol::Iscsi => Self::Iscsi,
-            replica_grpc::Protocol::Nbd => Self::Nbd,
+            replica::Protocol::None => Self::None,
+            replica::Protocol::Nvmf => Self::Nvmf,
+            replica::Protocol::Iscsi => Self::Iscsi,
+            replica::Protocol::Nbd => Self::Nbd,
         }
     }
 }
 
-impl From<message_bus::Protocol> for replica_grpc::Protocol {
+impl From<message_bus::Protocol> for replica::Protocol {
     fn from(src: message_bus::Protocol) -> Self {
         match src {
             message_bus::Protocol::None => Self::None,
@@ -557,18 +555,18 @@ impl From<message_bus::Protocol> for replica_grpc::Protocol {
     }
 }
 
-impl From<replica_grpc::ReplicaStatus> for message_bus::ReplicaStatus {
-    fn from(src: replica_grpc::ReplicaStatus) -> Self {
+impl From<replica::ReplicaStatus> for message_bus::ReplicaStatus {
+    fn from(src: replica::ReplicaStatus) -> Self {
         match src {
-            replica_grpc::ReplicaStatus::Unknown => Self::Unknown,
-            replica_grpc::ReplicaStatus::Online => Self::Online,
-            replica_grpc::ReplicaStatus::Degraded => Self::Degraded,
-            replica_grpc::ReplicaStatus::Faulted => Self::Faulted,
+            replica::ReplicaStatus::Unknown => Self::Unknown,
+            replica::ReplicaStatus::Online => Self::Online,
+            replica::ReplicaStatus::Degraded => Self::Degraded,
+            replica::ReplicaStatus::Faulted => Self::Faulted,
         }
     }
 }
 
-impl From<message_bus::ReplicaStatus> for replica_grpc::ReplicaStatus {
+impl From<message_bus::ReplicaStatus> for replica::ReplicaStatus {
     fn from(src: message_bus::ReplicaStatus) -> Self {
         match src {
             message_bus::ReplicaStatus::Unknown => Self::Unknown,
@@ -579,15 +577,15 @@ impl From<message_bus::ReplicaStatus> for replica_grpc::ReplicaStatus {
     }
 }
 
-impl From<replica_grpc::ReplicaShareProtocol> for message_bus::ReplicaShareProtocol {
-    fn from(src: replica_grpc::ReplicaShareProtocol) -> Self {
+impl From<replica::ReplicaShareProtocol> for message_bus::ReplicaShareProtocol {
+    fn from(src: replica::ReplicaShareProtocol) -> Self {
         match src {
-            replica_grpc::ReplicaShareProtocol::NvmfProtocol => Self::Nvmf,
+            replica::ReplicaShareProtocol::NvmfProtocol => Self::Nvmf,
         }
     }
 }
 
-impl From<message_bus::ReplicaShareProtocol> for replica_grpc::ReplicaShareProtocol {
+impl From<message_bus::ReplicaShareProtocol> for replica::ReplicaShareProtocol {
     fn from(src: message_bus::ReplicaShareProtocol) -> Self {
         match src {
             message_bus::ReplicaShareProtocol::Nvmf => Self::NvmfProtocol,

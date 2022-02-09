@@ -17,7 +17,10 @@ use common_lib::{
         store::replica::ReplicaSpec,
     },
 };
-use grpc::{grpc_opts::Context, pool::traits::PoolOperations, replica::traits::ReplicaOperations};
+use grpc::{
+    grpc_opts::Context,
+    operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations},
+};
 use itertools::Itertools;
 use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};

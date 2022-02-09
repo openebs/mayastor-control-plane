@@ -24,7 +24,10 @@ use common_lib::{
 };
 pub use etcd_client;
 use etcd_client::DeleteOptions;
-use grpc::{client::CoreClient, pool::traits::PoolOperations, replica::traits::ReplicaOperations};
+use grpc::{
+    client::CoreClient,
+    operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations},
+};
 use rpc::mayastor::RpcHandle;
 use std::{
     collections::HashMap,

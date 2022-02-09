@@ -6,7 +6,7 @@ use super::core::registry::Registry;
 use std::sync::Arc;
 
 use common::{handler::*, Service};
-use grpc::{pool::server::PoolServer, replica::server::ReplicaServer};
+use grpc::operations::{pool::server::PoolServer, replica::server::ReplicaServer};
 
 pub(crate) async fn configure(builder: Service) -> Service {
     let registry = builder.get_shared_state::<Registry>().clone();

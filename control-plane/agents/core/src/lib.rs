@@ -2,7 +2,7 @@
 
 use common::ServiceError;
 use futures::{future::join_all, FutureExt};
-use grpc::{pool::server::PoolServer, replica::server::ReplicaServer};
+use grpc::operations::{pool::server::PoolServer, replica::server::ReplicaServer};
 use http::Uri;
 use tracing::error;
 

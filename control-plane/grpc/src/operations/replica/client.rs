@@ -3,8 +3,8 @@ use crate::{
         NodeFilter, NodePoolFilter, NodePoolReplicaFilter, NodeReplicaFilter, PoolFilter,
         PoolReplicaFilter, ReplicaFilter, VolumeFilter,
     },
-    replica::traits::ReplicaOperations,
-    replica_grpc::{
+    operations::replica::traits::ReplicaOperations,
+    replica::{
         create_replica_reply, get_replicas_reply, get_replicas_request,
         replica_grpc_client::ReplicaGrpcClient, share_replica_reply, CreateReplicaRequest,
         DestroyReplicaRequest, GetReplicasRequest, ShareReplicaRequest, UnshareReplicaRequest,
@@ -15,7 +15,7 @@ use tonic::transport::{Channel, Endpoint, Uri};
 
 use crate::{
     grpc_opts::{timeout_grpc, Context},
-    replica::traits::{
+    operations::replica::traits::{
         CreateReplicaInfo, DestroyReplicaInfo, ShareReplicaInfo, UnshareReplicaInfo,
     },
 };

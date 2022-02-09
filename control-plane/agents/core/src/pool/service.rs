@@ -15,10 +15,12 @@ use common_lib::{
 };
 use grpc::{
     grpc_opts::Context,
-    pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
-    replica::traits::{
-        CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ShareReplicaInfo,
-        UnshareReplicaInfo,
+    operations::{
+        pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
+        replica::traits::{
+            CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ShareReplicaInfo,
+            UnshareReplicaInfo,
+        },
     },
 };
 use snafu::OptionExt;

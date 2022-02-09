@@ -1,7 +1,7 @@
 #![feature(allow_fail)]
 
 use common_lib::types::v0::message_bus as v0;
-use grpc::replica::traits::ReplicaOperations;
+use grpc::operations::replica::traits::ReplicaOperations;
 
 use testlib::{result_either, test_result_grpc, ClusterBuilder};
 

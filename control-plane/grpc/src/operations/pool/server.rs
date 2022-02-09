@@ -1,7 +1,7 @@
 use crate::{
-    pool::traits::PoolOperations,
-    pool_grpc,
-    pool_grpc::{
+    operations::pool::traits::PoolOperations,
+    pool,
+    pool::{
         create_pool_reply, get_pools_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
         CreatePoolReply, CreatePoolRequest, DestroyPoolReply, DestroyPoolRequest, GetPoolsReply,
@@ -59,7 +59,7 @@ impl PoolGrpc for PoolServer {
     async fn create_pool(
         &self,
         request: Request<CreatePoolRequest>,
-    ) -> Result<tonic::Response<pool_grpc::CreatePoolReply>, tonic::Status> {
+    ) -> Result<tonic::Response<pool::CreatePoolReply>, tonic::Status> {
         let req: CreatePoolRequest = request.into_inner();
         let service = self.service.clone();
         tokio::spawn(async move {
@@ -85,7 +85,7 @@ impl PoolGrpc for PoolServer {
     async fn get_pools(
         &self,
         request: Request<GetPoolsRequest>,
-    ) -> Result<tonic::Response<pool_grpc::GetPoolsReply>, tonic::Status> {
+    ) -> Result<tonic::Response<pool::GetPoolsReply>, tonic::Status> {
         let req: GetPoolsRequest = request.into_inner();
         let filter = req.filter.map(Into::into).unwrap_or_default();
         let service = self.service.clone();
