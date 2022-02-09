@@ -1504,6 +1504,7 @@ version = "0.1.0"
 dependencies = [
  "common-lib",
  "humantime",
+ "once_cell",
  "opentelemetry",
  "opentelemetry-semantic-conventions",
  "prost 0.8.0",
