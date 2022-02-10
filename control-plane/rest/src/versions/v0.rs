@@ -187,7 +187,7 @@ impl From<CreateVolume> for CreateVolumeBody {
 }
 impl CreateVolumeBody {
     /// convert into message bus type
-    pub fn bus_request(&self, volume_id: VolumeId) -> CreateVolume {
+    pub fn to_create_volume(&self, volume_id: VolumeId) -> CreateVolume {
         CreateVolume {
             uuid: volume_id,
             size: self.size,

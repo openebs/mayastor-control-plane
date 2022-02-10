@@ -43,7 +43,7 @@ message Child {
   // uri of the child device
   string uri = 1;
   // state of the child
-  NexusStatus state = 2;
+  ChildState state = 2;
   // current rebuild progress (%)
   optional uint32 rebuild_progress = 3;
 }

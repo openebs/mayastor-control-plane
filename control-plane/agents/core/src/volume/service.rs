@@ -1,7 +1,7 @@
 use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
-    mbus_api::message_bus::v0::Volumes,
+    mbus_api::{message_bus::v0::Volumes, ReplyError},
     types::v0::{
         message_bus::{
             CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
@@ -10,10 +10,114 @@ use common_lib::{
         store::OperationMode,
     },
 };
+use grpc::{
+    grpc_opts::Context,
+    operations::volume::traits::{
+        CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
+        ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
     registry: Registry,
+}
+
+#[tonic::async_trait]
+impl VolumeOperations for Service {
+    async fn create(
+        &self,
+        req: &dyn CreateVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let create_volume = req.into();
+        let service = self.clone();
+        let volume =
+            tokio::spawn(async move { service.create_volume(&create_volume).await }).await??;
+        Ok(volume)
+    }
+
+    async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Volumes, ReplyError> {
+        let req = GetVolumes { filter };
+        let service = self.clone();
+        let volumes = tokio::spawn(async move { service.get_volumes(&req).await }).await??;
+        Ok(volumes)
+    }
+
+    async fn destroy(
+        &self,
+        req: &dyn DestroyVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let destroy_volume = req.into();
+        let service = self.clone();
+        tokio::spawn(async move { service.destroy_volume(&destroy_volume).await }).await??;
+        Ok(())
+    }
+
+    async fn share(
+        &self,
+        req: &dyn ShareVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<String, ReplyError> {
+        let share_volume = req.into();
+        let service = self.clone();
+        let response =
+            tokio::spawn(async move { service.share_volume(&share_volume).await }).await??;
+        Ok(response)
+    }
+
+    async fn unshare(
+        &self,
+        req: &dyn UnshareVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let unshare_volume = req.into();
+        let service = self.clone();
+        tokio::spawn(async move { service.unshare_volume(&unshare_volume).await }).await??;
+        Ok(())
+    }
+
+    async fn publish(
+        &self,
+        req: &dyn PublishVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let publish_volume = req.into();
+        let service = self.clone();
+        let volume =
+            tokio::spawn(async move { service.publish_volume(&publish_volume).await }).await??;
+        Ok(volume)
+    }
+
+    async fn unpublish(
+        &self,
+        req: &dyn UnpublishVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let unpublish_volume = req.into();
+        let service = self.clone();
+        let volume = tokio::spawn(async move { service.unpublish_volume(&unpublish_volume).await })
+            .await??;
+        Ok(volume)
+    }
+
+    async fn set_volume_replica(
+        &self,
+        req: &dyn SetVolumeReplicaInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let set_volume_replica = req.into();
+        let service = self.clone();
+        let volume =
+            tokio::spawn(async move { service.set_volume_replica(&set_volume_replica).await })
+                .await??;
+        Ok(volume)
+    }
+
+    async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
+        return Ok(true);
+    }
 }
 
 impl Service {

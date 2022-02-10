@@ -26,7 +26,11 @@ pub use etcd_client;
 use etcd_client::DeleteOptions;
 use grpc::{
     client::CoreClient,
-    operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations},
+    grpc_opts::Context,
+    operations::{
+        pool::traits::PoolOperations, replica::traits::ReplicaOperations,
+        volume::traits::VolumeOperations,
+    },
 };
 use rpc::mayastor::RpcHandle;
 use std::{
@@ -86,6 +90,34 @@ impl Cluster {
     /// grpc client for connection
     pub fn grpc_client(&self) -> &CoreClient {
         self.grpc_client.as_ref().unwrap()
+    }
+
+    pub async fn volume_service_liveness(
+        &self,
+        client: &dyn VolumeOperations,
+        timeout_opts: Option<TimeoutOptions>,
+    ) -> Result<bool, ReplyError> {
+        let timeout_opts = if timeout_opts.clone().is_none() {
+            Some(
+                TimeoutOptions::new()
+                    .with_timeout(Duration::from_millis(500))
+                    .with_max_retries(5),
+            )
+        } else {
+            timeout_opts
+        };
+        for x in 1 .. timeout_opts.clone().unwrap().max_retires().unwrap() {
+            match client.probe(Some(Context::new(timeout_opts.clone()))).await {
+                Ok(resp) => return Ok(resp),
+                Err(_) => {
+                    tracing::info!("Volume Service not available, Retrying ....{}", x);
+                    tokio::time::sleep(timeout_opts.clone().unwrap().base_timeout()).await;
+                }
+            }
+        }
+        Err(ReplyError::invalid_reply_error(
+            "Max tries exceeded, volume service not up".to_string(),
+        ))
     }
 
     /// return grpc handle to the container

@@ -543,6 +543,11 @@ impl ReplicaTopology {
     pub fn pool(&self) -> &Option<PoolId> {
         &self.pool
     }
+
+    /// Get the status of the replica
+    pub fn status(&self) -> &ReplicaStatus {
+        &self.status
+    }
 }
 
 impl From<&ReplicaTopology> for models::ReplicaTopology {

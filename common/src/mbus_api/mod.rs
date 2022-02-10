@@ -665,6 +665,11 @@ impl TimeoutOptions {
     pub fn keep_alive_timeout(&self) -> Duration {
         self.keep_alive_timeout
     }
+
+    /// get the max retires
+    pub fn max_retires(&self) -> Option<u32> {
+        self.max_retries
+    }
 }
 
 /// Messaging Bus trait with "generic" publish and request/reply semantics

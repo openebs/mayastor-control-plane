@@ -25,7 +25,6 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
 #[cfg(test)]
 mod tests {
     use common_lib::{
-        mbus_api::Message,
         store::etcd::Etcd,
         types::v0::{
             message_bus::{CreateVolume, Volume, VolumeId, WatchResourceId},
@@ -33,6 +32,7 @@ mod tests {
             store::definitions::{ObjectKey, Store},
         },
     };
+    use grpc::operations::volume::traits::VolumeOperations;
     use once_cell::sync::OnceCell;
     use std::{net::SocketAddr, str::FromStr, time::Duration};
     use testlib::*;
@@ -40,16 +40,21 @@ mod tests {
 
     static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();
 
-    async fn setup_watcher() -> (Volume, tokio::sync::mpsc::Receiver<()>) {
-        let volume = CreateVolume {
-            uuid: VolumeId::new(),
-            size: 10 * 1024 * 1024,
-            replicas: 1,
-            ..Default::default()
-        }
-        .request()
-        .await
-        .unwrap();
+    async fn setup_watcher(
+        client: &dyn VolumeOperations,
+    ) -> (Volume, tokio::sync::mpsc::Receiver<()>) {
+        let volume = client
+            .create(
+                &CreateVolume {
+                    uuid: VolumeId::new(),
+                    size: 10 * 1024 * 1024,
+                    replicas: 1,
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
         let (s, r) = tokio::sync::mpsc::channel(1);
         CALLBACK.set(s).unwrap();
@@ -95,8 +100,9 @@ mod tests {
         let cluster = cluster.unwrap();
         let client = cluster.rest_v00();
         let client = client.watches_api();
+        let volume_client = cluster.grpc_client().volume();
 
-        let (volume, mut callback_ch) = setup_watcher().await;
+        let (volume, mut callback_ch) = setup_watcher(&volume_client).await;
 
         let watch_volume = WatchResourceId::Volume(volume.spec().uuid);
         let callback = url::Url::parse("http://10.1.0.1:8082/test").unwrap();
