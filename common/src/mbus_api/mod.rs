@@ -521,6 +521,11 @@ pub struct TimeoutOptions {
 
     /// Request specific minimum timeouts
     request_timeout: Option<RequestMinTimeout>,
+
+    /// Http2 keep alive interval.
+    keep_alive_interval: std::time::Duration,
+    /// Http2 keep alive timeout.
+    keep_alive_timeout: std::time::Duration,
 }
 
 /// Request specific minimum timeouts
@@ -580,6 +585,14 @@ impl TimeoutOptions {
     pub fn base_timeout(&self) -> Duration {
         self.timeout
     }
+    /// Default http2 Keep Alive interval.
+    pub(crate) fn default_keep_alive_interval() -> std::time::Duration {
+        Duration::from_secs(10)
+    }
+    /// Default http2 Keep Alive timeout.
+    pub(crate) fn default_keep_alive_timeout() -> std::time::Duration {
+        Duration::from_secs(20)
+    }
 }
 
 impl Default for TimeoutOptions {
@@ -590,6 +603,8 @@ impl Default for TimeoutOptions {
             max_retries: Some(Self::default_max_retries()),
             tcp_read_timeout: Self::default_tcp_read_timeout(),
             request_timeout: Self::default_request_timeouts(),
+            keep_alive_timeout: Self::default_keep_alive_timeout(),
+            keep_alive_interval: Self::default_keep_alive_interval(),
         }
     }
 }
@@ -640,6 +655,15 @@ impl TimeoutOptions {
     /// Get the minimum request timeouts
     pub fn request_timeout(&self) -> Option<&RequestMinTimeout> {
         self.request_timeout.as_ref()
+    }
+
+    /// Get the http2 Keep Alive interval.
+    pub fn keep_alive_interval(&self) -> Duration {
+        self.keep_alive_interval
+    }
+    /// Get the http2 Keep Alive timeout.
+    pub fn keep_alive_timeout(&self) -> Duration {
+        self.keep_alive_timeout
     }
 }
 

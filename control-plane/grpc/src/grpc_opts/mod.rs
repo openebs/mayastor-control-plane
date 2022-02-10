@@ -80,6 +80,21 @@ impl Context {
             .unwrap_or_else(|| humantime::parse_duration(DEFAULT_REQ_TIMEOUT).unwrap())
     }
 
+    /// Get the http2 keep alive interval.
+    pub fn keep_alive_interval(&self) -> Duration {
+        self.timeout_opts
+            .clone()
+            .unwrap_or_default()
+            .keep_alive_interval()
+    }
+    /// Get the http2 keep alive timeout.
+    pub fn keep_alive_timeout(&self) -> Duration {
+        self.timeout_opts
+            .clone()
+            .unwrap_or_default()
+            .keep_alive_timeout()
+    }
+
     /// Create a new endpoint that connects to the provided Uri.
     /// This endpoint has default connect and request timeouts.
     fn endpoint(&self, uri: Uri) -> tonic::transport::Endpoint {
@@ -89,7 +104,8 @@ impl Context {
             // todo: use a shorter connect timeout
             .connect_timeout(timeout)
             .timeout(timeout)
-            .keep_alive_while_idle(true)
+            .http2_keep_alive_interval(self.keep_alive_interval())
+            .keep_alive_timeout(self.keep_alive_timeout())
     }
 }
 
