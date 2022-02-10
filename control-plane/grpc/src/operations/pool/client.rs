@@ -44,7 +44,6 @@ impl PoolOperations for PoolClient {
         ctx: Option<Context>,
     ) -> Result<Pool, ReplyError> {
         let req = self.request(create_pool_req, ctx, MessageIdVs::CreatePool);
-
         let response = self.client().create_pool(req).await?.into_inner();
         match response.reply {
             Some(create_pool_reply) => match create_pool_reply {
