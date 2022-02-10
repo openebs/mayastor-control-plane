@@ -36,9 +36,15 @@ use once_cell::sync::OnceCell;
 use rest_client::versions::v0::*;
 use serde::Deserialize;
 
-/// once cell static variable to store the grpc client and initialise
-/// once at startup
+/// Once cell static variable to store the grpc client and initialise once at startup
 pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
+
+/// Get Core gRPC Client
+pub(crate) fn core_grpc<'a>() -> &'a CoreClient {
+    CORE_CLIENT
+        .get()
+        .expect("gRPC Core Client should have been initialised")
+}
 
 fn version() -> String {
     "v0".into()
