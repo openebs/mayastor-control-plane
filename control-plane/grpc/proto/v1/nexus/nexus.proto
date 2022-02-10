@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+package v1.nexus;
+
+message Nexus {
+  // id of the mayastor instance
+  string node_id = 1;
+  // name of the nexus
+  string name = 2;
+  // uuid of the nexus
+  google.protobuf.StringValue uuid = 3;
+  // size of the volume in bytes
+  uint64 size = 4;
+  // current status of the nexus
+  NexusStatus status = 5;
+  // array of children
+  repeated Child children = 6;
+  // URI of the device for the volume (missing if not published).
+  // Missing property and empty string are treated the same.
+  string device_uri = 7;
+  // number of active rebuild jobs
+  uint32 rebuilds = 8;
+  // protocol used for exposing the nexus
+  common.Protocol share = 9;
+}
+
+enum NexusStatus {
+  // Default Unknown state
+  Unknown = 0;
+  // healthy and working
+  Online = 1;
+  // not healthy but is able to serve IO
+  Degraded = 2;
+  // broken and unable to serve IO
+  Faulted = 3;
+}
+
+message Child {
+  // uri of the child device
+  string uri = 1;
+  // state of the child
+  NexusStatus state = 2;
+  // current rebuild progress (%)
+  optional uint32 rebuild_progress = 3;
+}
+
+enum ChildState {
+  // Default Unknown state
+  ChildUnknown = 0;
+  // healthy and contains the latest bits
+  ChildOnline = 1;
+  // rebuild is in progress (or other recoverable error)
+  ChildDegraded = 2;
+  // unrecoverable error (control plane must act)
+  ChildFaulted = 3;
+}

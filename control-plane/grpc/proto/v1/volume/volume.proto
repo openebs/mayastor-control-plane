@@ -1,0 +1,270 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+import "v1/nexus/nexus.proto";
+import "v1/replica/replica.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+package v1.volume;
+
+// A Mayastor Volume
+// It has a spec which is the specification provided by the creator
+// It has a state if such state is retrieved from a mayastor storage nodes
+message Volume {
+  // Desired specification of the pool and metadata
+  VolumeDefinition definition = 1;
+  // Runtime state of the pool.
+  VolumeState state = 2;
+}
+
+// Multiple volumes
+message Volumes {
+  repeated Volume volumes = 1;
+}
+
+message VolumeDefinition {
+  // Client specification of the volume
+  VolumeSpec spec = 1;
+  // Control plane related data for the volume
+  Metadata metadata = 2;
+}
+
+message VolumeSpec {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // Size of the volume in bytes
+  uint64 size = 2;
+  // Volume labels.
+  optional common.StringMapValue labels = 3;
+  // Number of children the volume should have.
+  uint64 num_replica = 4;
+  // The target where front-end IO will be sent to
+  optional VolumeTarget target = 5;
+  // volume policy
+  VolumePolicy policy = 6;
+  // replica placement topology for the volume creation only
+  optional Topology topology = 7;
+  // Id of the last Nexus used by the volume
+  google.protobuf.StringValue last_nexus_id = 8;
+}
+
+message Metadata {
+  // spec status of the volume
+  common.SpecStatus status = 4;
+}
+
+message VolumeTarget {
+  // The node where front-end IO will be sent to
+  string node_id = 1;
+  // The nexus ID where front-end IO will be sent to
+  google.protobuf.StringValue nexus_id = 2;
+  // The protocol to use on the target
+  optional VolumeShareProtocol protocol = 3;
+}
+
+message VolumePolicy {
+  bool self_heal = 1;
+}
+
+message Topology {
+  optional NodeTopology node = 1;
+  optional PoolTopology pool = 2;
+}
+
+enum VolumeShareProtocol {
+  Nvmf = 0;
+  Iscsi = 1;
+}
+
+message NodeTopology {
+  oneof topology {
+    LabelledTopology labelled = 1;
+    ExplicitNodeTopology explicit = 2;
+  }
+}
+
+message PoolTopology {
+  oneof topology {
+    LabelledTopology labelled = 1;
+  }
+}
+
+message LabelledTopology {
+  // exclusive labels
+  common.StringMapValue exclusion = 1;
+  // inclusive labels
+  common.StringMapValue inclusion = 2;
+}
+
+message ExplicitNodeTopology {
+  // replicas can only be placed on these nodes
+  repeated string allowed_nodes = 1;
+  // preferred nodes to place the replicas
+  repeated string preferred_nodes = 2;
+}
+
+message VolumeState {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // Actual size of the volume as returned by Mayastor
+  uint64 size = 2;
+  // current status of the volume
+  nexus.NexusStatus status = 3;
+  // target nexus that connects to the children
+  optional nexus.Nexus target = 4;
+  // replica topology information
+  map<string, ReplicaTopology> replica_topology = 5;
+}
+
+message ReplicaTopology {
+  // id of the mayastor instance
+  optional string node = 1;
+  // id of the pool
+  optional string pool = 2;
+  // status of the replica
+  replica.ReplicaStatus status = 3;
+}
+
+message GetVolumesRequest {
+  /// filter volumes
+  oneof filter {
+    common.VolumeFilter volume = 2;
+  }
+}
+
+// volume creation request
+message CreateVolumeRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // Size that the volume should be.
+  uint64 size = 2;
+  // Volume labels.
+  optional common.StringMapValue labels = 3;
+  // Number of replicas the volume should have.
+  uint64 replicas = 4;
+  // volume policy
+  VolumePolicy policy = 6;
+  // replica placement topology for the volume creation only
+  optional Topology topology = 7;
+}
+
+// Publish a volume on a node
+// Unpublishes the nexus if it's published somewhere else and creates a nexus on the given node.
+// Then, share the nexus via the provided share protocol.-
+message PublishVolumeRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // the node where front-end IO will be sent to
+  optional string target_node = 2;
+  // share protocol
+  optional VolumeShareProtocol share = 3;
+}
+
+// Unpublish a volume from any node where it may be published
+// Unshares the children nexuses from the volume and destroys them.
+message UnpublishVolumeRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // if the node where the nexus lives is offline then we can force unpublish, forgetting about
+  // the nexus. Note: this option should be used only when we know the node will not become
+  // accessible again and it is safe to do so.
+  bool force = 2;
+}
+
+// Share Volume request
+message ShareVolumeRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // share protocol
+  VolumeShareProtocol share = 3;
+}
+
+// Unshare Volume request
+message UnshareVolumeRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+}
+
+// Set the volume replica count
+message SetVolumeReplicaRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // replica count
+  uint32 replicas = 2;
+}
+
+// Delete volume
+message DestroyVolumeRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+}
+
+// Reply type for a CreateVolume request
+message CreateVolumeReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a GetVolumes request
+message GetVolumesReply {
+  oneof reply {
+    Volumes volumes = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a DestroyVolume request
+message DestroyVolumeReply {
+  optional common.ReplyError error = 1;
+}
+
+// Reply type for a ShareVolume request
+message ShareVolumeReply {
+  oneof reply {
+    string response = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a UnshareVolume request
+message UnshareVolumeReply {
+  optional common.ReplyError error = 1;
+}
+
+// Reply type for a PublishVolume request
+message PublishVolumeReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a UnpublishVolume request
+message UnpublishVolumeReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a SetVolumeReplica request
+message SetVolumeReplicaReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+service VolumeGrpc {
+  rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
+  rpc DestroyVolume (DestroyVolumeRequest) returns (DestroyVolumeReply) {}
+  rpc GetVolumes (GetVolumesRequest) returns (GetVolumesReply) {}
+  rpc PublishVolume (PublishVolumeRequest) returns (PublishVolumeReply) {}
+  rpc UnpublishVolume (UnpublishVolumeRequest) returns (UnpublishVolumeReply) {}
+  rpc ShareVolume (ShareVolumeRequest) returns (ShareVolumeReply) {}
+  rpc UnshareVolume (UnshareVolumeRequest) returns (UnshareVolumeReply) {}
+  rpc SetVolumeReplica (SetVolumeReplicaRequest) returns (SetVolumeReplicaReply) {}
+}

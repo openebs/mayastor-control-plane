@@ -23,6 +23,18 @@ message ReplyError {
   string extra = 4;
 }
 
+// Sharing Protocols
+enum Protocol {
+  // not shared by any of the variants
+  None = 0;
+  // shared as NVMe-oF TCP
+  Nvmf = 1;
+  // shared as iSCSI
+  Iscsi = 2;
+  // shared as NBD
+  Nbd = 3;
+}
+
 // ReplyErrorKind for the kind of the occurred error
 enum ReplyErrorKind {
   WithMessage = 0;

@@ -21,7 +21,7 @@ message Replica{
   // size of the replica in bytes
   uint64 size = 6;
   // protocol used for exposing the replica
-  Protocol share = 7;
+  common.Protocol share = 7;
   // uri usable by nexus to access it
   string uri = 8;
   // status of the replica
@@ -45,17 +45,6 @@ enum ReplicaStatus {
   Faulted = 3;
 }
 
-enum Protocol {
-  // not shared by any of the variants
-  None = 0;
-  // shared as NVMe-oF TCP
-  Nvmf = 1;
-  // shared as iSCSI
-  Iscsi = 2;
-  // shared as NBD
-  Nbd = 3;
-}
-
 // Create Replica Request
 message CreateReplicaRequest{
   // id of the mayastor instance
@@ -71,7 +60,7 @@ message CreateReplicaRequest{
   // size of the replica in bytes
   uint64 size = 6;
   // protocol to expose the replica over
-  Protocol share = 7;
+  common.Protocol share = 7;
   // Managed by our control plane
   bool managed = 8;
   // Owners of the resource
