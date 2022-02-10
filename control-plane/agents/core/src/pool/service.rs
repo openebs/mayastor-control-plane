@@ -38,7 +38,8 @@ impl PoolOperations for Service {
         _ctx: Option<Context>,
     ) -> Result<Pool, ReplyError> {
         let req = pool.into();
-        let pool = self.create_pool(&req).await?;
+        let service = self.clone();
+        let pool = tokio::spawn(async move { service.create_pool(&req).await }).await??;
         Ok(pool)
     }
 
@@ -48,7 +49,8 @@ impl PoolOperations for Service {
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let req = pool.into();
-        self.destroy_pool(&req).await?;
+        let service = self.clone();
+        tokio::spawn(async move { service.destroy_pool(&req).await }).await??;
         Ok(())
     }
 

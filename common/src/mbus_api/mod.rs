@@ -30,6 +30,7 @@ use std::{
     time::Duration,
 };
 use strum_macros::{AsRefStr, ToString};
+use tokio::task::JoinError;
 use tonic::Status;
 
 /// Result wrapper for send/receive
@@ -355,6 +356,12 @@ impl From<tonic::transport::Error> for ReplyError {
     }
 }
 
+impl From<JoinError> for ReplyError {
+    fn from(error: JoinError) -> Self {
+        Self::aborted_error(error)
+    }
+}
+
 impl StdError for ReplyError {}
 impl ReplyError {
     /// extend error with source
@@ -363,6 +370,15 @@ impl ReplyError {
     pub fn extend(&mut self, source: &str, extra: &str) {
         self.source = format!("{}::{}", source, self.source);
         self.extra = format!("{}::{}", extra, self.extra);
+    }
+    /// useful when the grpc server is dropped due to panic
+    pub fn aborted_error(error: JoinError) -> Self {
+        Self {
+            kind: ReplyErrorKind::Aborted,
+            resource: ResourceKind::Unknown,
+            source: error.to_string(),
+            extra: "Failed to wait for thread".to_string(),
+        }
     }
     /// useful when the grpc server is dropped due to panic
     pub fn tonic_reply_error(source: String, extra: String) -> Self {

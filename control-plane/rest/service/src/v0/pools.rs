@@ -3,15 +3,18 @@ use common_lib::types::v0::message_bus::{DestroyPool, Filter};
 use grpc::operations::pool::traits::PoolOperations;
 use mbus_api::{message_bus::v0::BusError, ReplyErrorKind, ResourceKind};
 
+fn client() -> impl PoolOperations {
+    core_grpc().pool()
+}
+
 async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
-    let client = CORE_CLIENT.get().unwrap().pool();
     let destroy = match filter.clone() {
         Filter::NodePool(node_id, pool_id) => DestroyPool {
             node: node_id,
             id: pool_id,
         },
         Filter::Pool(pool_id) => {
-            let node_id = match client.get(filter, None).await {
+            let node_id = match client().get(filter, None).await {
                 Ok(pools) => pool(pool_id.to_string(), pools.into_inner().get(0))?.node(),
                 Err(error) => return Err(RestError::from(error)),
             };
@@ -29,7 +32,7 @@ async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
             }))
         }
     };
-    client.destroy(&destroy, None).await?;
+    client().destroy(&destroy, None).await?;
     Ok(())
 }
 
@@ -48,10 +51,9 @@ impl apis::actix_server::Pools for RestApi {
     async fn get_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
     ) -> Result<models::Pool, RestError<RestJsonError>> {
-        let client = CORE_CLIENT.get().unwrap().pool();
         let pool = pool(
             pool_id.clone(),
-            client
+            client()
                 .get(Filter::NodePool(node_id.into(), pool_id.into()), None)
                 .await?
                 .into_inner()
@@ -63,18 +65,16 @@ impl apis::actix_server::Pools for RestApi {
     async fn get_node_pools(
         Path(id): Path<String>,
     ) -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
-        let client = CORE_CLIENT.get().unwrap().pool();
-        let pools = client.get(Filter::Node(id.into()), None).await?;
+        let pools = client().get(Filter::Node(id.into()), None).await?;
         Ok(pools.into_inner().into_iter().map(From::from).collect())
     }
 
     async fn get_pool(
         Path(pool_id): Path<String>,
     ) -> Result<models::Pool, RestError<RestJsonError>> {
-        let client = CORE_CLIENT.get().unwrap().pool();
         let pool = pool(
             pool_id.clone(),
-            client
+            client()
                 .get(Filter::Pool(pool_id.clone().into()), None)
                 .await?
                 .into_inner()
@@ -84,8 +84,7 @@ impl apis::actix_server::Pools for RestApi {
     }
 
     async fn get_pools() -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
-        let client = CORE_CLIENT.get().unwrap().pool();
-        let pools = client.get(Filter::None, None).await?;
+        let pools = client().get(Filter::None, None).await?;
         Ok(pools.into_inner().into_iter().map(From::from).collect())
     }
 
@@ -95,8 +94,7 @@ impl apis::actix_server::Pools for RestApi {
     ) -> Result<models::Pool, RestError<RestJsonError>> {
         let create =
             CreatePoolBody::from(create_pool_body).bus_request(node_id.into(), pool_id.into());
-        let client = CORE_CLIENT.get().unwrap().pool();
-        let pool = client.create(&create, None).await?;
+        let pool = client().create(&create, None).await?;
         Ok(pool.into())
     }
 }
