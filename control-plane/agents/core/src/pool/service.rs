@@ -69,7 +69,9 @@ impl ReplicaOperations for Service {
         _ctx: Option<Context>,
     ) -> Result<Replica, ReplyError> {
         let create_replica = req.into();
-        let replica = self.create_replica(&create_replica).await?;
+        let service = self.clone();
+        let replica =
+            tokio::spawn(async move { service.create_replica(&create_replica).await }).await??;
         Ok(replica)
     }
 
@@ -85,7 +87,8 @@ impl ReplicaOperations for Service {
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let destroy_replica = req.into();
-        self.destroy_replica(&destroy_replica).await?;
+        let service = self.clone();
+        tokio::spawn(async move { service.destroy_replica(&destroy_replica).await }).await??;
         Ok(())
     }
 
@@ -95,7 +98,9 @@ impl ReplicaOperations for Service {
         _ctx: Option<Context>,
     ) -> Result<String, ReplyError> {
         let share_replica = req.into();
-        let response = self.share_replica(&share_replica).await?;
+        let service = self.clone();
+        let response =
+            tokio::spawn(async move { service.share_replica(&share_replica).await }).await??;
         Ok(response)
     }
 
@@ -105,7 +110,8 @@ impl ReplicaOperations for Service {
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let unshare_replica = req.into();
-        self.unshare_replica(&unshare_replica).await?;
+        let service = self.clone();
+        tokio::spawn(async move { service.unshare_replica(&unshare_replica).await }).await??;
         Ok(())
     }
 }
