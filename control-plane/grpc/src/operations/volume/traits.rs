@@ -22,54 +22,54 @@ use common_lib::{
 };
 use std::{collections::HashMap, convert::TryFrom};
 
-/// all volume crud operations to be a part of the VolumeOperations trait
+/// All volume crud operations to be a part of the VolumeOperations trait
 #[tonic::async_trait]
 pub trait VolumeOperations: Send + Sync {
-    /// create a volume
+    /// Create a volume
     async fn create(
         &self,
         req: &dyn CreateVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
-    /// get volumes
+    /// Get volumes
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Volumes, ReplyError>;
-    /// destroy a volume
+    /// Destroy a volume
     async fn destroy(
         &self,
         req: &dyn DestroyVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
-    /// share a volume
+    /// Share a volume
     async fn share(
         &self,
         req: &dyn ShareVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<String, ReplyError>;
-    /// unshare a volume
+    /// Unshare a volume
     async fn unshare(
         &self,
         req: &dyn UnshareVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
-    /// publish a volume
+    /// Publish a volume
     async fn publish(
         &self,
         req: &dyn PublishVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
-    /// unpublish a volume
+    /// Unpublish a volume
     async fn unpublish(
         &self,
         req: &dyn UnpublishVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
-    /// increase or decrease volume replica
+    /// Increase or decrease volume replica
     async fn set_volume_replica(
         &self,
         req: &dyn SetVolumeReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
-    /// liveness probe for volume service
+    /// Liveness probe for volume service
     async fn probe(&self, ctx: Option<Context>) -> Result<bool, ReplyError>;
 }
 
@@ -214,10 +214,10 @@ impl TryFrom<volume::Volume> for Volume {
 
 impl TryFrom<volume::Volumes> for Volumes {
     type Error = ReplyError;
-    fn try_from(grpc_volume_type: volume::Volumes) -> Result<Self, Self::Error> {
+    fn try_from(grpc_volumes: volume::Volumes) -> Result<Self, Self::Error> {
         let mut volumes: Vec<Volume> = vec![];
-        for volume in grpc_volume_type.volumes {
-            volumes.push(Volume::try_from(volume.clone())?)
+        for volume in grpc_volumes.volumes {
+            volumes.push(Volume::try_from(volume)?)
         }
         Ok(Volumes(volumes))
     }
@@ -499,19 +499,19 @@ impl TryFrom<get_volumes_request::Filter> for Filter {
     }
 }
 
-/// trait to be implemented for CreateVolume operation
+/// Trait to be implemented for CreateVolume operation
 pub trait CreateVolumeInfo: Send + Sync {
-    /// uuid of the volume
+    /// Uuid of the volume
     fn uuid(&self) -> VolumeId;
-    /// size in bytes of the volume
+    /// Size in bytes of the volume
     fn size(&self) -> u64;
-    /// no of replicas of the volume
+    /// No of replicas of the volume
     fn replicas(&self) -> u64;
-    /// volume policy of the volume, i.e self_heal
+    /// Volume policy of the volume, i.e self_heal
     fn policy(&self) -> VolumePolicy;
-    /// topology configuration of the volume
+    /// Topology configuration of the volume
     fn topology(&self) -> Option<Topology>;
-    /// labels to be added to the volumes for topology based scheduling
+    /// Labels to be added to the volumes for topology based scheduling
     fn labels(&self) -> Option<VolumeLabels>;
 }
 
@@ -608,9 +608,9 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
     }
 }
 
-/// trait to be implemented for DestroyVolume operation
+/// Trait to be implemented for DestroyVolume operation
 pub trait DestroyVolumeInfo: Send + Sync {
-    /// uuid of the volume to be destroyed
+    /// Uuid of the volume to be destroyed
     fn uuid(&self) -> VolumeId;
 }
 
@@ -640,11 +640,11 @@ impl From<&dyn DestroyVolumeInfo> for DestroyVolumeRequest {
     }
 }
 
-/// trait to be implemented for ShareVolume operation
+/// Trait to be implemented for ShareVolume operation
 pub trait ShareVolumeInfo: Send + Sync {
-    /// uuid of the volume to be shared
+    /// Uuid of the volume to be shared
     fn uuid(&self) -> VolumeId;
-    /// protocol over which the volume be shared
+    /// Protocol over which the volume be shared
     fn share(&self) -> VolumeShareProtocol;
 }
 
@@ -687,9 +687,9 @@ impl From<&dyn ShareVolumeInfo> for ShareVolumeRequest {
     }
 }
 
-/// trait to be implemented for UnshareVolume operation
+/// Trait to be implemented for UnshareVolume operation
 pub trait UnshareVolumeInfo: Send + Sync {
-    /// uuid of the volume to be unshared
+    /// Uuid of the volume to be unshared
     fn uuid(&self) -> VolumeId;
 }
 
@@ -719,13 +719,13 @@ impl From<&dyn UnshareVolumeInfo> for UnshareVolumeRequest {
     }
 }
 
-/// trait to be implemented for PublishVolume operation
+/// Trait to be implemented for PublishVolume operation
 pub trait PublishVolumeInfo: Send + Sync {
-    /// uuid of the volume to be published
+    /// Uuid of the volume to be published
     fn uuid(&self) -> VolumeId;
-    /// the node where front-end IO will be sent to
+    /// The node where front-end IO will be sent to
     fn target_node(&self) -> Option<NodeId>;
-    /// the protocol over which volume be published
+    /// The protocol over which volume be published
     fn share(&self) -> Option<VolumeShareProtocol>;
 }
 
@@ -790,11 +790,11 @@ impl From<&dyn PublishVolumeInfo> for PublishVolumeRequest {
     }
 }
 
-/// trait to be implemented for PublishVolume operation
+/// Trait to be implemented for PublishVolume operation
 pub trait UnpublishVolumeInfo: Send + Sync {
-    /// uuid of the volume to unpublish
+    /// Uuid of the volume to unpublish
     fn uuid(&self) -> VolumeId;
-    /// force unpublish
+    /// Force unpublish
     fn force(&self) -> bool;
 }
 
@@ -832,11 +832,11 @@ impl From<&dyn UnpublishVolumeInfo> for UnpublishVolumeRequest {
     }
 }
 
-/// trait to be implemented for SetVolumeReplica operation
+/// Trait to be implemented for SetVolumeReplica operation
 pub trait SetVolumeReplicaInfo: Send + Sync {
-    /// uuid of the concerned volume
+    /// Uuid of the concerned volume
     fn uuid(&self) -> VolumeId;
-    /// no of replicas we want to set for the volume
+    /// No of replicas we want to set for the volume
     fn replicas(&self) -> u8;
 }
 
@@ -877,7 +877,7 @@ impl From<&dyn SetVolumeReplicaInfo> for SetVolumeReplicaRequest {
     }
 }
 
-/// a helper to convert the replica topology map form grpc type to corresponding control plane type
+/// A helper to convert the replica topology map form grpc type to corresponding control plane type
 fn to_replica_topology_map(
     map: HashMap<String, volume::ReplicaTopology>,
 ) -> Result<HashMap<ReplicaId, ReplicaTopology>, ReplyError> {
@@ -896,7 +896,7 @@ fn to_replica_topology_map(
     Ok(replica_topology_map)
 }
 
-/// a helper to convert the replica topology map form control plane type to corresponding grpc type
+/// A helper to convert the replica topology map form control plane type to corresponding grpc type
 fn to_grpc_replica_topology_map(
     map: HashMap<ReplicaId, ReplicaTopology>,
 ) -> HashMap<String, volume::ReplicaTopology> {

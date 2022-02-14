@@ -18,7 +18,7 @@ use common_lib::{
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::{Channel, Uri};
 
-/// RPC Pool Client
+/// RPC Volume Client
 #[derive(Clone)]
 pub struct VolumeClient {
     inner: Client<VolumeGrpcClient<Channel>>,
@@ -39,7 +39,7 @@ impl Deref for VolumeClient {
     }
 }
 
-/// Implement pool operations supported by the Pool RPC client.
+/// Implement volume operations supported by the Volume RPC client.
 /// This converts the client side data into a RPC request.
 #[tonic::async_trait]
 impl VolumeOperations for VolumeClient {
@@ -49,7 +49,7 @@ impl VolumeOperations for VolumeClient {
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
         let req = self.request(create_volume_req, ctx, MessageIdVs::CreateVolume);
-        let response = self.client().clone().create_volume(req).await?.into_inner();
+        let response = self.client().create_volume(req).await?.into_inner();
         match response.reply {
             Some(create_volume_reply) => match create_volume_reply {
                 create_volume_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
@@ -69,7 +69,7 @@ impl VolumeOperations for VolumeClient {
             _ => GetVolumesRequest { filter: None },
         };
         let req = self.request(req, ctx, MessageIdVs::GetVolumes);
-        let response = self.client().clone().get_volumes(req).await?.into_inner();
+        let response = self.client().get_volumes(req).await?.into_inner();
         match response.reply {
             Some(get_volumes_reply) => match get_volumes_reply {
                 get_volumes_reply::Reply::Volumes(volumes) => Ok(Volumes::try_from(volumes)?),
@@ -85,12 +85,7 @@ impl VolumeOperations for VolumeClient {
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let req = self.request(destroy_volume_req, ctx, MessageIdVs::DestroyVolume);
-        let response = self
-            .client()
-            .clone()
-            .destroy_volume(req)
-            .await?
-            .into_inner();
+        let response = self.client().destroy_volume(req).await?.into_inner();
         match response.error {
             None => Ok(()),
             Some(err) => Err(err.into()),
@@ -103,7 +98,7 @@ impl VolumeOperations for VolumeClient {
         ctx: Option<Context>,
     ) -> Result<String, ReplyError> {
         let req = self.request(share_volume_req, ctx, MessageIdVs::ShareVolume);
-        let response = self.client().clone().share_volume(req).await?.into_inner();
+        let response = self.client().share_volume(req).await?.into_inner();
         match response.reply {
             Some(share_volume_reply) => match share_volume_reply {
                 share_volume_reply::Reply::Response(message) => Ok(message),
@@ -119,12 +114,7 @@ impl VolumeOperations for VolumeClient {
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let req = self.request(unshare_volume_req, ctx, MessageIdVs::UnshareVolume);
-        let response = self
-            .client()
-            .clone()
-            .unshare_volume(req)
-            .await?
-            .into_inner();
+        let response = self.client().unshare_volume(req).await?.into_inner();
         match response.error {
             None => Ok(()),
             Some(err) => Err(err.into()),
@@ -137,12 +127,7 @@ impl VolumeOperations for VolumeClient {
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
         let req = self.request(publish_volume_req, ctx, MessageIdVs::PublishVolume);
-        let response = self
-            .client()
-            .clone()
-            .publish_volume(req)
-            .await?
-            .into_inner();
+        let response = self.client().publish_volume(req).await?.into_inner();
         match response.reply {
             Some(publish_volume_reply) => match publish_volume_reply {
                 publish_volume_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
@@ -158,12 +143,7 @@ impl VolumeOperations for VolumeClient {
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
         let req = self.request(unpublish_volume_req, ctx, MessageIdVs::UnpublishVolume);
-        let response = self
-            .client()
-            .clone()
-            .unpublish_volume(req)
-            .await?
-            .into_inner();
+        let response = self.client().unpublish_volume(req).await?.into_inner();
         match response.reply {
             Some(unpublish_volume_reply) => match unpublish_volume_reply {
                 unpublish_volume_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
@@ -179,12 +159,7 @@ impl VolumeOperations for VolumeClient {
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
         let req = self.request(set_volume_replica_req, ctx, MessageIdVs::SetVolumeReplica);
-        let response = self
-            .client()
-            .clone()
-            .set_volume_replica(req)
-            .await?
-            .into_inner();
+        let response = self.client().set_volume_replica(req).await?.into_inner();
         match response.reply {
             Some(set_volume_replica_reply) => match set_volume_replica_reply {
                 set_volume_replica_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
@@ -195,7 +170,7 @@ impl VolumeOperations for VolumeClient {
     }
 
     async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
-        match self.client().clone().probe(ProbeRequest {}).await {
+        match self.client().probe(ProbeRequest {}).await {
             Ok(resp) => Ok(resp.into_inner().ready),
             Err(e) => Err(e.into()),
         }

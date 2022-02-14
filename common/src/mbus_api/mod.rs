@@ -666,7 +666,7 @@ impl TimeoutOptions {
         self.keep_alive_timeout
     }
 
-    /// get the max retires
+    /// get the max retries
     pub fn max_retires(&self) -> Option<u32> {
         self.max_retries
     }

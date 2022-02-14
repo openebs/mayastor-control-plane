@@ -39,8 +39,7 @@ impl VolumeOperations for Service {
 
     async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Volumes, ReplyError> {
         let req = GetVolumes { filter };
-        let service = self.clone();
-        let volumes = tokio::spawn(async move { service.get_volumes(&req).await }).await??;
+        let volumes = self.get_volumes(&req).await?;
         Ok(volumes)
     }
 

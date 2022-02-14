@@ -98,20 +98,21 @@ impl Cluster {
         timeout_opts: Option<TimeoutOptions>,
     ) -> Result<bool, ReplyError> {
         let timeout_opts = if timeout_opts.clone().is_none() {
-            Some(
-                TimeoutOptions::new()
-                    .with_timeout(Duration::from_millis(500))
-                    .with_max_retries(5),
-            )
+            TimeoutOptions::new()
+                .with_timeout(Duration::from_millis(500))
+                .with_max_retries(5)
         } else {
-            timeout_opts
+            timeout_opts.unwrap()
         };
-        for x in 1 .. timeout_opts.clone().unwrap().max_retires().unwrap() {
-            match client.probe(Some(Context::new(timeout_opts.clone()))).await {
+        for x in 1 .. timeout_opts.clone().max_retires().unwrap() {
+            match client
+                .probe(Some(Context::new(Some(timeout_opts.clone()))))
+                .await
+            {
                 Ok(resp) => return Ok(resp),
                 Err(_) => {
                     tracing::info!("Volume Service not available, Retrying ....{}", x);
-                    tokio::time::sleep(timeout_opts.clone().unwrap().base_timeout()).await;
+                    tokio::time::sleep(timeout_opts.base_timeout()).await;
                 }
             }
         }

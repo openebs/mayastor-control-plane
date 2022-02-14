@@ -33,12 +33,6 @@ impl VolumeServer {
     }
 }
 
-impl Drop for VolumeServer {
-    fn drop(&mut self) {
-        println!("Dropping volume server")
-    }
-}
-
 /// Implementation of the RPC methods.
 #[tonic::async_trait]
 impl VolumeGrpc for VolumeServer {
@@ -61,7 +55,6 @@ impl VolumeGrpc for VolumeServer {
         request: tonic::Request<DestroyVolumeRequest>,
     ) -> Result<tonic::Response<DestroyVolumeReply>, tonic::Status> {
         let req = request.into_inner();
-        // Dispatch the destroy call to the registered service.
         match self.service.destroy(&req, None).await {
             Ok(()) => Ok(Response::new(DestroyVolumeReply { error: None })),
             Err(e) => Ok(Response::new(DestroyVolumeReply {
