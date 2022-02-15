@@ -4,9 +4,9 @@ use common_lib::{
     mbus_api::{Message, ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetNodes, GetSpecs,
-            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
-            ShareReplica, UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, Protocol,
+            Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus, ShareReplica,
+            UnshareReplica, VolumeId,
         },
         openapi::{
             apis::StatusCode,
@@ -18,7 +18,10 @@ use common_lib::{
 };
 use grpc::{
     context::Context,
-    operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations},
+    operations::{
+        node::traits::NodeOperations, pool::traits::PoolOperations,
+        replica::traits::ReplicaOperations,
+    },
 };
 use itertools::Itertools;
 use std::{convert::TryFrom, time::Duration};
@@ -33,12 +36,13 @@ async fn pool() {
         .await
         .unwrap();
 
-    let mayastor = cluster.node(0);
-    let nodes = GetNodes::default().request().await.unwrap();
-    tracing::info!("Nodes: {:?}", nodes);
-
+    let node_client = cluster.grpc_client().node();
     let pool_client = cluster.grpc_client().pool();
     let rep_client = cluster.grpc_client().replica();
+
+    let mayastor = cluster.node(0);
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
 
     let pool = pool_client
         .create(
@@ -212,10 +216,11 @@ async fn replica_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
 
+    let node_client = cluster.grpc_client().node();
     let pool_client = cluster.grpc_client().pool();
     let rep_client = cluster.grpc_client().replica();
 
-    let nodes = GetNodes::default().request().await.unwrap();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pools = pool_client.get(Filter::None, None).await.unwrap();
@@ -443,7 +448,9 @@ async fn reconciler_missing_pool_state() {
         .await
         .unwrap();
 
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let client = cluster.rest_v00();
@@ -542,7 +549,8 @@ async fn reconciler_deleting_pool_on_node_down() {
         .await
         .unwrap();
 
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pool_1_id = cluster.pool(0, 0);

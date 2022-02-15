@@ -1,6 +1,7 @@
 use super::*;
 use rpc::mayastor::RpcHandle;
 use std::net::{IpAddr, SocketAddr};
+use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
 #[async_trait]
 impl ComponentAction for Mayastor {
@@ -10,7 +11,6 @@ impl ComponentAction for Mayastor {
             let mayastor_socket =
                 format!("{}:10124", cfg.next_ip_for_name(&Self::name(i, options))?);
             let name = Self::name(i, options);
-            let nats = format!("nats.{}:4222", options.cluster_label.name());
             let bin = utils::MAYASTOR_BINARY;
             let binary = options.mayastor_bin.clone().or_else(|| Self::binary(bin));
 
@@ -20,9 +20,9 @@ impl ComponentAction for Mayastor {
             } else {
                 ContainerSpec::from_image(&name, &options.mayastor_image)
             }
-            .with_args(vec!["-n", &nats])
             .with_args(vec!["-N", &name])
             .with_args(vec!["-g", &mayastor_socket])
+            .with_args(vec!["-R", DEFAULT_GRPC_CLIENT_ADDR])
             .with_bind("/tmp", "/host/tmp");
 
             if let Some(env) = &options.mayastor_env {

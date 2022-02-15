@@ -29,8 +29,7 @@ pub(crate) struct CliArgs {
     #[structopt(long, short, default_value = "nats://0.0.0.0:4222")]
     nats: String,
 
-    /// The CORE gRPC Server URL or address to connect to which exposes both the Pool and Replica
-    /// services.
+    /// The CORE gRPC Server URL or address to connect to the services.
     #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
     core_grpc: Uri,
 

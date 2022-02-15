@@ -1,15 +1,39 @@
 use super::*;
-use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
+use grpc::operations::node::traits::NodeOperations;
+
+fn client() -> impl NodeOperations {
+    core_grpc().node()
+}
 
 #[async_trait::async_trait]
 impl apis::actix_server::Nodes for RestApi {
     async fn get_node(Path(id): Path<String>) -> Result<models::Node, RestError<RestJsonError>> {
-        let node = MessageBus::get_node(&id.into()).await?;
+        let node = node(
+            id.clone(),
+            client()
+                .get(Filter::Node(id.into()), None)
+                .await?
+                .into_inner()
+                .get(0),
+        )?;
         Ok(node.into())
     }
 
     async fn get_nodes() -> Result<Vec<models::Node>, RestError<RestJsonError>> {
-        let nodes = MessageBus::get_nodes().await?;
-        Ok(nodes.into_vec())
+        let nodes = client().get(Filter::None, None).await?;
+        Ok(nodes.into_inner().into_vec())
+    }
+}
+
+/// returns node from node option and returns an error on non existence
+pub fn node(node_id: String, node: Option<&Node>) -> Result<Node, ReplyError> {
+    match node {
+        Some(node) => Ok(node.clone()),
+        None => Err(ReplyError {
+            kind: ReplyErrorKind::NotFound,
+            resource: ResourceKind::Node,
+            source: "Requested node was not found".to_string(),
+            extra: format!("Node id : {}", node_id),
+        }),
     }
 }

@@ -4,14 +4,14 @@ use common_lib::{
     mbus_api::*,
     types::v0::{
         message_bus::{
-            AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, GetNexuses,
-            GetNodes, GetSpecs, Nexus, NexusId, NexusShareProtocol, Protocol, RemoveNexusChild,
+            AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, Filter,
+            GetNexuses, GetSpecs, Nexus, NexusId, NexusShareProtocol, Protocol, RemoveNexusChild,
             ReplicaId, ShareNexus, UnshareNexus,
         },
         store::nexus::NexusSpec,
     },
 };
-use grpc::operations::replica::traits::ReplicaOperations;
+use grpc::operations::{node::traits::NodeOperations, replica::traits::ReplicaOperations};
 use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};
 
@@ -27,7 +27,8 @@ async fn nexus() {
         .unwrap();
 
     let mayastor = cluster.node(0);
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let rep_client = cluster.grpc_client().replica();
@@ -124,7 +125,8 @@ async fn nexus_share_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
 
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
@@ -308,8 +310,8 @@ async fn nexus_child_transaction() {
         .await
         .unwrap();
     let mayastor = cluster.node(0);
-
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let child2 = "malloc:///ch2?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b";

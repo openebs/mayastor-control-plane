@@ -11,3 +11,9 @@ pub mod replica;
 
 /// module for all corresponding client, server, traits for volume transport
 pub mod volume;
+
+/// module for all corresponding client, server, traits for node transport
+pub mod node;
+
+/// module for all corresponding client, server, traits for registration transport
+pub mod registration;

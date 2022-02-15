@@ -68,7 +68,16 @@ message GetNodesReply {
   }
 }
 
+message ProbeRequest {
+  // Intentionally empty.
+}
+
+message ProbeResponse {
+  bool ready = 1;
+}
+
 service NodeGrpc {
   rpc GetNodes (GetNodesRequest) returns (GetNodesReply) {}
   rpc GetBlockDevices (blockdevice.GetBlockDevicesRequest) returns (blockdevice.GetBlockDevicesReply) {}
+  rpc Probe (ProbeRequest) returns (ProbeResponse) {}
 }
