@@ -31,7 +31,7 @@ use std::{
 };
 use strum_macros::{AsRefStr, ToString};
 use tokio::task::JoinError;
-use tonic::Status;
+use tonic::{Code, Status};
 
 /// Result wrapper for send/receive
 pub type BusResult<T> = Result<T, Error>;
@@ -350,6 +350,12 @@ impl From<tonic::Status> for ReplyError {
     }
 }
 
+impl From<ReplyError> for tonic::Status {
+    fn from(err: ReplyError) -> Self {
+        tonic::Status::new(Code::Aborted, err.full_string())
+    }
+}
+
 impl From<tonic::transport::Error> for ReplyError {
     fn from(e: tonic::transport::Error) -> Self {
         Self::tonic_reply_error(e.to_string(), e.full_string())
@@ -413,6 +419,15 @@ impl ReplyError {
             kind: ReplyErrorKind::Aborted,
             resource,
             source: "Error unwrapping to desired type".to_string(),
+            extra: "".to_string(),
+        }
+    }
+    /// used when we get an invalid argument
+    pub fn invalid_argument_err(resource: ResourceKind) -> Self {
+        Self {
+            kind: ReplyErrorKind::InvalidArgument,
+            resource,
+            source: "Expected argument was not found".to_string(),
             extra: "".to_string(),
         }
     }

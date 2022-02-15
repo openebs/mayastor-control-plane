@@ -1,5 +1,5 @@
 use crate::{
-    operations::volume::traits::VolumeOperations,
+    operations::volume::traits::{ValidateRequestTypes, VolumeOperations},
     volume::{
         create_volume_reply, get_volumes_reply, publish_volume_reply, set_volume_replica_reply,
         share_volume_reply, unpublish_volume_reply,
@@ -40,7 +40,7 @@ impl VolumeGrpc for VolumeServer {
         &self,
         request: tonic::Request<CreateVolumeRequest>,
     ) -> Result<tonic::Response<CreateVolumeReply>, tonic::Status> {
-        let req = request.into_inner();
+        let req = request.into_inner().validated()?;
         match self.service.create(&req, None).await {
             Ok(volume) => Ok(Response::new(CreateVolumeReply {
                 reply: Some(create_volume_reply::Reply::Volume(volume.into())),
@@ -54,7 +54,7 @@ impl VolumeGrpc for VolumeServer {
         &self,
         request: tonic::Request<DestroyVolumeRequest>,
     ) -> Result<tonic::Response<DestroyVolumeReply>, tonic::Status> {
-        let req = request.into_inner();
+        let req = request.into_inner().validated()?;
         match self.service.destroy(&req, None).await {
             Ok(()) => Ok(Response::new(DestroyVolumeReply { error: None })),
             Err(e) => Ok(Response::new(DestroyVolumeReply {
@@ -91,7 +91,7 @@ impl VolumeGrpc for VolumeServer {
         &self,
         request: tonic::Request<PublishVolumeRequest>,
     ) -> Result<tonic::Response<PublishVolumeReply>, tonic::Status> {
-        let req = request.into_inner();
+        let req = request.into_inner().validated()?;
         match self.service.publish(&req, None).await {
             Ok(volume) => Ok(Response::new(PublishVolumeReply {
                 reply: Some(publish_volume_reply::Reply::Volume(volume.into())),
@@ -105,7 +105,7 @@ impl VolumeGrpc for VolumeServer {
         &self,
         request: tonic::Request<UnpublishVolumeRequest>,
     ) -> Result<tonic::Response<UnpublishVolumeReply>, tonic::Status> {
-        let req = request.into_inner();
+        let req = request.into_inner().validated()?;
         match self.service.unpublish(&req, None).await {
             Ok(volume) => Ok(Response::new(UnpublishVolumeReply {
                 reply: Some(unpublish_volume_reply::Reply::Volume(volume.into())),
@@ -119,7 +119,7 @@ impl VolumeGrpc for VolumeServer {
         &self,
         request: tonic::Request<ShareVolumeRequest>,
     ) -> Result<tonic::Response<ShareVolumeReply>, tonic::Status> {
-        let req = request.into_inner();
+        let req = request.into_inner().validated()?;
         match self.service.share(&req, None).await {
             Ok(message) => Ok(Response::new(ShareVolumeReply {
                 reply: Some(share_volume_reply::Reply::Response(message)),
@@ -133,7 +133,7 @@ impl VolumeGrpc for VolumeServer {
         &self,
         request: tonic::Request<UnshareVolumeRequest>,
     ) -> Result<tonic::Response<UnshareVolumeReply>, tonic::Status> {
-        let req = request.into_inner();
+        let req = request.into_inner().validated()?;
         match self.service.unshare(&req, None).await {
             Ok(()) => Ok(Response::new(UnshareVolumeReply { error: None })),
             Err(e) => Ok(Response::new(UnshareVolumeReply {
@@ -145,7 +145,7 @@ impl VolumeGrpc for VolumeServer {
         &self,
         request: tonic::Request<SetVolumeReplicaRequest>,
     ) -> Result<tonic::Response<SetVolumeReplicaReply>, tonic::Status> {
-        let req = request.into_inner();
+        let req = request.into_inner().validated()?;
         match self.service.set_volume_replica(&req, None).await {
             Ok(volume) => Ok(Response::new(SetVolumeReplicaReply {
                 reply: Some(set_volume_replica_reply::Reply::Volume(volume.into())),

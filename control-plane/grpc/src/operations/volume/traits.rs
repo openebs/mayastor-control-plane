@@ -499,6 +499,14 @@ impl TryFrom<get_volumes_request::Filter> for Filter {
     }
 }
 
+/// Trait to validate the Grpc type by an intermediate conversion
+pub trait ValidateRequestTypes {
+    /// The validated type
+    type Validated;
+    /// The method that is needed to be implemented to ensure validation
+    fn validated(self) -> Result<Self::Validated, ReplyError>;
+}
+
 /// Trait to be implemented for CreateVolume operation
 pub trait CreateVolumeInfo: Send + Sync {
     /// Uuid of the volume
@@ -541,42 +549,65 @@ impl CreateVolumeInfo for CreateVolume {
     }
 }
 
-impl CreateVolumeInfo for CreateVolumeRequest {
+/// Intermediate structure that validates the conversion to CreateVolumeRequest type
+pub struct ValidatedCreateVolumeRequest {
+    inner: CreateVolumeRequest,
+    uuid: VolumeId,
+    topology: Option<Topology>,
+}
+
+impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
     fn uuid(&self) -> VolumeId {
-        VolumeId::try_from(self.uuid.clone().unwrap()).unwrap()
+        self.uuid.clone()
     }
 
     fn size(&self) -> u64 {
-        self.size
+        self.inner.size
     }
 
     fn replicas(&self) -> u64 {
-        self.replicas
+        self.inner.replicas
     }
 
     fn policy(&self) -> VolumePolicy {
-        match self.policy.clone() {
+        match self.inner.policy.clone() {
             Some(policy) => policy.into(),
             None => VolumePolicy::default(),
         }
     }
 
     fn topology(&self) -> Option<Topology> {
-        match self.topology.clone() {
-            Some(topology) => match Topology::try_from(topology) {
-                Ok(topology) => Some(topology),
-                // TODO:: Figure out some way to handle this situation
-                Err(_) => None,
-            },
-            None => None,
-        }
+        self.topology.clone()
     }
 
     fn labels(&self) -> Option<VolumeLabels> {
-        match self.labels.clone() {
+        match self.inner.labels.clone() {
             None => None,
             Some(labels) => Some(labels.value),
         }
+    }
+}
+
+impl ValidateRequestTypes for CreateVolumeRequest {
+    type Validated = ValidatedCreateVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedCreateVolumeRequest {
+            uuid: match self.uuid.clone() {
+                Some(uuid) => match VolumeId::try_from(uuid) {
+                    Ok(volumeid) => volumeid,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+            },
+            topology: match self.topology.clone() {
+                Some(topology) => match Topology::try_from(topology) {
+                    Ok(topology) => Some(topology),
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => None,
+            },
+            inner: self,
+        })
     }
 }
 
@@ -620,9 +651,29 @@ impl DestroyVolumeInfo for DestroyVolume {
     }
 }
 
-impl DestroyVolumeInfo for DestroyVolumeRequest {
+/// Intermediate structure that validates the conversion to DestroyVolumeRequest type
+pub struct ValidatedDestroyVolumeRequest {
+    uuid: VolumeId,
+}
+
+impl DestroyVolumeInfo for ValidatedDestroyVolumeRequest {
     fn uuid(&self) -> VolumeId {
-        VolumeId::try_from(self.uuid.clone().unwrap()).unwrap()
+        self.uuid.clone()
+    }
+}
+
+impl ValidateRequestTypes for DestroyVolumeRequest {
+    type Validated = ValidatedDestroyVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedDestroyVolumeRequest {
+            uuid: match self.uuid {
+                Some(uuid) => match VolumeId::try_from(uuid) {
+                    Ok(volumeid) => volumeid,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+            },
+        })
     }
 }
 
@@ -658,13 +709,35 @@ impl ShareVolumeInfo for ShareVolume {
     }
 }
 
-impl ShareVolumeInfo for ShareVolumeRequest {
+/// Intermediate structure that validates the conversion to ShareVolumeRequest type
+pub struct ValidatedShareVolumeRequest {
+    inner: ShareVolumeRequest,
+    uuid: VolumeId,
+}
+
+impl ShareVolumeInfo for ValidatedShareVolumeRequest {
     fn uuid(&self) -> VolumeId {
-        VolumeId::try_from(self.uuid.clone().unwrap()).unwrap()
+        self.uuid.clone()
     }
 
     fn share(&self) -> VolumeShareProtocol {
-        self.share.into()
+        self.inner.share.into()
+    }
+}
+
+impl ValidateRequestTypes for ShareVolumeRequest {
+    type Validated = ValidatedShareVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedShareVolumeRequest {
+            uuid: match self.uuid.clone() {
+                Some(uuid) => match VolumeId::try_from(uuid) {
+                    Ok(volumeid) => volumeid,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+            },
+            inner: self,
+        })
     }
 }
 
@@ -699,9 +772,29 @@ impl UnshareVolumeInfo for UnshareVolume {
     }
 }
 
-impl UnshareVolumeInfo for UnshareVolumeRequest {
+/// Intermediate structure that validates the conversion to UnshareVolumeRequest type
+pub struct ValidatedUnshareVolumeRequest {
+    uuid: VolumeId,
+}
+
+impl UnshareVolumeInfo for ValidatedUnshareVolumeRequest {
     fn uuid(&self) -> VolumeId {
-        VolumeId::try_from(self.uuid.clone().unwrap()).unwrap()
+        self.uuid.clone()
+    }
+}
+
+impl ValidateRequestTypes for UnshareVolumeRequest {
+    type Validated = ValidatedUnshareVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedUnshareVolumeRequest {
+            uuid: match self.uuid {
+                Some(uuid) => match VolumeId::try_from(uuid) {
+                    Ok(volumeid) => volumeid,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+            },
+        })
     }
 }
 
@@ -743,22 +836,49 @@ impl PublishVolumeInfo for PublishVolume {
     }
 }
 
-impl PublishVolumeInfo for PublishVolumeRequest {
+/// Intermediate structure that validates the conversion to PublishVolumeRequest type
+pub struct ValidatedPublishVolumeRequest {
+    inner: PublishVolumeRequest,
+    uuid: VolumeId,
+    share: Option<VolumeShareProtocol>,
+}
+
+impl PublishVolumeInfo for ValidatedPublishVolumeRequest {
     fn uuid(&self) -> VolumeId {
-        VolumeId::try_from(self.uuid.clone().unwrap()).unwrap()
+        self.uuid.clone()
     }
 
     fn target_node(&self) -> Option<NodeId> {
-        self.target_node
+        self.inner
+            .target_node
             .clone()
             .map(|target_node| target_node.into())
     }
 
     fn share(&self) -> Option<VolumeShareProtocol> {
-        self.share.map(|protocol| {
-            volume::VolumeShareProtocol::from_i32(protocol)
-                .unwrap()
-                .into()
+        self.share
+    }
+}
+
+impl ValidateRequestTypes for PublishVolumeRequest {
+    type Validated = ValidatedPublishVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedPublishVolumeRequest {
+            uuid: match self.uuid.clone() {
+                Some(uuid) => match VolumeId::try_from(uuid) {
+                    Ok(volumeid) => volumeid,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+            },
+            share: match self.share {
+                Some(share) => match volume::VolumeShareProtocol::from_i32(share) {
+                    Some(share) => Some(share.into()),
+                    None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => None,
+            },
+            inner: self,
         })
     }
 }
@@ -807,13 +927,35 @@ impl UnpublishVolumeInfo for UnpublishVolume {
         self.force()
     }
 }
-impl UnpublishVolumeInfo for UnpublishVolumeRequest {
-    fn uuid(&self) -> VolumeId {
-        VolumeId::try_from(self.uuid.clone().unwrap()).unwrap()
-    }
 
+/// Intermediate structure that validates the conversion to UnpublishVolumeRequest type
+pub struct ValidatedUnpublishVolumeRequest {
+    inner: UnpublishVolumeRequest,
+    uuid: VolumeId,
+}
+
+impl UnpublishVolumeInfo for ValidatedUnpublishVolumeRequest {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
     fn force(&self) -> bool {
-        self.force
+        self.inner.force
+    }
+}
+
+impl ValidateRequestTypes for UnpublishVolumeRequest {
+    type Validated = ValidatedUnpublishVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedUnpublishVolumeRequest {
+            uuid: match self.uuid.clone() {
+                Some(uuid) => match VolumeId::try_from(uuid) {
+                    Ok(volumeid) => volumeid,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+            },
+            inner: self,
+        })
     }
 }
 
@@ -849,13 +991,35 @@ impl SetVolumeReplicaInfo for SetVolumeReplica {
         self.replicas
     }
 }
-impl SetVolumeReplicaInfo for SetVolumeReplicaRequest {
-    fn uuid(&self) -> VolumeId {
-        VolumeId::try_from(self.uuid.clone().unwrap()).unwrap()
-    }
 
+/// Intermediate structure that validates the conversion to SetVolumeReplicaRequest type
+pub struct ValidatedSetVolumeReplicaRequest {
+    inner: SetVolumeReplicaRequest,
+    uuid: VolumeId,
+}
+
+impl SetVolumeReplicaInfo for ValidatedSetVolumeReplicaRequest {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
     fn replicas(&self) -> u8 {
-        self.replicas as u8
+        self.inner.replicas as u8
+    }
+}
+
+impl ValidateRequestTypes for SetVolumeReplicaRequest {
+    type Validated = ValidatedSetVolumeReplicaRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedSetVolumeReplicaRequest {
+            uuid: match self.uuid.clone() {
+                Some(uuid) => match VolumeId::try_from(uuid) {
+                    Ok(volumeid) => volumeid,
+                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                },
+                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+            },
+            inner: self,
+        })
     }
 }
 
