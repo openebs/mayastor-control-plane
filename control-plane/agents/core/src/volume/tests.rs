@@ -6,9 +6,9 @@ use common_lib::{
     types::v0::{
         message_bus::{
             Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, Filter, GetNexuses,
-            GetNodes, GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica,
-            ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol,
-            VolumeState, VolumeStatus,
+            GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume,
+            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol, VolumeState,
+            VolumeStatus,
         },
         openapi::apis::{StatusCode, Uuid},
         store::{
@@ -32,7 +32,10 @@ use common_lib::{
         store::{definitions::StorableObject, volume::VolumeSpec},
     },
 };
-use grpc::operations::{replica::traits::ReplicaOperations, volume::traits::VolumeOperations};
+use grpc::operations::{
+    node::traits::NodeOperations, replica::traits::ReplicaOperations,
+    volume::traits::VolumeOperations,
+};
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
@@ -53,7 +56,8 @@ async fn volume() {
         .await
         .unwrap();
 
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     test_volume(&cluster).await;
@@ -81,7 +85,8 @@ async fn hotspare() {
         .build()
         .await
         .unwrap();
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     hotspare_faulty_children(&cluster).await;
@@ -105,7 +110,8 @@ async fn volume_nexus_reconcile() {
         .build()
         .await
         .unwrap();
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     missing_nexus_reconcile(&cluster).await;
@@ -124,7 +130,8 @@ async fn garbage_collection() {
         .build()
         .await
         .unwrap();
-    let nodes = GetNodes::default().request().await.unwrap();
+    let node_client = cluster.grpc_client().node();
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     unused_nexus_reconcile(&cluster).await;

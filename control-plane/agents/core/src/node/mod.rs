@@ -4,32 +4,29 @@ mod specs;
 /// node watchdog to keep track of a node's liveness
 pub(crate) mod watchdog;
 
-use super::{
-    core::registry::Registry, handler, handler_publish, impl_publish_handler, impl_request_handler,
-    CliArgs,
-};
-use common::{errors::SvcError, Service};
-use common_lib::mbus_api::{v0::*, *};
-
+use super::{core::registry::Registry, handler, impl_request_handler, CliArgs};
 use async_trait::async_trait;
-use common_lib::types::v0::message_bus::{
-    ChannelVs, Deregister, GetBlockDevices, GetNodes, GetSpecs, GetStates, Register,
+use common::{errors::SvcError, Service};
+use common_lib::{
+    mbus_api::{v0::*, *},
+    types::v0::message_bus::{ChannelVs, GetBlockDevices, GetNodes, GetSpecs, GetStates},
 };
-use std::{convert::TryInto, marker::PhantomData};
+use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
+use std::{convert::TryInto, marker::PhantomData, sync::Arc};
 
 pub(crate) async fn configure(builder: Service) -> Service {
     let node_service = create_node_service(&builder).await;
+    let node_grpc_service = NodeServer::new(Arc::new(node_service.clone()));
+    let registration_service = RegistrationServer::new(Arc::new(node_service.clone()));
     builder
         .with_shared_state(node_service)
+        .with_shared_state(node_grpc_service)
+        .with_shared_state(registration_service)
         .with_channel(ChannelVs::Registry)
-        .with_subscription(handler_publish!(Register))
-        .with_subscription(handler_publish!(Deregister))
         .with_subscription(handler!(GetSpecs))
         .with_subscription(handler!(GetStates))
         .with_channel(ChannelVs::Node)
-        .with_subscription(handler!(GetNodes))
         .with_subscription(handler!(GetBlockDevices))
-        .with_default_liveness()
 }
 
 async fn create_node_service(builder: &Service) -> service::Service {
@@ -45,9 +42,10 @@ async fn create_node_service(builder: &Service) -> service::Service {
 mod tests {
     use super::*;
     use common_lib::types::v0::{
-        message_bus::{Liveness, Node, NodeId, NodeState, NodeStatus},
+        message_bus::{Filter, Node, NodeId, NodeState, NodeStatus},
         store::node::{NodeLabels, NodeSpec},
     };
+    use grpc::operations::node::traits::NodeOperations;
     use std::time::Duration;
     use testlib::ClusterBuilder;
 
@@ -79,8 +77,8 @@ mod tests {
 
         let maya_name = cluster.node(0);
         let grpc = format!("{}:10124", cluster.node_ip(0));
-
-        let nodes = GetNodes::default().request().await.unwrap();
+        let node_client = cluster.grpc_client().node();
+        let nodes = node_client.get(Filter::None, None).await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), 1);
         assert_eq!(
@@ -88,7 +86,7 @@ mod tests {
             &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online)
         );
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        let nodes = GetNodes::default().request().await.unwrap();
+        let nodes = node_client.get(Filter::None, None).await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), 1);
         // still Online because the node is reachable via gRPC!
@@ -99,7 +97,7 @@ mod tests {
 
         cluster.composer().kill(maya_name.as_str()).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        let nodes = GetNodes::default().request().await.unwrap();
+        let nodes = node_client.get(Filter::None, None).await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), 1);
         assert_eq!(
@@ -110,12 +108,12 @@ mod tests {
 
         let node = nodes.0.first().cloned().unwrap();
         cluster.restart_core().await;
-        Liveness {}
-            .request_on_ext(ChannelVs::Node, bus_timeout.clone())
+        cluster
+            .node_service_liveness(Some(bus_timeout.clone()))
             .await
-            .unwrap();
+            .expect("Should have restarted by now");
 
-        let nodes = GetNodes::default().request().await.unwrap();
+        let nodes = node_client.get(Filter::None, None).await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), 1);
         assert_eq!(
@@ -125,12 +123,12 @@ mod tests {
 
         cluster.composer().stop(maya_name.as_str()).await.unwrap();
         cluster.restart_core().await;
-        Liveness {}
-            .request_on_ext(ChannelVs::Node, bus_timeout)
+        cluster
+            .node_service_liveness(Some(bus_timeout.clone()))
             .await
-            .unwrap();
+            .expect("Should have restarted by now");
 
-        let nodes = GetNodes::default().request().await.unwrap();
+        let nodes = node_client.get(Filter::None, None).await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), 1);
         assert_eq!(
@@ -151,13 +149,18 @@ mod tests {
             .await
             .unwrap();
 
-        let nodes = GetNodes::default().request().await.unwrap();
+        let node_client = cluster.grpc_client().node();
+        let nodes = node_client.get(Filter::None, None).await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), expected_nodes);
 
         cluster.restart_core().await;
+        cluster
+            .node_service_liveness(None)
+            .await
+            .expect("Should have restarted by now");
 
-        let nodes = GetNodes::default().request().await.unwrap();
+        let nodes = node_client.get(Filter::None, None).await.unwrap();
         tracing::info!("Nodes: {:?}", nodes);
         assert_eq!(nodes.0.len(), expected_nodes);
     }

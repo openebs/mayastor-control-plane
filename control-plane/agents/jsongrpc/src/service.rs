@@ -1,12 +1,11 @@
 // clippy warning caused by the instrument macro
 #![allow(clippy::unit_arg)]
 
+use crate::CORE_CLIENT;
 use ::rpc::mayastor::{JsonRpcReply, JsonRpcRequest};
-use common::errors::{BusGetNode, JsonRpcDeserialise, NodeNotOnline, SvcError};
-use common_lib::{
-    mbus_api::message_bus::v0::{MessageBus, *},
-    types::v0::message_bus::JsonGrpcRequest,
-};
+use common::errors::{JsonRpcDeserialise, NodeNotOnline, SvcError};
+use common_lib::types::v0::message_bus::{Filter, JsonGrpcRequest, Node, NodeId};
+use grpc::operations::node::traits::NodeOperations;
 use rpc::mayastor::json_rpc_client::JsonRpcClient;
 use snafu::{OptionExt, ResultExt};
 
@@ -19,11 +18,21 @@ impl JsonGrpcSvc {
     pub(super) async fn json_grpc_call(
         request: &JsonGrpcRequest,
     ) -> Result<serde_json::Value, SvcError> {
-        let node = MessageBus::get_node(&request.node)
+        let response = match CORE_CLIENT
+            .get()
+            .expect("Client is not initialised")
+            .node() // get node client
+            .get(Filter::Node(request.clone().node), None)
             .await
-            .context(BusGetNode {
-                node: request.node.clone(),
-            })?;
+        {
+            Ok(response) => response,
+            Err(_) => {
+                return Err(SvcError::NodeNotFound {
+                    node_id: request.clone().node,
+                })
+            }
+        };
+        let node = node(request.clone().node, response.into_inner().get(0))?;
         let node = node.state().context(NodeNotOnline {
             node: request.node.to_owned(),
         })?;
@@ -45,5 +54,13 @@ impl JsonGrpcSvc {
             .into_inner();
 
         Ok(serde_json::from_str(&response.result).context(JsonRpcDeserialise)?)
+    }
+}
+
+/// returns node from node option and returns an error on non existence
+pub fn node(node_id: NodeId, node: Option<&Node>) -> Result<Node, SvcError> {
+    match node {
+        Some(node) => Ok(node.clone()),
+        None => Err(SvcError::NodeNotFound { node_id }),
     }
 }
