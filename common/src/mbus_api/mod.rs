@@ -423,12 +423,21 @@ impl ReplyError {
         }
     }
     /// used when we get an invalid argument
-    pub fn invalid_argument_err(resource: ResourceKind) -> Self {
+    pub fn invalid_argument(resource: ResourceKind, arg_name: &str, error: String) -> Self {
         Self {
             kind: ReplyErrorKind::InvalidArgument,
             resource,
-            source: "Expected argument was not found".to_string(),
-            extra: "".to_string(),
+            source: error,
+            extra: format!("Invalid {} was provided", arg_name),
+        }
+    }
+    /// used when we encounter a missing argument
+    pub fn missing_argument(resource: ResourceKind, arg_name: &str) -> Self {
+        Self {
+            kind: ReplyErrorKind::InvalidArgument,
+            resource,
+            source: arg_name.to_string(),
+            extra: format!("Argument {} was not provided", arg_name),
         }
     }
 }
@@ -682,7 +691,7 @@ impl TimeoutOptions {
     }
 
     /// get the max retries
-    pub fn max_retires(&self) -> Option<u32> {
+    pub fn max_retries(&self) -> Option<u32> {
         self.max_retries
     }
 }

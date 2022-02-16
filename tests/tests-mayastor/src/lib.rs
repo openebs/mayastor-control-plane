@@ -104,7 +104,7 @@ impl Cluster {
         } else {
             timeout_opts.unwrap()
         };
-        for x in 1 .. timeout_opts.clone().max_retires().unwrap() {
+        for x in 1 .. timeout_opts.clone().max_retries().unwrap() {
             match client
                 .probe(Some(Context::new(Some(timeout_opts.clone()))))
                 .await

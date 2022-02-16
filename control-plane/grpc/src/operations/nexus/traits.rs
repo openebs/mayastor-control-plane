@@ -15,7 +15,13 @@ impl TryFrom<nexus::Nexus> for Nexus {
         for child_grpc_type in nexus_grpc_type.children {
             let child = match Child::try_from(child_grpc_type) {
                 Ok(child) => child,
-                Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Nexus)),
+                Err(err) => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Nexus,
+                        "nexus.children",
+                        err.to_string(),
+                    ))
+                }
             };
             children.push(child)
         }
@@ -25,21 +31,44 @@ impl TryFrom<nexus::Nexus> for Nexus {
             uuid: match nexus_grpc_type.uuid {
                 Some(uuid) => match NexusId::try_from(uuid) {
                     Ok(nexusid) => nexusid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Nexus)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Nexus,
+                            "nexus.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Nexus)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Nexus,
+                        "nexus.uuid",
+                    ))
+                }
             },
             size: nexus_grpc_type.size,
             status: match nexus::NexusStatus::from_i32(nexus_grpc_type.status) {
                 Some(status) => status.into(),
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Nexus)),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Nexus,
+                        "nexus.status",
+                        "".to_string(),
+                    ))
+                }
             },
             children,
             device_uri: nexus_grpc_type.device_uri,
             rebuilds: nexus_grpc_type.rebuilds,
             share: match common::Protocol::from_i32(nexus_grpc_type.share) {
                 Some(share) => share.into(),
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Nexus)),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Nexus,
+                        "nexus.share",
+                        "".to_string(),
+                    ))
+                }
             },
         };
         Ok(nexus)
@@ -119,7 +148,13 @@ impl TryFrom<nexus::Child> for Child {
             uri: child_grpc_type.uri.into(),
             state: match ChildState::try_from(child_grpc_type.state) {
                 Ok(state) => state,
-                Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Nexus)),
+                Err(err) => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Nexus,
+                        "child.state",
+                        err.to_string(),
+                    ))
+                }
             },
             rebuild_progress: child_grpc_type.rebuild_progress.map(|i| i as u8),
         };

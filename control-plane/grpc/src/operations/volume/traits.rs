@@ -114,19 +114,39 @@ impl TryFrom<volume::Volume> for Volume {
     fn try_from(volume_grpc_type: volume::Volume) -> Result<Self, Self::Error> {
         let grpc_volume_definition = match volume_grpc_type.definition {
             Some(definition) => definition,
-            None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "volume.definition",
+                ))
+            }
         };
         let grpc_volume_spec = match grpc_volume_definition.spec {
             Some(spec) => spec,
-            None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "volume.definition.spec",
+                ))
+            }
         };
         let grpc_volume_meta = match grpc_volume_definition.metadata {
             Some(meta) => meta,
-            None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "volume.definition.metadata",
+                ))
+            }
         };
         let grpc_volume_state = match volume_grpc_type.state {
             Some(state) => state,
-            None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "volume.state",
+                ))
+            }
         };
         let volume_spec_status = match common::SpecStatus::from_i32(grpc_volume_meta.status) {
             Some(status) => match status {
@@ -135,18 +155,41 @@ impl TryFrom<volume::Volume> for Volume {
                 }
                 _ => match common::SpecStatus::from_i32(grpc_volume_meta.status) {
                     Some(status) => status.into(),
-                    None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume.definition.spec.status",
+                            "".to_string(),
+                        ))
+                    }
                 },
             },
-            None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            None => {
+                return Err(ReplyError::invalid_argument(
+                    ResourceKind::Volume,
+                    "volume.definition.spec.status",
+                    "".to_string(),
+                ))
+            }
         };
         let volume_spec = VolumeSpec {
             uuid: match grpc_volume_spec.uuid {
                 Some(id) => match VolumeId::try_from(id) {
                     Ok(volume_id) => volume_id,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume.definition.spec.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "volume.definition.spec.uuid",
+                    ))
+                }
             },
             size: grpc_volume_spec.size,
             labels: match grpc_volume_spec.labels {
@@ -158,18 +201,35 @@ impl TryFrom<volume::Volume> for Volume {
             target: match grpc_volume_spec.target {
                 Some(target) => match VolumeTarget::try_from(target) {
                     Ok(target) => Some(target),
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume.definition.spec.target",
+                            err.to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
             policy: match grpc_volume_spec.policy {
                 Some(policy) => policy.into(),
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "volume.definition.spec.policy",
+                    ))
+                }
             },
             topology: match grpc_volume_spec.topology {
                 Some(topology) => match Topology::try_from(topology) {
                     Ok(topology) => Some(topology),
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume.definition.spec.topology",
+                            err.to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
@@ -177,7 +237,13 @@ impl TryFrom<volume::Volume> for Volume {
             last_nexus_id: match grpc_volume_spec.last_nexus_id {
                 Some(id) => match NexusId::try_from(id) {
                     Ok(volume_id) => Some(volume_id),
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume.definition.spec.last_nexus_id",
+                            err.to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
@@ -187,25 +253,54 @@ impl TryFrom<volume::Volume> for Volume {
             uuid: match grpc_volume_state.uuid {
                 Some(id) => match VolumeId::try_from(id) {
                     Ok(volume_id) => volume_id,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume.state.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "volume.state.uuid",
+                    ))
+                }
             },
             size: grpc_volume_state.size,
             status: match nexus::NexusStatus::from_i32(grpc_volume_state.status) {
                 Some(status) => status.into(),
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Volume,
+                        "volume.state.status",
+                        "".to_string(),
+                    ))
+                }
             },
             target: match grpc_volume_state.target {
                 Some(target) => match Nexus::try_from(target) {
                     Ok(target) => Some(target),
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume.state.target",
+                            err.to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
             replica_topology: match to_replica_topology_map(grpc_volume_state.replica_topology) {
                 Ok(replica_topology_map) => replica_topology_map,
-                Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                Err(err) => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Volume,
+                        "volume.state.replica_topology",
+                        err.to_string(),
+                    ))
+                }
             },
         };
         Ok(Volume::new(volume_spec, volume_state))
@@ -242,7 +337,13 @@ impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
         let pool = replica_topology_grpc_type.pool.map(|pool| pool.into());
         let status = match ReplicaStatus::try_from(replica_topology_grpc_type.status) {
             Ok(status) => status,
-            Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            Err(err) => {
+                return Err(ReplyError::invalid_argument(
+                    ResourceKind::Volume,
+                    "replica_topology.status",
+                    err.to_string(),
+                ))
+            }
         };
         Ok(ReplicaTopology::new(node, pool, status))
     }
@@ -268,14 +369,26 @@ impl TryFrom<volume::Topology> for Topology {
             node: match topology_grpc_type.node {
                 Some(node_topo) => match NodeTopology::try_from(node_topo) {
                     Ok(node_topo) => Some(node_topo),
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "topology.node_topology",
+                            err.to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
             pool: match topology_grpc_type.pool {
                 Some(pool_topo) => match PoolTopology::try_from(pool_topo) {
                     Ok(pool_topo) => Some(pool_topo),
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "topology.pool_topology",
+                            err.to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
@@ -305,7 +418,12 @@ impl TryFrom<volume::NodeTopology> for NodeTopology {
                     NodeTopology::Explicit(explicit.into())
                 }
             },
-            None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "node_topology.topology",
+                ))
+            }
         };
         Ok(node_topo)
     }
@@ -333,7 +451,12 @@ impl TryFrom<volume::PoolTopology> for PoolTopology {
                     PoolTopology::Labelled(labels.into())
                 }
             },
-            None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "pool_topology.topology",
+                ))
+            }
         };
         Ok(pool_topo)
     }
@@ -435,14 +558,31 @@ impl TryFrom<volume::VolumeTarget> for VolumeTarget {
             match volume_target_grpc_type.nexus_id {
                 Some(id) => match NexusId::try_from(id) {
                     Ok(nexusid) => nexusid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "target.nexus_id",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "target.nexus_id",
+                    ))
+                }
             },
             match volume_target_grpc_type.protocol {
                 Some(i) => match volume::VolumeShareProtocol::from_i32(i) {
                     Some(protocol) => Some(protocol.into()),
-                    None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "target.protocol",
+                            "".to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
@@ -492,7 +632,13 @@ impl TryFrom<get_volumes_request::Filter> for Filter {
             get_volumes_request::Filter::Volume(volume_filter) => {
                 Filter::Volume(match VolumeId::try_from(volume_filter.volume_id) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume_filter.volume_id",
+                            err.to_string(),
+                        ))
+                    }
                 })
             }
         })
@@ -595,14 +741,31 @@ impl ValidateRequestTypes for CreateVolumeRequest {
             uuid: match self.uuid.clone() {
                 Some(uuid) => match VolumeId::try_from(uuid) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "create_volume_request.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "create_volume_request.uuid",
+                    ))
+                }
             },
             topology: match self.topology.clone() {
                 Some(topology) => match Topology::try_from(topology) {
                     Ok(topology) => Some(topology),
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "create_volume_request.topology",
+                            err.to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
@@ -669,9 +832,20 @@ impl ValidateRequestTypes for DestroyVolumeRequest {
             uuid: match self.uuid {
                 Some(uuid) => match VolumeId::try_from(uuid) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "destroy_volume_request.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "destroy_volume_request.uuid",
+                    ))
+                }
             },
         })
     }
@@ -732,9 +906,20 @@ impl ValidateRequestTypes for ShareVolumeRequest {
             uuid: match self.uuid.clone() {
                 Some(uuid) => match VolumeId::try_from(uuid) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "share_volume_request.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "share_volume_request.uuid",
+                    ))
+                }
             },
             inner: self,
         })
@@ -790,9 +975,20 @@ impl ValidateRequestTypes for UnshareVolumeRequest {
             uuid: match self.uuid {
                 Some(uuid) => match VolumeId::try_from(uuid) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "unshare_volume_request.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "unshare_volume_request.uuid",
+                    ))
+                }
             },
         })
     }
@@ -867,14 +1063,31 @@ impl ValidateRequestTypes for PublishVolumeRequest {
             uuid: match self.uuid.clone() {
                 Some(uuid) => match VolumeId::try_from(uuid) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "publish_volume_request.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "publish_volume_request.uuid",
+                    ))
+                }
             },
             share: match self.share {
                 Some(share) => match volume::VolumeShareProtocol::from_i32(share) {
                     Some(share) => Some(share.into()),
-                    None => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "publish_volume_request.share",
+                            "".to_string(),
+                        ))
+                    }
                 },
                 None => None,
             },
@@ -950,9 +1163,20 @@ impl ValidateRequestTypes for UnpublishVolumeRequest {
             uuid: match self.uuid.clone() {
                 Some(uuid) => match VolumeId::try_from(uuid) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "unpublish_volume_request.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "unpublish_volume_request.uuid",
+                    ))
+                }
             },
             inner: self,
         })
@@ -1014,9 +1238,20 @@ impl ValidateRequestTypes for SetVolumeReplicaRequest {
             uuid: match self.uuid.clone() {
                 Some(uuid) => match VolumeId::try_from(uuid) {
                     Ok(volumeid) => volumeid,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "set_volume_replica.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::invalid_argument_err(ResourceKind::Volume)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Volume,
+                        "set_volume_replica.uuid",
+                    ))
+                }
             },
             inner: self,
         })
@@ -1049,11 +1284,23 @@ fn to_replica_topology_map(
     for (k, v) in map {
         let replica_id = match ReplicaId::try_from(k) {
             Ok(id) => id,
-            Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            Err(err) => {
+                return Err(ReplyError::invalid_argument(
+                    ResourceKind::Volume,
+                    "replica_id",
+                    err.to_string(),
+                ))
+            }
         };
         let replica_topology = match ReplicaTopology::try_from(v) {
             Ok(topology) => topology,
-            Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Volume)),
+            Err(err) => {
+                return Err(ReplyError::invalid_argument(
+                    ResourceKind::Volume,
+                    "replica_toplogy",
+                    err.to_string(),
+                ))
+            }
         };
         replica_topology_map.insert(replica_id, replica_topology);
     }
