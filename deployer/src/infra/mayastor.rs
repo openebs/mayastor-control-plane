@@ -16,6 +16,7 @@ impl ComponentAction for Mayastor {
 
             let mut spec = if let Some(binary) = binary {
                 ContainerSpec::from_binary(&name, Binary::from_path(&binary))
+                    .with_bind_binary_dir(true)
             } else {
                 ContainerSpec::from_image(&name, &options.mayastor_image)
             }
