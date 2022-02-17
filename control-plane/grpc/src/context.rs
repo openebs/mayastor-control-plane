@@ -1,4 +1,6 @@
+use crate::tracing::OpenTelClient;
 use common_lib::{mbus_api::TimeoutOptions, types::v0::message_bus::MessageIdVs};
+use opentelemetry::trace::FutureExt;
 use std::time::Duration;
 use tonic::{
     transport::{Channel, Uri},
@@ -56,7 +58,7 @@ pub fn timeout_grpc(op_id: MessageIdVs, min_timeout: Duration) -> Duration {
 
 /// context to be sent along with each request encapsulating the extra add ons that changes the
 /// behaviour of each request.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Context {
     timeout_opts: Option<TimeoutOptions>,
 }
@@ -106,8 +108,21 @@ impl Context {
             .timeout(timeout)
             .http2_keep_alive_interval(self.keep_alive_interval())
             .keep_alive_timeout(self.keep_alive_timeout())
+            .concurrency_limit(utils::DEFAULT_GRPC_CLIENT_CONCURRENCY)
+    }
+
+    pub fn spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
+    where
+        T: std::future::Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        let context = opentelemetry::Context::current();
+        tokio::spawn(future.with_context(context))
     }
 }
+
+/// Tonic Channel with added gRPC tracing
+pub(crate) type TracedChannel = crate::tracing::OpenTelClientService<Channel>;
 
 /// Generic RPC Client.
 #[derive(Clone)]
@@ -123,11 +138,15 @@ impl<C: Clone> Client<C> {
     pub(crate) async fn new<O, M>(uri: Uri, options: O, make_client: M) -> Self
     where
         O: Into<Option<TimeoutOptions>>,
-        M: FnOnce(Channel) -> C,
+        M: FnOnce(TracedChannel) -> C,
     {
         let context = Context::new(options);
         let endpoint = context.endpoint(uri);
         let channel = endpoint.connect_lazy().unwrap();
+
+        let channel = tower::ServiceBuilder::new()
+            .layer(OpenTelClient::new())
+            .service(channel);
         let client = make_client(channel);
         Self { context, client }
     }

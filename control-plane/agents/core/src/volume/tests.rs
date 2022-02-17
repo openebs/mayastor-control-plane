@@ -1534,7 +1534,7 @@ async fn replica_count_test(cluster: &Cluster) {
         .unwrap();
 
     let volume = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume.spec().uuid.clone(),
                 replicas: 3,
@@ -1547,7 +1547,7 @@ async fn replica_count_test(cluster: &Cluster) {
 
     let volume_state = volume.state();
     let error = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume_state.uuid.clone(),
                 replicas: 4,
@@ -1571,7 +1571,7 @@ async fn replica_count_test(cluster: &Cluster) {
         .unwrap();
 
     let error = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume.uuid.clone(),
                 replicas: 4,
@@ -1592,7 +1592,7 @@ async fn replica_count_test(cluster: &Cluster) {
     ));
 
     let volume = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume.uuid.clone(),
                 replicas: 2,
@@ -1605,7 +1605,7 @@ async fn replica_count_test(cluster: &Cluster) {
 
     let volume_state = volume.state();
     let volume = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume_state.uuid.clone(),
                 replicas: 1,
@@ -1624,7 +1624,7 @@ async fn replica_count_test(cluster: &Cluster) {
         .any(|n| n.children.iter().any(|c| c.state != ChildState::Online)));
 
     let error = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume_state.uuid.clone(),
                 replicas: 0,
@@ -1645,7 +1645,7 @@ async fn replica_count_test(cluster: &Cluster) {
     ));
 
     let volume = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume_state.uuid.clone(),
                 replicas: 2,
@@ -1663,7 +1663,7 @@ async fn replica_count_test(cluster: &Cluster) {
         .unwrap();
 
     let volume = volume_client
-        .set_volume_replica(
+        .set_replica(
             &SetVolumeReplica {
                 uuid: volume_state.uuid.clone(),
                 replicas: 3,

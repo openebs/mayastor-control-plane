@@ -1,6 +1,6 @@
 use crate::{
     common::{NodeFilter, NodePoolFilter, PoolFilter},
-    grpc_opts::{Client, Context},
+    context::{Client, Context, TracedChannel},
     operations::pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
     pool::{
         create_pool_reply, get_pools_reply, get_pools_request, pool_grpc_client::PoolGrpcClient,
@@ -12,15 +12,15 @@ use common_lib::{
     types::v0::message_bus::{Filter, MessageIdVs, Pool},
 };
 use std::{convert::TryFrom, ops::Deref};
-use tonic::transport::{Channel, Uri};
+use tonic::transport::Uri;
 
 /// RPC Pool Client
 #[derive(Clone)]
 pub struct PoolClient {
-    inner: Client<PoolGrpcClient<Channel>>,
+    inner: Client<PoolGrpcClient<TracedChannel>>,
 }
 impl Deref for PoolClient {
-    type Target = Client<PoolGrpcClient<Channel>>;
+    type Target = Client<PoolGrpcClient<TracedChannel>>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
@@ -38,12 +38,13 @@ impl PoolClient {
 /// This converts the client side data into a RPC request.
 #[tonic::async_trait]
 impl PoolOperations for PoolClient {
+    #[tracing::instrument(name = "PoolClient::create", level = "debug", skip(self), err)]
     async fn create(
         &self,
-        create_pool_req: &dyn CreatePoolInfo,
+        request: &dyn CreatePoolInfo,
         ctx: Option<Context>,
     ) -> Result<Pool, ReplyError> {
-        let req = self.request(create_pool_req, ctx, MessageIdVs::CreatePool);
+        let req = self.request(request, ctx, MessageIdVs::CreatePool);
         let response = self.client().create_pool(req).await?.into_inner();
         match response.reply {
             Some(create_pool_reply) => match create_pool_reply {
@@ -54,13 +55,13 @@ impl PoolOperations for PoolClient {
         }
     }
 
-    /// Issue the pool destroy operation over RPC.
+    #[tracing::instrument(name = "PoolClient::destroy", level = "debug", skip(self), err)]
     async fn destroy(
         &self,
-        destroy_pool_req: &dyn DestroyPoolInfo,
+        request: &dyn DestroyPoolInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        let req = self.request(destroy_pool_req, ctx, MessageIdVs::DestroyPool);
+        let req = self.request(request, ctx, MessageIdVs::DestroyPool);
         let response = self.client().destroy_pool(req).await?.into_inner();
         match response.error {
             None => Ok(()),
@@ -68,6 +69,7 @@ impl PoolOperations for PoolClient {
         }
     }
 
+    #[tracing::instrument(name = "PoolClient::get", level = "debug", skip(self), err)]
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Pools, ReplyError> {
         let req: GetPoolsRequest = match filter {
             Filter::Node(id) => GetPoolsRequest {

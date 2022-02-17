@@ -147,7 +147,7 @@ impl VolumeGrpc for VolumeServer {
         request: tonic::Request<SetVolumeReplicaRequest>,
     ) -> Result<tonic::Response<SetVolumeReplicaReply>, tonic::Status> {
         let req = request.into_inner().validated()?;
-        match self.service.set_volume_replica(&req, None).await {
+        match self.service.set_replica(&req, None).await {
             Ok(volume) => Ok(Response::new(SetVolumeReplicaReply {
                 reply: Some(set_volume_replica_reply::Reply::Volume(volume.into())),
             })),

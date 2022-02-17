@@ -1,8 +1,9 @@
 pub mod client;
-pub mod grpc_opts;
+pub mod context;
 pub mod misc;
 /// All server, client implementations and the traits
 pub mod operations;
+pub mod tracing;
 
 /// Common module for all the misc operations
 pub(crate) mod common {
