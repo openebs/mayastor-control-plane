@@ -20,6 +20,7 @@ let
   };
   naersk = naersk_package channel.static;
   naersk_cross = naersk_package channel.windows_cross;
+  arch = with lib; head (splitString "-" stdenv.hostPlatform.system);
 
   components = { release ? false }: {
     windows-gnu = {
@@ -68,7 +69,7 @@ let
         doCheck = false;
         usePureFromTOML = true;
 
-        CARGO_BUILD_TARGET = "x86_64-unknown-linux-musl";
+        CARGO_BUILD_TARGET = "${arch}-unknown-linux-musl";
         CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
       };
       recurseForDerivations = true;
