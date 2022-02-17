@@ -1,4 +1,3 @@
-#![warn(missing_docs)]
 /// Volume grpc Client related code
 pub mod client;
 

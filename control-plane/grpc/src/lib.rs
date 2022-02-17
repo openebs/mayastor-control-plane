@@ -1,6 +1,7 @@
 pub mod client;
 pub mod grpc_opts;
 pub mod misc;
+/// All server, client implementations and the traits
 pub mod operations;
 
 /// Common module for all the misc operations

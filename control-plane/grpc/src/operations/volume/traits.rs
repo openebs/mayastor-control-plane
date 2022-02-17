@@ -1,6 +1,7 @@
 use crate::{
     common,
     grpc_opts::Context,
+    misc::traits::ValidateRequestTypes,
     nexus, replica, volume,
     volume::{
         get_volumes_request, CreateVolumeRequest, DestroyVolumeRequest, PublishVolumeRequest,
@@ -643,14 +644,6 @@ impl TryFrom<get_volumes_request::Filter> for Filter {
             }
         })
     }
-}
-
-/// Trait to validate the Grpc type by an intermediate conversion
-pub trait ValidateRequestTypes {
-    /// The validated type
-    type Validated;
-    /// The method that is needed to be implemented to ensure validation
-    fn validated(self) -> Result<Self::Validated, ReplyError>;
 }
 
 /// Trait to be implemented for CreateVolume operation

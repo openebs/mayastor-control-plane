@@ -1,6 +1,7 @@
 use crate::{
     common,
     grpc_opts::Context,
+    misc::traits::ValidateRequestTypes,
     replica,
     replica::{
         get_replicas_request, CreateReplicaRequest, DestroyReplicaRequest, ShareReplicaRequest,
@@ -19,25 +20,30 @@ use common_lib::{
 };
 use std::convert::TryFrom;
 
-/// all replica operations to be a part of the ReplicaOperations trait
+/// All replica operations to be a part of the ReplicaOperations trait
 #[tonic::async_trait]
 pub trait ReplicaOperations: Send + Sync {
+    /// Create a replica
     async fn create(
         &self,
         req: &dyn CreateReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<Replica, ReplyError>;
+    /// Get replicas based on filters
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Replicas, ReplyError>;
+    /// Destroy a replica
     async fn destroy(
         &self,
         req: &dyn DestroyReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
+    /// Share a replica
     async fn share(
         &self,
         req: &dyn ShareReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<String, ReplyError>;
+    /// Unshare a replica
     async fn unshare(
         &self,
         req: &dyn UnshareReplicaInfo,
@@ -72,60 +78,133 @@ impl TryFrom<replica::Replica> for Replica {
             uuid: match replica.replica_id {
                 Some(string) => match ReplicaId::try_from(string) {
                     Ok(replica_id) => replica_id,
-                    Err(_) => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "replica.uuid",
+                            err.to_string(),
+                        ))
+                    }
                 },
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Replica,
+                        "replica.uuid",
+                    ))
+                }
             },
             pool: replica.pool_id.into(),
             thin: replica.thin,
             size: replica.size,
             share: match common::Protocol::from_i32(replica.share) {
                 Some(share) => share.into(),
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "replica.share",
+                        "".to_string(),
+                    ))
+                }
             },
             uri: replica.uri,
             status: match replica::ReplicaStatus::from_i32(replica.status) {
                 Some(status) => status.into(),
-                None => return Err(ReplyError::unwrap_err(ResourceKind::Replica)),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "replica.status",
+                        "".to_string(),
+                    ))
+                }
             },
         })
     }
 }
 
-impl From<get_replicas_request::Filter> for Filter {
-    fn from(filter: get_replicas_request::Filter) -> Self {
+impl TryFrom<get_replicas_request::Filter> for Filter {
+    type Error = ReplyError;
+    fn try_from(filter: get_replicas_request::Filter) -> Result<Self, Self::Error> {
         match filter {
             get_replicas_request::Filter::Node(node_filter) => {
-                Filter::Node(node_filter.node_id.into())
+                Ok(Filter::Node(node_filter.node_id.into()))
             }
-            get_replicas_request::Filter::NodePool(node_pool_filter) => Filter::NodePool(
+            get_replicas_request::Filter::NodePool(node_pool_filter) => Ok(Filter::NodePool(
                 node_pool_filter.node_id.into(),
                 node_pool_filter.pool_id.into(),
-            ),
+            )),
             get_replicas_request::Filter::Pool(pool_filter) => {
-                Filter::Pool(pool_filter.pool_id.into())
+                Ok(Filter::Pool(pool_filter.pool_id.into()))
             }
             get_replicas_request::Filter::NodePoolReplica(node_pool_replica_filter) => {
-                Filter::NodePoolReplica(
+                Ok(Filter::NodePoolReplica(
                     node_pool_replica_filter.node_id.into(),
                     node_pool_replica_filter.pool_id.into(),
-                    ReplicaId::try_from(node_pool_replica_filter.replica_id).unwrap(),
-                )
+                    match ReplicaId::try_from(node_pool_replica_filter.replica_id) {
+                        Ok(replica_id) => replica_id,
+                        Err(err) => {
+                            return Err(ReplyError::invalid_argument(
+                                ResourceKind::Replica,
+                                "replica_filter::node_pool_replica.replica_id",
+                                err.to_string(),
+                            ))
+                        }
+                    },
+                ))
             }
-            get_replicas_request::Filter::NodeReplica(node_replica_filter) => Filter::NodeReplica(
-                node_replica_filter.node_id.into(),
-                ReplicaId::try_from(node_replica_filter.replica_id).unwrap(),
-            ),
-            get_replicas_request::Filter::PoolReplica(pool_replica_filter) => Filter::PoolReplica(
-                pool_replica_filter.pool_id.into(),
-                ReplicaId::try_from(pool_replica_filter.replica_id).unwrap(),
-            ),
-            get_replicas_request::Filter::Replica(replica_filter) => {
-                Filter::Replica(ReplicaId::try_from(replica_filter.replica_id).unwrap())
+            get_replicas_request::Filter::NodeReplica(node_replica_filter) => {
+                Ok(Filter::NodeReplica(
+                    node_replica_filter.node_id.into(),
+                    match ReplicaId::try_from(node_replica_filter.replica_id) {
+                        Ok(replica_id) => replica_id,
+                        Err(err) => {
+                            return Err(ReplyError::invalid_argument(
+                                ResourceKind::Replica,
+                                "replica_filter::node_replica.replica_id",
+                                err.to_string(),
+                            ))
+                        }
+                    },
+                ))
             }
-            get_replicas_request::Filter::Volume(volume_filter) => {
-                Filter::Volume(VolumeId::try_from(volume_filter.volume_id).unwrap())
+            get_replicas_request::Filter::PoolReplica(pool_replica_filter) => {
+                Ok(Filter::PoolReplica(
+                    pool_replica_filter.pool_id.into(),
+                    match ReplicaId::try_from(pool_replica_filter.replica_id) {
+                        Ok(replica_id) => replica_id,
+                        Err(err) => {
+                            return Err(ReplyError::invalid_argument(
+                                ResourceKind::Replica,
+                                "replica_filter::pool_replica.replica_id",
+                                err.to_string(),
+                            ))
+                        }
+                    },
+                ))
             }
+            get_replicas_request::Filter::Replica(replica_filter) => Ok(Filter::Replica(
+                match ReplicaId::try_from(replica_filter.replica_id) {
+                    Ok(replica_id) => replica_id,
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "replica_filter::replica.replica_id",
+                            err.to_string(),
+                        ))
+                    }
+                },
+            )),
+            get_replicas_request::Filter::Volume(volume_filter) => Ok(Filter::Volume(
+                match VolumeId::try_from(volume_filter.volume_id) {
+                    Ok(volume_id) => volume_id,
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "replica_filter::volume.volume_id",
+                            err.to_string(),
+                        ))
+                    }
+                },
+            )),
         }
     }
 }
@@ -156,14 +235,23 @@ impl From<Replicas> for replica::Replicas {
 /// CreateReplicaInfo trait for the replica creation to be implemented by entities which want to
 /// avail this operation
 pub trait CreateReplicaInfo: Send + Sync {
+    /// Id of the mayastor instanc
     fn node(&self) -> NodeId;
+    /// Name of the replica
     fn name(&self) -> Option<ReplicaName>;
+    /// Uuid of the replica
     fn uuid(&self) -> ReplicaId;
+    /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// Size of the replica in bytes
     fn size(&self) -> u64;
+    /// Thin provisioning
     fn thin(&self) -> bool;
+    /// Protocol to expose the replica over
     fn share(&self) -> message_bus::Protocol;
+    /// Managed by our control plane
     fn managed(&self) -> bool;
+    /// Owners of the resource
     fn owners(&self) -> ReplicaOwners;
 }
 
@@ -205,64 +293,149 @@ impl CreateReplicaInfo for CreateReplica {
     }
 }
 
-impl CreateReplicaInfo for CreateReplicaRequest {
+/// Intermediate structure that validates the conversion to CreateVolumeRequest type
+pub struct ValidatedCreateReplicaRequest {
+    inner: CreateReplicaRequest,
+    uuid: ReplicaId,
+    share: message_bus::Protocol,
+    owners: ReplicaOwners,
+}
+
+impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
     fn node(&self) -> NodeId {
-        self.node_id.clone().into()
+        self.inner.node_id.clone().into()
     }
 
     fn name(&self) -> Option<ReplicaName> {
-        self.name.clone().map(|e| e.into())
+        self.inner.name.clone().map(|e| e.into())
     }
 
     fn uuid(&self) -> ReplicaId {
-        ReplicaId::try_from(self.replica_id.clone().unwrap()).unwrap()
+        self.uuid.clone()
     }
 
     fn pool(&self) -> PoolId {
-        self.pool_id.clone().into()
+        self.inner.pool_id.clone().into()
     }
 
     fn size(&self) -> u64 {
-        self.size
+        self.inner.size
     }
 
     fn thin(&self) -> bool {
-        self.thin
+        self.inner.thin
     }
 
     fn share(&self) -> message_bus::Protocol {
-        common::Protocol::from_i32(self.share).unwrap().into()
+        self.share
     }
 
     fn managed(&self) -> bool {
-        self.managed
+        self.inner.managed
     }
 
     fn owners(&self) -> ReplicaOwners {
-        ReplicaOwners::new(
-            self.owners
-                .clone()
-                .unwrap()
-                .volume
-                .map(|id| VolumeId::try_from(id).unwrap()),
-            self.owners
-                .clone()
-                .unwrap()
-                .nexuses
-                .iter()
-                .map(|id| NexusId::try_from(id.clone()).unwrap())
-                .collect(),
-        )
+        self.owners.clone()
+    }
+}
+
+impl ValidateRequestTypes for CreateReplicaRequest {
+    type Validated = ValidatedCreateReplicaRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedCreateReplicaRequest {
+            uuid: match self.replica_id.clone() {
+                Some(uuid) => match ReplicaId::try_from(uuid) {
+                    Ok(replica_id) => replica_id,
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "create_replica_request.replica_id",
+                            err.to_string(),
+                        ))
+                    }
+                },
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Replica,
+                        "create_replica_request.replica_id",
+                    ))
+                }
+            },
+            share: match common::Protocol::from_i32(self.share) {
+                Some(share) => share.into(),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "create_replica_request.share",
+                        "".to_string(),
+                    ))
+                }
+            },
+            owners: ReplicaOwners::new(
+                match self.owners.clone() {
+                    Some(owners) => match owners.volume {
+                        Some(volume) => match VolumeId::try_from(volume) {
+                            Ok(volumeid) => Some(volumeid),
+                            Err(err) => {
+                                return Err(ReplyError::invalid_argument(
+                                    ResourceKind::Replica,
+                                    "create_replica_request.owners.volume",
+                                    err.to_string(),
+                                ))
+                            }
+                        },
+                        None => None,
+                    },
+                    None => {
+                        return Err(ReplyError::missing_argument(
+                            ResourceKind::Replica,
+                            "create_replica_request.owners",
+                        ))
+                    }
+                },
+                match self.owners.clone() {
+                    Some(owners) => {
+                        let mut nexuses: Vec<NexusId> = vec![];
+                        for nexus in owners.nexuses {
+                            let nexusid = match NexusId::try_from(nexus) {
+                                Ok(nexusid) => nexusid,
+                                Err(err) => {
+                                    return Err(ReplyError::invalid_argument(
+                                        ResourceKind::Replica,
+                                        "create_replica_request.owners.nexuses",
+                                        err.to_string(),
+                                    ))
+                                }
+                            };
+                            nexuses.push(nexusid);
+                        }
+                        nexuses
+                    }
+                    None => {
+                        return Err(ReplyError::missing_argument(
+                            ResourceKind::Replica,
+                            "create_replica_request.owners",
+                        ))
+                    }
+                },
+            ),
+            inner: self,
+        })
     }
 }
 
 /// DestroyReplicaInfo trait for the replica deletion to be implemented by entities which want to
 /// avail this operation
 pub trait DestroyReplicaInfo: Send + Sync {
+    /// Id of the mayastor instance
     fn node(&self) -> NodeId;
+    /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// Name of the replica
     fn name(&self) -> Option<ReplicaName>;
+    /// Uuid of the replica
     fn uuid(&self) -> ReplicaId;
+    /// Delete by owners
     fn disowners(&self) -> ReplicaOwners;
 }
 
@@ -288,48 +461,122 @@ impl DestroyReplicaInfo for DestroyReplica {
     }
 }
 
-impl DestroyReplicaInfo for DestroyReplicaRequest {
+/// Intermediate structure that validates the conversion to DestroyVolumeRequest type
+pub struct ValidatedDestroyReplicaRequest {
+    inner: DestroyReplicaRequest,
+    uuid: ReplicaId,
+    disowners: ReplicaOwners,
+}
+
+impl DestroyReplicaInfo for ValidatedDestroyReplicaRequest {
     fn node(&self) -> NodeId {
-        self.node_id.clone().into()
+        self.inner.node_id.clone().into()
     }
 
     fn pool(&self) -> PoolId {
-        self.pool_id.clone().into()
+        self.inner.pool_id.clone().into()
     }
 
     fn name(&self) -> Option<ReplicaName> {
-        self.name.clone().map(|e| e.into())
+        self.inner.name.clone().map(|e| e.into())
     }
 
     fn uuid(&self) -> ReplicaId {
-        ReplicaId::try_from(self.replica_id.clone().unwrap()).unwrap()
+        self.uuid.clone()
     }
 
     fn disowners(&self) -> ReplicaOwners {
-        ReplicaOwners::new(
-            self.disowners
-                .clone()
-                .unwrap()
-                .volume
-                .map(|id| VolumeId::try_from(id).unwrap()),
-            self.disowners
-                .clone()
-                .unwrap()
-                .nexuses
-                .iter()
-                .map(|id| NexusId::try_from(id.clone()).unwrap())
-                .collect(),
-        )
+        self.disowners.clone()
+    }
+}
+
+impl ValidateRequestTypes for DestroyReplicaRequest {
+    type Validated = ValidatedDestroyReplicaRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedDestroyReplicaRequest {
+            uuid: match self.replica_id.clone() {
+                Some(uuid) => match ReplicaId::try_from(uuid) {
+                    Ok(replica_id) => replica_id,
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "destroy_replica_request.replica_id",
+                            err.to_string(),
+                        ))
+                    }
+                },
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Replica,
+                        "destroy_replica_request.replica_id",
+                    ))
+                }
+            },
+            disowners: ReplicaOwners::new(
+                match self.disowners.clone() {
+                    Some(disowners) => match disowners.volume {
+                        Some(volume) => match VolumeId::try_from(volume) {
+                            Ok(volumeid) => Some(volumeid),
+                            Err(err) => {
+                                return Err(ReplyError::invalid_argument(
+                                    ResourceKind::Replica,
+                                    "destroy_replica_request.disowners.volume",
+                                    err.to_string(),
+                                ))
+                            }
+                        },
+                        None => None,
+                    },
+                    None => {
+                        return Err(ReplyError::missing_argument(
+                            ResourceKind::Replica,
+                            "destroy_replica_request.disowners",
+                        ))
+                    }
+                },
+                match self.disowners.clone() {
+                    Some(disowners) => {
+                        let mut nexuses: Vec<NexusId> = vec![];
+                        for nexus in disowners.nexuses {
+                            let nexusid = match NexusId::try_from(nexus) {
+                                Ok(nexusid) => nexusid,
+                                Err(err) => {
+                                    return Err(ReplyError::invalid_argument(
+                                        ResourceKind::Replica,
+                                        "destroy_replica_request.disowners.nexuses",
+                                        err.to_string(),
+                                    ))
+                                }
+                            };
+                            nexuses.push(nexusid);
+                        }
+                        nexuses
+                    }
+                    None => {
+                        return Err(ReplyError::missing_argument(
+                            ResourceKind::Replica,
+                            "destroy_replica_request.disowners",
+                        ))
+                    }
+                },
+            ),
+            inner: self,
+        })
     }
 }
 
 /// ShareReplicaInfo trait for the replica sharing to be implemented by entities which want to avail
 /// this operation
 pub trait ShareReplicaInfo: Send + Sync {
+    /// Id of the mayastor instance
     fn node(&self) -> NodeId;
+    /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// Name of the replica,
     fn name(&self) -> Option<ReplicaName>;
+    /// Uuid of the replica
     fn uuid(&self) -> ReplicaId;
+    /// Protocol used for exposing the replica
     fn protocol(&self) -> message_bus::ReplicaShareProtocol;
 }
 
@@ -355,36 +602,82 @@ impl ShareReplicaInfo for ShareReplica {
     }
 }
 
-impl ShareReplicaInfo for ShareReplicaRequest {
+/// Intermediate structure that validates the conversion to ShareVolumeRequest type
+pub struct ValidatedShareReplicaRequest {
+    inner: ShareReplicaRequest,
+    uuid: ReplicaId,
+    protocol: message_bus::ReplicaShareProtocol,
+}
+
+impl ShareReplicaInfo for ValidatedShareReplicaRequest {
     fn node(&self) -> NodeId {
-        self.node_id.clone().into()
+        self.inner.node_id.clone().into()
     }
 
     fn pool(&self) -> PoolId {
-        self.pool_id.clone().into()
+        self.inner.pool_id.clone().into()
     }
 
     fn name(&self) -> Option<ReplicaName> {
-        self.name.clone().map(|e| e.into())
+        self.inner.name.clone().map(|e| e.into())
     }
 
     fn uuid(&self) -> ReplicaId {
-        ReplicaId::try_from(self.replica_id.clone().unwrap()).unwrap()
+        self.uuid.clone()
     }
 
     fn protocol(&self) -> message_bus::ReplicaShareProtocol {
-        replica::ReplicaShareProtocol::from_i32(self.protocol)
-            .unwrap()
-            .into()
+        self.protocol
+    }
+}
+
+impl ValidateRequestTypes for ShareReplicaRequest {
+    type Validated = ValidatedShareReplicaRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedShareReplicaRequest {
+            uuid: match self.replica_id.clone() {
+                Some(uuid) => match ReplicaId::try_from(uuid) {
+                    Ok(replica_id) => replica_id,
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "share_replica_request.replica_id",
+                            err.to_string(),
+                        ))
+                    }
+                },
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Replica,
+                        "share_replica_request.replica_id",
+                    ))
+                }
+            },
+            protocol: match replica::ReplicaShareProtocol::from_i32(self.protocol) {
+                Some(protocol) => protocol.into(),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "share_replica_request.protocol",
+                        "".to_string(),
+                    ))
+                }
+            },
+            inner: self,
+        })
     }
 }
 
 /// UnshareReplicaInfo trait for the replica sharing to be implemented by entities which want to
 /// avail this operation
 pub trait UnshareReplicaInfo: Send + Sync {
+    /// Id of the mayastor instance
     fn node(&self) -> NodeId;
+    /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// Name of the replica
     fn name(&self) -> Option<ReplicaName>;
+    /// Uuid of the replica
     fn uuid(&self) -> ReplicaId;
 }
 
@@ -406,21 +699,54 @@ impl UnshareReplicaInfo for UnshareReplica {
     }
 }
 
-impl UnshareReplicaInfo for UnshareReplicaRequest {
+/// Intermediate structure that validates the conversion to ShareVolumeRequest type
+pub struct ValidatedUnshareReplicaRequest {
+    inner: UnshareReplicaRequest,
+    uuid: ReplicaId,
+}
+
+impl UnshareReplicaInfo for ValidatedUnshareReplicaRequest {
     fn node(&self) -> NodeId {
-        self.node_id.clone().into()
+        self.inner.node_id.clone().into()
     }
 
     fn pool(&self) -> PoolId {
-        self.pool_id.clone().into()
+        self.inner.pool_id.clone().into()
     }
 
     fn name(&self) -> Option<ReplicaName> {
-        self.name.clone().map(|e| e.into())
+        self.inner.name.clone().map(|e| e.into())
     }
 
     fn uuid(&self) -> ReplicaId {
-        ReplicaId::try_from(self.replica_id.clone().unwrap()).unwrap()
+        self.uuid.clone()
+    }
+}
+
+impl ValidateRequestTypes for UnshareReplicaRequest {
+    type Validated = ValidatedUnshareReplicaRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedUnshareReplicaRequest {
+            uuid: match self.replica_id.clone() {
+                Some(uuid) => match ReplicaId::try_from(uuid) {
+                    Ok(replica_id) => replica_id,
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "unshare_replica_request.replica_id",
+                            err.to_string(),
+                        ))
+                    }
+                },
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::Replica,
+                        "unshare_replica_request.replica_id",
+                    ))
+                }
+            },
+            inner: self,
+        })
     }
 }
 

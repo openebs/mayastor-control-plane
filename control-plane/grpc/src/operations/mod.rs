@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 /// module for all corresponding client, server, traits for nexus rpc transport
 pub mod nexus;
 

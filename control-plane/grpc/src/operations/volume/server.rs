@@ -1,5 +1,6 @@
 use crate::{
-    operations::volume::traits::{ValidateRequestTypes, VolumeOperations},
+    misc::traits::ValidateRequestTypes,
+    operations::volume::traits::VolumeOperations,
     volume::{
         create_volume_reply, get_volumes_reply, publish_volume_reply, set_volume_replica_reply,
         share_volume_reply, unpublish_volume_reply,

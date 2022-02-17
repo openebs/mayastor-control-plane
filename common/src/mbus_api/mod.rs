@@ -413,15 +413,6 @@ impl ReplyError {
             extra: "".to_string(),
         }
     }
-    /// used when we error while unwrapping
-    pub fn unwrap_err(resource: ResourceKind) -> Self {
-        Self {
-            kind: ReplyErrorKind::Aborted,
-            resource,
-            source: "Error unwrapping to desired type".to_string(),
-            extra: "".to_string(),
-        }
-    }
     /// used when we get an invalid argument
     pub fn invalid_argument(resource: ResourceKind, arg_name: &str, error: String) -> Self {
         Self {

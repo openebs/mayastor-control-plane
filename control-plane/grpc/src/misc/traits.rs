@@ -1,6 +1,14 @@
 use crate::common;
 use common_lib::mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
+/// Trait to validate the Grpc type by an intermediate conversion
+pub trait ValidateRequestTypes {
+    /// The validated type
+    type Validated;
+    /// The method that is needed to be implemented to ensure validation
+    fn validated(self) -> Result<Self::Validated, ReplyError>;
+}
+
 impl From<ResourceKind> for common::ResourceKind {
     fn from(kind: ResourceKind) -> Self {
         match kind {

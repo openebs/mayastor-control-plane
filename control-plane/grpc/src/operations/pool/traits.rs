@@ -19,16 +19,19 @@ use std::convert::TryFrom;
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]
 pub trait PoolOperations: Send + Sync {
+    /// Create a pool
     async fn create(
         &self,
         pool: &dyn CreatePoolInfo,
         ctx: Option<Context>,
     ) -> Result<Pool, ReplyError>;
+    /// Destroy a pool
     async fn destroy(
         &self,
         pool: &dyn DestroyPoolInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
+    /// Get pools based on the filters
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Pools, ReplyError>;
 }
 
@@ -43,7 +46,13 @@ impl TryFrom<pool::Pool> for Pool {
                 disks: pool_state.disks_uri.iter().map(|i| i.into()).collect(),
                 status: match pool::PoolStatus::from_i32(pool_state.status) {
                     Some(status) => status.into(),
-                    None => return Err(ReplyError::unwrap_err(ResourceKind::Pool)),
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Pool,
+                            "pool.state.status",
+                            "".to_string(),
+                        ))
+                    }
                 },
                 capacity: pool_state.capacity,
                 used: pool_state.used,
@@ -54,11 +63,21 @@ impl TryFrom<pool::Pool> for Pool {
             Some(pool_definition) => {
                 let pool_spec = match pool_definition.spec {
                     Some(spec) => spec,
-                    None => return Err(ReplyError::unwrap_err(ResourceKind::Pool)),
+                    None => {
+                        return Err(ReplyError::missing_argument(
+                            ResourceKind::Pool,
+                            "pool.definition.spec",
+                        ))
+                    }
                 };
                 let pool_meta = match pool_definition.metadata {
                     Some(meta) => meta,
-                    None => return Err(ReplyError::unwrap_err(ResourceKind::Pool)),
+                    None => {
+                        return Err(ReplyError::missing_argument(
+                            ResourceKind::Pool,
+                            "pool.definition.metadata",
+                        ))
+                    }
                 };
                 let pool_spec_status = match common::SpecStatus::from_i32(pool_meta.status) {
                     Some(status) => match status {
@@ -66,12 +85,15 @@ impl TryFrom<pool::Pool> for Pool {
                             None => PoolSpecStatus::Created(message_bus::PoolStatus::Unknown),
                             Some(ref state) => PoolSpecStatus::Created(state.status.clone()),
                         },
-                        _ => match common::SpecStatus::from_i32(pool_meta.status) {
-                            Some(status) => status.into(),
-                            None => return Err(ReplyError::unwrap_err(ResourceKind::Pool)),
-                        },
+                        _ => status.into(),
                     },
-                    None => return Err(ReplyError::unwrap_err(ResourceKind::Pool)),
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Pool,
+                            "pool.metadata.status",
+                            "".to_string(),
+                        ))
+                    }
                 };
                 Some(PoolSpec {
                     node: pool_spec.node_id.into(),
@@ -89,7 +111,10 @@ impl TryFrom<pool::Pool> for Pool {
         };
         match Pool::try_new(pool_spec, pool_state) {
             Some(pool) => Ok(pool),
-            None => Err(ReplyError::unwrap_err(ResourceKind::Pool)),
+            None => Err(ReplyError::missing_argument(
+                ResourceKind::Pool,
+                "pool.spec and pool.state",
+            )),
         }
     }
 }
@@ -177,16 +202,22 @@ impl From<get_pools_request::Filter> for Filter {
 /// CreatePoolInfo trait for the pool creation to be implemented by entities which want to avail
 /// this operation
 pub trait CreatePoolInfo: Send + Sync {
+    /// Id of the pool
     fn pool_id(&self) -> PoolId;
+    /// Id of the mayastor instance
     fn node_id(&self) -> NodeId;
+    /// Disk device paths or URIs to be claimed by the pool
     fn disks(&self) -> Vec<PoolDeviceUri>;
+    /// Labels to be set on the pool
     fn labels(&self) -> Option<PoolLabel>;
 }
 
 /// DestroyPoolInfo trait for the pool deletion to be implemented by entities which want to avail
 /// this operation
 pub trait DestroyPoolInfo: Sync + Send {
+    /// Id of the pool
     fn pool_id(&self) -> PoolId;
+    /// Id of the mayastor instance
     fn node_id(&self) -> NodeId;
 }
 
