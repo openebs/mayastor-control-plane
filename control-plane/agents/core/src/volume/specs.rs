@@ -139,7 +139,10 @@ pub(crate) async fn get_volume_replica_candidates(
         });
     }
 
-    request.trace(&format!("Creation pool candidates for volume: {:?}", pools));
+    request.trace(&format!(
+        "Creation pool candidates for volume: {:?}",
+        pools.iter().map(|p| p.state()).collect::<Vec<_>>()
+    ));
 
     Ok(pools
         .iter()
@@ -924,8 +927,8 @@ impl ResourceSpecsLocked {
     ) -> Result<Nexus, SvcError> {
         let children = get_healthy_volume_replicas(vol_spec, target_node, registry).await?;
         let (count, items) = match children {
-            HealthyChildItems::One(candidates) => (1, candidates),
-            HealthyChildItems::All(candidates) => (candidates.len(), candidates),
+            HealthyChildItems::One(_, candidates) => (1, candidates),
+            HealthyChildItems::All(_, candidates) => (candidates.len(), candidates),
         };
 
         let mut nexus_replicas = vec![];

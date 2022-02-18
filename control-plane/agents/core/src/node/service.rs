@@ -54,17 +54,30 @@ impl NodeCommsTimeout {
 impl Service {
     /// New Node Service which uses the `registry` as its node cache and sets
     /// the `deadline` to each node's watchdog
-    pub(super) fn new(
+    pub(super) async fn new(
         registry: Registry,
         deadline: std::time::Duration,
         request: std::time::Duration,
         connect: std::time::Duration,
     ) -> Self {
-        Self {
+        let service = Self {
             registry,
             deadline,
             comms_timeouts: NodeCommsTimeout::new(connect, request),
+        };
+        // attempt to reload the node state based on the specification
+        for node in service.registry.specs().get_nodes() {
+            service
+                .register_state(
+                    &Register {
+                        id: node.id().clone(),
+                        grpc_endpoint: node.endpoint().to_string(),
+                    },
+                    true,
+                )
+                .await;
         }
+        service
     }
     fn specs(&self) -> &ResourceSpecsLocked {
         self.registry.specs()
@@ -85,36 +98,57 @@ impl Service {
     /// Register a new node through the register information
     pub(super) async fn register(&self, registration: &Register) {
         self.registry.register_node_spec(registration).await;
-        self.register_state(registration).await;
+        self.register_state(registration, false).await;
     }
 
-    /// Attempt to Register a new node state through the register information
-    pub(super) async fn register_state(&self, registration: &Register) {
-        let node = NodeState {
+    /// Attempt to Register a new node state through the register information.
+    /// todo: if we enable concurrent registrations when we move to gRPC, we'll want
+    /// to make sure we don't process registrations for the same node in parallel.
+    pub(super) async fn register_state(&self, registration: &Register, startup: bool) {
+        let node_state = NodeState {
             id: registration.id.clone(),
             grpc_endpoint: registration.grpc_endpoint.clone(),
             status: NodeStatus::Online,
         };
 
-        let mut send_event = true;
-        let mut nodes = self.registry.nodes().write().await;
-        match nodes.get_mut(&node.id) {
+        let nodes = self.registry.nodes();
+        let node = nodes.write().await.get_mut(&node_state.id).cloned();
+        let send_event = match node {
             None => {
-                let mut node = NodeWrapper::new(&node, self.deadline, self.comms_timeouts.clone());
-                if node.load().await.is_ok() {
-                    node.watchdog_mut().arm(self.clone());
-                    nodes.insert(node.id().clone(), Arc::new(tokio::sync::RwLock::new(node)));
-                }
-            }
-            Some(node) => {
-                if node.read().await.is_online() {
-                    send_event = false;
-                }
-                node.on_register().await;
-            }
-        }
+                let mut node =
+                    NodeWrapper::new(&node_state, self.deadline, self.comms_timeouts.clone());
 
-        if send_event {
+                let mut result = node.liveness_probe().await;
+                if result.is_ok() {
+                    result = node.load().await;
+                }
+                match result {
+                    Ok(_) => {
+                        let mut nodes = self.registry.nodes().write().await;
+                        if nodes.get_mut(&node_state.id).is_none() {
+                            node.watchdog_mut().arm(self.clone());
+                            let node = Arc::new(tokio::sync::RwLock::new(node));
+                            nodes.insert(node_state.id().clone(), node);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            node = %node_state.id(),
+                            error = %error,
+                            "Failed to register node"
+                        );
+                        false
+                    }
+                }
+            }
+            Some(node) => matches!(node.on_register().await, Ok(true)),
+        };
+
+        // don't send these events on startup as the reconciler will start working afterwards anyway
+        if send_event && !startup {
             self.registry
                 .notify(PollTriggerEvent::NodeStateChangeOnline)
                 .await;

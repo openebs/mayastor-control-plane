@@ -107,6 +107,7 @@ macro_rules! impl_ctrlp_agents {
                         binary = binary.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
                     }
                 }
+
                 if name == "core" {
                     let etcd = format!("etcd.{}:2379", options.cluster_label.name());
                     binary = binary.with_args(vec!["--store", &etcd]);
@@ -141,6 +142,9 @@ macro_rules! impl_ctrlp_agents {
                         let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
                         binary = binary.with_args(vec!["--jaeger", &jaeger_config]);
                     }
+                }
+                if let Some(size) = &options.otel_max_batch_size {
+                    binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
                 }
                 Ok(cfg.add_container_bin(&name, binary))
             }

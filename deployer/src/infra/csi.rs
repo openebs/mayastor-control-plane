@@ -18,15 +18,24 @@ impl ComponentAction for Csi {
         } else {
             if options.build {
                 std::process::Command::new("cargo")
-                    .args(&["build", "-p", "rest", "--bin", "rest"])
+                    .args(&["build", "-p", "csi-controller", "--bin", "csi-controller"])
                     .status()?;
             }
 
-            let binary = Binary::from_dbg("csi-controller")
+            let mut binary = Binary::from_dbg("csi-controller")
                 .with_args(vec!["--rest-endpoint", "http://rest:8081"])
                 // Make sure that CSI socket is always under shared directory
                 // regardless of what its default value is.
                 .with_args(vec!["--csi-socket", CSI_SOCKET]);
+
+            if cfg.container_exists("jaeger") {
+                let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
+                binary = binary.with_args(vec!["--jaeger", &jaeger_config])
+            };
+
+            if let Some(size) = &options.otel_max_batch_size {
+                binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
+            }
 
             cfg.add_container_spec(
                 ContainerSpec::from_binary("csi-controller", binary)

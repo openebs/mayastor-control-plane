@@ -1027,6 +1027,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(jaeger) = matches.value_of("jaeger") {
         let tags = constants::default_tracing_tags(utils::git_version(), env!("CARGO_PKG_VERSION"));
         global::set_text_map_propagator(TraceContextPropagator::new());
+        constants::set_jaeger_env();
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)
             .with_service_name("msp-operator")

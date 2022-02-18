@@ -113,13 +113,14 @@ async fn volume_nexus_reconcile() {
 
 #[tokio::test]
 async fn garbage_collection() {
+    let reconcile_period = Duration::from_millis(500);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
         .with_mayastors(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_millis(500), Duration::from_millis(500))
+        .with_reconcile_period(reconcile_period, reconcile_period)
         .build()
         .await
         .unwrap();
@@ -128,6 +129,86 @@ async fn garbage_collection() {
 
     unused_nexus_reconcile(&cluster).await;
     unused_reconcile(&cluster).await;
+    offline_replicas_reconcile(&cluster, reconcile_period).await;
+}
+
+async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duration) {
+    let rest_api = cluster.rest_v00();
+    let volumes_api = rest_api.volumes_api();
+
+    let volume = volumes_api
+        .put_volume(
+            &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
+            models::CreateVolumeBody::new(models::VolumePolicy::default(), 2, 5242880u64),
+        )
+        .await
+        .unwrap();
+
+    let nodes = rest_api.nodes_api().get_nodes().await.unwrap();
+    let replica_nodes = rest_api.replicas_api().get_replicas().await.unwrap();
+    let replica_nodes = replica_nodes
+        .into_iter()
+        .map(|r| r.node)
+        .collect::<Vec<_>>();
+    let free_node = nodes
+        .into_iter()
+        .find_map(|n| {
+            if replica_nodes.iter().all(|repl_node| repl_node != &n.id) {
+                Some(n.id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    // 1. publish on the node with no replicas
+    let volume = volumes_api
+        .put_volume_target(
+            &volume.spec.uuid,
+            &free_node,
+            models::VolumeShareProtocol::Nvmf,
+        )
+        .await
+        .unwrap();
+
+    tracing::info!("Volume: {:?}", volume);
+    let volume_state = volume.state;
+
+    let volume_id = volume_state.uuid;
+    let volume = volumes_api.get_volume(&volume_id).await.unwrap();
+    assert_eq!(volume.state.status, models::VolumeStatus::Online);
+
+    // 2. kill all replica nodes
+    for node in replica_nodes.iter().filter(|n| n != &&free_node) {
+        cluster.composer().stop(node).await.unwrap();
+    }
+
+    // 3. wait for volume to become Faulted
+    wait_till_volume_status(cluster, &volume.spec.uuid, models::VolumeStatus::Faulted).await;
+
+    // 4. restart the core-agent
+    cluster.restart_core().await;
+
+    cluster.volume_service_liveness(None).await.unwrap();
+    wait_till_volume_status(cluster, &volume.spec.uuid, models::VolumeStatus::Faulted).await;
+
+    // 5. After the reconcilers run, replicas should not have been disowned
+    tokio::time::sleep(reconcile_period * 3).await;
+
+    let volume = volumes_api.get_volume(&volume.spec.uuid).await.unwrap();
+    assert_eq!(volume.state.status, models::VolumeStatus::Faulted);
+
+    let replicas = rest_api.specs_api().get_specs().await.unwrap().replicas;
+    assert_eq!(replicas.len(), 2);
+    assert_eq!(
+        replicas
+            .iter()
+            .filter(|r| r.owners.volume.as_ref() == Some(&volume.spec.uuid))
+            .count(),
+        2
+    );
+
+    volumes_api.del_volume(&volume_id).await.unwrap();
 }
 
 async fn unused_nexus_reconcile(cluster: &Cluster) {
@@ -692,7 +773,7 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
         .with_timeout_backoff(Duration::from_millis(50));
 
     cluster
-        .volume_service_liveness(&volume_client, Some(timeout_opts.clone()))
+        .volume_service_liveness(Some(timeout_opts.clone()))
         .await
         .expect("Should have restarted by now");
 
@@ -835,7 +916,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     cluster.restart_core().await;
 
     cluster
-        .volume_service_liveness(&volume_client, Some(timeout_opts.clone()))
+        .volume_service_liveness(Some(timeout_opts.clone()))
         .await
         .expect("Should have restarted by now");
 
@@ -855,7 +936,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     cluster.restart_core().await;
 
     cluster
-        .volume_service_liveness(&volume_client, Some(timeout_opts.clone()))
+        .volume_service_liveness(Some(timeout_opts.clone()))
         .await
         .expect("Should have restarted by now");
 

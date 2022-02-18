@@ -80,6 +80,7 @@ pub async fn main() -> Result<(), String> {
             utils::git_version(),
             env!("CARGO_PKG_VERSION"),
         );
+        common_lib::opentelemetry::set_jaeger_env();
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)
             .with_service_name("csi-controller")
@@ -99,10 +100,12 @@ pub async fn main() -> Result<(), String> {
         CsiControllerConfig::get_config().rest_endpoint()
     );
 
-    server::CsiServer::run(
+    let result = server::CsiServer::run(
         args.value_of("socket")
             .expect("CSI socket must be specfied")
             .to_string(),
     )
-    .await
+    .await;
+    global::shutdown_tracer_provider();
+    result
 }
