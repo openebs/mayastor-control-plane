@@ -94,24 +94,23 @@ impl Cluster {
 
     pub async fn volume_service_liveness(
         &self,
-        client: &dyn VolumeOperations,
         timeout_opts: Option<TimeoutOptions>,
     ) -> Result<bool, ReplyError> {
-        let timeout_opts = if timeout_opts.clone().is_none() {
-            TimeoutOptions::new()
+        let client = self.grpc_client().volume();
+        let timeout_opts = match timeout_opts {
+            Some(opts) => opts,
+            None => TimeoutOptions::new()
                 .with_timeout(Duration::from_millis(500))
-                .with_max_retries(5)
-        } else {
-            timeout_opts.unwrap()
+                .with_max_retries(10),
         };
-        for x in 1 .. timeout_opts.clone().max_retries().unwrap() {
+        for x in 1 .. timeout_opts.max_retries().unwrap_or_default() {
             match client
                 .probe(Some(Context::new(Some(timeout_opts.clone()))))
                 .await
             {
                 Ok(resp) => return Ok(resp),
                 Err(_) => {
-                    tracing::info!("Volume Service not available, Retrying ....{}", x);
+                    tracing::debug!("Volume Service not available, Retrying ....{}", x);
                     tokio::time::sleep(timeout_opts.base_timeout()).await;
                 }
             }

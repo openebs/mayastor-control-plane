@@ -45,6 +45,10 @@ impl ComponentAction for Rest {
                 binary = binary.with_args(vec!["--jaeger", &jaeger_config])
             };
 
+            if let Some(size) = &options.otel_max_batch_size {
+                binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
+            }
+
             cfg.add_container_spec(
                 ContainerSpec::from_binary("rest", binary)
                     .with_portmap("8080", "8080")

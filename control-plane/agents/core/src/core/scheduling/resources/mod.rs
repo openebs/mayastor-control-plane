@@ -4,7 +4,11 @@ use crate::core::{
 };
 use common_lib::types::v0::{
     message_bus::{Child, ChildUri, Replica},
-    store::{nexus_child::NexusChild, nexus_persistence::ChildInfo, replica::ReplicaSpec},
+    store::{
+        nexus_child::NexusChild,
+        nexus_persistence::{ChildInfo, NexusInfo},
+        replica::ReplicaSpec,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -118,23 +122,30 @@ pub(crate) struct ChildItem {
 #[derive(Debug, Clone)]
 pub(crate) enum HealthyChildItems {
     /// One with multiple healthy candidates
-    One(Vec<ChildItem>),
+    One(Option<NexusInfo>, Vec<ChildItem>),
     /// All the healthy replicas can be used
-    All(Vec<ChildItem>),
+    All(Option<NexusInfo>, Vec<ChildItem>),
 }
 impl HealthyChildItems {
     /// Check if there are no healthy children
     pub(crate) fn is_empty(&self) -> bool {
         match self {
-            HealthyChildItems::One(items) => items.is_empty(),
-            HealthyChildItems::All(items) => items.is_empty(),
+            HealthyChildItems::One(_, items) => items.is_empty(),
+            HealthyChildItems::All(_, items) => items.is_empty(),
         }
     }
     /// Get a reference to the list of candidates
     pub(crate) fn candidates(&self) -> &Vec<ChildItem> {
         match self {
-            HealthyChildItems::One(items) => items,
-            HealthyChildItems::All(items) => items,
+            HealthyChildItems::One(_, items) => items,
+            HealthyChildItems::All(_, items) => items,
+        }
+    }
+    /// Get a reference to the list of candidates
+    pub(crate) fn nexus_info(&self) -> &Option<NexusInfo> {
+        match self {
+            HealthyChildItems::One(info, _) => info,
+            HealthyChildItems::All(info, _) => info,
         }
     }
 }

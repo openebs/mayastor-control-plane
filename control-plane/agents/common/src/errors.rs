@@ -186,6 +186,8 @@ pub enum SvcError {
     ReplicaCreateNumber { id: String },
     #[snafu(display("No online replicas are available for Volume '{}'", id))]
     NoOnlineReplicas { id: String },
+    #[snafu(display("No healthy replicas are available for Volume '{}'", id))]
+    NoHealthyReplicas { id: String },
     #[snafu(display("Entry with key '{}' not found in the persistent store.", key))]
     StoreMissingEntry { key: String },
     #[snafu(display("The uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
@@ -509,6 +511,12 @@ impl From<SvcError> for ReplyError {
                 extra: error.full_string(),
             },
             SvcError::NoOnlineReplicas { .. } => ReplyError {
+                kind: ReplyErrorKind::VolumeNoReplicas,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::NoHealthyReplicas { .. } => ReplyError {
                 kind: ReplyErrorKind::VolumeNoReplicas,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),

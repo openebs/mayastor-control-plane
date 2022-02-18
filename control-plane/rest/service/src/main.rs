@@ -118,6 +118,7 @@ fn init_tracing() -> Option<Tracer> {
         tracing::info!("Starting jaeger trace pipeline at {}...", agent);
         // Start a new jaeger trace pipeline
         global::set_text_map_propagator(TraceContextPropagator::new());
+        common_lib::opentelemetry::set_jaeger_env();
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(agent)
             .with_service_name("rest-server")
@@ -237,12 +238,16 @@ async fn main() -> anyhow::Result<()> {
         .expect("Expect to be initialised only once");
 
     let server = HttpServer::new(app).bind_rustls(CliArgs::args().https, get_certificates()?)?;
-    if let Some(http) = CliArgs::args().http {
+    let result = if let Some(http) = CliArgs::args().http {
         server.bind(http).map_err(anyhow::Error::from)?
     } else {
         server
     }
     .run()
     .await
-    .map_err(|e| e.into())
+    .map_err(|e| e.into());
+
+    global::shutdown_tracer_provider();
+
+    result
 }

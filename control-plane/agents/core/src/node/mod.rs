@@ -37,19 +37,8 @@ async fn create_node_service(builder: &Service) -> service::Service {
     let deadline = CliArgs::args().deadline.into();
     let request = CliArgs::args().request_timeout.into();
     let connect = CliArgs::args().connect_timeout.into();
-    let service = service::Service::new(registry.clone(), deadline, request, connect);
 
-    // attempt to reload the node state based on the specification
-    for node in registry.specs().get_nodes() {
-        service
-            .register_state(&Register {
-                id: node.id().clone(),
-                grpc_endpoint: node.endpoint().to_string(),
-            })
-            .await;
-    }
-
-    service
+    service::Service::new(registry.clone(), deadline, request, connect).await
 }
 
 #[cfg(test)]
@@ -148,5 +137,28 @@ mod tests {
             nodes.0.first().unwrap(),
             &Node::new(maya_name.clone(), node.spec().cloned(), None)
         );
+    }
+
+    #[tokio::test]
+    async fn large_cluster() {
+        let expected_nodes = 7;
+        let cluster = ClusterBuilder::builder()
+            .with_rest(false)
+            .with_agents(vec!["core"])
+            .with_mayastors(expected_nodes as u32)
+            .with_node_deadline("2s")
+            .build()
+            .await
+            .unwrap();
+
+        let nodes = GetNodes::default().request().await.unwrap();
+        tracing::info!("Nodes: {:?}", nodes);
+        assert_eq!(nodes.0.len(), expected_nodes);
+
+        cluster.restart_core().await;
+
+        let nodes = GetNodes::default().request().await.unwrap();
+        tracing::info!("Nodes: {:?}", nodes);
+        assert_eq!(nodes.0.len(), expected_nodes);
     }
 }

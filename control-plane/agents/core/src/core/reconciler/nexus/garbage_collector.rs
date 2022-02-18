@@ -11,6 +11,7 @@ use common_lib::types::v0::{
 use crate::core::task_poller::PollTriggerEvent;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use tracing::Instrument;
 
 /// Nexus Garbage Collector reconciler
 #[derive(Debug)]
@@ -110,13 +111,25 @@ async fn destroy_disowned_nexus(
     if nexus_clone.managed && !nexus_clone.owned() {
         let node_online = matches!(context.registry().get_node_wrapper(&nexus_clone.node).await, Ok(node) if node.read().await.is_online());
         if node_online {
-            nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy disowned nexus"));
-            let request = DestroyNexus::from(nexus_clone.clone());
-            context
-                .specs()
-                .destroy_nexus(context.registry(), &request, true, mode)
-                .await?;
-            nexus_clone.info_span(|| tracing::info!("Successfully destroyed disowned nexus"));
+            async {
+                nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy disowned nexus"));
+                let request = DestroyNexus::from(nexus_clone.clone());
+                match context
+                    .specs()
+                    .destroy_nexus(context.registry(), &request, true, mode)
+                    .await {
+                    Ok(_) => {
+                        nexus_clone.info_span(|| tracing::info!("Successfully destroyed disowned nexus"));
+                        Ok(())
+                    }
+                    Err(error) => {
+                        nexus_clone.error_span(|| tracing::error!(error = %error, "Failed to destroy disowned nexus"));
+                        Err(error)
+                    }
+                }
+            }
+            .instrument(tracing::info_span!("destroy_disowned_nexus", nexus.uuid = %nexus_clone.uuid, request.reconcile = true))
+            .await?;
         }
     }
 

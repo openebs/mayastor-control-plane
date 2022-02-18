@@ -8,7 +8,10 @@ use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode, TraceSpan,
 
 use crate::core::specs::SpecOperations;
 use common::errors::SvcError;
-use common_lib::types::v0::store::{nexus_persistence::NexusInfo, replica::ReplicaSpec};
+use common_lib::types::v0::{
+    message_bus::VolumeStatus,
+    store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},
+};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -119,20 +122,35 @@ async fn disown_unused_replicas(
         // don't attempt to disown the replicas if the nexus that should own them is not stable
         return PollResult::Ok(PollerState::Busy);
     }
+
+    let volume_state = context
+        .registry()
+        .get_volume_state(&volume_clone.uuid)
+        .await?;
+    if matches!(
+        volume_state.status,
+        VolumeStatus::Faulted | VolumeStatus::Unknown
+    ) {
+        // don't attempt to disown the replicas if the volume state is faulted or unknown
+        return PollResult::Ok(PollerState::Busy);
+    }
+
     let mut nexus_info = None; // defer reading from the persistent store unless we find a candidate
     let mut results = vec![];
 
     for replica in context.specs().get_volume_replicas(&volume_clone.uuid) {
         let _guard = match replica.operation_guard(OperationMode::ReconcileStart) {
             Ok(guard) => guard,
-            Err(_) => return PollResult::Ok(PollerState::Busy),
+            Err(_) => continue,
         };
         let replica_clone = replica.lock().clone();
 
+        let replica_in_target = target.lock().contains_replica(&replica_clone.uuid);
         let replica_online = matches!(context.registry().get_replica(&replica_clone.uuid).await, Ok(state) if state.online());
         if !replica_online
             && replica_clone.owners.owned_by(&volume_clone.uuid)
             && !replica_clone.owners.owned_by_a_nexus()
+            && !replica_in_target
             && !is_replica_healthy(context, &mut nexus_info, &replica_clone, &volume_clone).await?
         {
             volume_clone.warn_span(|| tracing::warn!(replica.uuid = %replica_clone.uuid, "Attempting to disown unused replica"));
@@ -181,7 +199,13 @@ async fn is_replica_healthy(
         }
         Some(info) => info,
     };
-    Ok(info.is_replica_healthy(&replica_spec.uuid))
+    if info.no_healthy_replicas() {
+        Err(SvcError::NoHealthyReplicas {
+            id: volume_spec.uuid(),
+        })
+    } else {
+        Ok(info.is_replica_healthy(&replica_spec.uuid))
+    }
 }
 
 #[cfg(test)]

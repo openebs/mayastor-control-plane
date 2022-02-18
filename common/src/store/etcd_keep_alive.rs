@@ -508,7 +508,7 @@ impl LeaseLockKeeperClocking<Locked> for EtcdSingletonLock {
 
 #[async_trait::async_trait]
 impl LeaseLockKeeperClocking<KeepAlive> for EtcdSingletonLock {
-    #[tracing::instrument(skip(self, state), err)]
+    #[tracing::instrument(level = "trace", skip(self, state), err)]
     async fn clock(&mut self, mut state: KeepAlive) -> LockStatesResult {
         state
             .keeper

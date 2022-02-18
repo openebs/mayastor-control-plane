@@ -664,6 +664,17 @@ impl ResourceSpecsLocked {
                 panic!("Failed to initialise resource specs. Err {}.", e);
             }
         }
+
+        // patch up the missing replica nexus owners
+        let nexuses = self.get_nexuses();
+        for replica in self.get_replicas() {
+            let replica_uuid = replica.lock().uuid.clone();
+
+            nexuses
+                .iter()
+                .filter(|n| n.lock().contains_replica(&replica_uuid))
+                .for_each(|n| replica.lock().owners.add_owner(&n.lock().uuid));
+        }
     }
 
     /// Deserialise a vector of serde_json values into specific spec types.

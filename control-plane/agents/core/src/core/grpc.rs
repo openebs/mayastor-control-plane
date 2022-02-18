@@ -116,12 +116,12 @@ impl GrpcClient {
     }
 }
 
-/// Async Lock guard for gRPC operations
-/// It's used by the GrpcClientLocked to ensure there's only only operation in progress
-/// at at time while still allowing for multiple gRPC clients
+/// Async Lock guard for gRPC operations.
+/// It's used by the GrpcClientLocked to ensure there's only one operation in progress
+/// at a time while still allowing for multiple gRPC clients.
 type GrpcLockGuard = tokio::sync::OwnedMutexGuard<()>;
 
-/// Wrapper over all gRPC Clients types with implicit locking for serialization
+/// Wrapper over all gRPC Clients types with implicit locking for serialization.
 pub(crate) struct GrpcClientLocked {
     /// gRPC auto CRUD guard lock
     _lock: GrpcLockGuard,
