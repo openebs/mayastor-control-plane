@@ -11,7 +11,7 @@ use common_lib::{
     },
 };
 use grpc::{
-    grpc_opts::Context,
+    context::Context,
     operations::volume::traits::{
         CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
         ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
@@ -101,7 +101,7 @@ impl VolumeOperations for Service {
         Ok(volume)
     }
 
-    async fn set_volume_replica(
+    async fn set_replica(
         &self,
         req: &dyn SetVolumeReplicaInfo,
         _ctx: Option<Context>,

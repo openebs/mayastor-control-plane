@@ -17,7 +17,7 @@ use common_lib::{
     },
 };
 use grpc::{
-    grpc_opts::Context,
+    context::Context,
     operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations},
 };
 use itertools::Itertools;

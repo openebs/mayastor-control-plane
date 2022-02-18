@@ -13,7 +13,6 @@ pub struct CoreClient {
     volume: VolumeClient,
 }
 
-/// implement the CoreClient
 impl CoreClient {
     /// generates a new CoreClient to get the individual clients
     pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {

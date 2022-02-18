@@ -1,6 +1,6 @@
 use crate::{
     common,
-    grpc_opts::Context,
+    context::Context,
     pool,
     pool::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
 };
@@ -201,7 +201,7 @@ impl From<get_pools_request::Filter> for Filter {
 
 /// CreatePoolInfo trait for the pool creation to be implemented by entities which want to avail
 /// this operation
-pub trait CreatePoolInfo: Send + Sync {
+pub trait CreatePoolInfo: Send + Sync + std::fmt::Debug {
     /// Id of the pool
     fn pool_id(&self) -> PoolId;
     /// Id of the mayastor instance
@@ -214,7 +214,7 @@ pub trait CreatePoolInfo: Send + Sync {
 
 /// DestroyPoolInfo trait for the pool deletion to be implemented by entities which want to avail
 /// this operation
-pub trait DestroyPoolInfo: Sync + Send {
+pub trait DestroyPoolInfo: Sync + Send + std::fmt::Debug {
     /// Id of the pool
     fn pool_id(&self) -> PoolId;
     /// Id of the mayastor instance

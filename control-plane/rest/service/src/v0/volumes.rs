@@ -83,7 +83,7 @@ impl apis::actix_server::Volumes for RestApi {
         Path((volume_id, replica_count)): Path<(Uuid, u8)>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
         let volume = client()
-            .set_volume_replica(
+            .set_replica(
                 &SetVolumeReplica {
                     uuid: volume_id.into(),
                     replicas: replica_count,

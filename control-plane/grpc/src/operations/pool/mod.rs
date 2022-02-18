@@ -10,7 +10,7 @@ pub mod traits;
 #[cfg(test)]
 mod test {
     use crate::{
-        grpc_opts::Context,
+        context::Context,
         operations::pool::{client::PoolClient, server::PoolServer, traits::PoolOperations},
     };
     use common_lib::{mbus_api::TimeoutOptions, types::v0::message_bus::Filter};
@@ -97,7 +97,7 @@ mod test {
 
     mod server {
         use crate::{
-            grpc_opts::Context,
+            context::Context,
             operations::pool::{
                 test::TimeoutTester,
                 traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},

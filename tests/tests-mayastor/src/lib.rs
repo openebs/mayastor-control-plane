@@ -26,7 +26,7 @@ pub use etcd_client;
 use etcd_client::DeleteOptions;
 use grpc::{
     client::CoreClient,
-    grpc_opts::Context,
+    context::Context,
     operations::{
         pool::traits::PoolOperations, replica::traits::ReplicaOperations,
         volume::traits::VolumeOperations,

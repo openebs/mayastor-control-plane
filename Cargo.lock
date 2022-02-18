@@ -1503,9 +1503,11 @@ name = "grpc"
 version = "0.1.0"
 dependencies = [
  "common-lib",
+ "http-body",
  "humantime",
  "once_cell",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry-semantic-conventions",
  "prost 0.8.0",
  "prost-build",
@@ -1513,6 +1515,7 @@ dependencies = [
  "tokio",
  "tonic 0.5.2",
  "tonic-build",
+ "tower",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",

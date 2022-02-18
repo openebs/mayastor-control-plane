@@ -14,7 +14,7 @@ use common_lib::{
     },
 };
 use grpc::{
-    grpc_opts::Context,
+    context::Context,
     operations::{
         pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
         replica::traits::{
@@ -39,7 +39,7 @@ impl PoolOperations for Service {
     ) -> Result<Pool, ReplyError> {
         let req = pool.into();
         let service = self.clone();
-        let pool = tokio::spawn(async move { service.create_pool(&req).await }).await??;
+        let pool = Context::spawn(async move { service.create_pool(&req).await }).await??;
         Ok(pool)
     }
 
@@ -50,7 +50,7 @@ impl PoolOperations for Service {
     ) -> Result<(), ReplyError> {
         let req = pool.into();
         let service = self.clone();
-        tokio::spawn(async move { service.destroy_pool(&req).await }).await??;
+        Context::spawn(async move { service.destroy_pool(&req).await }).await??;
         Ok(())
     }
 
@@ -71,7 +71,7 @@ impl ReplicaOperations for Service {
         let create_replica = req.into();
         let service = self.clone();
         let replica =
-            tokio::spawn(async move { service.create_replica(&create_replica).await }).await??;
+            Context::spawn(async move { service.create_replica(&create_replica).await }).await??;
         Ok(replica)
     }
 
@@ -88,7 +88,7 @@ impl ReplicaOperations for Service {
     ) -> Result<(), ReplyError> {
         let destroy_replica = req.into();
         let service = self.clone();
-        tokio::spawn(async move { service.destroy_replica(&destroy_replica).await }).await??;
+        Context::spawn(async move { service.destroy_replica(&destroy_replica).await }).await??;
         Ok(())
     }
 
@@ -100,7 +100,7 @@ impl ReplicaOperations for Service {
         let share_replica = req.into();
         let service = self.clone();
         let response =
-            tokio::spawn(async move { service.share_replica(&share_replica).await }).await??;
+            Context::spawn(async move { service.share_replica(&share_replica).await }).await??;
         Ok(response)
     }
 
@@ -111,7 +111,7 @@ impl ReplicaOperations for Service {
     ) -> Result<(), ReplyError> {
         let unshare_replica = req.into();
         let service = self.clone();
-        tokio::spawn(async move { service.unshare_replica(&unshare_replica).await }).await??;
+        Context::spawn(async move { service.unshare_replica(&unshare_replica).await }).await??;
         Ok(())
     }
 }
@@ -236,7 +236,7 @@ impl Service {
     }
 
     /// Create pool
-    #[tracing::instrument(level = "debug", skip(self), fields(pool.uuid = %request.id))]
+    #[tracing::instrument(level = "debug", skip(self), err, fields(pool.uuid = %request.id))]
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         self.specs()
             .create_pool(&self.registry, request, OperationMode::Exclusive)

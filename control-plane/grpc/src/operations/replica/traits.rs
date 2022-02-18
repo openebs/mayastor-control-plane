@@ -1,6 +1,6 @@
 use crate::{
     common,
-    grpc_opts::Context,
+    context::Context,
     misc::traits::ValidateRequestTypes,
     replica,
     replica::{
@@ -234,7 +234,7 @@ impl From<Replicas> for replica::Replicas {
 
 /// CreateReplicaInfo trait for the replica creation to be implemented by entities which want to
 /// avail this operation
-pub trait CreateReplicaInfo: Send + Sync {
+pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
     /// Id of the mayastor instanc
     fn node(&self) -> NodeId;
     /// Name of the replica
@@ -294,6 +294,7 @@ impl CreateReplicaInfo for CreateReplica {
 }
 
 /// Intermediate structure that validates the conversion to CreateVolumeRequest type
+#[derive(Debug)]
 pub struct ValidatedCreateReplicaRequest {
     inner: CreateReplicaRequest,
     uuid: ReplicaId,
@@ -426,7 +427,7 @@ impl ValidateRequestTypes for CreateReplicaRequest {
 
 /// DestroyReplicaInfo trait for the replica deletion to be implemented by entities which want to
 /// avail this operation
-pub trait DestroyReplicaInfo: Send + Sync {
+pub trait DestroyReplicaInfo: Send + Sync + std::fmt::Debug {
     /// Id of the mayastor instance
     fn node(&self) -> NodeId;
     /// Id of the pool
@@ -462,6 +463,7 @@ impl DestroyReplicaInfo for DestroyReplica {
 }
 
 /// Intermediate structure that validates the conversion to DestroyVolumeRequest type
+#[derive(Debug)]
 pub struct ValidatedDestroyReplicaRequest {
     inner: DestroyReplicaRequest,
     uuid: ReplicaId,
@@ -567,7 +569,7 @@ impl ValidateRequestTypes for DestroyReplicaRequest {
 
 /// ShareReplicaInfo trait for the replica sharing to be implemented by entities which want to avail
 /// this operation
-pub trait ShareReplicaInfo: Send + Sync {
+pub trait ShareReplicaInfo: Send + Sync + std::fmt::Debug {
     /// Id of the mayastor instance
     fn node(&self) -> NodeId;
     /// Id of the pool
@@ -603,6 +605,7 @@ impl ShareReplicaInfo for ShareReplica {
 }
 
 /// Intermediate structure that validates the conversion to ShareVolumeRequest type
+#[derive(Debug)]
 pub struct ValidatedShareReplicaRequest {
     inner: ShareReplicaRequest,
     uuid: ReplicaId,
@@ -670,7 +673,7 @@ impl ValidateRequestTypes for ShareReplicaRequest {
 
 /// UnshareReplicaInfo trait for the replica sharing to be implemented by entities which want to
 /// avail this operation
-pub trait UnshareReplicaInfo: Send + Sync {
+pub trait UnshareReplicaInfo: Send + Sync + std::fmt::Debug {
     /// Id of the mayastor instance
     fn node(&self) -> NodeId;
     /// Id of the pool
@@ -700,6 +703,7 @@ impl UnshareReplicaInfo for UnshareReplica {
 }
 
 /// Intermediate structure that validates the conversion to ShareVolumeRequest type
+#[derive(Debug)]
 pub struct ValidatedUnshareReplicaRequest {
     inner: UnshareReplicaRequest,
     uuid: ReplicaId,

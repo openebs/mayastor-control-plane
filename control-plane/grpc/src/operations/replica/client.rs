@@ -3,6 +3,7 @@ use crate::{
         NodeFilter, NodePoolFilter, NodePoolReplicaFilter, NodeReplicaFilter, PoolFilter,
         PoolReplicaFilter, ReplicaFilter, VolumeFilter,
     },
+    context::{Client, Context, TracedChannel},
     operations::replica::traits::ReplicaOperations,
     replica::{
         create_replica_reply, get_replicas_reply, get_replicas_request,
@@ -11,13 +12,10 @@ use crate::{
 };
 
 use std::{convert::TryFrom, ops::Deref};
-use tonic::transport::{Channel, Uri};
+use tonic::transport::Uri;
 
-use crate::{
-    grpc_opts::{Client, Context},
-    operations::replica::traits::{
-        CreateReplicaInfo, DestroyReplicaInfo, ShareReplicaInfo, UnshareReplicaInfo,
-    },
+use crate::operations::replica::traits::{
+    CreateReplicaInfo, DestroyReplicaInfo, ShareReplicaInfo, UnshareReplicaInfo,
 };
 use common_lib::{
     mbus_api::{v0::Replicas, ReplyError, ResourceKind, TimeoutOptions},
@@ -27,10 +25,10 @@ use common_lib::{
 /// RPC Replica Client
 #[derive(Clone)]
 pub struct ReplicaClient {
-    inner: Client<ReplicaGrpcClient<Channel>>,
+    inner: Client<ReplicaGrpcClient<TracedChannel>>,
 }
 impl Deref for ReplicaClient {
-    type Target = Client<ReplicaGrpcClient<Channel>>;
+    type Target = Client<ReplicaGrpcClient<TracedChannel>>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
@@ -45,12 +43,13 @@ impl ReplicaClient {
 
 #[tonic::async_trait]
 impl ReplicaOperations for ReplicaClient {
+    #[tracing::instrument(name = "ReplicaClient::create", level = "debug", skip(self), err)]
     async fn create(
         &self,
-        create_replica_req: &dyn CreateReplicaInfo,
+        request: &dyn CreateReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<Replica, ReplyError> {
-        let req = self.request(create_replica_req, ctx, MessageIdVs::CreateReplica);
+        let req = self.request(request, ctx, MessageIdVs::CreateReplica);
         let response = self.client().create_replica(req).await?.into_inner();
         match response.reply {
             Some(create_replica_reply) => match create_replica_reply {
@@ -61,6 +60,7 @@ impl ReplicaOperations for ReplicaClient {
         }
     }
 
+    #[tracing::instrument(name = "ReplicaClient::get", level = "debug", skip(self), err)]
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Replicas, ReplyError> {
         let req: GetReplicasRequest = match filter {
             Filter::Node(id) => GetReplicasRequest {
@@ -127,12 +127,13 @@ impl ReplicaOperations for ReplicaClient {
         }
     }
 
+    #[tracing::instrument(name = "ReplicaClient::destroy", level = "debug", skip(self), err)]
     async fn destroy(
         &self,
-        destroy_replica_req: &dyn DestroyReplicaInfo,
+        request: &dyn DestroyReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        let req = self.request(destroy_replica_req, ctx, MessageIdVs::DestroyReplica);
+        let req = self.request(request, ctx, MessageIdVs::DestroyReplica);
         let response = self.client().destroy_replica(req).await?.into_inner();
         match response.error {
             None => Ok(()),
@@ -140,12 +141,13 @@ impl ReplicaOperations for ReplicaClient {
         }
     }
 
+    #[tracing::instrument(name = "ReplicaClient::share", level = "debug", skip(self), err)]
     async fn share(
         &self,
-        share_replica_req: &dyn ShareReplicaInfo,
+        request: &dyn ShareReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<String, ReplyError> {
-        let req = self.request(share_replica_req, ctx, MessageIdVs::ShareReplica);
+        let req = self.request(request, ctx, MessageIdVs::ShareReplica);
         let response = self.client().share_replica(req).await?.into_inner();
         match response.reply {
             Some(share_replica_reply) => match share_replica_reply {
@@ -156,12 +158,13 @@ impl ReplicaOperations for ReplicaClient {
         }
     }
 
+    #[tracing::instrument(name = "ReplicaClient::unshare", level = "debug", skip(self), err)]
     async fn unshare(
         &self,
-        unshare_replica_req: &dyn UnshareReplicaInfo,
+        request: &dyn UnshareReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        let req = self.request(unshare_replica_req, ctx, MessageIdVs::UnshareReplica);
+        let req = self.request(request, ctx, MessageIdVs::UnshareReplica);
         let response = self.client().unshare_replica(req).await?.into_inner();
         match response.error {
             None => Ok(()),

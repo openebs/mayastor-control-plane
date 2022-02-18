@@ -1,6 +1,6 @@
 use crate::{
     common::VolumeFilter,
-    grpc_opts::{Client, Context},
+    context::{Client, Context, TracedChannel},
     operations::volume::traits::{
         CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
         ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
@@ -16,12 +16,12 @@ use common_lib::{
     types::v0::message_bus::{Filter, MessageIdVs, Volume},
 };
 use std::{convert::TryFrom, ops::Deref};
-use tonic::transport::{Channel, Uri};
+use tonic::transport::Uri;
 
 /// RPC Volume Client
 #[derive(Clone)]
 pub struct VolumeClient {
-    inner: Client<VolumeGrpcClient<Channel>>,
+    inner: Client<VolumeGrpcClient<TracedChannel>>,
 }
 
 impl VolumeClient {
@@ -33,7 +33,7 @@ impl VolumeClient {
 }
 
 impl Deref for VolumeClient {
-    type Target = Client<VolumeGrpcClient<Channel>>;
+    type Target = Client<VolumeGrpcClient<TracedChannel>>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
@@ -43,12 +43,13 @@ impl Deref for VolumeClient {
 /// This converts the client side data into a RPC request.
 #[tonic::async_trait]
 impl VolumeOperations for VolumeClient {
+    #[tracing::instrument(name = "VolumeClient::create", level = "debug", skip(self), err)]
     async fn create(
         &self,
-        create_volume_req: &dyn CreateVolumeInfo,
+        request: &dyn CreateVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
-        let req = self.request(create_volume_req, ctx, MessageIdVs::CreateVolume);
+        let req = self.request(request, ctx, MessageIdVs::CreateVolume);
         let response = self.client().create_volume(req).await?.into_inner();
         match response.reply {
             Some(create_volume_reply) => match create_volume_reply {
@@ -59,6 +60,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::get", level = "debug", skip(self), err)]
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Volumes, ReplyError> {
         let req: GetVolumesRequest = match filter {
             Filter::Volume(volume_id) => GetVolumesRequest {
@@ -79,12 +81,13 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::destroy", level = "debug", skip(self), err)]
     async fn destroy(
         &self,
-        destroy_volume_req: &dyn DestroyVolumeInfo,
+        request: &dyn DestroyVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        let req = self.request(destroy_volume_req, ctx, MessageIdVs::DestroyVolume);
+        let req = self.request(request, ctx, MessageIdVs::DestroyVolume);
         let response = self.client().destroy_volume(req).await?.into_inner();
         match response.error {
             None => Ok(()),
@@ -92,12 +95,13 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::share", level = "debug", skip(self), err)]
     async fn share(
         &self,
-        share_volume_req: &dyn ShareVolumeInfo,
+        request: &dyn ShareVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<String, ReplyError> {
-        let req = self.request(share_volume_req, ctx, MessageIdVs::ShareVolume);
+        let req = self.request(request, ctx, MessageIdVs::ShareVolume);
         let response = self.client().share_volume(req).await?.into_inner();
         match response.reply {
             Some(share_volume_reply) => match share_volume_reply {
@@ -108,12 +112,13 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::unshare", level = "debug", skip(self), err)]
     async fn unshare(
         &self,
-        unshare_volume_req: &dyn UnshareVolumeInfo,
+        request: &dyn UnshareVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        let req = self.request(unshare_volume_req, ctx, MessageIdVs::UnshareVolume);
+        let req = self.request(request, ctx, MessageIdVs::UnshareVolume);
         let response = self.client().unshare_volume(req).await?.into_inner();
         match response.error {
             None => Ok(()),
@@ -121,12 +126,13 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::publish", level = "debug", skip(self), err)]
     async fn publish(
         &self,
-        publish_volume_req: &dyn PublishVolumeInfo,
+        request: &dyn PublishVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
-        let req = self.request(publish_volume_req, ctx, MessageIdVs::PublishVolume);
+        let req = self.request(request, ctx, MessageIdVs::PublishVolume);
         let response = self.client().publish_volume(req).await?.into_inner();
         match response.reply {
             Some(publish_volume_reply) => match publish_volume_reply {
@@ -137,12 +143,13 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::unpublish", level = "debug", skip(self), err)]
     async fn unpublish(
         &self,
-        unpublish_volume_req: &dyn UnpublishVolumeInfo,
+        request: &dyn UnpublishVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
-        let req = self.request(unpublish_volume_req, ctx, MessageIdVs::UnpublishVolume);
+        let req = self.request(request, ctx, MessageIdVs::UnpublishVolume);
         let response = self.client().unpublish_volume(req).await?.into_inner();
         match response.reply {
             Some(unpublish_volume_reply) => match unpublish_volume_reply {
@@ -153,12 +160,13 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    async fn set_volume_replica(
+    #[tracing::instrument(name = "VolumeClient::set_replica", level = "debug", skip(self), err)]
+    async fn set_replica(
         &self,
-        set_volume_replica_req: &dyn SetVolumeReplicaInfo,
+        request: &dyn SetVolumeReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
-        let req = self.request(set_volume_replica_req, ctx, MessageIdVs::SetVolumeReplica);
+        let req = self.request(request, ctx, MessageIdVs::SetVolumeReplica);
         let response = self.client().set_volume_replica(req).await?.into_inner();
         match response.reply {
             Some(set_volume_replica_reply) => match set_volume_replica_reply {
@@ -169,6 +177,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::probe", level = "debug", skip(self), err)]
     async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
         match self.client().probe(ProbeRequest {}).await {
             Ok(resp) => Ok(resp.into_inner().ready),

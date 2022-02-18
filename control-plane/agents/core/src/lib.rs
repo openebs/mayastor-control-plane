@@ -2,8 +2,11 @@
 
 use common::ServiceError;
 use futures::{future::join_all, FutureExt};
-use grpc::operations::{
-    pool::server::PoolServer, replica::server::ReplicaServer, volume::server::VolumeServer,
+use grpc::{
+    operations::{
+        pool::server::PoolServer, replica::server::ReplicaServer, volume::server::VolumeServer,
+    },
+    tracing::OpenTelServer,
 };
 use http::Uri;
 use tracing::error;
@@ -24,7 +27,7 @@ impl Service {
     }
 
     /// launch each of the services and the grpc server
-    pub async fn run(mut self) {
+    pub async fn run(self) {
         let grpc_addr = self.base_service.get_shared_state::<Uri>().clone();
         let pool_service = self.base_service.get_shared_state::<PoolServer>().clone();
         let replica_service = self
@@ -35,6 +38,7 @@ impl Service {
 
         let tonic_router = self
             .tonic_grpc_server
+            .layer(OpenTelServer::new())
             .add_service(pool_service.into_grpc_server())
             .add_service(replica_service.into_grpc_server())
             .add_service(volume_service.into_grpc_server());
