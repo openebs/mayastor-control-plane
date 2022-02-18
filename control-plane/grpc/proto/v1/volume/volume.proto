@@ -38,7 +38,7 @@ message VolumeSpec {
   // Volume labels.
   optional common.StringMapValue labels = 3;
   // Number of children the volume should have.
-  uint64 num_replica = 4;
+  uint32 num_replicas = 4;
   // The target where front-end IO will be sent to
   optional VolumeTarget target = 5;
   // volume policy
@@ -258,6 +258,14 @@ message SetVolumeReplicaReply {
   }
 }
 
+message ProbeRequest {
+  // Intentionally empty.
+}
+
+message ProbeResponse {
+  bool ready = 1;
+}
+
 service VolumeGrpc {
   rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
   rpc DestroyVolume (DestroyVolumeRequest) returns (DestroyVolumeReply) {}
@@ -267,4 +275,5 @@ service VolumeGrpc {
   rpc ShareVolume (ShareVolumeRequest) returns (ShareVolumeReply) {}
   rpc UnshareVolume (UnshareVolumeRequest) returns (UnshareVolumeReply) {}
   rpc SetVolumeReplica (SetVolumeReplicaRequest) returns (SetVolumeReplicaReply) {}
+  rpc Probe (ProbeRequest) returns (ProbeResponse) {}
 }

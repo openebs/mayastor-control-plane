@@ -880,32 +880,6 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
-  '/nodes/{node_id}/volumes':
-    get:
-      tags:
-        - Volumes
-      operationId: get_node_volumes
-      parameters:
-        - in: path
-          name: node_id
-          required: true
-          schema:
-            $ref: '#/components/schemas/NodeId'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Volume'
-        '4XX':
-          $ref: '#/components/responses/ClientError'
-        '5XX':
-          $ref: '#/components/responses/ServerError'
-      security:
-        - JWT: []
   '/nodes/{node}/block_devices':
     get:
       tags:

@@ -1,8 +1,7 @@
 #![cfg(test)]
 
-use super::*;
 use common_lib::{
-    mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
+    mbus_api::{Message, ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetNodes, GetSpecs,

@@ -31,7 +31,7 @@ use std::{
 };
 use strum_macros::{AsRefStr, ToString};
 use tokio::task::JoinError;
-use tonic::Status;
+use tonic::{Code, Status};
 
 /// Result wrapper for send/receive
 pub type BusResult<T> = Result<T, Error>;
@@ -350,6 +350,12 @@ impl From<tonic::Status> for ReplyError {
     }
 }
 
+impl From<ReplyError> for tonic::Status {
+    fn from(err: ReplyError) -> Self {
+        tonic::Status::new(Code::Aborted, err.full_string())
+    }
+}
+
 impl From<tonic::transport::Error> for ReplyError {
     fn from(e: tonic::transport::Error) -> Self {
         Self::tonic_reply_error(e.to_string(), e.full_string())
@@ -407,13 +413,22 @@ impl ReplyError {
             extra: "".to_string(),
         }
     }
-    /// used when we error while unwrapping
-    pub fn unwrap_err(resource: ResourceKind) -> Self {
+    /// used when we get an invalid argument
+    pub fn invalid_argument(resource: ResourceKind, arg_name: &str, error: String) -> Self {
         Self {
-            kind: ReplyErrorKind::Aborted,
+            kind: ReplyErrorKind::InvalidArgument,
             resource,
-            source: "Error unwrapping to desired type".to_string(),
-            extra: "".to_string(),
+            source: error,
+            extra: format!("Invalid {} was provided", arg_name),
+        }
+    }
+    /// used when we encounter a missing argument
+    pub fn missing_argument(resource: ResourceKind, arg_name: &str) -> Self {
+        Self {
+            kind: ReplyErrorKind::InvalidArgument,
+            resource,
+            source: arg_name.to_string(),
+            extra: format!("Argument {} was not provided", arg_name),
         }
     }
 }
@@ -664,6 +679,11 @@ impl TimeoutOptions {
     /// Get the http2 Keep Alive timeout.
     pub fn keep_alive_timeout(&self) -> Duration {
         self.keep_alive_timeout
+    }
+
+    /// get the max retries
+    pub fn max_retries(&self) -> Option<u32> {
+        self.max_retries
     }
 }
 

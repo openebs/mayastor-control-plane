@@ -5,7 +5,7 @@ pub mod specs;
 use super::core::registry::Registry;
 use std::sync::Arc;
 
-use common::{handler::*, Service};
+use common::Service;
 use grpc::operations::{pool::server::PoolServer, replica::server::ReplicaServer};
 
 pub(crate) async fn configure(builder: Service) -> Service {
@@ -14,8 +14,6 @@ pub(crate) async fn configure(builder: Service) -> Service {
     let pool_service = PoolServer::new(new_service.clone());
     let replica_service = ReplicaServer::new(new_service);
     builder
-        .with_channel(ChannelVs::Pool)
-        .with_default_liveness()
         .with_shared_state(pool_service)
         .with_shared_state(replica_service)
 }
