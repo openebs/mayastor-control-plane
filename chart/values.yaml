@@ -3,11 +3,15 @@
 # Declare variables to be passed into your templates.
 
 mayastorCP:
-  registry:
+  registry: ''
+  tag: latest
   pullPolicy: Always
   logLevel: info
 
 base:
+  cache_poll_period: "30s"
+  default_req_timeout: "5s"
+
   initContainers:
     enabled: true
     containers:
