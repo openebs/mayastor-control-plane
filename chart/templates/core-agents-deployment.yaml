@@ -27,9 +27,15 @@ spec:
           args:
             - "-smayastor-etcd"
             - "-nnats"
+            {{- if .Values.default_req_timeout }}
             - "--request-timeout={{ .Values.base.default_req_timeout }}"
-            - "--cache-period={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
-            - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
+            {{- end }}
+            {{- if .Values.base.cache_poll_period }}
+            - "--cache-period={{ .Values.base.cache_poll_period }}"
+            {{- end }}
+            {{- if .Values.base.jaeger.enabled }}
+            - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"
+            {{- end }}
           ports:
             - containerPort: 50051
           env:

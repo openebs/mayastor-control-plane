@@ -27,8 +27,12 @@ spec:
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-e http://rest:8081"
-            - "--interval={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
-            - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
+            {{- if .Values.base.cache_poll_period }}
+            - "--interval={{ .Values.base.cache_poll_period }}"
+            {{- end }}
+            {{- if .Values.base.jaeger.enabled }}
+            - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"
+            {{- end }}
           env:
             - name: RUST_LOG
               value: info,msp_operator={{ .Values.mayastorCP.logLevel }}
