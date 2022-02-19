@@ -1,3 +1,4 @@
+{{- if (index .Values "jaeger-operator").jaeger.create }}
 apiVersion: jaegertracing.io/v1
 kind: Jaeger
 metadata:
@@ -16,3 +17,4 @@ spec:
     options:
       memory:
         max-traces: 100000
+{{- end }}
