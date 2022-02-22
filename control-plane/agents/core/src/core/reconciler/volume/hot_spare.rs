@@ -13,7 +13,10 @@ use common_lib::{
     },
 };
 
-use common_lib::types::v0::store::{TraceSpan, TraceStrLog};
+use common_lib::types::v0::{
+    message_bus::Nexus,
+    store::{TraceSpan, TraceStrLog},
+};
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::{cmp::Ordering, sync::Arc};
@@ -154,7 +157,6 @@ async fn missing_children_remover(
 /// Given a degraded volume
 /// When the nexus spec has a different number of children to the number of volume replicas
 /// Then the nexus spec should eventually have as many children as the number of volume replicas
-#[tracing::instrument(skip(context, volume_spec, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
 async fn nexus_replica_count_reconciler(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     nexus_spec: &Arc<Mutex<NexusSpec>>,
@@ -180,6 +182,34 @@ async fn nexus_replica_count_reconciler(
                 }
                 counter
             });
+
+    match nexus_replica_children.cmp(&volume_replicas) {
+        Ordering::Less | Ordering::Greater => {
+            nexus_replica_count_reconciler_traced(
+                volume_spec,
+                nexus_spec,
+                nexus_state,
+                nexus_replica_children,
+                context,
+                mode,
+            )
+            .await
+        }
+        Ordering::Equal => PollResult::Ok(PollerState::Idle),
+    }
+}
+#[tracing::instrument(skip(context, volume_spec, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
+async fn nexus_replica_count_reconciler_traced(
+    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    nexus_state: Nexus,
+    nexus_replica_children: usize,
+    context: &PollContext,
+    mode: OperationMode,
+) -> PollResult {
+    let vol_spec_clone = volume_spec.lock().clone();
+    let nexus_spec_clone = nexus_spec.lock().clone();
+    let volume_replicas = vol_spec_clone.num_replicas as usize;
 
     match nexus_replica_children.cmp(&volume_replicas) {
         Ordering::Less => {
@@ -234,8 +264,28 @@ async fn nexus_replica_count_reconciler(
 /// When the number of created volume replicas is different to the required number of replicas
 /// Then the number of created volume replicas should eventually match the required number of
 /// replicas
-#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
 async fn volume_replica_count_reconciler(
+    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    context: &PollContext,
+    mode: OperationMode,
+) -> PollResult {
+    let volume_spec_clone = volume_spec.lock().clone();
+    let volume_uuid = volume_spec_clone.uuid.clone();
+    let required_replica_count = volume_spec_clone.num_replicas as usize;
+
+    let current_replicas = context.specs().get_volume_replicas(&volume_uuid);
+    let current_replica_count = current_replicas.len();
+
+    match current_replica_count.cmp(&required_replica_count) {
+        Ordering::Less | Ordering::Greater => {
+            volume_replica_count_reconciler_traced(volume_spec, context, mode).await
+        }
+        Ordering::Equal => PollResult::Ok(PollerState::Idle),
+    }
+}
+
+#[tracing::instrument(skip(context, volume_spec, mode), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
+async fn volume_replica_count_reconciler_traced(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
     mode: OperationMode,

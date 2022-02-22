@@ -1029,6 +1029,7 @@ async fn main() -> anyhow::Result<()> {
             env!("CARGO_PKG_VERSION"),
         );
         global::set_text_map_propagator(TraceContextPropagator::new());
+        constants::set_jaeger_env();
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_agent_endpoint(jaeger)
             .with_service_name("msp-operator")

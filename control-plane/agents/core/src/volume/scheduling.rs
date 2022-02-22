@@ -61,13 +61,12 @@ pub(crate) async fn get_healthy_volume_replicas(
     registry: &Registry,
 ) -> Result<HealthyChildItems, SvcError> {
     let builder = nexus::CreateVolumeNexus::builder_with_defaults(request, registry).await?;
-
-    if let Some(info) = &builder.context().nexus_info() {
-        if !info.clean_shutdown {
-            let items = builder.collect();
-            return Ok(HealthyChildItems::One(items));
+    let info = builder.context().nexus_info().clone();
+    if let Some(info_inner) = &builder.context().nexus_info() {
+        if !info_inner.clean_shutdown {
+            return Ok(HealthyChildItems::One(info, builder.collect()));
         }
     }
     let items = builder.collect();
-    Ok(HealthyChildItems::All(items))
+    Ok(HealthyChildItems::All(info, items))
 }

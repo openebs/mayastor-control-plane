@@ -3,6 +3,7 @@ from openapi.api.pools_api import PoolsApi
 from openapi.api.specs_api import SpecsApi
 from openapi.api.replicas_api import ReplicasApi
 from openapi.api.nodes_api import NodesApi
+from openapi.api.nexuses_api import NexusesApi
 from openapi import api_client
 from openapi import configuration
 
@@ -48,3 +49,8 @@ class ApiClient(object):
     @staticmethod
     def replicas_api():
         return ReplicasApi(get_api_client())
+
+    # Return a NexusesApi object which can be used for performing nexus related REST calls.
+    @staticmethod
+    def nexuses_api():
+        return NexusesApi(get_api_client())

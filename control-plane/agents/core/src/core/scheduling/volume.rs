@@ -169,13 +169,23 @@ impl GetChildForRemoval {
 
 /// Used to filter nexus children in order to choose the best candidates for removal
 /// when the volume's replica count is being reduced.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct GetChildForRemovalContext {
     registry: Registry,
     spec: VolumeSpec,
     state: VolumeState,
     nexus_info: Option<NexusInfo>,
     unused_only: bool,
+}
+impl std::fmt::Debug for GetChildForRemovalContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GetChildForRemovalContext")
+            .field("spec", &self.spec)
+            .field("state", &self.state)
+            .field("nexus_info", &self.nexus_info)
+            .field("unused_only", &self.unused_only)
+            .finish()
+    }
 }
 
 impl GetChildForRemovalContext {

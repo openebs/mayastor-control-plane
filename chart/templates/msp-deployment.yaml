@@ -26,7 +26,7 @@ spec:
           image: {{ .Values.mayastorCP.registry }}mayadata/mcp-msp-operator:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
-            - "-e http://$(REST_SERVICE_HOST):8081"
+            - "-e http://rest:8081"
             - "--interval={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
           env:

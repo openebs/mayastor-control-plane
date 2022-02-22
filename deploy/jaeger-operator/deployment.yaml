@@ -45,14 +45,3 @@ spec:
               value: "mayastor-jaeger-operator"
           resources:
             {}
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/master
-                operator: In
-                values:
-                - ""
-      tolerations:
-        - key: node-role.kubernetes.io/master

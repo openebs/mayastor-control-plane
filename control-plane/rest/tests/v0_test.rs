@@ -59,7 +59,7 @@ fn bearer_token() -> String {
 #[tokio::test]
 async fn client() {
     // Run the client test both with and without authentication.
-    for auth in &[true, false] {
+    for auth in &[false, true] {
         let cluster = test_setup(auth).await;
         client_test(&cluster, auth).await;
     }
@@ -221,7 +221,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         }
     );
 
-    let mut child = client
+    let child = client
         .children_api()
         .put_node_nexus_child(
             &nexus.node,
@@ -236,14 +236,16 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .get_nexus_children(&nexus.uuid)
         .await
         .unwrap();
+    let child_updated = children.iter().find(|c| c.uri == child.uri);
 
     // It's possible that the rebuild progress will change between putting a child and getting the
-    // list of children. Just check that they are both rebuilding and then set them to the same
-    // thing so that we can compare them in subsequent asserts.
+    // list of children so don't bother comparing the states
     assert!(child.rebuild_progress.is_some());
-    assert!(children.last().unwrap().rebuild_progress.is_some());
-    child.rebuild_progress = children.last().unwrap().rebuild_progress;
-    assert_eq!(Some(&child), children.last());
+    assert!(child_updated.is_some());
+    assert!(
+        child_updated.unwrap().rebuild_progress.is_some()
+            || child_updated.unwrap().state == models::ChildState::Online
+    );
 
     client
         .nexuses_api()
