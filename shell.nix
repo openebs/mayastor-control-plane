@@ -49,6 +49,7 @@ mkShell {
   NATS_BIN = "${pkgs.nats-server}/bin/nats-server";
 
   shellHook = ''
+    ./scripts/nix/git-submodule-init.sh
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo 'Hint: use rustup tool.'"}
     ${pkgs.lib.optionalString (norust) "echo"}

@@ -37,5 +37,5 @@ opentelemetry-semantic-conventions = "0.8.0"
 tracing = "0.1.28"
 
 [dev-dependencies]
-composer = { git = "https://github.com/mayadata-io/composer", default-features = false, branch = "develop" }
+composer = { path = "../utils/mayastor-dependencies/composer", default-features = false }
 oneshot = "0.1.2"

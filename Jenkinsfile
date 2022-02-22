@@ -85,6 +85,7 @@ pipeline {
           anyOf {
             branch 'master'
             branch 'release/*'
+            branch 'hotfix-*'
             expression { run_linter == false }
           }
         }
@@ -105,6 +106,7 @@ pipeline {
           anyOf {
             branch 'master'
             branch 'release/*'
+            branch 'hotfix-*'
           }
         }
       }
@@ -146,6 +148,7 @@ pipeline {
           anyOf {
             branch 'master'
             branch 'release/*'
+            branch 'hotfix-*'
             branch 'develop'
           }
         }
@@ -155,6 +158,7 @@ pipeline {
             sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
         }
         sh 'printenv'
+        sh './scripts/nix/git-submodule-init.sh --force'
         sh './scripts/release.sh'
       }
       post {
