@@ -124,7 +124,7 @@ async fn url_from_kubeconfig(kube_config_path: Option<PathBuf>) -> Result<Url> {
                 Ok(value) => Some(value),
                 Err(_) => {
                     // Look for kubeconfig file in default location.
-                    #[cfg(target_os = "linux")]
+                    #[cfg(any(target_os = "linux", target_os = "macos"))]
                     let default_path = format!("{}/.kube/config", env::var("HOME")?);
                     #[cfg(target_os = "windows")]
                     let default_path = format!("{}/.kube/config", env::var("USERPROFILE")?);
