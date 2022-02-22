@@ -15,7 +15,7 @@ name = "deployer_lib"
 path = "src/lib.rs"
 
 [dependencies]
-composer = { git = "https://github.com/mayadata-io/composer", default-features = false, branch = "develop" }
+composer = { path = "../utils/mayastor-dependencies/composer", default-features = false }
 common-lib = { path = "../common" }
 structopt = "0.3.23"
 tokio = { version = "1.12.0", features = ["full"] }

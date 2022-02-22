@@ -102,8 +102,6 @@ let
         outputHashes = {
           "nats-0.15.2" =
             "sha256:1whr0v4yv31q5zwxhcqmx4qykgn5cgzvwlaxgq847mymzajpcsln";
-          "composer-0.1.0" =
-            "sha256:1k68gdpq9wjhlddd8zkrkqp3jqzkbchsxbp529ifhi9fi1czqarg";
         };
       };
     });
