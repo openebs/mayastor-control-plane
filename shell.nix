@@ -38,6 +38,7 @@ mkShell {
     tini
     utillinux
     which
+    libudev
   ] ++ pkgs.lib.optional (!norust) channel.default_src.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
