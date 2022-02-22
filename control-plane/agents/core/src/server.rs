@@ -115,6 +115,8 @@ fn init_tracing() {
             tracing_tags.dedup();
             println!("Using the following tracing tags: {:?}", tracing_tags);
 
+            common_lib::opentelemetry::set_jaeger_env();
+
             global::set_text_map_propagator(TraceContextPropagator::new());
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_agent_endpoint(jaeger)

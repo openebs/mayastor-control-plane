@@ -139,7 +139,10 @@ pub(crate) async fn get_volume_replica_candidates(
         });
     }
 
-    request.trace(&format!("Creation pool candidates for volume: {:?}", pools));
+    request.trace(&format!(
+        "Creation pool candidates for volume: {:?}",
+        pools.iter().map(|p| p.state()).collect::<Vec<_>>()
+    ));
 
     Ok(pools
         .iter()
@@ -924,8 +927,8 @@ impl ResourceSpecsLocked {
     ) -> Result<Nexus, SvcError> {
         let children = get_healthy_volume_replicas(vol_spec, target_node, registry).await?;
         let (count, items) = match children {
-            HealthyChildItems::One(candidates) => (1, candidates),
-            HealthyChildItems::All(candidates) => (candidates.len(), candidates),
+            HealthyChildItems::One(_, candidates) => (1, candidates),
+            HealthyChildItems::All(_, candidates) => (candidates.len(), candidates),
         };
 
         let mut nexus_replicas = vec![];
@@ -1419,7 +1422,7 @@ async fn get_volume_target_node(
                 let node = locked_node.read().await;
                 // todo: use other metrics in order to make the "best" choice
                 if node.is_online() {
-                    return Ok(node.id.clone());
+                    return Ok(node.id().clone());
                 }
             }
             Err(SvcError::NoNodes {})
@@ -1430,10 +1433,10 @@ async fn get_volume_target_node(
             let node = registry.get_node_wrapper(node).await?;
             let node = node.read().await;
             if node.is_online() {
-                Ok(node.id.clone())
+                Ok(node.id().clone())
             } else {
                 Err(SvcError::NodeNotOnline {
-                    node: node.id.clone(),
+                    node: node.id().clone(),
                 })
             }
         }

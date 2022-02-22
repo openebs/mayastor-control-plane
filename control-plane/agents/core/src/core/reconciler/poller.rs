@@ -34,7 +34,9 @@ impl ReconcilerWorker {
             Box::new(replica::ReplicaReconciler::new()),
         ];
 
-        let event_channel = tokio::sync::mpsc::channel(poll_targets.len());
+        // if events are sent before the worker is started they may fill up the buffer
+        // from which point messages will be dropped
+        let event_channel = tokio::sync::mpsc::channel(poll_targets.len() * 2);
         let shutdown_channel = tokio::sync::mpsc::channel(1);
         Self {
             poll_targets,

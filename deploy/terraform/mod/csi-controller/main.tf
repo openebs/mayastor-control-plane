@@ -87,7 +87,7 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
 
           args = concat([
             "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock",
-            "--rest-endpoint=http://$(REST_SERVICE_HOST):8081",
+            "--rest-endpoint=http://rest:8081",
           ], var.jaeger_agent_argument)
           env {
             name  = "RUST_LOG"

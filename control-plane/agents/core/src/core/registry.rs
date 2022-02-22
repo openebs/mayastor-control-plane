@@ -260,17 +260,19 @@ impl Registry {
     /// Poll each node for resource updates
     async fn poller(&self) {
         loop {
-            let nodes = self.nodes().read().await.clone();
-            for (_, node) in nodes.iter() {
-                let lock = node.grpc_lock().await;
-                let _guard = lock.lock().await;
-
-                let mut node_clone = node.write().await.clone();
-                if let Err(e) = node_clone.reload().await {
-                    tracing::trace!("Failed to reload node {}. Error {:?}.", node_clone.id, e);
+            {
+                let nodes = self.nodes().read().await;
+                for (_, node) in nodes.iter() {
+                    let (id, online) = {
+                        let node = node.read().await;
+                        (node.id().clone(), node.is_online())
+                    };
+                    if online {
+                        if let Err(error) = node.update_all(false).await {
+                            tracing::error!(node = %id, error = %error, "Failed to reload node");
+                        }
+                    }
                 }
-                // update node in the registry
-                *node.write().await = node_clone;
             }
             tokio::time::sleep(self.cache_period).await;
         }
