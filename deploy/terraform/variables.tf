@@ -46,17 +46,17 @@ variable "nats_image" {
 variable "msp_operator_image" {
   type        = string
   description = "msp operator image to use"
-  default     = "mcp-msp-operator"
+  default     = "mayastor-msp-operator"
 }
 
 variable "rest_image" {
   type    = string
-  default = "mcp-rest"
+  default = "mayastor-rest"
 }
 
 variable "core_image" {
   type    = string
-  default = "mcp-core"
+  default = "mayastor-core"
 }
 
 variable "mayastor_image" {
@@ -127,7 +127,7 @@ variable "csi_provisioner" {
 variable "csi_controller_image" {
   type        = string
   description = "mayastor CSI controller image to use"
-  default     = "mcp-csi-controller"
+  default     = "mayastor-csi-controller"
 }
 
 variable "control_request_timeout" {

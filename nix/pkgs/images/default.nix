@@ -9,7 +9,7 @@ let
     dockerTools.buildImage {
       tag = control-plane.version;
       created = "now";
-      name = "mayadata/mcp-${name}${image_suffix.${buildType}}";
+      name = "mayadata/mayastor-${name}${image_suffix.${buildType}}";
       contents = [ tini busybox package ];
       config = {
         Entrypoint = [ "tini" "--" package.binary ];
