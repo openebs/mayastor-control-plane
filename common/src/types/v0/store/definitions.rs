@@ -159,12 +159,16 @@ pub enum StorableObjectType {
     StoreLeaseOwner,
 }
 
+/// Returns the common namespace that should be used for the keys.
+pub fn key_namespace() -> String {
+    let namespace = std::env::var("MY_POD_NAMESPACE").unwrap_or_else(|_| "default".into());
+    format!("/namespace/{}", namespace)
+}
+
+/// Returns the prefix that should be used for the keys.
 pub fn key_prefix(obj_type: StorableObjectType) -> String {
-    format!(
-        "/namespace/{}/control-plane/{}",
-        std::env::var("MY_POD_NAMESPACE").unwrap_or_else(|_| "default".into()),
-        obj_type
-    )
+    let namespace = key_namespace();
+    format!("{}/control-plane/{}", namespace, obj_type)
 }
 
 /// create a key based on the object's key trait

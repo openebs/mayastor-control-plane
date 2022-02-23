@@ -184,7 +184,11 @@ async fn is_replica_healthy(
         None => {
             *nexus_info = context
                 .registry()
-                .get_nexus_info(volume_spec.last_nexus_id.as_ref(), true)
+                .get_nexus_info(
+                    Some(&volume_spec.uuid),
+                    volume_spec.last_nexus_id.as_ref(),
+                    true,
+                )
                 .await?;
             match nexus_info {
                 Some(info) => info,
