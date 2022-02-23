@@ -93,3 +93,7 @@ pub mod mayastor {
 pub mod csi {
     include!(concat!(env!("OUT_DIR"), "/csi.v1.rs"));
 }
+
+pub mod registration {
+    include!(concat!(env!("OUT_DIR"), "/v1.registration.rs"));
+}

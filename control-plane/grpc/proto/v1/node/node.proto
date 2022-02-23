@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+package v1.node;
+
+// Node information
+message Node {
+  // Node identification
+  string node_id = 1;
+  // Specification of the node.
+  optional NodeSpec spec = 2;
+  // Runtime state of the node.
+  optional NodeState state = 3;
+}
+
+message NodeSpec {
+  // Node identification
+  string node_id = 1;
+  // Endpoint of the mayastor instance (gRPC)
+  string endpoint = 2;
+  // Node labels.
+  common.StringMapValue labels = 3;
+}
+
+message NodeState {
+  // id of the mayastor instance
+  string node_id = 1;
+  // grpc_endpoint of the mayastor instance
+  string endpoint = 2;
+  // deemed status of the node
+  NodeStatus status = 3;
+}
+
+// Multiple nodes
+message Nodes {
+  repeated Node nodes = 1;
+}
+
+// Status of the Node
+enum NodeStatus {
+  // Node has unexpectedly disappeared
+  Unknown = 0;
+  // Node is deemed online if it has not missed the
+  // registration keep alive deadline
+  Online = 1;
+  // Node is deemed offline if has missed the
+  // registration keep alive deadline
+  Offline = 2;
+}
+
+// Get storage nodes by filter
+message GetNodesRequest {
+  oneof filter {
+    // filter by node id
+    common.NodeFilter node = 1;
+  }
+}
+
+// Reponse to the GetNodes request
+message GetNodesReply {
+  oneof reply {
+    Nodes nodes = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+service NodeGrpc {
+  rpc GetNodes (GetNodesRequest) returns (GetNodesReply) {}
+}
