@@ -43,7 +43,7 @@ spec:
             requests:
               cpu: 50m
               memory: 32Mi
-          image: mayadata/mcp-rest:e2e-nightly
+          image: mayadata/mayastor-rest:e2e-nightly
           imagePullPolicy: Always
           args:
             - "--dummy-certificates"

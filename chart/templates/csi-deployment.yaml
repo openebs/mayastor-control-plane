@@ -53,7 +53,7 @@ spec:
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-controller
           resources: {{- .Values.csi.resources | toYaml | nindent 12 }}
-          image: {{ .Values.mayastorCP.registry }}mayadata/mcp-csi-controller:{{ .Values.mayastorCP.tag }}
+          image: {{ .Values.mayastorCP.registry }}mayadata/mayastor-csi-controller:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
