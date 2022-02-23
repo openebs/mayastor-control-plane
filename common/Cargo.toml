@@ -26,7 +26,6 @@ once_cell = "1.8.0"
 openapi = { path = "../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
 parking_lot = "0.11.2"
 rand = "0.8.4"
-utils = { path = "../utils/utils-lib" }
 tonic = "0.5.2"
 
 # Tracing
@@ -35,7 +34,3 @@ tracing-opentelemetry = "0.15.0"
 opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
 opentelemetry-semantic-conventions = "0.8.0"
 tracing = "0.1.28"
-
-[dev-dependencies]
-composer = { path = "../utils/mayastor-dependencies/composer", default-features = false }
-oneshot = "0.1.2"
