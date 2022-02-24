@@ -24,4 +24,4 @@ control_resource_limits = {
 }
 
 # csi agent configuration
-csi_agent_grace_period = 2
+csi_node_grace_period = 2

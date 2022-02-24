@@ -12,6 +12,8 @@
 , version
 , openapi-generator
 , which
+, libudev
+, utillinux
   # with allInOne set to true all components are built as part of the same "cargo build" derivation
   # this allows for a quicker build of all components but slower single components
   # with allInOne set to false each component gets its own "cargo build" derivation allowing for faster
@@ -44,7 +46,7 @@ let
           (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
           allowedPrefixes)
       src;
-  LIBCLANG_PATH = "${llvmPackages.libclang}/lib";
+  LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
   src_list = [
@@ -69,7 +71,7 @@ let
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [ clang pkg-config openapi-generator which git ];
-    buildInputs = [ llvmPackages.libclang protobuf openssl ];
+    buildInputs = [ llvmPackages.libclang protobuf openssl libudev utillinux ];
     doCheck = false;
   };
   release_build = { "release" = true; "debug" = false; };
@@ -112,7 +114,7 @@ in
 
   build = { buildType, cargoBuildFlags ? [ ] }:
     if allInOne then
-      builder { inherit buildType; cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-controller" ]; }
+      builder { inherit buildType; cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-driver" ]; }
     else
       builder { inherit buildType cargoBuildFlags; };
 }

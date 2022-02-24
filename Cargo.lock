@@ -881,51 +881,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "csi-controller"
+name = "csi-driver"
 version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-stream",
- "clap",
- "common-lib",
- "futures",
- "humantime",
- "once_cell",
- "opentelemetry",
- "opentelemetry-jaeger",
- "regex",
- "rpc",
- "serde",
- "tokio",
- "tokio-stream",
- "tonic",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber 0.2.25",
- "utils",
- "uuid",
-]
-
-[[package]]
-name = "csi-node-plugin"
-version = "1.0.0"
-dependencies = [
- "async-stream",
  "async-trait",
  "chrono",
  "clap",
+ "common-lib",
  "devinfo",
  "env_logger 0.9.0",
  "failure",
  "futures",
  "glob",
+ "humantime",
  "lazy_static",
  "nvmeadm",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-jaeger",
  "prost",
  "prost-build",
  "prost-derive",
  "prost-types",
  "regex",
+ "rpc",
+ "serde",
  "serde_json",
  "snafu",
  "sys-mount",
@@ -936,8 +918,11 @@ dependencies = [
  "tonic-build",
  "tower",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber 0.2.25",
  "udev",
  "url",
+ "utils",
  "uuid",
  "which 4.2.2",
 ]
@@ -1709,9 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c9de88456263e249e241fcd211d3954e2c9b0ef7ccfc235a444eb367cae3689"
+version = "0.3.11"
 dependencies = [
  "bytes",
  "fnv",

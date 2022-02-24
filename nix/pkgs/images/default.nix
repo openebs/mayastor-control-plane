@@ -2,8 +2,15 @@
 # avoid dependency on docker tool chain. Though the maturity of OCI
 # builder in nixpkgs is questionable which is why we postpone this step.
 
-{ busybox, dockerTools, lib, utillinux, control-plane, tini }:
+{ busybox, dockerTools, lib, xfsprogs, e2fsprogs, utillinux, fetchurl, control-plane, tini }:
 let
+  e2fsprogs_1_46_2 = (e2fsprogs.overrideAttrs (oldAttrs: rec {
+    version = "1.46.2";
+    src = fetchurl {
+      url = "mirror://sourceforge/${oldAttrs.pname}/${oldAttrs.pname}-${version}.tar.gz";
+      sha256 = "1mawh41ikrxy2nwhxdrza0dcxhs061mfrq8jraghbp2vyss2d7zp";
+    };
+  }));
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
   build-control-plane-image = { buildType, name, package, config ? { } }:
     dockerTools.buildImage {
@@ -35,9 +42,9 @@ let
       name = "${name}-operator";
       package = control-plane.${buildType}.operators.${name};
     };
-  build-csi-image = { buildType, name }:
+  build-csi-image = { buildType, name, config ? { } }:
     build-control-plane-image {
-      inherit buildType;
+      inherit buildType config;
       name = "csi-${name}";
       package = control-plane.${buildType}.csi.${name};
     };
@@ -58,6 +65,13 @@ let
   };
   build-csi-images = { buildType }: {
     controller = build-csi-image { inherit buildType; name = "controller"; };
+    node = build-csi-image {
+      inherit buildType;
+      name = "node";
+      config = {
+        Env = [ "PATH=${lib.makeBinPath [ "/" xfsprogs e2fsprogs_1_46_2 utillinux ]}" ];
+      };
+    };
   };
 in
 let

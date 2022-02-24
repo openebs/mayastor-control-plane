@@ -1,3 +1,6 @@
+[patch.crates-io]
+h2 = { path = "./utils/mayastor-dependencies/h2" }
+
 [profile.dev]
 panic = "abort"
 
@@ -7,8 +10,7 @@ members = [
     "control-plane/agents",
     "control-plane/msp-operator",
     "control-plane/rest",
-    "control-plane/csi/controller",
-    "control-plane/csi/node-plugin",
+    "control-plane/csi-driver",
     "control-plane/grpc",
     "deployer",
     "kubectl-plugin",

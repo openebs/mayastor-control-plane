@@ -74,13 +74,13 @@ module "etcd" {
  */
 
 
-module "csi-agent" {
-  source         = "./mod/csi-agent"
-  image          = var.csi_agent_image
+module "csi-node" {
+  source         = "./mod/csi-node"
+  image          = var.csi_node_image
   tag            = var.tag
   registry       = var.registry
-  registar_image = var.csi_registar_image
-  grace_period   = var.csi_agent_grace_period
+  registrar_image = var.csi_registar_image
+  grace_period   = var.csi_node_grace_period
   rust_log       = var.control_rust_log
 }
 
