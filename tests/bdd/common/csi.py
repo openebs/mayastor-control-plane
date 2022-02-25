@@ -1,5 +1,5 @@
 """
-Wrapper arount gRPC handle to communicate with CSI controller.
+Wrapper around gRPC handle to communicate with CSI controller.
 """
 
 import grpc
@@ -11,6 +11,7 @@ class CsiHandle(object):
         self.channel = grpc.insecure_channel(csi_socket)
         self.controller = rpc.ControllerStub(self.channel)
         self.identity = rpc.IdentityStub(self.channel)
+        self.node = rpc.NodeStub(self.channel)
 
     def __del__(self):
         del self.channel

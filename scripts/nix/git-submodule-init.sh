@@ -18,7 +18,7 @@ done
 
 for mod in `git config --file .gitmodules --get-regexp path | awk '{ print $2 }'`; do
     if [ -n "$FORCE" ] || [ ! -f $mod/.git ]; then
-       git submodule update --init $mod
+       git submodule update --init --recursive $mod
     fi
 done
 

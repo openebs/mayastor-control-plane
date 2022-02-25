@@ -2,12 +2,12 @@ variable "image" {}
 variable "tag" {}
 variable "registry" {}
 variable "grace_period" {}
-variable "registar_image" {}
+variable "registrar_image" {}
 variable "rust_log" {}
 
-resource "kubernetes_daemonset" "mayastor_csi_agent" {
+resource "kubernetes_daemonset" "csi_node" {
   metadata {
-    name      = "mayastor-csi-agent"
+    name      = "mayastor-csi"
     namespace = "mayastor"
     labels = {
       "openebs/engine" = "mayastor"
@@ -17,14 +17,14 @@ resource "kubernetes_daemonset" "mayastor_csi_agent" {
   spec {
     selector {
       match_labels = {
-        app = "mayastor-csi-agent"
+        app = "mayastor-csi"
       }
     }
 
     template {
       metadata {
         labels = {
-          app = "mayastor-csi-agent"
+          app = "mayastor-csi"
         }
       }
 
@@ -95,7 +95,7 @@ resource "kubernetes_daemonset" "mayastor_csi_agent" {
         }
 
         container {
-          name  = "mayastor-csi-agent"
+          name  = "mayastor-csi"
           image = format("%s/%s:%s", var.registry, var.image, var.tag)
           args  = ["--csi-socket=/csi/csi.sock", "--node-name=$(MY_NODE_NAME)", "--grpc-endpoint=$(MY_POD_IP):10199", "-v"]
 
@@ -169,7 +169,7 @@ resource "kubernetes_daemonset" "mayastor_csi_agent" {
 
         container {
           name  = "csi-driver-registrar"
-          image = var.registar_image
+          image = var.registrar_image
           args = [
             "--csi-address=/csi/csi.sock",
             "--kubelet-registration-path=/var/lib/kubelet/plugins/mayastor.openebs.io/csi.sock"

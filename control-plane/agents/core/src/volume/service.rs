@@ -33,7 +33,7 @@ impl VolumeOperations for Service {
         let create_volume = req.into();
         let service = self.clone();
         let volume =
-            tokio::spawn(async move { service.create_volume(&create_volume).await }).await??;
+            Context::spawn(async move { service.create_volume(&create_volume).await }).await??;
         Ok(volume)
     }
 
@@ -50,7 +50,7 @@ impl VolumeOperations for Service {
     ) -> Result<(), ReplyError> {
         let destroy_volume = req.into();
         let service = self.clone();
-        tokio::spawn(async move { service.destroy_volume(&destroy_volume).await }).await??;
+        Context::spawn(async move { service.destroy_volume(&destroy_volume).await }).await??;
         Ok(())
     }
 
@@ -62,7 +62,7 @@ impl VolumeOperations for Service {
         let share_volume = req.into();
         let service = self.clone();
         let response =
-            tokio::spawn(async move { service.share_volume(&share_volume).await }).await??;
+            Context::spawn(async move { service.share_volume(&share_volume).await }).await??;
         Ok(response)
     }
 
@@ -73,7 +73,7 @@ impl VolumeOperations for Service {
     ) -> Result<(), ReplyError> {
         let unshare_volume = req.into();
         let service = self.clone();
-        tokio::spawn(async move { service.unshare_volume(&unshare_volume).await }).await??;
+        Context::spawn(async move { service.unshare_volume(&unshare_volume).await }).await??;
         Ok(())
     }
 
@@ -85,7 +85,7 @@ impl VolumeOperations for Service {
         let publish_volume = req.into();
         let service = self.clone();
         let volume =
-            tokio::spawn(async move { service.publish_volume(&publish_volume).await }).await??;
+            Context::spawn(async move { service.publish_volume(&publish_volume).await }).await??;
         Ok(volume)
     }
 
@@ -96,8 +96,9 @@ impl VolumeOperations for Service {
     ) -> Result<Volume, ReplyError> {
         let unpublish_volume = req.into();
         let service = self.clone();
-        let volume = tokio::spawn(async move { service.unpublish_volume(&unpublish_volume).await })
-            .await??;
+        let volume =
+            Context::spawn(async move { service.unpublish_volume(&unpublish_volume).await })
+                .await??;
         Ok(volume)
     }
 
@@ -109,7 +110,7 @@ impl VolumeOperations for Service {
         let set_volume_replica = req.into();
         let service = self.clone();
         let volume =
-            tokio::spawn(async move { service.set_volume_replica(&set_volume_replica).await })
+            Context::spawn(async move { service.set_volume_replica(&set_volume_replica).await })
                 .await??;
         Ok(volume)
     }

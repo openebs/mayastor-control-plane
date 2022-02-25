@@ -26,7 +26,8 @@ mkShell {
     etcd
     fio
     git
-    llvmPackages_11.libclang
+    llvmPackages.libclang
+    libxfs
     nats-server
     nvme-cli
     openapi-generator
@@ -41,7 +42,7 @@ mkShell {
     libudev
   ] ++ pkgs.lib.optional (!norust) channel.default_src.nightly;
 
-  LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";
+  LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
 

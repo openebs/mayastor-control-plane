@@ -46,17 +46,17 @@ variable "nats_image" {
 variable "msp_operator_image" {
   type        = string
   description = "msp operator image to use"
-  default     = "mcp-msp-operator"
+  default     = "mayastor-msp-operator"
 }
 
 variable "rest_image" {
   type    = string
-  default = "mcp-rest"
+  default = "mayastor-rest"
 }
 
 variable "core_image" {
   type    = string
-  default = "mcp-core"
+  default = "mayastor-core"
 }
 
 variable "mayastor_image" {
@@ -94,13 +94,13 @@ variable "mayastor_rust_log" {
   default     = "debug"
 }
 
-variable "csi_agent_image" {
+variable "csi_node_image" {
   type        = string
   description = "mayastor CSI agent image to use"
-  default     = "mayastor-csi"
+  default     = "mayastor-csi-node"
 }
 
-variable "csi_agent_grace_period" {
+variable "csi_node_grace_period" {
   type        = string
   description = "termination grace period in seconds for the mayastor CSI pod"
   default     = 30
@@ -108,7 +108,7 @@ variable "csi_agent_grace_period" {
 
 variable "csi_registar_image" {
   type        = string
-  default     = "k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.2.0"
+  default     = "k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0"
   description = "CSI sidecars to use"
 }
 
@@ -127,7 +127,7 @@ variable "csi_provisioner" {
 variable "csi_controller_image" {
   type        = string
   description = "mayastor CSI controller image to use"
-  default     = "mcp-csi-controller"
+  default     = "mayastor-csi-controller"
 }
 
 variable "control_request_timeout" {

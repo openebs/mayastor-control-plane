@@ -1,5 +1,5 @@
 mayastorCP:
-  tag: e2e-nightly
+  tag: develop
 
 jaeger:
   enabled: false

@@ -86,3 +86,7 @@ csi:
     requests:
       cpu: "16m"
       memory: "64Mi"
+  nvme:
+    # nvme_core module io timeout in seconds
+    io_timeout: "30"
+    io_timeout_enabled: true

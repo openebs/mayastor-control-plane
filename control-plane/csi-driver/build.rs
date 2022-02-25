@@ -4,11 +4,11 @@ fn main() {
     tonic_build::configure()
         .build_server(true)
         .build_client(false)
-        .compile(&["proto/csi.proto"], &["proto"])
+        .compile(&["node/proto/csi.proto"], &["node/proto"])
         .expect("csi protobuf compilation failed");
     tonic_build::configure()
         .build_server(true)
         .build_client(false)
-        .compile(&["proto/mayastornodeplugin.proto"], &["proto"])
+        .compile(&["node/proto/mayastornodeplugin.proto"], &["node/proto"])
         .expect("mayastor node grpc service protobuf compilation failed");
 }

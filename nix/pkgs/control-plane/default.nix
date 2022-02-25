@@ -4,14 +4,14 @@ let
   version = builtins.readFile "${versionDrv}";
   project-builder =
     pkgs.callPackage ../control-plane/cargo-project.nix { inherit version allInOne incremental; };
-  installer = { name, src, suffix }:
+  installer = { name, src, suffix ? "" }:
     stdenv.mkDerivation {
       inherit src;
       name = "${name}-${version}";
-      binary = "${name}-${suffix}";
+      binary = "${name}${suffix}";
       installPhase = ''
         mkdir -p $out/bin
-        cp $src/bin/${name} $out/bin/${name}-${suffix}
+        cp $src/bin/${name} $out/bin/${name}${suffix}
       '';
     };
 
@@ -19,7 +19,7 @@ let
     agents = rec {
       recurseForDerivations = true;
       agents_builder = { buildType, builder }: builder.build { inherit buildType; cargoBuildFlags = [ "-p agents" ]; };
-      agent_installer = { name, src }: installer { inherit name src; suffix = "agent"; };
+      agent_installer = { name, src }: installer { inherit name src; suffix = "-agent"; };
       jsongrpc = agent_installer {
         src = agents_builder { inherit buildType builder; };
         name = "jsongrpc";
@@ -33,11 +33,11 @@ let
     rest = installer {
       src = builder.build { inherit buildType; cargoBuildFlags = [ "-p rest" ]; };
       name = "rest";
-      suffix = "api";
+      suffix = "-api";
     };
 
     operators = rec {
-      operator_installer = { name, src }: installer { inherit name src; suffix = "operator"; };
+      operator_installer = { name, src }: installer { inherit name src; suffix = "-operator"; };
       msp = operator_installer {
         src = builder.build { inherit buildType; cargoBuildFlags = [ "-p msp-operator" ]; };
         name = "msp-operator";
@@ -46,10 +46,20 @@ let
     };
 
     csi = rec {
-      csi_installer = { name, src }: installer { inherit name src; suffix = "csi"; };
+      csi_installer = { name }: installer {
+        inherit name;
+        src =
+          if allInOne then
+            builder.build { inherit buildType; cargoBuildFlags = [ "-p csi-driver" ]; }
+          else
+            builder.build { inherit buildType; cargoBuildFlags = [ "--bin ${name}" ]; };
+      };
+
       controller = csi_installer {
-        src = builder.build { inherit buildType; cargoBuildFlags = [ "-p csi-controller" ]; };
         name = "csi-controller";
+      };
+      node = csi_installer {
+        name = "csi-node";
       };
       recurseForDerivations = true;
     };

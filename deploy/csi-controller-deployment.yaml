@@ -1,5 +1,5 @@
 ---
-# Source: mayastor-control-plane/templates/csi-deployment.yaml
+# Source: mayastor-control-plane/templates/csi-controller-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -66,7 +66,7 @@ spec:
             requests:
               cpu: 16m
               memory: 64Mi
-          image: mayadata/mayastor-csi-controller:e2e-nightly
+          image: mayadata/mayastor-csi-controller:develop
           imagePullPolicy: Always
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
