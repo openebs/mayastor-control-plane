@@ -1326,7 +1326,7 @@ async fn publishing_test(cluster: &Cluster) {
             &PublishVolume {
                 uuid: volume_state.uuid.clone(),
                 target_node: Some(cluster.node(0)),
-                share: Some(VolumeShareProtocol::Iscsi),
+                share: Some(VolumeShareProtocol::Nvmf),
             },
             None,
         )
@@ -1347,7 +1347,7 @@ async fn publishing_test(cluster: &Cluster) {
     let first_volume_state = volumes.0.first().unwrap().state();
     assert_eq!(
         first_volume_state.target_protocol(),
-        Some(VolumeShareProtocol::Iscsi)
+        Some(VolumeShareProtocol::Nvmf)
     );
     assert_eq!(
         first_volume_state.target_node(),
@@ -1360,6 +1360,18 @@ async fn publishing_test(cluster: &Cluster) {
                 uuid: volume_state.uuid.clone(),
                 target_node: None,
                 share: Some(VolumeShareProtocol::Iscsi),
+            },
+            None,
+        )
+        .await
+        .expect_err("The volume publish should fail with Invalid protocol error");
+
+    volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume_state.uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
             },
             None,
         )

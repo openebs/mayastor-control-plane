@@ -881,8 +881,8 @@ impl ShareVolumeInfo for ShareVolume {
 /// Intermediate structure that validates the conversion to ShareVolumeRequest type
 #[derive(Debug)]
 pub struct ValidatedShareVolumeRequest {
-    inner: ShareVolumeRequest,
     uuid: VolumeId,
+    share: VolumeShareProtocol,
 }
 
 impl ShareVolumeInfo for ValidatedShareVolumeRequest {
@@ -891,7 +891,7 @@ impl ShareVolumeInfo for ValidatedShareVolumeRequest {
     }
 
     fn share(&self) -> VolumeShareProtocol {
-        self.inner.share.into()
+        self.share
     }
 }
 
@@ -917,7 +917,16 @@ impl ValidateRequestTypes for ShareVolumeRequest {
                     ))
                 }
             },
-            inner: self,
+            share: match volume::VolumeShareProtocol::from_i32(self.share) {
+                Some(share) => share.into(),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Volume,
+                        "share_volume_request.share",
+                        "".to_string(),
+                    ))
+                }
+            },
         })
     }
 }

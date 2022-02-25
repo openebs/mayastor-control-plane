@@ -80,6 +80,12 @@ pub enum SvcError {
     VolumeNotFound { vol_id: String },
     #[snafu(display("Volume '{}' not published", vol_id))]
     VolumeNotPublished { vol_id: String },
+    #[snafu(display("{} {} cannot be shared over invalid protocol '{}'", kind.to_string(), id, share))]
+    InvalidShareProtocol {
+        kind: ResourceKind,
+        id: String,
+        share: String,
+    },
     #[snafu(display(
         "Volume '{}' is already published on node '{}' with protocol '{}'",
         vol_id,
@@ -235,6 +241,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::AlreadyShared { kind, .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyShared,
+                resource: kind,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::InvalidShareProtocol { kind, .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
                 resource: kind,
                 source: desc.to_string(),
                 extra: error_str,
