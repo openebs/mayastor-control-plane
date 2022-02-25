@@ -67,112 +67,112 @@ def setup():
         pool_api.del_pool(POOL2_UUID)
     except:
         pass
-    Deployer().stop()
+    Deployer.stop()
 
 
 def csi_rpc_handle():
     return CsiHandle("unix:///var/tmp/csi.sock")
 
 
-@scenario("feature.feature", "get controller capabilities")
+@scenario("controller.feature", "get controller capabilities")
 def test_controller_capabilities(setup):
     """get controller capabilities"""
 
 
-@scenario("feature.feature", "get overall storage capacity")
+@scenario("controller.feature", "get overall storage capacity")
 def test_overall_capacity(setup):
     """get overall capacity"""
 
 
-@scenario("feature.feature", "get node storage capacity")
+@scenario("controller.feature", "get node storage capacity")
 def test_node_capacity(setup):
     """get node capacity"""
 
 
-@scenario("feature.feature", "create 1 replica nvmf volume")
+@scenario("controller.feature", "create 1 replica nvmf volume")
 def test_create_1_replica_nvmf_volume(setup):
     """create 1 replica nvmf volume"""
 
 
-@scenario("feature.feature", "volume creation idempotency")
+@scenario("controller.feature", "volume creation idempotency")
 def test_volume_creation_idempotency(setup):
     """volume creation idempotency"""
 
 
-@scenario("feature.feature", "remove existing volume")
+@scenario("controller.feature", "remove existing volume")
 def test_remove_existing_volume(setup):
     """remove existing volume"""
 
 
-@scenario("feature.feature", "volume removal idempotency")
+@scenario("controller.feature", "volume removal idempotency")
 def test_volume_removal_idempotency(setup):
     """volume removal idempotency"""
 
 
-@scenario("feature.feature", "list existing volumes")
+@scenario("controller.feature", "list existing volumes")
 def test_list_existing_volumes(setup):
     """list existing volumes"""
 
 
-@scenario("feature.feature", "validate SINGLE_NODE_WRITER volume capability")
+@scenario("controller.feature", "validate SINGLE_NODE_WRITER volume capability")
 def test_validate_single_node_writer_capability(setup):
     """validate SINGLE_NODE_WRITER volume capability"""
 
 
 @scenario(
-    "feature.feature",
+    "controller.feature",
     "validate non-SINGLE_NODE_WRITER volume capability",
 )
 def test_validate_non_single_node_writer_capability(setup):
     """validate non-SINGLE_NODE_WRITER volume capability"""
 
 
-@scenario("feature.feature", "publish volume over nvmf")
+@scenario("controller.feature", "publish volume over nvmf")
 def test_publish_volume_over_nvmf(setup):
     """publish volume over nvmf"""
 
 
-@scenario("feature.feature", "publish volume idempotency")
+@scenario("controller.feature", "publish volume idempotency")
 def test_publish_volume_idempotency(setup):
     """publish volume idempotency"""
 
 
-@scenario("feature.feature", "unpublish volume")
+@scenario("controller.feature", "unpublish volume")
 def test_unpublish_volume(setup):
     """unpublish volume"""
 
 
-@scenario("feature.feature", "unpublish volume idempotency")
+@scenario("controller.feature", "unpublish volume idempotency")
 def test_unpublish_volume_idempotency(setup):
     """unpublish volume idempotency"""
 
 
-@scenario("feature.feature", "unpublish volume from a different node")
+@scenario("controller.feature", "unpublish volume from a different node")
 def test_unpublish_volume_from_a_different_node(setup):
     """unpublish volume on a different node"""
 
 
-@scenario("feature.feature", "unpublish not existing volume")
+@scenario("controller.feature", "unpublish not existing volume")
 def test_unpublish_not_existing_volume(setup):
     """unpublish not existing volume"""
 
 
-@scenario("feature.feature", "republish volume on a different node")
+@scenario("controller.feature", "republish volume on a different node")
 def test_republish_volume_on_a_different_node(setup):
     """republish volume on a different node"""
 
 
-@scenario("feature.feature", "create 1 replica local nvmf volume")
+@scenario("controller.feature", "create 1 replica local nvmf volume")
 def test_create_1_replica_local_nvmf_volume(setup):
     """create 1 replica local nvmf volume"""
 
 
-@scenario("feature.feature", "list local volume")
+@scenario("controller.feature", "list local volume")
 def test_list_local_volume(setup):
     """list local volume"""
 
 
-@scenario("feature.feature", "unpublish volume when nexus node is offline")
+@scenario("controller.feature", "unpublish volume when nexus node is offline")
 def test_unpublish_volume_with_offline_nexus_node(setup):
     """unpublish volume when nexus node is offline"""
 
