@@ -30,7 +30,7 @@ use common_lib::{
             DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, Protocol, PublishVolume,
             RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
             ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
-            VolumeId, VolumeState, VolumeStatus,
+            VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
         },
         store::{
             nexus::{NexusSpec, ReplicaUri},
@@ -1471,18 +1471,25 @@ impl SpecOperations for VolumeSpec {
         }
 
         match &operation {
-            VolumeOperation::Share(_) => match &self.target {
-                None => Err(SvcError::VolumeNotPublished {
-                    vol_id: self.uuid(),
-                }),
-                Some(target) => match target.protocol() {
-                    None => Ok(()),
-                    Some(protocol) => Err(SvcError::AlreadyShared {
-                        kind: self.kind(),
-                        id: self.uuid(),
-                        share: protocol.to_string(),
+            VolumeOperation::Share(protocol) => match protocol {
+                VolumeShareProtocol::Nvmf => match &self.target {
+                    None => Err(SvcError::VolumeNotPublished {
+                        vol_id: self.uuid(),
                     }),
+                    Some(target) => match target.protocol() {
+                        None => Ok(()),
+                        Some(protocol) => Err(SvcError::AlreadyShared {
+                            kind: self.kind(),
+                            id: self.uuid(),
+                            share: protocol.to_string(),
+                        }),
+                    },
                 },
+                VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
+                    kind: ResourceKind::Volume,
+                    id: self.uuid(),
+                    share: format!("{:?}", protocol),
+                }),
             },
             VolumeOperation::Unshare => match &self.target {
                 None => Err(SvcError::NotShared {
@@ -1495,17 +1502,27 @@ impl SpecOperations for VolumeSpec {
                 }),
                 _ => Ok(()),
             },
-            VolumeOperation::Publish((_, _, _)) => {
-                if let Some(target) = &self.target {
-                    Err(SvcError::VolumeAlreadyPublished {
-                        vol_id: self.uuid(),
-                        node: target.node().to_string(),
-                        protocol: format!("{:?}", target.protocol()),
-                    })
-                } else {
-                    Ok(())
-                }
-            }
+            VolumeOperation::Publish((_, _, protocol)) => match protocol {
+                None => Ok(()),
+                Some(protocol) => match protocol {
+                    VolumeShareProtocol::Nvmf => {
+                        if let Some(target) = &self.target {
+                            Err(SvcError::VolumeAlreadyPublished {
+                                vol_id: self.uuid(),
+                                node: target.node().to_string(),
+                                protocol: format!("{:?}", target.protocol()),
+                            })
+                        } else {
+                            Ok(())
+                        }
+                    }
+                    VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
+                        kind: ResourceKind::Volume,
+                        id: self.uuid(),
+                        share: format!("{:?}", protocol),
+                    }),
+                },
+            },
             VolumeOperation::Unpublish if self.target.is_none() => {
                 Err(SvcError::VolumeNotPublished {
                     vol_id: self.uuid(),
