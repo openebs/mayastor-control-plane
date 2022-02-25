@@ -59,15 +59,6 @@ resource "kubernetes_daemonset" "csi_node" {
         }
 
         volume {
-          name = "host-root"
-
-          host_path {
-            path = "/"
-            type = "Directory"
-          }
-        }
-
-        volume {
           name = "registration-dir"
 
           host_path {
@@ -142,11 +133,6 @@ resource "kubernetes_daemonset" "csi_node" {
           volume_mount {
             name       = "run-udev"
             mount_path = "/run/udev"
-          }
-
-          volume_mount {
-            name       = "host-root"
-            mount_path = "/host"
           }
 
           volume_mount {

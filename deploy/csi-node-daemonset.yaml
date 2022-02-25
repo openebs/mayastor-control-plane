@@ -61,8 +61,6 @@ spec:
           mountPath: /sys
         - name: run-udev
           mountPath: /run/udev
-        - name: host-root
-          mountPath: /host
         - name: plugin-dir
           mountPath: /csi
         - name: kubelet-dir
@@ -109,10 +107,6 @@ spec:
       - name: run-udev
         hostPath:
           path: /run/udev
-          type: Directory
-      - name: host-root
-        hostPath:
-          path: /
           type: Directory
       - name: registration-dir
         hostPath:
