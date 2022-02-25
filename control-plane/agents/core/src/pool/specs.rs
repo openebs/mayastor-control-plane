@@ -59,9 +59,9 @@ impl SpecOperations for PoolSpec {
         registry.specs().remove_pool(&id);
     }
     fn dirty(&self) -> bool {
-        // pools are not updatable currently, so the spec is never dirty (not written to etcd)
-        // because it can never change after creation
-        false
+        // The pool spec can be dirty if a pool create operation fails to complete because it cannot
+        // write to etcd.
+        self.pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::Pool
