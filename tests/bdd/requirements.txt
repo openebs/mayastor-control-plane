@@ -4,3 +4,4 @@ retrying
 urllib3
 docker
 asyncssh
+etcd3

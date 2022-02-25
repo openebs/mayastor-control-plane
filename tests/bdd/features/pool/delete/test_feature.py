@@ -103,8 +103,15 @@ def the_pool_deletion_should_fail_with_error_kind_inuse(attempt_delete_the_pool)
 @then('the pool deletion should fail with error kind "Timeout"')
 def the_pool_deletion_should_fail_with_error_kind_timeout(attempt_delete_the_pool):
     """the pool deletion should fail with error kind "Timeout"."""
-    assert attempt_delete_the_pool.status == http.HTTPStatus.REQUEST_TIMEOUT
-    assert ApiClient.exception_to_error(attempt_delete_the_pool).kind == "Timeout"
+    assert (
+        attempt_delete_the_pool.status == http.HTTPStatus.REQUEST_TIMEOUT
+        or attempt_delete_the_pool.status == http.HTTPStatus.PRECONDITION_FAILED
+    )
+    assert (
+        ApiClient.exception_to_error(attempt_delete_the_pool).kind == "Timeout"
+        or ApiClient.exception_to_error(attempt_delete_the_pool).kind
+        == "FailedPrecondition"
+    )
 
 
 @then('the pool deletion should fail with error kind "NodeOffline"')

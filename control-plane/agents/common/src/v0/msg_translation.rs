@@ -265,6 +265,7 @@ impl MessageBusToRpc for message_bus::CreateNexus {
             resv_key: nexus_config.resv_key(),
             preempt_key: nexus_config.preempt_key(),
             children: self.children.clone().into_vec(),
+            nexus_info_key: self.nexus_info_key(),
         }
     }
 }
