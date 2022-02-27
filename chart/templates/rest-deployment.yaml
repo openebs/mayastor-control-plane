@@ -29,7 +29,7 @@ spec:
             - "--no-auth"
             - "-nnats"
             - "--http=0.0.0.0:8081"
-            {{- if .Values.default_req_timeout }}
+            {{- if .Values.base.default_req_timeout }}
             - "--request-timeout={{ .Values.base.default_req_timeout }}"
             {{- end }}
             {{- if .Values.base.jaeger.enabled }}

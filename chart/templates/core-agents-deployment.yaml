@@ -27,7 +27,7 @@ spec:
           args:
             - "-smayastor-etcd"
             - "-nnats"
-            {{- if .Values.default_req_timeout }}
+            {{- if .Values.base.default_req_timeout }}
             - "--request-timeout={{ .Values.base.default_req_timeout }}"
             {{- end }}
             {{- if .Values.base.cache_poll_period }}
