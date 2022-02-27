@@ -1,8 +1,9 @@
 mayastorCP:
   tag: develop
 
-jaeger:
-  enabled: false
+base:
+  jaeger:
+    enabled: false
 
 jaeger-operator:
   affinity:

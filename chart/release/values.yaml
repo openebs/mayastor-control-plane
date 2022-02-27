@@ -1,2 +1,2 @@
-# Values should go into `../values.yaml` instead so the
+# Values should go into `../defaults.yaml` instead so the
 # chart can be used stand-alone with release values.

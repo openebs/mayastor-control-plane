@@ -56,3 +56,5 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+      nodeSelector:
+        kubernetes.io/arch: amd64
