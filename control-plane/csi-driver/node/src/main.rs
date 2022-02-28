@@ -15,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{identity::Identity, mount::probe_filesystems, node::Node};
+use crate::{identity::Identity, mount::probe_filesystems, node::Node, shutdown_event::Shutdown};
 use chrono::Local;
 use clap::{App, Arg};
 use csi::{identity_server::IdentityServer, node_server::NodeServer};
@@ -55,6 +55,10 @@ mod mount;
 mod node;
 mod nodeplugin_grpc;
 mod nodeplugin_svc;
+
+/// Shutdown event which lets the plugin know it needs to stop processing new events and
+/// complete any existing ones before shutting down.
+pub(crate) mod shutdown_event;
 
 #[derive(Clone, Debug)]
 pub struct UdsConnectInfo {
@@ -259,7 +263,7 @@ impl CsiServer {
                 filesystems: probe_filesystems(),
             }))
             .add_service(IdentityServer::new(Identity {}))
-            .serve_with_incoming(incoming)
+            .serve_with_incoming_shutdown(incoming, Shutdown::wait())
             .await
         {
             error!("CSI server failed with error: {}", e);

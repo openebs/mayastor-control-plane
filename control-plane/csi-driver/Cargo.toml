@@ -59,6 +59,7 @@ nvmeadm = { path = "../../utils/mayastor-dependencies/nvmeadm" }
 sysfs = { path = "../../utils/mayastor-dependencies/sysfs" }
 common-lib = { path = "../../common" }
 utils = { path = "../../utils/utils-lib" }
+shutdown = { path = "../../utils/shutdown" }
 
 [dependencies.serde]
 features = ["derive"]

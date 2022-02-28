@@ -8,7 +8,7 @@ fn main() {
         .expect("csi protobuf compilation failed");
     tonic_build::configure()
         .build_server(true)
-        .build_client(false)
+        .build_client(true)
         .compile(&["node/proto/mayastornodeplugin.proto"], &["node/proto"])
         .expect("mayastor node grpc service protobuf compilation failed");
 }

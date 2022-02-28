@@ -3,13 +3,12 @@
 //! node as a Mayastor CSI node plugin, but it is not possible to do so within
 //! the CSI framework. This service must be deployed on all nodes the
 //! Mayastor CSI node plugin is deployed.
-use crate::nodeplugin_svc;
+use crate::{nodeplugin_svc, shutdown_event::Shutdown};
 use mayastor_node_plugin::{
     mayastor_node_plugin_server::{MayastorNodePlugin, MayastorNodePluginServer},
     FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
     UnfreezeFsRequest, VolumeType,
 };
-
 use nodeplugin_svc::{find_volume, freeze_volume, unfreeze_volume, ServiceError, TypeOfMount};
 use tonic::{transport::Server, Code, Request, Response, Status};
 
@@ -88,7 +87,7 @@ impl MayastorNodePluginGrpcServer {
         );
         if let Err(e) = Server::builder()
             .add_service(MayastorNodePluginServer::new(MayastorNodePluginSvc {}))
-            .serve(endpoint)
+            .serve_with_shutdown(endpoint, Shutdown::wait())
             .await
         {
             error!("gRPC server failed with error: {}", e);
