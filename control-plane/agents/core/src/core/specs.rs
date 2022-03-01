@@ -490,6 +490,77 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
             }
         }
     }
+    /// Operations that have started but were not able to complete because access to the
+    /// persistent store was lost.
+    /// Returns whether the incomplete operation has now been handled.
+    async fn handle_incomplete_ops<O>(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) -> bool
+    where
+        Self: SpecTransaction<O>,
+        Self: StorableObject,
+    {
+        if let Ok(_guard) = locked_spec.operation_guard(OperationMode::ReconcileStart) {
+            let spec_status = locked_spec.lock().status();
+            match spec_status {
+                SpecStatus::Creating | SpecStatus::Deleted => {
+                    SpecOperations::delete_spec(registry, locked_spec)
+                        .await
+                        .ok();
+                    true
+                }
+                SpecStatus::Created(_) => {
+                    // A spec that was being updated is in the `Created` state
+                    Self::handle_incomplete_updates(locked_spec, registry).await
+                }
+                SpecStatus::Deleting => {
+                    // Destroyed by the garbage collector
+                    true
+                }
+            }
+        } else {
+            true
+        }
+    }
+    /// Updates that have started but were not able to complete because access to the
+    /// persistent store was lost.
+    async fn handle_incomplete_updates<O>(
+        locked_spec: &Arc<Mutex<Self>>,
+        registry: &Registry,
+    ) -> bool
+    where
+        Self: SpecTransaction<O>,
+        Self: StorableObject,
+    {
+        let mut spec_clone = locked_spec.lock().clone();
+        match spec_clone.operation_result() {
+            Some(Some(true)) => {
+                spec_clone.commit_op();
+                let result = registry.store_obj(&spec_clone).await;
+                if result.is_ok() {
+                    locked_spec.lock().commit_op();
+                }
+                result.is_ok()
+            }
+            Some(Some(false)) => {
+                spec_clone.clear_op();
+                let result = registry.store_obj(&spec_clone).await;
+                if result.is_ok() {
+                    locked_spec.lock().clear_op();
+                }
+                result.is_ok()
+            }
+            Some(None) => {
+                // we must have crashed... we could check the node to see what the
+                // current state is but for now assume failure
+                spec_clone.clear_op();
+                let result = registry.store_obj(&spec_clone).await;
+                if result.is_ok() {
+                    locked_spec.lock().clear_op();
+                }
+                result.is_ok()
+            }
+            None => true,
+        }
+    }
 
     /// Check if the object is free to be modified or if it's still busy
     fn busy(&self) -> Result<(), SvcError> {
@@ -579,6 +650,8 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
     fn disown(&mut self, _owner: &Self::Owners) {}
     /// Remove all owners from the resource
     fn disown_all(&mut self) {}
+    /// Return the result of the pending operation, if any.
+    fn operation_result(&self) -> Option<Option<bool>>;
 }
 
 /// Operations are locked
