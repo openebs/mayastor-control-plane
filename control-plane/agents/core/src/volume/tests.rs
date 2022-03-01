@@ -129,7 +129,86 @@ async fn garbage_collection() {
 
     unused_nexus_reconcile(&cluster).await;
     unused_reconcile(&cluster).await;
+    deleting_volume_reconcile(&cluster).await;
     offline_replicas_reconcile(&cluster, reconcile_period).await;
+}
+
+async fn deleting_volume_reconcile(cluster: &Cluster) {
+    let client = cluster.grpc_client().volume();
+    let volume = client
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 5242880,
+                replicas: 1,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    client
+        .publish(
+            &PublishVolume {
+                uuid: volume.uuid().clone(),
+                target_node: None,
+                share: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    // 1. Pause etcd
+    cluster.composer().pause("etcd").await.unwrap();
+
+    // 2. Attempt to delete the volume
+    client
+        .destroy(
+            &DestroyVolume {
+                uuid: volume.uuid().to_owned(),
+            },
+            None,
+        )
+        .await
+        .expect_err("ETCD is paused...");
+
+    // 3. Bring back etcd
+    cluster.composer().thaw("etcd").await.unwrap();
+
+    // 4. Wait for volume deletion
+    wait_till_volume_deleted(cluster).await;
+
+    // 5. Volume replicas and nexuses should have been deleted as well
+    let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+    assert!(specs.nexuses.is_empty());
+    let nexuses = cluster.rest_v00().nexuses_api().get_nexuses().await;
+    assert!(nexuses.unwrap().is_empty());
+    assert!(specs.replicas.is_empty());
+    let replicas = cluster.rest_v00().replicas_api().get_replicas().await;
+    assert!(replicas.unwrap().is_empty());
+}
+
+/// Wait for a volume to reach the provided status
+async fn wait_till_volume_deleted(cluster: &Cluster) {
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let client = cluster.grpc_client().volume();
+    let start = std::time::Instant::now();
+    loop {
+        let volumes = client.get(Filter::None, None).await.unwrap();
+        if volumes.0.is_empty() {
+            return;
+        }
+
+        if std::time::Instant::now() > (start + timeout) {
+            panic!(
+                "Timeout waiting for the volumes to be deleted current: '{:?}'",
+                volumes
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
 }
 
 async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duration) {

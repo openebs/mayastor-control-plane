@@ -388,3 +388,11 @@ impl From<NexusSpec> for DestroyNexus {
         }
     }
 }
+impl From<&NexusSpec> for DestroyNexus {
+    fn from(nexus: &NexusSpec) -> Self {
+        Self {
+            node: nexus.node.clone(),
+            uuid: nexus.uuid.clone(),
+        }
+    }
+}
