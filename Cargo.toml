@@ -18,6 +18,7 @@ members = [
     "rpc",
     "utils/utils-lib",
     "utils/pstor-usage",
+    "utils/shutdown",
     "utils/mayastor-dependencies/composer",
     "utils/mayastor-dependencies/devinfo",
     "utils/mayastor-dependencies/nvmeadm",
