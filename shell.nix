@@ -26,6 +26,7 @@ mkShell {
     etcd
     fio
     git
+    jq
     llvmPackages.libclang
     libxfs
     nats-server
@@ -40,6 +41,7 @@ mkShell {
     utillinux
     which
     libudev
+    yq
   ] ++ pkgs.lib.optional (!norust) channel.default_src.nightly;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
