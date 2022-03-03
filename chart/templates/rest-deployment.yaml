@@ -27,7 +27,6 @@ spec:
           args:
             - "--dummy-certificates"
             - "--no-auth"
-            - "-nnats"
             - "--http=0.0.0.0:8081"
             - "--request-timeout={{ .Values.base.default_req_timeout }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
