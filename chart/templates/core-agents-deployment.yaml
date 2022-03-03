@@ -18,7 +18,7 @@ spec:
       imagePullSecrets:
         {{- include "base_pull_secrets" . }}
       initContainers:
-        {{- include "base_init_containers" . }}
+        {{- include "base_init_core_containers" . }}
       containers:
         - name: core
           resources: {{- .Values.core.resources | toYaml | nindent 12 }}

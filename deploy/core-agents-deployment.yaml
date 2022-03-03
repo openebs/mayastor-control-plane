@@ -23,20 +23,6 @@ spec:
         - command:
           - sh
           - -c
-          - trap "exit 1" TERM; until nc -vz nats 4222; do echo "Waiting for nats..."; sleep
-            1; done;
-          image: busybox:latest
-          name: nats-probe
-        - command:
-          - sh
-          - -c
-          - trap "exit 1" TERM; until nc -vz core 50051; do echo "Waiting for grpc services...";
-            sleep 1; done;
-          image: busybox:latest
-          name: grpc-probe
-        - command:
-          - sh
-          - -c
           - trap "exit 1" TERM; until nc -vz mayastor-etcd 2379; do echo "Waiting for etcd...";
             sleep 1; done;
           image: busybox:latest
