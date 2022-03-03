@@ -21,6 +21,7 @@ spec:
       labels:
         app: mayastor-csi
     spec:
+      serviceAccount: mayastor-service-account
       hostNetwork: true
       nodeSelector:
         kubernetes.io/arch: amd64
