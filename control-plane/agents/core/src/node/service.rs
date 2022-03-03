@@ -75,14 +75,14 @@ impl RegistrationOperations for Service {
     async fn register(&self, req: &dyn RegisterInfo) -> Result<(), ReplyError> {
         let register = req.into();
         let service = self.clone();
-        tokio::spawn(async move { service.register(&register).await }).await?;
+        Context::spawn(async move { service.register(&register).await }).await?;
         Ok(())
     }
 
     async fn deregister(&self, req: &dyn DeregisterInfo) -> Result<(), ReplyError> {
         let deregister = req.into();
         let service = self.clone();
-        tokio::spawn(async move { service.deregister(&deregister).await }).await?;
+        Context::spawn(async move { service.deregister(&deregister).await }).await?;
         Ok(())
     }
 }

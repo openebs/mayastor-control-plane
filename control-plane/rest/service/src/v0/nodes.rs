@@ -26,7 +26,7 @@ impl apis::actix_server::Nodes for RestApi {
 }
 
 /// returns node from node option and returns an error on non existence
-pub fn node(node_id: String, node: Option<&Node>) -> Result<Node, ReplyError> {
+fn node(node_id: String, node: Option<&Node>) -> Result<Node, ReplyError> {
     match node {
         Some(node) => Ok(node.clone()),
         None => Err(ReplyError {

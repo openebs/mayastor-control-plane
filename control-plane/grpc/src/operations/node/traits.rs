@@ -86,7 +86,7 @@ impl TryFrom<node::Nodes> for Nodes {
     fn try_from(grpc_nodes: node::Nodes) -> Result<Self, Self::Error> {
         let mut nodes: Vec<Node> = vec![];
         for node in grpc_nodes.nodes {
-            nodes.push(Node::try_from(node.clone())?)
+            nodes.push(Node::try_from(node)?)
         }
         Ok(Nodes(nodes))
     }
@@ -97,8 +97,8 @@ impl From<Nodes> for node::Nodes {
         node::Nodes {
             nodes: nodes
                 .into_inner()
-                .iter()
-                .map(|node| node.clone().into())
+                .into_iter()
+                .map(|node| node.into())
                 .collect(),
         }
     }
