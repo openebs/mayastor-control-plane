@@ -26,9 +26,10 @@ impl JsonGrpcSvc {
             .await
         {
             Ok(response) => response,
-            Err(_) => {
-                return Err(SvcError::NodeNotFound {
-                    node_id: request.clone().node,
+            Err(err) => {
+                return Err(SvcError::BusGetNode {
+                    node: request.node.to_string(),
+                    source: err,
                 })
             }
         };
@@ -58,7 +59,7 @@ impl JsonGrpcSvc {
 }
 
 /// returns node from node option and returns an error on non existence
-pub fn node(node_id: NodeId, node: Option<&Node>) -> Result<Node, SvcError> {
+fn node(node_id: NodeId, node: Option<&Node>) -> Result<Node, SvcError> {
     match node {
         Some(node) => Ok(node.clone()),
         None => Err(SvcError::NodeNotFound { node_id }),
