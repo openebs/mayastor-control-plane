@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+
+package v1.blockdevice;
+
+message BlockDevice {
+  // entry in /dev associated with device
+  string devname = 1;
+  // current "disk" or "partition"
+  string devtype = 2;
+  // major device number
+  uint32 devmajor = 3;
+  // minor device number
+  uint32 devminor = 4;
+  // device model - useful for identifying mayastor devices
+  string model = 5;
+  // official device path
+  string devpath = 6;
+  // list of udev generated symlinks by which device may be identified
+  repeated string devlinks = 7;
+  // size of device in (512 byte) blocks
+  uint64 size = 8;
+  // partition information in case where device represents a partition
+  Partition partition = 9;
+  // filesystem information in case where a filesystem is present
+  Filesystem filesystem = 10;
+  // identifies if device is available for use (ie. is not "currently" in
+  // use)
+  bool available = 11;
+}
+
+message Partition {
+  // devname of parent device to which this partition belongs
+  string parent = 1;
+  // partition number
+  uint32 number = 2;
+  // partition name
+  string name = 3;
+  // partition scheme: gpt, dos, ...
+  string scheme = 4;
+  // partition type identifier
+  string typeid = 5;
+  // UUID identifying partition
+  string uuid = 6;
+}
+
+message Filesystem {
+  // filesystem type: ext3, ntfs, ...
+  string fstype = 1;
+  // volume label
+  string label = 2;
+  // UUID identifying the volume (filesystem)
+  string uuid = 3;
+  // path where filesystem is currently mounted
+  string mountpoint = 4;
+}
+
+// Multiple blockDevice
+message BlockDevices {
+  repeated BlockDevice blockdevices = 1;
+}
+
+message GetBlockDevicesRequest {
+  // id of the mayastor instance
+  string node_id = 1;
+  // specifies whether to get all devices or only usable devices
+  bool all = 2;
+}
+
+// Reponse to the GetBlockDevices request
+message GetBlockDevicesReply {
+  oneof reply {
+    BlockDevices blockdevices = 1;
+    common.ReplyError error = 2;
+  }
+}

@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "v1/misc/common.proto";
+import "v1/blockdevice/blockdevice.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
@@ -69,4 +70,5 @@ message GetNodesReply {
 
 service NodeGrpc {
   rpc GetNodes (GetNodesRequest) returns (GetNodesReply) {}
+  rpc GetBlockDevices (blockdevice.GetBlockDevicesRequest) returns (blockdevice.GetBlockDevicesReply) {}
 }

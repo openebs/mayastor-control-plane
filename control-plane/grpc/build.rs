@@ -10,6 +10,7 @@ fn main() {
                 "proto/v1/nexus/nexus.proto",
                 "proto/v1/volume/volume.proto",
                 "proto/v1/node/node.proto",
+                "proto/v1/blockdevice/blockdevice.proto",
             ],
             &["proto/"],
         )
