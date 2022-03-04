@@ -1,5 +1,5 @@
 use crate::{
-    blockdevice::{GetBlockDevicesReply, GetBlockDevicesRequest},
+    blockdevice::{get_block_devices_reply, GetBlockDevicesReply, GetBlockDevicesRequest},
     node,
     node::{
         get_nodes_reply,
@@ -57,8 +57,18 @@ impl NodeGrpc for NodeServer {
     }
     async fn get_block_devices(
         &self,
-        _request: tonic::Request<GetBlockDevicesRequest>,
+        request: tonic::Request<GetBlockDevicesRequest>,
     ) -> Result<tonic::Response<GetBlockDevicesReply>, tonic::Status> {
-        todo!()
+        let req: GetBlockDevicesRequest = request.into_inner();
+        match self.service.get_block_devices(&req, None).await {
+            Ok(blockdevices) => Ok(Response::new(GetBlockDevicesReply {
+                reply: Some(get_block_devices_reply::Reply::Blockdevices(
+                    blockdevices.into(),
+                )),
+            })),
+            Err(err) => Ok(Response::new(GetBlockDevicesReply {
+                reply: Some(get_block_devices_reply::Reply::Error(err.into())),
+            })),
+        }
     }
 }

@@ -1,14 +1,18 @@
 use crate::{
+    blockdevice::get_block_devices_reply,
     common::NodeFilter,
     context::{Client, Context, TracedChannel},
     node::{
         get_nodes_reply, get_nodes_request, node_grpc_client::NodeGrpcClient, GetNodesRequest,
         ProbeRequest,
     },
-    operations::node::traits::NodeOperations,
+    operations::node::traits::{GetBlockDeviceInfo, NodeOperations},
 };
 use common_lib::{
-    mbus_api::{v0::Nodes, ReplyError, ResourceKind, TimeoutOptions},
+    mbus_api::{
+        v0::{BlockDevices, Nodes},
+        ReplyError, ResourceKind, TimeoutOptions,
+    },
     types::v0::message_bus::{Filter, MessageIdVs},
 };
 use std::{convert::TryFrom, ops::Deref};
@@ -61,6 +65,23 @@ impl NodeOperations for NodeClient {
         match self.client().probe(ProbeRequest {}).await {
             Ok(resp) => Ok(resp.into_inner().ready),
             Err(e) => Err(e.into()),
+        }
+    }
+    async fn get_block_devices(
+        &self,
+        request: &dyn GetBlockDeviceInfo,
+        ctx: Option<Context>,
+    ) -> Result<BlockDevices, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::GetBlockDevices);
+        let response = self.client().get_block_devices(req).await?.into_inner();
+        match response.reply {
+            Some(get_block_devices_reply) => match get_block_devices_reply {
+                get_block_devices_reply::Reply::Blockdevices(blockdevices) => {
+                    Ok(BlockDevices::try_from(blockdevices)?)
+                }
+                get_block_devices_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Block)),
         }
     }
 }

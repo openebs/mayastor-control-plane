@@ -139,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn large_cluster() {
-        let expected_nodes = 7;
+        let expected_nodes = 2;
         let cluster = ClusterBuilder::builder()
             .with_rest(false)
             .with_agents(vec!["core"])

@@ -1,14 +1,21 @@
-use crate::context::Context;
+use crate::{
+    blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
+    node::get_nodes_request,
+};
 use common_lib::{
-    mbus_api::{v0::Nodes, ReplyError, ResourceKind},
+    mbus_api::{
+        v0::{BlockDevices, Nodes},
+        ReplyError, ResourceKind,
+    },
     types::v0::{
-        message_bus::{Filter, Node, NodeState, NodeStatus},
+        message_bus::{
+            BlockDevice, Filesystem, Filter, GetBlockDevices, Node, NodeId, NodeState, NodeStatus,
+            Partition,
+        },
         store::node::NodeSpec,
     },
 };
 use std::convert::TryFrom;
-
-use crate::{node, node::get_nodes_request};
 
 /// Trait implemented by services which support node operations.
 #[tonic::async_trait]
@@ -17,6 +24,12 @@ pub trait NodeOperations: Send + Sync {
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Nodes, ReplyError>;
     /// Liveness probe for node service
     async fn probe(&self, ctx: Option<Context>) -> Result<bool, ReplyError>;
+    /// Get the all or usable blockdevices from a particular node
+    async fn get_block_devices(
+        &self,
+        get_blockdevice: &dyn GetBlockDeviceInfo,
+        ctx: Option<Context>,
+    ) -> Result<BlockDevices, ReplyError>;
 }
 
 impl TryFrom<node::Node> for Node {
@@ -130,6 +143,155 @@ impl From<NodeStatus> for node::NodeStatus {
             NodeStatus::Unknown => Self::Unknown,
             NodeStatus::Online => Self::Online,
             NodeStatus::Offline => Self::Offline,
+        }
+    }
+}
+
+/// GetBlockDeviceInfo trait for the getblockdevices
+/// operation
+pub trait GetBlockDeviceInfo: Send + Sync {
+    /// id of the mayastor instance
+    fn node_id(&self) -> NodeId;
+    /// specifies whether to get all devices or only usable devices
+    fn all(&self) -> bool;
+}
+
+impl GetBlockDeviceInfo for GetBlockDevices {
+    fn node_id(&self) -> NodeId {
+        self.node.clone()
+    }
+
+    fn all(&self) -> bool {
+        self.all
+    }
+}
+
+impl GetBlockDeviceInfo for GetBlockDevicesRequest {
+    fn node_id(&self) -> NodeId {
+        self.node_id.clone().into()
+    }
+
+    fn all(&self) -> bool {
+        self.all
+    }
+}
+
+impl From<&dyn GetBlockDeviceInfo> for GetBlockDevices {
+    fn from(data: &dyn GetBlockDeviceInfo) -> Self {
+        Self {
+            node: data.node_id(),
+            all: data.all(),
+        }
+    }
+}
+
+impl From<&dyn GetBlockDeviceInfo> for GetBlockDevicesRequest {
+    fn from(data: &dyn GetBlockDeviceInfo) -> Self {
+        Self {
+            node_id: data.node_id().to_string(),
+            all: data.all(),
+        }
+    }
+}
+
+impl From<BlockDevice> for blockdevice::BlockDevice {
+    fn from(bd: BlockDevice) -> Self {
+        Self {
+            devname: bd.devname,
+            devtype: bd.devtype,
+            devmajor: bd.devmajor,
+            devminor: bd.devminor,
+            model: bd.model,
+            devpath: bd.devpath,
+            devlinks: bd.devlinks,
+            size: bd.size,
+            partition: Some(blockdevice::Partition {
+                parent: bd.partition.parent,
+                number: bd.partition.number,
+                name: bd.partition.name,
+                scheme: bd.partition.scheme,
+                typeid: bd.partition.typeid,
+                uuid: bd.partition.uuid,
+            }),
+            filesystem: Some(blockdevice::Filesystem {
+                fstype: bd.filesystem.fstype,
+                label: bd.filesystem.label,
+                uuid: bd.filesystem.uuid,
+                mountpoint: bd.filesystem.mountpoint,
+            }),
+            available: bd.available,
+        }
+    }
+}
+
+impl TryFrom<blockdevice::BlockDevice> for BlockDevice {
+    type Error = ReplyError;
+    fn try_from(bd: blockdevice::BlockDevice) -> Result<Self, Self::Error> {
+        Ok(Self {
+            devname: bd.devname,
+            devtype: bd.devtype,
+            devmajor: bd.devmajor,
+            devminor: bd.devminor,
+            model: bd.model,
+            devpath: bd.devpath,
+            devlinks: bd.devlinks,
+            size: bd.size,
+            partition: match bd.partition {
+                Some(partition) => Partition {
+                    parent: partition.parent,
+                    number: partition.number,
+                    name: partition.name,
+                    scheme: partition.scheme,
+                    typeid: partition.typeid,
+                    uuid: partition.uuid,
+                },
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Block,
+                        "bd.partition",
+                        "".to_string(),
+                    ))
+                }
+            },
+            filesystem: match bd.filesystem {
+                Some(filesystem) => Filesystem {
+                    fstype: filesystem.fstype,
+                    label: filesystem.label,
+                    uuid: filesystem.uuid,
+                    mountpoint: filesystem.mountpoint,
+                },
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Block,
+                        "bd.partition",
+                        "".to_string(),
+                    ))
+                }
+            },
+            available: bd.available,
+        })
+    }
+}
+
+impl TryFrom<blockdevice::BlockDevices> for BlockDevices {
+    type Error = ReplyError;
+    fn try_from(bds: blockdevice::BlockDevices) -> Result<Self, Self::Error> {
+        let mut blockdevices: Vec<BlockDevice> = vec![];
+        for bd in bds.blockdevices {
+            blockdevices.push(BlockDevice::try_from(bd)?)
+        }
+        Ok(BlockDevices(blockdevices))
+    }
+}
+
+impl From<BlockDevices> for blockdevice::BlockDevices {
+    fn from(blockdevices: BlockDevices) -> Self {
+        blockdevice::BlockDevices {
+            blockdevices: blockdevices
+                .into_inner()
+                .into_iter()
+                .map(|bd| bd.into())
+                .collect(),
         }
     }
 }

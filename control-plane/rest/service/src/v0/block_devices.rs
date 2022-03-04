@@ -1,7 +1,9 @@
 use super::*;
 use common_lib::types::v0::message_bus::GetBlockDevices;
-use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
-
+use grpc::operations::node::traits::NodeOperations;
+fn client() -> impl NodeOperations {
+    core_grpc().node()
+}
 #[async_trait::async_trait]
 impl apis::actix_server::BlockDevices for RestApi {
     // Get block devices takes a query parameter 'all' which is used to determine
@@ -25,11 +27,15 @@ impl apis::actix_server::BlockDevices for RestApi {
         Path(node): Path<String>,
         Query(all): Query<Option<bool>>,
     ) -> Result<Vec<models::BlockDevice>, RestError<RestJsonError>> {
-        let devices = MessageBus::get_block_devices(GetBlockDevices {
-            node: node.into(),
-            all: all.unwrap_or(true),
-        })
-        .await?;
+        let devices = client()
+            .get_block_devices(
+                &GetBlockDevices {
+                    node: node.into(),
+                    all: all.unwrap_or(true),
+                },
+                None,
+            )
+            .await?;
         Ok(devices.into_inner().into_iter().map(From::from).collect())
     }
 }

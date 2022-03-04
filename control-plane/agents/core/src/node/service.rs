@@ -15,7 +15,7 @@ use crate::core::wrapper::InternalOps;
 use grpc::{
     context::Context,
     operations::{
-        node::traits::NodeOperations,
+        node::traits::{GetBlockDeviceInfo, NodeOperations},
         registration::traits::{DeregisterInfo, RegisterInfo, RegistrationOperations},
     },
 };
@@ -62,11 +62,21 @@ impl NodeCommsTimeout {
 impl NodeOperations for Service {
     async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Nodes, ReplyError> {
         let req = GetNodes::new(filter);
-        let pools = self.get_nodes(&req).await?;
-        Ok(pools)
+        let nodes = self.get_nodes(&req).await?;
+        Ok(nodes)
     }
     async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
         return Ok(true);
+    }
+
+    async fn get_block_devices(
+        &self,
+        get_blockdevice: &dyn GetBlockDeviceInfo,
+        _ctx: Option<Context>,
+    ) -> Result<BlockDevices, ReplyError> {
+        let req = get_blockdevice.into();
+        let blockdevices = self.get_block_devices(&req).await?;
+        Ok(blockdevices)
     }
 }
 
