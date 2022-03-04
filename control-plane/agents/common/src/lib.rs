@@ -66,7 +66,7 @@ pub enum ServiceError {
 /// Runnable service with N subscriptions which listen on a given
 /// message bus channel on a specific ID
 pub struct Service {
-    server: String,
+    server: Option<String>,
     server_connected: bool,
     no_min_timeouts: bool,
     channel: Channel,
@@ -77,7 +77,7 @@ pub struct Service {
 impl Default for Service {
     fn default() -> Self {
         Self {
-            server: "".to_string(),
+            server: None,
             server_connected: false,
             channel: Default::default(),
             subscriptions: Default::default(),
@@ -153,13 +153,18 @@ pub trait ServiceSubscriber: Clone + Send + Sync {
 
 impl Service {
     /// Setup default service connecting to `server` on subject `channel`
-    pub fn builder(server: String, channel: impl Into<Channel>) -> Self {
+    pub fn builder(server: Option<String>, channel: impl Into<Channel>) -> Self {
         Self {
             server,
             server_connected: false,
             channel: channel.into(),
             ..Default::default()
         }
+    }
+
+    /// Check whether we have the nats enabled or not
+    pub fn nats_enabled(&self) -> bool {
+        self.server.is_some()
     }
 
     /// Connect to the provided message bus server immediately
@@ -186,8 +191,10 @@ impl Service {
                 TimeoutOptions::new_no_retries()
             };
             // todo: parse connection options when nats has better support
-            mbus_api::message_bus_init_options(client, self.server.clone(), timeout_opts).await;
-            self.server_connected = true;
+            if let Some(server) = self.server.clone() {
+                mbus_api::message_bus_init_options(client, server, timeout_opts).await;
+                self.server_connected = true;
+            }
             self.no_min_timeouts = no_min_timeouts;
         }
     }

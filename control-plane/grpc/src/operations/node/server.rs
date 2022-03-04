@@ -1,4 +1,5 @@
 use crate::{
+    blockdevice::{GetBlockDevicesReply, GetBlockDevicesRequest},
     node,
     node::{
         get_nodes_reply,
@@ -53,5 +54,11 @@ impl NodeGrpc for NodeServer {
             Ok(resp) => Ok(Response::new(ProbeResponse { ready: resp })),
             Err(_) => Ok(Response::new(ProbeResponse { ready: false })),
         }
+    }
+    async fn get_block_devices(
+        &self,
+        _request: tonic::Request<GetBlockDevicesRequest>,
+    ) -> Result<tonic::Response<GetBlockDevicesReply>, tonic::Status> {
+        todo!()
     }
 }

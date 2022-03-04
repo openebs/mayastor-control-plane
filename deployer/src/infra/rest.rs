@@ -11,12 +11,13 @@ impl ComponentAction for Rest {
                     .args(&["build", "-p", "rest", "--bin", "rest"])
                     .status()?;
             }
-            let binary = Binary::from_dbg("rest")
-                .with_nats("-n")
+            let mut binary = Binary::from_dbg("rest")
                 .with_arg("--dummy-certificates")
                 .with_args(vec!["--https", "rest:8080"])
                 .with_args(vec!["--http", "rest:8081"]);
-
+            if !options.no_nats {
+                binary = binary.with_nats("-n");
+            }
             let binary = if let Some(jwk) = &options.rest_jwk {
                 binary.with_arg("--jwk").with_arg(jwk)
             } else {

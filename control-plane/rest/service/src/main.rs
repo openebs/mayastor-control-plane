@@ -26,8 +26,8 @@ pub(crate) struct CliArgs {
     #[structopt(long)]
     http: Option<String>,
     /// The Nats Server URL or address to connect to
-    #[structopt(long, short, default_value = "nats://0.0.0.0:4222")]
-    nats: String,
+    #[structopt(long, short)]
+    nats: Option<String>,
 
     /// The CORE gRPC Server URL or address to connect to the services.
     #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
@@ -223,12 +223,9 @@ async fn main() -> anyhow::Result<()> {
             .configure_api(&v0::configure_api)
     };
 
-    mbus_api::message_bus_init_options(
-        BusClient::RestServer,
-        CliArgs::args().nats,
-        bus_timeout_opts(),
-    )
-    .await;
+    if let Some(addr) = CliArgs::args().nats {
+        mbus_api::message_bus_init_options(BusClient::RestServer, addr, bus_timeout_opts()).await;
+    }
 
     // Initialise the core client to be used in rest
     CORE_CLIENT

@@ -52,7 +52,11 @@ impl Service {
             .add_service(node_service.into_grpc_server())
             .add_service(registration_service.into_grpc_server());
 
-        let mut threads = self.base_service.mbus_handles().await;
+        let mut threads = if self.base_service.nats_enabled() {
+            self.base_service.mbus_handles().await
+        } else {
+            vec![]
+        };
 
         let tonic_thread = tokio::spawn(async move {
             tonic_router

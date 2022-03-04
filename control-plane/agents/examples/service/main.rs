@@ -79,7 +79,7 @@ async fn client() {
 async fn server() {
     let cli_args = CliArgs::from_args();
 
-    Service::builder(cli_args.url, ChannelVs::Default)
+    Service::builder(Some(cli_args.url), ChannelVs::Default)
         .with_subscription(ServiceHandler::<GetSvcName>::default())
         .run()
         .await;

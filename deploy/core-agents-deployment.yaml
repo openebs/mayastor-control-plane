@@ -40,7 +40,6 @@ spec:
           imagePullPolicy: Always
           args:
             - "-smayastor-etcd"
-            - "-nnats"
             - "--request-timeout=5s"
             - "--cache-period=30s"
             - "--grpc-server-addr=https://0.0.0.0:50051"

@@ -11,7 +11,7 @@ use crate::core::registry;
 use common_lib::types::v0::message_bus::ChannelVs;
 use http::Uri;
 
-use common_lib::{mbus_api::BusClient, opentelemetry::default_tracing_tags};
+use common_lib::opentelemetry::default_tracing_tags;
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator, KeyValue};
 use structopt::StructOpt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
@@ -22,9 +22,8 @@ use utils::{package_info, DEFAULT_GRPC_SERVER_ADDR};
 pub(crate) struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)
-    /// Default: nats://127.0.0.1:4222
-    #[structopt(long, short, default_value = "nats://127.0.0.1:4222")]
-    pub(crate) nats: String,
+    #[structopt(long, short)]
+    pub(crate) nats: Option<String>,
 
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
@@ -70,10 +69,9 @@ pub(crate) struct CliArgs {
     #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
     tracing_tags: Vec<KeyValue>,
 
-    /// Don't use minimum timeouts for specific requests
-    #[structopt(long)]
-    no_min_timeouts: bool,
-
+    // /// Don't use minimum timeouts for specific requests
+    // #[structopt(long)]
+    // no_min_timeouts: bool,
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(long, short)]
     jaeger: Option<String>,
@@ -164,9 +162,6 @@ async fn server(cli_args: CliArgs) {
             "core-agent",
             env!("CARGO_PKG_VERSION"),
         ))
-        .with_default_liveness()
-        .connect_message_bus(cli_args.no_min_timeouts, BusClient::CoreAgent)
-        .await
         .with_shared_state(registry.clone())
         .with_shared_state(cli_args.grpc_server_addr.clone())
         .configure_async(node::configure)

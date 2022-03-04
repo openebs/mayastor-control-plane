@@ -92,7 +92,7 @@ async fn main() {
 }
 
 async fn server(cli_args: CliArgs) {
-    Service::builder(cli_args.nats, ChannelVs::JsonGrpc)
+    Service::builder(Some(cli_args.nats), ChannelVs::JsonGrpc)
         .connect_message_bus(
             CliArgs::from_args().no_min_timeouts,
             BusClient::JsonGrpcAgent,
