@@ -82,6 +82,7 @@ module "csi-node" {
   registrar_image = var.csi_registar_image
   grace_period   = var.csi_node_grace_period
   rust_log       = var.control_rust_log
+  io_queues      = var.mayastor_cpus
 }
 
 module "csi-controller" {

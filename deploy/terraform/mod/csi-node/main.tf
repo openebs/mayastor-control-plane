@@ -4,6 +4,7 @@ variable "registry" {}
 variable "grace_period" {}
 variable "registrar_image" {}
 variable "rust_log" {}
+variable "io_queues" {}
 
 resource "kubernetes_daemonset" "csi_node" {
   metadata {
@@ -88,7 +89,13 @@ resource "kubernetes_daemonset" "csi_node" {
         container {
           name  = "mayastor-csi"
           image = format("%s/%s:%s", var.registry, var.image, var.tag)
-          args  = ["--csi-socket=/csi/csi.sock", "--node-name=$(MY_NODE_NAME)", "--grpc-endpoint=$(MY_POD_IP):10199", "-v"]
+          args  = [
+            "--csi-socket=/csi/csi.sock",
+            "--node-name=$(MY_NODE_NAME)",
+            "--grpc-endpoint=$(MY_POD_IP):10199",
+            format("--nvme-nr-io-queues=%s", var.io_queues),
+            "-v"
+          ]
 
           env {
             name = "MY_NODE_NAME"

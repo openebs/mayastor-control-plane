@@ -118,6 +118,25 @@ def nvme_discover(uri):
         raise ValueError("uri {} is not discovered".format(u.path[1:]))
 
 
+def nvme_find_device(uri):
+    u = urlparse(uri)
+    nqn = u.path[1:]
+
+    command = "sudo nvme list -v -o json"
+    discover = json.loads(
+        subprocess.run(
+            command, shell=True, check=True, text=True, capture_output=True
+        ).stdout
+    )
+
+    dev = list(filter(lambda d: nqn in d.get("SubsystemNQN"), discover.get("Devices")))
+
+    # we should only have one connection
+    assert len(dev) == 1
+    device = "/dev/{}".format(dev[0]["Namespaces"][0].get("NameSpace"))
+    return device
+
+
 def nvme_disconnect(uri):
     """Disconnect the given URI on this host."""
     u = urlparse(uri)
