@@ -1,8 +1,7 @@
 use tracing::info;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 use clap::{App, Arg, ArgMatches};
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
+use opentelemetry::global;
 
 mod client;
 mod config;
@@ -66,32 +65,15 @@ pub async fn main() -> Result<(), String> {
 
     utils::print_package_info!();
 
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))
-        .expect("failed to init tracing filter");
-
-    let subscriber = Registry::default()
-        .with(filter)
-        .with(tracing_subscriber::fmt::layer().pretty());
-
-    if let Some(jaeger) = args.value_of("jaeger") {
-        global::set_text_map_propagator(TraceContextPropagator::new());
-        let tags = common_lib::opentelemetry::default_tracing_tags(
-            utils::git_version(),
-            env!("CARGO_PKG_VERSION"),
-        );
-        common_lib::opentelemetry::set_jaeger_env();
-        let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_agent_endpoint(jaeger)
-            .with_service_name("csi-controller")
-            .with_tags(tags)
-            .install_batch(opentelemetry::runtime::TokioCurrentThread)
-            .expect("Should be able to initialise the exporter");
-        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-        subscriber.with(telemetry).init();
-    } else {
-        subscriber.init();
-    }
+    let tags = utils::tracing_telemetry::default_tracing_tags(
+        utils::git_version(),
+        env!("CARGO_PKG_VERSION"),
+    );
+    utils::tracing_telemetry::init_tracing(
+        "csi-controller",
+        tags,
+        args.value_of("jaeger").map(|s| s.to_string()),
+    );
 
     initialize_controller(&args)?;
 

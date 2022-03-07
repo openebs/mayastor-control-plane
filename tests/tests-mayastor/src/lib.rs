@@ -13,7 +13,6 @@ use openapi::apis::Uuid;
 
 use common_lib::{
     mbus_api::ReplyError,
-    opentelemetry::default_tracing_tags,
     types::v0::{
         message_bus::CreatePool,
         store::{
@@ -44,6 +43,7 @@ use std::{
 use structopt::StructOpt;
 use tonic::transport::Uri;
 use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
+use utils::tracing_telemetry::default_tracing_tags;
 
 const RUST_LOG_QUIET_DEFAULTS: &str =
     "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info,bollard=info,composer=info";

@@ -9,21 +9,14 @@ extern crate lazy_static;
 #[macro_use]
 extern crate tracing;
 
-use std::{
-    fs,
-    io::{ErrorKind, Write},
-    sync::Arc,
-};
+use std::{fs, io::ErrorKind, sync::Arc};
 
 use crate::{identity::Identity, mount::probe_filesystems, node::Node, shutdown_event::Shutdown};
-use chrono::Local;
 use clap::{App, Arg};
 use csi::{identity_server::IdentityServer, node_server::NodeServer};
-use env_logger::{Builder, Env};
 use futures::TryFutureExt;
 use nodeplugin_grpc::MayastorNodePluginGrpcServer;
 use std::{
-    path::Path,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -133,11 +126,6 @@ async fn main() -> Result<(), String> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("log-debug")
-                .short("l")
-                .help("Log extra info - file name and line number"),
-        )
-        .arg(
             Arg::with_name("node-name")
                 .short("n")
                 .long("node-name")
@@ -184,35 +172,17 @@ async fn main() -> Result<(), String> {
     let csi_socket = matches
         .value_of("csi-socket")
         .unwrap_or("/var/tmp/csi.sock");
+
     let level = match matches.occurrences_of("v") as usize {
         0 => "info",
         1 => "debug",
         _ => "trace",
     };
-
-    // configure logger: env var takes precedence over cmd line options
-    let filter_expr = format!("{}={}", module_path!(), level);
-    let mut builder = Builder::from_env(Env::default().default_filter_or(filter_expr));
-    if matches.is_present("log-debug") {
-        builder.format(|buf, record| {
-            let mut level_style = buf.default_level_style(record.level());
-            level_style.set_intense(true);
-            writeln!(
-                buf,
-                "[{} {} {}:{}] {}",
-                Local::now().format("%Y-%m-%dT%H:%M:%SZ"),
-                level_style.value(record.level()),
-                Path::new(record.file().unwrap())
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap(),
-                record.line().unwrap(),
-                record.args()
-            )
-        });
-    }
-    builder.init();
+    let tags = utils::tracing_telemetry::default_tracing_tags(
+        utils::git_version(),
+        env!("CARGO_PKG_VERSION"),
+    );
+    utils::tracing_telemetry::init_tracing_level("csi-node", tags, None, Some(level));
 
     if let Some(nvme_io_timeout_secs) = matches.value_of("nvme_core io_timeout") {
         let io_timeout_secs: u32 = nvme_io_timeout_secs.parse().expect(

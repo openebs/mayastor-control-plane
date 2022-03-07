@@ -23,23 +23,17 @@ use openapi::{
     clients::{self, tower::Url},
     models::{CreatePoolBody, Pool, RestJsonError},
 };
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
+use opentelemetry::global;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::Snafu;
 use std::{collections::HashMap, io::Write, ops::Deref, sync::Arc, time::Duration};
 use tracing::{debug, error, info, trace, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 const WHO_AM_I: &str = "Mayastor pool operator";
 const WHO_AM_I_SHORT: &str = "msp-operator";
 const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
-
-/// Various common constants used by the control plane
-pub mod constants {
-    include!("../../../common/src/opentelemetry.rs");
-}
 
 #[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
 #[kube(
@@ -1016,29 +1010,15 @@ async fn main() -> anyhow::Result<()> {
 
     utils::print_package_info!();
 
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))
-        .expect("failed to init tracing filter");
-
-    let subscriber = Registry::default()
-        .with(filter)
-        .with(tracing_subscriber::fmt::layer().pretty());
-
-    if let Some(jaeger) = matches.value_of("jaeger") {
-        let tags = constants::default_tracing_tags(utils::git_version(), env!("CARGO_PKG_VERSION"));
-        global::set_text_map_propagator(TraceContextPropagator::new());
-        constants::set_jaeger_env();
-        let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_agent_endpoint(jaeger)
-            .with_service_name("msp-operator")
-            .with_tags(tags)
-            .install_batch(opentelemetry::runtime::TokioCurrentThread)
-            .expect("Should be able to initialise the exporter");
-        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-        subscriber.with(telemetry).init();
-    } else {
-        subscriber.init();
-    }
+    let tags = utils::tracing_telemetry::default_tracing_tags(
+        utils::git_version(),
+        env!("CARGO_PKG_VERSION"),
+    );
+    utils::tracing_telemetry::init_tracing(
+        "msp-operator",
+        tags,
+        matches.value_of("jaeger").map(|s| s.to_string()),
+    );
 
     if matches.occurrences_of("write_crd") > 0 {
         return write_msp_crd(matches.value_of("write_crd"));

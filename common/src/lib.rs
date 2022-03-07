@@ -25,6 +25,3 @@ impl<F: Into<T>, T> IntoOption<T> for Option<F> {
         self.map(Into::into)
     }
 }
-
-/// OpenTelemetry
-pub mod opentelemetry;
