@@ -4,7 +4,7 @@
 
 set -e
 
-SCRIPTDIR=$(dirname "$0")
+SCRIPTDIR="$(dirname "$(realpath "${BASH_SOURCE[0]:-"$0"}")")"
 ROOTDIR="$SCRIPTDIR"/../../
 
 CSI_PROTO=
