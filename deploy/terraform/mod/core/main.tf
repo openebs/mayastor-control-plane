@@ -62,7 +62,6 @@ resource "kubernetes_deployment" "core_deployment" {
         container {
           args = concat([
             "-smayastor-etcd",
-            "-nnats",
             "--request-timeout=${var.request_timeout}",
             "--cache-period=${var.cache_period}",
             ],

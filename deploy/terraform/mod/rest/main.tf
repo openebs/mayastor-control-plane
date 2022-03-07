@@ -65,7 +65,6 @@ resource "kubernetes_deployment" "rest_deployment" {
           args = concat([
             "--dummy-certificates",
             "--no-auth",
-            "-nnats",
             "--http=0.0.0.0:8081",
             "--request-timeout=${var.request_timeout}",
             "--core-grpc=https://core:50051"
