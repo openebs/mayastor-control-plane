@@ -43,21 +43,21 @@ pub mod constants {
 
 #[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
 #[kube(
-    group = "openebs.io",
-    version = "v1alpha1",
-    kind = "MayastorPool",
-    plural = "mayastorpools",
-    // The name of the struct that gets created that represents a resource
-    namespaced,
-    status = "MayastorPoolStatus",
-    derive = "PartialEq",
-    derive = "Default",
-    shortname = "msp",
-    printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
-    printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
-    printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
-    printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
-    printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
+group = "openebs.io",
+version = "v1alpha1",
+kind = "MayastorPool",
+plural = "mayastorpools",
+// The name of the struct that gets created that represents a resource
+namespaced,
+status = "MayastorPoolStatus",
+derive = "PartialEq",
+derive = "Default",
+shortname = "msp",
+printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
+printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
+printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
+printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
+printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
 )]
 
 /// The pool spec which contains the parameters we use when creating the pool
@@ -624,21 +624,21 @@ impl ResourceContext {
                             "The pool has been deleted through an external API request",
                             "Warning",
                         )
-                        .await;
+                            .await;
 
                         // We expected the control plane to have a spec for this pool. It didn't so
                         // set the CRD to the error state and don't try to recreate it.
                         return self.mark_error().await;
                     }
                 } else {
-                        self.k8s_notify(
-                            "Missing",
-                            "Check",
-                            &format!("The pool information is not available: {}", response),
-                            "Warning",
-                        )
-                            .await;
-                        return self.is_missing().await;
+                    self.k8s_notify(
+                        "Missing",
+                        "Check",
+                        &format!("The pool information is not available: {}", response),
+                        "Warning",
+                    )
+                        .await;
+                    return self.is_missing().await;
                 }
             }
             error => error,

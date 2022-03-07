@@ -28,8 +28,8 @@ use grpc::{
     client::CoreClient,
     context::Context,
     operations::{
-        pool::traits::PoolOperations, replica::traits::ReplicaOperations,
-        volume::traits::VolumeOperations,
+        node::traits::NodeOperations, pool::traits::PoolOperations,
+        replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
     },
 };
 use rpc::mayastor::RpcHandle;
@@ -92,6 +92,9 @@ impl Cluster {
         self.grpc_client.as_ref().unwrap()
     }
 
+    /// volume service liveness checks whether the volume service responds to the
+    /// liveliness probe(generally after restart of core agent), with the timeout and
+    /// retry options specified
     pub async fn volume_service_liveness(
         &self,
         timeout_opts: Option<TimeoutOptions>,
@@ -117,6 +120,37 @@ impl Cluster {
         }
         Err(ReplyError::invalid_reply_error(
             "Max tries exceeded, volume service not up".to_string(),
+        ))
+    }
+
+    /// node service liveness checks whether the node service responds to the
+    /// liveliness probe(generally after restart of core agent), with the timeout and
+    /// retry options specified
+    pub async fn node_service_liveness(
+        &self,
+        timeout_opts: Option<TimeoutOptions>,
+    ) -> Result<bool, ReplyError> {
+        let client = self.grpc_client().node();
+        let timeout_opts = match timeout_opts {
+            Some(opts) => opts,
+            None => TimeoutOptions::new()
+                .with_timeout(Duration::from_millis(500))
+                .with_max_retries(10),
+        };
+        for x in 1 .. timeout_opts.max_retries().unwrap_or_default() {
+            match client
+                .probe(Some(Context::new(Some(timeout_opts.clone()))))
+                .await
+            {
+                Ok(resp) => return Ok(resp),
+                Err(_) => {
+                    tracing::debug!("Node Service not available, Retrying ....{}", x);
+                    tokio::time::sleep(timeout_opts.base_timeout()).await;
+                }
+            }
+        }
+        Err(ReplyError::invalid_reply_error(
+            "Max tries exceeded, node service not up".to_string(),
         ))
     }
 

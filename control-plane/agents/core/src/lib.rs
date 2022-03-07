@@ -4,7 +4,9 @@ use common::ServiceError;
 use futures::{future::join_all, FutureExt};
 use grpc::{
     operations::{
-        pool::server::PoolServer, replica::server::ReplicaServer, volume::server::VolumeServer,
+        node::server::NodeServer, pool::server::PoolServer,
+        registration::server::RegistrationServer, replica::server::ReplicaServer,
+        volume::server::VolumeServer,
     },
     tracing::OpenTelServer,
 };
@@ -35,15 +37,26 @@ impl Service {
             .get_shared_state::<ReplicaServer>()
             .clone();
         let volume_service = self.base_service.get_shared_state::<VolumeServer>().clone();
+        let node_service = self.base_service.get_shared_state::<NodeServer>().clone();
+        let registration_service = self
+            .base_service
+            .get_shared_state::<RegistrationServer>()
+            .clone();
 
         let tonic_router = self
             .tonic_grpc_server
             .layer(OpenTelServer::new())
             .add_service(pool_service.into_grpc_server())
             .add_service(replica_service.into_grpc_server())
-            .add_service(volume_service.into_grpc_server());
+            .add_service(volume_service.into_grpc_server())
+            .add_service(node_service.into_grpc_server())
+            .add_service(registration_service.into_grpc_server());
 
-        let mut threads = self.base_service.mbus_handles().await;
+        let mut threads = if self.base_service.nats_enabled() {
+            self.base_service.mbus_handles().await
+        } else {
+            vec![]
+        };
 
         let tonic_thread = tokio::spawn(async move {
             tonic_router

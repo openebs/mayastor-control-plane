@@ -18,7 +18,7 @@ spec:
       imagePullSecrets:
         {{- include "base_pull_secrets" . }}
       initContainers:
-        {{- include "base_init_containers" . }}
+        {{- include "base_init_core_containers" . }}
       containers:
         - name: core
           resources: {{- .Values.core.resources | toYaml | nindent 12 }}
@@ -26,10 +26,10 @@ spec:
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-smayastor-etcd"
-            - "-nnats"
             - "--request-timeout={{ .Values.base.default_req_timeout }}"
             - "--cache-period={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
+            - "--grpc-server-addr=https://0.0.0.0:50051"
           ports:
             - containerPort: 50051
           env:

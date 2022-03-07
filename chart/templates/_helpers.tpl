@@ -26,6 +26,17 @@ Usage:
 {{- end -}}
 
 {{/*
+Renders the CORE server init container, if enabled
+Usage:
+{{ include "base_init_core_containers" . }}
+*/}}
+{{- define "base_init_core_containers" -}}
+    {{- if .Values.base.initCoreContainers.enabled }}
+    {{- include "render" (dict "value" .Values.base.initCoreContainers.containers "context" $) | nindent 8 }}
+    {{- end }}
+{{- end -}}
+
+{{/*
 Renders the jaeger agent init container, if enabled
 Usage:
 {{ include "jaeger_agent_init_container" . }}

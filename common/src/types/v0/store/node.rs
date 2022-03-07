@@ -52,6 +52,10 @@ impl NodeSpec {
     pub fn endpoint(&self) -> &str {
         &self.endpoint
     }
+    /// Node labels
+    pub fn labels(&self) -> &NodeLabels {
+        &self.labels
+    }
     /// Node gRPC endpoint
     pub fn set_endpoint(&mut self, endpoint: String) {
         self.endpoint = endpoint

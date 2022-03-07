@@ -8,10 +8,17 @@ use common::{
     v0::msg_translation::RpcToMessageBus,
 };
 use common_lib::types::v0::message_bus::{
-    Filter, GetSpecs, Node, NodeId, NodeState, NodeStatus, Specs, States,
+    Deregister, Filter, GetSpecs, Node, NodeId, NodeState, NodeStatus, Register, Specs, States,
 };
 
 use crate::core::wrapper::InternalOps;
+use grpc::{
+    context::Context,
+    operations::{
+        node::traits::{GetBlockDeviceInfo, NodeOperations},
+        registration::traits::{DeregisterInfo, RegisterInfo, RegistrationOperations},
+    },
+};
 use rpc::mayastor::ListBlockDevicesRequest;
 use snafu::ResultExt;
 use std::{collections::HashMap, sync::Arc};
@@ -48,6 +55,45 @@ impl NodeCommsTimeout {
     /// timeout for the request itself
     pub fn request(&self) -> std::time::Duration {
         self.request
+    }
+}
+
+#[tonic::async_trait]
+impl NodeOperations for Service {
+    async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Nodes, ReplyError> {
+        let req = GetNodes::new(filter);
+        let nodes = self.get_nodes(&req).await?;
+        Ok(nodes)
+    }
+    async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
+        return Ok(true);
+    }
+
+    async fn get_block_devices(
+        &self,
+        get_blockdevice: &dyn GetBlockDeviceInfo,
+        _ctx: Option<Context>,
+    ) -> Result<BlockDevices, ReplyError> {
+        let req = get_blockdevice.into();
+        let blockdevices = self.get_block_devices(&req).await?;
+        Ok(blockdevices)
+    }
+}
+
+#[tonic::async_trait]
+impl RegistrationOperations for Service {
+    async fn register(&self, req: &dyn RegisterInfo) -> Result<(), ReplyError> {
+        let register = req.into();
+        let service = self.clone();
+        Context::spawn(async move { service.register(&register).await }).await?;
+        Ok(())
+    }
+
+    async fn deregister(&self, req: &dyn DeregisterInfo) -> Result<(), ReplyError> {
+        let deregister = req.into();
+        let service = self.clone();
+        Context::spawn(async move { service.deregister(&deregister).await }).await?;
+        Ok(())
     }
 }
 

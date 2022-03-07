@@ -101,7 +101,10 @@ macro_rules! impl_ctrlp_agents {
                         .status()?;
                     build_error(&format!("the {} agent", name), status.code())?;
                 }
-                let mut binary = Binary::from_dbg(&name).with_nats("-n");
+                let mut binary = Binary::from_dbg(&name);
+                if options.no_nats == false {
+                    binary = binary.with_nats("-n");
+                }
                 if let Some(env) = &options.agents_env {
                     for kv in env {
                         binary = binary.with_env(kv.key.as_str(), kv.value.as_str().as_ref());

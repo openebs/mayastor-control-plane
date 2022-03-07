@@ -6,10 +6,14 @@ use common_lib::{
     mbus_api::*,
     types::v0::message_bus::{ChannelVs, JsonGrpcRequest},
 };
+use grpc::client::CoreClient;
+use http::Uri;
+use once_cell::sync::OnceCell;
 use service::*;
 use std::{convert::TryInto, marker::PhantomData};
 use structopt::StructOpt;
 use tracing::info;
+use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
 #[derive(Debug, StructOpt)]
 #[structopt(version = utils::package_info!())]
@@ -19,6 +23,10 @@ struct CliArgs {
     /// Default: nats://127.0.0.1:4222
     #[structopt(long, short, default_value = "nats://127.0.0.1:4222")]
     nats: String,
+
+    /// The CORE gRPC Server URL or address to connect to the services.
+    #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
+    core_grpc: Uri,
 
     /// Don't use minimum timeouts for specific requests
     #[structopt(long)]
@@ -31,6 +39,9 @@ struct CliArgs {
 struct ServiceHandler<T> {
     data: PhantomData<T>,
 }
+
+/// Once cell static variable to store the grpc client and initialise once at startup
+pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
 
 macro_rules! impl_service_handler {
     // RequestType is the message bus request type
@@ -69,11 +80,19 @@ async fn main() {
     info!("Using options: {:?}", &cli_args);
 
     init_tracing();
+
+    let grpc_addr = &cli_args.core_grpc;
+    // Initialise the core client to be used in rest
+    CORE_CLIENT
+        .set(CoreClient::new(grpc_addr.clone(), None).await)
+        .ok()
+        .expect("Expect to be initialised only once");
+
     server(cli_args).await;
 }
 
 async fn server(cli_args: CliArgs) {
-    Service::builder(cli_args.nats, ChannelVs::JsonGrpc)
+    Service::builder(Some(cli_args.nats), ChannelVs::JsonGrpc)
         .connect_message_bus(
             CliArgs::from_args().no_min_timeouts,
             BusClient::JsonGrpcAgent,

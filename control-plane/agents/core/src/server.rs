@@ -22,9 +22,8 @@ use utils::{package_info, DEFAULT_GRPC_SERVER_ADDR};
 pub(crate) struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)
-    /// Default: nats://127.0.0.1:4222
-    #[structopt(long, short, default_value = "nats://127.0.0.1:4222")]
-    pub(crate) nats: String,
+    #[structopt(long, short)]
+    pub(crate) nats: Option<String>,
 
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
@@ -73,7 +72,6 @@ pub(crate) struct CliArgs {
     /// Don't use minimum timeouts for specific requests
     #[structopt(long)]
     no_min_timeouts: bool,
-
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(long, short)]
     jaeger: Option<String>,

@@ -33,6 +33,10 @@ pub struct GetNodes {
     filter: Filter,
 }
 impl GetNodes {
+    /// New get nodes request
+    pub fn new(filter: Filter) -> Self {
+        Self { filter }
+    }
     /// Return `Self` to request all nodes (`None`) or a specific node (`NodeId`)
     pub fn from(node_id: impl Into<Option<NodeId>>) -> Self {
         let node_id = node_id.into();
@@ -61,6 +65,10 @@ impl Node {
     /// Get new `Self` from the given parameters
     pub fn new(id: NodeId, spec: Option<NodeSpec>, state: Option<NodeState>) -> Self {
         Self { id, spec, state }
+    }
+    /// Get the node id
+    pub fn id(&self) -> &NodeId {
+        &self.id
     }
     /// Get the node specification
     pub fn spec(&self) -> Option<&NodeSpec> {
