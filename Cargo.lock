@@ -4348,6 +4348,11 @@ name = "utils"
 version = "0.1.0"
 dependencies = [
  "git-version",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]

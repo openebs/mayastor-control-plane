@@ -2,11 +2,11 @@ pub mod infra;
 
 use infra::*;
 
-pub(crate) use common_lib::opentelemetry::KeyValue;
 use composer::Builder;
 use std::{collections::HashMap, convert::TryInto, str::FromStr, time::Duration};
 use structopt::StructOpt;
 use strum::VariantNames;
+pub(crate) use utils::tracing_telemetry::KeyValue;
 
 const TEST_LABEL_PREFIX: &str = "io.mayastor.test";
 
@@ -142,15 +142,15 @@ pub struct StartOptions {
     pub mayastor_devices: Vec<String>,
 
     /// Add the following environment variables to the mayastor containers
-    #[structopt(long, env = "MAYASTOR_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    #[structopt(long, env = "MAYASTOR_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub mayastor_env: Option<Vec<KeyValue>>,
 
     /// Add the following environment variables to the agent containers
-    #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub agents_env: Option<Vec<KeyValue>>,
 
     /// Add the following environment variables to the rest container
-    #[structopt(long, env = "REST_ENV", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    #[structopt(long, env = "REST_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub rest_env: Option<Vec<KeyValue>>,
 
     /// Cargo Build each component before deploying
@@ -242,7 +242,7 @@ pub struct StartOptions {
     pub developer_delayed: bool,
 
     /// Add process service tags to the traces
-    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     tracing_tags: Vec<KeyValue>,
 }
 

@@ -38,3 +38,7 @@ pub const DEFAULT_GRPC_CLIENT_ADDR: &str = "https://core:50051";
 
 /// The default value for a concurrency limit.
 pub const DEFAULT_GRPC_CLIENT_CONCURRENCY: usize = 25;
+
+/// The default quiet RUST_LOG
+pub const RUST_LOG_QUIET_DEFAULTS: &str =
+    "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info";

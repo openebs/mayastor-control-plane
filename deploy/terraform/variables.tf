@@ -37,12 +37,6 @@ variable "control_resource_requests" {
   }
 }
 
-variable "nats_image" {
-  type        = string
-  description = "nats image used by the nats deployment"
-  default     = "nats:2.2.6-alpine3.13"
-}
-
 variable "msp_operator_image" {
   type        = string
   description = "msp operator image to use"
@@ -91,7 +85,7 @@ variable "mayastor_memory" {
 variable "mayastor_rust_log" {
   type        = string
   description = "The RUST_LOG environment filter for mayastor"
-  default     = "debug"
+  default     = "debug,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info"
 }
 
 variable "csi_node_image" {

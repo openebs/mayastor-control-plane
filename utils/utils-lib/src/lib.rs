@@ -5,3 +5,5 @@ pub mod functions;
 pub use functions::*;
 
 pub mod macros;
+
+pub mod tracing_telemetry;

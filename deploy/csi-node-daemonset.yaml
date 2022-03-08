@@ -46,12 +46,13 @@ spec:
               fieldPath: status.podIP
         - name: RUST_BACKTRACE
           value: "1"
+        - name: RUST_LOG
+          value: "debug"
         args:
         - "--csi-socket=/csi/csi.sock"
         - "--node-name=$(MY_NODE_NAME)"
         - "--grpc-endpoint=$(MY_POD_IP):10199"
         - "--nvme-core-io-timeout=30"
-        - "-v"
         command:
         - csi-node
         volumeMounts:

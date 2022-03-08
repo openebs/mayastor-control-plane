@@ -78,9 +78,9 @@ resource "kubernetes_daemonset" "mayastor" {
         }
 
         init_container {
-          name    = "message-bus-probe"
+          name    = "registration-probe"
           image   = "busybox:latest"
-          command = ["sh", "-c", "trap 'exit 1' TERM; until nc -vz nats 4222; do echo \"Waiting for message bus...\"; sleep 1; done;"]
+          command = ["sh", "-c", "trap 'exit 1' TERM; until nc -vz core 50051; do echo \"Waiting for registration service...\"; sleep 1; done;"]
         }
 
         container {
@@ -90,7 +90,7 @@ resource "kubernetes_daemonset" "mayastor" {
           args = [
             "-N$(MY_NODE_NAME)",
             "-g$(MY_POD_IP)",
-            "-nnats",
+            "-Rhttps://core:50051",
             format("-l%s", var.cpu_list),
             "-pmayastor-etcd"
           ]

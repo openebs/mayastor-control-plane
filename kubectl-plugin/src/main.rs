@@ -21,11 +21,6 @@ use structopt::StructOpt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 use yaml_rust::YamlLoader;
 
-/// OpenTelemetry helpers for handling Processor Tags
-pub mod opentelemetry_helper {
-    include!("../../common/src/opentelemetry.rs");
-}
-
 #[derive(StructOpt, Debug)]
 #[structopt(version = utils::package_info!())]
 struct CliArgs {
@@ -81,8 +76,10 @@ fn init_tracing() {
         Some(jaeger) => {
             global::set_text_map_propagator(TraceContextPropagator::new());
             let git_version = option_env!("GIT_VERSION").unwrap_or_else(utils::git_version);
-            let tags =
-                opentelemetry_helper::default_tracing_tags(git_version, env!("CARGO_PKG_VERSION"));
+            let tags = utils::tracing_telemetry::default_tracing_tags(
+                git_version,
+                env!("CARGO_PKG_VERSION"),
+            );
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_agent_endpoint(jaeger)
                 .with_service_name("kubectl-plugin")

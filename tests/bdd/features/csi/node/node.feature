@@ -1,4 +1,4 @@
-Feature: Mayastor CSI plugin pool management
+Feature: CSI node plugin
 
   Background:
     Given a mayastor instance

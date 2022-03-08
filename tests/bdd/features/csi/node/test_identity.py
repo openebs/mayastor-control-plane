@@ -37,6 +37,7 @@ def setup():
             "--csi-socket=/var/tmp/csi.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",
+            "--nvme-nr-io-queues=1",
             "-v",
         ],
         stdout=subprocess.PIPE,

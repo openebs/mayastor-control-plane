@@ -11,10 +11,9 @@ use crate::core::registry;
 use common_lib::types::v0::message_bus::ChannelVs;
 use http::Uri;
 
-use common_lib::{mbus_api::BusClient, opentelemetry::default_tracing_tags};
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator, KeyValue};
+use common_lib::mbus_api::BusClient;
+use opentelemetry::{global, KeyValue};
 use structopt::StructOpt;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 use utils::{package_info, DEFAULT_GRPC_SERVER_ADDR};
 
 #[derive(Debug, StructOpt)]
@@ -66,7 +65,7 @@ pub(crate) struct CliArgs {
     pub(crate) request_timeout: humantime::Duration,
 
     /// Add process service tags to the traces
-    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = common_lib::opentelemetry::parse_key_value))]
+    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     tracing_tags: Vec<KeyValue>,
 
     /// Don't use minimum timeouts for specific requests
@@ -86,63 +85,16 @@ impl CliArgs {
     }
 }
 
-const RUST_LOG_QUIET_DEFAULTS: &str =
-    "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
-
-fn rust_log_add_quiet_defaults(
-    current: tracing_subscriber::EnvFilter,
-) -> tracing_subscriber::EnvFilter {
-    let main = match current.to_string().as_str() {
-        "debug" => "debug",
-        "trace" => "trace",
-        _ => return current,
-    };
-    let logs = format!("{},{}", main, RUST_LOG_QUIET_DEFAULTS);
-    tracing_subscriber::EnvFilter::try_new(logs).unwrap()
-}
-
-fn init_tracing() {
-    let filter = rust_log_add_quiet_defaults(
-        tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-    );
-
-    let subscriber = Registry::default()
-        .with(filter)
-        .with(tracing_subscriber::fmt::layer().pretty());
-
-    match CliArgs::args().jaeger {
-        Some(jaeger) => {
-            let mut tracing_tags = CliArgs::args().tracing_tags;
-            tracing_tags.append(&mut default_tracing_tags(
-                utils::git_version(),
-                env!("CARGO_PKG_VERSION"),
-            ));
-            tracing_tags.dedup();
-            println!("Using the following tracing tags: {:?}", tracing_tags);
-
-            common_lib::opentelemetry::set_jaeger_env();
-
-            global::set_text_map_propagator(TraceContextPropagator::new());
-            let tracer = opentelemetry_jaeger::new_pipeline()
-                .with_agent_endpoint(jaeger)
-                .with_service_name("core-agent")
-                .with_tags(tracing_tags)
-                .install_batch(opentelemetry::runtime::TokioCurrentThread)
-                .expect("Should be able to initialise the exporter");
-            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-            subscriber.with(telemetry).init();
-        }
-        None => subscriber.init(),
-    };
-}
-
 #[tokio::main]
 async fn main() {
     let cli_args = CliArgs::args();
     utils::print_package_info!();
     println!("Using options: {:?}", &cli_args);
-    init_tracing();
+    utils::tracing_telemetry::init_tracing(
+        "core-agent",
+        cli_args.tracing_tags.clone(),
+        cli_args.jaeger.clone(),
+    );
     server(cli_args).await;
 }
 

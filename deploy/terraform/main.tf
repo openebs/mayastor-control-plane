@@ -49,16 +49,6 @@ module "jaegertracing" {
  * external services
  */
 
-module "nats" {
-  source = "./mod/nats"
-  depends_on = [
-    kubernetes_namespace.mayastor_ns,
-    kubernetes_secret.regcred,
-  ]
-  nats_image   = var.nats_image
-  control_node = var.control_node
-}
-
 module "etcd" {
   source = "./mod/etcd"
   depends_on = [
@@ -82,6 +72,7 @@ module "csi-node" {
   registrar_image = var.csi_registar_image
   grace_period   = var.csi_node_grace_period
   rust_log       = var.control_rust_log
+  io_queues      = var.mayastor_cpus
 }
 
 module "csi-controller" {
@@ -144,7 +135,6 @@ module "rest" {
 module "core" {
   source = "./mod/core"
   depends_on = [
-    module.nats,
     module.etcd,
     module.jaegertracing
   ]
@@ -174,8 +164,8 @@ module "sc" {
 module "mayastor" {
   source = "./mod/mayastor"
   depends_on = [
-    module.nats,
-    module.etcd
+    module.etcd,
+    module.core
   ]
   hugepages = var.mayastor_hugepages_2Mi
   cpus      = var.mayastor_cpus

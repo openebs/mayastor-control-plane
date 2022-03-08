@@ -140,7 +140,7 @@ if [ -z "$IMAGES" ]; then
   IMAGES="$DEFAULT_IMAGES"
 elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
   image=$(echo "$IMAGES" | xargs)
-  if nix eval -f . "images.debug.$image.imageName" 2>/dev/null; then
+  if nix eval -f . "images.debug.$image.imageName" 1>/dev/null 2>/dev/null; then
     if [ "$INCREMENTAL" == "true" ]; then
       # if we're building a single image incrementally, then build only that image
       ALL_IN_ONE="false"
