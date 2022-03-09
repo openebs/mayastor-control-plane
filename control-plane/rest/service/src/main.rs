@@ -16,7 +16,7 @@ use structopt::StructOpt;
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
 #[derive(Debug, StructOpt)]
-#[structopt(version = utils::package_info!())]
+#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 pub(crate) struct CliArgs {
     /// The bind address for the REST interface (with HTTPS)
     /// Default: 0.0.0.0:8080

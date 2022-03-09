@@ -23,6 +23,7 @@ members = [
     "utils/mayastor-dependencies/devinfo",
     "utils/mayastor-dependencies/nvmeadm",
     "utils/mayastor-dependencies/sysfs",
+    "utils/mayastor-dependencies/version-info",
     # Test mayastor through the rest api
     "tests/tests-mayastor",
 ]

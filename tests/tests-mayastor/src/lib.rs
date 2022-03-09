@@ -282,7 +282,7 @@ impl Cluster {
         let trace_guard = Arc::new(match trace {
             true => {
                 tracing_tags.append(&mut default_tracing_tags(
-                    utils::git_version(),
+                    utils::raw_version_str(),
                     env!("CARGO_PKG_VERSION"),
                 ));
                 tracing_tags.dedup();

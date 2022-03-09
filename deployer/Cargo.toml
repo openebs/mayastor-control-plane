@@ -1,5 +1,6 @@
 [package]
 name = "deployer"
+description = "Deployer of control plane and data plane components"
 version = "1.0.0"
 authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
 edition = "2018"

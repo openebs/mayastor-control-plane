@@ -1,5 +1,6 @@
 [package]
 name = "csi-driver"
+description = "CSI controller"
 version = "1.0.0"
 edition = "2021"
 

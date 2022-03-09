@@ -24,9 +24,9 @@ fn initialize_controller(args: &ArgMatches) -> Result<(), String> {
 
 #[tokio::main(worker_threads = 2)]
 pub async fn main() -> Result<(), String> {
-    let args = App::new("Mayastor k8s CSI controller")
+    let args = App::new(utils::package_description!())
         .author(clap::crate_authors!())
-        .version(utils::package_info!())
+        .version(utils::version_info_str!())
         .settings(&[
             clap::AppSettings::ColoredHelp,
             clap::AppSettings::ColorAlways,
@@ -66,7 +66,7 @@ pub async fn main() -> Result<(), String> {
     utils::print_package_info!();
 
     let tags = utils::tracing_telemetry::default_tracing_tags(
-        utils::git_version(),
+        utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
     utils::tracing_telemetry::init_tracing(

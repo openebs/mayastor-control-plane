@@ -14,10 +14,10 @@ use http::Uri;
 use common_lib::mbus_api::BusClient;
 use opentelemetry::{global, KeyValue};
 use structopt::StructOpt;
-use utils::{package_info, DEFAULT_GRPC_SERVER_ADDR};
+use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
 #[derive(Debug, StructOpt)]
-#[structopt(version = package_info!())]
+#[structopt(name = utils::package_description!(), version = version_info_str!())]
 pub(crate) struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)
