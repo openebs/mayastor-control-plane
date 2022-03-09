@@ -108,3 +108,16 @@ Usage:
     {{- include "render" (dict "value" .Values.msp.extraVolumeMounts "context" $) }}
     {{- end }}
 {{- end -}}
+
+{{/*
+Renders the image for the msp-operator container
+Usage:
+{{ include "msp_operator_image" . }}
+*/}}
+{{- define "msp_operator_image" -}}
+    {{- if not (empty .Values.msp.image) -}}
+        {{- .Values.msp.image -}}
+    {{- else }}
+        {{- .Values.mayastorCP.registry }}mayadata/mayastor-msp-operator:{{ .Values.mayastorCP.tag }}
+    {{- end }}
+{{- end -}}

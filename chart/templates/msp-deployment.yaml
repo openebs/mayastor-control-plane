@@ -25,7 +25,7 @@ spec:
       containers:
         - name: msp-operator
           resources: {{- .Values.operators.pool.resources | toYaml | nindent 12 }}
-          image: {{ .Values.mayastorCP.registry }}mayadata/mayastor-msp-operator:{{ .Values.mayastorCP.tag }}
+          image: {{ include "msp_operator_image" . }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-e http://rest:8081"

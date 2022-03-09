@@ -93,6 +93,7 @@ rest:
       memory: "32Mi"
 
 msp:
+  image: ""
   extraVolumes: []
   extraVolumeMounts: []
 
