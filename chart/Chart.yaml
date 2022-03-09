@@ -8,3 +8,4 @@ dependencies:
   - name: jaeger-operator
     version: 2.25.0
     repository: https://jaegertracing.github.io/helm-charts
+    condition: base.jaeger.enabled
