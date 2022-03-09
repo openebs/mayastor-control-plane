@@ -25,7 +25,7 @@ spec:
           image: {{ .Values.mayastorCP.registry }}mayadata/mayastor-core:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
-            - "-smayastor-etcd"
+            - "-s{{ .Values.etcdEndpoint }}"
             - "--request-timeout={{ .Values.base.default_req_timeout }}"
             - "--cache-period={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}

@@ -2,6 +2,8 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+etcdEndpoint: mayastor-etcd
+
 mayastorCP:
   registry:
   pullPolicy: Always
@@ -16,14 +18,14 @@ base:
         command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz core 50051; do echo "Waiting for grpc services..."; sleep 1; done;' ]
       - name: etcd-probe
         image: busybox:latest
-        command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz mayastor-etcd 2379; do echo "Waiting for etcd..."; sleep 1; done;' ]
+        command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz {{ .Values.etcdEndpoint }} 2379; do echo "Waiting for etcd..."; sleep 1; done;' ]
 
   initCoreContainers:
     enabled: true
     containers:
       - name: etcd-probe
         image: busybox:latest
-        command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz mayastor-etcd 2379; do echo "Waiting for etcd..."; sleep 1; done;' ]
+        command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz {{ .Values.etcdEndpoint }} 2379; do echo "Waiting for etcd..."; sleep 1; done;' ]
 
   imagePullSecrets:
     enabled: true
