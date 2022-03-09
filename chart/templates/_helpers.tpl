@@ -86,3 +86,25 @@ Usage:
     {{- include "render" (dict "value" (index .Values "jaeger-operator" "tolerations") "context" $) | nindent 4 }}
     {{- end }}
 {{- end -}}
+
+{{/*
+Renders the extra volumes for the msp-deployment
+Usage:
+{{ include "msp_extra_volumes" . | nindent $INDENT }}
+*/}}
+{{- define "msp_extra_volumes" -}}
+    {{- if len .Values.msp.extraVolumes }}
+    {{- include "render" (dict "value" .Values.msp.extraVolumes "context" $) }}
+    {{- end }}
+{{- end -}}
+
+{{/*
+Renders the extra volume mounts for the msp-operator container of the msp-deployment
+Usage:
+{{ include "msp_extra_volume_mounts" . | nindent $INDENT }}
+*/}}
+{{- define "msp_extra_volume_mounts" -}}
+    {{- if len .Values.msp.extraVolumeMounts }}
+    {{- include "render" (dict "value" .Values.msp.extraVolumeMounts "context" $) }}
+    {{- end }}
+{{- end -}}
