@@ -896,6 +896,8 @@ dependencies = [
  "futures",
  "glob",
  "humantime",
+ "k8s-openapi",
+ "kube",
  "lazy_static",
  "nvmeadm",
  "once_cell",
