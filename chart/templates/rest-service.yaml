@@ -6,7 +6,7 @@ metadata:
   labels:
     app: rest
 spec:
-  type: NodePort
+  type: {{ .Values.rest.service.type }}
   selector:
     app: rest
   ports:
@@ -14,9 +14,13 @@ spec:
       name: https
       targetPort: 8080
       protocol: TCP
-      nodePort: 30010
+      {{- if eq .Values.rest.service.type "NodePort" }}
+      nodePort: {{ .Values.rest.service.nodePort.https }}
+      {{- end }}
     - port: 8081
       name: http
       targetPort: 8081
       protocol: TCP
-      nodePort: 30011
+      {{- if eq .Values.rest.service.type "NodePort" }}
+      nodePort: {{ .Values.rest.service.nodePort.http }}
+      {{- end }}

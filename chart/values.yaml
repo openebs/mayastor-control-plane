@@ -79,6 +79,11 @@ core:
       memory: "16Mi"
 
 rest:
+  service:
+    type: NodePort
+    nodePort:
+      https: 30010
+      http: 30011
   resources:
     limits:
       cpu: "100m"
