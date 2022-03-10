@@ -41,7 +41,7 @@ mkShell {
     utillinux
     which
     libudev
-    yq
+    yq-go
   ] ++ pkgs.lib.optional (!norust) channel.default_src.nightly;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
