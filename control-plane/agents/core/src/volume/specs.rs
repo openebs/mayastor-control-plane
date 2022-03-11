@@ -27,7 +27,7 @@ use common_lib::{
     types::v0::{
         message_bus::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
-            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, Protocol, PublishVolume,
+            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, PoolId, Protocol, PublishVolume,
             RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
             ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
             VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
@@ -282,6 +282,22 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
+    /// Get a list of cloned volume replicas
+    pub(crate) fn get_cloned_volume_replicas(&self, id: &VolumeId) -> Vec<ReplicaSpec> {
+        self.read()
+            .replicas
+            .values()
+            .filter_map(|r| {
+                let r = r.lock();
+                if r.owners.owned_by(id) {
+                    Some(r.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Get the `NodeId` where `replica` lives
     pub(crate) async fn get_replica_node(
         registry: &Registry,
@@ -290,6 +306,18 @@ impl ResourceSpecsLocked {
         let pools = registry.get_pool_states_inner().await;
         pools.iter().find_map(|p| {
             if p.id == replica.pool {
+                Some(p.node.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get the `NodeId` where `pool` lives
+    pub(crate) async fn get_pool_node(registry: &Registry, pool: PoolId) -> Option<NodeId> {
+        let pools = registry.get_pool_states_inner().await;
+        pools.iter().find_map(|p| {
+            if p.id == pool {
                 Some(p.node.clone())
             } else {
                 None
@@ -428,7 +456,7 @@ impl ResourceSpecsLocked {
             for nexus in nexuses {
                 let nexus = nexus.lock().deref().clone();
                 if let Err(error) = self
-                    .destroy_nexus(registry, &DestroyNexus::from(nexus.clone()), true, mode)
+                    .destroy_nexus(registry, &DestroyNexus::from(&nexus), true, mode)
                     .await
                 {
                     nexus.warn_span(|| {

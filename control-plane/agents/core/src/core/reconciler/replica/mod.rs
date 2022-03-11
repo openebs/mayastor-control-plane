@@ -63,9 +63,13 @@ async fn remove_missing_owners(
     let specs = context.specs();
 
     if let Ok(_guard) = replica.operation_guard(OperationMode::ReconcileStart) {
-        let replica_spec = replica.lock().clone();
+        let owned = {
+            let replica_spec = replica.lock();
+            replica_spec.managed && replica_spec.owned()
+        };
 
-        if replica_spec.managed && replica_spec.owned() {
+        if owned {
+            let replica_spec = replica.lock().clone();
             let mut owner_removed = false;
             let owners = &replica_spec.owners;
 
@@ -151,10 +155,9 @@ async fn destroy_replica(
     replica_spec: &Arc<Mutex<ReplicaSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    let replica_clone = replica_spec.lock().clone();
-    if let Some(node) =
-        ResourceSpecsLocked::get_replica_node(context.registry(), &replica_clone).await
-    {
+    let pool_id = replica_spec.lock().pool.clone();
+    if let Some(node) = ResourceSpecsLocked::get_pool_node(context.registry(), pool_id).await {
+        let replica_clone = replica_spec.lock().clone();
         match context
             .specs()
             .destroy_replica(
