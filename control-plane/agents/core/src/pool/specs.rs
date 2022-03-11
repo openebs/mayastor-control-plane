@@ -414,6 +414,17 @@ impl ResourceSpecsLocked {
         specs.replicas.to_vec()
     }
 
+    /// Get a vector of protected ReplicaSpec's
+    pub(crate) fn get_cloned_replicas(&self) -> Vec<ReplicaSpec> {
+        let specs = self.read();
+        specs
+            .replicas
+            .to_vec()
+            .into_iter()
+            .map(|r| r.lock().clone())
+            .collect::<Vec<_>>()
+    }
+
     /// Worker that reconciles dirty ReplicaSpec's with the persistent store.
     /// This is useful when replica operations are performed but we fail to
     /// update the spec with the persistent store.

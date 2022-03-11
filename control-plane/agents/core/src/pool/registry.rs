@@ -1,5 +1,8 @@
-use crate::core::{registry::Registry, wrapper::*};
-use common::errors::{self, ReplicaNotFound, SvcError, SvcError::PoolNotFound};
+use crate::core::{
+    registry::Registry,
+    wrapper::{GetterOps, *},
+};
+use common::errors::{self, SvcError, SvcError::PoolNotFound};
 use common_lib::types::v0::message_bus::{NodeId, Pool, PoolId, PoolState, Replica, ReplicaId};
 use snafu::OptionExt;
 
@@ -144,14 +147,15 @@ impl Registry {
 
     /// Get replica `replica_id`
     pub(crate) async fn get_replica(&self, replica_id: &ReplicaId) -> Result<Replica, SvcError> {
-        let replicas = self.get_replicas().await;
-        let replica = replicas
-            .iter()
-            .find(|r| &r.uuid == replica_id)
-            .context(ReplicaNotFound {
-                replica_id: replica_id.clone(),
-            })?;
-        Ok(replica.clone())
+        let nodes = self.get_node_wrappers().await;
+        for node in nodes {
+            if let Some(replica) = node.replica(replica_id).await {
+                return Ok(replica);
+            }
+        }
+        Err(SvcError::ReplicaNotFound {
+            replica_id: replica_id.clone(),
+        })
     }
 
     /// Get all replicas from node `node_id`

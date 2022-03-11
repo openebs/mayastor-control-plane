@@ -280,6 +280,21 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
+    pub(crate) fn get_cloned_volume_replicas(&self, id: &VolumeId) -> Vec<ReplicaSpec> {
+        self.read()
+            .replicas
+            .values()
+            .filter_map(|r| {
+                let r = r.lock();
+                if r.owners.owned_by(id) {
+                    Some(r.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Get the `NodeId` where `replica` lives
     pub(crate) async fn get_replica_node(
         registry: &Registry,

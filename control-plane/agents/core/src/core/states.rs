@@ -51,9 +51,16 @@ impl ResourceStates {
         self.nexuses.populate(nexuses);
     }
 
+    /// Returns a vector of cloned nexus states.
+    pub(crate) fn get_cloned_nexus_states(&self) -> Vec<NexusState> {
+        Self::cloned_inner_states(self.nexuses.to_values())
+    }
+
     /// Returns a vector of nexus states.
-    pub(crate) fn get_nexus_states(&self) -> Vec<NexusState> {
-        Self::cloned_inner_states(self.nexuses.to_vec())
+    pub(crate) fn get_nexus_states(
+        &self,
+    ) -> std::collections::hash_map::Values<NexusId, Arc<Mutex<NexusState>>> {
+        self.nexuses.to_values()
     }
 
     /// Returns the nexus state for the nexus with the given ID.
@@ -67,9 +74,16 @@ impl ResourceStates {
         self.pools.populate(pools);
     }
 
+    /// Returns a vector of cloned pool states.
+    pub(crate) fn get_cloned_pool_states(&self) -> Vec<PoolState> {
+        Self::cloned_inner_states(self.pools.to_values())
+    }
+
     /// Returns a vector of pool states.
-    pub(crate) fn get_pool_states(&self) -> Vec<PoolState> {
-        Self::cloned_inner_states(self.pools.to_vec())
+    pub(crate) fn get_pool_states(
+        &self,
+    ) -> std::collections::hash_map::Values<PoolId, Arc<Mutex<PoolState>>> {
+        self.pools.to_values()
     }
 
     /// Get a pool with the given ID.
@@ -85,14 +99,20 @@ impl ResourceStates {
     }
 
     /// Returns a vector of replica states.
-    pub(crate) fn get_replica_states(&self) -> Vec<ReplicaState> {
-        Self::cloned_inner_states(self.replicas.to_vec())
+    pub(crate) fn get_cloned_replica_states(&self) -> Vec<ReplicaState> {
+        Self::cloned_inner_states(self.replicas.to_values())
+    }
+
+    /// Returns a vector of cloned replica states.
+    pub(crate) fn get_replica_states(
+        &self,
+    ) -> std::collections::hash_map::Values<ReplicaId, Arc<Mutex<ReplicaState>>> {
+        self.replicas.to_values()
     }
 
     /// Get a replica with the given ID.
-    pub(crate) fn get_replica_state(&self, id: &ReplicaId) -> Option<ReplicaState> {
-        let replica_state = self.replicas.get(id)?;
-        Some(replica_state.lock().clone())
+    pub(crate) fn get_replica_state(&self, id: &ReplicaId) -> Option<&Arc<Mutex<ReplicaState>>> {
+        self.replicas.get(id)
     }
 
     /// Clear all state information.
@@ -102,12 +122,17 @@ impl ResourceStates {
         self.replicas.clear();
     }
 
-    /// Takes a vector of resources protected by an 'Arc' and 'Mutex' and returns a vector of
+    /// Takes values of resources protected by an 'Arc' and 'Mutex' and returns a vector of
     /// unprotected resources.
-    fn cloned_inner_states<S>(locked_states: Vec<Arc<Mutex<S>>>) -> Vec<S>
+    fn cloned_inner_states<I, S>(
+        locked_states: std::collections::hash_map::Values<I, Arc<Mutex<S>>>,
+    ) -> Vec<S>
     where
         S: Clone,
     {
-        locked_states.iter().map(|s| s.lock().clone()).collect()
+        locked_states
+            .into_iter()
+            .map(|s| s.lock().clone())
+            .collect()
     }
 }
