@@ -280,6 +280,7 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
+    /// Get a list of cloned volume replicas
     pub(crate) fn get_cloned_volume_replicas(&self, id: &VolumeId) -> Vec<ReplicaSpec> {
         self.read()
             .replicas
