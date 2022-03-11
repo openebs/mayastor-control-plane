@@ -516,10 +516,21 @@ impl ResourceContext {
                     // As pool exists, set the status based on the presence of pool state.
                     self.set_status_or_unknown(pool).await
                 }
-                Err(_) => {
-                    // If we don't find the pool, i.e. its not present or not yet created
-                    // so, set the status to Creating to retry creation.
-                    return self.mark_error().await;
+                Err(clients::tower::Error::Request(_)) => {
+                    // Probably grpc server is not yet up
+                    return self.mark_unknown().await;
+                }
+                Err(clients::tower::Error::Response(err)) => {
+                    if err.status() == clients::tower::StatusCode::SERVICE_UNAVAILABLE
+                        || err.status() == clients::tower::StatusCode::REQUEST_TIMEOUT
+                    {
+                        // Probably grpc server is not yet up
+                        return self.mark_unknown().await;
+                    } else {
+                        // If we don't find the pool, i.e. its not present or not yet created
+                        // so, set the status to Creating to retry creation.
+                        return self.mark_error().await;
+                    }
                 }
             },
         }
@@ -609,14 +620,14 @@ impl ResourceContext {
             .get_node_pool(&self.spec.node, &self.name())
             .await
         {
-            Ok(response) => Ok(response),
+            Ok(response) => response,
             Err(clients::tower::Error::Response(response)) => {
-                if response.status() == clients::tower::StatusCode::NOT_FOUND {
+                return if response.status() == clients::tower::StatusCode::NOT_FOUND {
                     if self.metadata.deletion_timestamp.is_some() {
                         tracing::debug!(name = ?self.name(), "deleted stopping checker");
-                        return Ok(ReconcilerAction {
+                        Ok(ReconcilerAction {
                             requeue_after: None,
-                        });
+                        })
                     } else {
                         tracing::warn!(pool = ?self.name(), "deleted by external event NOT recreating");
                         self.k8s_notify(
@@ -629,21 +640,27 @@ impl ResourceContext {
 
                         // We expected the control plane to have a spec for this pool. It didn't so
                         // set the CRD to the error state and don't try to recreate it.
-                        return self.mark_error().await;
+                        self.mark_error().await
                     }
+                } else if response.status() == clients::tower::StatusCode::SERVICE_UNAVAILABLE || response.status() == clients::tower::StatusCode::REQUEST_TIMEOUT {
+                    // Probably grpc server is not yet up
+                    self.mark_unknown().await
                 } else {
-                        self.k8s_notify(
-                            "Missing",
-                            "Check",
-                            &format!("The pool information is not available: {}", response),
-                            "Warning",
-                        )
-                            .await;
-                        return self.is_missing().await;
+                    self.k8s_notify(
+                        "Missing",
+                        "Check",
+                        &format!("The pool information is not available: {}", response),
+                        "Warning",
+                    )
+                        .await;
+                    self.is_missing().await
                 }
             }
-            error => error,
-        }?.into_body();
+            Err(clients::tower::Error::Request(_)) => {
+                // Probably grpc server is not yet up
+                return self.mark_unknown().await;
+            }
+        }.into_body();
         // As pool exists, set the status based on the presence of pool state.
         self.set_status_or_unknown(pool).await
     }
