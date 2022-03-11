@@ -35,8 +35,8 @@ impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         for pool in context.specs().get_locked_pools() {
-            results.push(missing_pool_state_reconciler(pool.clone(), context).await);
-            results.push(deleting_pool_spec_reconciler(pool.clone(), context).await);
+            results.push(missing_pool_state_reconciler(&pool, context).await);
+            results.push(deleting_pool_spec_reconciler(&pool, context).await);
         }
         Self::squash_results(results)
     }
@@ -54,7 +54,7 @@ impl TaskPoller for PoolReconciler {
 /// should exist.
 #[tracing::instrument(skip(pool_spec, context), level = "trace", fields(pool.uuid = %pool_spec.lock().id, request.reconcile = true))]
 async fn missing_pool_state_reconciler(
-    pool_spec: Arc<Mutex<PoolSpec>>,
+    pool_spec: &Arc<Mutex<PoolSpec>>,
     context: &PollContext,
 ) -> PollResult {
     if !pool_spec.lock().status().created() {
@@ -83,11 +83,11 @@ async fn missing_pool_state_reconciler(
         let node = match context.registry().get_node_wrapper(&pool.node).await {
             Ok(node) if !node.read().await.is_online() => {
                 let node_status = node.read().await.status();
-                warn_missing(&pool_spec, node_status);
+                warn_missing(pool_spec, node_status);
                 return PollResult::Ok(PollerState::Idle);
             }
             Err(_) => {
-                warn_missing(&pool_spec, NodeStatus::Unknown);
+                warn_missing(pool_spec, NodeStatus::Unknown);
                 return PollResult::Ok(PollerState::Idle);
             }
             Ok(node) => node,
@@ -123,7 +123,7 @@ async fn missing_pool_state_reconciler(
 /// cleans up any such pool when node comes up.
 #[tracing::instrument(skip(pool_spec, context), level = "trace", fields(pool.uuid = %pool_spec.lock().id, request.reconcile = true))]
 async fn deleting_pool_spec_reconciler(
-    pool_spec: Arc<Mutex<PoolSpec>>,
+    pool_spec: &Arc<Mutex<PoolSpec>>,
     context: &PollContext,
 ) -> PollResult {
     if !pool_spec.lock().status().deleting() {

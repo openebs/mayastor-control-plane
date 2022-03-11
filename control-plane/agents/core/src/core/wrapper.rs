@@ -26,6 +26,7 @@ use common_lib::{
 };
 
 use async_trait::async_trait;
+use common_lib::types::v0::store::ResourceUuid;
 use rpc::mayastor::Null;
 use snafu::ResultExt;
 use std::{
@@ -267,29 +268,34 @@ impl NodeWrapper {
     pub(crate) fn pools(&self) -> Vec<PoolState> {
         self.resources()
             .get_pool_states()
-            .iter()
-            .map(|p| p.pool.clone())
+            .map(|p| p.lock().pool.clone())
             .collect()
     }
     /// Get all pool wrappers
     pub(crate) fn pool_wrappers(&self) -> Vec<PoolWrapper> {
-        let pools = self.resources().get_pool_states();
-        let replicas = self.resources().get_replica_states();
+        let pools = self.resources().get_cloned_pool_states();
+        let resources = self.resources();
         pools
             .into_iter()
-            .map(|p| {
-                let replicas = replicas
-                    .iter()
-                    .filter(|r| r.replica.pool == p.pool.id)
-                    .map(|r| r.replica.clone())
+            .map(|pool_state| {
+                let replicas = resources
+                    .get_replica_states()
+                    .filter_map(|replica_state| {
+                        let replica_state = replica_state.lock();
+                        if replica_state.replica.pool == pool_state.uuid() {
+                            Some(replica_state.replica.clone())
+                        } else {
+                            None
+                        }
+                    })
                     .collect::<Vec<Replica>>();
-                PoolWrapper::new(&p.pool, &replicas)
+                PoolWrapper::new(pool_state.pool, replicas)
             })
             .collect()
     }
     /// Get all pool states
     pub(crate) fn pool_states(&self) -> Vec<store::pool::PoolState> {
-        self.resources().get_pool_states()
+        self.resources().get_cloned_pool_states()
     }
     /// Get pool from `pool_id` or None
     pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
@@ -297,15 +303,21 @@ impl NodeWrapper {
     }
     /// Get a PoolWrapper for the pool ID.
     pub(crate) fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
-        let r = self.resources();
-        match r.get_pool_states().iter().find(|p| &p.pool.id == pool_id) {
+        match self.resources().get_pool_state(pool_id) {
             Some(pool_state) => {
-                let replicas: Vec<Replica> = self
-                    .replicas()
-                    .into_iter()
-                    .filter(|r| &r.pool == pool_id)
+                let resources = self.resources();
+                let replicas = resources
+                    .get_replica_states()
+                    .filter_map(|r| {
+                        let replica = r.lock();
+                        if replica.replica.pool == pool_state.uuid() {
+                            Some(replica.replica.clone())
+                        } else {
+                            None
+                        }
+                    })
                     .collect();
-                Some(PoolWrapper::new(&pool_state.pool, &replicas))
+                Some(PoolWrapper::new(pool_state.pool, replicas))
             }
             None => None,
         }
@@ -314,25 +326,23 @@ impl NodeWrapper {
     pub(crate) fn replicas(&self) -> Vec<Replica> {
         self.resources()
             .get_replica_states()
-            .iter()
-            .map(|r| r.replica.clone())
+            .map(|r| r.lock().replica.clone())
             .collect()
     }
     /// Get all replica states
     pub(crate) fn replica_states(&self) -> Vec<ReplicaState> {
-        self.resources().get_replica_states()
+        self.resources().get_cloned_replica_states()
     }
     /// Get all nexuses
     fn nexuses(&self) -> Vec<Nexus> {
         self.resources()
             .get_nexus_states()
-            .iter()
-            .map(|nexus_state| nexus_state.nexus.clone())
+            .map(|nexus_state| nexus_state.lock().nexus.clone())
             .collect()
     }
     /// Get all nexus states
     pub(crate) fn nexus_states(&self) -> Vec<NexusState> {
-        self.resources().get_nexus_states()
+        self.resources().get_cloned_nexus_states()
     }
     /// Get nexus
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
@@ -342,7 +352,7 @@ impl NodeWrapper {
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
         self.resources()
             .get_replica_state(replica_id)
-            .map(|r| r.replica)
+            .map(|r| r.lock().replica.clone())
     }
     /// Is the node online
     pub(crate) fn is_online(&self) -> bool {
@@ -1002,10 +1012,10 @@ impl Deref for PoolWrapper {
 
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas
-    pub fn new(pool: &PoolState, replicas: &[Replica]) -> Self {
+    pub fn new(pool: PoolState, replicas: Vec<Replica>) -> Self {
         Self {
-            state: pool.clone(),
-            replicas: replicas.into(),
+            state: pool,
+            replicas,
         }
     }
 
