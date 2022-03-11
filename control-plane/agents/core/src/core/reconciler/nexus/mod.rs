@@ -86,10 +86,13 @@ async fn nexus_reconciler(
     context: &PollContext,
     mode: OperationMode,
 ) -> PollResult {
-    let nexus_spec_clone = nexus_spec.lock().clone();
+    let created = {
+        let nexus_spec = nexus_spec.lock();
+        nexus_spec.status().created()
+    };
 
-    let mut results = vec![];
-    if nexus_spec_clone.status().created() {
+    let mut results = Vec::with_capacity(5);
+    if created {
         results.push(faulted_children_remover(nexus_spec, context, mode).await);
         results.push(unknown_children_remover(nexus_spec, context, mode).await);
         results.push(missing_children_remover(nexus_spec, context, mode).await);
@@ -108,14 +111,14 @@ pub(super) async fn faulted_children_remover(
     context: &PollContext,
     mode: OperationMode,
 ) -> PollResult {
-    let nexus_spec_clone = nexus_spec.lock().clone();
-    let nexus_uuid = nexus_spec_clone.uuid.clone();
+    let nexus_uuid = nexus_spec.lock().uuid.clone();
     let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
     let child_count = nexus_state.children.len();
 
     // Remove faulted children only from a degraded nexus with other healthy children left
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
         async {
+            let nexus_spec_clone = nexus_spec.lock().clone();
             for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
                 nexus_spec_clone
                     .warn_span(|| tracing::warn!("Attempting to remove faulted child '{}'", child.uri));
@@ -157,10 +160,9 @@ pub(super) async fn unknown_children_remover(
     mode: OperationMode,
 ) -> PollResult {
     let nexus_spec_clone = nexus_spec.lock().clone();
-    let nexus_uuid = nexus_spec_clone.uuid.clone();
-    let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
+    let nexus_state = context.registry().get_nexus(&nexus_spec_clone.uuid).await?;
     let state_children = nexus_state.children.iter();
-    let spec_children = nexus_spec.lock().children.clone();
+    let spec_children = nexus_spec_clone.children.clone();
 
     let unknown_children = state_children
         .filter(|c| !spec_children.iter().any(|spec| spec.uri() == c.uri))
@@ -168,6 +170,7 @@ pub(super) async fn unknown_children_remover(
         .collect::<Vec<_>>();
 
     if !unknown_children.is_empty() {
+        let nexus_uuid = nexus_spec_clone.uuid.clone();
         async move {
             for child in unknown_children {
                 nexus_spec_clone
@@ -259,8 +262,7 @@ pub(super) async fn missing_nexus_recreate(
     context: &PollContext,
     mode: OperationMode,
 ) -> PollResult {
-    let nexus = nexus_spec.lock().clone();
-    let nexus_uuid = nexus.uuid.clone();
+    let nexus_uuid = nexus_spec.lock().uuid.clone();
 
     if context.registry().get_nexus(&nexus_uuid).await.is_ok() {
         return PollResult::Ok(PollerState::Idle);
@@ -354,6 +356,7 @@ pub(super) async fn missing_nexus_recreate(
         }
     }
 
+    let nexus = nexus_spec.lock().clone();
     missing_nexus_recreate(nexus, context, mode).await
 }
 
@@ -366,10 +369,10 @@ pub(super) async fn fixup_nexus_protocol(
     context: &PollContext,
     mode: OperationMode,
 ) -> PollResult {
-    let nexus = nexus_spec.lock().clone();
-    let nexus_uuid = nexus.uuid.clone();
+    let nexus_uuid = nexus_spec.lock().uuid.clone();
 
     if let Ok(nexus_state) = context.registry().get_nexus(&nexus_uuid).await {
+        let nexus = nexus_spec.lock().clone();
         if nexus.share != nexus_state.share {
             nexus.warn_span(|| {
                 tracing::warn!(
@@ -421,11 +424,11 @@ pub(super) async fn faulted_nexus_remover(
     context: &PollContext,
     _mode: OperationMode,
 ) -> PollResult {
-    let nexus = nexus_spec.lock().clone();
-    let nexus_uuid = nexus.uuid.clone();
+    let nexus_uuid = nexus_spec.lock().uuid.clone();
 
     if let Ok(nexus_state) = context.registry().get_nexus(&nexus_uuid).await {
         if nexus_state.status == NexusStatus::Faulted {
+            let nexus = nexus_spec.lock().clone();
             let healthy_children = get_healthy_nexus_children(&nexus, context.registry()).await?;
             let node = context.registry().get_node_wrapper(&nexus.node).await?;
 
