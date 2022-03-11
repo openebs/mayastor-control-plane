@@ -17,13 +17,10 @@ impl Registry {
             None => {
                 let mut pools = vec![];
                 let pools_from_state =
-                    self.get_pool_states_inner()
-                        .await?
-                        .into_iter()
-                        .map(|state| {
-                            let spec = self.specs().get_pool(&state.id).ok();
-                            Pool::from_state(state, spec)
-                        });
+                    self.get_pool_states_inner().await.into_iter().map(|state| {
+                        let spec = self.specs().get_pool(&state.id).ok();
+                        Pool::from_state(state, spec)
+                    });
 
                 pools.extend(pools_from_state);
 
@@ -82,19 +79,19 @@ impl Registry {
     }
 
     /// Get all pools
-    pub(crate) async fn get_pool_states_inner(&self) -> Result<Vec<PoolState>, SvcError> {
+    pub(crate) async fn get_pool_states_inner(&self) -> Vec<PoolState> {
         let nodes = self.get_node_wrappers().await;
-        let mut pools = vec![];
+        let mut pools = Vec::with_capacity(nodes.len());
         for node in nodes {
             pools.append(&mut node.pools().await)
         }
-        Ok(pools)
+        pools
     }
 
     /// Get all pool wrappers
     pub(crate) async fn get_pool_wrappers(&self) -> Vec<PoolWrapper> {
         let nodes = self.get_node_wrappers().await;
-        let mut pools = vec![];
+        let mut pools = Vec::with_capacity(nodes.len());
         for node in nodes {
             pools.append(&mut node.pool_wrappers().await)
         }

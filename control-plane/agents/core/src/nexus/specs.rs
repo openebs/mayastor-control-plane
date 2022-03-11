@@ -1,6 +1,6 @@
 use crate::core::{
     registry::Registry,
-    specs::{OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+    specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     wrapper::ClientOps,
 };
 use common::errors::{NexusNotFound, SvcError};
@@ -16,12 +16,11 @@ use common_lib::{
             nexus::{NexusOperation, NexusSpec},
             nexus_child::NexusChild,
             replica::ReplicaSpec,
-            OperationMode, SpecStatus, SpecTransaction,
+            OperationMode, SpecStatus, SpecTransaction, TraceSpan,
         },
     },
 };
 
-use common_lib::types::v0::store::TraceSpan;
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::sync::Arc;
@@ -108,6 +107,9 @@ impl SpecOperations for NexusSpec {
     fn disown_all(&mut self) {
         self.owner.take();
     }
+    fn operation_result(&self) -> Option<Option<bool>> {
+        self.operation.as_ref().map(|r| r.result)
+    }
 }
 
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
@@ -166,7 +168,8 @@ impl ResourceSpecsLocked {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let nexus_spec = self.get_or_create_nexus(request);
-        SpecOperations::start_create(&nexus_spec, registry, request, mode).await?;
+        let (_, _guard) =
+            SpecOperations::start_create(&nexus_spec, registry, request, mode).await?;
 
         let result = node.create_nexus(request).await;
         self.on_create_set_owners(request, &nexus_spec, &result);
@@ -429,9 +432,8 @@ impl ResourceSpecsLocked {
                                 .ok_or(SvcError::ReplicaNotFound {
                                     replica_id: replica.uuid().clone(),
                                 })?;
-                        let replica_spec_clone = replica_spec.lock().clone();
-
-                        match Self::get_replica_node(registry, &replica_spec_clone).await {
+                        let pool_id = replica_spec.lock().pool.clone();
+                        match Self::get_pool_node(registry, pool_id).await {
                             Some(node) => {
                                 if let Err(error) = self
                                     .disown_and_destroy_replica(registry, &node, replica.uuid())
@@ -515,65 +517,14 @@ impl ResourceSpecsLocked {
     /// This is useful when nexus operations are performed but we fail to
     /// update the spec with the persistent store.
     pub async fn reconcile_dirty_nexuses(&self, registry: &Registry) -> bool {
-        if registry.store_online().await {
-            let mut pending_count = 0;
-
-            let nexuses = self.get_nexuses();
-            for nexus_spec in nexuses {
-                let (mut nexus_clone, _guard) = {
-                    if let Ok(guard) = nexus_spec.operation_guard(OperationMode::ReconcileStart) {
-                        let nexus = nexus_spec.lock();
-                        if !nexus.spec_status.created() {
-                            continue;
-                        }
-                        (nexus.clone(), guard)
-                    } else {
-                        continue;
-                    }
-                };
-
-                if let Some(op) = nexus_clone.operation.clone() {
-                    let fail = !match op.result {
-                        Some(true) => {
-                            nexus_clone.commit_op();
-                            let result = registry.store_obj(&nexus_clone).await;
-                            if result.is_ok() {
-                                let mut nexus = nexus_spec.lock();
-                                nexus.commit_op();
-                            }
-                            result.is_ok()
-                        }
-                        Some(false) => {
-                            nexus_clone.clear_op();
-                            let result = registry.store_obj(&nexus_clone).await;
-                            if result.is_ok() {
-                                let mut nexus = nexus_spec.lock();
-                                nexus.clear_op();
-                            }
-                            result.is_ok()
-                        }
-                        None => {
-                            // we must have crashed... we could check the node to see what the
-                            // current state is but for now assume failure
-                            nexus_clone.clear_op();
-                            let result = registry.store_obj(&nexus_clone).await;
-                            if result.is_ok() {
-                                let mut nexus = nexus_spec.lock();
-                                nexus.clear_op();
-                            }
-                            result.is_ok()
-                        }
-                    };
-                    if fail {
-                        pending_count += 1;
-                    }
-                } else {
-                    // No operation to reconcile.
-                }
+        let mut pending_ops = false;
+        let nexuses = self.get_nexuses();
+        for nexus in nexuses {
+            if !SpecOperations::handle_incomplete_ops(&nexus, registry).await {
+                // Not all pending operations could be handled.
+                pending_ops = true;
             }
-            pending_count > 0
-        } else {
-            true
         }
+        pending_ops
     }
 }

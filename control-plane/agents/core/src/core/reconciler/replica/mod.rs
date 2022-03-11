@@ -2,17 +2,14 @@
 mod tests;
 
 use crate::core::{
-    specs::{OperationSequenceGuard, SpecOperations},
+    specs::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperations},
     task_poller::{
         PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
     },
 };
-use common_lib::types::v0::{
-    message_bus::ReplicaOwners,
-    store::{replica::ReplicaSpec, OperationMode},
-};
+use common_lib::types::v0::store::{replica::ReplicaSpec, OperationMode};
 use parking_lot::Mutex;
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 /// Replica reconciler
 #[derive(Debug)]
@@ -32,12 +29,15 @@ impl ReplicaReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for ReplicaReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let mut results = vec![];
+        let replicas = context.specs().get_replicas();
+        let mut results = Vec::with_capacity(replicas.len());
 
-        for replica in context.specs().get_replicas() {
-            results.push(disown_missing_owners(context, &replica).await);
-            results.push(destroy_orphaned_replicas(context, &replica).await);
+        for replica in replicas {
+            results.push(remove_missing_owners(&replica, context).await);
+            results.push(destroy_orphaned_replica(&replica, context).await);
+            results.push(destroy_deleting_replica(&replica, context).await);
         }
+
         Self::squash_results(results)
     }
 
@@ -56,17 +56,20 @@ impl TaskPoller for ReplicaReconciler {
 /// Remove replica owners who no longer exist.
 /// In the event that the replicas become orphaned (have no owners) they will be destroyed by the
 /// 'destroy_orphaned_replicas' reconcile loop.
-async fn disown_missing_owners(
-    context: &PollContext,
+async fn remove_missing_owners(
     replica: &Arc<Mutex<ReplicaSpec>>,
+    context: &PollContext,
 ) -> PollResult {
     let specs = context.specs();
 
-    // If we obtain the operation guard no one else can be modifying the replica spec.
     if let Ok(_guard) = replica.operation_guard(OperationMode::ReconcileStart) {
-        let replica_spec = replica.lock().clone();
+        let owned = {
+            let replica_spec = replica.lock();
+            replica_spec.managed && replica_spec.owned()
+        };
 
-        if replica_spec.managed && replica_spec.owned() {
+        if owned {
+            let replica_spec = replica.lock().clone();
             let mut owner_removed = false;
             let owners = &replica_spec.owners;
 
@@ -106,35 +109,79 @@ async fn disown_missing_owners(
 
 /// Destroy orphaned replicas.
 /// Orphaned replicas are those that are managed but which don't have any owners.
-async fn destroy_orphaned_replicas(
-    context: &PollContext,
+async fn destroy_orphaned_replica(
     replica: &Arc<Mutex<ReplicaSpec>>,
+    context: &PollContext,
 ) -> PollResult {
     let _guard = match replica.operation_guard(OperationMode::ReconcileStart) {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
 
-    let replica_spec = replica.lock().deref().clone();
-    if replica_spec.managed && !replica_spec.owned() {
+    let destroy_owned = {
+        let replica = replica.lock();
+        replica.managed && !replica.owned()
+    };
+
+    if destroy_owned {
+        destroy_replica(replica, context).await
+    } else {
+        PollResult::Ok(PollerState::Idle)
+    }
+}
+
+/// Given a control plane replica
+/// When its destruction fails
+/// Then it should eventually be destroyed
+async fn destroy_deleting_replica(
+    replica_spec: &Arc<Mutex<ReplicaSpec>>,
+    context: &PollContext,
+) -> PollResult {
+    let _guard = match replica_spec.operation_guard(OperationMode::ReconcileStart) {
+        Ok(guard) => guard,
+        Err(_) => return PollResult::Ok(PollerState::Busy),
+    };
+
+    let deleting = replica_spec.lock().status().deleting();
+    if deleting {
+        destroy_replica(replica_spec, context).await
+    } else {
+        PollResult::Ok(PollerState::Idle)
+    }
+}
+
+#[tracing::instrument(level = "debug", skip(replica_spec, context), fields(replica.uuid = %replica_spec.lock().uuid, request.reconcile = true))]
+async fn destroy_replica(
+    replica_spec: &Arc<Mutex<ReplicaSpec>>,
+    context: &PollContext,
+) -> PollResult {
+    let pool_id = replica_spec.lock().pool.clone();
+    if let Some(node) = ResourceSpecsLocked::get_pool_node(context.registry(), pool_id).await {
+        let replica_clone = replica_spec.lock().clone();
         match context
             .specs()
-            .destroy_replica_spec(
+            .destroy_replica(
                 context.registry(),
-                &replica_spec,
-                ReplicaOwners::default(),
-                false,
+                &ResourceSpecsLocked::destroy_replica_request(
+                    replica_clone,
+                    Default::default(),
+                    &node,
+                ),
+                true,
                 OperationMode::ReconcileStep,
             )
             .await
         {
             Ok(_) => {
-                tracing::info!(replica.uuid=%replica_spec.uuid, "Successfully destroyed orphaned replica");
+                tracing::info!(replica.uuid=%replica_spec.lock().uuid, "Successfully destroyed replica");
+                PollResult::Ok(PollerState::Idle)
             }
             Err(e) => {
-                tracing::trace!(replica.uuid=%replica_spec.uuid, error=%e, "Failed to destroy orphaned replica");
+                tracing::trace!(replica.uuid=%replica_spec.lock().uuid, error=%e, "Failed to destroy replica");
+                PollResult::Err(e)
             }
         }
+    } else {
+        PollResult::Ok(PollerState::Busy)
     }
-    PollResult::Ok(PollerState::Idle)
 }

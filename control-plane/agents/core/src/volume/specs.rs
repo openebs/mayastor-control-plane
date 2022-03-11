@@ -10,7 +10,7 @@ use crate::{
             },
             ResourceFilter,
         },
-        specs::{OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+        specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     },
     registry::Registry,
     volume::scheduling,
@@ -27,7 +27,7 @@ use common_lib::{
     types::v0::{
         message_bus::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
-            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, Protocol, PublishVolume,
+            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, PoolId, Protocol, PublishVolume,
             RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
             ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
             VolumeId, VolumeState, VolumeStatus,
@@ -301,9 +301,21 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         replica: &ReplicaSpec,
     ) -> Option<NodeId> {
-        let pools = registry.get_pool_states_inner().await.unwrap();
+        let pools = registry.get_pool_states_inner().await;
         pools.iter().find_map(|p| {
             if p.id == replica.pool {
+                Some(p.node.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get the `NodeId` where `pool` lives
+    pub(crate) async fn get_pool_node(registry: &Registry, pool: PoolId) -> Option<NodeId> {
+        let pools = registry.get_pool_states_inner().await;
+        pools.iter().find_map(|p| {
+            if p.id == pool {
                 Some(p.node.clone())
             } else {
                 None
@@ -442,7 +454,7 @@ impl ResourceSpecsLocked {
             for nexus in nexuses {
                 let nexus = nexus.lock().deref().clone();
                 if let Err(error) = self
-                    .destroy_nexus(registry, &DestroyNexus::from(nexus.clone()), true, mode)
+                    .destroy_nexus(registry, &DestroyNexus::from(&nexus), true, mode)
                     .await
                 {
                     nexus.warn_span(|| {
@@ -589,10 +601,20 @@ impl ResourceSpecsLocked {
         // Share the Nexus if it was requested
         let mut result = Ok(nexus.clone());
         if let Some(share) = request.share {
-            result = self
+            result = match self
                 .share_nexus(registry, &ShareNexus::from((&nexus, None, share)), mode)
                 .await
-                .map(|_| nexus);
+            {
+                Ok(_) => Ok(nexus),
+                Err(error) => {
+                    // Since we failed to share, we'll revert back to the previous state.
+                    // If we fail to do this inline, the reconcilers will pick up the slack.
+                    self.destroy_nexus(registry, &DestroyNexus::from(nexus), true, mode)
+                        .await
+                        .ok();
+                    Err(error)
+                }
+            }
         }
 
         SpecOperations::complete_update(registry, result, spec, spec_clone.clone()).await?;
@@ -1346,73 +1368,16 @@ impl ResourceSpecsLocked {
     /// This is useful when nexus operations are performed but we fail to
     /// update the spec with the persistent store.
     pub async fn reconcile_dirty_volumes(&self, registry: &Registry) -> bool {
-        if registry.store_online().await {
-            let mut pending_count = 0;
+        let mut pending_ops = false;
 
-            let volumes = self.get_locked_volumes();
-            for volume_spec in volumes {
-                let (mut volume_clone, _guard) = {
-                    if let Ok(guard) = volume_spec.operation_guard(OperationMode::ReconcileStart) {
-                        let volume = volume_spec.lock().clone();
-                        if !volume.status.created() {
-                            if volume.status.creating() {
-                                // An attempt to create the volume failed. Delete the spec from the
-                                // persistent store and registry.
-                                SpecOperations::delete_spec(registry, &volume_spec)
-                                    .await
-                                    .ok();
-                            }
-                            continue;
-                        }
-                        (volume.clone(), guard)
-                    } else {
-                        continue;
-                    }
-                };
-
-                if let Some(op) = volume_clone.operation.clone() {
-                    let fail = !match op.result {
-                        Some(true) => {
-                            volume_clone.commit_op();
-                            let result = registry.store_obj(&volume_clone).await;
-                            if result.is_ok() {
-                                let mut volume = volume_spec.lock();
-                                volume.commit_op();
-                            }
-                            result.is_ok()
-                        }
-                        Some(false) => {
-                            volume_clone.clear_op();
-                            let result = registry.store_obj(&volume_clone).await;
-                            if result.is_ok() {
-                                let mut volume = volume_spec.lock();
-                                volume.clear_op();
-                            }
-                            result.is_ok()
-                        }
-                        None => {
-                            // we must have crashed... we could check the node to see what the
-                            // current state is but for now assume failure
-                            volume_clone.clear_op();
-                            let result = registry.store_obj(&volume_clone).await;
-                            if result.is_ok() {
-                                let mut volume = volume_spec.lock();
-                                volume.clear_op();
-                            }
-                            result.is_ok()
-                        }
-                    };
-                    if fail {
-                        pending_count += 1;
-                    }
-                } else {
-                    // No operation to reconcile.
-                }
+        let volumes = self.get_locked_volumes();
+        for volume_spec in volumes {
+            if !SpecOperations::handle_incomplete_ops(&volume_spec, registry).await {
+                // Not all pending operations could be handled.
+                pending_ops = true;
             }
-            pending_count > 0
-        } else {
-            true
         }
+        pending_ops
     }
 }
 
@@ -1634,5 +1599,8 @@ impl SpecOperations for VolumeSpec {
     }
     fn set_status(&mut self, status: SpecStatus<Self::Status>) {
         self.status = status;
+    }
+    fn operation_result(&self) -> Option<Option<bool>> {
+        self.operation.as_ref().map(|r| r.result)
     }
 }
