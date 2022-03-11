@@ -74,13 +74,18 @@ async fn destroy_orphaned_nexus(
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
-    let nexus_clone = nexus_spec.lock().clone();
 
-    if !nexus_clone.managed {
-        return PollResult::Ok(PollerState::Idle);
-    }
-    if let Some(owner) = &nexus_clone.owner {
-        if context.specs().get_volume(owner).is_err() {
+    let owner = {
+        let nexus = nexus_spec.lock();
+        if !nexus.managed {
+            return PollResult::Ok(PollerState::Idle);
+        }
+        nexus.owner.clone()
+    };
+
+    if let Some(owner) = owner {
+        let nexus_clone = nexus_spec.lock().clone();
+        if context.specs().get_volume(&owner).is_err() {
             nexus_clone.warn_span(|| tracing::warn!("Attempting to disown orphaned nexus"));
             context
                 .specs()
@@ -107,10 +112,21 @@ async fn destroy_disowned_nexus(
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
 
-    let nexus_clone = nexus_spec.lock().clone();
-    if nexus_clone.managed && !nexus_clone.owned() {
-        let node_online = matches!(context.registry().get_node_wrapper(&nexus_clone.node).await, Ok(node) if node.read().await.is_online());
+    let nexus_node = {
+        let nexus = nexus_spec.lock();
+        let destroy = nexus.managed && !nexus.owned();
+        let mut nexus_node = None;
+        if destroy {
+            nexus_node = Some(nexus.node.clone())
+        }
+        nexus_node
+    };
+
+    if let Some(nexus_node) = nexus_node {
+        let node_online = matches!(context.registry().get_node_wrapper(&nexus_node).await, Ok(node) if node.read().await.is_online());
         if node_online {
+            let nexus_clone = nexus_spec.lock().clone();
+            let nexus_uuid = nexus_clone.uuid.clone();
             async {
                 nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy disowned nexus"));
                 let request = DestroyNexus::from(nexus_clone.clone());
@@ -128,7 +144,7 @@ async fn destroy_disowned_nexus(
                     }
                 }
             }
-            .instrument(tracing::info_span!("destroy_disowned_nexus", nexus.uuid = %nexus_clone.uuid, request.reconcile = true))
+            .instrument(tracing::info_span!("destroy_disowned_nexus", nexus.uuid = %nexus_uuid, request.reconcile = true))
             .await?;
         }
     }
