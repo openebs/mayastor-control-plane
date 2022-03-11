@@ -53,10 +53,10 @@ async fn nexus_garbage_collector(
     nexus_spec: &Arc<Mutex<NexusSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    let mode = OperationMode::ReconcileStep;
     let results = vec![
         destroy_orphaned_nexus(nexus_spec, context).await,
-        destroy_disowned_nexus(nexus_spec, context, mode).await,
+        destroy_deleting_nexus(nexus_spec, context).await,
+        destroy_disowned_nexus(nexus_spec, context).await,
     ];
     GarbageCollector::squash_results(results)
 }
@@ -101,53 +101,80 @@ async fn destroy_orphaned_nexus(
 /// Given a control plane managed nexus
 /// When a nexus is not owned by a volume
 /// Then it should eventually be destroyed
-#[tracing::instrument(level = "debug", skip(nexus_spec, context, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(nexus_spec, context), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
 async fn destroy_disowned_nexus(
     nexus_spec: &Arc<Mutex<NexusSpec>>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
     let _guard = match nexus_spec.operation_guard(OperationMode::ReconcileStart) {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
 
-    let nexus_node = {
+    let not_owned = {
         let nexus = nexus_spec.lock();
-        let destroy = nexus.managed && !nexus.owned();
-        let mut nexus_node = None;
-        if destroy {
-            nexus_node = Some(nexus.node.clone())
-        }
-        nexus_node
+        nexus.managed && !nexus.owned()
     };
-
-    if let Some(nexus_node) = nexus_node {
-        let node_online = matches!(context.registry().get_node_wrapper(&nexus_node).await, Ok(node) if node.read().await.is_online());
-        if node_online {
-            let nexus_clone = nexus_spec.lock().clone();
-            let nexus_uuid = nexus_clone.uuid.clone();
-            async {
-                nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy disowned nexus"));
-                let request = DestroyNexus::from(nexus_clone.clone());
-                match context
-                    .specs()
-                    .destroy_nexus(context.registry(), &request, true, mode)
-                    .await {
-                    Ok(_) => {
-                        nexus_clone.info_span(|| tracing::info!("Successfully destroyed disowned nexus"));
-                        Ok(())
-                    }
-                    Err(error) => {
-                        nexus_clone.error_span(|| tracing::error!(error = %error, "Failed to destroy disowned nexus"));
-                        Err(error)
-                    }
-                }
-            }
-            .instrument(tracing::info_span!("destroy_disowned_nexus", nexus.uuid = %nexus_uuid, request.reconcile = true))
+    if not_owned {
+        destroy_nexus(nexus_spec, context, OperationMode::ReconcileStep)
+            .instrument(tracing::info_span!("destroy_disowned_nexus", nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))
             .await?;
-        }
     }
 
     PollResult::Ok(PollerState::Idle)
+}
+
+/// Given a control plane nexus
+/// When a nexus destruction fails
+/// Then it should eventually be destroyed
+#[tracing::instrument(level = "debug", skip(nexus_spec, context), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
+async fn destroy_deleting_nexus(
+    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    context: &PollContext,
+) -> PollResult {
+    let _guard = match nexus_spec.operation_guard(OperationMode::ReconcileStart) {
+        Ok(guard) => guard,
+        Err(_) => return PollResult::Ok(PollerState::Busy),
+    };
+
+    let deleting = nexus_spec.lock().status().deleting();
+    if deleting {
+        destroy_nexus(nexus_spec, context, OperationMode::ReconcileStep)
+                .instrument(tracing::info_span!("destroy_deleting_nexus", nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))
+                .await?;
+    }
+
+    PollResult::Ok(PollerState::Idle)
+}
+
+#[tracing::instrument(level = "trace", skip(nexus_spec, context, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
+async fn destroy_nexus(
+    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    context: &PollContext,
+    mode: OperationMode,
+) -> PollResult {
+    let node = nexus_spec.lock().node.clone();
+    let node_online = matches!(context.registry().get_node_wrapper(&node).await, Ok(node) if node.read().await.is_online());
+    if node_online {
+        let nexus_clone = nexus_spec.lock().clone();
+        nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy nexus"));
+        let request = DestroyNexus::from(&nexus_clone);
+        match context
+            .specs()
+            .destroy_nexus(context.registry(), &request, true, mode)
+            .await
+        {
+            Ok(_) => {
+                nexus_clone.info_span(|| tracing::info!("Successfully destroyed nexus"));
+                Ok(PollerState::Idle)
+            }
+            Err(error) => {
+                nexus_clone
+                    .error_span(|| tracing::error!(error = %error, "Failed to destroy nexus"));
+                Err(error)
+            }
+        }
+    } else {
+        Ok(PollerState::Idle)
+    }
 }

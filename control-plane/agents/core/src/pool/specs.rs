@@ -1,6 +1,6 @@
 use crate::{
     core::{
-        specs::{OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+        specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
         wrapper::ClientOps,
     },
     registry::Registry,
@@ -21,7 +21,6 @@ use common_lib::{
         },
     },
 };
-
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -74,6 +73,9 @@ impl SpecOperations for PoolSpec {
     }
     fn set_status(&mut self, status: SpecStatus<Self::Status>) {
         self.status = status;
+    }
+    fn operation_result(&self) -> Option<Option<bool>> {
+        self.operation.as_ref().map(|r| r.result)
     }
 }
 
@@ -148,6 +150,9 @@ impl SpecOperations for ReplicaSpec {
     }
     fn disown_all(&mut self) {
         self.owners.disown_all();
+    }
+    fn operation_result(&self) -> Option<Option<bool>> {
+        self.operation.as_ref().map(|r| r.result)
     }
 }
 
@@ -425,69 +430,35 @@ impl ResourceSpecsLocked {
             .collect::<Vec<_>>()
     }
 
+    /// Worker that reconciles dirty PoolSpec's with the persistent store.
+    /// This is useful when pool operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub(crate) async fn reconcile_dirty_pools(&self, registry: &Registry) -> bool {
+        let mut pending_ops = false;
+
+        let pools = self.get_locked_pools();
+        for pool in pools {
+            if !SpecOperations::handle_incomplete_ops(&pool, registry).await {
+                // Not all pending operations could be handled.
+                pending_ops = true;
+            }
+        }
+        pending_ops
+    }
+
     /// Worker that reconciles dirty ReplicaSpec's with the persistent store.
     /// This is useful when replica operations are performed but we fail to
     /// update the spec with the persistent store.
     pub(crate) async fn reconcile_dirty_replicas(&self, registry: &Registry) -> bool {
-        if registry.store_online().await {
-            let mut pending_count = 0;
+        let mut pending_ops = false;
 
-            let replicas = self.get_replicas();
-            for replica_spec in replicas {
-                let (mut replica_clone, _guard) = {
-                    if let Ok(guard) = replica_spec.operation_guard(OperationMode::ReconcileStart) {
-                        let replica = replica_spec.lock();
-                        if !replica.status.created() {
-                            continue;
-                        }
-                        (replica.clone(), guard)
-                    } else {
-                        continue;
-                    }
-                };
-
-                if let Some(op) = replica_clone.operation.clone() {
-                    let fail = !match op.result {
-                        Some(true) => {
-                            replica_clone.commit_op();
-                            let result = registry.store_obj(&replica_clone).await;
-                            if result.is_ok() {
-                                let mut replica = replica_spec.lock();
-                                replica.commit_op();
-                            }
-                            result.is_ok()
-                        }
-                        Some(false) => {
-                            replica_clone.clear_op();
-                            let result = registry.store_obj(&replica_clone).await;
-                            if result.is_ok() {
-                                let mut replica = replica_spec.lock();
-                                replica.clear_op();
-                            }
-                            result.is_ok()
-                        }
-                        None => {
-                            // we must have crashed... we could check the node to see what the
-                            // current state is but for now assume failure
-                            replica_clone.clear_op();
-                            let result = registry.store_obj(&replica_clone).await;
-                            if result.is_ok() {
-                                let mut replica = replica_spec.lock();
-                                replica.clear_op();
-                            }
-                            result.is_ok()
-                        }
-                    };
-                    if fail {
-                        pending_count += 1;
-                    }
-                } else {
-                    // No operation to reconcile.
-                }
+        let replicas = self.get_replicas();
+        for replica in replicas {
+            if !SpecOperations::handle_incomplete_ops(&replica, registry).await {
+                // Not all pending operations could be handled.
+                pending_ops = true;
             }
-            pending_count > 0
-        } else {
-            true
         }
+        pending_ops
     }
 }
