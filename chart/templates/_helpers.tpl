@@ -121,3 +121,42 @@ Usage:
         {{- .Values.mayastorCP.registry }}mayadata/mayastor-msp-operator:{{ .Values.mayastorCP.tag }}
     {{- end }}
 {{- end -}}
+
+{{/*
+Renders the image for the rest container
+Usage:
+{{ include "rest_image" . }}
+*/}}
+{{- define "rest_image" -}}
+    {{- if not (empty .Values.rest.image) -}}
+        {{- .Values.rest.image -}}
+    {{- else }}
+        {{- .Values.mayastorCP.registry }}mayadata/mayastor-rest:{{ .Values.mayastorCP.tag }}
+    {{- end }}
+{{- end -}}
+
+{{/*
+Renders the image for the csi-controller container
+Usage:
+{{ include "csi_controller_image" . }}
+*/}}
+{{- define "csi_controller_image" -}}
+    {{- if not (empty .Values.csi.controller.image) -}}
+        {{- .Values.csi.controller.image -}}
+    {{- else }}
+        {{- .Values.mayastorCP.registry }}mayadata/mayastor-csi-controller:{{ .Values.mayastorCP.tag }}
+    {{- end }}
+{{- end -}}
+
+{{/*
+Renders the image for the core container
+Usage:
+{{ include "core_image" . }}
+*/}}
+{{- define "core_image" -}}
+    {{- if not (empty .Values.core.image) -}}
+        {{- .Values.core.image -}}
+    {{- else }}
+        {{- .Values.mayastorCP.registry }}mayadata/mayastor-core:{{ .Values.mayastorCP.tag }}
+    {{- end }}
+{{- end -}}

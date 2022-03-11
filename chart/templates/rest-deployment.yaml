@@ -22,7 +22,7 @@ spec:
       containers:
         - name: rest
           resources: {{- .Values.rest.resources | toYaml | nindent 12 }}
-          image: {{ .Values.mayastorCP.registry }}mayadata/mayastor-rest:{{ .Values.mayastorCP.tag }}
+          image: {{ include "rest_image" . }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "--dummy-certificates"

@@ -70,6 +70,7 @@ jaeger-operator:
     clusterRole: true
 
 core:
+  image: ""
   resources:
     limits:
       cpu: "1000m"
@@ -79,6 +80,7 @@ core:
       memory: "16Mi"
 
 rest:
+  image: ""
   service:
     type: NodePort
     nodePort:
@@ -98,6 +100,8 @@ msp:
   extraVolumeMounts: []
 
 csi:
+  controller:
+    image: ""
   resources:
     limits:
       cpu: "32m"
