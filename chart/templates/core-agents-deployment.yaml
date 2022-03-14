@@ -22,7 +22,7 @@ spec:
       containers:
         - name: core
           resources: {{- .Values.core.resources | toYaml | nindent 12 }}
-          image: {{ include "core_image" . }}
+          image: {{- .Values.mayastorCP.registry }}{{ .Values.core.image }}:{{ .Values.mayastorCP.tag }}
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-s{{ .Values.etcdEndpoint }}"

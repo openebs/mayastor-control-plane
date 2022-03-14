@@ -70,7 +70,7 @@ jaeger-operator:
     clusterRole: true
 
 core:
-  image: ""
+  image: "mayadata/mayastor-core"
   resources:
     limits:
       cpu: "1000m"
@@ -80,7 +80,7 @@ core:
       memory: "16Mi"
 
 rest:
-  image: ""
+  image: "mayadata/mayastor-rest"
   service:
     type: NodePort
     nodePort:
@@ -95,13 +95,15 @@ rest:
       memory: "32Mi"
 
 msp:
-  image: ""
+  image: "mayadata/mayastor-msp-operator"
   extraVolumes: []
   extraVolumeMounts: []
 
 csi:
   controller:
-    image: ""
+    image: "mayadata/mayastor-csi-controller"
+  node:
+    image: "mayadata/mayastor-csi-node"
   resources:
     limits:
       cpu: "32m"
