@@ -33,8 +33,9 @@ impl PoolReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let mut results = vec![];
-        for pool in context.specs().get_locked_pools() {
+        let pools = context.specs().get_locked_pools();
+        let mut results = Vec::with_capacity(pools.len() * 2);
+        for pool in pools {
             results.push(missing_pool_state_reconciler(&pool, context).await);
             results.push(deleting_pool_spec_reconciler(&pool, context).await);
         }

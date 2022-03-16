@@ -30,7 +30,7 @@ impl ReplicaReconciler {
 impl TaskPoller for ReplicaReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let replicas = context.specs().get_replicas();
-        let mut results = Vec::with_capacity(replicas.len());
+        let mut results = Vec::with_capacity(replicas.len() * 3);
 
         for replica in replicas {
             results.push(remove_missing_owners(&replica, context).await);

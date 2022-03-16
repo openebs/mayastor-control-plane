@@ -10,7 +10,7 @@ use common_lib::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec};
 use std::collections::HashMap;
 
 impl Registry {
-    /// Get the volume state for the specified volume
+    /// Get the volume state for the specified volume.
     pub(crate) async fn get_volume_state(
         &self,
         volume_uuid: &VolumeId,
@@ -22,8 +22,8 @@ impl Registry {
             .await
     }
 
-    /// Get the volume state for the specified volume
-    #[tracing::instrument(level = "info", skip(self, volume_spec, replicas))]
+    /// Get the volume state for the specified volume.
+    /// replicas is a pre-fetched list of replicas from any and all volumes.
     pub(crate) async fn get_volume_state_with_replicas(
         &self,
         volume_spec: &VolumeSpec,

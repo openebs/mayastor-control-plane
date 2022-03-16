@@ -419,7 +419,7 @@ impl ResourceSpecsLocked {
         specs.replicas.to_vec()
     }
 
-    /// Get a vector of protected ReplicaSpec's
+    /// Get a vector of ReplicaSpec's
     pub(crate) fn get_cloned_replicas(&self) -> Vec<ReplicaSpec> {
         let specs = self.read();
         specs

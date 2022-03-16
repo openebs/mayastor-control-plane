@@ -282,7 +282,7 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
-    /// Get a list of cloned volume replicas
+    /// Get a list of cloned volume replicas owned by the given volume `id`.
     pub(crate) fn get_cloned_volume_replicas(&self, id: &VolumeId) -> Vec<ReplicaSpec> {
         self.read()
             .replicas
@@ -313,7 +313,7 @@ impl ResourceSpecsLocked {
         })
     }
 
-    /// Get the `NodeId` where `pool` lives
+    /// Get the `NodeId` where `pool` lives.
     pub(crate) async fn get_pool_node(registry: &Registry, pool: PoolId) -> Option<NodeId> {
         let pools = registry.get_pool_states_inner().await;
         pools.iter().find_map(|p| {

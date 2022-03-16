@@ -80,11 +80,13 @@ async fn destroy_orphaned_nexus(
         if !nexus.managed {
             return PollResult::Ok(PollerState::Idle);
         }
-        nexus.owner.clone()
+        nexus
+            .owner
+            .as_ref()
+            .map(|owner| (owner.clone(), nexus.clone()))
     };
 
-    if let Some(owner) = owner {
-        let nexus_clone = nexus_spec.lock().clone();
+    if let Some((owner, nexus_clone)) = owner {
         if context.specs().get_volume(&owner).is_err() {
             nexus_clone.warn_span(|| tracing::warn!("Attempting to disown orphaned nexus"));
             context
