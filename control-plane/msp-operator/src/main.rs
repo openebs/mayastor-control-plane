@@ -968,9 +968,9 @@ fn write_msp_crd(name: Option<&str>) -> anyhow::Result<()> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
-    let matches = App::new("Mayastor k8s pool operator")
+    let matches = App::new(utils::package_description!())
         .author(clap::crate_authors!())
-        .version(utils::package_info!())
+        .version(utils::version_info_str!())
         .settings(&[
             clap::AppSettings::ColoredHelp,
             clap::AppSettings::ColorAlways,
@@ -1028,7 +1028,7 @@ async fn main() -> anyhow::Result<()> {
     utils::print_package_info!();
 
     let tags = utils::tracing_telemetry::default_tracing_tags(
-        utils::git_version(),
+        utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
     utils::tracing_telemetry::init_tracing(

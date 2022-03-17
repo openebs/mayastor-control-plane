@@ -1,5 +1,6 @@
 [package]
 name = "pstor-usage"
+description = "Persistent Storage Usage"
 version = "0.1.0"
 edition = "2018"
 authors = ["Tiago Castro <tiago.castro@mayadata.io>"]

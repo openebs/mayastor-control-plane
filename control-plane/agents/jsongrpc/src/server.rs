@@ -16,7 +16,7 @@ use tracing::info;
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
 #[derive(Debug, StructOpt)]
-#[structopt(version = utils::package_info!())]
+#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)

@@ -11,6 +11,7 @@ pub(crate) use utils::tracing_telemetry::KeyValue;
 const TEST_LABEL_PREFIX: &str = "io.mayastor.test";
 
 #[derive(Debug, StructOpt)]
+#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 pub struct CliArgs {
     #[structopt(subcommand)]
     action: Action,

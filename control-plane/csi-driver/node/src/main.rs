@@ -153,8 +153,9 @@ pub async fn get_nodename(hostname: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let matches = App::new("Mayastor CSI plugin")
+    let matches = App::new(utils::package_description!())
         .about("k8s sidecar for Mayastor implementing CSI among others")
+        .version(utils::version_info_str!())
         .arg(
             Arg::with_name("csi-socket")
                 .short("c")
@@ -205,6 +206,8 @@ async fn main() -> Result<(), String> {
         )
         .get_matches();
 
+    utils::print_package_info!();
+
     let endpoint = matches.value_of("grpc-endpoint").unwrap();
     let csi_socket = matches
         .value_of("csi-socket")
@@ -216,7 +219,7 @@ async fn main() -> Result<(), String> {
         _ => "trace",
     };
     let tags = utils::tracing_telemetry::default_tracing_tags(
-        utils::git_version(),
+        utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
     utils::tracing_telemetry::init_tracing_level("csi-node", tags, None, Some(level));

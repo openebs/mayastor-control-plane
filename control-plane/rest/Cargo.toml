@@ -1,5 +1,6 @@
 [package]
 name = "rest"
+description = "Control plane REST server"
 version = "1.0.0"
 authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
 edition = "2018"

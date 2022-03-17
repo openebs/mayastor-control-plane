@@ -22,7 +22,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 
 #[derive(structopt::StructOpt, Debug)]
-#[structopt(version = utils::package_info!())]
+#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
     /// The rest endpoint if reusing a cluster.
     #[structopt(short, long)]

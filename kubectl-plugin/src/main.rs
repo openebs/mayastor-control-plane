@@ -22,7 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry
 use yaml_rust::YamlLoader;
 
 #[derive(StructOpt, Debug)]
-#[structopt(version = utils::package_info!())]
+#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
     /// The rest endpoint, parsed from KUBECONFIG, if left empty .
     #[structopt(global = true, long, short)]
@@ -75,7 +75,7 @@ fn init_tracing() {
     match CliArgs::args().jaeger {
         Some(jaeger) => {
             global::set_text_map_propagator(TraceContextPropagator::new());
-            let git_version = option_env!("GIT_VERSION").unwrap_or_else(utils::git_version);
+            let git_version = option_env!("GIT_VERSION").unwrap_or_else(utils::raw_version_str);
             let tags = utils::tracing_telemetry::default_tracing_tags(
                 git_version,
                 env!("CARGO_PKG_VERSION"),

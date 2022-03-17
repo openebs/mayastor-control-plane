@@ -76,7 +76,7 @@ pub fn init_tracing_level(
     match jaeger {
         Some(jaeger) => {
             tracing_tags.append(&mut default_tracing_tags(
-                super::git_version(),
+                super::raw_version_str(),
                 env!("CARGO_PKG_VERSION"),
             ));
             tracing_tags.dedup();
