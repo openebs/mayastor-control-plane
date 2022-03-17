@@ -60,5 +60,6 @@ mkShell {
     export MCP_SRC=`pwd`
     [ ! -z "${mayastor}" ] && cowsay "${mayastor_moth}"
     [ ! -z "${mayastor}" ] && export MAYASTOR_BIN="${mayastor}"
+    export PATH="$PATH:$(pwd)/target/debug"
   '';
 }

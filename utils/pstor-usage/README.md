@@ -1,6 +1,6 @@
 # Persistent Storage Usage
 
-This `pstore-usage` is used to sample persistent store (ETCD) usage at runtime from a live cluster.
+This `pstore-usage` can be used to sample persistent store (ETCD) usage at runtime from a simulated cluster as well as extrapolate future usage based on the samples.
 By default, it makes use of the `deployer` library to create a local cluster running on docker.
 
 ## Examples
@@ -9,10 +9,31 @@ By default, it makes use of the `deployer` library to create a local cluster run
 
 ```textmate
 ❯ cargo run -q --bin pstor-usage -- --help
-pstor-usage version 0.1.0, git hash 756e0175b34e
 
 USAGE:
-    pstor-usage [FLAGS] [OPTIONS]
+    pstor-usage [OPTIONS] <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -r, --rest-url <rest-url>    The rest endpoint if reusing a cluster
+
+SUBCOMMANDS:
+    extrapolate    Extrapolate how much storage a cluster would require if it were to run for a specified number of
+                   days
+    help           Prints this message or the help of the given subcommand(s)
+    simulate       Simulate how much storage a cluster would require based on some parameters
+```
+
+Help can also be retrieved for a specific subcommand, example:
+```textmate
+> cargo run -q --bin pstor-usage -- simulate --help
+Simulate how much storage a cluster would require based on some parameters
+
+USAGE:
+    pstor-usage simulate [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help               Prints help information
@@ -26,13 +47,12 @@ OPTIONS:
         --pool-samples <pool-samples>          Number of pool samples [default: 5]
         --pool-size <pool-size>                Size of the pools [default: 20MiB]
     -p, --pools <pools>                        Number of pools per sample [default: 10]
-    -r, --rest-url <rest-url>                  The rest endpoint if reusing a cluster
-        --vol-samples <vol-samples>            Number of volume samples [default: 10]
         --volume-mods <volume-mods>            Modifies `N` volumes from each volume samples. In other words, we will
                                                publish/unpublish each `N` volumes from each list of samples. Please note
                                                that this can take quite some time; it's very slow to create nexuses with
                                                remote replicas [default: 2]
         --volume-replicas <volume-replicas>    Number of volume replicas [default: 3]
+        --volume-samples <volume-samples>      Number of volume samples [default: 10]
         --volume-size <volume-size>            Size of the volumes [default: 5MiB]
     -v, --volumes <volumes>                    Number of volumes per sample [default: 20]
 ```
@@ -41,7 +61,6 @@ OPTIONS:
 
 ```textmate
 ❯ cargo run -q --bin pstor-usage
-pstor-usage version 0.1.0, git hash 756e0175b34e
 ┌───────────────┬────────────┐
 │ Volumes ~Repl │ Disk Usage │
 ├───────────────┼────────────┤
@@ -158,4 +177,62 @@ pstor-usage version 0.1.0, git hash 756e0175b34e
 ├───────────────┼────────────┤
 │    200 ~1     │  408 KiB   │
 └───────────────┴────────────┘
+```
+
+***Extrapolating persistent storage usage for a whole year:***
+
+```textmate
+❯ cargo run -q --bin pstor-usage -- extrapolate --days 365
+┌──────┬─────────────────┬─────────────┬─────────────────┐
+│ Days │ Volume Turnover │ Volume Mods │ Disk Usage      │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│  36  │      1800       │    7200     │ 97 MiB 890 KiB  │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│  72  │      3600       │    14400    │ 195 MiB 756 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 108  │      5400       │    21600    │ 293 MiB 622 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 144  │      7200       │    28800    │ 391 MiB 488 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 180  │      9000       │    36000    │ 489 MiB 354 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 216  │      10800      │    43200    │ 587 MiB 220 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 252  │      12600      │    50400    │ 685 MiB 87 KiB  │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 288  │      14400      │    57600    │ 782 MiB 977 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 324  │      16200      │    64800    │ 880 MiB 843 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 365  │      18250      │    73000    │ 992 MiB 292 KiB │
+└──────┴─────────────────┴─────────────┴─────────────────┘
+```
+
+The simulation parameters can be modified using the simulation subcommand within the extrapolation, example:
+
+```textmate
+❯ cargo run -q --bin pstor-usage -- extrapolate --days 365 simulate --volume-replicas 1
+┌──────┬─────────────────┬─────────────┬─────────────────┐
+│ Days │ Volume Turnover │ Volume Mods │ Disk Usage      │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│  36  │      1800       │    7200     │ 52 MiB 208 KiB  │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│  72  │      3600       │    14400    │ 104 MiB 417 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 108  │      5400       │    21600    │ 156 MiB 626 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 144  │      7200       │    28800    │ 208 MiB 835 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 180  │      9000       │    36000    │ 261 MiB 20 KiB  │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 216  │      10800      │    43200    │ 313 MiB 229 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 252  │      12600      │    50400    │ 365 MiB 437 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 288  │      14400      │    57600    │ 417 MiB 646 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 324  │      16200      │    64800    │ 469 MiB 855 KiB │
+├──────┼─────────────────┼─────────────┼─────────────────┤
+│ 365  │      18250      │    73000    │ 529 MiB 296 KiB │
+└──────┴─────────────────┴─────────────┴─────────────────┘
 ```

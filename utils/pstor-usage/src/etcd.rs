@@ -121,8 +121,17 @@ impl Sampler for EtcdSampler {
     }
 }
 
-struct DiskUsage {
+/// ResourceSample for etcd disk usage.
+pub(crate) struct DiskUsage {
     points: Vec<u64>,
+}
+impl DiskUsage {
+    /// Get new `Self` with the provided data.
+    pub(crate) fn new(points: impl Iterator<Item = u64>) -> Self {
+        Self {
+            points: points.collect(),
+        }
+    }
 }
 impl ResourceSample for DiskUsage {
     fn points(&self) -> &Vec<u64> {
