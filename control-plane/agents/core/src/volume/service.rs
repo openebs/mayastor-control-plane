@@ -131,11 +131,9 @@ impl Service {
     /// Get volumes
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid))]
     pub(super) async fn get_volumes(&self, request: &GetVolumes) -> Result<Volumes, SvcError> {
-        let volumes = self.registry.get_volumes().await;
-
         // The filter criteria is matched against the volume state.
         let filtered_volumes = match &request.filter {
-            Filter::None => volumes,
+            Filter::None => self.registry.get_volumes().await,
             Filter::Volume(volume_id) => {
                 tracing::Span::current().record("volume.uuid", &volume_id.as_str());
                 vec![self.registry.get_volume(volume_id).await?]

@@ -1,29 +1,40 @@
 use crate::core::registry::Registry;
-use common::errors::{SvcError, VolumeNotFound};
+use common::errors::SvcError;
 use common_lib::types::v0::message_bus::{
     NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 
 use crate::core::reconciler::PollTriggerEvent;
-use common_lib::types::v0::store::replica::ReplicaSpec;
-use snafu::OptionExt;
+use common_lib::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec};
+
 use std::collections::HashMap;
 
 impl Registry {
-    /// Get the volume state for the specified volume
+    /// Get the volume state for the specified volume.
     pub(crate) async fn get_volume_state(
         &self,
         volume_uuid: &VolumeId,
     ) -> Result<VolumeState, SvcError> {
-        let replica_specs = self.specs().get_volume_replicas(volume_uuid);
-        let volume_spec = self
-            .specs()
-            .get_locked_volume(volume_uuid)
-            .context(VolumeNotFound {
-                vol_id: volume_uuid.to_string(),
-            })?;
-        let volume_spec = volume_spec.lock().clone();
-        let nexus_spec = self.specs().get_volume_target_nexus(&volume_spec);
+        let volume_spec = self.specs().get_volume(volume_uuid)?;
+        let replica_specs = self.specs().get_cloned_volume_replicas(volume_uuid);
+
+        self.get_volume_state_with_replicas(&volume_spec, &replica_specs)
+            .await
+    }
+
+    /// Get the volume state for the specified volume.
+    /// replicas is a pre-fetched list of replicas from any and all volumes.
+    pub(crate) async fn get_volume_state_with_replicas(
+        &self,
+        volume_spec: &VolumeSpec,
+        replicas: &[ReplicaSpec],
+    ) -> Result<VolumeState, SvcError> {
+        let replica_specs = replicas
+            .iter()
+            .filter(|r| r.owners.owned_by(&volume_spec.uuid))
+            .collect::<Vec<_>>();
+
+        let nexus_spec = self.specs().get_volume_target_nexus(volume_spec);
         let nexus_state = match nexus_spec {
             None => None,
             Some(spec) => {
@@ -34,17 +45,16 @@ impl Registry {
 
         // Construct the topological information for the volume replicas.
         let mut replica_topology = HashMap::new();
-        for spec in &replica_specs {
-            let replica_spec = spec.lock().clone();
+        for replica_spec in &replica_specs {
             replica_topology.insert(
                 replica_spec.uuid.clone(),
-                self.replica_topology(&replica_spec).await,
+                self.replica_topology(replica_spec).await,
             );
         }
 
         Ok(if let Some(nexus_state) = nexus_state {
             VolumeState {
-                uuid: volume_uuid.to_owned(),
+                uuid: volume_spec.uuid.to_owned(),
                 size: nexus_state.size,
                 status: match nexus_state.status {
                     NexusStatus::Online
@@ -59,7 +69,7 @@ impl Registry {
             }
         } else {
             VolumeState {
-                uuid: volume_uuid.to_owned(),
+                uuid: volume_spec.uuid.to_owned(),
                 size: volume_spec.size,
                 status: if volume_spec.target.is_none() {
                     if replica_specs.len() >= volume_spec.num_replicas as usize {
@@ -92,10 +102,11 @@ impl Registry {
 
     /// Get all volumes
     pub(super) async fn get_volumes(&self) -> Vec<Volume> {
-        let mut volumes = vec![];
         let volume_specs = self.specs().get_volumes();
+        let replicas = self.specs().get_cloned_replicas();
+        let mut volumes = Vec::with_capacity(volume_specs.len());
         for spec in volume_specs {
-            if let Ok(state) = self.get_volume_state(&spec.uuid).await {
+            if let Ok(state) = self.get_volume_state_with_replicas(&spec, &replicas).await {
                 volumes.push(Volume::new(spec, state));
             }
         }
