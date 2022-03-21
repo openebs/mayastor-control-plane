@@ -140,3 +140,32 @@ impl ResourceSamples {
         false
     }
 }
+
+/// New Generic sample of data points with a name.
+pub(crate) struct GenericSample {
+    name: String,
+    points: Vec<u64>,
+}
+impl GenericSample {
+    /// Get new `Self` with a name.
+    pub(crate) fn new(name: &str, points: impl Iterator<Item = u64>) -> Self {
+        Self {
+            name: name.to_string(),
+            points: points.collect(),
+        }
+    }
+}
+impl ResourceSample for GenericSample {
+    fn points(&self) -> &Vec<u64> {
+        &self.points
+    }
+    fn points_mut(&mut self) -> &mut Vec<u64> {
+        &mut self.points
+    }
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+    fn format_point(&self, point: u64) -> String {
+        point.to_string()
+    }
+}
