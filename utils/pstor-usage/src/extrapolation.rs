@@ -30,7 +30,7 @@ pub(crate) struct Extrapolation {
     #[structopt(flatten)]
     opts: ExtrapolationDayOpts,
 
-    /// Show tabled simulation output.
+    /// Show tabulated simulation output.
     #[structopt(long)]
     show_simulation: bool,
 
@@ -51,10 +51,10 @@ struct ExtrapolationDayOpts {
     #[structopt(long, default_value = "50")]
     volume_turnover: u64,
 
-    /// Volume mods:
+    /// Volume attach cycle:
     /// how many volume modifications (publish/unpublish) are done every day.
     #[structopt(long, default_value = "200")]
-    volume_mods: u64,
+    volume_attach_cycle: u64,
 }
 
 impl Extrapolation {
@@ -71,8 +71,8 @@ impl Extrapolation {
         let usage_per_vol = (stats.allocation() + stats.cleanup()) / simulation.volumes_allocated();
         let usage_per_mod = stats.modification() / simulation.volumes_modified();
 
-        let daily =
-            usage_per_mod * self.opts.volume_mods + usage_per_vol * self.opts.volume_turnover;
+        let daily = usage_per_mod * self.opts.volume_attach_cycle
+            + usage_per_vol * self.opts.volume_turnover;
         let days = u64::from(self.days);
 
         if self.usage_only {
@@ -101,8 +101,9 @@ impl Extrapolation {
                     .take(max_entries as usize),
             ));
             let mut mods = Box::new(GenericSample::new(
-                "Volume Mods",
-                std::iter::repeat(self.opts.volume_mods * days_entry).take(max_entries as usize),
+                "Volume Attach/Detach",
+                std::iter::repeat(self.opts.volume_attach_cycle * days_entry)
+                    .take(max_entries as usize),
             ));
             let mut daily_usage = Box::new(DiskUsage::new(
                 std::iter::repeat(days_entry * daily).take(max_entries as usize),
@@ -114,7 +115,8 @@ impl Extrapolation {
                 turnover
                     .points_mut()
                     .push(self.opts.volume_turnover * extra_days);
-                mods.points_mut().push(self.opts.volume_mods * extra_days);
+                mods.points_mut()
+                    .push(self.opts.volume_attach_cycle * extra_days);
                 daily_usage.points_mut().push(daily * extra_days);
             }
 
