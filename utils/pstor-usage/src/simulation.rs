@@ -59,12 +59,12 @@ pub(crate) struct SimulationOpts {
     #[structopt(long, default_value = "10")]
     volume_samples: u32,
 
-    /// Modifies `N` volumes from each volume samples.
+    /// Attaches and detaches `N` volumes from each volume sample.
     /// In other words, we will publish/unpublish each `N` volumes from each list of samples.
-    /// Please note that this can take quite some time; it's very slow to create
-    /// nexuses with remote replicas.
+    /// Please note that this can take quite some time; it's very slow to create volume targets
+    /// with remote replicas.
     #[structopt(long, default_value = "2")]
-    volume_mods: u32,
+    volume_attach_cycle: u32,
 
     /// Use ram based pools instead of files (useful for debugging with small pool allocation).
     /// When using files the /tmp/pool directory will be used.
@@ -175,9 +175,9 @@ impl Simulation {
         // capture the database size after we've completed allocating new resources
         let after_alloc = etcd.db_size().await?;
 
-        if args.volume_mods > 0 {
+        if args.volume_attach_cycle > 0 {
             let mod_results = EtcdSampler::new_sampler(etcd.clone(), args.volume_samples)
-                .sample_mods(&client, args.volume_mods, &volumes)
+                .sample_mods(&client, args.volume_attach_cycle, &volumes)
                 .await?;
             self.print(&printer, &mod_results);
         }
@@ -209,7 +209,7 @@ impl Simulation {
     }
     /// Total number of volumes modified.
     pub(crate) fn volumes_modified(&self) -> u64 {
-        (self.opts.volume_mods * self.opts.volume_samples) as u64
+        (self.opts.volume_attach_cycle * self.opts.volume_samples) as u64
     }
 }
 
