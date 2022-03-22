@@ -149,8 +149,12 @@ impl MayastorApiClient {
 
     /// List all volumes available in Mayastor cluster.
     pub async fn list_volumes(&self) -> Result<Vec<Volume>, ApiClientError> {
-        let response = self.rest_client.volumes_api().get_volumes().await?;
-        Ok(response.into_body())
+        let response = self
+            .rest_client
+            .volumes_api()
+            .get_volumes(None, None)
+            .await?;
+        Ok(response.into_body().entries)
     }
 
     /// List pools available on target Mayastor node.

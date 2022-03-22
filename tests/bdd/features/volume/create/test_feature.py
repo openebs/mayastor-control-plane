@@ -190,7 +190,7 @@ def volume_creation_should_fail_with_a_precondition_failed_error(create_request)
         assert exception_info["status"] == requests.codes["precondition_failed"]
 
     # Check that the volume wasn't created.
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes().entries
     assert len(volumes) == 0
 
 
@@ -205,7 +205,7 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
         assert exception_info["status"] == requests.codes["insufficient_storage"]
     finally:
         # Check that the volume wasn't created.
-        volumes = ApiClient.volumes_api().get_volumes()
+        volumes = ApiClient.volumes_api().get_volumes().entries
         assert len(volumes) == 0
 
 

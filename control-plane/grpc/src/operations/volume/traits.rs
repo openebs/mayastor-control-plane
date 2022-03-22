@@ -2,7 +2,9 @@ use crate::{
     common,
     context::Context,
     misc::traits::ValidateRequestTypes,
-    nexus, replica, volume,
+    nexus,
+    operations::Pagination,
+    replica, volume,
     volume::{
         get_volumes_request, CreateVolumeRequest, DestroyVolumeRequest, PublishVolumeRequest,
         SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
@@ -33,7 +35,12 @@ pub trait VolumeOperations: Send + Sync {
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
     /// Get volumes
-    async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Volumes, ReplyError>;
+    async fn get(
+        &self,
+        filter: Filter,
+        pagination: Option<Pagination>,
+        ctx: Option<Context>,
+    ) -> Result<Volumes, ReplyError>;
     /// Destroy a volume
     async fn destroy(
         &self,
@@ -312,21 +319,25 @@ impl TryFrom<volume::Volumes> for Volumes {
     type Error = ReplyError;
     fn try_from(grpc_volumes: volume::Volumes) -> Result<Self, Self::Error> {
         let mut volumes: Vec<Volume> = vec![];
-        for volume in grpc_volumes.volumes {
+        for volume in grpc_volumes.entries {
             volumes.push(Volume::try_from(volume)?)
         }
-        Ok(Volumes(volumes))
+        Ok(Volumes {
+            entries: volumes,
+            next_token: grpc_volumes.next_token,
+        })
     }
 }
 
 impl From<Volumes> for volume::Volumes {
     fn from(volumes: Volumes) -> Self {
         volume::Volumes {
-            volumes: volumes
-                .into_inner()
+            entries: volumes
+                .entries
                 .iter()
                 .map(|volume| volume.clone().into())
                 .collect(),
+            next_token: volumes.next_token,
         }
     }
 }

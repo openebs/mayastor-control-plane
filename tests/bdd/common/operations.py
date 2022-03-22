@@ -21,5 +21,5 @@ class Volume(object):
     # Delete all the pools in the cluster
     @staticmethod
     def delete_all():
-        for volume in Volume.__api().get_volumes():
+        for volume in Volume.__api().get_volumes().entries:
             Volume.__api().del_volume(volume.spec.uuid)

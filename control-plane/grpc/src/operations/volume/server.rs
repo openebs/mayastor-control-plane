@@ -1,6 +1,6 @@
 use crate::{
     misc::traits::ValidateRequestTypes,
-    operations::volume::traits::VolumeOperations,
+    operations::{volume::traits::VolumeOperations, Pagination},
     volume::{
         create_volume_reply, get_volumes_reply, publish_volume_reply, set_volume_replica_reply,
         share_volume_reply, unpublish_volume_reply,
@@ -79,7 +79,9 @@ impl VolumeGrpc for VolumeServer {
             },
             None => Filter::None,
         };
-        match self.service.get(filter, None).await {
+
+        let pagination: Option<Pagination> = req.pagination.map(|p| p.into());
+        match self.service.get(filter, pagination, None).await {
             Ok(volumes) => Ok(Response::new(GetVolumesReply {
                 reply: Some(get_volumes_reply::Reply::Volumes(volumes.into())),
             })),

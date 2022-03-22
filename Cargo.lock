@@ -246,6 +246,7 @@ dependencies = [
  "grpc",
  "http",
  "humantime",
+ "indexmap",
  "itertools",
  "lazy_static",
  "once_cell",

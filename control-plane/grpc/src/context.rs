@@ -62,6 +62,7 @@ pub fn timeout_grpc(op_id: MessageIdVs, min_timeout: Duration) -> Duration {
 pub struct Context {
     timeout_opts: Option<TimeoutOptions>,
 }
+
 impl Context {
     /// Generate a new context with the provided `TimeoutOptions`.
     pub fn new(timeout_opts: impl Into<Option<TimeoutOptions>>) -> Self {
@@ -69,6 +70,7 @@ impl Context {
             timeout_opts: timeout_opts.into(),
         }
     }
+
     /// Get the optional `TimeoutOptions`.
     pub fn timeout_opts(&self) -> Option<TimeoutOptions> {
         self.timeout_opts.clone()

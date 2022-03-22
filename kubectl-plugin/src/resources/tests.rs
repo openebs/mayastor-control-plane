@@ -73,12 +73,12 @@ async fn get_volumes() {
         .await
         .rest_v00()
         .volumes_api()
-        .get_volumes()
+        .get_volumes(None, None)
         .await
         .unwrap();
-    let volume_state = volumes[0].state.clone();
-    let volume_spec = volumes[0].spec.clone();
-    compare(volume_output(volume_spec, volume_state), volumes);
+    let volume_state = volumes.entries[0].state.clone();
+    let volume_spec = volumes.entries[0].spec.clone();
+    compare(volume_output(volume_spec, volume_state), volumes.entries);
 }
 
 #[tokio::test]

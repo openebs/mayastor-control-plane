@@ -2,7 +2,8 @@ use common_lib::types::v0::{
     message_bus::{self, Nexus, NexusId, PoolId, Replica, ReplicaId},
     store::{nexus::NexusState, pool::PoolState, replica::ReplicaState},
 };
-use std::{collections::hash_map::Values, ops::Deref, sync::Arc};
+use indexmap::map::Values;
+use std::{ops::Deref, sync::Arc};
 
 use super::resource_map::ResourceMap;
 use parking_lot::{Mutex, RwLock};

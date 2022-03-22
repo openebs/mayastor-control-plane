@@ -141,3 +141,13 @@ message NodePoolFilter{
   string node_id = 1;
   string pool_id = 2;
 }
+
+// Pagination related parameters.
+// This allows a large response to be split over multiple requests to prevent timeouts.
+message Pagination {
+  // If specified (non-zero value), this is the maximum number of entries to return.
+  uint64 max_entries = 1;
+  // A token to specify where to start paginating. Set this field to `next_token` returned by a
+  // previous `GetVolumes` call to get the next page of entries.
+  uint64 starting_token = 2;
+}

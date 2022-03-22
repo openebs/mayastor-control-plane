@@ -1194,15 +1194,24 @@ paths:
       tags:
         - Volumes
       operationId: get_volumes
+      parameters:
+        - in: query
+          name: max_entries
+          description: the maximum number of results to return
+          schema:
+            type: integer
+        - in: query
+          name: starting_token
+          description: the offset to start pagination from
+          schema:
+            type: integer
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Volume'
+               $ref: '#/components/schemas/Volumes'
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -2608,6 +2617,19 @@ components:
         - uuid
         - status
         - replica_topology
+    Volumes:
+      description: |-
+        Array of volumes plus the next token for subsequent get requests when using pagination
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Volume'
+        next_token:
+          type: integer
+      required:
+        - entries
     Volume:
       description: |-
         Volumes

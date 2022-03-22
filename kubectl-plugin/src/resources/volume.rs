@@ -53,10 +53,14 @@ impl GetHeaderRow for openapi::models::Volume {
 #[async_trait(?Send)]
 impl List for Volumes {
     async fn list(output: &utils::OutputFormat) {
-        match RestClient::client().volumes_api().get_volumes().await {
+        match RestClient::client()
+            .volumes_api()
+            .get_volumes(None, None)
+            .await
+        {
             Ok(volumes) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table(output, volumes.into_body());
+                utils::print_table(output, volumes.into_body().entries);
             }
             Err(e) => {
                 println!("Failed to list volumes. Error {}", e)

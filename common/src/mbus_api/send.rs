@@ -193,6 +193,21 @@ macro_rules! bus_impl_vector_request {
     };
 }
 
+/// Implement request for all objects of `Type` that require pagination.
+#[macro_export]
+macro_rules! bus_impl_vector_request_token {
+    ($Request:ident, $Inner:ident) => {
+        /// Request all the `Inner` elements
+        #[derive(Serialize, Deserialize, Default, Debug, Clone)]
+        pub struct $Request {
+            /// Vector of entries
+            pub entries: Vec<$Inner>,
+            /// The token to use in subsequent requests.
+            pub next_token: Option<u64>,
+        }
+    };
+}
+
 /// Trait to send a message `bus` request with the `payload` type `S` via a
 /// a `channel` and requesting a response back with the payload type `R`
 /// via a specific reply channel.

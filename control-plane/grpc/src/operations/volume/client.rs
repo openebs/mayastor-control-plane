@@ -1,9 +1,12 @@
 use crate::{
     common::VolumeFilter,
     context::{Client, Context, TracedChannel},
-    operations::volume::traits::{
-        CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
-        ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+    operations::{
+        volume::traits::{
+            CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
+            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+        },
+        Pagination,
     },
     volume::{
         create_volume_reply, get_volumes_reply, get_volumes_request, publish_volume_reply,
@@ -61,14 +64,23 @@ impl VolumeOperations for VolumeClient {
     }
 
     #[tracing::instrument(name = "VolumeClient::get", level = "debug", skip(self), err)]
-    async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Volumes, ReplyError> {
+    async fn get(
+        &self,
+        filter: Filter,
+        pagination: Option<Pagination>,
+        ctx: Option<Context>,
+    ) -> Result<Volumes, ReplyError> {
         let req: GetVolumesRequest = match filter {
             Filter::Volume(volume_id) => GetVolumesRequest {
                 filter: Some(get_volumes_request::Filter::Volume(VolumeFilter {
                     volume_id: volume_id.to_string(),
                 })),
+                pagination: pagination.map(|p| p.into()),
             },
-            _ => GetVolumesRequest { filter: None },
+            _ => GetVolumesRequest {
+                filter: None,
+                pagination: pagination.map(|p| p.into()),
+            },
         };
         let req = self.request(req, ctx, MessageIdVs::GetVolumes);
         let response = self.client().get_volumes(req).await?.into_inner();
