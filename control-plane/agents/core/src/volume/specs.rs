@@ -1,6 +1,7 @@
 use crate::{
     core::{
         reconciler::PollTriggerEvent,
+        registry::Registry,
         scheduling::{
             nexus::GetPersistedNexusChildren,
             resources::{ChildItem, HealthyChildItems, ReplicaItem},
@@ -12,7 +13,6 @@ use crate::{
         },
         specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     },
-    registry::Registry,
     volume::scheduling,
 };
 use common::{

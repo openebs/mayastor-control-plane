@@ -1,9 +1,7 @@
-use crate::{
-    core::{
-        specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
-        wrapper::ClientOps,
-    },
+use crate::core::{
     registry::Registry,
+    specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+    wrapper::ClientOps,
 };
 use common::errors::{SvcError, SvcError::PoolNotFound};
 use common_lib::{

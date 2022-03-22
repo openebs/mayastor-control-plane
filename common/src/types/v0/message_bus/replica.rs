@@ -72,6 +72,10 @@ impl ReplicaName {
         // use the name as uuid (since the name is guaranteed to be unique)
         ReplicaName(replica_uuid.to_string())
     }
+    /// Create new `Self` derived from the replica name string
+    pub fn from_string(replica_name: String) -> Self {
+        ReplicaName(replica_name)
+    }
 }
 impl Default for ReplicaName {
     fn default() -> Self {

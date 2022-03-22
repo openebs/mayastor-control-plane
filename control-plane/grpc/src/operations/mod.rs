@@ -18,6 +18,9 @@ pub mod node;
 /// module for all corresponding client, server, traits for registration transport
 pub mod registration;
 
+/// module for all corresponding client, server, traits for registry transport
+pub mod registry;
+
 /// The type of max entries.
 pub type MaxEntries = u64;
 

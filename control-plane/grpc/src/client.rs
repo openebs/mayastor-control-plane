@@ -3,6 +3,7 @@ use crate::{
     operations::{
         node::{client::NodeClient, traits::NodeOperations},
         pool::{client::PoolClient, traits::PoolOperations},
+        registry::{client::RegistryClient, traits::RegistryOperations},
         replica::{client::ReplicaClient, traits::ReplicaOperations},
         volume::{client::VolumeClient, traits::VolumeOperations},
     },
@@ -17,6 +18,7 @@ pub struct CoreClient {
     replica: ReplicaClient,
     volume: VolumeClient,
     node: NodeClient,
+    registry: RegistryClient,
 }
 
 impl CoreClient {
@@ -26,12 +28,14 @@ impl CoreClient {
         let pool_client = PoolClient::new(addr.clone(), timeout_opts.clone()).await;
         let replica_client = ReplicaClient::new(addr.clone(), timeout_opts.clone()).await;
         let volume_client = VolumeClient::new(addr.clone(), timeout_opts.clone()).await;
-        let node_client = NodeClient::new(addr, timeout_opts).await;
+        let node_client = NodeClient::new(addr.clone(), timeout_opts.clone()).await;
+        let registry_client = RegistryClient::new(addr, timeout_opts).await;
         Self {
             pool: pool_client,
             replica: replica_client,
             volume: volume_client,
             node: node_client,
+            registry: registry_client,
         }
     }
     /// retrieve the corresponding pool client
@@ -49,6 +53,10 @@ impl CoreClient {
     /// retrieve the corresponding node client
     pub fn node(&self) -> impl NodeOperations {
         self.node.clone()
+    }
+    /// retrieve the corresponding registry client
+    pub fn registry(&self) -> impl RegistryOperations {
+        self.registry.clone()
     }
     /// Try to wait until the Core Agent is ready, up to a timeout, by using the Probe method.
     pub async fn wait_ready(&self, timeout_opts: Option<TimeoutOptions>) -> Result<(), ()> {

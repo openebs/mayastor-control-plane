@@ -1,7 +1,7 @@
 use crate::{
     common,
     context::Context,
-    misc::traits::ValidateRequestTypes,
+    misc::traits::{StringValue, ValidateRequestTypes},
     replica,
     replica::{
         get_replicas_request, CreateReplicaRequest, DestroyReplicaRequest, ShareReplicaRequest,
@@ -16,6 +16,7 @@ use common_lib::{
             CreateReplica, DestroyReplica, Filter, NexusId, NodeId, PoolId, Replica, ReplicaId,
             ReplicaName, ReplicaOwners, ShareReplica, UnshareReplica, VolumeId,
         },
+        store::replica::{ReplicaOperation, ReplicaOperationState, ReplicaSpec, ReplicaSpecStatus},
     },
 };
 use std::convert::TryFrom;
@@ -75,24 +76,7 @@ impl TryFrom<replica::Replica> for Replica {
         Ok(Replica {
             node: replica.node_id.into(),
             name: replica.name.into(),
-            uuid: match replica.replica_id {
-                Some(string) => match ReplicaId::try_from(string) {
-                    Ok(replica_id) => replica_id,
-                    Err(err) => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Replica,
-                            "replica.uuid",
-                            err.to_string(),
-                        ))
-                    }
-                },
-                None => {
-                    return Err(ReplyError::missing_argument(
-                        ResourceKind::Replica,
-                        "replica.uuid",
-                    ))
-                }
-            },
+            uuid: ReplicaId::try_from(StringValue(replica.replica_id))?,
             pool: replica.pool_id.into(),
             thin: replica.thin,
             size: replica.size,
@@ -139,16 +123,7 @@ impl TryFrom<get_replicas_request::Filter> for Filter {
                 Ok(Filter::NodePoolReplica(
                     node_pool_replica_filter.node_id.into(),
                     node_pool_replica_filter.pool_id.into(),
-                    match ReplicaId::try_from(node_pool_replica_filter.replica_id) {
-                        Ok(replica_id) => replica_id,
-                        Err(err) => {
-                            return Err(ReplyError::invalid_argument(
-                                ResourceKind::Replica,
-                                "replica_filter::node_pool_replica.replica_id",
-                                err.to_string(),
-                            ))
-                        }
-                    },
+                    ReplicaId::try_from(StringValue(Some(node_pool_replica_filter.replica_id)))?,
                 ))
             }
             get_replicas_request::Filter::NodeReplica(node_replica_filter) => {
@@ -344,24 +319,7 @@ impl ValidateRequestTypes for CreateReplicaRequest {
     type Validated = ValidatedCreateReplicaRequest;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedCreateReplicaRequest {
-            uuid: match self.replica_id.clone() {
-                Some(uuid) => match ReplicaId::try_from(uuid) {
-                    Ok(replica_id) => replica_id,
-                    Err(err) => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Replica,
-                            "create_replica_request.replica_id",
-                            err.to_string(),
-                        ))
-                    }
-                },
-                None => {
-                    return Err(ReplyError::missing_argument(
-                        ResourceKind::Replica,
-                        "create_replica_request.replica_id",
-                    ))
-                }
-            },
+            uuid: ReplicaId::try_from(StringValue(self.replica_id.clone()))?,
             share: match common::Protocol::from_i32(self.share) {
                 Some(share) => share.into(),
                 None => {
@@ -372,54 +330,15 @@ impl ValidateRequestTypes for CreateReplicaRequest {
                     ))
                 }
             },
-            owners: ReplicaOwners::new(
-                match self.owners.clone() {
-                    Some(owners) => match owners.volume {
-                        Some(volume) => match VolumeId::try_from(volume) {
-                            Ok(volumeid) => Some(volumeid),
-                            Err(err) => {
-                                return Err(ReplyError::invalid_argument(
-                                    ResourceKind::Replica,
-                                    "create_replica_request.owners.volume",
-                                    err.to_string(),
-                                ))
-                            }
-                        },
-                        None => None,
-                    },
-                    None => {
-                        return Err(ReplyError::missing_argument(
-                            ResourceKind::Replica,
-                            "create_replica_request.owners",
-                        ))
-                    }
-                },
-                match self.owners.clone() {
-                    Some(owners) => {
-                        let mut nexuses: Vec<NexusId> = vec![];
-                        for nexus in owners.nexuses {
-                            let nexusid = match NexusId::try_from(nexus) {
-                                Ok(nexusid) => nexusid,
-                                Err(err) => {
-                                    return Err(ReplyError::invalid_argument(
-                                        ResourceKind::Replica,
-                                        "create_replica_request.owners.nexuses",
-                                        err.to_string(),
-                                    ))
-                                }
-                            };
-                            nexuses.push(nexusid);
-                        }
-                        nexuses
-                    }
-                    None => {
-                        return Err(ReplyError::missing_argument(
-                            ResourceKind::Replica,
-                            "create_replica_request.owners",
-                        ))
-                    }
-                },
-            ),
+            owners: match self.owners.clone() {
+                Some(owners) => ReplicaOwners::try_from(owners)?,
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::ReplicaSpec,
+                        "replica_spec.owners",
+                    ))
+                }
+            },
             inner: self,
         })
     }
@@ -496,72 +415,16 @@ impl ValidateRequestTypes for DestroyReplicaRequest {
     type Validated = ValidatedDestroyReplicaRequest;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedDestroyReplicaRequest {
-            uuid: match self.replica_id.clone() {
-                Some(uuid) => match ReplicaId::try_from(uuid) {
-                    Ok(replica_id) => replica_id,
-                    Err(err) => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Replica,
-                            "destroy_replica_request.replica_id",
-                            err.to_string(),
-                        ))
-                    }
-                },
+            uuid: ReplicaId::try_from(StringValue(self.replica_id.clone()))?,
+            disowners: match self.disowners.clone() {
+                Some(disowners) => ReplicaOwners::try_from(disowners)?,
                 None => {
                     return Err(ReplyError::missing_argument(
                         ResourceKind::Replica,
-                        "destroy_replica_request.replica_id",
+                        "replica_spec.disowners",
                     ))
                 }
             },
-            disowners: ReplicaOwners::new(
-                match self.disowners.clone() {
-                    Some(disowners) => match disowners.volume {
-                        Some(volume) => match VolumeId::try_from(volume) {
-                            Ok(volumeid) => Some(volumeid),
-                            Err(err) => {
-                                return Err(ReplyError::invalid_argument(
-                                    ResourceKind::Replica,
-                                    "destroy_replica_request.disowners.volume",
-                                    err.to_string(),
-                                ))
-                            }
-                        },
-                        None => None,
-                    },
-                    None => {
-                        return Err(ReplyError::missing_argument(
-                            ResourceKind::Replica,
-                            "destroy_replica_request.disowners",
-                        ))
-                    }
-                },
-                match self.disowners.clone() {
-                    Some(disowners) => {
-                        let mut nexuses: Vec<NexusId> = vec![];
-                        for nexus in disowners.nexuses {
-                            let nexusid = match NexusId::try_from(nexus) {
-                                Ok(nexusid) => nexusid,
-                                Err(err) => {
-                                    return Err(ReplyError::invalid_argument(
-                                        ResourceKind::Replica,
-                                        "destroy_replica_request.disowners.nexuses",
-                                        err.to_string(),
-                                    ))
-                                }
-                            };
-                            nexuses.push(nexusid);
-                        }
-                        nexuses
-                    }
-                    None => {
-                        return Err(ReplyError::missing_argument(
-                            ResourceKind::Replica,
-                            "destroy_replica_request.disowners",
-                        ))
-                    }
-                },
-            ),
             inner: self,
         })
     }
@@ -638,24 +501,7 @@ impl ValidateRequestTypes for ShareReplicaRequest {
     type Validated = ValidatedShareReplicaRequest;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedShareReplicaRequest {
-            uuid: match self.replica_id.clone() {
-                Some(uuid) => match ReplicaId::try_from(uuid) {
-                    Ok(replica_id) => replica_id,
-                    Err(err) => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Replica,
-                            "share_replica_request.replica_id",
-                            err.to_string(),
-                        ))
-                    }
-                },
-                None => {
-                    return Err(ReplyError::missing_argument(
-                        ResourceKind::Replica,
-                        "share_replica_request.replica_id",
-                    ))
-                }
-            },
+            uuid: ReplicaId::try_from(StringValue(self.replica_id.clone()))?,
             protocol: match replica::ReplicaShareProtocol::from_i32(self.protocol) {
                 Some(protocol) => protocol.into(),
                 None => {
@@ -731,24 +577,7 @@ impl ValidateRequestTypes for UnshareReplicaRequest {
     type Validated = ValidatedUnshareReplicaRequest;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedUnshareReplicaRequest {
-            uuid: match self.replica_id.clone() {
-                Some(uuid) => match ReplicaId::try_from(uuid) {
-                    Ok(replica_id) => replica_id,
-                    Err(err) => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Replica,
-                            "unshare_replica_request.replica_id",
-                            err.to_string(),
-                        ))
-                    }
-                },
-                None => {
-                    return Err(ReplyError::missing_argument(
-                        ResourceKind::Replica,
-                        "unshare_replica_request.replica_id",
-                    ))
-                }
-            },
+            uuid: ReplicaId::try_from(StringValue(self.replica_id.clone()))?,
             inner: self,
         })
     }
@@ -766,15 +595,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
             size: data.size(),
             share: share as i32,
             managed: data.managed(),
-            owners: Some(replica::ReplicaOwners {
-                volume: data.owners().volume().map(|id| id.to_string()),
-                nexuses: data
-                    .owners()
-                    .nexuses()
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect(),
-            }),
+            owners: Some(data.owners().into()),
         }
     }
 }
@@ -802,15 +623,7 @@ impl From<&dyn DestroyReplicaInfo> for DestroyReplicaRequest {
             pool_id: data.pool().to_string(),
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
-            disowners: Some(replica::ReplicaOwners {
-                volume: data.disowners().volume().map(|id| id.to_string()),
-                nexuses: data
-                    .disowners()
-                    .nexuses()
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect(),
-            }),
+            disowners: Some(data.disowners().into()),
         }
     }
 }
@@ -930,6 +743,159 @@ impl From<message_bus::ReplicaShareProtocol> for replica::ReplicaShareProtocol {
     fn from(src: message_bus::ReplicaShareProtocol) -> Self {
         match src {
             message_bus::ReplicaShareProtocol::Nvmf => Self::NvmfProtocol,
+        }
+    }
+}
+
+impl From<common::SpecStatus> for ReplicaSpecStatus {
+    fn from(src: common::SpecStatus) -> Self {
+        match src {
+            common::SpecStatus::Created => Self::Created(Default::default()),
+            common::SpecStatus::Creating => Self::Creating,
+            common::SpecStatus::Deleted => Self::Deleted,
+            common::SpecStatus::Deleting => Self::Deleting,
+        }
+    }
+}
+
+impl From<ReplicaSpecStatus> for common::SpecStatus {
+    fn from(src: ReplicaSpecStatus) -> Self {
+        match src {
+            ReplicaSpecStatus::Creating => Self::Creating,
+            ReplicaSpecStatus::Created(_) => Self::Created,
+            ReplicaSpecStatus::Deleting => Self::Deleting,
+            ReplicaSpecStatus::Deleted => Self::Deleted,
+        }
+    }
+}
+
+impl TryFrom<replica::ReplicaOwners> for ReplicaOwners {
+    type Error = ReplyError;
+
+    fn try_from(value: replica::ReplicaOwners) -> Result<Self, Self::Error> {
+        Ok(ReplicaOwners::new(
+            match value.volume.clone() {
+                Some(volume) => match VolumeId::try_from(volume) {
+                    Ok(volumeid) => Some(volumeid),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::ReplicaSpec,
+                            "replica_spec.owners.volume",
+                            err.to_string(),
+                        ))
+                    }
+                },
+                None => None,
+            },
+            {
+                let mut nexuses: Vec<NexusId> = vec![];
+                for nexus in value.nexuses {
+                    let nexusid = NexusId::try_from(StringValue(Some(nexus)))?;
+                    nexuses.push(nexusid);
+                }
+                nexuses
+            },
+        ))
+    }
+}
+
+impl From<ReplicaOwners> for replica::ReplicaOwners {
+    fn from(owners: ReplicaOwners) -> Self {
+        replica::ReplicaOwners {
+            volume: owners.volume().map(|id| id.to_string()),
+            nexuses: owners.nexuses().iter().map(|id| id.to_string()).collect(),
+        }
+    }
+}
+
+impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
+    type Error = ReplyError;
+
+    fn try_from(value: replica::ReplicaSpec) -> Result<Self, Self::Error> {
+        let replica_spec_status = match common::SpecStatus::from_i32(value.spec_status) {
+            Some(status) => status.into(),
+            None => {
+                return Err(ReplyError::invalid_argument(
+                    ResourceKind::ReplicaSpec,
+                    "replica_spec.status",
+                    "".to_string(),
+                ))
+            }
+        };
+        Ok(Self {
+            name: ReplicaName::from_string(value.name),
+            uuid: ReplicaId::try_from(StringValue(value.replica_id))?,
+            size: value.size,
+            pool: value.pool_id.into(),
+            share: match common::Protocol::from_i32(value.share) {
+                Some(share) => share.into(),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::ReplicaSpec,
+                        "replica_spec.share",
+                        "".to_string(),
+                    ))
+                }
+            },
+            thin: value.thin,
+            status: replica_spec_status,
+            managed: value.managed,
+            owners: match value.owners {
+                Some(owners) => ReplicaOwners::try_from(owners)?,
+                None => {
+                    return Err(ReplyError::missing_argument(
+                        ResourceKind::ReplicaSpec,
+                        "replica_spec.owners",
+                    ))
+                }
+            },
+            sequencer: Default::default(),
+            operation: value.operation.map(|op| ReplicaOperationState {
+                operation: ReplicaOperation::Create,
+                result: op.result,
+            }),
+        })
+    }
+}
+
+impl From<ReplicaSpec> for replica::ReplicaSpec {
+    fn from(value: ReplicaSpec) -> Self {
+        let share: common::Protocol = value.share.into();
+        let spec_status: common::SpecStatus = value.status.into();
+        Self {
+            name: value.name.to_string(),
+            replica_id: Some(value.uuid.to_string()),
+            size: value.size,
+            pool_id: value.pool.to_string(),
+            share: share as i32,
+            thin: value.thin,
+            spec_status: spec_status as i32,
+            managed: value.managed,
+            owners: Some(value.owners.into()),
+            operation: value.operation.map(|operation| common::SpecOperation {
+                result: operation.result,
+            }),
+        }
+    }
+}
+
+impl TryFrom<StringValue> for ReplicaId {
+    type Error = ReplyError;
+
+    fn try_from(value: StringValue) -> Result<Self, Self::Error> {
+        match value.0 {
+            Some(uuid) => match ReplicaId::try_from(uuid) {
+                Ok(replicaid) => Ok(replicaid),
+                Err(err) => Err(ReplyError::invalid_argument(
+                    ResourceKind::Replica,
+                    "replica.uuid",
+                    err.to_string(),
+                )),
+            },
+            None => Err(ReplyError::missing_argument(
+                ResourceKind::Replica,
+                "replica.uuid",
+            )),
         }
     }
 }

@@ -1,7 +1,6 @@
 syntax = "proto3";
 
 import "v1/misc/common.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
 package v1.nexus;
@@ -57,4 +56,45 @@ enum ChildState {
   ChildDegraded = 2;
   // unrecoverable error (control plane must act)
   ChildFaulted = 3;
+}
+
+message NexusSpec {
+  // Nexus Id
+  google.protobuf.StringValue nexus_id = 1;
+  // Name of the nexus
+  string name = 2;
+  // Node where the nexus should live.
+  string node_id = 3;
+  // List of children.
+  repeated NexusChild children = 4;
+  // Size of the nexus.
+  uint64 size = 5;
+  // The status the nexus spec.
+  common.SpecStatus spec_status = 6;
+  // Share Protocol
+  common.Protocol share = 7;
+  // Managed by our control plane
+  bool managed = 8;
+  // Volume which owns this nexus, if any
+  google.protobuf.StringValue owner = 9;
+  // Record of the operation in progress
+  optional common.SpecOperation operation = 10;
+}
+
+message NexusChild {
+  oneof child {
+    // When the child is a pool replica (in case of a volume)
+    Replica replica = 1;
+    // When the child is just a "raw" URI (could be anything)
+    Uri uri = 2;
+  }
+}
+
+message Replica {
+  google.protobuf.StringValue replica_id = 1;
+  string ChildUri = 2;
+}
+
+message Uri {
+  string ChildUri = 1;
 }
