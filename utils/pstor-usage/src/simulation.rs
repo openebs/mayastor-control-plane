@@ -11,11 +11,12 @@ use openapi::{
 };
 
 use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use structopt::StructOpt;
 
 /// Simulate how much storage a cluster would require based on some parameters.
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, Clone, Hash, Eq, PartialEq)]
 pub(crate) struct Simulation {
     #[structopt(flatten)]
     opts: SimulationOpts,
@@ -29,7 +30,8 @@ pub(crate) struct Simulation {
     print_samples: bool,
 }
 
-#[derive(StructOpt, Default, Debug, Clone)]
+#[derive(StructOpt, Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
+#[serde(default)]
 pub(crate) struct SimulationOpts {
     /// Size of the pools.
     #[structopt(long, parse(try_from_str = parse_size::parse_size), default_value = "20MiB")]
@@ -64,12 +66,18 @@ pub(crate) struct SimulationOpts {
     /// Please note that this can take quite some time; it's very slow to create volume targets
     /// with remote replicas.
     #[structopt(long, default_value = "2")]
-    volume_attach_cycle: u32,
+    volume_attach_cycles: u32,
 
     /// Use ram based pools instead of files (useful for debugging with small pool allocation).
     /// When using files the /tmp/pool directory will be used.
     #[structopt(long)]
     pool_use_malloc: bool,
+}
+
+impl Default for SimulationOpts {
+    fn default() -> Self {
+        SimulationOpts::from_iter(Vec::<String>::new())
+    }
 }
 
 impl From<SimulationOpts> for Simulation {
@@ -79,6 +87,14 @@ impl From<SimulationOpts> for Simulation {
             opts,
             print_samples: false,
         }
+    }
+}
+
+impl SimulationOpts {
+    /// Set number of volume replicas.
+    pub(crate) fn with_replicas(mut self, replicas: u8) -> Self {
+        self.volume_replicas = replicas;
+        self
     }
 }
 
@@ -112,6 +128,8 @@ impl Simulation {
                     .with_silence_test_traces()
                     .with_build(false)
                     .with_build_all(false)
+                    .with_nats(false)
+                    .with_jaeger(false)
                     .with_mayastors(args.volume_replicas.into())
                     .build()
                     .await
@@ -175,9 +193,9 @@ impl Simulation {
         // capture the database size after we've completed allocating new resources
         let after_alloc = etcd.db_size().await?;
 
-        if args.volume_attach_cycle > 0 {
+        if args.volume_attach_cycles > 0 {
             let mod_results = EtcdSampler::new_sampler(etcd.clone(), args.volume_samples)
-                .sample_mods(&client, args.volume_attach_cycle, &volumes)
+                .sample_mods(&client, args.volume_attach_cycles, &volumes)
                 .await?;
             self.print(&printer, &mod_results);
         }
@@ -209,11 +227,12 @@ impl Simulation {
     }
     /// Total number of volumes modified.
     pub(crate) fn volumes_modified(&self) -> u64 {
-        (self.opts.volume_attach_cycle * self.opts.volume_samples) as u64
+        (self.opts.volume_attach_cycles * self.opts.volume_samples) as u64
     }
 }
 
 /// Stats collected after running a simulation.
+#[derive(Debug, Clone, Default)]
 pub(crate) struct RunStats {
     allocation: u64,
     modification: u64,
@@ -251,21 +270,21 @@ impl TabledData for RunStats {
 
     fn titles(&self) -> Self::Row {
         prettytable::Row::new(vec![
-            prettytable::Cell::new("Creation"),
-            prettytable::Cell::new("Modification"),
-            prettytable::Cell::new("Cleanup"),
-            prettytable::Cell::new("Total"),
-            prettytable::Cell::new("Current"),
+            crate::new_cell("Creation"),
+            crate::new_cell("Modification"),
+            crate::new_cell("Cleanup"),
+            crate::new_cell("Total"),
+            crate::new_cell("Current"),
         ])
     }
 
     fn rows(&self) -> Vec<Self::Row> {
         vec![prettytable::Row::new(vec![
-            prettytable::Cell::new(&Etcd::bytes_to_units(self.allocation)),
-            prettytable::Cell::new(&Etcd::bytes_to_units(self.modification)),
-            prettytable::Cell::new(&Etcd::bytes_to_units(self.cleanup)),
-            prettytable::Cell::new(&Etcd::bytes_to_units(self.total())),
-            prettytable::Cell::new(&Etcd::bytes_to_units(self.last)),
+            crate::new_cell(&Etcd::bytes_to_units(self.allocation)),
+            crate::new_cell(&Etcd::bytes_to_units(self.modification)),
+            crate::new_cell(&Etcd::bytes_to_units(self.cleanup)),
+            crate::new_cell(&Etcd::bytes_to_units(self.total())),
+            crate::new_cell(&Etcd::bytes_to_units(self.last)),
         ])]
     }
 }
@@ -277,7 +296,7 @@ impl TabledData for ResourceSamples {
         prettytable::Row::new(
             self.inner()
                 .iter()
-                .map(|r| prettytable::Cell::new(&r.name()))
+                .map(|r| crate::new_cell(&r.name()))
                 .collect::<Vec<_>>(),
         )
     }
@@ -304,8 +323,7 @@ impl TabledData for ResourceSamples {
                 *acc += point;
                 let formatted_point = estimation.format_point(*acc);
 
-                let mut cell = prettytable::Cell::new(&formatted_point);
-                cell.align(prettytable::format::Alignment::CENTER);
+                let cell = crate::new_cell(&formatted_point);
                 row.add_cell(cell);
             }
             rows.push(row);

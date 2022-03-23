@@ -47,7 +47,7 @@ OPTIONS:
         --pool-samples <pool-samples>                  Number of pool samples [default: 5]
         --pool-size <pool-size>                        Size of the pools [default: 20MiB]
     -p, --pools <pools>                                Number of pools per sample [default: 10]
-        --volume-attach-cycle <volume-attach-cycle>
+        --volume-attach-cycles <volume-attach-cycle>
             Attaches and detaches `N` volumes from each volume sample. In other words, we will publish/unpublish each
             `N` volumes from each list of samples. Please note that this can take quite some time; it's very slow to
             create volume targets with remote replicas [default: 2]
@@ -144,7 +144,7 @@ OPTIONS:
 │       20~3       │  240 KiB   │
 └──────────────────┴────────────┘
 ┌──────────┬──────────────┬─────────┬───────────────┬───────────────┐
-│ Creation │ Modification │ Cleanup │ Total         │ Current       │
+│ Creation │ Modification │ Cleanup │     Total     │    Current    │
 ├──────────┼──────────────┼─────────┼───────────────┼───────────────┤
 │ 868 KiB  │ 240 KiB      │ 532 KiB │ 1 MiB 616 KiB │ 1 MiB 636 KiB │
 └──────────┴──────────────┴─────────┴───────────────┴───────────────┘
@@ -153,7 +153,7 @@ OPTIONS:
 ***Sampling only single replica volumes:***
 
 ```textmate
-❯ cargo run -q --bin pstor-usage -- --pools 0 --volume-replicas 1 --volume-mods 0 --no-total-stats
+❯ cargo run -q --bin pstor-usage -- --pools 0 --volume-replicas 1 --volume-attach-cycles 0 --no-total-stats
 ┌───────────────┬────────────┐
 │ Volumes ~Repl │ Disk Usage │
 ├───────────────┼────────────┤
@@ -182,9 +182,52 @@ OPTIONS:
 ***Extrapolating persistent storage usage for a whole year:***
 
 ```textmate
+> Extrapolate how much storage a cluster would require if it were to run for a specified number of days
+USAGE:
+    pstor-usage extrapolate [FLAGS] [OPTIONS] --days <days> [SUBCOMMAND]
+
+FLAGS:
+    -h, --help               Prints help information
+        --show-simulation    Show tabulated simulation output
+        --usage-bytes        Show the usage in the stdout output as bytes
+        --usage-only         Show only the usage in the stdout output
+    -V, --version            Prints version information
+
+OPTIONS:
+        --cluster-name <cluster-name>
+            When using a cluster config (--config), you can specify a single cluster to extrapolate. Otherwise, we'll
+            extrapolate all clusters
+    -c, --config <config>
+            Reads cluster configuration from a YAML configuration file.
+            Example format:
+            ```yaml
+            clusters:
+              tiny:
+                replicas: 1
+                volume_turnover: 1
+                volume_attach_cycles: 5
+              small:
+                replicas: 2
+                volume_turnover: 10
+                volume_attach_cycles: 15
+            ```
+            When using this option you must specify which cluster to extrapolate using --cluster-name.
+    -d, --days <days>                                  Runtime in days to extrapolate
+        --table-entries <table-entries>                Maximum number of table entries to print [default: 10]
+        --volume-attach-cycle <volume-attach-cycle>
+            Volume attach cycle: how many volume modifications (publish/unpublish) are done every day [default: 200]
+
+        --volume-turnover <volume-turnover>
+            Volume turnover: how many volumes are created/deleted every day [default: 50]
+
+
+SUBCOMMANDS:
+    help        Prints this message or the help of the given subcommand(s)
+    simulate
+
 ❯ cargo run -q --bin pstor-usage -- extrapolate --days 365
 ┌──────┬─────────────────┬──────────────────────┬─────────────────┐
-│ Days │ Volume Turnover │ Volume Attach/Detach │ Disk Usage      │
+│ Days │ Volume Turnover │ Volume Attach/Detach │   Disk Usage    │
 ├──────┼─────────────────┼──────────────────────┼─────────────────┤
 │  36  │      1800       │         7200         │ 96 MiB 514 KiB  │
 ├──────┼─────────────────┼──────────────────────┼─────────────────┤
@@ -213,7 +256,7 @@ The simulation parameters can be modified using the simulation subcommand within
 ```textmate
 ❯ cargo run -q --bin pstor-usage -- extrapolate --days 365 simulate --volume-replicas 1
 ┌──────┬─────────────────┬──────────────────────┬─────────────────┐
-│ Days │ Volume Turnover │ Volume Attach/Detach │ Disk Usage      │
+│ Days │ Volume Turnover │ Volume Attach/Detach │   Disk Usage    │
 ├──────┼─────────────────┼──────────────────────┼─────────────────┤
 │  36  │      1800       │         7200         │ 53 MiB 626 KiB  │
 ├──────┼─────────────────┼──────────────────────┼─────────────────┤
@@ -235,4 +278,109 @@ The simulation parameters can be modified using the simulation subcommand within
 ├──────┼─────────────────┼──────────────────────┼─────────────────┤
 │ 365  │      18250      │        73000         │ 543 MiB 575 KiB │
 └──────┴─────────────────┴──────────────────────┴─────────────────┘
+```
+
+***Extrapolating using a config file:***
+
+```textmate
+> cargo run -q --bin pstor-usage -- extrapolate --days 365 --config utils/pstor-usage/config.yaml
+┌─────────┬───────────────────────────────────────────────────────────────────┐
+│ Cluster │                              Results                              │
+├─────────┼───────────────────────────────────────────────────────────────────┤
+│ tiny    │ ┌──────┬─────────────────┬──────────────────────┬───────────────┐ │
+│         │ │ Days │ Volume Turnover │ Volume Attach/Detach │  Disk Usage   │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │  36  │       36        │         180          │ 1 MiB 742 KiB │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │  72  │       72        │         360          │ 3 MiB 461 KiB │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 108  │       108       │         540          │ 5 MiB 180 KiB │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 144  │       144       │         720          │ 6 MiB 923 KiB │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 180  │       180       │         900          │ 8 MiB 642 KiB │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 216  │       216       │         1080         │    11 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 252  │       252       │         1260         │    12 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 288  │       288       │         1440         │    14 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 324  │       324       │         1620         │    16 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 365  │       365       │         1825         │    18 MiB     │ │
+│         │ └──────┴─────────────────┴──────────────────────┴───────────────┘ │
+├─────────┼───────────────────────────────────────────────────────────────────┤
+│ small   │ ┌──────┬─────────────────┬──────────────────────┬───────────────┐ │
+│         │ │ Days │ Volume Turnover │ Volume Attach/Detach │  Disk Usage   │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │  36  │       360       │         540          │ 6 MiB 436 KiB │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │  72  │       720       │         1080         │    13 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 108  │      1080       │         1620         │    20 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 144  │      1440       │         2160         │    26 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 180  │      1800       │         2700         │    33 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 216  │      2160       │         3240         │    39 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 252  │      2520       │         3780         │    45 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 288  │      2880       │         4320         │    52 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 324  │      3240       │         4860         │    58 MiB     │ │
+│         │ ├──────┼─────────────────┼──────────────────────┼───────────────┤ │
+│         │ │ 365  │      3650       │         5475         │    66 MiB     │ │
+│         │ └──────┴─────────────────┴──────────────────────┴───────────────┘ │
+├─────────┼───────────────────────────────────────────────────────────────────┤
+│ medium  │ ┌──────┬─────────────────┬──────────────────────┬────────────┐    │
+│         │ │ Days │ Volume Turnover │ Volume Attach/Detach │ Disk Usage │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │  36  │      1800       │         3600         │   55 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │  72  │      3600       │         7200         │  109 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 108  │      5400       │        10800         │  163 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 144  │      7200       │        14400         │  218 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 180  │      9000       │        18000         │  272 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 216  │      10800      │        21600         │  326 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 252  │      12600      │        25200         │  381 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 288  │      14400      │        28800         │  435 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 324  │      16200      │        32400         │  489 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 365  │      18250      │        36500         │  551 MiB   │    │
+│         │ └──────┴─────────────────┴──────────────────────┴────────────┘    │
+├─────────┼───────────────────────────────────────────────────────────────────┤
+│ large   │ ┌──────┬─────────────────┬──────────────────────┬────────────┐    │
+│         │ │ Days │ Volume Turnover │ Volume Attach/Detach │ Disk Usage │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │  36  │      3600       │         7200         │  109 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │  72  │      7200       │        14400         │  218 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 108  │      10800      │        21600         │  326 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 144  │      14400      │        28800         │  435 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 180  │      18000      │        36000         │  544 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 216  │      21600      │        43200         │  652 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 252  │      25200      │        50400         │  761 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 288  │      28800      │        57600         │  869 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 324  │      32400      │        64800         │  978 MiB   │    │
+│         │ ├──────┼─────────────────┼──────────────────────┼────────────┤    │
+│         │ │ 365  │      36500      │        73000         │  1102 MiB  │    │
+│         │ └──────┴─────────────────┴──────────────────────┴────────────┘    │
+└─────────┴───────────────────────────────────────────────────────────────────┘
 ```

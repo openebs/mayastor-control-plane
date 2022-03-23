@@ -28,7 +28,14 @@ impl Etcd {
         let byte = 1;
         let kilo = byte * 1024;
         let mega = kilo * 1024;
-        if bytes > mega {
+        if bytes > 10 * mega {
+            let mut megas = bytes / mega;
+            let kilos = (bytes - (megas * mega)) / kilo;
+            if kilos > 100 {
+                megas += 1;
+            }
+            format!("{} MiB", megas)
+        } else if bytes > mega {
             let megas = bytes / mega;
             let kilos = (bytes - (megas * mega)) / kilo;
             format!("{} MiB {} KiB", megas, kilos)

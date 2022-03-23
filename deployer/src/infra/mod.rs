@@ -16,6 +16,7 @@ use common_lib::{
     mbus_api::Message,
     types::v0::message_bus::{ChannelVs, Liveness},
 };
+
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
 use futures::future::join_all;
 use paste::paste;
@@ -102,7 +103,7 @@ macro_rules! impl_ctrlp_agents {
                     build_error(&format!("the {} agent", name), status.code())?;
                 }
                 let mut binary = Binary::from_dbg(&name);
-                if options.no_nats == false {
+                if !options.no_nats {
                     binary = binary.with_nats("-n");
                 }
                 if let Some(env) = &options.agents_env {
@@ -156,8 +157,19 @@ macro_rules! impl_ctrlp_agents {
                 cfg.start(&name).await?;
                 Ok(())
             }
-            async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
-                Liveness {}.request_on_bus(ChannelVs::$name, bus()).await?;
+            async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+                if !options.no_nats {
+                    Liveness {}.request_on_bus(ChannelVs::$name, bus()).await?;
+                } else {
+                    let ip = cfg.container_ip("core");
+                    let uri = tonic::transport::Uri::from_str(&format!("https://{}:50051", ip)).unwrap();
+                    let timeout = grpc::context::TimeoutOptions::new().with_timeout(std::time::Duration::from_millis(100));
+                    let core = grpc::client::CoreClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;
+                    core.wait_ready(None).await.map_err(|_| {
+                        let error = "Failed to wait for core to get ready";
+                        std::io::Error::new(std::io::ErrorKind::TimedOut, error)
+                    })?;
+                }
                 Ok(())
             }
         })+
@@ -238,6 +250,7 @@ impl Components {
                 .iter()
                 .filter(|c| c.boot_order() == component.boot_order());
             for component in components {
+                tracing::trace!(component=%component.to_string(), "Starting");
                 component.start(&self.1, cfg).await?;
             }
             last_done = Some(component.boot_order());
@@ -387,16 +400,19 @@ macro_rules! impl_component {
         #[async_trait]
         impl ComponentAction for Component {
             fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
+                let _trace = TraceFn::new(self, "configure");
                 match self {
                     $(Self::$name(obj) => obj.configure(options, cfg),)+
                 }
             }
             async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+                let _trace = TraceFn::new(self, "start");
                 match self {
                     $(Self::$name(obj) => obj.start(options, cfg).await,)+
                 }
             }
             async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+                let _trace = TraceFn::new(self, "wait_on");
                 match self {
                     $(Self::$name(obj) => obj.wait_on(options, cfg).await,)+
                 }
@@ -437,6 +453,20 @@ macro_rules! impl_component {
     };
 }
 
+struct TraceFn(String, String);
+impl TraceFn {
+    fn new(component: &Component, func: &str) -> Self {
+        let component = component.to_string();
+        tracing::trace!(component=%component, func=%func, "Entering");
+        Self(component, func.to_string())
+    }
+}
+impl Drop for TraceFn {
+    fn drop(&mut self) {
+        tracing::trace!(component=%self.0, func=%self.1, "Exiting");
+    }
+}
+
 // Component Name and bootstrap ordering
 // from lower to high
 impl_component! {
@@ -444,11 +474,11 @@ impl_component! {
     // Note: NATS needs to be the first to support usage of this library in cargo tests
     // to make sure that the IP does not change between tests
     Nats,       0,
+    Jaeger,     0,
     Dns,        1,
     Etcd,       1,
     Elastic,    1,
     Kibana,     1,
-    Jaeger,     2,
     Core,       3,
     Rest,       3,
     Mayastor,   4,

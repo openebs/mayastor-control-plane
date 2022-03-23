@@ -1,0 +1,26 @@
+clusters:
+  tiny:
+    replicas: 2
+    volume_turnover: 1
+    volume_attach_cycles: 5
+  small:
+    replicas: 2
+    volume_turnover: 10
+    volume_attach_cycles: 15
+  medium:
+    replicas: 3
+    volume_turnover: 50
+    volume_attach_cycles: 100
+  large:
+    replicas: 3
+    volume_turnover: 100
+    volume_attach_cycles: 200
+simulation:
+  pool_size: 20971520
+  volume_size: 5242880
+  pools: 10
+  pool_samples: 5
+  volumes: 20
+  volume_samples: 10
+  volume_attach_cycles: 2
+  pool_use_malloc: false

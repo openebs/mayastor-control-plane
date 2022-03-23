@@ -61,7 +61,7 @@ let
     };
   };
   build-operator-images = { buildType }: {
-    msp = build-operator-image { inherit buildType; name = "msp"; };
+    diskpool = build-operator-image { inherit buildType; name = "diskpool"; };
   };
   build-csi-images = { buildType }: {
     controller = build-csi-image { inherit buildType; name = "controller"; };

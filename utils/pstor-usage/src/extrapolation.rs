@@ -1,9 +1,13 @@
 use crate::{
+    config::{ClusterConfig, ClusterName, ClusterOpts},
     etcd::DiskUsage,
+    printer::TabledData,
     resources::{GenericSample, ResourceSample, ResourceSamples},
-    simulation::SimulationOpts,
+    simulation::{RunStats, SimulationOpts},
     Etcd, PrettyPrinter, Printer, Simulation, Url,
 };
+use itertools::Itertools;
+use std::collections::HashMap;
 use structopt::StructOpt;
 
 /// Extrapolate how much storage a cluster would require if it were to run for a specified
@@ -14,9 +18,9 @@ pub(crate) struct Extrapolation {
     #[structopt(long, short)]
     days: std::num::NonZeroU64,
 
-    /// Maximum number of tabled entries to print.
+    /// Maximum number of table entries to print.
     #[structopt(long, default_value = "10")]
-    tabled_entries: std::num::NonZeroU64,
+    table_entries: std::num::NonZeroU64,
 
     /// Show only the usage in the stdout output.
     #[structopt(long)]
@@ -29,6 +33,9 @@ pub(crate) struct Extrapolation {
     /// Extrapolation specific options.
     #[structopt(flatten)]
     opts: ExtrapolationDayOpts,
+
+    #[structopt(flatten)]
+    cluster_opts: ClusterOpts,
 
     /// Show tabulated simulation output.
     #[structopt(long)]
@@ -58,33 +65,88 @@ struct ExtrapolationDayOpts {
 }
 
 impl Extrapolation {
-    /// Extrapolate based on the current parameters.
-    pub(crate) async fn extrapolate(&self, external_cluster: &Option<Url>) -> anyhow::Result<()> {
-        let mut simulation = match &self.simulate {
-            None => Simulation::from(SimulationOpts::from_iter(Vec::<String>::new())),
-            Some(Command::Simulate(opts)) => Simulation::from(opts.clone()),
+    fn init(&mut self, config: &ClusterConfig) {
+        self.opts = ExtrapolationDayOpts {
+            volume_turnover: config.turnover(),
+            volume_attach_cycle: config.mods(),
+        }
+    }
+    fn clusters(&mut self) -> anyhow::Result<HashMap<ClusterName, ClusterConfig>> {
+        Ok(if let Some(config) = self.cluster_opts.cluster()? {
+            HashMap::from([config])
+        } else {
+            self.cluster_opts.clusters()
+        })
+    }
+    fn config_to_simulation(&self, config: &ClusterConfig) -> Simulation {
+        let config_simulation = self.cluster_opts.simulation();
+        let opts = match (config_simulation, &self.simulate) {
+            (Some(opts), _) => opts,
+            (None, Some(Command::Simulate(opts))) => opts.clone(),
+            (None, None) => SimulationOpts::default(),
         };
+        let opts = opts.with_replicas(config.replicas());
+        let mut simulation = Simulation::from(opts);
         simulation.set_print_samples(!self.usage_only && self.show_simulation);
+        simulation
+    }
+    /// Extrapolate based on the current parameters.
+    pub(crate) async fn extrapolate(
+        &mut self,
+        external_cluster: &Option<Url>,
+    ) -> anyhow::Result<()> {
+        let mut simulations = HashMap::new();
+        let mut results = ExtrapolationResults::default();
+        for (name, config) in self.clusters()? {
+            let simulation = self.config_to_simulation(&config);
+            let stats = match simulations.get(&simulation) {
+                None => {
+                    let stats = simulation.simulate(external_cluster).await?;
+                    simulations.insert(simulation.clone(), stats.clone());
+                    stats
+                }
+                Some(stats) => stats.clone(),
+            };
+            self.init(&config);
 
-        let stats = simulation.simulate(external_cluster).await?;
+            results.push(name, self.extrapolate_from_simulation(simulation, stats));
+        }
+        if self.usage_only {
+            for (_, result) in results
+                .results
+                .into_iter()
+                .sorted_by(|(_, a), (_, b)| a.total_usage.cmp(&b.total_usage))
+            {
+                if self.usage_bytes {
+                    println!("{}", result.total_usage);
+                } else {
+                    println!("{}", Etcd::bytes_to_units(result.total_usage));
+                }
+            }
+        } else {
+            let printer = PrettyPrinter::new();
+            printer.print(&results);
+        }
 
+        Ok(())
+    }
+    fn extrapolate_from_simulation(
+        &self,
+        simulation: Simulation,
+        stats: RunStats,
+    ) -> ExtrapolationResult {
         let usage_per_vol = (stats.allocation() + stats.cleanup()) / simulation.volumes_allocated();
         let usage_per_mod = stats.modification() / simulation.volumes_modified();
 
         let daily = usage_per_mod * self.opts.volume_attach_cycle
             + usage_per_vol * self.opts.volume_turnover;
         let days = u64::from(self.days);
+        let total_usage = daily * days;
 
-        if self.usage_only {
-            if self.usage_bytes {
-                println!("{}", daily * days);
-            } else {
-                println!("{}", Etcd::bytes_to_units(daily * days));
-            }
-
-            Ok(())
+        let samples = if self.usage_only {
+            ResourceSamples::default()
         } else {
-            let mut max_entries = u64::from(self.tabled_entries).min(days);
+            let mut max_entries = u64::from(self.table_entries).min(days);
             let days_entry = days / max_entries;
             let mut extra_days = days - days_entry * max_entries;
             if extra_days > 0 {
@@ -120,11 +182,52 @@ impl Extrapolation {
                 daily_usage.points_mut().push(daily * extra_days);
             }
 
-            let samples = ResourceSamples::new(vec![days, turnover, mods, daily_usage]);
-            let printer = PrettyPrinter::new();
-            printer.print(&samples);
-
-            Ok(())
+            ResourceSamples::new(vec![days, turnover, mods, daily_usage])
+        };
+        ExtrapolationResult {
+            total_usage,
+            samples,
         }
+    }
+}
+
+#[derive(Default)]
+struct ExtrapolationResults {
+    results: HashMap<ClusterName, ExtrapolationResult>,
+}
+struct ExtrapolationResult {
+    total_usage: u64,
+    samples: ResourceSamples,
+}
+
+impl ExtrapolationResults {
+    fn push(&mut self, name: ClusterName, result: ExtrapolationResult) {
+        self.results.insert(name, result);
+    }
+}
+
+impl TabledData for ExtrapolationResults {
+    type Row = prettytable::Row;
+
+    fn titles(&self) -> Self::Row {
+        prettytable::Row::new(vec![crate::new_cell("Cluster"), crate::new_cell("Results")])
+    }
+
+    fn rows(&self) -> Vec<Self::Row> {
+        self.results
+            .iter()
+            .sorted_by(|(_, a), (_, b)| a.total_usage.cmp(&b.total_usage))
+            .map(|(name, result)| {
+                let titles = result.samples.titles();
+                let rows = result.samples.rows();
+                let mut table = prettytable::Table::init(rows);
+                table.set_titles(titles);
+                table.set_format(*prettytable::format::consts::FORMAT_BOX_CHARS);
+                prettytable::Row::new(vec![
+                    prettytable::Cell::new(name),
+                    prettytable::Cell::new(&table.to_string()),
+                ])
+            })
+            .collect()
     }
 }
