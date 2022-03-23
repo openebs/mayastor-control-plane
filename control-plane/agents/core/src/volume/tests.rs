@@ -203,8 +203,8 @@ async fn wait_till_volume_deleted(cluster: &Cluster) {
     let client = cluster.grpc_client().volume();
     let start = std::time::Instant::now();
     loop {
-        let volumes = client.get(Filter::None, None).await.unwrap();
-        if volumes.0.is_empty() {
+        let volumes = client.get(Filter::None, None, None).await.unwrap();
+        if volumes.entries.is_empty() {
             return;
         }
 
@@ -638,10 +638,10 @@ async fn wait_till_volume_nexus(
     let start = std::time::Instant::now();
     loop {
         let volume = client
-            .get(GetVolumes::new(volume).filter, None)
+            .get(GetVolumes::new(volume).filter, None, None)
             .await
             .unwrap();
-        let volume_state = volume.0.clone().first().unwrap().state();
+        let volume_state = volume.entries.clone().first().unwrap().state();
         let nexus = volume_state.target.clone().unwrap();
         let specs = GetSpecs::default().request().await.unwrap();
         let nexus_spec = specs.nexuses.first().unwrap().clone();
@@ -665,10 +665,10 @@ async fn wait_till_volume_nexus(
 /// Get the children of the specified volume (assumes non ANA)
 async fn volume_children(volume: &VolumeId, client: &dyn VolumeOperations) -> Vec<Child> {
     let volume = client
-        .get(GetVolumes::new(volume).filter, None)
+        .get(GetVolumes::new(volume).filter, None, None)
         .await
         .unwrap();
-    let volume_state = volume.0.first().unwrap().state();
+    let volume_state = volume.entries.first().unwrap().state();
     volume_state.target.unwrap().children
 }
 
@@ -1069,14 +1069,14 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize, client: &dyn Volum
 /// Return the number of replicas that exist and have a state.
 async fn existing_replicas(volume_id: &VolumeId, client: &dyn VolumeOperations) -> usize {
     let volumes = client
-        .get(GetVolumes::new(volume_id).filter, None)
+        .get(GetVolumes::new(volume_id).filter, None, None)
         .await
         .unwrap();
 
     // Get volumes with the given uuid.
     // There should only be one.
     let filtered_volumes: Vec<Volume> = volumes
-        .into_inner()
+        .entries
         .into_iter()
         .filter(|v| v.uuid() == volume_id)
         .collect();
@@ -1292,10 +1292,10 @@ async fn nexus_persistence_test_iteration(
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client
@@ -1323,10 +1323,10 @@ async fn publishing_test(cluster: &Cluster) {
         .await
         .unwrap();
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0;
+        .entries;
     tracing::info!("Volumes: {:?}", volumes);
     assert_eq!(Some(&volume), volumes.first());
 
@@ -1429,11 +1429,11 @@ async fn publishing_test(cluster: &Cluster) {
     tracing::info!("Published on '{}' with share '{}'", nx.node, nx.device_uri);
 
     let volumes = volume_client
-        .get(Filter::Volume(volume_state.uuid.clone()), None)
+        .get(Filter::Volume(volume_state.uuid.clone()), None, None)
         .await
         .unwrap();
 
-    let first_volume_state = volumes.0.first().unwrap().state();
+    let first_volume_state = volumes.entries.first().unwrap().state();
     assert_eq!(
         first_volume_state.target_protocol(),
         Some(VolumeShareProtocol::Nvmf)
@@ -1491,11 +1491,11 @@ async fn publishing_test(cluster: &Cluster) {
     );
 
     let volumes = volume_client
-        .get(Filter::Volume(volume_state.uuid.clone()), None)
+        .get(Filter::Volume(volume_state.uuid.clone()), None, None)
         .await
         .unwrap();
 
-    let first_volume_state = volumes.0.first().unwrap().state();
+    let first_volume_state = volumes.entries.first().unwrap().state();
     assert_eq!(
         first_volume_state.target_protocol(),
         None,
@@ -1537,10 +1537,10 @@ async fn publishing_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client
@@ -1553,10 +1553,10 @@ async fn publishing_test(cluster: &Cluster) {
 
 async fn get_volume(volume: &VolumeState, client: &dyn VolumeOperations) -> Volume {
     let request = client
-        .get(Filter::Volume(volume.uuid.clone()), None)
+        .get(Filter::Volume(volume.uuid.clone()), None, None)
         .await
         .unwrap();
-    request.into_inner().first().cloned().unwrap()
+    request.entries.first().cloned().unwrap()
 }
 
 async fn wait_for_node_online(cluster: &Cluster, node: &NodeId) {
@@ -1616,10 +1616,10 @@ async fn replica_count_test(cluster: &Cluster) {
         .unwrap();
 
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0;
+        .entries;
     tracing::info!("Volumes: {:?}", volumes);
     assert_eq!(Some(&volume), volumes.first());
 
@@ -1786,10 +1786,10 @@ async fn replica_count_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client
@@ -1812,10 +1812,10 @@ async fn smoke_test(cluster: &Cluster) {
 
     let volume = volume_client.create(&create_volume, None).await.unwrap();
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0;
+        .entries;
     tracing::info!("Volumes: {:?}", volumes);
 
     assert_eq!(Some(&volume), volumes.first());
@@ -1831,10 +1831,10 @@ async fn smoke_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client

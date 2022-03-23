@@ -6,7 +6,7 @@ use common_lib::types::v0::message_bus::{
 
 use crate::core::reconciler::PollTriggerEvent;
 use common_lib::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec};
-
+use grpc::operations::{PaginatedResult, Pagination};
 use std::collections::HashMap;
 
 impl Registry {
@@ -111,6 +111,22 @@ impl Registry {
             }
         }
         volumes
+    }
+
+    /// Get a paginated subset of volumes
+    pub(super) async fn get_paginated_volume(
+        &self,
+        pagination: &Pagination,
+    ) -> PaginatedResult<Volume> {
+        let volume_specs = self.specs().get_paginated_volumes(pagination);
+        let mut volumes = Vec::with_capacity(volume_specs.len());
+        let last = volume_specs.last();
+        for spec in volume_specs.result() {
+            if let Ok(state) = self.get_volume_state(&spec.uuid).await {
+                volumes.push(Volume::new(spec, state));
+            }
+        }
+        PaginatedResult::new(volumes, last)
     }
 
     /// Return a volume object corresponding to the ID.

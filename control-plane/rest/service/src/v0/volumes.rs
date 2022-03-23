@@ -6,7 +6,7 @@ use common_lib::types::v0::{
     },
     openapi::{apis::Uuid, models::VolumeShareProtocol},
 };
-use grpc::operations::volume::traits::VolumeOperations;
+use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
 
 fn client() -> impl VolumeOperations {
     core_grpc().volume()
@@ -57,17 +57,32 @@ impl apis::actix_server::Volumes for RestApi {
         let volume = volume(
             volume_id.to_string(),
             client()
-                .get(Filter::Volume(volume_id.into()), None)
+                .get(Filter::Volume(volume_id.into()), None, None)
                 .await?
-                .into_inner()
+                .entries
                 .get(0),
         )?;
         Ok(volume.into())
     }
 
-    async fn get_volumes() -> Result<Vec<models::Volume>, RestError<RestJsonError>> {
-        let volumes = client().get(Filter::None, None).await?;
-        Ok(volumes.into_inner().into_iter().map(From::from).collect())
+    async fn get_volumes(
+        Query((max_entries, starting_token)): Query<(Option<isize>, Option<isize>)>,
+    ) -> Result<models::Volumes, RestError<RestJsonError>> {
+        let max_entries = max_entries.unwrap_or_default();
+        let starting_token = starting_token.unwrap_or_default();
+        let pagination = if max_entries > 0 {
+            Some(Pagination::new(
+                max_entries as MaxEntries,
+                starting_token as StartingToken,
+            ))
+        } else {
+            None
+        };
+        let volumes = client().get(Filter::None, pagination, None).await?;
+        Ok(models::Volumes {
+            entries: volumes.entries.into_iter().map(|e| e.into()).collect(),
+            next_token: volumes.next_token.map(|t| t as isize),
+        })
     }
 
     async fn put_volume(

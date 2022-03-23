@@ -447,7 +447,7 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
         assert exception_info["status"] == requests.codes["insufficient_storage"]
 
     # Check that the volume wasn't created.
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes().entries
     assert len(volumes) == 0
 
 

@@ -143,7 +143,7 @@ def setup():
     )
     yield
     PoolOps.delete_all()
-    # Deployer.stop()
+    Deployer.stop()
 
 
 @pytest.fixture(scope="module")

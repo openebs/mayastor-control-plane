@@ -43,6 +43,7 @@ use common_lib::{
         },
     },
 };
+use grpc::operations::{PaginatedResult, Pagination};
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::{convert::From, ops::Deref, sync::Arc};
@@ -222,6 +223,26 @@ impl ResourceSpecs {
     pub(crate) fn get_volumes(&self) -> Vec<VolumeSpec> {
         self.volumes.values().map(|v| v.lock().clone()).collect()
     }
+
+    /// Get a subset of the volumes based on the pagination argument.
+    pub(crate) fn get_paginated_volumes(
+        &self,
+        pagination: &Pagination,
+    ) -> PaginatedResult<VolumeSpec> {
+        let num_volumes = self.volumes.len() as u64;
+        let max_entries = pagination.max_entries() as u64;
+        let offset = std::cmp::min(pagination.starting_token() as u64, num_volumes);
+        let mut last_result = false;
+        let length = match offset + max_entries >= num_volumes {
+            true => {
+                last_result = true;
+                num_volumes - offset
+            }
+            false => pagination.max_entries(),
+        };
+
+        PaginatedResult::new(self.volumes.paginate(offset, length), last_result)
+    }
 }
 impl ResourceSpecsLocked {
     /// Get the protected VolumeSpec for the given volume `id`, if any exists
@@ -248,6 +269,16 @@ impl ResourceSpecsLocked {
         let specs = self.read();
         specs.get_volumes()
     }
+
+    /// Get a subset of volumes based on the pagination argument.
+    pub(crate) fn get_paginated_volumes(
+        &self,
+        pagination: &Pagination,
+    ) -> PaginatedResult<VolumeSpec> {
+        let specs = self.read();
+        specs.get_paginated_volumes(pagination)
+    }
+
     /// Gets a copy of all locked VolumeSpec's
     pub(crate) fn get_locked_volumes(&self) -> Vec<Arc<Mutex<VolumeSpec>>> {
         let specs = self.read();
