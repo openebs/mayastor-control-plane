@@ -1,10 +1,14 @@
-use crate::operations::{
-    node::{client::NodeClient, traits::NodeOperations},
-    pool::{client::PoolClient, traits::PoolOperations},
-    replica::{client::ReplicaClient, traits::ReplicaOperations},
-    volume::{client::VolumeClient, traits::VolumeOperations},
+use crate::{
+    context::Context,
+    operations::{
+        node::{client::NodeClient, traits::NodeOperations},
+        pool::{client::PoolClient, traits::PoolOperations},
+        replica::{client::ReplicaClient, traits::ReplicaOperations},
+        volume::{client::VolumeClient, traits::VolumeOperations},
+    },
 };
 use common_lib::mbus_api::TimeoutOptions;
+use std::time::Duration;
 use tonic::transport::Uri;
 
 /// CoreClient encapsulates all the individual clients needed for gRPC transport
@@ -45,5 +49,39 @@ impl CoreClient {
     /// retrieve the corresponding node client
     pub fn node(&self) -> impl NodeOperations {
         self.node.clone()
+    }
+    /// Try to wait until the Core Agent is ready, up to a timeout, by using the Probe method.
+    pub async fn wait_ready(&self, timeout_opts: Option<TimeoutOptions>) -> Result<(), ()> {
+        let timeout_opts = match timeout_opts {
+            Some(opts) => opts,
+            None => TimeoutOptions::new()
+                .with_timeout(Duration::from_millis(250))
+                .with_max_retries(10),
+        };
+        for attempt in 1 ..= timeout_opts.max_retries().unwrap_or_default() {
+            match self
+                .volume
+                .probe(Some(Context::new(Some(timeout_opts.clone()))))
+                .await
+            {
+                Ok(true) => return Ok(()),
+                _ => {
+                    let delay = std::time::Duration::from_millis(100);
+                    tracing::trace!(%attempt, delay=?delay, "Not available, retrying after...");
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        }
+        match self
+            .volume
+            .probe(Some(Context::new(Some(timeout_opts.clone()))))
+            .await
+        {
+            Ok(true) => Ok(()),
+            _ => {
+                tracing::error!("Timed out");
+                Err(())
+            }
+        }
     }
 }

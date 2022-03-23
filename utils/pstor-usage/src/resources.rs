@@ -92,6 +92,7 @@ pub(crate) trait ResourceSample {
 }
 
 /// A helper collection of samples
+#[derive(Default)]
 pub(crate) struct ResourceSamples {
     inner: Vec<Box<dyn ResourceSample>>,
 }

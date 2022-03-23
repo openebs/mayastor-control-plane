@@ -2,6 +2,7 @@
 //! simulated cluster as well as extrapolate future usage based on the samples. By default, it makes
 //! use of the `deployer` library to create a local cluster running on docker.
 
+mod config;
 mod etcd;
 mod extrapolation;
 mod pools;
@@ -46,7 +47,14 @@ async fn main() -> anyhow::Result<()> {
         Operations::Simulate(simulation) => {
             let _ = simulation.simulate(&args.rest_url).await?;
         }
-        Operations::Extrapolate(extrapolation) => extrapolation.extrapolate(&args.rest_url).await?,
+        Operations::Extrapolate(mut extrapolation) => {
+            extrapolation.extrapolate(&args.rest_url).await?
+        }
     }
     Ok(())
+}
+
+/// New `prettytable::Cell` aligned to the center.
+pub(crate) fn new_cell(string: &str) -> prettytable::Cell {
+    prettytable::Cell::new_align(string, prettytable::format::Alignment::CENTER)
 }

@@ -42,6 +42,7 @@ use std::{
 };
 use structopt::StructOpt;
 use tonic::transport::Uri;
+use tracing::dispatcher::DefaultGuard;
 use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
 use utils::tracing_telemetry::default_tracing_tags;
 
@@ -229,7 +230,7 @@ impl Cluster {
     /// New cluster
     async fn new(
         trace: bool,
-        env_filter: Option<EnvFilter>,
+        trace_guard: Arc<DefaultGuard>,
         timeout_rest: std::time::Duration,
         bus_timeout: TimeoutOptions,
         bearer_token: Option<String>,
@@ -272,32 +273,6 @@ impl Cluster {
                 test_module.is_none()
             });
         }
-
-        let subscriber = Registry::default()
-            // todo: add env filter as an optional layer
-            .with(env_filter.unwrap())
-            .with(tracing_subscriber::fmt::layer());
-
-        let mut tracing_tags = vec![];
-        let trace_guard = Arc::new(match trace {
-            true => {
-                tracing_tags.append(&mut default_tracing_tags(
-                    utils::raw_version_str(),
-                    env!("CARGO_PKG_VERSION"),
-                ));
-                tracing_tags.dedup();
-
-                global::set_text_map_propagator(TraceContextPropagator::new());
-                let tracer = opentelemetry_jaeger::new_pipeline()
-                    .with_service_name("cluster-client")
-                    .with_tags(tracing_tags)
-                    .install_simple()
-                    .expect("Should be able to initialise the exporter");
-                let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-                tracing::subscriber::set_default(subscriber.with(telemetry))
-            }
-            false => tracing::subscriber::set_default(subscriber),
-        });
 
         let grpc_client = if components.core_enabled() {
             Some(
@@ -706,6 +681,9 @@ impl ClusterBuilder {
     #[must_use]
     pub fn with_jaeger(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_jaeger(enabled);
+        if !enabled {
+            self.trace = false;
+        }
         self
     }
     /// Specify whether rest is enabled or not and wether to use authentication or not
@@ -765,12 +743,38 @@ impl ClusterBuilder {
         components: Components,
         compose_builder: Builder,
     ) -> Result<Cluster, Error> {
+        let subscriber = Registry::default()
+            // todo: add env filter as an optional layer
+            .with(self.env_filter.take().unwrap())
+            .with(tracing_subscriber::fmt::layer());
+
+        let mut tracing_tags = vec![];
+        let trace_guard = Arc::new(match self.trace {
+            true => {
+                tracing_tags.append(&mut default_tracing_tags(
+                    utils::raw_version_str(),
+                    env!("CARGO_PKG_VERSION"),
+                ));
+                tracing_tags.dedup();
+
+                global::set_text_map_propagator(TraceContextPropagator::new());
+                let tracer = opentelemetry_jaeger::new_pipeline()
+                    .with_service_name("cluster-client")
+                    .with_tags(tracing_tags)
+                    .install_simple()
+                    .expect("Should be able to initialise the exporter");
+                let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+                tracing::subscriber::set_default(subscriber.with(telemetry))
+            }
+            false => tracing::subscriber::set_default(subscriber),
+        });
+
         let compose_builder = compose_builder.with_shutdown_order(components.shutdown_order());
         let composer = compose_builder.build().await?;
 
         let cluster = Cluster::new(
             self.trace,
-            self.env_filter.take(),
+            trace_guard,
             self.rest_timeout,
             self.bus_timeout.clone(),
             self.bearer_token.clone(),
