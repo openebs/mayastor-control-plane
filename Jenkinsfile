@@ -117,6 +117,9 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+            }
             sh 'printenv'
             sh 'nix-shell --run "./scripts/rust/test.sh"'
           }
@@ -133,6 +136,9 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+            }
             sh 'printenv'
             sh 'nix-shell --run "./scripts/python/test.sh"'
           }

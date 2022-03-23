@@ -26,8 +26,10 @@ mkShell {
     etcd
     fio
     git
-    llvmPackages.libclang
+    jq
+    libudev
     libxfs
+    llvmPackages.libclang
     nats-server
     nvme-cli
     openapi-generator
@@ -39,7 +41,6 @@ mkShell {
     tini
     utillinux
     which
-    libudev
   ] ++ pkgs.lib.optional (!norust) channel.default_src.nightly;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
@@ -61,5 +62,11 @@ mkShell {
     [ ! -z "${mayastor}" ] && cowsay "${mayastor_moth}"
     [ ! -z "${mayastor}" ] && export MAYASTOR_BIN="${mayastor}"
     export PATH="$PATH:$(pwd)/target/debug"
+    DOCKER_CONFIG=~/.docker/config.json
+    if [ -f "$DOCKER_CONFIG" ]; then
+      DOCKER_TOKEN=$(cat ~/.docker/config.json | jq '.auths."https://index.docker.io/v1/".auth // empty' | tr -d '"' | base64 -d)
+      export DOCKER_USER=$(echo $DOCKER_TOKEN | cut -d':' -f1)
+      export DOCKER_PASS=$(echo $DOCKER_TOKEN | cut -d':' -f2)
+    fi
   '';
 }
