@@ -142,6 +142,22 @@ pipeline {
             sh 'printenv'
             sh 'nix-shell --run "./scripts/python/test.sh"'
           }
+          post {
+            always {
+              // in case of abnormal termination of any nvmf test
+              sh 'sudo nvme disconnect-all'
+            }
+          }
+        }
+        stage('image build test') {
+          when {
+            branch 'staging'
+          }
+          agent { label 'nixos-mayastor' }
+          steps {
+            sh './scripts/nix/git-submodule-init.sh --force'
+            sh './scripts/release.sh --skip-publish --debug'
+          }
         }
       }// parallel stages block
     }// end of test stage

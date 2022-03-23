@@ -62,6 +62,7 @@ let
     "tests"
     "scripts"
     "utils"
+    "license"
   ];
   buildProps = rec {
     name = "control-plane-${version}";
