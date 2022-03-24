@@ -5,14 +5,14 @@ pub mod volume;
 
 use structopt::StructOpt;
 
-pub(crate) type VolumeId = openapi::apis::Uuid;
-pub(crate) type ReplicaCount = u8;
-pub(crate) type PoolId = String;
-pub(crate) type NodeId = String;
+pub type VolumeId = openapi::apis::Uuid;
+pub type ReplicaCount = u8;
+pub type PoolId = String;
+pub type NodeId = String;
 
 /// The types of resources that support the 'get' operation.
 #[derive(StructOpt, Debug)]
-pub(crate) enum GetResources {
+pub enum GetResources {
     /// Get all volumes.
     Volumes,
     /// Get volume with the given ID.
@@ -31,7 +31,7 @@ pub(crate) enum GetResources {
 
 /// The types of resources that support the 'scale' operation.
 #[derive(StructOpt, Debug)]
-pub(crate) enum ScaleResources {
+pub enum ScaleResources {
     /// Scale volume.
     Volume {
         /// ID of the volume.

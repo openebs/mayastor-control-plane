@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 /// Volumes resource.
 #[derive(StructOpt, Debug)]
-pub(crate) struct Volumes {}
+pub struct Volumes {}
 
 // CreateRows being trait for Vec<Volume> would create the rows from the list of
 // Volumes returned from REST call.
@@ -71,7 +71,7 @@ impl List for Volumes {
 
 /// Volume resource.
 #[derive(StructOpt, Debug)]
-pub(crate) struct Volume {}
+pub struct Volume {}
 
 #[async_trait(?Send)]
 impl Get for Volume {
@@ -103,7 +103,7 @@ impl Scale for Volume {
                     // Print json or yaml based on output format.
                     utils::print_table(output, volume.into_body());
                 }
-                OutputFormat::NoFormat => {
+                OutputFormat::None => {
                     // In case the output format is not specified, show a success message.
                     println!("Volume {} Scaled Successfully 🚀", id)
                 }

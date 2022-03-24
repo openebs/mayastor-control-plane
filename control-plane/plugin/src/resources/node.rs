@@ -57,7 +57,7 @@ impl List for Nodes {
 
 /// Node resource.
 #[derive(StructOpt, Debug)]
-pub(crate) struct Node {}
+pub struct Node {}
 
 #[async_trait(?Send)]
 impl Get for Node {

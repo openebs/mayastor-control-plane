@@ -1,9 +1,11 @@
+mod core;
 mod csi;
 pub mod dns;
 mod elastic;
 mod empty;
 mod etcd;
 mod jaeger;
+mod jsongrpc;
 mod kibana;
 mod mayastor;
 pub mod nats;
@@ -91,88 +93,6 @@ macro_rules! impl_ctrlp_agents {
                 }
             }
         }
-
-        $(#[async_trait]
-        impl ComponentAction for $name {
-            fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
-                let name = stringify!($name).to_ascii_lowercase();
-                if options.build {
-                    let status = std::process::Command::new("cargo")
-                        .args(&["build", "-p", "agents", "--bin", &name])
-                        .status()?;
-                    build_error(&format!("the {} agent", name), status.code())?;
-                }
-                let mut binary = Binary::from_dbg(&name);
-                if !options.no_nats {
-                    binary = binary.with_nats("-n");
-                }
-                if let Some(env) = &options.agents_env {
-                    for kv in env {
-                        binary = binary.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
-                    }
-                }
-
-                if name == "core" {
-                    let etcd = format!("etcd.{}:2379", options.cluster_label.name());
-                    binary = binary.with_args(vec!["--store", &etcd]);
-                    if let Some(cache_period) = &options.cache_period {
-                        binary = binary.with_args(vec!["-c", &cache_period.to_string()]);
-                    }
-                    if let Some(deadline) = &options.node_deadline {
-                        binary = binary.with_args(vec!["-d", &deadline.to_string()]);
-                    }
-                    if let Some(timeout) = &options.node_conn_timeout {
-                        binary = binary.with_args(vec!["--connect-timeout", &timeout.to_string()]);
-                    }
-                    if let Some(timeout) = &options.request_timeout {
-                        binary = binary.with_args(vec!["--request-timeout", &timeout.to_string()]);
-                    }
-                    if options.no_min_timeouts {
-                        binary = binary.with_arg("--no-min-timeouts");
-                    }
-                    if let Some(timeout) = &options.store_timeout {
-                        binary = binary.with_args(vec!["--store-timeout", &timeout.to_string()]);
-                    }
-                    if let Some(ttl) = &options.store_lease_ttl {
-                        binary = binary.with_args(vec!["--store-lease-ttl", &ttl.to_string()]);
-                    }
-                    if let Some(period) = &options.reconcile_period {
-                        binary = binary.with_args(vec!["--reconcile-period", &period.to_string()]);
-                    }
-                    if let Some(period) = &options.reconcile_idle_period {
-                        binary = binary.with_args(vec!["--reconcile-idle-period", &period.to_string()]);
-                    }
-                    if cfg.container_exists("jaeger") {
-                        let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
-                        binary = binary.with_args(vec!["--jaeger", &jaeger_config]);
-                    }
-                }
-                if let Some(size) = &options.otel_max_batch_size {
-                    binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
-                }
-                Ok(cfg.add_container_bin(&name, binary))
-            }
-            async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
-                let name = stringify!($name).to_ascii_lowercase();
-                cfg.start(&name).await?;
-                Ok(())
-            }
-            async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
-                if !options.no_nats {
-                    Liveness {}.request_on_bus(ChannelVs::$name, bus()).await?;
-                } else {
-                    let ip = cfg.container_ip("core");
-                    let uri = tonic::transport::Uri::from_str(&format!("https://{}:50051", ip)).unwrap();
-                    let timeout = grpc::context::TimeoutOptions::new().with_timeout(std::time::Duration::from_millis(100));
-                    let core = grpc::client::CoreClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;
-                    core.wait_ready(None).await.map_err(|_| {
-                        let error = "Failed to wait for core to get ready";
-                        std::io::Error::new(std::io::ErrorKind::TimedOut, error)
-                    })?;
-                }
-                Ok(())
-            }
-        })+
     };
     ($($name:ident), +) => {
         impl_ctrlp_agents!($($name,)+);
@@ -195,14 +115,23 @@ pub fn build_error(name: &str, status: Option<i32>) -> Result<(), Error> {
 }
 
 impl Components {
-    /// Wait for the url endpoint to return success to a GET request with a default timeout
+    /// Wait for the url endpoint to return success to a GET request with a default timeout.
     pub async fn wait_url(url: &str) -> Result<(), Error> {
         Self::wait_url_timeout(url, std::time::Duration::from_secs(20)).await
     }
-    /// Wait for the url endpoint to return success to a GET request with a provided timeout
+    /// Wait for the url endpoint to return success to a GET request with a provided timeout.
     pub async fn wait_url_timeout(url: &str, timeout: std::time::Duration) -> Result<(), Error> {
+        Self::wait_url_timeouts(url, timeout, std::time::Duration::from_millis(200)).await
+    }
+    /// Wait for the url endpoint to return success to a GET request with provided timeouts.
+    pub async fn wait_url_timeouts(
+        url: &str,
+        total: std::time::Duration,
+        each: std::time::Duration,
+    ) -> Result<(), Error> {
         let start_time = std::time::Instant::now();
-        let get_timeout = std::time::Duration::from_millis(200);
+        let get_timeout = each;
+        let timeout = total;
         loop {
             let request = reqwest::Client::new().get(url).timeout(get_timeout);
             match request.send().await {

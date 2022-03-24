@@ -238,7 +238,9 @@ version = "1.0.0"
 dependencies = [
  "actix-rt",
  "actix-web",
+ "anyhow",
  "async-trait",
+ "chrono",
  "common-lib",
  "ctrlp-tests",
  "dyn-clonable",
@@ -248,6 +250,8 @@ dependencies = [
  "humantime",
  "indexmap",
  "itertools",
+ "k8s-openapi",
+ "kube",
  "lazy_static",
  "once_cell",
  "opentelemetry",
@@ -259,6 +263,7 @@ dependencies = [
  "rpc",
  "serde",
  "serde_json",
+ "shutdown",
  "snafu",
  "state",
  "structopt",
@@ -269,6 +274,7 @@ dependencies = [
  "tracing-subscriber 0.2.25",
  "url",
  "utils",
+ "uuid",
 ]
 
 [[package]]
@@ -2023,6 +2029,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "k8s-operators"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "futures",
+ "humantime",
+ "k8s-openapi",
+ "kube",
+ "kube-runtime",
+ "openapi",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "snafu",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber 0.2.25",
+ "utils",
+]
+
+[[package]]
 name = "kube"
 version = "0.60.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2114,26 +2147,13 @@ name = "kubectl-plugin"
 version = "1.0.0"
 dependencies = [
  "anyhow",
- "async-trait",
- "ctrlp-tests",
- "gag",
- "git-version",
  "humantime",
- "lazy_static",
- "once_cell",
  "openapi",
  "opentelemetry",
- "opentelemetry-jaeger",
- "prettytable-rs",
- "serde",
- "serde_json",
- "serde_yaml",
- "shutdown_hooks",
+ "rest-plugin",
  "structopt",
  "tokio",
  "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber 0.2.25",
  "utils",
  "yaml-rust",
 ]
@@ -2354,33 +2374,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
 dependencies = [
  "winapi",
-]
-
-[[package]]
-name = "msp-operator"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "futures",
- "humantime",
- "k8s-openapi",
- "kube",
- "kube-runtime",
- "openapi",
- "opentelemetry",
- "opentelemetry-jaeger",
- "schemars",
- "serde",
- "serde_json",
- "serde_yaml",
- "snafu",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber 0.2.25",
- "utils",
 ]
 
 [[package]]
@@ -3221,6 +3214,35 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
  "url",
+ "utils",
+]
+
+[[package]]
+name = "rest-plugin"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ctrlp-tests",
+ "gag",
+ "humantime",
+ "lazy_static",
+ "once_cell",
+ "openapi",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "prettytable-rs",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "shutdown_hooks",
+ "structopt",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber 0.2.25",
  "utils",
 ]
 

@@ -39,8 +39,8 @@ let
     operators = rec {
       operator_installer = { name, src }: installer { inherit name src; suffix = "-operator"; };
       diskpool = operator_installer {
-        src = builder.build { inherit buildType; cargoBuildFlags = [ "-p msp-operator" ]; };
-        name = "msp-operator";
+        src = builder.build { inherit buildType; cargoBuildFlags = [ "-p diskpool-operator" ]; };
+        name = "diskpool-operator";
       };
       recurseForDerivations = true;
     };

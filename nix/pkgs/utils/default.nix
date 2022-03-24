@@ -32,9 +32,9 @@ let
           # don't run during the dependency build phase
           if [ ! -f build.rs ]; then
             patchShebangs ./scripts/rust/generate-openapi-bindings.sh
-            ./scripts/rust/generate-openapi-bindings.sh
+            ./scripts/rust/generate-openapi-bindings.sh --skip-git-diff
           fi
-          sed -i '/ctrlp-tests.*=/d' ./kubectl-plugin/Cargo.toml
+          sed -i '/ctrlp-tests.*=/d' ./control-plane/plugin/Cargo.toml
           export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C link-args=''$(echo $NIX_LDFLAGS | tr ' ' '\n' | grep -- '^-L' | tr '\n' ' ')"
           export NIX_LDFLAGS=
         '';
@@ -60,9 +60,9 @@ let
           # don't run during the dependency build phase
           if [ ! -f build.rs ]; then
             patchShebangs ./scripts/rust/generate-openapi-bindings.sh
-            ./scripts/rust/generate-openapi-bindings.sh
+            ./scripts/rust/generate-openapi-bindings.sh --skip-git-diff
           fi
-          sed -i '/ctrlp-tests.*=/d' ./kubectl-plugin/Cargo.toml
+          sed -i '/ctrlp-tests.*=/d' ./control-plane/plugin/Cargo.toml
         '';
         cargoBuildOptions = attrs: attrs ++ [ "-p" "kubectl-plugin" ];
         nativeBuildInputs = [ clang openapi-generator which git ];

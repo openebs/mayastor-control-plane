@@ -1,11 +1,8 @@
 use prettytable::{format, Row, Table};
 use serde::ser;
 
-/// Constant to specify the output formats, these should work irrespective of case.
-pub const YAML_FORMAT: &str = "yaml";
-pub const JSON_FORMAT: &str = "json";
-
 const CELL_NO_CONTENT: &str = "<none>";
+
 /// Optional cells should display `CELL_NO_CONTENT` if Node
 pub fn optional_cell<T: ToString>(field: Option<T>) -> String {
     field
@@ -60,21 +57,12 @@ pub trait GetHeaderRow {
 }
 
 // OutputFormat to be used as an enum to match the output from args.
-#[derive(Debug)]
+#[derive(Debug, strum_macros::EnumString, strum_macros::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
 pub enum OutputFormat {
+    None,
     Yaml,
     Json,
-    NoFormat,
-}
-
-impl From<&str> for OutputFormat {
-    fn from(format_str: &str) -> Self {
-        match format_str {
-            YAML_FORMAT => Self::Yaml,
-            JSON_FORMAT => Self::Json,
-            _ => Self::NoFormat,
-        }
-    }
 }
 
 impl<T> CreateRows for Vec<T>
@@ -115,7 +103,7 @@ where
             let s = serde_json::to_string(&obj).unwrap();
             println!("{}", s);
         }
-        OutputFormat::NoFormat => {
+        OutputFormat::None => {
             // Show the tabular form if output format is not specified.
             let rows: Vec<Row> = obj.create_rows();
             let header: Row = obj.get_header_row();

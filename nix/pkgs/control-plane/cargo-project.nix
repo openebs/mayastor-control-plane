@@ -56,13 +56,13 @@ let
     "common"
     "control-plane"
     "deployer"
+    "k8s"
     "kubectl-plugin"
     "openapi"
     "rpc"
-    "tests"
     "scripts"
+    "tests"
     "utils"
-    "license"
   ];
   buildProps = rec {
     name = "control-plane-${version}";
@@ -115,7 +115,7 @@ in
 
   build = { buildType, cargoBuildFlags ? [ ] }:
     if allInOne then
-      builder { inherit buildType; cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p msp-operator" "-p csi-driver" ]; }
+      builder { inherit buildType; cargoBuildFlags = [ "-p rpc" "-p agents" "-p rest" "-p k8s-operators" "-p csi-driver" ]; }
     else
       builder { inherit buildType cargoBuildFlags; };
 }
