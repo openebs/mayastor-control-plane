@@ -14,6 +14,8 @@ members = [
     "control-plane/plugin",
     "k8s/operators",
     "k8s/plugin",
+    ## Supportability tool to create bundle
+    "k8s/supportability-tool",
     "deployer",
     "openapi",
     "rpc",
