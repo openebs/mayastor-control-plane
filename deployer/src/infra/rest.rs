@@ -1,4 +1,5 @@
 use super::*;
+use std::time::Duration;
 
 #[async_trait]
 impl ComponentAction for Rest {
@@ -67,6 +68,11 @@ impl ComponentAction for Rest {
         if options.no_rest {
             return Ok(());
         }
-        Components::wait_url("http://localhost:8081/v0/api/spec").await
+        Components::wait_url_timeouts(
+            "http://localhost:8081/v0/api/spec",
+            Duration::from_secs(10),
+            Duration::from_millis(100),
+        )
+        .await
     }
 }

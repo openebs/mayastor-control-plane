@@ -5,7 +5,7 @@ set -e
 SCRIPTDIR=$(dirname "$0")
 ROOTDIR="$SCRIPTDIR"/../../
 TEMPLATES="$ROOTDIR/chart/templates"
-POOL="$ROOTDIR/control-plane/msp-operator"
+POOL="$ROOTDIR/k8s/operators/diskpool"
 POOL_CRD="mayastorpoolcrd.yaml"
 
 # Regenerate the bindings only if the rest src changed
@@ -21,7 +21,7 @@ if [[ $check = "yes" ]]; then
     git diff --cached --exit-code "$POOL" 1>/dev/null && exit 0
 fi
 
-( cd "$TEMPLATES" && cargo run --bin msp-operator -- --write-crd "$POOL_CRD" )
+( cd "$TEMPLATES" && cargo run --bin diskpool-operator -- --write-crd "$POOL_CRD" )
 
 # If the openapi bindings were modified then fail the check
 git diff --exit-code "$TEMPLATES/$POOL_CRD"

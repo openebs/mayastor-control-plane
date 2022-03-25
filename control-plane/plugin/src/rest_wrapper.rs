@@ -26,7 +26,7 @@ impl RestClient {
     }
 
     /// Get an ApiClient to use for REST calls.
-    pub(crate) fn client() -> &'static ApiClient {
+    pub fn client() -> &'static ApiClient {
         REST_SERVER.get().unwrap()
     }
 }

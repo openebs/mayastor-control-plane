@@ -4,7 +4,7 @@ use structopt::StructOpt;
 
 /// The types of operations that are supported.
 #[derive(StructOpt, Debug)]
-pub(crate) enum Operations {
+pub enum Operations {
     /// 'Get' resources.
     Get(GetResources),
     /// 'Scale' resources.

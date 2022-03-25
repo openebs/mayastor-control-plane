@@ -188,7 +188,7 @@ where
     T: GetHeaderRow,
 {
     let mut buf = BufferRedirect::stdout().unwrap();
-    print_table(&OutputFormat::NoFormat, obj);
+    print_table(&OutputFormat::None, obj);
     let mut actual_output = String::new();
     buf.read_to_string(&mut actual_output).unwrap();
     assert_eq!(&actual_output[..], expected_output);

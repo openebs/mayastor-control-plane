@@ -58,8 +58,10 @@ impl ComponentAction for Csi {
 
         // Step 1: Wait till CSI controller's gRPC server is registered and is ready
         // to serve API requests.
+        let endpoint =
+            Endpoint::try_from("http://[::]:50051")?.connect_timeout(Duration::from_millis(100));
         let channel = loop {
-            match Endpoint::try_from("http://[::]:50051")?
+            match endpoint
                 .connect_with_connector(service_fn(|_: Uri| UnixStream::connect(CSI_SOCKET)))
                 .await
             {
@@ -77,7 +79,7 @@ impl ComponentAction for Csi {
                 .await
             {
                 Ok(_) => break,
-                Err(_) => sleep(Duration::from_secs(1)).await,
+                Err(_) => sleep(Duration::from_millis(100)).await,
             }
         }
 

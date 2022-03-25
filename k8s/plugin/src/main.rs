@@ -1,30 +1,19 @@
-#[macro_use]
-extern crate prettytable;
-#[macro_use]
-extern crate lazy_static;
-
-mod operations;
-mod resources;
-mod rest_wrapper;
-
-use crate::{
-    operations::{Get, List, ReplicaTopology, Scale},
+use anyhow::Result;
+use openapi::tower::client::Url;
+use opentelemetry::global;
+use plugin::{
+    operations::{Get, List, Operations, ReplicaTopology, Scale},
     resources::{node, pool, volume, GetResources, ScaleResources},
     rest_wrapper::RestClient,
 };
-use anyhow::Result;
-use openapi::tower::client::Url;
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
-use operations::Operations;
 use std::{env, path::Path};
 use structopt::StructOpt;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 use yaml_rust::YamlLoader;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
-    /// The rest endpoint, parsed from KUBECONFIG, if left empty .
+    /// The rest endpoint to connect to.
     #[structopt(global = true, long, short)]
     rest: Option<Url>,
 
@@ -33,14 +22,14 @@ struct CliArgs {
     operations: Operations,
 
     /// The Output, viz yaml, json.
-    #[structopt(global = true, default_value = "none", short, long, possible_values=&["yaml", "json", "none"], parse(from_str))]
-    output: crate::resources::utils::OutputFormat,
+    #[structopt(global = true, default_value = plugin::resources::utils::OutputFormat::None.as_ref(), short, long)]
+    output: plugin::resources::utils::OutputFormat,
 
-    /// Trace rest requests to the Jaeger endpoint agent
+    /// Trace rest requests to the Jaeger endpoint agent.
     #[structopt(global = true, long, short)]
     jaeger: Option<String>,
 
-    /// Timeout for the REST operations
+    /// Timeout for the REST operations.
     #[structopt(long, short, default_value = "10s")]
     timeout: humantime::Duration,
 }
@@ -50,52 +39,9 @@ impl CliArgs {
     }
 }
 
-fn default_log_filter(current: tracing_subscriber::EnvFilter) -> tracing_subscriber::EnvFilter {
-    let log_level = match current.to_string().as_str() {
-        "debug" => "debug",
-        "trace" => "trace",
-        _ => return current,
-    };
-    let logs = format!("kubectl_mayastor={},warn", log_level);
-    tracing_subscriber::EnvFilter::try_new(logs).unwrap()
-}
-
-fn init_tracing() {
-    let filter = default_log_filter(
-        tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("off")),
-    );
-
-    let subscriber = Registry::default().with(filter).with(
-        tracing_subscriber::fmt::layer()
-            .with_writer(std::io::stderr)
-            .pretty(),
-    );
-
-    match CliArgs::args().jaeger {
-        Some(jaeger) => {
-            global::set_text_map_propagator(TraceContextPropagator::new());
-            let git_version = option_env!("GIT_VERSION").unwrap_or_else(utils::raw_version_str);
-            let tags = utils::tracing_telemetry::default_tracing_tags(
-                git_version,
-                env!("CARGO_PKG_VERSION"),
-            );
-            let tracer = opentelemetry_jaeger::new_pipeline()
-                .with_agent_endpoint(jaeger)
-                .with_service_name("kubectl-plugin")
-                .with_tags(tags)
-                .install_batch(opentelemetry::runtime::TokioCurrentThread)
-                .expect("Should be able to initialise the exporter");
-            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-            subscriber.with(telemetry).init();
-        }
-        None => subscriber.init(),
-    };
-}
-
 #[tokio::main]
 async fn main() {
-    init_tracing();
+    plugin::init_tracing(&CliArgs::args().jaeger);
 
     execute(CliArgs::args()).await;
 
