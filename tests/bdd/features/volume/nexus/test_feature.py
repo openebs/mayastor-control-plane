@@ -1,4 +1,6 @@
 """Managing a Volume Nexus Target feature tests."""
+import time
+
 import os
 
 from pytest_bdd import given, scenario, then, when
@@ -49,8 +51,10 @@ def a_published_selfhealing_volume():
 @when("its nexus target is faulted")
 def its_nexus_target_is_faulted():
     """its nexus target is faulted."""
-    # Kill remote mayastor instance, which should fault the volume nexus child
-    Docker.kill_container(MAYASTOR_2)
+    # Stop remote mayastor instance, which should fault the volume nexus child
+    # By Stopping instead of killing, the control plane should see the node is down due to the
+    # DeRegister event.
+    Docker.stop_container(MAYASTOR_2)
     check_target_faulted()
 
 

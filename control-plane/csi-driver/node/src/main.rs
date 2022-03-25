@@ -126,15 +126,20 @@ pub async fn get_nodename(hostname: &str) -> String {
         .await
         .expect("Failed to initialize k8s API client");
     let nodes: Api<K8sNode> = Api::all(k8s);
-    let node = nodes
-        .get(hostname)
-        .await
-        .unwrap_or_else(|_| panic!("Node '{}' not found in Kubernetes cluster", hostname));
+
+    let node = nodes.get(hostname).await.unwrap_or_else(|error| {
+        panic!(
+            "Node '{}' not found in Kubernetes cluster: {}",
+            hostname, error
+        )
+    });
+
     let labels = node
         .meta()
         .labels
         .as_ref()
         .unwrap_or_else(|| panic!("No labels available for node '{}'", hostname));
+
     let l = labels
         .get("kubernetes.io/hostname")
         .unwrap_or_else(|| {
@@ -145,8 +150,8 @@ pub async fn get_nodename(hostname: &str) -> String {
         })
         .to_string();
     info!(
-        "Retrieved hostname from 'kubernetes.io/hostname' label: {}",
-        l
+        "Retrieved hostname({}) from 'kubernetes.io/hostname' label: {}",
+        hostname, l
     );
     l
 }

@@ -40,7 +40,7 @@ variable "control_resource_requests" {
 variable "msp_operator_image" {
   type        = string
   description = "msp operator image to use"
-  default     = "mayastor-msp-operator"
+  default     = "diskpool-operator"
 }
 
 variable "rest_image" {
