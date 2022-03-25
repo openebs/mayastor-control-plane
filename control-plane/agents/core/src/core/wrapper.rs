@@ -142,6 +142,11 @@ impl NodeWrapper {
         )
     }
 
+    /// Get the `NodeStateFetcher` to fetch information from the data-plane.
+    pub(crate) fn fetcher(&self) -> NodeStateFetcher {
+        NodeStateFetcher::new(self.node_state.clone())
+    }
+
     /// Whether the watchdog deadline has expired
     pub(crate) fn registration_expired(&self) -> bool {
         self.watchdog.timestamp().elapsed() > self.watchdog.deadline()
@@ -380,7 +385,7 @@ impl NodeWrapper {
         );
 
         let mut client = self.grpc_client().await?;
-        match self.fetch_resources(&mut client).await {
+        match self.fetcher().fetch_resources(&mut client).await {
             Ok((replicas, pools, nexuses)) => {
                 let mut states = self.resources_mut();
                 states.update(pools, replicas, nexuses);
@@ -442,6 +447,97 @@ impl NodeWrapper {
         }
     }
 
+    /// Update all the nexus states.
+    async fn update_nexus_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let nexuses = node.read().await.fetcher().fetch_nexuses(client).await?;
+        node.write()
+            .await
+            .update_resources(ResourceType::Nexus(nexuses));
+        Ok(())
+    }
+
+    /// Update all the pool states.
+    async fn update_pool_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let pools = node.read().await.fetcher().fetch_pools(client).await?;
+        node.write()
+            .await
+            .update_resources(ResourceType::Pool(pools));
+        Ok(())
+    }
+
+    /// Update all the replica states.
+    async fn update_replica_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let replicas = node.read().await.fetcher().fetch_replicas(client).await?;
+        node.write()
+            .await
+            .update_resources(ResourceType::Replica(replicas));
+        Ok(())
+    }
+
+    /// Update the states of the specified resource type.
+    /// Whenever the nexus states are updated the number of rebuilds must be updated.
+    fn update_resources(&self, resource_type: ResourceType) {
+        match resource_type {
+            ResourceType::All(pools, replicas, nexuses) => {
+                self.resources_mut().update(pools, replicas, nexuses);
+                self.update_num_rebuilds();
+            }
+            ResourceType::Nexus(nexuses) => {
+                self.resources_mut().update_nexuses(nexuses);
+                self.update_num_rebuilds();
+            }
+            ResourceType::Pool(pools) => {
+                self.resources_mut().update_pools(pools);
+            }
+            ResourceType::Replica(replicas) => {
+                self.resources_mut().update_replicas(replicas);
+            }
+        }
+    }
+
+    /// Update the number of rebuilds in progress on this node.
+    fn update_num_rebuilds(&self) {
+        // Note: Each nexus returns the total number of rebuilds on the node **NOT** the number of
+        // rebuilds per nexus. Therefore retrieve the number of rebuilds from one nexus only.
+        // If there are no nexuses, the number of rebuilds is reset.
+        let num_rebuilds = self
+            .nexus_states()
+            .first()
+            .map(|nexus_state| nexus_state.nexus.rebuilds)
+            .unwrap_or(0);
+        let mut rebuilds = self.num_rebuilds.write();
+        *rebuilds = num_rebuilds;
+    }
+
+    /// Return the number of rebuilds in progress on this node.
+    pub(crate) fn num_rebuilds(&self) -> NumRebuilds {
+        *self.num_rebuilds.read()
+    }
+}
+
+/// Fetches node state from the dataplane.
+#[derive(Debug, Clone)]
+pub(crate) struct NodeStateFetcher {
+    /// inner Node state
+    node_state: NodeState,
+}
+impl NodeStateFetcher {
+    /// Get new `Self` from the `NodeState`.
+    fn new(node_state: NodeState) -> Self {
+        Self { node_state }
+    }
+    fn id(&self) -> &NodeId {
+        self.node_state.id()
+    }
     /// Fetch the various resources from Mayastor.
     async fn fetch_resources(
         &self,
@@ -527,63 +623,6 @@ impl NodeWrapper {
             })
             .collect();
         Ok(nexuses)
-    }
-
-    /// Update all the nexus states.
-    async fn update_nexus_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
-        let nexuses = self.fetch_nexuses(client).await?;
-        self.update_resources(ResourceType::Nexus(nexuses));
-        Ok(())
-    }
-
-    /// Update all the pool states.
-    async fn update_pool_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
-        let pools = self.fetch_pools(client).await?;
-        self.update_resources(ResourceType::Pool(pools));
-        Ok(())
-    }
-
-    /// Update all the replica states.
-    async fn update_replica_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
-        let replicas = self.fetch_replicas(client).await?;
-        self.update_resources(ResourceType::Replica(replicas));
-        Ok(())
-    }
-
-    /// Update the states of the specified resource type.
-    /// Whenever the nexus states are updated the number of rebuilds must be updated.
-    fn update_resources(&self, resource_type: ResourceType) {
-        match resource_type {
-            ResourceType::All(pools, replicas, nexuses) => {
-                self.resources_mut().update(pools, replicas, nexuses);
-                self.update_num_rebuilds();
-            }
-            ResourceType::Nexus(nexuses) => {
-                self.resources_mut().update_nexuses(nexuses);
-                self.update_num_rebuilds();
-            }
-            ResourceType::Pool(pools) => {
-                self.resources_mut().update_pools(pools);
-            }
-            ResourceType::Replica(replicas) => {
-                self.resources_mut().update_replicas(replicas);
-            }
-        }
-    }
-
-    /// Update the number of rebuilds in progress on this node.
-    fn update_num_rebuilds(&self) {
-        let mut num_rebuilds = 0;
-        self.nexus_states().iter().for_each(|nexus_state| {
-            num_rebuilds += nexus_state.nexus.rebuilds;
-        });
-        let mut rebuilds = self.num_rebuilds.write();
-        *rebuilds = num_rebuilds;
-    }
-
-    /// Return the number of rebuilds in progress on this node.
-    pub(crate) fn num_rebuilds(&self) -> NumRebuilds {
-        *self.num_rebuilds.read()
     }
 }
 
@@ -702,23 +741,23 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     }
 
     async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
-        self.read().await.update_nexus_states(ctx.deref_mut()).await
+        NodeWrapper::update_nexus_states(self, ctx.deref_mut()).await
     }
 
     async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
-        self.read().await.update_pool_states(ctx.deref_mut()).await
+        NodeWrapper::update_pool_states(self, ctx.deref_mut()).await
     }
 
     async fn update_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
-        let node = self.read().await;
-        node.update_replica_states(ctx.deref_mut()).await
+        NodeWrapper::update_replica_states(self, ctx.deref_mut()).await
     }
 
     async fn update_all(&self, setting_online: bool) -> Result<(), SvcError> {
         let ctx = self.read().await.grpc_context_ext(GETS_TIMEOUT)?;
         match ctx.connect_locked().await {
             Ok(mut lock) => {
-                let results = self.read().await.fetch_resources(lock.deref_mut()).await;
+                let node_fetcher = self.read().await.fetcher();
+                let results = node_fetcher.fetch_resources(lock.deref_mut()).await;
 
                 let mut node = self.write().await;
                 node.update(setting_online, results)
