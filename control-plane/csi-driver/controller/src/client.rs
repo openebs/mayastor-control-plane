@@ -1,3 +1,4 @@
+use crate::CsiControllerConfig;
 use common_lib::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
@@ -7,11 +8,9 @@ use common_lib::types::v0::openapi::{
     },
 };
 
-use crate::CsiControllerConfig;
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
-
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 use tracing::{debug, info, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -106,14 +105,13 @@ impl MayastorApiClient {
 
         let url = clients::tower::Url::parse(endpoint)
             .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
-        let tower =
-            clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration, Error: '{:?}'",
-                        error
-                    )
-                })?;
+        let tower = clients::tower::Configuration::new(url, cfg.io_timeout(), None, None, true)
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to create openapi configuration, Error: '{:?}'",
+                    error
+                )
+            })?;
 
         REST_CLIENT.get_or_init(|| Self {
             rest_client: clients::tower::ApiClient::new(tower),
