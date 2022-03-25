@@ -30,6 +30,7 @@ resource "kubernetes_daemonset" "csi_node" {
       }
 
       spec {
+        service_account_name = "mayastor-service-account"
         termination_grace_period_seconds = var.grace_period
 
         volume {
@@ -122,10 +123,6 @@ resource "kubernetes_daemonset" "csi_node" {
             value = "1"
           }
 
-          env {
-            name  = "RUST_LOG"
-            value = var.rust_log
-          }
 
           volume_mount {
             name       = "device"
