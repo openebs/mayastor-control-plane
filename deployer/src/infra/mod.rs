@@ -20,7 +20,7 @@ use common_lib::{
 };
 
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
 use paste::paste;
 use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
 use structopt::StructOpt;
@@ -178,10 +178,12 @@ impl Components {
                 .0
                 .iter()
                 .filter(|c| c.boot_order() == component.boot_order());
-            for component in components {
+
+            let start_components = components.map(|component| async move {
                 tracing::trace!(component=%component.to_string(), "Starting");
-                component.start(&self.1, cfg).await?;
-            }
+                component.start(&self.1, cfg).await
+            });
+            try_join_all(start_components).await?;
             last_done = Some(component.boot_order());
         }
         Ok(())
@@ -190,6 +192,7 @@ impl Components {
     /// component to make sure they start orderly
     async fn start_wait_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
         let mut last_done = None;
+
         for component in &self.0 {
             if let Some(last_done) = last_done {
                 if component.boot_order() == last_done {
@@ -202,9 +205,10 @@ impl Components {
                 .filter(|c| c.boot_order() == component.boot_order())
                 .collect::<Vec<&Component>>();
 
-            for component in &components {
-                component.start(&self.1, cfg).await?;
-            }
+            let wait_components = components
+                .iter()
+                .map(|c| async move { c.start(&self.1, cfg).await });
+            try_join_all(wait_components).await?;
             self.wait_on_components(&components, cfg).await?;
             last_done = Some(component.boot_order());
         }

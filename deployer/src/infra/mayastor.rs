@@ -51,9 +51,10 @@ impl ComponentAction for Mayastor {
         Ok(cfg)
     }
     async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
-        for i in 0 .. options.mayastors {
-            cfg.start(&Self::name(i, options)).await?;
-        }
+        let mayastors = (0 .. options.mayastors)
+            .into_iter()
+            .map(|i| async move { cfg.start(&Self::name(i, options)).await });
+        futures::future::try_join_all(mayastors).await?;
         Ok(())
     }
     async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {

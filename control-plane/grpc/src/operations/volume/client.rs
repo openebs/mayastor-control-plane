@@ -189,7 +189,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    #[tracing::instrument(name = "VolumeClient::probe", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "VolumeClient::probe", level = "debug", skip(self))]
     async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
         match self.client().probe(ProbeRequest {}).await {
             Ok(resp) => Ok(resp.into_inner().ready),
