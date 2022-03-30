@@ -3,7 +3,7 @@ use common_lib::types::v0::openapi::{
     clients::tower::StatusCode,
     models::{
         CreateVolumeBody, ExplicitNodeTopology, LabelledTopology, Node, NodeTopology, Pool,
-        PoolTopology, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol,
+        PoolTopology, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol, Volumes,
     },
 };
 
@@ -29,6 +29,8 @@ pub enum ApiClientError {
     InvalidResponse(String),
     /// URL is malformed.
     MalformedUrl(String),
+    /// Invalid argument.
+    InvalidArgument(String),
 }
 
 /// Placeholder for volume topology for volume creation operation.
@@ -148,13 +150,28 @@ impl MayastorApiClient {
     }
 
     /// List all volumes available in Mayastor cluster.
-    pub async fn list_volumes(&self) -> Result<Vec<Volume>, ApiClientError> {
+    pub async fn list_volumes(
+        &self,
+        max_entries: i32,
+        starting_token: String,
+    ) -> Result<Volumes, ApiClientError> {
+        let max_entries = max_entries as isize;
+        let starting_token = if starting_token.is_empty() {
+            0
+        } else {
+            starting_token.parse::<isize>().map_err(|_| {
+                ApiClientError::InvalidArgument(
+                    "Failed to parse starting token as an isize".to_string(),
+                )
+            })?
+        };
+
         let response = self
             .rest_client
             .volumes_api()
-            .get_volumes(None, None)
+            .get_volumes(Some(max_entries), Some(starting_token))
             .await?;
-        Ok(response.into_body().entries)
+        Ok(response.into_body())
     }
 
     /// List pools available on target Mayastor node.
