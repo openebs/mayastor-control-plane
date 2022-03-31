@@ -31,6 +31,9 @@ spec:
             - "-e http://rest:8081"
             - "--interval={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
+            {{- if .Values.msp.numRetries }}
+            - "-r={{ .Values.msp.numRetries }}"
+            {{- end }}
           env:
             - name: RUST_LOG
               value: info,msp_operator={{ .Values.mayastorCP.logLevel }}
