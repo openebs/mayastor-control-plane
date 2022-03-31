@@ -1200,6 +1200,8 @@ paths:
           description: the maximum number of results to return
           schema:
             type: integer
+            default: 0
+          required: true
         - in: query
           name: starting_token
           description: the offset to start pagination from

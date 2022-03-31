@@ -120,3 +120,9 @@ Scenario: list existing volumes with pagination
     When a ListVolumesRequest is sent to CSI controller with max_entries set to 1
     Then only a single volume should be returned
     And a subsequent ListVolumesRequest using the next token should return the next volume
+
+Scenario: list existing volumes with pagination max entries set to 0
+    Given 2 existing volumes
+    When a ListVolumesRequest is sent to CSI controller with max_entries set to 0
+    Then all volumes should be returned
+    And the next token should be empty

@@ -167,7 +167,7 @@ impl MayastorApiClient {
         let response = self
             .rest_client
             .volumes_api()
-            .get_volumes(Some(max_entries), Some(starting_token))
+            .get_volumes(max_entries, Some(starting_token))
             .await?;
         Ok(response.into_body())
     }
