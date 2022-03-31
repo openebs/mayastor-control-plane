@@ -1,3 +1,7 @@
+mod crd;
+
+use crd::*;
+
 use chrono::Utc;
 /// Mayastor pool operator wachtes for pool CRDs and creates the pool on
 /// the given node. There is a maximum retry limit that will put the pool
@@ -13,7 +17,7 @@ use k8s_openapi::{
 };
 use kube::{
     api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams},
-    Client, CustomResource, CustomResourceExt, ResourceExt,
+    Client, CustomResourceExt, ResourceExt,
 };
 use kube_runtime::{
     controller::{Context, Controller, ReconcilerAction},
@@ -24,8 +28,7 @@ use openapi::{
     models::{CreatePoolBody, Pool, RestJsonError},
 };
 use opentelemetry::global;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+
 use serde_json::json;
 use snafu::Snafu;
 use std::{collections::HashMap, io::Write, ops::Deref, sync::Arc, time::Duration};
@@ -35,128 +38,10 @@ const WHO_AM_I: &str = "Mayastor pool operator";
 const WHO_AM_I_SHORT: &str = "msp-operator";
 const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
 
-#[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
-#[kube(
-group = "openebs.io",
-version = "v1alpha1",
-kind = "MayastorPool",
-plural = "mayastorpools",
-// The name of the struct that gets created that represents a resource
-namespaced,
-status = "MayastorPoolStatus",
-derive = "PartialEq",
-derive = "Default",
-shortname = "msp",
-printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
-printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
-printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
-printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
-printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
-)]
-
-/// The pool spec which contains the parameters we use when creating the pool
-pub struct MayastorPoolSpec {
-    /// The node the pool is placed on
-    node: String,
-    /// The disk device the pool is located on
-    disks: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
-#[non_exhaustive]
-pub enum PoolState {
-    /// The pool is a new OR missing resource, and it has not been created or
-    /// imported yet by the operator. The pool spec MAY be but DOES
-    /// NOT have a status field.
-    Creating,
-    /// The resource spec has been created, and the pool is getting created by
-    /// the control plane.
-    Created,
-    /// The resource is present, and the pool has been created. The schema MUST
-    /// have a status and spec field.
-    Online,
-    /// The resource is present but the control plane did not return the pool state.
-    Unknown,
-    /// Trying to converge to the next state has exceeded the maximum retry
-    /// counts. The retry counts are implemented using an exponential back-off,
-    /// which by default is set to 10. Once the error state is entered,
-    /// reconciliation stops. Only external events (a new resource version)
-    /// will trigger a new attempt.
-    Error,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
-/// Status of the pool which is driven and changed by the controller loop
-pub struct MayastorPoolStatus {
-    /// The state of the pool
-    state: PoolState,
-    /// Capacity as number of bytes
-    capacity: u64,
-    /// Used number of bytes
-    used: u64,
-    /// Available number of bytes
-    available: u64,
-}
-
-impl Default for MayastorPoolStatus {
-    fn default() -> Self {
-        Self {
-            state: PoolState::Creating,
-            capacity: 0,
-            used: 0,
-            available: 0,
-        }
-    }
-}
-
-impl MayastorPoolStatus {
-    fn error() -> Self {
-        Self {
-            state: PoolState::Error,
-            capacity: 0,
-            used: 0,
-            available: 0,
-        }
-    }
-    fn created() -> Self {
-        Self {
-            state: PoolState::Created,
-            capacity: 0,
-            used: 0,
-            available: 0,
-        }
-    }
-    fn unknown() -> Self {
-        Self {
-            state: PoolState::Unknown,
-            capacity: 0,
-            used: 0,
-            available: 0,
-        }
-    }
-}
-
-impl From<Pool> for MayastorPoolStatus {
-    fn from(p: Pool) -> Self {
-        let state = p.state.expect("pool does not have state");
-        // todo: Should we set the pool to some sort of error state?
-        let free = if state.capacity > state.used {
-            state.capacity - state.used
-        } else {
-            0
-        };
-        Self {
-            state: PoolState::Online,
-            capacity: state.capacity,
-            used: state.used,
-            available: free,
-        }
-    }
-}
-
 /// Errors generated during the reconciliation loop
 #[derive(Debug, Snafu)]
-pub enum Error {
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum Error {
     #[snafu(display(
         "Failed to reconcile '{}' CRD within set limits, aborting operation",
         name
@@ -199,29 +84,9 @@ impl From<clients::tower::Error<RestJsonError>> for Error {
     }
 }
 
-/// converts the pool state into a string
-impl ToString for PoolState {
-    fn to_string(&self) -> String {
-        match &*self {
-            PoolState::Creating => "Creating",
-            PoolState::Created => "Created",
-            PoolState::Online => "Online",
-            PoolState::Unknown => "Unknown",
-            PoolState::Error => "Error",
-        }
-        .to_string()
-    }
-}
-/// Pool state into a string
-impl From<PoolState> for String {
-    fn from(p: PoolState) -> Self {
-        p.to_string()
-    }
-}
-
 /// Additional per resource context during the runtime; it is volatile
 #[derive(Clone)]
-pub struct ResourceContext {
+pub(crate) struct ResourceContext {
     /// The latest CRD known to us
     inner: MayastorPool,
     /// Counter that keeps track of how many times the reconcile loop has run
@@ -240,7 +105,7 @@ impl Deref for ResourceContext {
 }
 
 /// Data we want access to in error/reconcile calls
-pub struct OperatorContext {
+pub(crate) struct OperatorContext {
     /// Reference to our k8s client
     k8s: Client,
     /// Hashtable of name and the full last seen CRD
@@ -257,7 +122,11 @@ impl OperatorContext {
     /// Upsert the potential new CRD into the operator context. If an existing
     /// resource with the same name is present, the old resource is
     /// returned.
-    pub async fn upsert(&self, ctx: Arc<OperatorContext>, msp: MayastorPool) -> ResourceContext {
+    pub(crate) async fn upsert(
+        &self,
+        ctx: Arc<OperatorContext>,
+        msp: MayastorPool,
+    ) -> ResourceContext {
         let resource = ResourceContext {
             inner: msp,
             num_retries: 0,
@@ -305,7 +174,7 @@ impl OperatorContext {
         }
     }
     /// Remove the resource from the operator
-    pub async fn remove(&self, name: String) -> Option<ResourceContext> {
+    pub(crate) async fn remove(&self, name: String) -> Option<ResourceContext> {
         let mut i = self.inventory.write().await;
         let removed = i.remove(&name);
         if let Some(removed) = removed {
@@ -319,7 +188,7 @@ impl OperatorContext {
 impl ResourceContext {
     /// Called when putting our finalizer on top of the resource.
     #[tracing::instrument(fields(name = ?msp.name()))]
-    pub async fn put_finalizer(msp: MayastorPool) -> Result<ReconcilerAction, Error> {
+    pub(crate) async fn put_finalizer(msp: MayastorPool) -> Result<ReconcilerAction, Error> {
         Ok(ReconcilerAction {
             requeue_after: None,
         })
@@ -327,7 +196,9 @@ impl ResourceContext {
 
     /// Our notification that we should remove the pool and then the finalizer
     #[tracing::instrument(fields(name = ?resource.name()) skip(resource))]
-    pub async fn delete_finalizer(resource: ResourceContext) -> Result<ReconcilerAction, Error> {
+    pub(crate) async fn delete_finalizer(
+        resource: ResourceContext,
+    ) -> Result<ReconcilerAction, Error> {
         let ctx = resource.ctx.clone();
         resource.delete_pool().await?;
         ctx.remove(resource.name()).await;
@@ -414,7 +285,7 @@ impl ResourceContext {
     /// Create or import the pool, on failure try again. When we reach max error
     /// count we fail the whole thing.
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
-    pub async fn create_or_import(self) -> Result<ReconcilerAction, Error> {
+    pub(crate) async fn create_or_import(self) -> Result<ReconcilerAction, Error> {
         if self.num_retries == self.ctx.retries {
             self.k8s_notify(
                 "Failing pool creation",
@@ -431,29 +302,29 @@ impl ResourceContext {
         }
         match self
             .block_devices_api()
-            .get_node_block_devices(&self.spec.node, Some(true))
+            .get_node_block_devices(&self.spec.node(), Some(true))
             .await
         {
             Ok(response) => {
                 if !response.into_body().into_iter().any(|b| {
-                    b.devname == normalize_disk(&self.spec.disks[0])
+                    b.devname == normalize_disk(&self.spec.disks()[0])
                         || b.devlinks
                             .iter()
-                            .any(|d| *d == normalize_disk(&self.spec.disks[0]))
+                            .any(|d| *d == normalize_disk(&self.spec.disks()[0]))
                 }) {
                     self.k8s_notify(
                         "Create or import",
                         "Missing",
                         &format!(
                             "The block device(s): {} can not be found",
-                            &self.spec.disks[0]
+                            &self.spec.disks()[0]
                         ),
                         "Warn",
                     )
                     .await;
 
                     return Err(Error::SpecError {
-                        value: self.spec.disks[0].clone(),
+                        value: self.spec.disks()[0].clone(),
                         timeout: u32::pow(2, self.num_retries),
                     });
                 }
@@ -464,10 +335,10 @@ impl ResourceContext {
                     String::from(utils::MSP_OPERATOR),
                 );
 
-                let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
+                let body = CreatePoolBody::new_all(self.spec.disks(), labels);
                 match self
                     .pools_api()
-                    .put_node_pool(&self.spec.node, &self.name(), body)
+                    .put_node_pool(&self.spec.node(), &self.name(), body)
                     .await
                 {
                     Ok(_) => {}
@@ -549,7 +420,7 @@ impl ResourceContext {
 
         let res = self
             .pools_api()
-            .del_node_pool(&self.spec.node, &self.name())
+            .del_node_pool(&self.spec.node(), &self.name())
             .await?;
 
         if res.status().is_success() {
@@ -574,7 +445,7 @@ impl ResourceContext {
     async fn online_pool(self) -> Result<ReconcilerAction, Error> {
         let pool = self
             .pools_api()
-            .get_node_pool(&self.spec.node, &self.name())
+            .get_node_pool(&self.spec.node(), &self.name())
             .await?
             .into_body();
 
@@ -610,7 +481,7 @@ impl ResourceContext {
     async fn pool_check(&self) -> Result<ReconcilerAction, Error> {
         let pool = match self
             .pools_api()
-            .get_node_pool(&self.spec.node, &self.name())
+            .get_node_pool(&self.spec.node(), &self.name())
             .await
         {
             Ok(response) => response,
@@ -847,7 +718,7 @@ fn error_policy(error: &Error, _ctx: Context<OperatorContext>) -> ReconcilerActi
 }
 
 /// The main work horse
-#[tracing::instrument(fields(name = %msp.spec.node, status = ?msp.status) skip(msp, ctx))]
+#[tracing::instrument(fields(name = %msp.spec.node(), status = ?msp.status) skip(msp, ctx))]
 async fn reconcile(
     msp: MayastorPool,
     ctx: Context<OperatorContext>,

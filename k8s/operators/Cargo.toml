@@ -9,6 +9,11 @@ authors = ["Jeffry Molanus <jeffry.molanus@gmail.com>"]
 name = "diskpool-operator"
 path = "src/diskpool/main.rs"
 
+[lib]
+name = "k8s_operators"
+path = "src/lib.rs"
+
+
 [dependencies]
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
 utils = { path = "../../utils/utils-lib" }

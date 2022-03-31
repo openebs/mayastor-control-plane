@@ -1,4 +1,7 @@
-use crate::collect::{logs::LogError, resources::ResourceError};
+use crate::collect::{
+    k8s_resources::k8s_resource_dump::K8sResourceDumperError, logs::LogError,
+    resources::ResourceError,
+};
 use std::ffi::OsString;
 
 /// Error contains possible errors that can occur while interacting
@@ -9,6 +12,7 @@ pub(crate) enum Error {
     ResourceError(ResourceError),
     ArchiveError(std::io::Error),
     LogCollectionError(LogError),
+    K8sResourceDumperError(K8sResourceDumperError),
     OSStringError(OsString),
 }
 
@@ -33,5 +37,11 @@ impl From<LogError> for Error {
 impl From<OsString> for Error {
     fn from(e: OsString) -> Error {
         Error::OSStringError(e)
+    }
+}
+
+impl From<K8sResourceDumperError> for Error {
+    fn from(e: K8sResourceDumperError) -> Error {
+        Error::K8sResourceDumperError(e)
     }
 }

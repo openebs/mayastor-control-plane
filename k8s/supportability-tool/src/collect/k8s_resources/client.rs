@@ -1,5 +1,10 @@
-use k8s_openapi::api::core::v1::{Node, Pod};
-use kube::{api::ListParams, Api, Client};
+use crate::collect::k8s_resources::common::KUBERNETES_HOST_LABEL_KEY;
+use k8s_openapi::api::{
+    apps::v1::{DaemonSet, Deployment, StatefulSet},
+    core::v1::{Event, Node, Pod},
+};
+use k8s_operators::diskpool::crd::MayastorPool;
+use kube::{api::ListParams, error::ConfigError, Api, Client, Resource};
 use std::{collections::HashMap, convert::TryFrom};
 
 /// K8sResourceError holds errors that can obtain while fetching
@@ -7,14 +12,14 @@ use std::{collections::HashMap, convert::TryFrom};
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 pub(crate) enum K8sResourceError {
-    ClientConfigError(kube::config::KubeconfigError),
+    ClientConfigError(ConfigError),
     ClientError(kube::Error),
     ResourceError(Box<dyn std::error::Error>),
     CustomError(String),
 }
 
-impl From<kube::config::KubeconfigError> for K8sResourceError {
-    fn from(e: kube::config::KubeconfigError) -> K8sResourceError {
+impl From<ConfigError> for K8sResourceError {
+    fn from(e: ConfigError) -> K8sResourceError {
         K8sResourceError::ClientConfigError(e)
     }
 }
@@ -96,12 +101,169 @@ impl ClientSet {
         label_selector: &str,
         field_selector: &str,
     ) -> Result<Vec<Pod>, K8sResourceError> {
+        let mut list_params = ListParams::default()
+            .labels(label_selector)
+            .fields(field_selector)
+            .limit(100);
+
+        let mut pods: Vec<Pod> = vec![];
+
+        let pods_api: Api<Pod> = Api::namespaced(self.client.clone(), &self.namespace);
+        // Paginate to get 100 contents at a time
+        loop {
+            let mut result = pods_api.list(&list_params).await?;
+            pods.append(&mut result.items);
+            match result.metadata.continue_ {
+                None => break,
+                Some(token) => list_params = list_params.continue_token(token.as_str()),
+            };
+        }
+        Ok(pods)
+    }
+
+    /// get the k8s pod api for pod operations, like logs_stream
+    pub(crate) async fn get_pod_api(&self) -> Api<Pod> {
+        Api::namespaced(self.client.clone(), &self.namespace)
+    }
+
+    /// Fetch list of disk pools associated to given label_selector & field_selector
+    pub(crate) async fn get_pools(
+        &self,
+        label_selector: &str,
+        field_selector: &str,
+    ) -> Result<Vec<MayastorPool>, K8sResourceError> {
         let list_params = ListParams::default()
             .labels(label_selector)
             .fields(field_selector);
 
-        let pod_api: Api<Pod> = Api::namespaced(self.client.clone(), &self.namespace);
-        let pods = pod_api.list(&list_params).await?;
-        Ok(pods.items)
+        let pools_api: Api<MayastorPool> = Api::namespaced(self.client.clone(), &self.namespace);
+        let pools = pools_api.list(&list_params).await?;
+        Ok(pools.items)
+    }
+
+    /// Fetch list of k8s events associated to given label_selector & field_selector
+    pub(crate) async fn get_events(
+        &self,
+        label_selector: &str,
+        field_selector: &str,
+    ) -> Result<Vec<Event>, K8sResourceError> {
+        let mut list_params = ListParams::default()
+            .labels(label_selector)
+            .fields(field_selector)
+            .limit(100);
+
+        let mut events: Vec<Event> = vec![];
+
+        let events_api: Api<Event> = Api::namespaced(self.client.clone(), &self.namespace);
+        // Paginate to get 100 contents at a time
+        loop {
+            let mut result = events_api.list(&list_params).await?;
+            events.append(&mut result.items);
+            match result.metadata.continue_ {
+                None => break,
+                Some(token) => list_params = list_params.continue_token(token.as_str()),
+            };
+        }
+
+        Ok(events)
+    }
+
+    /// Fetch list of deployments associated to given label_selector & field_selector
+    pub(crate) async fn get_deployments(
+        &self,
+        label_selector: &str,
+        field_selector: &str,
+    ) -> Result<Vec<Deployment>, K8sResourceError> {
+        let list_params = ListParams::default()
+            .labels(label_selector)
+            .fields(field_selector);
+
+        let deployments_api: Api<Deployment> =
+            Api::namespaced(self.client.clone(), &self.namespace);
+        let deployments = deployments_api.list(&list_params).await?;
+        Ok(deployments.items)
+    }
+
+    /// Fetch list of daemonsets associated to given label_selector & field_selector
+    pub(crate) async fn get_daemonsets(
+        &self,
+        label_selector: &str,
+        field_selector: &str,
+    ) -> Result<Vec<DaemonSet>, K8sResourceError> {
+        let list_params = ListParams::default()
+            .labels(label_selector)
+            .fields(field_selector);
+
+        let ds_api: Api<DaemonSet> = Api::namespaced(self.client.clone(), &self.namespace);
+        let daemonsets = ds_api.list(&list_params).await?;
+        Ok(daemonsets.items)
+    }
+
+    /// Fetch list of statefulsets associated to given label_selector & field_selector
+    pub(crate) async fn get_statefulsets(
+        &self,
+        label_selector: &str,
+        field_selector: &str,
+    ) -> Result<Vec<StatefulSet>, K8sResourceError> {
+        let list_params = ListParams::default()
+            .labels(label_selector)
+            .fields(field_selector);
+
+        let sts_api: Api<StatefulSet> = Api::namespaced(self.client.clone(), &self.namespace);
+        let statefulsets = sts_api.list(&list_params).await?;
+        Ok(statefulsets.items)
+    }
+
+    /// Returns the hostname of provided node name by reading from Kubernetes
+    /// object labels
+    pub(crate) async fn get_hostname(&self, node_name: &str) -> Result<String, K8sResourceError> {
+        let node_api: Api<Node> = Api::all(self.client.clone());
+        let node = node_api.get(node_name).await?;
+
+        // Labels will definitely exists on Kubernetes node object
+        let labels = node.meta().labels.as_ref().ok_or_else(|| {
+            K8sResourceError::CustomError(format!("No labels available on node '{}'", node_name))
+        })?;
+
+        let reqired_label_value = labels
+            .get(KUBERNETES_HOST_LABEL_KEY)
+            .ok_or_else(|| {
+                K8sResourceError::CustomError(format!(
+                    "Node '{}' label not found on node {}",
+                    KUBERNETES_HOST_LABEL_KEY, node_name
+                ))
+            })?
+            .as_str();
+        Ok(reqired_label_value.to_string())
+    }
+
+    /// Get node name from a specified hostname
+    pub(crate) async fn get_nodename(&self, host_name: &str) -> Result<String, K8sResourceError> {
+        let node_api: Api<Node> = Api::all(self.client.clone());
+        let node = node_api
+            .list(
+                &ListParams::default()
+                    .labels(format!("{}={}", KUBERNETES_HOST_LABEL_KEY, host_name).as_str()),
+            )
+            .await?;
+        if node.items.is_empty() {
+            return Err(K8sResourceError::CustomError(format!(
+                "No node found for hostname {}",
+                host_name
+            )));
+        }
+        // Since object fetched from Kube-apiserver node name will always exist
+        if let Some(node) = node.items.first() {
+            Ok(node
+                .metadata
+                .name
+                .clone()
+                .expect("Node Name should exist in kube-apiserver"))
+        } else {
+            Err(K8sResourceError::CustomError(format!(
+                "No node found for hostname {}",
+                host_name
+            )))
+        }
     }
 }

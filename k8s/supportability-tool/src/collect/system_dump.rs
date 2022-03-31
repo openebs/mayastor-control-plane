@@ -2,6 +2,7 @@
 use crate::collect::{
     archive,
     error::Error,
+    k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
     logs::{LogCollection, Logger},
     resources::{
         node::NodeClientWrapper, pool::PoolClientWrapper, volume::VolumeClientWrapper, Resourcer,
@@ -18,6 +19,7 @@ pub(crate) struct SystemDumper {
     archive: archive::Archive,
     dir_path: String,
     logger: Box<dyn Logger>,
+    k8s_resource_dumper: K8sResourceDumperClient,
 }
 
 impl SystemDumper {
@@ -51,7 +53,7 @@ impl SystemDumper {
         };
 
         let logger = LogCollection::new_logger(
-            kube_config_path,
+            kube_config_path.clone(),
             namespace.clone(),
             loki_uri,
             since,
@@ -60,11 +62,16 @@ impl SystemDumper {
         .await
         .expect("Failed to initialize logging service");
 
+        let k8s_resource_dumper = K8sResourceDumperClient::new(kube_config_path, namespace)
+            .await
+            .expect("Failed to instantiate the k8s resource dumper client");
+
         SystemDumper {
             rest_client,
             archive,
             dir_path: new_dir,
             logger,
+            k8s_resource_dumper,
         }
     }
 
@@ -94,6 +101,10 @@ impl SystemDumper {
 
         self.logger
             .fetch_and_dump_logs(resources, self.dir_path.clone())
+            .await?;
+
+        self.k8s_resource_dumper
+            .dump_k8s_resources(self.dir_path.clone())
             .await?;
 
         // Copy folder into archive
