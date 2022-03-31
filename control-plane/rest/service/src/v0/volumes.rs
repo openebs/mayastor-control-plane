@@ -69,6 +69,9 @@ impl apis::actix_server::Volumes for RestApi {
         Query((max_entries, starting_token)): Query<(isize, Option<isize>)>,
     ) -> Result<models::Volumes, RestError<RestJsonError>> {
         let starting_token = starting_token.unwrap_or_default();
+
+        // If max entries is 0, pagination is disabled. All volumes will be returned in a single
+        // call.
         let pagination = if max_entries > 0 {
             Some(Pagination::new(
                 max_entries as MaxEntries,
