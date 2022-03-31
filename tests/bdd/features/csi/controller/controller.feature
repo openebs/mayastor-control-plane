@@ -114,3 +114,9 @@ Scenario: unpublish volume when nexus node is offline
     When a node that hosts the nexus becomes offline
     Then a ControllerUnpublishVolume request should succeed as if nexus node was online
     And volume should be successfully republished on the other node
+
+Scenario: list existing volumes with pagination
+    Given 2 existing volumes
+    When a ListVolumesRequest is sent to CSI controller with max_entries set to 1
+    Then only a single volume should be returned
+    And a subsequent ListVolumesRequest using the next token should return the next volume

@@ -18,7 +18,6 @@ const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 const SUPPORTED_FS_TYPES: [&str; 2] = ["ext4", "xfs"];
 const MAYASTOR_NODE_PREFIX: &str = "mayastor://";
-const MAX_VOLUMES_TO_LIST: usize = 1024 * 1024;
 
 #[derive(Debug, Default)]
 pub struct CsiControllerSvc {}
@@ -329,29 +328,32 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
         // First check if the volume already exists.
-        if let Some(existing_volume) = MayastorApiClient::get_client()
-            .list_volumes()
-            .await?
-            .into_iter()
-            .find(|v| v.spec.uuid == u)
-        {
-            check_existing_volume(&existing_volume, replica_count, size, pinned_volume)?;
-            debug!(
-                "Volume {} already exists and is compatible with requested config",
-                volume_uuid
-            );
-        } else {
-            let volume_topology =
-                CreateVolumeTopology::new(allowed_nodes, preferred_nodes, inclusive_label_topology);
+        match MayastorApiClient::get_client().get_volume(&u).await {
+            Ok(volume) => {
+                check_existing_volume(&volume, replica_count, size, pinned_volume)?;
+                debug!(
+                    "Volume {} already exists and is compatible with requested config",
+                    volume_uuid
+                );
+            }
+            // If the volume doesn't exist, create it.
+            Err(ApiClientError::ResourceNotExists(_)) => {
+                let volume_topology = CreateVolumeTopology::new(
+                    allowed_nodes,
+                    preferred_nodes,
+                    inclusive_label_topology,
+                );
 
-            MayastorApiClient::get_client()
-                .create_volume(&u, replica_count, size, volume_topology, pinned_volume)
-                .await?;
+                MayastorApiClient::get_client()
+                    .create_volume(&u, replica_count, size, volume_topology, pinned_volume)
+                    .await?;
 
-            debug!(
-                "Volume {} successfully created, pinned volume = {}",
-                volume_uuid, pinned_volume
-            );
+                debug!(
+                    "Volume {} successfully created, pinned volume = {}",
+                    volume_uuid, pinned_volume
+                );
+            }
+            Err(e) => return Err(e.into()),
         }
 
         let volume = rpc::csi::Volume {
@@ -625,16 +627,14 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
-        let entries = MayastorApiClient::get_client()
-            .list_volumes()
+        let volumes = MayastorApiClient::get_client()
+            .list_volumes(max_entries, args.starting_token)
             .await
-            .map_err(|e| Status::internal(format!("Failed to list volumes, error = {:?}", e)))?
+            .map_err(|e| Status::internal(format!("Failed to list volumes, error = {:?}", e)))?;
+
+        let entries = volumes
+            .entries
             .into_iter()
-            .take(if max_entries > 0 {
-                max_entries as usize
-            } else {
-                MAX_VOLUMES_TO_LIST
-            })
             .map(|v| {
                 let volume = rpc::csi::Volume {
                     volume_id: v.spec.uuid.to_string(),
@@ -656,7 +656,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         Ok(Response::new(ListVolumesResponse {
             entries,
-            next_token: "".to_string(),
+            next_token: volumes.next_token.map_or("".to_string(), |v| v.to_string()),
         }))
     }
 

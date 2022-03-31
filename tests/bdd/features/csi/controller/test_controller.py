@@ -114,6 +114,11 @@ def test_list_existing_volumes(setup):
     """list existing volumes"""
 
 
+@scenario("controller.feature", "list existing volumes with pagination")
+def test_list_existing_volumes_with_pagination(setup):
+    """list existing volumes with pagination."""
+
+
 @scenario("controller.feature", "validate SINGLE_NODE_WRITER volume capability")
 def test_validate_single_node_writer_capability(setup):
     """validate SINGLE_NODE_WRITER volume capability"""
@@ -510,6 +515,20 @@ def list_all_volumes(two_volumes):
     return [two_volumes, vols.entries]
 
 
+@when(
+    "a ListVolumesRequest is sent to CSI controller with max_entries set to 1",
+    target_fixture="paginated_volumes_list",
+)
+def a_listvolumesrequest_is_sent_to_csi_controller_with_max_entries_set_to_1(
+    two_volumes,
+):
+    """a ListVolumesRequest is sent to CSI controller with max_entries set to 1."""
+    vols = csi_rpc_handle().controller.ListVolumes(
+        pb.ListVolumesRequest(max_entries=1, starting_token="0")
+    )
+    return [two_volumes, vols.entries, vols.next_token]
+
+
 @then("all 2 volumes are listed")
 def check_list_all_volumes(list_2_volumes):
     created_volumes = sorted(list_2_volumes[0], key=lambda v: v.volume.volume_id)
@@ -525,6 +544,24 @@ def check_list_all_volumes(list_2_volumes):
         ), "Volumes have different sizes"
 
         check_volume_context(vol1.volume_context, vol2.volume_context)
+
+
+@then(
+    "a subsequent ListVolumesRequest using the next token should return the next volume"
+)
+def a_subsequent_listvolumesrequest_using_the_next_token_should_return_the_next_volume(
+    paginated_volumes_list,
+):
+    """a subsequent ListVolumesRequest using the next token should return the next volume."""
+    created_volumes = paginated_volumes_list[0]
+    next_token = paginated_volumes_list[2]
+    vols = csi_rpc_handle().controller.ListVolumes(
+        pb.ListVolumesRequest(max_entries=1, starting_token=next_token)
+    )
+    assert len(created_volumes) == 2
+    assert len(vols.entries) == 1
+    # The returned volume ID should match the ID of the second created volume.
+    assert created_volumes[1].volume.volume_id == vols.entries[0].volume.volume_id
 
 
 @when(
@@ -830,6 +867,17 @@ def check_identical_volume_creation(create_the_same_volume):
     check_volume_specs(
         create_the_same_volume[0].volume, create_the_same_volume[1].volume
     )
+
+
+@then("only a single volume should be returned")
+def only_a_single_volume_should_be_returned(paginated_volumes_list):
+    """only a single volume should be returned."""
+    created_volumes = paginated_volumes_list[0]
+    listed_volumes = paginated_volumes_list[1]
+    assert len(created_volumes) == 2
+    assert len(listed_volumes) == 1
+    # The returned volume ID should match the ID of the first created volume.
+    assert created_volumes[0].volume.volume_id == listed_volumes[0].volume.volume_id
 
 
 @when("a DeleteVolume request is sent to CSI controller to delete existing volume")
