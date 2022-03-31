@@ -261,7 +261,9 @@ impl Registry {
     async fn poller(&self) {
         loop {
             {
-                let nodes = self.nodes().read().await;
+                // Clone the nodes so we don't hold the read lock on the nodes list while
+                // we may be busy or waiting on node information being fetched.
+                let nodes = self.nodes().read().await.clone();
                 for (_, node) in nodes.iter() {
                     let (id, online) = {
                         let node = node.read().await;
