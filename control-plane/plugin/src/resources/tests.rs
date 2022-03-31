@@ -82,6 +82,66 @@ async fn get_volumes() {
 }
 
 #[tokio::test]
+async fn get_volumes_paginated() {
+    let volume_uuids = [
+        VOLUME_UUID,
+        "81fb45d2-23e8-430d-9bbd-0bbce5b0c040",
+        "ed10e8bd-bcfc-48cc-987c-5e5a5ebeb1ff",
+    ];
+
+    // Create an additional 2 volumes. We do not need to create the first volume because this is
+    // already created by the setup code.
+    for uuid in volume_uuids[1 ..= 2].iter() {
+        cluster()
+            .await
+            .rest_v00()
+            .volumes_api()
+            .put_volume(
+                &Uuid::parse_str(uuid).unwrap(),
+                CreateVolumeBody {
+                    policy: Default::default(),
+                    replicas: 1,
+                    size: 5242880,
+                    topology: None,
+                    labels: None,
+                },
+            )
+            .await
+            .unwrap();
+    }
+
+    let num_volumes = cluster()
+        .await
+        .rest_v00()
+        .volumes_api()
+        .get_volumes(None, None)
+        .await
+        .unwrap()
+        .entries
+        .len();
+
+    assert_eq!(num_volumes, volume_uuids.len());
+
+    // Get a single entry at a time.
+    let max_entries = Some(1);
+    let mut starting_token = Some(0);
+
+    for uuid in volume_uuids {
+        let volumes = cluster()
+            .await
+            .rest_v00()
+            .volumes_api()
+            .get_volumes(max_entries, starting_token)
+            .await
+            .unwrap();
+        // The number of returned volumes should be equal to the number of specified max entries.
+        assert_eq!(volumes.entries.len(), max_entries.unwrap() as usize);
+        assert_eq!(volumes.entries[0].spec.uuid.to_string(), uuid);
+        starting_token = volumes.next_token;
+    }
+}
+
+#[tokio::test]
 async fn get_volume() {
     let volume = cluster()
         .await

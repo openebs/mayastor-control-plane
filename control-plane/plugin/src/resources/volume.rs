@@ -53,20 +53,42 @@ impl GetHeaderRow for openapi::models::Volume {
 #[async_trait(?Send)]
 impl List for Volumes {
     async fn list(output: &utils::OutputFormat) {
+        if let Some(volumes) = get_paginated_volumes().await {
+            // Print table, json or yaml based on output format.
+            utils::print_table(output, volumes);
+        }
+    }
+}
+
+/// Get the list of volumes over multiple paginated requests if necessary.
+/// If any `get_volumes` request fails, `None` will be returned. This prevents the user from getting
+/// a partial list when they expect a complete list.
+async fn get_paginated_volumes() -> Option<Vec<openapi::models::Volume>> {
+    // The number of volumes to get per request.
+    let max_entries = 200;
+    let mut starting_token = Some(0);
+    let mut volumes = Vec::with_capacity(max_entries as usize);
+
+    // The last paginated request will set the `starting_token` to `None`.
+    while starting_token.is_some() {
         match RestClient::client()
             .volumes_api()
-            .get_volumes(None, None)
+            .get_volumes(Some(max_entries), starting_token)
             .await
         {
-            Ok(volumes) => {
-                // Print table, json or yaml based on output format.
-                utils::print_table(output, volumes.into_body().entries);
+            Ok(vols) => {
+                let v = vols.into_body();
+                volumes.extend(v.entries);
+                starting_token = v.next_token;
             }
             Err(e) => {
-                println!("Failed to list volumes. Error {}", e)
+                println!("Failed to list volumes. Error {}", e);
+                return None;
             }
         }
     }
+
+    Some(volumes)
 }
 
 /// Volume resource.
