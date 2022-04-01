@@ -119,6 +119,13 @@ def test_list_existing_volumes_with_pagination(setup):
     """list existing volumes with pagination."""
 
 
+@scenario(
+    "controller.feature", "list existing volumes with pagination max entries set to 0"
+)
+def test_list_existing_volumes_with_pagination_max_entries_set_to_0(setup):
+    """list existing volumes with pagination max entries set to 0."""
+
+
 @scenario("controller.feature", "validate SINGLE_NODE_WRITER volume capability")
 def test_validate_single_node_writer_capability(setup):
     """validate SINGLE_NODE_WRITER volume capability"""
@@ -516,6 +523,18 @@ def list_all_volumes(two_volumes):
 
 
 @when(
+    "a ListVolumesRequest is sent to CSI controller with max_entries set to 0",
+    target_fixture="paginated_volumes_list",
+)
+def a_listvolumesrequest_is_sent_to_csi_controller_with_max_entries_set_to_0(
+    two_volumes,
+):
+    """a ListVolumesRequest is sent to CSI controller with max_entries set to 0."""
+    vols = csi_rpc_handle().controller.ListVolumes(pb.ListVolumesRequest(max_entries=0))
+    return [two_volumes, vols.entries, vols.next_token]
+
+
+@when(
     "a ListVolumesRequest is sent to CSI controller with max_entries set to 1",
     target_fixture="paginated_volumes_list",
 )
@@ -544,6 +563,14 @@ def check_list_all_volumes(list_2_volumes):
         ), "Volumes have different sizes"
 
         check_volume_context(vol1.volume_context, vol2.volume_context)
+
+
+@then("all volumes should be returned")
+def all_volumes_should_be_returned(paginated_volumes_list):
+    """all volumes should be returned."""
+    created_volumes = paginated_volumes_list[0]
+    listed_volumes = paginated_volumes_list[1]
+    assert len(listed_volumes) == len(created_volumes)
 
 
 @then(
@@ -878,6 +905,13 @@ def only_a_single_volume_should_be_returned(paginated_volumes_list):
     assert len(listed_volumes) == 1
     # The returned volume ID should match the ID of the first created volume.
     assert created_volumes[0].volume.volume_id == listed_volumes[0].volume.volume_id
+
+
+@then("the next token should be empty")
+def the_next_token_should_be_empty(paginated_volumes_list):
+    """the next token should be empty."""
+    next_token = paginated_volumes_list[2]
+    assert next_token == ""
 
 
 @when("a DeleteVolume request is sent to CSI controller to delete existing volume")

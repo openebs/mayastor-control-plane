@@ -73,7 +73,7 @@ async fn get_volumes() {
         .await
         .rest_v00()
         .volumes_api()
-        .get_volumes(None, None)
+        .get_volumes(0, None)
         .await
         .unwrap();
     let volume_state = volumes.entries[0].state.clone();
@@ -114,7 +114,7 @@ async fn get_volumes_paginated() {
         .await
         .rest_v00()
         .volumes_api()
-        .get_volumes(None, None)
+        .get_volumes(0, None)
         .await
         .unwrap()
         .entries
@@ -123,7 +123,7 @@ async fn get_volumes_paginated() {
     assert_eq!(num_volumes, volume_uuids.len());
 
     // Get a single entry at a time.
-    let max_entries = Some(1);
+    let max_entries = 1;
     let mut starting_token = Some(0);
 
     for uuid in volume_uuids {
@@ -135,7 +135,7 @@ async fn get_volumes_paginated() {
             .await
             .unwrap();
         // The number of returned volumes should be equal to the number of specified max entries.
-        assert_eq!(volumes.entries.len(), max_entries.unwrap() as usize);
+        assert_eq!(volumes.entries.len(), max_entries as usize);
         assert_eq!(volumes.entries[0].spec.uuid.to_string(), uuid);
         starting_token = volumes.next_token;
     }
