@@ -1,6 +1,6 @@
 use crate::types::v0::{
     message_bus::{NexusId, ReplicaId, VolumeId},
-    store::definitions::{key_namespace, ObjectKey, StorableObject, StorableObjectType},
+    store::definitions::{key_prefix, ObjectKey, StorableObject, StorableObjectType},
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -74,7 +74,7 @@ impl NexusInfoKey {
 
 impl ObjectKey for NexusInfoKey {
     fn key(&self) -> String {
-        let namespace = key_namespace();
+        let namespace = key_prefix();
         let nexus_uuid = self.nexus_id.clone();
         match &self.volume_id {
             Some(volume_uuid) => {

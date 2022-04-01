@@ -8,11 +8,10 @@ use std::{
 
 const ETCD_SERVICE_LABEL_SELECTOR: &str = "app.kubernetes.io/name=etcd";
 
-/// EtcdStore is used to abstract connection to etcd database for dumping the
-/// contents
+/// EtcdStore is used to abstract connection to etcd database for dumping the contents
 pub(crate) struct EtcdStore {
     etcd: etcd::Etcd,
-    namespace: String,
+    key_prefix: String,
 }
 
 impl EtcdStore {
@@ -24,25 +23,30 @@ impl EtcdStore {
         etcd_endpoint: Option<String>,
         namespace: String,
     ) -> Result<Self, EtcdError> {
-        let etcd: etcd::Etcd;
+        let client_set = ClientSet::new(kube_config_path, namespace.clone()).await?;
+        let platform_info = common_lib::platform::k8s::K8s::from(client_set.kube_client())
+            .await
+            .map_err(|e| EtcdError::Custom(format!("Failed to get k8s platform info: {}", e)))?;
+        let key_prefix = common_lib::store::etcd::build_key_prefix(platform_info, namespace);
+
         // if an endpoint is provided it will be used, else the kubeconfig path will be used
         // to find the endpoint of the headless etcd service
-        if let Some(endpoint) = etcd_endpoint {
-            etcd = etcd::Etcd::new(endpoint.as_str()).await?;
+        let endpoint = if let Some(endpoint) = etcd_endpoint {
+            endpoint
         } else {
-            let c = ClientSet::new(kube_config_path, namespace.clone()).await?;
-            let e = get_etcd_endpoint(c).await?;
-            etcd = etcd::Etcd::new(e.to_string().as_str()).await?;
-        }
+            let e = get_etcd_endpoint(client_set).await?;
+            e.to_string()
+        };
+        let etcd = etcd::Etcd::new(endpoint.as_str()).await?;
 
-        Ok(Self { etcd, namespace })
+        Ok(Self { etcd, key_prefix })
     }
 
     /// dump all the data from etcd in the selected namespace into a file in
     /// the given working directory.
     pub(crate) async fn dump(&mut self, working_dir: PathBuf) -> Result<(), EtcdError> {
-        let key_prefix = format!("/namespace/{}", self.namespace);
-        let mut dump = self.etcd.get_values_prefix(key_prefix.as_str()).await?;
+        let prefix = self.key_prefix.as_str();
+        let mut dump = self.etcd.get_values_prefix(prefix).await?;
         let file_name = "etcd_dump".to_string();
         let file_path = working_dir.join(file_name);
         let mut etcd_dump_file = std::fs::File::create(file_path)?;

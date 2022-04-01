@@ -61,6 +61,9 @@ pub struct ClusterLabel {
     name: String,
 }
 
+/// Cluster Uid
+pub type ClusterUid = String;
+
 /// default enabled agents
 pub fn default_agents() -> &'static str {
     "Core"
@@ -172,10 +175,15 @@ pub struct StartOptions {
     pub show_info: bool,
 
     /// Name of the cluster - currently only one allowed at a time.
-    /// Note: Does not quite work as intended, as we haven't figured out of to bridge between
+    /// Note: Does not quite work as intended, as we haven't figured out how to bridge between
     /// different networks
     #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
     pub cluster_label: ClusterLabel,
+
+    /// Uid of the cluster.
+    /// By default the agents will determine this value themselves.
+    #[structopt(long)]
+    pub cluster_uid: Option<ClusterUid>,
 
     /// Disable the etcd service
     #[structopt(long)]

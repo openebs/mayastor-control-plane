@@ -262,7 +262,15 @@ macro_rules! impl_component {
                 for component in &self.0 {
                     cfg = component.configure(&self.1, cfg)?;
                 }
-                Ok(cfg)
+                Ok(cfg.with_spec_map(|spec| {
+                    let spec = spec.with_direct_bind("/etc/machine-id")
+                                   .with_direct_bind("/sys/class/dmi/id/product_uuid");
+                    if let Some(uid) = &self.1.cluster_uid {
+                        spec.with_env("NOPLATFORM_UUID", uid)
+                    } else {
+                        spec
+                    }
+                }))
             }
         }
 
