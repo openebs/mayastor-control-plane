@@ -1,7 +1,7 @@
 use crate::collect::k8s_resources::common::KUBERNETES_HOST_LABEL_KEY;
 use k8s_openapi::api::{
     apps::v1::{DaemonSet, Deployment, StatefulSet},
-    core::v1::{Event, Node, Pod},
+    core::v1::{Event, Node, Pod, Service},
 };
 use k8s_operators::diskpool::crd::MayastorPool;
 use kube::{api::ListParams, error::ConfigError, Api, Client, Resource};
@@ -265,5 +265,17 @@ impl ClientSet {
                 host_name
             )))
         }
+    }
+
+    /// Fetch list of services associated with the given label selector
+    pub(crate) async fn get_svcs(
+        &self,
+        label_selector: &str,
+    ) -> Result<Vec<Service>, K8sResourceError> {
+        let list_params = ListParams::default().labels(label_selector);
+
+        let svc_api: Api<Service> = Api::namespaced(self.client.clone(), &self.namespace);
+        let svcs = svc_api.list(&list_params).await?;
+        Ok(svcs.items)
     }
 }

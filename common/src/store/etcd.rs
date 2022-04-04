@@ -251,7 +251,9 @@ impl Store for Etcd {
             .map(|kv| {
                 (
                     kv.key_str().unwrap().to_string(),
-                    serde_json::from_slice(kv.value()).unwrap(),
+                    // unwrap_or_default is used since when using to dump data, the lease entry
+                    // does not have a value, which can cause panic
+                    serde_json::from_slice(kv.value()).unwrap_or_default(),
                 )
             })
             .collect();

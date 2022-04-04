@@ -30,6 +30,10 @@ struct CliArgs {
     #[structopt(global = true, short, long)]
     loki_endpoint: Option<String>,
 
+    /// Endpoint of ETCD service, if left empty then will be parsed from the internal service name
+    #[structopt(global = true, short, long)]
+    etcd_endpoint: Option<String>,
+
     /// Output directory path to store archive file
     #[structopt(global = true, long, short = "o", default_value = "./")]
     output_directory_path: String,
@@ -39,7 +43,7 @@ struct CliArgs {
     namespace: String,
 
     /// Path to kubeconfig file
-    #[structopt(parse(from_os_str), long, short = "k")]
+    #[structopt(parse(from_os_str), global = true, long, short = "k")]
     kube_config_path: Option<PathBuf>,
 
     /// Supported subcommand options
@@ -91,6 +95,7 @@ async fn execute_resource_dump(
                 cli_args.output_directory_path,
                 cli_args.namespace,
                 cli_args.loki_endpoint,
+                cli_args.etcd_endpoint,
                 cli_args.since,
                 cli_args.kube_config_path,
                 cli_args.timeout,

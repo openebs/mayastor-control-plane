@@ -1,6 +1,6 @@
 use crate::collect::{
     k8s_resources::k8s_resource_dump::K8sResourceDumperError, logs::LogError,
-    resources::ResourceError,
+    persistent_store::EtcdError, resources::ResourceError,
 };
 use std::ffi::OsString;
 
@@ -14,6 +14,7 @@ pub(crate) enum Error {
     LogCollectionError(LogError),
     K8sResourceDumperError(K8sResourceDumperError),
     OSStringError(OsString),
+    EtcdDumpError(EtcdError),
 }
 
 impl From<std::io::Error> for Error {
@@ -43,5 +44,11 @@ impl From<OsString> for Error {
 impl From<K8sResourceDumperError> for Error {
     fn from(e: K8sResourceDumperError) -> Error {
         Error::K8sResourceDumperError(e)
+    }
+}
+
+impl From<EtcdError> for Error {
+    fn from(e: EtcdError) -> Self {
+        Error::EtcdDumpError(e)
     }
 }
