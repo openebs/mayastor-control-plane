@@ -1,10 +1,13 @@
+mod k8s_log;
 mod loki;
+
 use crate::collect::{
     constants::{CONTROL_PLANE_SERVICES, DATA_PLANE_SERVICES, HOST_NAME_REQUIRED_SERVICES},
     k8s_resources::{
         client::{ClientSet, K8sResourceError},
         common::{KUBERNETES_HOST_LABEL_KEY, RUNNING_FIELD_SELECTOR},
     },
+    logs::k8s_log::{K8sLoggerClient, K8sLoggerError},
 };
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Pod;
@@ -18,6 +21,7 @@ const LOGGING_LABEL_SELECTOR: &str = "openebs.io/logging=true";
 pub(crate) enum LogError {
     Loki(loki::LokiError),
     K8sResource(K8sResourceError),
+    K8sLogger(K8sLoggerError),
     IOError(std::io::Error),
     Custom(String),
 }
@@ -31,6 +35,12 @@ impl From<loki::LokiError> for LogError {
 impl From<K8sResourceError> for LogError {
     fn from(e: K8sResourceError) -> LogError {
         LogError::K8sResource(e)
+    }
+}
+
+impl From<K8sLoggerError> for LogError {
+    fn from(e: K8sLoggerError) -> LogError {
+        LogError::K8sLogger(e)
     }
 }
 
@@ -66,7 +76,7 @@ pub(crate) struct LogResource {
 #[derive(Clone)]
 pub(crate) struct LogCollection {
     loki_client: Option<loki::LokiClient>,
-    clientset: ClientSet,
+    k8s_logger_client: K8sLoggerClient,
 }
 
 impl LogCollection {
@@ -83,9 +93,10 @@ impl LogCollection {
         since: humantime::Duration,
         timeout: humantime::Duration,
     ) -> Result<Box<dyn Logger>, LogError> {
+        let client_set = ClientSet::new(kube_config_path, namespace).await?;
         Ok(Box::new(Self {
             loki_client: loki_uri.map(|uri| loki::LokiClient::new(uri, since, timeout)),
-            clientset: ClientSet::new(kube_config_path, namespace).await?,
+            k8s_logger_client: K8sLoggerClient::new(client_set),
         }))
     }
 
@@ -93,7 +104,11 @@ impl LogCollection {
         &self,
         pods: Vec<Pod>,
     ) -> Result<HashSet<LogResource>, LogError> {
-        let nodes_map = self.clientset.get_nodes_map().await?;
+        let nodes_map = self
+            .k8s_logger_client
+            .get_k8s_clientset()
+            .get_nodes_map()
+            .await?;
         let mut logging_resources = HashSet::new();
 
         for pod in pods {
@@ -209,13 +224,23 @@ impl Logger for LogCollection {
                     continue;
                 }
             }
+
+            self.k8s_logger_client
+                .dump_pod_logs(
+                    resource.label_selector.as_str(),
+                    service_dir.clone(),
+                    resource.host_name.clone(),
+                    &[resource.container_name.as_str()],
+                )
+                .await?;
         }
         Ok(())
     }
 
     async fn get_control_plane_logging_services(&self) -> Result<HashSet<LogResource>, LogError> {
         let pods = self
-            .clientset
+            .k8s_logger_client
+            .get_k8s_clientset()
             .get_pods(LOGGING_LABEL_SELECTOR, RUNNING_FIELD_SELECTOR)
             .await?;
 
@@ -239,7 +264,8 @@ impl Logger for LogCollection {
 
     async fn get_data_plane_logging_services(&self) -> Result<HashSet<LogResource>, LogError> {
         let pods = self
-            .clientset
+            .k8s_logger_client
+            .get_k8s_clientset()
             .get_pods(LOGGING_LABEL_SELECTOR, RUNNING_FIELD_SELECTOR)
             .await?;
         let data_plane_pods = pods
