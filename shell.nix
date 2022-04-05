@@ -14,6 +14,7 @@ let
   # python environment for tests/bdd
   pytest_inputs = python3.withPackages
     (ps: with ps; [ virtualenv grpcio grpcio-tools black ]);
+  rust_chan = channel.default_src;
 in
 mkShell {
   name = "mayastor-control-plane-shell";
@@ -41,7 +42,7 @@ mkShell {
     tini
     utillinux
     which
-  ] ++ pkgs.lib.optional (!norust) channel.default_src.nightly;
+  ] ++ pkgs.lib.optional (!norust) rust_chan.nightly;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
@@ -51,11 +52,25 @@ mkShell {
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";
   NATS_BIN = "${pkgs.nats-server}/bin/nats-server";
 
+  # using the nix rust toolchain
+  USE_NIX_RUST = "${toString (!norust)}";
+  # copy the rust-src to a writable directory, see: https://github.com/rust-lang/cargo/issues/10096
+  RUST_SRC_CLONE = "/tmp/rust-src";
+
   shellHook = ''
     ./scripts/nix/git-submodule-init.sh
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo 'Hint: use rustup tool.'"}
     ${pkgs.lib.optionalString (norust) "echo"}
+    if [ -n "$USE_NIX_RUST" ]; then
+      RUST_SRC_PATH="${rust_chan.nightly_src}/lib/rustlib/src/rust/library/"
+      if ! diff "$RUST_SRC_PATH" "$RUST_SRC_CLONE" &>/dev/null; then
+        rm -rf "$RUST_SRC_CLONE"
+        mkdir -p "$RUST_SRC_CLONE" 2>/dev/null
+        cp -r "$RUST_SRC_PATH"/* "$RUST_SRC_CLONE"
+        chmod -R 775 "$RUST_SRC_CLONE"
+      fi
+    fi
     pre-commit install
     pre-commit install --hook commit-msg
     export MCP_SRC=`pwd`
