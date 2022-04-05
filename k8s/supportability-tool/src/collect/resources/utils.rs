@@ -116,4 +116,11 @@ where
         }
         resources
     }
+
+    fn get_k8s_resource_names(&self) -> Vec<String> {
+        self.iter()
+            .map(|t| t.get_k8s_resource_names())
+            .flatten()
+            .collect::<Vec<String>>()
+    }
 }

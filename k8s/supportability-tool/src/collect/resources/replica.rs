@@ -55,6 +55,11 @@ impl ReplicaTopology {
 
         resources
     }
+
+    /// fetch pool name of replica resource
+    pub fn get_k8s_resource_names(&self) -> Vec<String> {
+        self.pool_topology.get_k8s_resource_names()
+    }
 }
 
 // Wrapper around mayastor REST client

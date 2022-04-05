@@ -2,7 +2,10 @@ mod k8s_log;
 mod loki;
 
 use crate::collect::{
-    constants::{CONTROL_PLANE_SERVICES, DATA_PLANE_SERVICES, HOST_NAME_REQUIRED_SERVICES},
+    constants::{
+        CONTROL_PLANE_SERVICES, DATA_PLANE_SERVICES, HOST_NAME_REQUIRED_SERVICES,
+        LOGGING_LABEL_SELECTOR, LOKI_METRICS_PORT_NAME, LOKI_SERVICE_LABEL_SELECTOR,
+    },
     k8s_resources::{
         client::{ClientSet, K8sResourceError},
         common::{KUBERNETES_HOST_LABEL_KEY, RUNNING_FIELD_SELECTOR},
@@ -12,9 +15,6 @@ use crate::collect::{
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Pod;
 use std::{collections::HashSet, iter::Iterator, path::PathBuf};
-
-// Represents logging services in the system
-const LOGGING_LABEL_SELECTOR: &str = "openebs.io/logging=true";
 
 /// Error that can occur while interacting with logs module
 #[derive(Debug)]
@@ -94,8 +94,13 @@ impl LogCollection {
         timeout: humantime::Duration,
     ) -> Result<Box<dyn Logger>, LogError> {
         let client_set = ClientSet::new(kube_config_path, namespace).await?;
+        // If Loki URI is not provided then read endpoint from K8s service object
+        let loki_endpoint = match loki_uri {
+            Some(uri) => Some(uri),
+            None => get_loki_endpoint(client_set.clone()).await.ok(),
+        };
         Ok(Box::new(Self {
-            loki_client: loki_uri.map(|uri| loki::LokiClient::new(uri, since, timeout)),
+            loki_client: loki_endpoint.map(|uri| loki::LokiClient::new(uri, since, timeout)),
             k8s_logger_client: K8sLoggerClient::new(client_set),
         }))
     }
@@ -285,6 +290,31 @@ impl Logger for LogCollection {
 
         self.get_logging_resources(data_plane_pods).await
     }
+}
+
+// used to get the Loki end point from the Loki service(labeled with app=loki)
+async fn get_loki_endpoint(c: ClientSet) -> Result<String, LogError> {
+    let svcs = c.get_svcs(LOKI_SERVICE_LABEL_SELECTOR).await?;
+
+    let info = svcs.into_iter().find_map(|svc| match svc.spec {
+        Some(spec) => match spec.cluster_ip {
+            Some(cluster_ip) => spec
+                .ports
+                .unwrap_or_default()
+                .into_iter()
+                .find(|port| port.name == Some(LOKI_METRICS_PORT_NAME.to_string()))
+                .map(|service_port| (cluster_ip, service_port.port)),
+            None => None,
+        },
+        _ => None,
+    });
+    let (ip, port) = info.ok_or_else(|| {
+        LogError::Custom(format!(
+            "cannot find {} port for loki service",
+            LOKI_METRICS_PORT_NAME
+        ))
+    })?;
+    Ok(format!("http://{}:{}", ip, port))
 }
 
 fn is_host_name_required(service_name: String) -> bool {

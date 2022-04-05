@@ -109,6 +109,13 @@ impl Topologer for NodeTopology {
         }
         resources
     }
+
+    fn get_k8s_resource_names(&self) -> Vec<String> {
+        // NOTE: AS of now there is only one direct dependency between Kubernetes
+        // CustomResource and mayastor resource i.e disk pool resource(msp). Since mayastor
+        // node doesn't have any dependency we can safely return empty vector
+        vec![]
+    }
 }
 
 /// TablePrinter holds methods to display node information in Tabular Manner

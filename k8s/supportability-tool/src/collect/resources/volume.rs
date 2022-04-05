@@ -72,6 +72,15 @@ impl Topologer for VolumeTopology {
         }
         resources
     }
+
+    fn get_k8s_resource_names(&self) -> Vec<String> {
+        self.replicas_topology
+            .clone()
+            .into_iter()
+            .map(|r| r.get_k8s_resource_names())
+            .flatten()
+            .collect::<Vec<String>>()
+    }
 }
 
 // TablePrinter implements functionality to list volume resources in tabular format
