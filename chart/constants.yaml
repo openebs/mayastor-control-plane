@@ -1,3 +1,0 @@
-base:
-  cache_poll_period: "30s"
-  default_req_timeout: "5s"
