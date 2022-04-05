@@ -1,16 +1,16 @@
-// use crate::collect::k8s_resources::client::ClientSet;
 use crate::collect::{
     archive,
     error::Error,
     k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
     logs::{LogCollection, Logger},
+    persistent_store::etcd::EtcdStore,
     resources::{
         node::NodeClientWrapper, pool::PoolClientWrapper, volume::VolumeClientWrapper, Resourcer,
     },
     rest_wrapper::rest_wrapper_client::RestClient,
 };
 use chrono::Local;
-use std::process;
+use std::{path::PathBuf, process};
 
 /// SystemDumper interacts with various services to collect information,
 /// logs of mayastor service and state of mayastor artifacts in etcd
@@ -20,6 +20,7 @@ pub(crate) struct SystemDumper {
     dir_path: String,
     logger: Box<dyn Logger>,
     k8s_resource_dumper: K8sResourceDumperClient,
+    etcd_dumper: EtcdStore,
 }
 
 impl SystemDumper {
@@ -27,11 +28,13 @@ impl SystemDumper {
     /// 1.1 Create new archive in given directory and create temporary directory
     /// in given directory to generate dump files
     /// 1.2 Instantiate all required objects to interact with various other modules
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn get_or_panic_system_dumper(
         rest_client: &'static RestClient,
         dir_path: String,
         namespace: String,
         loki_uri: Option<String>,
+        etcd_uri: Option<String>,
         since: humantime::Duration,
         kube_config_path: Option<std::path::PathBuf>,
         timeout: humantime::Duration,
@@ -62,9 +65,14 @@ impl SystemDumper {
         .await
         .expect("Failed to initialize logging service");
 
-        let k8s_resource_dumper = K8sResourceDumperClient::new(kube_config_path, namespace)
+        let k8s_resource_dumper =
+            K8sResourceDumperClient::new(kube_config_path.clone(), namespace.clone())
+                .await
+                .expect("Failed to instantiate the k8s resource dumper client");
+
+        let etcd_dumper = EtcdStore::new(kube_config_path, etcd_uri, namespace)
             .await
-            .expect("Failed to instantiate the k8s resource dumper client");
+            .expect("Failed to initialize etcd service");
 
         SystemDumper {
             rest_client,
@@ -72,6 +80,7 @@ impl SystemDumper {
             dir_path: new_dir,
             logger,
             k8s_resource_dumper,
+            etcd_dumper,
         }
     }
 
@@ -106,6 +115,10 @@ impl SystemDumper {
         self.k8s_resource_dumper
             .dump_k8s_resources(self.dir_path.clone())
             .await?;
+
+        let mut path: PathBuf = std::path::PathBuf::new();
+        path.push(&self.dir_path.clone());
+        self.etcd_dumper.dump(path).await?;
 
         // Copy folder into archive
         self.archive
