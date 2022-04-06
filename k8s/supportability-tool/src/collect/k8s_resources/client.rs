@@ -74,6 +74,10 @@ impl ClientSet {
         };
         Ok(Self { client, namespace })
     }
+    /// Get a clone of the inner `kube::Client`.
+    pub(crate) fn kube_client(&self) -> kube::Client {
+        self.client.clone()
+    }
 
     /// Fetch node objects from API-server then form and return map of node name to node object
     pub(crate) async fn get_nodes_map(&self) -> Result<HashMap<String, Node>, K8sResourceError> {

@@ -345,3 +345,9 @@ fn deserialise_kv(kv: &KeyValue) -> Result<(String, Value), StoreError> {
     })?;
     Ok((key_str, value))
 }
+
+/// Returns the key prefix that is used for the keys.
+/// The platform info and namespace where the product is running must be specified.
+pub fn build_key_prefix(platform: impl crate::platform::PlatformInfo, namespace: String) -> String {
+    crate::types::v0::store::definitions::build_key_prefix(&platform, namespace)
+}

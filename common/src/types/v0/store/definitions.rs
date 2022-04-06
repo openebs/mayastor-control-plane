@@ -120,7 +120,7 @@ pub type StoreWatchReceiver = Receiver<Result<WatchEvent, StoreError>>;
 /// Implemented by Keys of Storable Objects, eg: VolumeId
 pub trait ObjectKey: Sync + Send {
     fn key(&self) -> String {
-        get_key(self)
+        generate_key(self)
     }
     fn key_type(&self) -> StorableObjectType;
     fn key_uuid(&self) -> String;
@@ -159,20 +159,33 @@ pub enum StorableObjectType {
     StoreLeaseOwner,
 }
 
-/// Returns the common namespace that should be used for the keys.
-pub fn key_namespace() -> String {
+/// Returns the key prefix that should is used for the keys, when running from within the cluster.
+pub fn key_prefix() -> String {
     let namespace = std::env::var("MY_POD_NAMESPACE").unwrap_or_else(|_| "default".into());
-    format!("/namespace/{}", namespace)
+    build_key_prefix(crate::platform::platform_info(), namespace)
+}
+/// Returns the key prefix that is used for the keys.
+/// The platform info and namespace where the product is running must be specified.
+pub fn build_key_prefix(
+    cluster_uid: &dyn crate::platform::PlatformInfo,
+    namespace: String,
+) -> String {
+    let api_version = 0;
+    format!(
+        "{}/apis/v{}/clusters/{}/namespaces/{}",
+        crate::ETCD_KEY_PREFIX,
+        api_version,
+        cluster_uid.uid(),
+        namespace
+    )
+}
+/// Returns the control plane prefix that should be used for the keys, in conjunction
+/// with a `StorableObjectType` type.
+pub fn key_prefix_obj(obj_type: StorableObjectType) -> String {
+    format!("{}/{}", key_prefix(), obj_type)
 }
 
-/// Returns the prefix that should be used for the keys.
-pub fn key_prefix(obj_type: StorableObjectType) -> String {
-    let namespace = key_namespace();
-    format!("{}/control-plane/{}", namespace, obj_type)
-}
-
-/// create a key based on the object's key trait
-/// todo: version properly
-pub fn get_key<K: ObjectKey + ?Sized>(k: &K) -> String {
-    format!("{}/{}", key_prefix(k.key_type()), k.key_uuid())
+/// Create a key based on the object's key trait.
+pub fn generate_key<K: ObjectKey + ?Sized>(k: &K) -> String {
+    format!("{}/{}", key_prefix_obj(k.key_type()), k.key_uuid())
 }

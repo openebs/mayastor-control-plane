@@ -71,7 +71,7 @@ pub fn init_tracing_level(
 
     let subscriber = Registry::default()
         .with(filter)
-        .with(tracing_subscriber::fmt::layer().pretty().with_ansi(false));
+        .with(tracing_subscriber::fmt::layer().pretty());
 
     match jaeger {
         Some(jaeger) => {

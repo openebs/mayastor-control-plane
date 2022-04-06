@@ -85,6 +85,12 @@ resource "kubernetes_cluster_role" "mayastor" {
   }
 
   rule {
+    verbs      = ["get", ]
+    api_groups = [""]
+    resources  = ["namespaces"]
+  }
+
+  rule {
     verbs      = ["get", "list", "watch", "update", "patch"]
     api_groups = ["storage.k8s.io"]
     resources  = ["volumeattachments"]

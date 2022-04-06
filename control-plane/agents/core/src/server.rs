@@ -99,6 +99,7 @@ async fn main() {
 }
 
 async fn server(cli_args: CliArgs) {
+    common_lib::init_cluster_info_or_panic().await;
     let registry = registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),

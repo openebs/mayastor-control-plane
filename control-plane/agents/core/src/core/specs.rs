@@ -7,7 +7,7 @@ use common_lib::{
         openapi::apis::Uuid,
         store::{
             definitions::{
-                key_prefix, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
+                key_prefix_obj, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
             },
             nexus::NexusSpec,
             node::NodeSpec,
@@ -781,7 +781,7 @@ impl ResourceSpecsLocked {
         store: &mut S,
         spec_type: StorableObjectType,
     ) -> Result<(), SpecError> {
-        let prefix = key_prefix(spec_type);
+        let prefix = key_prefix_obj(spec_type);
         let store_entries =
             store
                 .get_values_prefix(&prefix)

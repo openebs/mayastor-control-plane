@@ -15,6 +15,7 @@ class StartOptions:
     agents_env: str = ""
     node_deadline: str = ""
     jaeger: bool = True
+    cluster_uid: str = "bdd"
     extra_args: [str] = ()
 
     def args(self):
@@ -39,6 +40,8 @@ class StartOptions:
             args.append(f"--mayastor-env={self.mayastor_env}")
         if len(self.agents_env) > 0:
             args.append(f"--agents-env={self.agents_env}")
+        if len(self.cluster_uid) > 0:
+            args.append(f"--cluster-uid={self.cluster_uid}")
         if len(self.extra_args) > 0:
             args.append(self.extra_args)
         return args
