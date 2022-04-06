@@ -95,7 +95,6 @@ pipeline {
         sh 'nix-shell --run "./scripts/rust/generate-openapi-bindings.sh"'
         sh 'nix-shell --run "cargo fmt --all -- --check"'
         sh 'nix-shell --run "cargo clippy --all-targets -- -D warnings"'
-        sh 'nix-shell --run "./scripts/deploy/generate-crds.sh --changes"'
         sh 'nix-shell --run "black tests/bdd"'
       }
     }

@@ -68,6 +68,8 @@ pub(super) fn platform_info() -> &'static dyn PlatformInfo {
         return platform.as_ref();
     }
 
+    tracing::warn!("PlatformInfo should be pre-initialized before use");
+
     // only when we don't pre initialize and on the first iteration/(concurrent ones) do we fall
     // through here.
     let rt = Builder::new_current_thread()
