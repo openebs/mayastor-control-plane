@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::{Message, ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
+    mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, Protocol,
@@ -20,7 +20,7 @@ use grpc::{
     context::Context,
     operations::{
         node::traits::NodeOperations, pool::traits::PoolOperations,
-        replica::traits::ReplicaOperations,
+        registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
     },
 };
 use itertools::Itertools;
@@ -191,9 +191,9 @@ fn bus_timeout_opts() -> TimeoutOptions {
 }
 
 /// Get the replica spec
-async fn replica_spec(replica: &Replica) -> Option<ReplicaSpec> {
-    GetSpecs {}
-        .request()
+async fn replica_spec(replica: &Replica, client: &dyn RegistryOperations) -> Option<ReplicaSpec> {
+    client
+        .get_specs(&GetSpecs {}, None)
         .await
         .unwrap()
         .replicas
@@ -216,6 +216,7 @@ async fn replica_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
 
+    let registry_client = cluster.grpc_client().registry();
     let node_client = cluster.grpc_client().node();
     let pool_client = cluster.grpc_client().pool();
     let rep_client = cluster.grpc_client().replica();
@@ -242,13 +243,28 @@ async fn replica_transaction() {
         .await
         .unwrap();
 
-    async fn check_operation(replica: &Replica, protocol: Protocol) {
+    async fn check_operation(
+        replica: &Replica,
+        protocol: Protocol,
+        registry_client: &dyn RegistryOperations,
+    ) {
         // operation in progress
-        assert!(replica_spec(replica).await.unwrap().operation.is_some());
+        assert!(replica_spec(replica, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_some());
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is completed
-        assert!(replica_spec(replica).await.unwrap().operation.is_none());
-        assert_eq!(replica_spec(replica).await.unwrap().share, protocol);
+        assert!(replica_spec(replica, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_none());
+        assert_eq!(
+            replica_spec(replica, registry_client).await.unwrap().share,
+            protocol
+        );
     }
 
     // pause mayastor
@@ -262,7 +278,7 @@ async fn replica_transaction() {
         .await
         .expect_err("mayastor down");
 
-    check_operation(&replica, Protocol::None).await;
+    check_operation(&replica, Protocol::None, &registry_client).await;
 
     // unpause mayastor
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
@@ -284,7 +300,7 @@ async fn replica_transaction() {
         .await
         .expect_err("mayastor down");
 
-    check_operation(&replica, Protocol::Nvmf).await;
+    check_operation(&replica, Protocol::Nvmf, &registry_client).await;
 
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
@@ -293,7 +309,13 @@ async fn replica_transaction() {
         .await
         .unwrap();
 
-    assert_eq!(replica_spec(&replica).await.unwrap().share, Protocol::None);
+    assert_eq!(
+        replica_spec(&replica, &registry_client)
+            .await
+            .unwrap()
+            .share,
+        Protocol::None
+    );
 }
 
 /// Tests Store Write Failures for Replica Operations
@@ -313,6 +335,7 @@ async fn replica_op_transaction_store(
     cluster.composer().pause(mayastor.as_str()).await.unwrap();
 
     let rep_client = cluster.grpc_client().replica();
+    let registry_client = cluster.grpc_client().registry();
 
     if share.clone().is_some() {
         rep_client
@@ -333,7 +356,7 @@ async fn replica_op_transaction_store(
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
     // hopefully we have enough time before the store times out
-    let spec = replica_spec(replica).await.unwrap();
+    let spec = replica_spec(replica, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_none());
 
     // let the store write time out
@@ -341,7 +364,7 @@ async fn replica_op_transaction_store(
 
     // and now we have a result but the operation is still pending until
     // we can sync the spec
-    let spec = replica_spec(replica).await.unwrap();
+    let spec = replica_spec(replica, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_some());
 
     // thaw etcd allowing the worker thread to sync the "dirty" spec
@@ -351,7 +374,7 @@ async fn replica_op_transaction_store(
     tokio::time::sleep(reconcile_period * 2).await;
 
     // and now we've sync and the pending operation is no more
-    let spec = replica_spec(replica).await.unwrap();
+    let spec = replica_spec(replica, &registry_client).await.unwrap();
     assert!(spec.operation.is_none() && spec.share == protocol);
 
     if share.clone().is_some() {

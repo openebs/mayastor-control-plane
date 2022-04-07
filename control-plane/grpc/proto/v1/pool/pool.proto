@@ -1,7 +1,6 @@
 syntax = "proto3";
 
 import "v1/misc/common.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
 package v1.pool;
@@ -32,9 +31,9 @@ message PoolDefinition {
 // uuid and the status of pool spec for the control plane use
 message Metadata {
   // uuid of the pool
-  google.protobuf.StringValue uuid = 2;
+  google.protobuf.StringValue uuid = 1;
   // spec status of the pool
-  common.SpecStatus status = 4;
+  common.SpecStatus spec_status = 2;
 }
 
 // User specification of a pool.

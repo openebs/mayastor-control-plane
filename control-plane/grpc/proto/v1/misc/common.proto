@@ -95,6 +95,8 @@ enum ResourceKind {
   Block = 10;
   // Watch
   Watch = 11;
+  // Spec
+  Spec = 13;
 }
 
 // Filter by Node and Replica id
@@ -150,4 +152,8 @@ message Pagination {
   // A token to specify where to start paginating. Set this field to `next_token` returned by a
   // previous `GetVolumes` call to get the next page of entries.
   uint64 starting_token = 2;
+}
+
+message SpecOperation {
+  optional bool result = 1;
 }

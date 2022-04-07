@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+import "v1/nexus/nexus.proto";
+import "v1/volume/volume.proto";
+import "v1/pool/pool.proto";
+import "v1/replica/replica.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+package v1.registry;
+
+message Specs {
+  repeated volume.VolumeDefinition volumes = 1;
+  repeated pool.PoolDefinition pools = 2;
+  repeated nexus.NexusSpec nexuses = 3;
+  repeated replica.ReplicaSpec replicas = 4;
+}
+
+message GetSpecsRequest {}
+
+message GetSpecsReply {
+  oneof reply {
+    Specs specs = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+service RegistryGrpc {
+  rpc GetSpecs (GetSpecsRequest) returns (GetSpecsReply) {}
+}

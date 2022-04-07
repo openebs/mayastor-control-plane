@@ -1,4 +1,4 @@
-use crate::registry::Registry;
+use crate::core::registry::Registry;
 use grpc::operations::volume::server::VolumeServer;
 use std::sync::Arc;
 

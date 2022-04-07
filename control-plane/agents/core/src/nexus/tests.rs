@@ -11,7 +11,10 @@ use common_lib::{
         store::nexus::NexusSpec,
     },
 };
-use grpc::operations::{node::traits::NodeOperations, replica::traits::ReplicaOperations};
+use grpc::operations::{
+    node::traits::NodeOperations, registry::traits::RegistryOperations,
+    replica::traits::ReplicaOperations,
+};
 use std::{convert::TryFrom, time::Duration};
 use testlib::{Cluster, ClusterBuilder};
 
@@ -106,8 +109,8 @@ fn bus_timeout_opts() -> TimeoutOptions {
 }
 
 /// Get the nexus spec
-async fn nexus_spec(replica: &Nexus) -> Option<NexusSpec> {
-    let specs = GetSpecs {}.request().await.unwrap().nexuses;
+async fn nexus_spec(replica: &Nexus, client: &dyn RegistryOperations) -> Option<NexusSpec> {
+    let specs = client.get_specs(&GetSpecs {}, None).await.unwrap().nexuses;
     specs.iter().find(|r| r.uuid == replica.uuid).cloned()
 }
 
@@ -126,6 +129,7 @@ async fn nexus_share_transaction() {
     let mayastor = cluster.node(0);
 
     let node_client = cluster.grpc_client().node();
+    let registry_client = cluster.grpc_client().registry();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
@@ -142,13 +146,28 @@ async fn nexus_share_transaction() {
     .unwrap();
     let share = ShareNexus::from((&nexus, None, NexusShareProtocol::Nvmf));
 
-    async fn check_share_operation(nexus: &Nexus, protocol: Protocol) {
+    async fn check_share_operation(
+        nexus: &Nexus,
+        protocol: Protocol,
+        registry_client: &dyn RegistryOperations,
+    ) {
         // operation in progress
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_some());
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is completed
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
-        assert_eq!(nexus_spec(nexus).await.unwrap().share, protocol);
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_none());
+        assert_eq!(
+            nexus_spec(nexus, registry_client).await.unwrap().share,
+            protocol
+        );
     }
 
     // pause mayastor
@@ -159,7 +178,7 @@ async fn nexus_share_transaction() {
         .await
         .expect_err("mayastor is down");
 
-    check_share_operation(&nexus, Protocol::None).await;
+    check_share_operation(&nexus, Protocol::None, &registry_client).await;
 
     // unpause mayastor
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
@@ -175,13 +194,16 @@ async fn nexus_share_transaction() {
         .await
         .expect_err("mayastor down");
 
-    check_share_operation(&nexus, Protocol::Nvmf).await;
+    check_share_operation(&nexus, Protocol::Nvmf, &registry_client).await;
 
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
     UnshareNexus::from(&nexus).request().await.unwrap();
 
-    assert_eq!(nexus_spec(&nexus).await.unwrap().share, Protocol::None);
+    assert_eq!(
+        nexus_spec(&nexus, &registry_client).await.unwrap().share,
+        Protocol::None
+    );
 }
 
 /// Tests Store Write Failures for Nexus Child Operations
@@ -211,8 +233,9 @@ async fn nexus_child_op_transaction_store<R>(
     cluster.composer().pause("etcd").await.unwrap();
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
+    let registry_client = cluster.grpc_client().registry();
     // hopefully we have enough time before the store times out
-    let spec = nexus_spec(nexus).await.unwrap();
+    let spec = nexus_spec(nexus, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_none());
 
     // let the store write time out
@@ -220,7 +243,7 @@ async fn nexus_child_op_transaction_store<R>(
 
     // and now we have a result but the operation is still pending until
     // we can sync the spec
-    let spec = nexus_spec(nexus).await.unwrap();
+    let spec = nexus_spec(nexus, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_some());
 
     // thaw etcd allowing the worker thread to sync the "dirty" spec
@@ -230,7 +253,7 @@ async fn nexus_child_op_transaction_store<R>(
     tokio::time::sleep(reconcile_period * 2).await;
 
     // and now we're in sync and the pending operation is no more
-    let spec = nexus_spec(nexus).await.unwrap();
+    let spec = nexus_spec(nexus, &registry_client).await.unwrap();
     assert!(spec.operation.is_none());
     assert_eq!(spec.children.len(), children);
     assert_eq!(spec.share, share);
@@ -311,6 +334,7 @@ async fn nexus_child_transaction() {
         .unwrap();
     let mayastor = cluster.node(0);
     let node_client = cluster.grpc_client().node();
+    let registry_client = cluster.grpc_client().registry();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
@@ -337,13 +361,32 @@ async fn nexus_child_transaction() {
         uri: child2.into(),
     };
 
-    async fn check_child_operation(nexus: &Nexus, children: usize) {
+    async fn check_child_operation(
+        nexus: &Nexus,
+        children: usize,
+        registry_client: &dyn RegistryOperations,
+    ) {
         // operation in progress
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_some());
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is complete
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
-        assert_eq!(nexus_spec(nexus).await.unwrap().children.len(), children);
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_none());
+        assert_eq!(
+            nexus_spec(nexus, registry_client)
+                .await
+                .unwrap()
+                .children
+                .len(),
+            children
+        );
     }
 
     // pause mayastor
@@ -354,7 +397,7 @@ async fn nexus_child_transaction() {
         .await
         .expect_err("mayastor is down");
 
-    check_child_operation(&nexus, 1).await;
+    check_child_operation(&nexus, 1, &registry_client).await;
 
     // unpause mayastor
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
@@ -370,13 +413,20 @@ async fn nexus_child_transaction() {
         .await
         .expect_err("mayastor down");
 
-    check_child_operation(&nexus, 2).await;
+    check_child_operation(&nexus, 2, &registry_client).await;
 
     cluster.composer().thaw(mayastor.as_str()).await.unwrap();
 
     rm_child.request().await.unwrap();
 
-    assert_eq!(nexus_spec(&nexus).await.unwrap().children.len(), 1);
+    assert_eq!(
+        nexus_spec(&nexus, &registry_client)
+            .await
+            .unwrap()
+            .children
+            .len(),
+        1
+    );
 }
 
 /// Tests child add and remove operations when the store is temporarily down

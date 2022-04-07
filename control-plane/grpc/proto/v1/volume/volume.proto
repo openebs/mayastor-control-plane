@@ -3,7 +3,6 @@ syntax = "proto3";
 import "v1/misc/common.proto";
 import "v1/nexus/nexus.proto";
 import "v1/replica/replica.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
 package v1.volume;
@@ -56,7 +55,7 @@ message VolumeSpec {
 
 message Metadata {
   // spec status of the volume
-  common.SpecStatus status = 4;
+  common.SpecStatus spec_status = 1;
 }
 
 message VolumeTarget {
