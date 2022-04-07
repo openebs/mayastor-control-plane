@@ -101,6 +101,13 @@ impl Topologer for PoolTopology {
         // always 1:1 mapping between pools & nodes
         self.get_pool_info(|_pool_state: openapi::models::PoolStatus| true)
     }
+
+    fn get_k8s_resource_names(&self) -> Vec<String> {
+        // NOTE: As of now mayastor disk pool is the only Kubernetes resource linked
+        //       to mayastor disk pools. In future if any resource gets added update
+        //       return type as HashMap<ResourceType, Vec<String>>
+        vec![self.pool.id.clone()]
+    }
 }
 
 // TablePrinter holds methods to display pool information in tabular manner
@@ -235,13 +242,33 @@ impl Resourcer for PoolClientWrapper {
     ) -> Result<Box<dyn Topologer>, ResourceError> {
         // When ID is provided then caller needs topologer for given pool id
         if let Some(pool_id) = id {
-            let pool = self.get_pool(pool_id).await?;
-            let node_info = self.get_pool_node_info(pool.clone());
-            let device_info = self.get_pool_disks_info(pool.clone());
+            let pool = self.get_pool(pool_id.clone()).await?;
+            let node_info = match self.get_pool_node_info(pool.clone()).await {
+                Ok(node_info) => node_info,
+                Err(e) => {
+                    // TODO: Collect errors and return to caller at end
+                    println!(
+                        "Warning: Failed to get node information for pool: {}, error: {:?}",
+                        pool_id, e
+                    );
+                    None
+                }
+            };
+            let device_info = match self.get_pool_disks_info(pool.clone()).await {
+                Ok(d_info) => d_info,
+                Err(e) => {
+                    // TODO: Collect errors and return to caller at end
+                    println!(
+                        "Warning: Failed to get device information for pool: {}, error: {:?}",
+                        pool_id, e
+                    );
+                    None
+                }
+            };
             let pool_topology = PoolTopology {
                 pool,
-                node_info: node_info.await?,
-                device_info: device_info.await?,
+                node_info,
+                device_info,
             };
             return Ok(Box::new(pool_topology));
         }
@@ -251,12 +278,33 @@ impl Resourcer for PoolClientWrapper {
         let mut pools_topology: Vec<PoolTopology> = Vec::new();
         let pools = self.list_pools().await?;
         for pool in pools.into_iter() {
-            let node_info = self.get_pool_node_info(pool.clone());
-            let device_info = self.get_pool_disks_info(pool.clone());
+            let node_info = match self.get_pool_node_info(pool.clone()).await {
+                Ok(node_info) => node_info,
+                Err(e) => {
+                    // TODO: Collect errors and return to caller at end
+                    println!(
+                        "Warning: Failed to get node information for pools, error: {:?}",
+                        e
+                    );
+                    None
+                }
+            };
+            let device_info = match self.get_pool_disks_info(pool.clone()).await {
+                Ok(d_info) => d_info,
+                Err(e) => {
+                    // TODO: Collect errors and return to caller at end
+                    println!(
+                        "Warning: Failed to get device information for pools, error: {:?}",
+                        e
+                    );
+                    None
+                }
+            };
+
             let pool_topology = PoolTopology {
                 pool,
-                node_info: node_info.await?,
-                device_info: device_info.await?,
+                node_info,
+                device_info,
             };
             pools_topology.push(pool_topology);
         }

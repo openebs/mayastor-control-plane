@@ -1,4 +1,4 @@
-use crate::collect::{constants::MAYASTOR_SERVICE, resources::error::ResourceError};
+use crate::collect::{constants::DATA_PLANE_CONTAINER_NAME, resources::error::ResourceError};
 use async_trait::async_trait;
 use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
@@ -9,11 +9,11 @@ lazy_static! {
     /// Represents map of resource name to service where resources are hosted
     pub(crate) static ref RESOURCE_TO_CONTAINER_NAME: HashMap<&'static str, &'static str> =
         HashMap::from([
-            ("node", MAYASTOR_SERVICE),
-            ("pool", MAYASTOR_SERVICE),
-            ("nexus", MAYASTOR_SERVICE),
-            ("replica", MAYASTOR_SERVICE),
-            ("device", MAYASTOR_SERVICE),
+            ("node", DATA_PLANE_CONTAINER_NAME),
+            ("pool", DATA_PLANE_CONTAINER_NAME),
+            ("nexus", DATA_PLANE_CONTAINER_NAME),
+            ("replica", DATA_PLANE_CONTAINER_NAME),
+            ("device", DATA_PLANE_CONTAINER_NAME),
         ]);
 }
 
@@ -52,6 +52,21 @@ impl ResourceInformation {
     pub(crate) fn set_label_selector(&mut self, label_selector: Vec<String>) {
         self.label_selector = label_selector;
     }
+
+    /// getter method to return container name
+    pub(crate) fn get_container_name(&self) -> String {
+        self.container_name.clone()
+    }
+
+    /// getter method to return label selector
+    pub(crate) fn get_label_selector(&self) -> Vec<String> {
+        self.label_selector.clone()
+    }
+
+    /// getter method to return host name
+    pub(crate) fn get_host_name(&self) -> String {
+        self.host_name.clone()
+    }
 }
 
 /// Implements functionality for displaying information in tabular manner and reading inputs
@@ -67,6 +82,7 @@ pub(crate) trait Topologer: Downcast {
     fn dump_topology_info(&self, dir_path: String) -> Result<(), ResourceError>;
     fn get_unhealthy_resource_info(&self) -> HashSet<ResourceInformation>;
     fn get_all_resource_info(&self) -> HashSet<ResourceInformation>;
+    fn get_k8s_resource_names(&self) -> Vec<String>;
 }
 impl_downcast!(Topologer);
 

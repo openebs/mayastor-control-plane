@@ -72,8 +72,6 @@ impl RestClient {
     }
 
     fn get_rest_url() -> Result<Url, RestClientError> {
-        // TODO: Remove
-        println!("Fetch URL from Kube configuration file");
         let file_path = match env::var("KUBECONFIG") {
             Ok(value) => Some(value),
             Err(_) => {

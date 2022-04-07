@@ -6,17 +6,15 @@ use crate::collect::{
     k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
     logs::{LogCollection, LogResource, Logger},
     persistent_store::etcd::EtcdStore,
-    resources::{
-        node::NodeClientWrapper, pool::PoolClientWrapper, volume::VolumeClientWrapper, Resourcer,
-    },
-    rest_wrapper::rest_wrapper_client::RestClient,
+    resources::traits::Topologer,
 };
 use std::{path::PathBuf, process};
 
-/// SystemDumper interacts with various services to collect information like mayastor resource(s),
-/// logs of mayastor service and state of mayastor artifacts in etcd
-pub(crate) struct SystemDumper {
-    rest_client: &'static RestClient,
+/// Dumper interacts with various services to collect information like mayastor resource(s),
+/// mayastor service logs and state of mayastor artifacts and mayastor specific artifacts from
+/// etcd
+pub(crate) struct ResourceDumper {
+    topologer: Box<dyn Topologer>,
     archive: archive::Archive,
     dir_path: String,
     logger: Box<dyn Logger>,
@@ -24,17 +22,17 @@ pub(crate) struct SystemDumper {
     etcd_dumper: EtcdStore,
 }
 
-impl SystemDumper {
-    /// Instantiate new system dumper by performing following actions:
+impl ResourceDumper {
+    /// Instantiate new dumper by performing following actions:
     /// 1.1 Create new archive in given directory and create temporary directory
     /// in given directory to generate dump files
     /// 1.2 Instantiate all required objects to interact with various other modules
-    pub(crate) async fn get_or_panic_system_dumper(config: DumpConfig) -> Self {
+    pub(crate) async fn get_or_panic_resource_dumper(config: DumpConfig) -> Self {
         // creates a temporary directory inside given directory
         let new_dir = match common::create_and_get_tmp_directory(config.output_directory.clone()) {
             Ok(val) => val,
             Err(e) => {
-                println!("Failed to create temporary, {:?}", e);
+                println!("Failed to create temporary directory, {:?}", e);
                 process::exit(1);
             }
         };
@@ -66,8 +64,8 @@ impl SystemDumper {
                 .await
                 .expect("Failed to initialize etcd service");
 
-        SystemDumper {
-            rest_client: config.rest_client,
+        ResourceDumper {
+            topologer: config.topologer.unwrap(),
             archive,
             dir_path: new_dir,
             logger,
@@ -76,58 +74,44 @@ impl SystemDumper {
         }
     }
 
-    /// Dumps the state of the system
-    pub(crate) async fn dump_system(&mut self) -> Result<(), Error> {
-        // Dump information of all volume topologies exist in the system
-        let volume_topologer = VolumeClientWrapper::new(self.rest_client)
-            .get_topologer(None)
-            .await?;
-        volume_topologer.dump_topology_info(self.dir_path.clone())?;
+    /// Dumps information associated to given resource(s)
+    pub(crate) async fn dump_info(&mut self) -> Result<(), Error> {
+        self.topologer.dump_topology_info(self.dir_path.clone())?;
 
-        // Dump information of all pools topologies exist in the system
-        let pool_topologer = PoolClientWrapper::new(self.rest_client)
-            .get_topologer(None)
-            .await?;
-        pool_topologer.dump_topology_info(self.dir_path.clone())?;
-
-        let node_topologer = NodeClientWrapper::new(self.rest_client)
-            .get_topologer(None)
-            .await?;
-        node_topologer.dump_topology_info(self.dir_path.clone())?;
-
-        // Fetch required logging resources
+        // Fetch dataplane resources associated to Unhealthy resources
+        // TODO: Check with team whether we have to collect data from all associated
+        //       (or) only from offline associated resources?
+        let unhealthy_resources = self.topologer.get_unhealthy_resource_info();
         let mut resources = self.logger.get_control_plane_logging_services().await?;
-        resources.extend(self.logger.get_data_plane_logging_services().await?);
-        // NOTE: MAYASTOR-IO services will not be available when MAYASTOR-IO pod is down.
-        //       Lets add information from mayastor node resources.
-        let node_topologer_resources = node_topologer.get_all_resource_info();
-        node_topologer_resources.iter().for_each(|topo_resource| {
+        unhealthy_resources.into_iter().for_each(|resource| {
             resources.insert(LogResource {
-                container_name: topo_resource.get_container_name(),
-                label_selector: topo_resource.get_label_selector().as_string(','),
-                host_name: Some(topo_resource.get_host_name()),
+                container_name: resource.get_container_name(),
+                label_selector: resource.get_label_selector().as_string(','),
+                host_name: Some(resource.get_host_name()),
                 service_type: MAYASTOR_SERVICE.to_string(),
             });
         });
 
-        println!("Collecting logs of following services: \n {:#?}", resources);
-
+        println!("Collecting logs from following services: {:#?}", resources);
         self.logger
             .fetch_and_dump_logs(resources, self.dir_path.clone())
             .await?;
 
+        // Collect mayastor & kubernetes associated resources
         self.k8s_resource_dumper
-            .dump_k8s_resources(self.dir_path.clone(), None)
+            .dump_k8s_resources(
+                self.dir_path.clone(),
+                Some(self.topologer.get_k8s_resource_names()),
+            )
             .await?;
 
+        // Collect ETCD dump specific to mayastor
         let mut path: PathBuf = std::path::PathBuf::new();
         path.push(&self.dir_path.clone());
         self.etcd_dumper.dump(path).await?;
 
-        // Copy folder into archive
         self.archive
             .copy_to_archive(self.dir_path.clone(), ".".to_string())?;
-
         let _ignore = self.delete_temporary_directory();
         Ok(())
     }

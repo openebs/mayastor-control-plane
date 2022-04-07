@@ -6,8 +6,10 @@ use k8s_openapi::{
     api::{apps::v1, core::v1::Event},
     apimachinery::pkg::apis::meta::v1::MicroTime,
 };
+use k8s_operators::diskpool::crd::MayastorPool;
+use kube::Resource;
 use serde::Serialize;
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{collections::HashSet, fs::File, io::Write, iter::FromIterator, path::PathBuf};
 
 /// K8s resource dumper client
 #[derive(Clone)]
@@ -97,6 +99,7 @@ impl K8sResourceDumperClient {
     pub(crate) async fn dump_k8s_resources(
         &self,
         root_path: String,
+        required_pools: Option<Vec<String>>,
     ) -> Result<(), K8sResourceDumperError> {
         // Create the root dir path
         let mut root_dir = PathBuf::from(root_path);
@@ -144,11 +147,21 @@ impl K8sResourceDumperClient {
         )?;
 
         // Fetch all DiskPools in provided NAMESPACE
-        let mps = self.k8s_client.get_pools("", "").await?;
+        let disk_pools = self.k8s_client.list_pools(None, None).await?;
+        let filtered_pools = match required_pools {
+            Some(p_names) => {
+                let names: HashSet<String> = HashSet::from_iter(p_names);
+                disk_pools
+                    .into_iter()
+                    .filter(|p| names.contains(p.meta().name.as_ref().unwrap()))
+                    .collect::<Vec<MayastorPool>>()
+            }
+            None => disk_pools,
+        };
         create_file_and_write(
             root_dir.clone(),
             "k8s_disk_pools.yaml".to_string(),
-            serde_yaml::to_string(&mps)?,
+            serde_yaml::to_string(&filtered_pools)?,
         )?;
 
         // Fetch all Pods in provided NAMESPACE

@@ -130,16 +130,16 @@ impl ClientSet {
         Api::namespaced(self.client.clone(), &self.namespace)
     }
 
-    /// Fetch list of disk pools associated to given label_selector & field_selector
-    pub(crate) async fn get_pools(
+    /// Fetch list of disk pools associated to given names if None is provided then
+    /// all results will be returned
+    pub(crate) async fn list_pools(
         &self,
-        label_selector: &str,
-        field_selector: &str,
+        label_selector: Option<&str>,
+        field_selector: Option<&str>,
     ) -> Result<Vec<MayastorPool>, K8sResourceError> {
         let list_params = ListParams::default()
-            .labels(label_selector)
-            .fields(field_selector);
-
+            .labels(label_selector.unwrap_or_default())
+            .fields(field_selector.unwrap_or_default());
         let pools_api: Api<MayastorPool> = Api::namespaced(self.client.clone(), &self.namespace);
         let pools = pools_api.list(&list_params).await?;
         Ok(pools.items)
