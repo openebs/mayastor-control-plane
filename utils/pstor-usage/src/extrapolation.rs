@@ -64,6 +64,17 @@ struct ExtrapolationDayOpts {
     volume_attach_cycle: u64,
 }
 
+const DEFAULT_CLUSTER_NAME: &str = "extrapolated";
+impl From<SimulationOpts> for ClusterConfig {
+    fn from(simul: SimulationOpts) -> Self {
+        ClusterConfig::new(
+            simul.replicas(),
+            simul.volume_turnover(),
+            simul.volume_attach_cycles(),
+        )
+    }
+}
+
 impl Extrapolation {
     fn init(&mut self, config: &ClusterConfig) {
         self.opts = ExtrapolationDayOpts {
@@ -75,7 +86,12 @@ impl Extrapolation {
         Ok(if let Some(config) = self.cluster_opts.cluster()? {
             HashMap::from([config])
         } else {
-            self.cluster_opts.clusters()
+            self.cluster_opts.clusters().unwrap_or_else(|| {
+                HashMap::from([(
+                    DEFAULT_CLUSTER_NAME.to_string(),
+                    ClusterConfig::from(SimulationOpts::default()),
+                )])
+            })
         })
     }
     fn config_to_simulation(&self, config: &ClusterConfig) -> Simulation {

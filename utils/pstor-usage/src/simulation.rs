@@ -27,7 +27,7 @@ pub(crate) struct Simulation {
     total_stats: bool,
 
     #[structopt(skip)]
-    print_samples: bool,
+    no_print_samples: bool,
 }
 
 #[derive(StructOpt, Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
@@ -85,7 +85,7 @@ impl From<SimulationOpts> for Simulation {
         Self {
             total_stats: true,
             opts,
-            print_samples: false,
+            no_print_samples: true,
         }
     }
 }
@@ -96,6 +96,18 @@ impl SimulationOpts {
         self.volume_replicas = replicas;
         self
     }
+    /// Number of volume replicas.
+    pub(crate) fn replicas(&self) -> u8 {
+        self.volume_replicas
+    }
+    /// Attach/detach volumes from each cycle.
+    pub(crate) fn volume_attach_cycles(&self) -> u64 {
+        self.volume_attach_cycles as u64
+    }
+    /// Volume turnover.
+    pub(crate) fn volume_turnover(&self) -> u64 {
+        self.volumes as u64
+    }
 }
 
 impl Simulation {
@@ -104,14 +116,14 @@ impl Simulation {
         P: Printer,
         T: TabledData<Row = P::Row>,
     {
-        if self.print_samples {
+        if !self.no_print_samples {
             printer.print(printable);
         }
     }
 
     /// Sets whether the simulation prints its samples as it's simulating.
-    pub(crate) fn set_print_samples(&mut self, skip: bool) {
-        self.print_samples = skip;
+    pub(crate) fn set_print_samples(&mut self, print: bool) {
+        self.no_print_samples = !print;
     }
 
     /// Simulate with the current parameters.
@@ -121,7 +133,7 @@ impl Simulation {
     ) -> anyhow::Result<RunStats> {
         let args = &self.opts;
 
-        let (client, _cluster) = match external_cluster {
+        let (client, cluster) = match external_cluster {
             None => {
                 // cluster will be terminated on drop
                 let cluster = testlib::ClusterBuilder::builder()
@@ -147,7 +159,7 @@ impl Simulation {
                 (client, None)
             }
         };
-        let cleanup = _cluster.is_none() || self.total_stats;
+        let cleanup = cluster.is_none() || self.total_stats;
 
         let etcd = Etcd::new(Url::parse("http://0.0.0.0:2379")?).await?;
 
