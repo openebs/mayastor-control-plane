@@ -14,7 +14,7 @@ pub(crate) const JAEGER_OPERATOR_SERVICE: &str = "jaeger-operator";
 pub(crate) const JAEGER_SERVICE: &str = "jaeger";
 
 /// Defines the name of the pool-operator service
-pub(crate) const POOL_OPERATOR_SERVICE: &str = "msp-operator";
+pub(crate) const POOL_OPERATOR_SERVICE: &str = "diskpool-operator";
 
 /// Defines the name of the rest service
 pub(crate) const REST_SERVICE: &str = "rest";

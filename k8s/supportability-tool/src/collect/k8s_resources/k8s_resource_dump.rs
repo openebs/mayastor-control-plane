@@ -6,7 +6,7 @@ use k8s_openapi::{
     api::{apps::v1, core::v1::Event},
     apimachinery::pkg::apis::meta::v1::MicroTime,
 };
-use k8s_operators::diskpool::crd::MayastorPool;
+use k8s_operators::diskpool::crd::DiskPool;
 use kube::Resource;
 use serde::Serialize;
 use std::{collections::HashSet, fs::File, io::Write, iter::FromIterator, path::PathBuf};
@@ -154,7 +154,7 @@ impl K8sResourceDumperClient {
                 disk_pools
                     .into_iter()
                     .filter(|p| names.contains(p.meta().name.as_ref().unwrap()))
-                    .collect::<Vec<MayastorPool>>()
+                    .collect::<Vec<DiskPool>>()
             }
             None => disk_pools,
         };

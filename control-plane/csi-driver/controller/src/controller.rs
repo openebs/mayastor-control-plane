@@ -9,7 +9,7 @@ use uuid::Uuid;
 use common_lib::types::v0::openapi::models::{
     Node, Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol,
 };
-use utils::{MSP_OPERATOR, OPENEBS_CREATED_BY_KEY};
+use utils::{DSP_OPERATOR, OPENEBS_CREATED_BY_KEY};
 
 use rpc::csi::Topology as CsiTopology;
 
@@ -294,7 +294,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         inclusive_label_topology.insert(
             String::from(OPENEBS_CREATED_BY_KEY),
-            String::from(MSP_OPERATOR),
+            String::from(DSP_OPERATOR),
         );
 
         if let Some(reqs) = args.accessibility_requirements {
