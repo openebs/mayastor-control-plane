@@ -35,11 +35,8 @@ impl ClusterOpts {
         self.config.as_ref().map(|c| c.simulation()).flatten()
     }
     /// Get the all the specified clusters.
-    pub(crate) fn clusters(&self) -> HashMap<ClusterName, ClusterConfig> {
-        self.config
-            .as_ref()
-            .map(|c| c.clusters.clone())
-            .unwrap_or_default()
+    pub(crate) fn clusters(&self) -> Option<HashMap<ClusterName, ClusterConfig>> {
+        self.config.as_ref().map(|c| c.clusters.clone())
     }
 
     /// Get the specified cluster.
@@ -110,6 +107,14 @@ impl ClusterConfig {
     /// Get the number of volume modifications per day.
     pub(crate) fn mods(&self) -> u64 {
         self.volume_attach_cycles
+    }
+    /// Return new `Self` with the given parameters.
+    pub(crate) fn new(replicas: u8, volume_turnover: u64, volume_attach_cycles: u64) -> Self {
+        Self {
+            replicas,
+            volume_turnover,
+            volume_attach_cycles,
+        }
     }
 }
 

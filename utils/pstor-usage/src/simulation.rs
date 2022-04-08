@@ -96,6 +96,18 @@ impl SimulationOpts {
         self.volume_replicas = replicas;
         self
     }
+    /// Number of volume replicas.
+    pub(crate) fn replicas(&self) -> u8 {
+        self.volume_replicas
+    }
+    /// Attach/detach volumes from each cycle.
+    pub(crate) fn volume_attach_cycles(&self) -> u64 {
+        self.volume_attach_cycles as u64
+    }
+    /// Volume turnover.
+    pub(crate) fn volume_turnover(&self) -> u64 {
+        self.volumes as u64
+    }
 }
 
 impl Simulation {
