@@ -2168,6 +2168,9 @@ components:
         details:
           description: detailed error information
           type: string
+        message:
+          description: last reported error information
+          type: string
         kind:
           description: error kind
           type: string
@@ -2199,6 +2202,7 @@ components:
       required:
         - details
         - kind
+        - message
     RestWatch:
       example:
         callback: 'https://api.myserver.com/volume/e2fc5ce8-a56e-47a1-94e9-04dd2f73b88f/callback'

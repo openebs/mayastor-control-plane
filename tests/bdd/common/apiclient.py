@@ -58,7 +58,9 @@ class ApiClient(object):
     def exception_to_error(exception):
         assert isinstance(exception, ApiException)
         body = json.loads(exception.body)
-        return RestJsonError(details=body["details"], kind=body["kind"])
+        return RestJsonError(
+            details=body["details"], message=body["message"], kind=body["kind"]
+        )
 
     # Return a NexusesApi object which can be used for performing nexus related REST calls.
     @staticmethod
@@ -69,4 +71,6 @@ class ApiClient(object):
     def exception_to_error(exception):
         assert isinstance(exception, ApiException)
         body = json.loads(exception.body)
-        return RestJsonError(details=body["details"], kind=body["kind"])
+        return RestJsonError(
+            details=body["details"], message=body["message"], kind=body["kind"]
+        )
