@@ -9,25 +9,25 @@ variable "cache_period" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 
-resource "kubernetes_deployment" "deployment_msp_operator" {
+resource "kubernetes_deployment" "deployment_diskpool_operator" {
   metadata {
     labels = {
-      app = "msp-operator"
+      app = "diskpool-operator"
     }
-    name      = "msp-operator"
+    name      = "diskpool-operator"
     namespace = "mayastor"
   }
   spec {
     replicas = 1
     selector {
       match_labels = {
-        app = "msp-operator"
+        app = "diskpool-operator"
       }
     }
     template {
       metadata {
         labels = {
-          app = "msp-operator"
+          app = "diskpool-operator"
         }
       }
       spec {
@@ -51,7 +51,7 @@ resource "kubernetes_deployment" "deployment_msp_operator" {
               }
             }
           }
-          name = "msp-operator"
+          name = "diskpool-operator"
 
           image = format("%s/%s:%s", var.registry, var.image, var.tag)
 

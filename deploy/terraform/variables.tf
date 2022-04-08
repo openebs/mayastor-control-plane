@@ -37,10 +37,10 @@ variable "control_resource_requests" {
   }
 }
 
-variable "msp_operator_image" {
+variable "dsp_operator_image" {
   type        = string
-  description = "msp operator image to use"
-  default     = "diskpool-operator"
+  description = "diskpool operator image to use"
+  default     = "mayastor-diskpool-operator"
 }
 
 variable "rest_image" {
@@ -145,5 +145,5 @@ variable "with_jaeger" {
 variable "control_rust_log" {
   type        = string
   description = "The RUST_LOG environment filter for all control-plane components"
-  default     = "info,core=debug,rest=debug,csi_controller=debug,mayastor_csi=debug,msp_operator=debug,common_lib=debug,grpc=debug"
+  default     = "info,core=debug,rest=debug,csi_controller=debug,mayastor_csi=debug,diskpool_operator=debug,common_lib=debug,grpc=debug"
 }

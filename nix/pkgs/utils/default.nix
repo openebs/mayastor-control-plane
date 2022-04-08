@@ -1,4 +1,4 @@
-{ git, lib, stdenv, clang, openapi-generator, pkgs, which, sources }:
+{ git, lib, stdenv, openapi-generator, pkgs, which, sources, llvmPackages, protobuf }:
 let
   versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
   version = builtins.readFile "${versionDrv}";
@@ -13,6 +13,10 @@ let
           allowedPrefixes)
       src;
   src = whitelistSource ../../../. project-builder.src_list;
+
+  LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
+  PROTOC = "${protobuf}/bin/protoc";
+  PROTOC_INCLUDE = "${protobuf}/include";
 
   naersk_package = channel: pkgs.callPackage sources.naersk {
     rustc = channel.stable;
@@ -65,7 +69,27 @@ let
           sed -i '/ctrlp-tests.*=/d' ./control-plane/plugin/Cargo.toml
         '';
         cargoBuildOptions = attrs: attrs ++ [ "-p" "kubectl-plugin" ];
-        nativeBuildInputs = [ clang openapi-generator which git ];
+        nativeBuildInputs = with pkgs; [ clang openapi-generator which git ];
+        doCheck = false;
+        usePureFromTOML = true;
+
+        CARGO_BUILD_TARGET = "${arch}-unknown-linux-musl";
+        CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+      };
+      kubectl-support = naersk.buildPackage {
+        inherit release src version;
+        name = "kubectl-mayastor_support";
+
+        preBuild = ''
+          # don't run during the dependency build phase
+          if [ ! -f build.rs ]; then
+            patchShebangs ./scripts/rust/generate-openapi-bindings.sh
+            ./scripts/rust/generate-openapi-bindings.sh --skip-git-diff
+          fi
+        '';
+        inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
+        cargoBuildOptions = attrs: attrs ++ [ "-p" "supportability-tool" ];
+        nativeBuildInputs = with pkgs.pkgsCross.musl64; [ pkgconfig clang openapi-generator which git openssl ];
         doCheck = false;
         usePureFromTOML = true;
 

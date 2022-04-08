@@ -49,7 +49,7 @@ def setup():
     subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "msp-operator"}
+    pool_labels = {"openebs.io/created-by": "diskpool-operator"}
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,
