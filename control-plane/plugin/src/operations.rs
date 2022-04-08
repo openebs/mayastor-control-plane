@@ -1,13 +1,14 @@
 use crate::resources::{utils, GetResources, ScaleResources};
 use async_trait::async_trait;
-use structopt::StructOpt;
 
 /// The types of operations that are supported.
-#[derive(StructOpt, Debug)]
+#[derive(clap::Subcommand, Debug)]
 pub enum Operations {
     /// 'Get' resources.
+    #[clap(subcommand)]
     Get(GetResources),
     /// 'Scale' resources.
+    #[clap(subcommand)]
     Scale(ScaleResources),
 }
 

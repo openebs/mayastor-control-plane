@@ -3,6 +3,7 @@ extern crate prettytable;
 mod collect;
 mod operations;
 
+use clap::Parser;
 use collect::{
     common::DumpConfig,
     error::Error,
@@ -16,37 +17,36 @@ use collect::{
 use openapi::tower::client::Url;
 use operations::{Operations, Resource};
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 /// Supportability tool collects state & log information of mayastor services runningin
 /// in the system
-#[derive(Debug, Clone, StructOpt)]
-#[structopt(name = "mayastor-cli", about = "Supportability tool for Mayastor")]
+#[derive(Debug, Clone, Parser)]
+#[clap(name = "mayastor-cli", about = "Supportability tool")]
 struct CliArgs {
     /// The rest endpoint, parsed from KUBECONFIG, if left empty
-    #[structopt(global = true, short, long)]
+    #[clap(global = true, short, long)]
     rest: Option<Url>,
 
     /// Specifies the timeout value to interact with other modules of system
-    #[structopt(global = true, long, short, default_value = "10s")]
+    #[clap(global = true, long, short, default_value = "10s")]
     timeout: humantime::Duration,
 
     /// Period states to collect all logs from last specified duration
-    #[structopt(global = true, long, short, default_value = "24h")]
+    #[clap(global = true, long, short, default_value = "24h")]
     since: humantime::Duration,
 
     /// Endpoint of LOKI service, if left empty then it will try to parse endpoint
     /// from Loki service(K8s service resource), if the tool is unable to parse
     /// from service then logs will be collected using Kube-apiserver
-    #[structopt(global = true, short, long)]
+    #[clap(global = true, short, long)]
     loki_endpoint: Option<String>,
 
     /// Endpoint of ETCD service, if left empty then will be parsed from the internal service name
-    #[structopt(global = true, short, long)]
+    #[clap(global = true, short, long)]
     etcd_endpoint: Option<String>,
 
     /// Output directory path to store archive file
-    #[structopt(global = true, long, short = "o", default_value = "./")]
+    #[clap(global = true, long, short = 'o', default_value = "./")]
     output_directory_path: String,
 
     /// Kubernetes namespace of installation
@@ -54,17 +54,17 @@ struct CliArgs {
     namespace: String,
 
     /// Path to kubeconfig file
-    #[structopt(parse(from_os_str), global = true, long, short = "k")]
+    #[clap(parse(from_os_str), global = true, long, short = 'k')]
     kube_config_path: Option<PathBuf>,
 
     /// Supported subcommand options
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     operations: Operations,
 }
 
 impl CliArgs {
     fn args() -> Self {
-        CliArgs::from_args()
+        CliArgs::parse()
     }
 }
 

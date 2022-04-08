@@ -22,7 +22,7 @@ kube = { version = "0.60.0", features = ["derive" ] }
 common-lib = { path = "../../common" }
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
 yaml-rust = { version = "0.4" }
-structopt = "0.3.26"
+clap = { version = "3.1.5", features = ["color", "derive"] }
 humantime = "2.1.0"
 async-trait = "0.1.51"
 prettytable-rs = "^0.8"

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use clap::Parser;
 use openapi::tower::client::Url;
 use opentelemetry::global;
 use plugin::{
@@ -7,35 +8,34 @@ use plugin::{
     rest_wrapper::RestClient,
 };
 use std::{env, path::Path};
-use structopt::StructOpt;
 use yaml_rust::YamlLoader;
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
+#[derive(Parser, Debug)]
+#[clap(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
     /// The rest endpoint to connect to.
-    #[structopt(global = true, long, short)]
+    #[clap(global = true, long, short)]
     rest: Option<Url>,
 
     /// The operation to be performed.
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     operations: Operations,
 
     /// The Output, viz yaml, json.
-    #[structopt(global = true, default_value = plugin::resources::utils::OutputFormat::None.as_ref(), short, long)]
+    #[clap(global = true, default_value = plugin::resources::utils::OutputFormat::None.as_ref(), short, long)]
     output: plugin::resources::utils::OutputFormat,
 
     /// Trace rest requests to the Jaeger endpoint agent.
-    #[structopt(global = true, long, short)]
+    #[clap(global = true, long, short)]
     jaeger: Option<String>,
 
     /// Timeout for the REST operations.
-    #[structopt(long, short, default_value = "10s")]
+    #[clap(long, short, default_value = "10s")]
     timeout: humantime::Duration,
 }
 impl CliArgs {
     fn args() -> Self {
-        CliArgs::from_args()
+        CliArgs::parse()
     }
 }
 
