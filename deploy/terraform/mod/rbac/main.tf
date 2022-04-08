@@ -85,7 +85,7 @@ resource "kubernetes_cluster_role" "mayastor" {
   }
 
   rule {
-    verbs      = ["get", ]
+    verbs      = ["get"]
     api_groups = [""]
     resources  = ["namespaces"]
   }
