@@ -80,7 +80,7 @@ impl SupportArgs {
         let rest_client = rest_wrapper_client::RestClient::new(std::time::Duration::from_secs(
             self.timeout.as_secs(),
         ))
-        .map_err(|e| anyhow::anyhow!("Failed to initialise REST client {e:?}"))?;
+        .map_err(|e| anyhow::anyhow!("Failed to initialise REST client {:?}", e))?;
 
         // TODO: Move code inside options to some generic function
         // Perform the operations based on user chosen subcommands
