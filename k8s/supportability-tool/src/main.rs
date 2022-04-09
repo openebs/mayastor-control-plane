@@ -85,9 +85,11 @@ async fn main() {
 async fn execute(cli_args: CliArgs) -> Result<(), Error> {
     // Initialise the REST client.
     let rest_client = rest_wrapper_client::RestClient::new(
-        cli_args.clone().rest,
+        cli_args.rest.clone(),
+        cli_args.kube_config_path.clone(),
         std::time::Duration::new(cli_args.timeout.as_secs(), 0),
     )
+    .await
     .expect("Failed to initialise REST client");
 
     // TODO: Move code inside options to some generic function

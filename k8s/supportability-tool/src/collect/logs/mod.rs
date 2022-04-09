@@ -8,7 +8,7 @@ use crate::collect::{
     },
     k8s_resources::{
         client::{ClientSet, K8sResourceError},
-        common::{KUBERNETES_HOST_LABEL_KEY, RUNNING_FIELD_SELECTOR},
+        common::KUBERNETES_HOST_LABEL_KEY,
     },
     logs::k8s_log::{K8sLoggerClient, K8sLoggerError},
 };
@@ -97,7 +97,12 @@ impl LogCollection {
         // If Loki URI is not provided then read endpoint from K8s service object
         let loki_endpoint = match loki_uri {
             Some(uri) => Some(uri),
-            None => get_loki_endpoint(client_set.clone()).await.ok(),
+            None => {
+                let e = client_set
+                    .get_service_endpoint(LOKI_SERVICE_LABEL_SELECTOR, LOKI_METRICS_PORT_NAME)
+                    .await?;
+                Some(format!("http://{}", e))
+            }
         };
         Ok(Box::new(Self {
             loki_client: loki_endpoint.map(|uri| loki::LokiClient::new(uri, since, timeout)),
@@ -243,10 +248,12 @@ impl Logger for LogCollection {
     }
 
     async fn get_control_plane_logging_services(&self) -> Result<HashSet<LogResource>, LogError> {
+        // NOTE: We have to get historic logs of non-running pods, so passing field selector as
+        // empty value
         let pods = self
             .k8s_logger_client
             .get_k8s_clientset()
-            .get_pods(LOGGING_LABEL_SELECTOR, RUNNING_FIELD_SELECTOR)
+            .get_pods(LOGGING_LABEL_SELECTOR, "")
             .await?;
 
         let control_plane_pods = pods
@@ -268,10 +275,12 @@ impl Logger for LogCollection {
     }
 
     async fn get_data_plane_logging_services(&self) -> Result<HashSet<LogResource>, LogError> {
+        // NOTE: We have to get historic logs of non-running pods, so passing field selector as
+        // empty value
         let pods = self
             .k8s_logger_client
             .get_k8s_clientset()
-            .get_pods(LOGGING_LABEL_SELECTOR, RUNNING_FIELD_SELECTOR)
+            .get_pods(LOGGING_LABEL_SELECTOR, "")
             .await?;
         let data_plane_pods = pods
             .into_iter()
@@ -290,31 +299,6 @@ impl Logger for LogCollection {
 
         self.get_logging_resources(data_plane_pods).await
     }
-}
-
-// used to get the Loki end point from the Loki service(labeled with app=loki)
-async fn get_loki_endpoint(c: ClientSet) -> Result<String, LogError> {
-    let svcs = c.get_svcs(LOKI_SERVICE_LABEL_SELECTOR).await?;
-
-    let info = svcs.into_iter().find_map(|svc| match svc.spec {
-        Some(spec) => match spec.cluster_ip {
-            Some(cluster_ip) => spec
-                .ports
-                .unwrap_or_default()
-                .into_iter()
-                .find(|port| port.name == Some(LOKI_METRICS_PORT_NAME.to_string()))
-                .map(|service_port| (cluster_ip, service_port.port)),
-            None => None,
-        },
-        _ => None,
-    });
-    let (ip, port) = info.ok_or_else(|| {
-        LogError::Custom(format!(
-            "cannot find {} port for loki service",
-            LOKI_METRICS_PORT_NAME
-        ))
-    })?;
-    Ok(format!("http://{}:{}", ip, port))
 }
 
 fn is_host_name_required(service_name: String) -> bool {

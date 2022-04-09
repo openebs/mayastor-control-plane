@@ -5,7 +5,11 @@ use k8s_openapi::api::{
 };
 use k8s_operators::diskpool::crd::MayastorPool;
 use kube::{api::ListParams, error::ConfigError, Api, Client, Resource};
-use std::{collections::HashMap, convert::TryFrom};
+use std::{
+    collections::HashMap,
+    convert::TryFrom,
+    net::{SocketAddr, ToSocketAddrs},
+};
 
 /// K8sResourceError holds errors that can obtain while fetching
 /// information of Kubernetes Objects
@@ -52,6 +56,7 @@ impl K8sResourceError {
 /// ClientSet is wrapper Kubernetes clientset and namespace of mayastor service
 #[derive(Clone)]
 pub(crate) struct ClientSet {
+    kube_config: kube::Config,
     client: kube::Client,
     namespace: String,
 }
@@ -62,18 +67,22 @@ impl ClientSet {
         kube_config_path: Option<std::path::PathBuf>,
         namespace: String,
     ) -> Result<Self, K8sResourceError> {
-        let client = match kube_config_path {
+        let config = match kube_config_path {
             Some(config_path) => {
                 let kube_config = kube::config::Kubeconfig::read_from(&config_path)
                     .map_err(|e| -> K8sResourceError { e.into() })?;
-                let config =
-                    kube::Config::from_custom_kubeconfig(kube_config, &Default::default()).await?;
-                Client::try_from(config)?
+                kube::Config::from_custom_kubeconfig(kube_config, &Default::default()).await?
             }
-            None => Client::try_default().await?,
+            None => kube::Config::infer().await?,
         };
-        Ok(Self { client, namespace })
+        let client = Client::try_from(config.clone())?;
+        Ok(Self {
+            client,
+            kube_config: config,
+            namespace,
+        })
     }
+
     /// Get a clone of the inner `kube::Client`.
     pub(crate) fn kube_client(&self) -> kube::Client {
         self.client.clone()
@@ -281,5 +290,54 @@ impl ClientSet {
         let svc_api: Api<Service> = Api::namespaced(self.client.clone(), &self.namespace);
         let svcs = svc_api.list(&list_params).await?;
         Ok(svcs.items)
+    }
+
+    /// Returns the cluster URL by reading from kubeconfig/incluster_config
+    fn get_cluster_url(&self) -> http::Uri {
+        self.kube_config.cluster_url.clone()
+    }
+
+    /// Fetch list of service matching to selector and return address matching to port name
+    pub(crate) async fn get_service_endpoint(
+        &self,
+        label_selector: &str,
+        port_name_const: &str,
+    ) -> Result<SocketAddr, K8sResourceError> {
+        let svcs = self.get_svcs(label_selector).await?;
+
+        for svc in svcs {
+            match svc.spec {
+                Some(spec) if spec.type_ == Some("NodePort".to_string()) => {
+                    let cluster_url = self.get_cluster_url();
+                    if let Some(ip_address) = cluster_url.host() {
+                        let parts: Vec<&str> = ip_address.split(':').collect();
+                        let mut ports = spec.ports.unwrap_or_default().into_iter();
+                        if let Some(node_port) = ports
+                            .find(|port| port.name == Some(port_name_const.to_string()))
+                            .map(|service_port| service_port.node_port.unwrap_or_default())
+                        {
+                            let address = format!("{}:{}", parts[0], node_port);
+                            return match address.to_socket_addrs() {
+                                Ok(mut a) => a.next().ok_or_else(|| {
+                                    K8sResourceError::CustomError(String::from(
+                                        "could not find socket address",
+                                    ))
+                                }),
+                                Err(e) => Err(K8sResourceError::CustomError(format!(
+                                    "cannot resolve endpoint for etcd: {}",
+                                    e
+                                ))),
+                            };
+                        }
+                    }
+                }
+                // NOTE: Handle ClusterIP type value only if there is any mechanisms
+                // to reach application from outside Kubernetes cluster
+                _ => continue,
+            }
+        }
+        Err(K8sResourceError::CustomError(
+            "unable able to find service endpoint".to_string(),
+        ))
     }
 }
