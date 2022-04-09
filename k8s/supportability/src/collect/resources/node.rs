@@ -152,20 +152,13 @@ impl NodeClientWrapper {
 
     // TODO: Add pagination support when REST service supports it
     async fn list_nodes(&self) -> Result<Vec<Node>, ResourceError> {
-        let nodes = self
-            .rest_client
-            .client
-            .nodes_api()
-            .get_nodes()
-            .await?
-            .into_body();
+        let nodes = self.rest_client.nodes_api().get_nodes().await?.into_body();
         Ok(nodes)
     }
 
     async fn get_node(&self, id: String) -> Result<Node, ResourceError> {
         let node = self
             .rest_client
-            .client
             .nodes_api()
             .get_node(&id)
             .await?
@@ -176,7 +169,6 @@ impl NodeClientWrapper {
     async fn list_node_block_devices(&self, id: String) -> Result<Vec<BlockDevice>, ResourceError> {
         let devices = match self
             .rest_client
-            .client
             .block_devices_api()
             .get_node_block_devices(&id, Some(true))
             .await

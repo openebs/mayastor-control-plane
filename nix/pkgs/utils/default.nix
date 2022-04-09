@@ -88,7 +88,7 @@ let
           fi
         '';
         inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
-        cargoBuildOptions = attrs: attrs ++ [ "-p" "supportability-tool" ];
+        cargoBuildOptions = attrs: attrs ++ [ "-p" "supportability" ];
         nativeBuildInputs = with pkgs.pkgsCross.musl64; [ pkgconfig clang openapi-generator which git openssl ];
         doCheck = false;
         usePureFromTOML = true;

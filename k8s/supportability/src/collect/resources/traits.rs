@@ -3,7 +3,10 @@ use async_trait::async_trait;
 use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use prettytable::Row;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+};
 
 lazy_static! {
     /// Represents map of resource name to service where resources are hosted
@@ -77,7 +80,7 @@ pub(crate) trait TablePrinter {
 }
 
 /// Implements functionality to inspect topology information
-pub(crate) trait Topologer: Downcast {
+pub(crate) trait Topologer: Downcast + Debug {
     fn get_printable_topology(&self) -> Result<(String, String), ResourceError>;
     fn dump_topology_info(&self, dir_path: String) -> Result<(), ResourceError>;
     fn get_unhealthy_resource_info(&self) -> HashSet<ResourceInformation>;

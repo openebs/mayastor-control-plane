@@ -2251,13 +2251,14 @@ dependencies = [
  "anyhow",
  "clap 3.1.18",
  "humantime",
+ "kube",
  "openapi",
  "opentelemetry",
  "rest-plugin",
+ "supportability",
  "tokio",
  "tracing",
  "utils",
- "yaml-rust",
 ]
 
 [[package]]
@@ -3905,9 +3906,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "supportability-tool"
+name = "supportability"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "chrono",
  "clap 3.1.18",
@@ -3925,6 +3927,7 @@ dependencies = [
  "openapi",
  "prettytable-rs",
  "reqwest",
+ "rest-plugin",
  "schemars",
  "serde",
  "serde_json",

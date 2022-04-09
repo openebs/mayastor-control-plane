@@ -4,6 +4,7 @@ use crate::collect::{
 use chrono::Local;
 
 /// DumpConfig helps to create new instance of Dumper
+#[derive(Debug)]
 pub(crate) struct DumpConfig {
     /// Client to interact with REST service
     pub(crate) rest_client: &'static RestClient,

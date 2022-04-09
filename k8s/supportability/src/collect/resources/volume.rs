@@ -18,7 +18,7 @@ use traits::{
 
 /// Holds topological information of volume(like) --> {Replicas} --> {Pools} --> {Nodes}
 /// of Volume resource
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct VolumeTopology {
     volume: Volume,
     target: Option<Nexus>,
@@ -122,7 +122,6 @@ impl VolumeClientWrapper {
         loop {
             let volumes_api_resp = self
                 .rest_client
-                .client
                 .volumes_api()
                 .get_volumes(max_entries, next_token)
                 .await?
@@ -139,7 +138,6 @@ impl VolumeClientWrapper {
     async fn get_volume(&self, id: openapi::apis::Uuid) -> Result<Volume, ResourceError> {
         let volume = self
             .rest_client
-            .client
             .volumes_api()
             .get_volume(&id)
             .await?
