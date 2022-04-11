@@ -49,8 +49,8 @@ struct CliArgs {
     #[structopt(global = true, long, short = "o", default_value = "./")]
     output_directory_path: String,
 
-    /// Kubernetes namespace of mayastor service, defaults to mayastor
-    #[structopt(global = true, long, short = "n", default_value = "mayastor")]
+    /// Kubernetes namespace of installation
+    #[structopt(global = true, long, short = "n", default_value)]
     namespace: String,
 
     /// Path to kubeconfig file
@@ -71,6 +71,11 @@ impl CliArgs {
 #[tokio::main]
 async fn main() {
     let args = CliArgs::args();
+    // Add CLI validations for optional argument
+    if args.namespace.is_empty() {
+        println!("-n (or) --namespace option is required");
+        std::process::exit(1);
+    }
     let ret = execute(args).await;
     if let Err(_e) = ret {
         std::process::exit(1);

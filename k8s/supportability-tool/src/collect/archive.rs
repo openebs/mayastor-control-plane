@@ -1,5 +1,5 @@
 use crate::collect::error::Error;
-use chrono::Local;
+use chrono::Utc;
 use flate2::{write::GzEncoder, Compression};
 use std::fs::File;
 use tar::Builder;
@@ -15,11 +15,11 @@ pub(crate) struct Archive {
 impl Archive {
     /// Creates new archive file with 'mayastor-<timestamp>.tar.gz' in provided directory
     pub(crate) fn new(dir_path: String) -> Result<Self, Error> {
-        let date = Local::now();
+        let date = Utc::now();
         let archive_file_name = format!(
             "{}-{}.tar.gz",
             ARCHIVE_PREFIX,
-            date.format("%Y-%m-%d-%H-%M-%S")
+            date.format("%Y-%m-%d--%H-%M-%S-%Z")
         );
         let tar_file_name = std::path::Path::new(&dir_path).join(archive_file_name);
         let tar_file = File::create(tar_file_name)?;

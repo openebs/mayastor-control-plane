@@ -168,7 +168,7 @@ impl K8sResourceDumperClient {
         let pods = self.k8s_client.get_pods("", "").await?;
         create_file_and_write(
             root_dir.clone(),
-            "pods_configurations.yaml".to_string(),
+            "pods.yaml".to_string(),
             serde_yaml::to_string(&pods)?,
         )?;
         Ok(())
