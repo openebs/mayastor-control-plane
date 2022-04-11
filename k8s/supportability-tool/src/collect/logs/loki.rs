@@ -5,6 +5,8 @@ use std::{io::Write, path::PathBuf};
 /// Loki endpoint to query for logs
 const ENDPOINT: &str = "/loki/api/v1/query_range";
 
+const SERVICE_NAME: &str = "loki";
+
 /// Possible errors can occur while interacting with Loki service
 #[derive(Debug)]
 pub(crate) enum LokiError {
@@ -155,7 +157,7 @@ impl LokiClient {
         }
         let (file_name, new_query_field) = match host_name {
             Some(host_name) => {
-                let file_name = format!("{}-historic-{}.log", host_name, container_name);
+                let file_name = format!("{}-{}-{}.log", host_name, SERVICE_NAME, container_name);
                 let new_query_field = format!(
                     "{{{},container=\"{}\",hostname=\"{}\"}}",
                     label_filters, container_name, host_name
@@ -163,7 +165,7 @@ impl LokiClient {
                 (file_name, new_query_field)
             }
             None => {
-                let file_name = format!("historic-{}.log", container_name);
+                let file_name = format!("{}-{}.log", SERVICE_NAME, container_name);
                 let new_query_field =
                     format!("{{{},container=\"{}\"}}", label_filters, container_name);
                 (file_name, new_query_field)
