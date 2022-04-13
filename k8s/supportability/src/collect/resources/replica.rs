@@ -16,7 +16,7 @@ use traits::{ResourceInformation, MAYASTOR_DAEMONSET_LABEL, RESOURCE_TO_CONTAINE
 
 /// ReplicaTopology represents information about
 /// mayastor volume replica and all it's descendants
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct ReplicaTopology {
     replica: Replica,
     pool_topology: PoolTopology,
@@ -83,7 +83,6 @@ impl ReplicaClientWrapper {
     async fn list_replicas(&self) -> Result<Vec<Replica>, ResourceError> {
         let replicas = self
             .rest_client
-            .client
             .replicas_api()
             .get_replicas()
             .await?
@@ -94,7 +93,6 @@ impl ReplicaClientWrapper {
     async fn get_replica(&self, id: openapi::apis::Uuid) -> Result<Replica, ResourceError> {
         let replicas = self
             .rest_client
-            .client
             .replicas_api()
             .get_replica(&id)
             .await?

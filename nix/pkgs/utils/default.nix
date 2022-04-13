@@ -1,4 +1,4 @@
-{ git, lib, stdenv, clang, openapi-generator, pkgs, which, sources }:
+{ git, lib, stdenv, openapi-generator, pkgs, which, sources, llvmPackages, protobuf }:
 let
   versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
   version = builtins.readFile "${versionDrv}";
@@ -13,6 +13,10 @@ let
           allowedPrefixes)
       src;
   src = whitelistSource ../../../. project-builder.src_list;
+
+  LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
+  PROTOC = "${protobuf}/bin/protoc";
+  PROTOC_INCLUDE = "${protobuf}/include";
 
   naersk_package = channel: pkgs.callPackage sources.naersk {
     rustc = channel.stable;
@@ -63,9 +67,11 @@ let
             ./scripts/rust/generate-openapi-bindings.sh --skip-git-diff
           fi
           sed -i '/ctrlp-tests.*=/d' ./control-plane/plugin/Cargo.toml
+          export OPENSSL_STATIC=1
         '';
+        inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
         cargoBuildOptions = attrs: attrs ++ [ "-p" "kubectl-plugin" ];
-        nativeBuildInputs = [ clang openapi-generator which git ];
+        nativeBuildInputs = with pkgs.pkgsCross.musl64; [ pkgconfig clang openapi-generator which git pkgsStatic.openssl.dev ];
         doCheck = false;
         usePureFromTOML = true;
 

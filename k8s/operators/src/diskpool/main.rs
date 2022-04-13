@@ -1,15 +1,13 @@
+//! K8S pool operator watches for pool CRs and creates the pool on the given node.
+//! There is a maximum retry limit that will put the pool into a steady error state.
+//!
+//! Successfully created pools are recreated by the control plane.
+
 mod crd;
 
-use crd::*;
-
 use chrono::Utc;
-/// Mayastor pool operator wachtes for pool CRDs and creates the pool on
-/// the given node. There is a maximum retry limit that will put the pool
-/// into a steady error state.
-///
-///
-/// Succesfully created pools are recreated by the control plane.
 use clap::{App, Arg, ArgMatches};
+use crd::{DiskPool, DiskPoolStatus, PoolState};
 use futures::StreamExt;
 use k8s_openapi::{
     api::core::v1::{Event as k8Event, ObjectReference},
@@ -31,12 +29,11 @@ use opentelemetry::global;
 
 use serde_json::json;
 use snafu::Snafu;
-use std::{collections::HashMap, io::Write, ops::Deref, sync::Arc, time::Duration};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 use tracing::{debug, error, info, trace, warn};
 
-const WHO_AM_I: &str = "Mayastor pool operator";
-const WHO_AM_I_SHORT: &str = "msp-operator";
-const CRD_FILE_NAME: &str = "mayastorpoolcrd.yaml";
+const WHO_AM_I: &str = "DiskPool Operator";
+const WHO_AM_I_SHORT: &str = "dsp-operator";
 
 /// Errors generated during the reconciliation loop
 #[derive(Debug, Snafu)]
@@ -88,7 +85,7 @@ impl From<clients::tower::Error<RestJsonError>> for Error {
 #[derive(Clone)]
 pub(crate) struct ResourceContext {
     /// The latest CRD known to us
-    inner: MayastorPool,
+    inner: DiskPool,
     /// Counter that keeps track of how many times the reconcile loop has run
     /// within the current state
     num_retries: u32,
@@ -97,7 +94,7 @@ pub(crate) struct ResourceContext {
 }
 
 impl Deref for ResourceContext {
-    type Target = MayastorPool;
+    type Target = DiskPool;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -122,13 +119,9 @@ impl OperatorContext {
     /// Upsert the potential new CRD into the operator context. If an existing
     /// resource with the same name is present, the old resource is
     /// returned.
-    pub(crate) async fn upsert(
-        &self,
-        ctx: Arc<OperatorContext>,
-        msp: MayastorPool,
-    ) -> ResourceContext {
+    pub(crate) async fn upsert(&self, ctx: Arc<OperatorContext>, dsp: DiskPool) -> ResourceContext {
         let resource = ResourceContext {
-            inner: msp,
+            inner: dsp,
             num_retries: 0,
             ctx,
         };
@@ -141,7 +134,7 @@ impl OperatorContext {
                 if p.resource_version() == resource.resource_version() {
                     if matches!(
                         resource.status,
-                        Some(MayastorPoolStatus {
+                        Some(DiskPoolStatus {
                             state: PoolState::Online,
                             ..
                         })
@@ -187,8 +180,8 @@ impl OperatorContext {
 
 impl ResourceContext {
     /// Called when putting our finalizer on top of the resource.
-    #[tracing::instrument(fields(name = ?msp.name()))]
-    pub(crate) async fn put_finalizer(msp: MayastorPool) -> Result<ReconcilerAction, Error> {
+    #[tracing::instrument(fields(name = ?dsp.name()))]
+    pub(crate) async fn put_finalizer(dsp: DiskPool) -> Result<ReconcilerAction, Error> {
         Ok(ReconcilerAction {
             requeue_after: None,
         })
@@ -208,12 +201,12 @@ impl ResourceContext {
     }
 
     /// Clone the inner value of this resource
-    fn inner(&self) -> MayastorPool {
+    fn inner(&self) -> DiskPool {
         self.inner.clone()
     }
 
     /// Construct an API handle for the resource
-    fn api(&self) -> Api<MayastorPool> {
+    fn api(&self) -> Api<DiskPool> {
         Api::namespaced(self.ctx.k8s.clone(), &self.namespace().unwrap())
     }
 
@@ -227,9 +220,9 @@ impl ResourceContext {
         self.ctx.http.block_devices_api()
     }
 
-    /// Patch the given MSP status to the state provided. When not online the
+    /// Patch the given dsp status to the state provided. When not online the
     /// size should be assumed to be zero.
-    async fn patch_status(&self, status: MayastorPoolStatus) -> Result<MayastorPool, Error> {
+    async fn patch_status(&self, status: DiskPoolStatus) -> Result<DiskPool, Error> {
         let status = json!({ "status": status });
 
         let ps = PatchParams::apply(WHO_AM_I);
@@ -250,7 +243,7 @@ impl ResourceContext {
     /// it. We set the state of the of the object to Creating, such that we
     /// can track the its progress
     async fn start(&self) -> Result<ReconcilerAction, Error> {
-        let _ = self.patch_status(MayastorPoolStatus::default()).await?;
+        let _ = self.patch_status(DiskPoolStatus::default()).await?;
         Ok(ReconcilerAction {
             requeue_after: None,
         })
@@ -259,7 +252,7 @@ impl ResourceContext {
     /// Mark the resource as errored which is its final state. A pool in the
     /// error state will not be deleted.
     async fn mark_error(&self) -> Result<ReconcilerAction, Error> {
-        let _ = self.patch_status(MayastorPoolStatus::error()).await?;
+        let _ = self.patch_status(DiskPoolStatus::error()).await?;
 
         error!(name = ?self.name(),"status set to error");
         Ok(ReconcilerAction {
@@ -269,14 +262,14 @@ impl ResourceContext {
 
     /// patch the resource state to creating.
     async fn is_missing(&self) -> Result<ReconcilerAction, Error> {
-        self.patch_status(MayastorPoolStatus::default()).await?;
+        self.patch_status(DiskPoolStatus::default()).await?;
         Ok(ReconcilerAction {
             requeue_after: None,
         })
     }
     /// patch the resource state to unknown
     async fn mark_unknown(&self) -> Result<ReconcilerAction, Error> {
-        self.patch_status(MayastorPoolStatus::unknown()).await?;
+        self.patch_status(DiskPoolStatus::unknown()).await?;
         Ok(ReconcilerAction {
             requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
         })
@@ -332,7 +325,7 @@ impl ResourceContext {
                 let mut labels: HashMap<String, String> = HashMap::new();
                 labels.insert(
                     String::from(utils::OPENEBS_CREATED_BY_KEY),
-                    String::from(utils::MSP_OPERATOR),
+                    String::from(utils::DSP_OPERATOR),
                 );
 
                 let body = CreatePoolBody::new_all(self.spec.disks(), labels);
@@ -363,7 +356,7 @@ impl ResourceContext {
                 )
                 .await;
 
-                let _ = self.patch_status(MayastorPoolStatus::created()).await?;
+                let _ = self.patch_status(DiskPoolStatus::created()).await?;
 
                 // We are done creating the pool, we patched to created which triggers a
                 // new loop. Any error in the loop will call our error handler where we
@@ -408,7 +401,7 @@ impl ResourceContext {
         // the CRD.
         if matches!(
             self.status,
-            Some(MayastorPoolStatus {
+            Some(DiskPoolStatus {
                 state: PoolState::Error,
                 ..
             })
@@ -450,7 +443,7 @@ impl ResourceContext {
             .into_body();
 
         if pool.state.is_some() {
-            let _ = self.patch_status(MayastorPoolStatus::from(pool)).await?;
+            let _ = self.patch_status(DiskPoolStatus::from(pool)).await?;
 
             self.k8s_notify(
                 "Online pool",
@@ -534,7 +527,7 @@ impl ResourceContext {
     async fn set_status_or_unknown(&self, pool: Pool) -> Result<ReconcilerAction, Error> {
         if pool.state.is_some() {
             if let Some(status) = &self.status {
-                let new_status = MayastorPoolStatus::from(pool);
+                let new_status = DiskPoolStatus::from(pool);
                 if status != &new_status {
                     // update the usage state such that users can see the values changes
                     // as replica's are added and/or removed.
@@ -546,7 +539,7 @@ impl ResourceContext {
             // the CRD as an 'Unknown' state.
             if let Some(status) = &self.status {
                 if status.state != PoolState::Unknown {
-                    debug!("Missing pool state. Setting MSP state to 'Unknown'.");
+                    debug!("Missing pool state. Setting dsp state to 'Unknown'.");
                     self.k8s_notify(
                         "Unknown",
                         "Check",
@@ -631,12 +624,12 @@ impl ResourceContext {
     async fn finalizer(&self) -> Result<ReconcilerAction, Error> {
         let _ = finalizer(
             &self.api(),
-            "io.mayastor.pool/cleanup",
+            "openebs.io/diskpool-protection",
             self.inner(),
             |event| async move {
                 match event {
-                    Event::Apply(msp) => Self::put_finalizer(msp).await,
-                    Event::Cleanup(_msp) => Self::delete_finalizer(self.clone()).await,
+                    Event::Apply(dsp) => Self::put_finalizer(dsp).await,
+                    Event::Cleanup(_dsp) => Self::delete_finalizer(self.clone()).await,
                 }
             },
         )
@@ -656,21 +649,21 @@ impl ResourceContext {
 /// running is not an option as the operator would be "running" and the only way to know something
 /// is wrong would be to consult the logs.
 async fn ensure_crd(k8s: Client) {
-    let msp: Api<k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition> = Api::all(k8s);
-    let lp = ListParams::default().fields(&format!("metadata.name={}", "mayastorpools.openebs.io"));
-    let crds = msp.list(&lp).await.expect("failed to list CRDS");
+    let dsp: Api<k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition> = Api::all(k8s);
+    let lp = ListParams::default().fields(&format!("metadata.name={}", "diskpools.openebs.io"));
+    let crds = dsp.list(&lp).await.expect("failed to list CRDS");
 
     // the CRD has not been installed yet, to avoid overwriting (and create upgrade issues) only
     // install it when there is no crd with the given name
     if crds.iter().count() == 0 {
-        let crd = MayastorPool::crd();
+        let crd = DiskPool::crd();
         info!(
-            "Creating Foo CRD: {}",
+            "Creating CRD: {}",
             serde_json::to_string_pretty(&crd).unwrap()
         );
 
         let pp = PostParams::default();
-        match msp.create(&pp, &crd).await {
+        match dsp.create(&pp, &crd).await {
             Ok(o) => {
                 info!(crd = ?o.name(), "created");
                 // let the CRD settle this purely to avoid errors messages in the console
@@ -718,53 +711,53 @@ fn error_policy(error: &Error, _ctx: Context<OperatorContext>) -> ReconcilerActi
 }
 
 /// The main work horse
-#[tracing::instrument(fields(name = %msp.spec.node(), status = ?msp.status) skip(msp, ctx))]
+#[tracing::instrument(fields(name = %dsp.spec.node(), status = ?dsp.status) skip(dsp, ctx))]
 async fn reconcile(
-    msp: MayastorPool,
+    dsp: DiskPool,
     ctx: Context<OperatorContext>,
 ) -> Result<ReconcilerAction, Error> {
     let ctx = ctx.into_inner();
-    let msp = ctx.upsert(ctx.clone(), msp).await;
+    let dsp = ctx.upsert(ctx.clone(), dsp).await;
 
-    let _ = msp.finalizer().await;
+    let _ = dsp.finalizer().await;
 
-    match msp.status {
-        Some(MayastorPoolStatus {
+    match dsp.status {
+        Some(DiskPoolStatus {
             state: PoolState::Creating,
             ..
         }) => {
-            return msp.create_or_import().await;
+            return dsp.create_or_import().await;
         }
 
-        Some(MayastorPoolStatus {
+        Some(DiskPoolStatus {
             state: PoolState::Created,
             ..
         }) => {
-            return msp.online_pool().await;
+            return dsp.online_pool().await;
         }
 
-        Some(MayastorPoolStatus {
+        Some(DiskPoolStatus {
             state: PoolState::Online,
             ..
         })
-        | Some(MayastorPoolStatus {
+        | Some(DiskPoolStatus {
             state: PoolState::Unknown,
             ..
         }) => {
-            return msp.pool_check().await;
+            return dsp.pool_check().await;
         }
 
-        Some(MayastorPoolStatus {
+        Some(DiskPoolStatus {
             state: PoolState::Error,
             ..
         }) => {
-            error!(pool = ?msp.name(), "entered error as final state");
-            Err(Error::ReconcileError { name: msp.name() })
+            error!(pool = ?dsp.name(), "entered error as final state");
+            Err(Error::ReconcileError { name: dsp.name() })
         }
 
         // We use this state to indicate its a new CRD however, we could (and
         // perhaps should) use the finalizer callback.
-        None => return msp.start().await,
+        None => return dsp.start().await,
     }
 }
 
@@ -773,7 +766,7 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
     let namespace = args.value_of("namespace").unwrap();
     ensure_crd(k8s.clone()).await;
 
-    let msp: Api<MayastorPool> = Api::namespaced(k8s.clone(), namespace);
+    let dsp: Api<DiskPool> = Api::namespaced(k8s.clone(), namespace);
     let lp = ListParams::default();
     let url = Url::parse(args.value_of("endpoint").unwrap()).expect("endpoint is not a valid URL");
     let cfg = clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
@@ -802,11 +795,11 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
     });
 
     info!(
-        "Starting Mayastor Pool Operator (MSP) in namespace {}",
+        "Starting DiskPool Operator (dsp) in namespace {}",
         namespace
     );
 
-    Controller::new(msp, lp)
+    Controller::new(dsp, lp)
         .run(reconcile, error_policy, context)
         .for_each(|res| async move {
             match res {
@@ -819,20 +812,6 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
             }
         })
         .await;
-
-    Ok(())
-}
-
-/// Generate the mayastor pool CRD file allowing users to register them with kubernetes
-/// before the pool operator starts running.
-/// Can also be used to unregister the CRDs on uninstall.
-fn write_msp_crd(name: Option<&str>) -> anyhow::Result<()> {
-    let file = std::path::Path::new(name.unwrap_or(CRD_FILE_NAME));
-    let mut file = std::fs::File::create(file)?;
-
-    let crd = MayastorPool::crd();
-    let str = serde_json::to_string_pretty(&crd)?;
-    file.write_all(str.as_ref())?;
 
     Ok(())
 }
@@ -884,16 +863,6 @@ async fn main() -> anyhow::Result<()> {
                 .env("JAEGER_ENDPOINT")
                 .help("enable open telemetry and forward to jaeger"),
         )
-        .arg(
-            Arg::with_name("write_crd")
-                .short("-w")
-                .long("write-crd")
-                .default_value(CRD_FILE_NAME)
-                .takes_value(true)
-                .help(
-                    "writes out the CRD file to current directory with the optional name and exits",
-                ),
-        )
         .get_matches();
 
     utils::print_package_info!();
@@ -903,14 +872,10 @@ async fn main() -> anyhow::Result<()> {
         env!("CARGO_PKG_VERSION"),
     );
     utils::tracing_telemetry::init_tracing(
-        "msp-operator",
+        "dsp-operator",
         tags,
         matches.value_of("jaeger").map(|s| s.to_string()),
     );
-
-    if matches.occurrences_of("write_crd") > 0 {
-        return write_msp_crd(matches.value_of("write_crd"));
-    }
 
     pool_controller(matches).await?;
     global::shutdown_tracer_provider();

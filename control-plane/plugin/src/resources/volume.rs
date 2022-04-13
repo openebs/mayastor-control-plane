@@ -4,7 +4,6 @@ use crate::{
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
-use structopt::StructOpt;
 
 use crate::{
     operations::ReplicaTopology,
@@ -14,7 +13,7 @@ use prettytable::Row;
 use std::collections::HashMap;
 
 /// Volumes resource.
-#[derive(StructOpt, Debug)]
+#[derive(clap::Args, Debug)]
 pub struct Volumes {}
 
 // CreateRows being trait for Vec<Volume> would create the rows from the list of
@@ -92,7 +91,7 @@ async fn get_paginated_volumes() -> Option<Vec<openapi::models::Volume>> {
 }
 
 /// Volume resource.
-#[derive(StructOpt, Debug)]
+#[derive(clap::Args, Debug)]
 pub struct Volume {}
 
 #[async_trait(?Send)]

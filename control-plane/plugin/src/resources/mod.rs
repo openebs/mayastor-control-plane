@@ -3,15 +3,13 @@ pub mod pool;
 pub mod utils;
 pub mod volume;
 
-use structopt::StructOpt;
-
 pub type VolumeId = openapi::apis::Uuid;
 pub type ReplicaCount = u8;
 pub type PoolId = String;
 pub type NodeId = String;
 
 /// The types of resources that support the 'get' operation.
-#[derive(StructOpt, Debug)]
+#[derive(clap::Subcommand, Debug)]
 pub enum GetResources {
     /// Get all volumes.
     Volumes,
@@ -30,7 +28,7 @@ pub enum GetResources {
 }
 
 /// The types of resources that support the 'scale' operation.
-#[derive(StructOpt, Debug)]
+#[derive(clap::Subcommand, Debug)]
 pub enum ScaleResources {
     /// Scale volume.
     Volume {

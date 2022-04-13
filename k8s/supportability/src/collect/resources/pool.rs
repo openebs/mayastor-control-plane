@@ -152,20 +152,13 @@ impl PoolClientWrapper {
 
     // TODO: Add pagination support when REST service supports it
     async fn list_pools(&self) -> Result<Vec<Pool>, ResourceError> {
-        let pools = self
-            .rest_client
-            .client
-            .pools_api()
-            .get_pools()
-            .await?
-            .into_body();
+        let pools = self.rest_client.pools_api().get_pools().await?.into_body();
         Ok(pools)
     }
 
     async fn get_pool(&self, id: String) -> Result<Pool, ResourceError> {
         let pool = self
             .rest_client
-            .client
             .pools_api()
             .get_pool(&id)
             .await?
@@ -177,7 +170,6 @@ impl PoolClientWrapper {
         if let Some(pool_spec) = pool.spec {
             let node = self
                 .rest_client
-                .client
                 .nodes_api()
                 .get_node(&pool_spec.node.clone())
                 .await?
@@ -194,7 +186,6 @@ impl PoolClientWrapper {
         if let Some(pool_spec) = pool.spec {
             let devices = self
                 .rest_client
-                .client
                 .block_devices_api()
                 .get_node_block_devices(&pool_spec.node.clone(), Some(true))
                 .await?

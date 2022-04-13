@@ -9,10 +9,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use prettytable::Row;
-use structopt::StructOpt;
 
 /// Nodes resource.
-#[derive(StructOpt, Debug)]
+#[derive(clap::Args, Debug)]
 pub struct Nodes {}
 
 // CreateRows being trait for Node would create the rows from the list of
@@ -56,7 +55,7 @@ impl List for Nodes {
 }
 
 /// Node resource.
-#[derive(StructOpt, Debug)]
+#[derive(clap::Args, Debug)]
 pub struct Node {}
 
 #[async_trait(?Send)]

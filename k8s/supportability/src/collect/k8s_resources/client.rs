@@ -3,7 +3,7 @@ use k8s_openapi::api::{
     apps::v1::{DaemonSet, Deployment, StatefulSet},
     core::v1::{Event, Node, Pod, Service},
 };
-use k8s_operators::diskpool::crd::MayastorPool;
+use k8s_operators::diskpool::crd::DiskPool;
 use kube::{api::ListParams, error::ConfigError, Api, Client, Resource};
 use std::{
     collections::HashMap,
@@ -145,11 +145,11 @@ impl ClientSet {
         &self,
         label_selector: Option<&str>,
         field_selector: Option<&str>,
-    ) -> Result<Vec<MayastorPool>, K8sResourceError> {
+    ) -> Result<Vec<DiskPool>, K8sResourceError> {
         let list_params = ListParams::default()
             .labels(label_selector.unwrap_or_default())
             .fields(field_selector.unwrap_or_default());
-        let pools_api: Api<MayastorPool> = Api::namespaced(self.client.clone(), &self.namespace);
+        let pools_api: Api<DiskPool> = Api::namespaced(self.client.clone(), &self.namespace);
         let pools = pools_api.list(&list_params).await?;
         Ok(pools.items)
     }

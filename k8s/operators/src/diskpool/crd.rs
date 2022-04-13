@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 #[kube(
 group = "openebs.io",
 version = "v1alpha1",
-kind = "MayastorPool",
-plural = "mayastorpools",
+kind = "DiskPool",
+plural = "diskpools",
 // The name of the struct that gets created that represents a resource
 namespaced,
-status = "MayastorPoolStatus",
+status = "DiskPoolStatus",
 derive = "PartialEq",
 derive = "Default",
-shortname = "msp",
+shortname = "dsp",
 printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
 printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
 printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
@@ -23,14 +23,14 @@ printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "min
 )]
 
 /// The pool spec which contains the parameters we use when creating the pool
-pub struct MayastorPoolSpec {
+pub struct DiskPoolSpec {
     /// The node the pool is placed on
     node: String,
     /// The disk device the pool is located on
     disks: Vec<String>,
 }
 
-impl MayastorPoolSpec {
+impl DiskPoolSpec {
     /// The node the pool is placed on
     pub fn node(&self) -> String {
         self.node.clone()
@@ -66,7 +66,7 @@ pub enum PoolState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 /// Status of the pool which is driven and changed by the controller loop
-pub struct MayastorPoolStatus {
+pub struct DiskPoolStatus {
     /// The state of the pool
     pub state: PoolState,
     /// Capacity as number of bytes
@@ -77,7 +77,7 @@ pub struct MayastorPoolStatus {
     available: u64,
 }
 
-impl Default for MayastorPoolStatus {
+impl Default for DiskPoolStatus {
     fn default() -> Self {
         Self {
             state: PoolState::Creating,
@@ -88,7 +88,7 @@ impl Default for MayastorPoolStatus {
     }
 }
 
-impl MayastorPoolStatus {
+impl DiskPoolStatus {
     /// error pool status
     pub fn error() -> Self {
         Self {
@@ -118,7 +118,7 @@ impl MayastorPoolStatus {
     }
 }
 
-impl From<Pool> for MayastorPoolStatus {
+impl From<Pool> for DiskPoolStatus {
     fn from(p: Pool) -> Self {
         let state = p.state.expect("pool does not have state");
         // todo: Should we set the pool to some sort of error state?

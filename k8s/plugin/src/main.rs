@@ -1,41 +1,50 @@
 use anyhow::Result;
+use clap::Parser;
 use openapi::tower::client::Url;
 use opentelemetry::global;
 use plugin::{
-    operations::{Get, List, Operations, ReplicaTopology, Scale},
+    operations::{Get, List, ReplicaTopology, Scale},
     resources::{node, pool, volume, GetResources, ScaleResources},
     rest_wrapper::RestClient,
 };
-use std::{env, path::Path};
-use structopt::StructOpt;
-use yaml_rust::YamlLoader;
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
+mod resources;
+use resources::Operations;
+
+#[derive(Parser, Debug)]
+#[clap(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
     /// The rest endpoint to connect to.
-    #[structopt(global = true, long, short)]
+    #[clap(global = true, long, short)]
     rest: Option<Url>,
 
+    /// Path to kubeconfig file.
+    #[clap(parse(from_os_str), global = true, long, short = 'k')]
+    kube_config_path: Option<PathBuf>,
+
     /// The operation to be performed.
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     operations: Operations,
 
     /// The Output, viz yaml, json.
-    #[structopt(global = true, default_value = plugin::resources::utils::OutputFormat::None.as_ref(), short, long)]
+    #[clap(global = true, default_value = plugin::resources::utils::OutputFormat::None.as_ref(), short, long)]
     output: plugin::resources::utils::OutputFormat,
 
     /// Trace rest requests to the Jaeger endpoint agent.
-    #[structopt(global = true, long, short)]
+    #[clap(global = true, long, short)]
     jaeger: Option<String>,
 
     /// Timeout for the REST operations.
-    #[structopt(long, short, default_value = "10s")]
+    #[clap(long, short, default_value = "10s")]
     timeout: humantime::Duration,
 }
 impl CliArgs {
     fn args() -> Self {
-        CliArgs::from_args()
+        CliArgs::parse()
     }
 }
 
@@ -50,43 +59,47 @@ async fn main() {
 
 async fn execute(cli_args: CliArgs) {
     // Initialise the REST client.
-    if let Err(e) = init_rest(cli_args.rest.clone(), *cli_args.timeout) {
+    if let Err(e) = init_rest(cli_args.rest.clone(), *cli_args.timeout).await {
         println!("Failed to initialise the REST client. Error {}", e);
+        std::process::exit(1);
     }
 
     // Perform the operations based on the subcommand, with proper output format.
-    match &cli_args.operations {
+    match cli_args.operations {
         Operations::Get(resource) => match resource {
             GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
-            GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
+            GetResources::Volume { id } => volume::Volume::get(&id, &cli_args.output).await,
             GetResources::VolumeReplicaTopology { id } => {
-                volume::Volume::topology(id, &cli_args.output).await
+                volume::Volume::topology(&id, &cli_args.output).await
             }
             GetResources::Pools => pool::Pools::list(&cli_args.output).await,
-            GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
+            GetResources::Pool { id } => pool::Pool::get(&id, &cli_args.output).await,
             GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
-            GetResources::Node { id } => node::Node::get(id, &cli_args.output).await,
+            GetResources::Node { id } => node::Node::get(&id, &cli_args.output).await,
         },
         Operations::Scale(resource) => match resource {
             ScaleResources::Volume { id, replica_count } => {
-                volume::Volume::scale(id, *replica_count, &cli_args.output).await
+                volume::Volume::scale(&id, replica_count, &cli_args.output).await
             }
         },
+        Operations::Dump(resources) => {
+            resources.dump(cli_args.kube_config_path).await.unwrap();
+        }
     };
 }
 
 /// Initialise the REST client.
-fn init_rest(url: Option<Url>, timeout: std::time::Duration) -> Result<()> {
+async fn init_rest(url: Option<Url>, timeout: std::time::Duration) -> Result<()> {
     // Use the supplied URL if there is one otherwise obtain one from the kubeconfig file.
     let url = match url {
         Some(url) => url,
-        None => url_from_kubeconfig()?,
+        None => url_from_kubeconfig().await?,
     };
     RestClient::init(url, timeout)
 }
 
 /// Get the URL of the master node from the kubeconfig file.
-fn url_from_kubeconfig() -> Result<Url> {
+async fn url_from_kubeconfig() -> Result<Url> {
     // Search for the kubeconfig.
     // First look at the environment variable then look in the default directory.
     let file = match env::var("KUBECONFIG") {
@@ -106,12 +119,17 @@ fn url_from_kubeconfig() -> Result<Url> {
 
     match file {
         Some(file) => {
-            let cfg_str = std::fs::read_to_string(file)?;
-            let cfg_yaml = &YamlLoader::load_from_str(&cfg_str)?[0];
-            let master_ip = cfg_yaml["clusters"][0]["cluster"]["server"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Failed to convert IP of master node to string"))?;
-            let mut url = Url::parse(master_ip)?;
+            // NOTE: Kubeconfig file may hold multiple contexts to communicate
+            //       with different kubernetes clusters. We have to pick master
+            //       address of current-context config
+            let kube_config = kube::config::Kubeconfig::read_from(&file)?;
+            let config =
+                kube::Config::from_custom_kubeconfig(kube_config, &Default::default()).await?;
+            let server_url = config
+                .cluster_url
+                .host()
+                .ok_or_else(|| anyhow::anyhow!("Failed to get master address"))?;
+            let mut url = Url::parse(("http://".to_owned() + server_url).as_str())?;
             url.set_port(None)
                 .map_err(|_| anyhow::anyhow!("Failed to unset port"))?;
             url.set_scheme("http")

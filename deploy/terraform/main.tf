@@ -93,15 +93,15 @@ module "csi-controller" {
   rust_log              = var.control_rust_log
 }
 
-module "msp-operator" {
-  source = "./mod/msp-operator"
+module "dsp-operator" {
+  source = "./mod/dsp-operator"
   depends_on = [
     module.rbac,
     module.core,
     module.rest,
     module.mayastor
   ]
-  image                 = var.msp_operator_image
+  image                 = var.dsp_operator_image
   registry              = var.registry
   tag                   = var.tag
   control_node          = var.control_node

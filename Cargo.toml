@@ -15,7 +15,7 @@ members = [
     "k8s/operators",
     "k8s/plugin",
     ## Supportability tool to create bundle
-    "k8s/supportability-tool",
+    "k8s/supportability",
     "deployer",
     "openapi",
     "rpc",
