@@ -126,7 +126,7 @@ impl SupportArgs {
                 topologer = volume_client.get_topologer(None).await?;
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
-                if let Err(e) = dumper.dump_info().await {
+                if let Err(e) = dumper.dump_info("topology/volume".to_string()).await {
                     println!("Failed to dump volumes information, Error: {:?}", e);
                     return Err(e);
                 }
@@ -136,7 +136,7 @@ impl SupportArgs {
                 topologer = volume_client.get_topologer(Some(id)).await?;
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
-                if let Err(e) = dumper.dump_info().await {
+                if let Err(e) = dumper.dump_info("topology/volume".to_string()).await {
                     println!("Failed to dump volume {} information, Error: {:?}", id, e);
                     return Err(e);
                 }
@@ -146,7 +146,7 @@ impl SupportArgs {
                 topologer = pool_client.get_topologer(None).await?;
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
-                if let Err(e) = dumper.dump_info().await {
+                if let Err(e) = dumper.dump_info("topology/pool".to_string()).await {
                     println!("Failed to dump pools information, Error: {:?}", e);
                     return Err(e);
                 }
@@ -156,7 +156,7 @@ impl SupportArgs {
                 topologer = pool_client.get_topologer(Some(id.to_string())).await?;
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
-                if let Err(e) = dumper.dump_info().await {
+                if let Err(e) = dumper.dump_info("topology/pool".to_string()).await {
                     println!("Failed to dump pool {} information, Error: {:?}", id, e);
                     return Err(e);
                 }
@@ -166,7 +166,7 @@ impl SupportArgs {
                 topologer = node_client.get_topologer(None).await?;
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
-                if let Err(e) = dumper.dump_info().await {
+                if let Err(e) = dumper.dump_info("topology/node".to_string()).await {
                     println!("Failed to dump nodes information, Error: {:?}", e);
                     return Err(e);
                 }
@@ -176,7 +176,7 @@ impl SupportArgs {
                 topologer = node_client.get_topologer(Some(id.to_string())).await?;
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
-                if let Err(e) = dumper.dump_info().await {
+                if let Err(e) = dumper.dump_info("topology/node".to_string()).await {
                     println!("Failed to dump node {} information, Error: {:?}", id, e);
                     return Err(e);
                 }

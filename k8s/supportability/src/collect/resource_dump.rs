@@ -75,8 +75,9 @@ impl ResourceDumper {
     }
 
     /// Dumps information associated to given resource(s)
-    pub(crate) async fn dump_info(&mut self) -> Result<(), Error> {
-        self.topologer.dump_topology_info(self.dir_path.clone())?;
+    pub(crate) async fn dump_info(&mut self, folder_path: String) -> Result<(), Error> {
+        self.topologer
+            .dump_topology_info(format!("{}/{}", self.dir_path.clone(), folder_path))?;
 
         // Fetch dataplane resources associated to Unhealthy resources
         // TODO: Check with team whether we have to collect data from all associated

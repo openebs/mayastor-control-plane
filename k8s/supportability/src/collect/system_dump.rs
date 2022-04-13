@@ -82,18 +82,19 @@ impl SystemDumper {
         let volume_topologer = VolumeClientWrapper::new(self.rest_client)
             .get_topologer(None)
             .await?;
-        volume_topologer.dump_topology_info(self.dir_path.clone())?;
+        volume_topologer
+            .dump_topology_info(format!("{}/topology/volume", self.dir_path.clone()))?;
 
         // Dump information of all pools topologies exist in the system
         let pool_topologer = PoolClientWrapper::new(self.rest_client)
             .get_topologer(None)
             .await?;
-        pool_topologer.dump_topology_info(self.dir_path.clone())?;
+        pool_topologer.dump_topology_info(format!("{}/topology/pool", self.dir_path.clone()))?;
 
         let node_topologer = NodeClientWrapper::new(self.rest_client)
             .get_topologer(None)
             .await?;
-        node_topologer.dump_topology_info(self.dir_path.clone())?;
+        node_topologer.dump_topology_info(format!("{}/topology/node", self.dir_path.clone()))?;
 
         // Fetch required logging resources
         let mut resources = self.logger.get_control_plane_logging_services().await?;
