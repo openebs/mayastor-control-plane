@@ -3863,6 +3863,7 @@ dependencies = [
  "downcast-rs",
  "flate2 0.2.20",
  "futures 0.3.19",
+ "http",
  "humantime",
  "k8s-openapi",
  "k8s-operators",

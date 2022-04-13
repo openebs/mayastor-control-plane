@@ -3,8 +3,10 @@ use openapi::clients::{
     self,
     tower::{self, Url},
 };
-use std::{env, path::Path};
-use yaml_rust::YamlLoader;
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug)]
 pub enum RestClientError {
@@ -14,6 +16,7 @@ pub enum RestClientError {
     ConfigError(tower::configuration::Error),
     IOError(std::io::Error),
     CustomError(String),
+    KubeError(kube::Error),
 }
 
 impl From<env::VarError> for RestClientError {
@@ -40,6 +43,12 @@ impl From<std::io::Error> for RestClientError {
     }
 }
 
+impl From<kube::Error> for RestClientError {
+    fn from(e: kube::Error) -> Self {
+        RestClientError::KubeError(e)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RestClient {
     pub client: clients::tower::ApiClient,
@@ -48,17 +57,22 @@ pub struct RestClient {
 static REST_CLIENT: OnceCell<RestClient> = OnceCell::new();
 
 impl RestClient {
-    pub fn new(
+    pub async fn new(
         opt_url: Option<Url>,
+        kubeconfig_file: Option<PathBuf>,
         time_duration: std::time::Duration,
     ) -> Result<&'static Self, RestClientError> {
         let mut url = match opt_url {
             Some(url) => url,
-            None => Self::get_rest_url()?,
+            None => Self::get_rest_url(kubeconfig_file).await?,
         };
         if url.port().is_none() {
-            url.set_port(Some(30011))
-                .expect("Failed to set REST client port");
+            url.set_port(Some(30011)).map_err(|e| {
+                RestClientError::CustomError(format!(
+                    "Failed to set REST client port error: {:?}",
+                    e
+                ))
+            })?;
         }
         let cfg = clients::tower::Configuration::new(url, time_duration, None, None, true)?;
         REST_CLIENT.get_or_init(|| RestClient {
@@ -71,42 +85,48 @@ impl RestClient {
         REST_CLIENT.get().unwrap()
     }
 
-    fn get_rest_url() -> Result<Url, RestClientError> {
-        let file_path = match env::var("KUBECONFIG") {
-            Ok(value) => Some(value),
-            Err(_) => {
-                let default_path = format!("{}/.kube/config", env::var("HOME")?);
-                match Path::new(&default_path).exists() {
-                    true => Some(default_path),
-                    false => None,
+    async fn get_rest_url(kubeconfig_file: Option<PathBuf>) -> Result<Url, RestClientError> {
+        let file = match kubeconfig_file {
+            Some(config_path) => config_path,
+            None => {
+                let file_path = match env::var("KUBECONFIG") {
+                    Ok(value) => Some(value),
+                    Err(_) => {
+                        let default_path = format!("{}/.kube/config", env::var("HOME")?);
+                        match Path::new(&default_path).exists() {
+                            true => Some(default_path),
+                            false => None,
+                        }
+                    }
+                };
+                if file_path.is_none() {
+                    return Err(RestClientError::UrlNotExist);
                 }
+                let mut path = PathBuf::new();
+                path.push(file_path.unwrap_or_default());
+                path
             }
         };
 
-        match file_path {
-            Some(file) => {
-                let cfg_str = std::fs::read_to_string(file)?;
-                let cfg_yaml = &YamlLoader::load_from_str(&cfg_str).unwrap()[0];
-                let master_ip = cfg_yaml["clusters"][0]["cluster"]["server"]
-                    .as_str()
-                    .ok_or_else(|| {
-                        RestClientError::CustomError(
-                            "Failed to convert IP of master node to string".to_string(),
-                        )
-                    })?;
-                let mut url = Url::parse(master_ip).expect("Failed to parse URL");
-                url.set_port(None).map_err(|e| {
-                    RestClientError::CustomError(format!("Failed to unset port {:?}", e))
-                })?;
-                url.set_scheme("http").map_err(|e| {
-                    RestClientError::CustomError(format!(
-                        "Failed to set REST client scheme, Error: {:?}",
-                        e
-                    ))
-                })?;
-                Ok(url)
-            }
-            None => Err(RestClientError::UrlNotExist),
-        }
+        // NOTE: Kubeconfig file may hold multiple contexts to communicate
+        //       with different kubernetes clusters. We have to pick master
+        //       address of current-context config
+        let kube_config = kube::config::Kubeconfig::read_from(&file)?;
+        let config = kube::Config::from_custom_kubeconfig(kube_config, &Default::default()).await?;
+        let server_url = config.cluster_url.host().ok_or_else(|| {
+            RestClientError::CustomError("Failed to get master address".to_string())
+        })?;
+        let mut url = Url::parse(("http://".to_owned() + server_url).as_str()).map_err(|e| {
+            RestClientError::CustomError(format!("Failed to parse URL, error: {}", e))
+        })?;
+        url.set_port(None)
+            .map_err(|e| RestClientError::CustomError(format!("Failed to unset port {:?}", e)))?;
+        url.set_scheme("http").map_err(|e| {
+            RestClientError::CustomError(format!(
+                "Failed to set REST client scheme, Error: {:?}",
+                e
+            ))
+        })?;
+        Ok(url)
     }
 }
