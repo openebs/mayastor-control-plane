@@ -1,4 +1,5 @@
 use crate::collect::{
+    logs::create_directory_if_not_exist,
     resources,
     resources::{
         replica::{ReplicaClientWrapper, ReplicaTopology},
@@ -11,7 +12,12 @@ use openapi::models::{Nexus, Volume};
 use prettytable::Row;
 use resources::ResourceError;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs::File, io::Write, path::Path};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+};
 use traits::{
     ResourceInformation, Resourcer, Topologer, MAYASTOR_DAEMONSET_LABEL, RESOURCE_TO_CONTAINER_NAME,
 };
@@ -34,6 +40,7 @@ impl Topologer for VolumeTopology {
     }
 
     fn dump_topology_info(&self, dir_path: String) -> Result<(), ResourceError> {
+        create_directory_if_not_exist(PathBuf::from(dir_path.clone()))?;
         let file_path =
             Path::new(&dir_path).join(format!("volume-{}-topology.json", self.volume.spec.uuid));
         let mut topo_file = File::create(file_path)?;

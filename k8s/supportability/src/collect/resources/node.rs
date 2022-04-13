@@ -1,4 +1,5 @@
 use crate::collect::{
+    logs::create_directory_if_not_exist,
     resources,
     resources::{traits, utils},
     rest_wrapper::rest_wrapper_client::RestClient,
@@ -8,7 +9,13 @@ use openapi::models::{BlockDevice, Node};
 use prettytable::Row;
 use resources::ResourceError;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs::File, io::Write, iter::FromIterator, path::Path};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::Write,
+    iter::FromIterator,
+    path::{Path, PathBuf},
+};
 use traits::{
     ResourceInformation, Resourcer, Topologer, MAYASTOR_DAEMONSET_LABEL, RESOURCE_TO_CONTAINER_NAME,
 };
@@ -70,6 +77,7 @@ impl Topologer for NodeTopology {
 
     /// Writes topology information into a file in specified directory
     fn dump_topology_info(&self, dir_path: String) -> Result<(), ResourceError> {
+        create_directory_if_not_exist(PathBuf::from(dir_path.clone()))?;
         let file_path = Path::new(&dir_path).join(format!("node-{}-topology.json", self.node.id));
         let mut topo_file = File::create(file_path)?;
         let topology_as_pretty = serde_json::to_string_pretty(self)?;
