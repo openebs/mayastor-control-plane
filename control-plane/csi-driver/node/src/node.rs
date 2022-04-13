@@ -117,7 +117,7 @@ impl node_server::Node for Node {
         &self,
         _request: Request<NodeGetInfoRequest>,
     ) -> Result<Response<NodeGetInfoResponse>, Status> {
-        let node_id = format!("mayastor://{}", &self.node_name);
+        let node_id = format!("csi-node://{}", &self.node_name);
         let mut segments = HashMap::new();
         segments.insert("kubernetes.io/hostname".to_owned(), self.node_name.clone());
 

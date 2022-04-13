@@ -134,7 +134,7 @@ def setup():
     Deployer.start(1, jaeger=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "diskpool-operator"}
+    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,

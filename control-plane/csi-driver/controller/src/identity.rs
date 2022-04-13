@@ -8,7 +8,7 @@ use tracing::{debug, error, instrument};
 pub struct CsiIdentitySvc {}
 
 const CSI_PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
-const CSI_PLUGIN_VERSION: &str = "0.5";
+const CSI_PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tonic::async_trait]
 impl rpc::csi::identity_server::Identity for CsiIdentitySvc {

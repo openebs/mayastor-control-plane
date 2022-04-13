@@ -324,7 +324,7 @@ impl ResourceContext {
 
                 let mut labels: HashMap<String, String> = HashMap::new();
                 labels.insert(
-                    String::from(utils::OPENEBS_CREATED_BY_KEY),
+                    String::from(utils::CREATED_BY_KEY),
                     String::from(utils::DSP_OPERATOR),
                 );
 

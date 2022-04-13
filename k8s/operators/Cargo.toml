@@ -6,7 +6,7 @@ edition = "2018"
 authors = ["Jeffry Molanus <jeffry.molanus@gmail.com>"]
 
 [[bin]]
-name = "diskpool-operator"
+name = "operator-diskpool"
 path = "src/diskpool/main.rs"
 
 [lib]

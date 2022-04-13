@@ -83,7 +83,7 @@ def plugin_information_info_request(csi_instance):
 @then("CSI node should report its name and version")
 def check_csi_node_info(info_request):
     assert info_request.name == "io.openebs.csi-mayastor"
-    assert info_request.vendor_version == "0.2"
+    assert info_request.vendor_version == "1.0.0"
 
 
 @when(

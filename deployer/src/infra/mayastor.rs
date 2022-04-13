@@ -11,7 +11,7 @@ impl ComponentAction for Mayastor {
             let mayastor_socket =
                 format!("{}:10124", cfg.next_ip_for_name(&Self::name(i, options))?);
             let name = Self::name(i, options);
-            let bin = utils::MAYASTOR_BINARY;
+            let bin = utils::DATA_PLANE_BINARY;
             let binary = options.mayastor_bin.clone().or_else(|| Self::binary(bin));
 
             let mut spec = if let Some(binary) = binary {

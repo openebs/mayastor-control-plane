@@ -9,7 +9,7 @@ use uuid::Uuid;
 use common_lib::types::v0::openapi::models::{
     Node, Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol,
 };
-use utils::{DSP_OPERATOR, OPENEBS_CREATED_BY_KEY};
+use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
 use rpc::csi::Topology as CsiTopology;
 
@@ -17,7 +17,7 @@ const K8S_HOSTNAME: &str = "kubernetes.io/hostname";
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 const SUPPORTED_FS_TYPES: [&str; 2] = ["ext4", "xfs"];
-const MAYASTOR_NODE_PREFIX: &str = "mayastor://";
+const CSI_NODE_PREFIX: &str = "csi-node://";
 
 #[derive(Debug, Default)]
 pub struct CsiControllerSvc {}
@@ -78,7 +78,7 @@ fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, Status>
 
 /// Transform Kubernetes Mayastor node ID into its real hostname.
 fn normalize_hostname(name: &str) -> String {
-    if let Some(hostname) = name.strip_prefix(MAYASTOR_NODE_PREFIX) {
+    if let Some(hostname) = name.strip_prefix(CSI_NODE_PREFIX) {
         hostname.to_string()
     } else {
         name.to_string()
@@ -293,10 +293,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let mut preferred_nodes: Vec<String> = Vec::new();
         let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
 
-        inclusive_label_topology.insert(
-            String::from(OPENEBS_CREATED_BY_KEY),
-            String::from(DSP_OPERATOR),
-        );
+        inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
 
         if let Some(reqs) = args.accessibility_requirements {
             for r in reqs.requisite.iter() {
