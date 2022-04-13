@@ -102,6 +102,15 @@ Scenario: create 1 replica local nvmf volume
     Then a new local volume of requested size should be successfully created
     And local volume must be accessible only from all existing Mayastor nodes
 
+Scenario: unpinned volume creation
+    Given 2 Mayastor nodes with one pool on each node
+    When a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)
+    Then volume creation should fail with invalid argument
+
+    Given 2 Mayastor nodes with one pool on each node
+    When a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)
+    Then volume creation should fail with invalid argument
+
 Scenario: list local volume
     Given 2 existing volumes
     Given an existing unpublished local volume
