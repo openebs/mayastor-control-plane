@@ -1,15 +1,20 @@
-use crate::collect::{
-    archive, common,
-    common::{DumpConfig, Stringer},
-    constants::MAYASTOR_SERVICE,
-    error::Error,
-    k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
-    logs::{LogCollection, LogResource, Logger},
-    persistent_store::etcd::EtcdStore,
-    resources::{
-        node::NodeClientWrapper, pool::PoolClientWrapper, volume::VolumeClientWrapper, Resourcer,
+use crate::{
+    collect::{
+        archive, common,
+        common::{DumpConfig, Stringer},
+        constants::MAYASTOR_SERVICE,
+        error::Error,
+        k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
+        logs::{LogCollection, LogResource, Logger},
+        persistent_store::etcd::EtcdStore,
+        resources::{
+            node::NodeClientWrapper, pool::PoolClientWrapper, volume::VolumeClientWrapper,
+            Resourcer,
+        },
+        rest_wrapper::rest_wrapper_client::RestClient,
+        utils::init_tool_log_file,
     },
-    rest_wrapper::rest_wrapper_client::RestClient,
+    log,
 };
 use std::{path::PathBuf, process};
 
@@ -38,10 +43,16 @@ impl SystemDumper {
                 process::exit(1);
             }
         };
+
+        // Create and initialise the support tool log file
+        init_tool_log_file(PathBuf::from(format!("{}/support_tool_logs.log", new_dir)))
+            .expect("Support Tool Log file should be created.");
+
         let archive = match archive::Archive::new(config.output_directory) {
             Ok(val) => val,
             Err(err) => {
-                println!("Failed to create archive, {:?}", err);
+                log(format!("Failed to create archive, {:?}", err))
+                    .expect("Should be able to write to Tool Log File");
                 process::exit(1);
             }
         };
@@ -111,7 +122,10 @@ impl SystemDumper {
             });
         });
 
-        println!("Collecting logs of following services: \n {:#?}", resources);
+        log(format!(
+            "Collecting logs of following services: \n {:#?}",
+            resources
+        ))?;
 
         self.logger
             .fetch_and_dump_logs(resources, self.dir_path.clone())

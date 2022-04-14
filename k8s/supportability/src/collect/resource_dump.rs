@@ -1,12 +1,16 @@
-use crate::collect::{
-    archive, common,
-    common::{DumpConfig, Stringer},
-    constants::MAYASTOR_SERVICE,
-    error::Error,
-    k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
-    logs::{LogCollection, LogResource, Logger},
-    persistent_store::etcd::EtcdStore,
-    resources::traits::Topologer,
+use crate::{
+    collect::{
+        archive, common,
+        common::{DumpConfig, Stringer},
+        constants::MAYASTOR_SERVICE,
+        error::Error,
+        k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
+        logs::{LogCollection, LogResource, Logger},
+        persistent_store::etcd::EtcdStore,
+        resources::traits::Topologer,
+        utils::init_tool_log_file,
+    },
+    log,
 };
 use std::{path::PathBuf, process};
 
@@ -36,10 +40,20 @@ impl ResourceDumper {
                 process::exit(1);
             }
         };
+
+        // Create and initialise the support tool log file
+        if let Err(e) =
+            init_tool_log_file(PathBuf::from(format!("{}/support_tool_logs.log", new_dir)))
+        {
+            println!("Encountered error while creating log file: {} ", e);
+            process::exit(1);
+        }
+
         let archive = match archive::Archive::new(config.output_directory) {
             Ok(val) => val,
             Err(err) => {
-                println!("Failed to create archive, {:?}", err);
+                log(format!("Failed to create archive, {:?}", err))
+                    .expect("Should be able to write to Tool Log File");
                 process::exit(1);
             }
         };
@@ -93,7 +107,10 @@ impl ResourceDumper {
             });
         });
 
-        println!("Collecting logs from following services: {:#?}", resources);
+        log(format!(
+            "Collecting logs from following services: {:#?}",
+            resources
+        ))?;
         self.logger
             .fetch_and_dump_logs(resources, self.dir_path.clone())
             .await?;

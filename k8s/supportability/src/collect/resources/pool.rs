@@ -1,8 +1,11 @@
-use crate::collect::{
-    logs::create_directory_if_not_exist,
-    resources,
-    resources::{traits, utils},
-    rest_wrapper::rest_wrapper_client::RestClient,
+use crate::{
+    collect::{
+        logs::create_directory_if_not_exist,
+        resources,
+        resources::{traits, utils},
+        rest_wrapper::rest_wrapper_client::RestClient,
+    },
+    log,
 };
 use async_trait::async_trait;
 use openapi::models::{BlockDevice, Node, Pool};
@@ -228,7 +231,7 @@ impl Resourcer for PoolClientWrapper {
     async fn read_resource_id(&self) -> Result<Self::ID, ResourceError> {
         let pools = self.list_pools().await?;
         if pools.is_empty() {
-            println!("No Pool resources, Are Pools created?!!");
+            log("No Pool resources, Are Pools created?!!".to_string())?;
             return Err(ResourceError::CustomError("No Pool resources".to_string()));
         }
         let pool_id = utils::print_table_and_get_id(pools)?;
@@ -246,10 +249,10 @@ impl Resourcer for PoolClientWrapper {
                 Ok(node_info) => node_info,
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
-                    println!(
+                    log(format!(
                         "Warning: Failed to get node information for pool: {}, error: {:?}",
                         pool_id, e
-                    );
+                    ))?;
                     None
                 }
             };
@@ -257,10 +260,10 @@ impl Resourcer for PoolClientWrapper {
                 Ok(d_info) => d_info,
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
-                    println!(
+                    log(format!(
                         "Warning: Failed to get device information for pool: {}, error: {:?}",
                         pool_id, e
-                    );
+                    ))?;
                     None
                 }
             };
@@ -281,10 +284,10 @@ impl Resourcer for PoolClientWrapper {
                 Ok(node_info) => node_info,
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
-                    println!(
+                    log(format!(
                         "Warning: Failed to get node information for pools, error: {:?}",
                         e
-                    );
+                    ))?;
                     None
                 }
             };
@@ -292,10 +295,10 @@ impl Resourcer for PoolClientWrapper {
                 Ok(d_info) => d_info,
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
-                    println!(
+                    log(format!(
                         "Warning: Failed to get device information for pools, error: {:?}",
                         e
-                    );
+                    ))?;
                     None
                 }
             };

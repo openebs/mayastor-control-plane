@@ -1,11 +1,14 @@
-use crate::collect::{
-    logs::create_directory_if_not_exist,
-    resources,
-    resources::{
-        replica::{ReplicaClientWrapper, ReplicaTopology},
-        traits, utils,
+use crate::{
+    collect::{
+        logs::create_directory_if_not_exist,
+        resources,
+        resources::{
+            replica::{ReplicaClientWrapper, ReplicaTopology},
+            traits, utils,
+        },
+        rest_wrapper::rest_wrapper_client::RestClient,
     },
-    rest_wrapper::rest_wrapper_client::RestClient,
+    log,
 };
 use async_trait::async_trait;
 use openapi::models::{Nexus, Volume};
@@ -168,7 +171,7 @@ impl Resourcer for VolumeClientWrapper {
     async fn read_resource_id(&self) -> Result<Self::ID, ResourceError> {
         let volumes = self.list_volumes().await?;
         if volumes.is_empty() {
-            println!("No Volume resources, Are Volumes created?!!");
+            log("No Volume resources, Are Volumes created?!!".to_string())?;
             return Err(ResourceError::CustomError(
                 "Volume resources doesn't exist".to_string(),
             ));

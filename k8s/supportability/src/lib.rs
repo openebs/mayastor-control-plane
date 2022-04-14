@@ -16,6 +16,7 @@ use collect::{
 };
 use operations::{Operations, Resource};
 
+use crate::collect::utils::{flush_tool_log_file, log};
 use std::path::PathBuf;
 
 /// Collects state & log information of mayastor services running in the system and dump them.
@@ -117,7 +118,7 @@ impl SupportArgs {
                 let mut system_dumper =
                     collect::system_dump::SystemDumper::get_or_panic_system_dumper(config).await;
                 if let Err(e) = system_dumper.dump_system().await {
-                    println!("Failed to dump system state, error: {:?}", e);
+                    log(format!("Failed to dump system state, error: {:?}", e))?;
                     return Err(e);
                 }
             }
@@ -127,7 +128,10 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/volume".to_string()).await {
-                    println!("Failed to dump volumes information, Error: {:?}", e);
+                    log(format!(
+                        "Failed to dump volumes information, Error: {:?}",
+                        e
+                    ))?;
                     return Err(e);
                 }
             }
@@ -137,7 +141,10 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/volume".to_string()).await {
-                    println!("Failed to dump volume {} information, Error: {:?}", id, e);
+                    log(format!(
+                        "Failed to dump volume {} information, Error: {:?}",
+                        id, e
+                    ))?;
                     return Err(e);
                 }
             }
@@ -147,7 +154,7 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/pool".to_string()).await {
-                    println!("Failed to dump pools information, Error: {:?}", e);
+                    log(format!("Failed to dump pools information, Error: {:?}", e))?;
                     return Err(e);
                 }
             }
@@ -157,7 +164,10 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/pool".to_string()).await {
-                    println!("Failed to dump pool {} information, Error: {:?}", id, e);
+                    log(format!(
+                        "Failed to dump pool {} information, Error: {:?}",
+                        id, e
+                    ))?;
                     return Err(e);
                 }
             }
@@ -167,7 +177,7 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/node".to_string()).await {
-                    println!("Failed to dump nodes information, Error: {:?}", e);
+                    log(format!("Failed to dump nodes information, Error: {:?}", e))?;
                     return Err(e);
                 }
             }
@@ -177,11 +187,15 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/node".to_string()).await {
-                    println!("Failed to dump node {} information, Error: {:?}", id, e);
+                    log(format!(
+                        "Failed to dump node {} information, Error: {:?}",
+                        id, e
+                    ))?;
                     return Err(e);
                 }
             }
         }
+        flush_tool_log_file()?;
         Ok(())
     }
 }

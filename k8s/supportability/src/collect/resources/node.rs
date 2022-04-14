@@ -1,8 +1,11 @@
-use crate::collect::{
-    logs::create_directory_if_not_exist,
-    resources,
-    resources::{traits, utils},
-    rest_wrapper::rest_wrapper_client::RestClient,
+use crate::{
+    collect::{
+        logs::create_directory_if_not_exist,
+        resources,
+        resources::{traits, utils},
+        rest_wrapper::rest_wrapper_client::RestClient,
+    },
+    log,
 };
 use async_trait::async_trait;
 use openapi::models::{BlockDevice, Node};
@@ -240,7 +243,7 @@ impl Resourcer for NodeClientWrapper {
             nodes_topology.push(node_topology);
         }
         if nodes_topology.is_empty() {
-            println!("No Node resources, Are node daemonsets in Running State?!!");
+            log("No Node resources, Are node daemonsets in Running State?!!".to_string())?;
             return Err(ResourceError::CustomError("No Node resources".to_string()));
         }
         Ok(Box::new(nodes_topology))

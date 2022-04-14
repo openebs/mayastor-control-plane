@@ -1,6 +1,9 @@
-use crate::collect::{
-    k8s_resources::client::{ClientSet, K8sResourceError},
-    logs::create_directory_if_not_exist,
+use crate::{
+    collect::{
+        k8s_resources::client::{ClientSet, K8sResourceError},
+        logs::create_directory_if_not_exist,
+    },
+    log,
 };
 use k8s_openapi::{
     api::{apps::v1, core::v1::Event},
@@ -197,18 +200,22 @@ fn create_app_configurations<T: EntityName>(
         let serialized = match serde_yaml::to_string(&app) {
             Ok(value) => value,
             Err(e) => {
-                println!("Error serializing the app : {} , error: {}", app.name(), e);
+                log(format!(
+                    "Error serializing the app : {} , error: {}",
+                    app.name(),
+                    e
+                ))?;
                 continue;
             }
         };
         match create_file_and_write(dir_path.clone(), format!("{}.yaml", app.name()), serialized) {
             Ok(_) => {}
             Err(e) => {
-                println!(
+                log(format!(
                     "Error creating or writing file for the app : {} , error: {}",
                     app.name(),
                     e
-                );
+                ))?;
                 continue;
             }
         }
