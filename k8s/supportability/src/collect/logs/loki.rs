@@ -1,3 +1,4 @@
+use crate::{collect::utils::write_to_log_file, log};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, path::PathBuf};
@@ -202,10 +203,13 @@ impl LokiClient {
                 Err(e) => {
                     if !is_written {
                         if let Err(e) = std::fs::remove_file(file_path) {
-                            println!("[Warning] Failed to remove empty historic log file {}", e);
+                            log(format!(
+                                "[Warning] Failed to remove empty historic log file {}",
+                                e
+                            ))?;
                         }
                     }
-                    println!("[Warning] While fetching logs from Loki {:?}", e);
+                    write_to_log_file(format!("[Warning] While fetching logs from Loki {:?}", e))?;
                     return Err(e);
                 }
             };

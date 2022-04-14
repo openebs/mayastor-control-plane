@@ -1,9 +1,12 @@
-use crate::collect::{
-    k8s_resources::{
-        client::{ClientSet, K8sResourceError},
-        common::{NODE_NAME_FIELD_SELECTOR, RUNNING_FIELD_SELECTOR},
+use crate::{
+    collect::{
+        k8s_resources::{
+            client::{ClientSet, K8sResourceError},
+            common::{NODE_NAME_FIELD_SELECTOR, RUNNING_FIELD_SELECTOR},
+        },
+        logs::create_directory_if_not_exist,
     },
-    logs::create_directory_if_not_exist,
+    log,
 };
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
@@ -100,11 +103,11 @@ impl K8sLoggerClient {
             {
                 Ok(()) => {}
                 Err(err) => {
-                    println!(
+                    log(format!(
                         "Error fetching logs for pod : {}, error: {:?}",
                         pod.meta().name.as_ref().unwrap_or(&"".to_string()),
                         err
-                    );
+                    ))?;
                     continue;
                 }
             }
