@@ -16,7 +16,7 @@ use collect::{
 };
 use operations::{Operations, Resource};
 
-use crate::collect::utils::{flush_tool_log_file, log};
+use crate::collect::utils::log;
 use std::path::PathBuf;
 
 /// Collects state & log information of mayastor services running in the system and dump them.
@@ -100,7 +100,6 @@ impl SupportArgs {
         resource: Resource,
     ) -> Result<(), Error> {
         let cli_args = self;
-
         let topologer: Box<dyn Topologer>;
         let mut config = DumpConfig {
             rest_client,
@@ -113,13 +112,19 @@ impl SupportArgs {
             timeout: cli_args.timeout,
             topologer: None,
         };
+        let mut errors = Vec::new();
         match resource {
             Resource::System => {
                 let mut system_dumper =
                     collect::system_dump::SystemDumper::get_or_panic_system_dumper(config).await;
                 if let Err(e) = system_dumper.dump_system().await {
-                    log(format!("Failed to dump system state, error: {:?}", e))?;
-                    return Err(e);
+                    // NOTE: We also need to log error content into Supportability log file
+                    log(format!("Failed to dump system state, error: {:?}", e));
+                    errors.push(e);
+                }
+                if let Err(e) = system_dumper.fill_archive_and_delete_tmp() {
+                    log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
                 }
             }
             Resource::Volumes => {
@@ -131,8 +136,12 @@ impl SupportArgs {
                     log(format!(
                         "Failed to dump volumes information, Error: {:?}",
                         e
-                    ))?;
-                    return Err(e);
+                    ));
+                    errors.push(e);
+                }
+                if let Err(e) = dumper.fill_archive_and_delete_tmp() {
+                    log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
                 }
             }
             Resource::Volume { id } => {
@@ -144,8 +153,12 @@ impl SupportArgs {
                     log(format!(
                         "Failed to dump volume {} information, Error: {:?}",
                         id, e
-                    ))?;
-                    return Err(e);
+                    ));
+                    errors.push(e);
+                }
+                if let Err(e) = dumper.fill_archive_and_delete_tmp() {
+                    log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
                 }
             }
             Resource::Pools => {
@@ -154,8 +167,12 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/pool".to_string()).await {
-                    log(format!("Failed to dump pools information, Error: {:?}", e))?;
-                    return Err(e);
+                    log(format!("Failed to dump pools information, Error: {:?}", e));
+                    errors.push(e);
+                }
+                if let Err(e) = dumper.fill_archive_and_delete_tmp() {
+                    log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
                 }
             }
             Resource::Pool { id } => {
@@ -167,8 +184,12 @@ impl SupportArgs {
                     log(format!(
                         "Failed to dump pool {} information, Error: {:?}",
                         id, e
-                    ))?;
-                    return Err(e);
+                    ));
+                    errors.push(e);
+                }
+                if let Err(e) = dumper.fill_archive_and_delete_tmp() {
+                    log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
                 }
             }
             Resource::Nodes => {
@@ -177,8 +198,12 @@ impl SupportArgs {
                 config.topologer = Some(topologer);
                 let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
                 if let Err(e) = dumper.dump_info("topology/node".to_string()).await {
-                    log(format!("Failed to dump nodes information, Error: {:?}", e))?;
-                    return Err(e);
+                    log(format!("Failed to dump nodes information, Error: {:?}", e));
+                    errors.push(e);
+                }
+                if let Err(e) = dumper.fill_archive_and_delete_tmp() {
+                    log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
                 }
             }
             Resource::Node { id } => {
@@ -190,12 +215,18 @@ impl SupportArgs {
                     log(format!(
                         "Failed to dump node {} information, Error: {:?}",
                         id, e
-                    ))?;
-                    return Err(e);
+                    ));
+                    errors.push(e);
+                }
+                if let Err(e) = dumper.fill_archive_and_delete_tmp() {
+                    log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
                 }
             }
         }
-        flush_tool_log_file()?;
+        if !errors.is_empty() {
+            return Err(Error::MultipleErrors(errors));
+        }
         Ok(())
     }
 }

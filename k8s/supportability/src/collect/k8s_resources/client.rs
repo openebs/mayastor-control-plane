@@ -150,7 +150,18 @@ impl ClientSet {
             .labels(label_selector.unwrap_or_default())
             .fields(field_selector.unwrap_or_default());
         let pools_api: Api<DiskPool> = Api::namespaced(self.client.clone(), &self.namespace);
-        let pools = pools_api.list(&list_params).await?;
+        let pools = match pools_api.list(&list_params).await {
+            Ok(val) => val,
+            Err(kube_error) => match kube_error {
+                kube::Error::Api(e) => {
+                    if e.code == 404 {
+                        return Ok(vec![]);
+                    }
+                    return Err(K8sResourceError::ClientError(kube::Error::Api(e)));
+                }
+                _ => return Err(K8sResourceError::ClientError(kube_error)),
+            },
+        };
         Ok(pools.items)
     }
 

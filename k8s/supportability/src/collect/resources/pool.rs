@@ -79,6 +79,7 @@ impl Topologer for PoolTopology {
         let mut topo_file = File::create(file_path)?;
         let topology_as_pretty = serde_json::to_string_pretty(self)?;
         topo_file.write_all(topology_as_pretty.as_bytes())?;
+        topo_file.flush()?;
         Ok(())
     }
 
@@ -231,7 +232,7 @@ impl Resourcer for PoolClientWrapper {
     async fn read_resource_id(&self) -> Result<Self::ID, ResourceError> {
         let pools = self.list_pools().await?;
         if pools.is_empty() {
-            log("No Pool resources, Are Pools created?!!".to_string())?;
+            log("No Pool resources, Are Pools created?!!".to_string());
             return Err(ResourceError::CustomError("No Pool resources".to_string()));
         }
         let pool_id = utils::print_table_and_get_id(pools)?;
@@ -250,9 +251,9 @@ impl Resourcer for PoolClientWrapper {
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
                     log(format!(
-                        "Warning: Failed to get node information for pool: {}, error: {:?}",
+                        "Failed to get node information for pool: {}, error: {:?}",
                         pool_id, e
-                    ))?;
+                    ));
                     None
                 }
             };
@@ -261,9 +262,9 @@ impl Resourcer for PoolClientWrapper {
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
                     log(format!(
-                        "Warning: Failed to get device information for pool: {}, error: {:?}",
+                        "Failed to get device information for pool: {}, error: {:?}",
                         pool_id, e
-                    ))?;
+                    ));
                     None
                 }
             };
@@ -285,9 +286,9 @@ impl Resourcer for PoolClientWrapper {
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
                     log(format!(
-                        "Warning: Failed to get node information for pools, error: {:?}",
+                        "Failed to get node information for pools, error: {:?}",
                         e
-                    ))?;
+                    ));
                     None
                 }
             };
@@ -296,9 +297,9 @@ impl Resourcer for PoolClientWrapper {
                 Err(e) => {
                     // TODO: Collect errors and return to caller at end
                     log(format!(
-                        "Warning: Failed to get device information for pools, error: {:?}",
+                        "Failed to get device information for pools, error: {:?}",
                         e
-                    ))?;
+                    ));
                     None
                 }
             };

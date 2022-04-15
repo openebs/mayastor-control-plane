@@ -85,6 +85,7 @@ impl Topologer for NodeTopology {
         let mut topo_file = File::create(file_path)?;
         let topology_as_pretty = serde_json::to_string_pretty(self)?;
         topo_file.write_all(topology_as_pretty.as_bytes())?;
+        topo_file.flush()?;
         Ok(())
     }
 
@@ -202,7 +203,7 @@ impl Resourcer for NodeClientWrapper {
     async fn read_resource_id(&self) -> Result<Self::ID, ResourceError> {
         let nodes = self.list_nodes().await?;
         if nodes.is_empty() {
-            println!("No Node resources, Are node daemonsets in Running State?!!");
+            println!("No Node resources, Are daemonset pods in Running State?!!");
             return Err(ResourceError::CustomError("No Node resources".to_string()));
         }
         let node_id = utils::print_table_and_get_id(nodes)?;
@@ -243,7 +244,7 @@ impl Resourcer for NodeClientWrapper {
             nodes_topology.push(node_topology);
         }
         if nodes_topology.is_empty() {
-            log("No Node resources, Are node daemonsets in Running State?!!".to_string())?;
+            log("No Node resources, Are daemonset pods in Running State?!!".to_string());
             return Err(ResourceError::CustomError("No Node resources".to_string()));
         }
         Ok(Box::new(nodes_topology))

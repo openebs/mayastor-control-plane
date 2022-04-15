@@ -107,7 +107,7 @@ impl K8sLoggerClient {
                         "Error fetching logs for pod : {}, error: {:?}",
                         pod.meta().name.as_ref().unwrap_or(&"".to_string()),
                         err
-                    ))?;
+                    ));
                     continue;
                 }
             }

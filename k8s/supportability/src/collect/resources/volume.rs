@@ -49,6 +49,7 @@ impl Topologer for VolumeTopology {
         let mut topo_file = File::create(file_path)?;
         let topology_as_pretty = serde_json::to_string_pretty(self)?;
         topo_file.write_all(topology_as_pretty.as_bytes())?;
+        topo_file.flush()?;
         Ok(())
     }
 
@@ -171,7 +172,7 @@ impl Resourcer for VolumeClientWrapper {
     async fn read_resource_id(&self) -> Result<Self::ID, ResourceError> {
         let volumes = self.list_volumes().await?;
         if volumes.is_empty() {
-            log("No Volume resources, Are Volumes created?!!".to_string())?;
+            log("No Volume resources, Are Volumes created?!!".to_string());
             return Err(ResourceError::CustomError(
                 "Volume resources doesn't exist".to_string(),
             ));

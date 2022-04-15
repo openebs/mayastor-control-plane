@@ -206,7 +206,7 @@ impl LokiClient {
                             log(format!(
                                 "[Warning] Failed to remove empty historic log file {}",
                                 e
-                            ))?;
+                            ));
                         }
                     }
                     write_to_log_file(format!("[Warning] While fetching logs from Loki {:?}", e))?;

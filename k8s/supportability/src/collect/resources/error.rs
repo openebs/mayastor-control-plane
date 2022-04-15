@@ -8,6 +8,7 @@ pub enum ResourceError {
     JSONError(serde_json::Error),
     UUIDParseError(uuid::Error),
     CustomError(String),
+    MultipleErrors(Vec<ResourceError>),
 }
 
 impl ResourceError {

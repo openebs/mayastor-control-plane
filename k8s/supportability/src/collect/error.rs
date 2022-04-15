@@ -15,6 +15,7 @@ pub(crate) enum Error {
     K8sResourceDumperError(K8sResourceDumperError),
     OSStringError(OsString),
     EtcdDumpError(EtcdError),
+    MultipleErrors(Vec<Error>),
 }
 
 impl From<std::io::Error> for Error {
