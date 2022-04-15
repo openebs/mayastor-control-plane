@@ -49,7 +49,7 @@ pub fn valid_fs_type(fs_type: Option<&String>) -> bool {
     }
 }
 
-/// Check whether target volume capabilites are valid. As of now, only
+/// Check whether target volume capabilities are valid. As of now, only
 /// SingleNodeWriter capability is supported.
 fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), tonic::Status> {
     for c in capabilities {
@@ -200,6 +200,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<CreateVolumeRequest>,
     ) -> Result<tonic::Response<CreateVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
+        tracing::trace!(request = ?args);
 
         if args.volume_content_source.is_some() {
             return Err(Status::invalid_argument(
@@ -277,6 +278,12 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let pinned_volume =
             volume_opts::decode_local_volume_flag(args.parameters.get(volume_opts::LOCAL_VOLUME));
+        // Check locality flag.
+        if !pinned_volume {
+            return Err(Status::invalid_argument(
+                "Non local volumes not currently supported",
+            ));
+        }
 
         // For explanation of accessibilityRequirements refer to a table at
         // https://github.com/kubernetes-csi/external-provisioner.
@@ -284,7 +291,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         //
         // The first node in preferred array the node that was chosen for running
         // the app by the k8s scheduler. The rest of the entries are in random
-        // order and perhaps don't even run mayastor csi node plugin.
+        // order and perhaps don't even run the csi node plugin.
         //
         // The requisite array contains all nodes in the cluster irrespective
         // of what node was chosen for running the app.
@@ -375,6 +382,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<DeleteVolumeRequest>,
     ) -> Result<tonic::Response<DeleteVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
+        tracing::trace!(volume.uuid = %args.volume_id, request = ?args);
 
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
@@ -399,6 +407,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<ControllerPublishVolumeRequest>,
     ) -> Result<tonic::Response<ControllerPublishVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
+        tracing::trace!(volume.uuid = %args.volume_id, request = ?args);
 
         if args.readonly {
             return Err(Status::invalid_argument(
@@ -483,7 +492,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     uri
                 } else {
                     let m = format!(
-                        "Volume {} has been successfully published but URI is available",
+                        "Volume {} has been successfully published but URI is not available",
                         volume_id
                     );
                     error!("{}", m);
@@ -515,6 +524,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<ControllerUnpublishVolumeRequest>,
     ) -> Result<tonic::Response<ControllerUnpublishVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
+        tracing::trace!(volume.uuid = %args.volume_id, request = ?args);
+
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
@@ -569,6 +580,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<ValidateVolumeCapabilitiesRequest>,
     ) -> Result<tonic::Response<ValidateVolumeCapabilitiesResponse>, tonic::Status> {
         let args = request.into_inner();
+        tracing::trace!(volume.uuid = %args.volume_id, request = ?args);
 
         debug!("Request to validate volume capabilities: {:?}", args);
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
@@ -619,6 +631,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<ListVolumesRequest>,
     ) -> Result<tonic::Response<ListVolumesResponse>, tonic::Status> {
         let args = request.into_inner();
+        tracing::trace!(request = ?args);
 
         let max_entries = args.max_entries;
         if max_entries < 0 {
@@ -666,6 +679,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         request: tonic::Request<GetCapacityRequest>,
     ) -> Result<tonic::Response<GetCapacityResponse>, tonic::Status> {
         let args = request.into_inner();
+        tracing::trace!(request = ?args);
 
         // Check capabilities.
         check_volume_capabilities(&args.volume_capabilities)?;

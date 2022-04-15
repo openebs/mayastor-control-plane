@@ -94,6 +94,11 @@ def test_create_1_replica_nvmf_volume(setup):
     """create 1 replica nvmf volume"""
 
 
+@scenario("controller.feature", "unpinned volume creation")
+def test_unpinned_volume_creation(setup):
+    """unpinned volume creation."""
+
+
 @scenario("controller.feature", "volume creation idempotency")
 def test_volume_creation_idempotency(setup):
     """volume creation idempotency"""
@@ -295,6 +300,30 @@ def check_republish_volume_for_offline_nexus_node(offline_nexus_node):
 )
 def create_1_replica_local_nvmf_volume(_create_1_replica_local_nvmf_volume):
     return _create_1_replica_local_nvmf_volume
+
+
+@when("a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)")
+def a_createvolume_request_is_sent_to_create_a_1_replica_nvmf_volume_localfalse(
+    _create_1_replica_nvmf_volume_local_false,
+):
+    """a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)."""
+
+
+@when("a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)")
+def a_createvolume_request_is_sent_to_create_a_1_replica_nvmf_volume_local_unset(
+    _create_1_replica_nvmf_volume_local_unset,
+):
+    """a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)."""
+
+
+@then("volume creation should fail with invalid argument")
+def volume_creation_should_fail_with_invalid_argument(context):
+    """volume creation should fail with invalid argument."""
+    create_volume_result = context["create_result"]
+    assert isinstance(
+        create_volume_result, grpc.RpcError
+    ), "Expect the volume not to be created"
+    assert create_volume_result.code() is grpc.StatusCode.INVALID_ARGUMENT
 
 
 @when(
@@ -674,6 +703,7 @@ def csi_create_1_replica_nvmf_volume1():
         "protocol": "nvmf",
         "ioTimeout": "30",
         "repl": "1",
+        "local": "true",
     }
 
     req = pb.CreateVolumeRequest(
@@ -689,6 +719,7 @@ def csi_create_2_replica_nvmf_volume4():
         "protocol": "nvmf",
         "ioTimeout": "30",
         "repl": "2",
+        "local": "true",
     }
 
     req = pb.CreateVolumeRequest(
@@ -715,13 +746,39 @@ def csi_create_1_replica_nvmf_volume2():
         "protocol": "nvmf",
         "ioTimeout": "30",
         "repl": "1",
+        "local": "true",
     }
 
     req = pb.CreateVolumeRequest(
         name=PVC_VOLUME2_NAME, capacity_range=capacity, parameters=parameters
     )
 
-    return csi_rpc_handle().controller.CreateVolume(req)
+    try:
+        return csi_rpc_handle().controller.CreateVolume(req)
+    except grpc.RpcError as e:
+        return e
+
+
+def csi_create_1_replica_nvmf_volume_local(local_set=False, local=False):
+    capacity = pb.CapacityRange(required_bytes=VOLUME2_SIZE, limit_bytes=0)
+    parameters = {
+        "protocol": "nvmf",
+        "ioTimeout": "30",
+        "repl": "1",
+    }
+    if local_set and local:
+        parameters["local"] = "true"
+    elif local_set and not local:
+        parameters["local"] = "false"
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME2_NAME, capacity_range=capacity, parameters=parameters
+    )
+
+    try:
+        return csi_rpc_handle().controller.CreateVolume(req)
+    except grpc.RpcError as e:
+        return e
 
 
 def check_nvmf_target(uri):
@@ -771,6 +828,12 @@ def csi_delete_1_replica_local_nvmf_volume1():
     )
 
 
+def csi_delete_1_replica_nvmf_volume_local():
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=VOLUME2_UUID)
+    )
+
+
 def csi_delete_1_replica_nvmf_volume2():
     csi_rpc_handle().controller.DeleteVolume(
         pb.DeleteVolumeRequest(volume_id=VOLUME2_UUID)
@@ -791,6 +854,24 @@ def _create_1_replica_local_nvmf_volume():
 
 
 @pytest.fixture
+def _create_1_replica_nvmf_volume_local_false(context):
+    csi_delete_1_replica_nvmf_volume_local()
+    result = csi_create_1_replica_nvmf_volume_local(True, False)
+    context["create_result"] = result
+    yield result
+    csi_delete_1_replica_nvmf_volume_local()
+
+
+@pytest.fixture
+def _create_1_replica_nvmf_volume_local_unset(context):
+    csi_delete_1_replica_nvmf_volume_local()
+    result = csi_create_1_replica_nvmf_volume_local(False)
+    context["create_result"] = result
+    yield result
+    csi_delete_1_replica_nvmf_volume_local()
+
+
+@pytest.fixture
 def _create_2_volumes_1_replica():
     vol1 = csi_create_1_replica_nvmf_volume1()
     vol2 = csi_create_1_replica_nvmf_volume2()
@@ -799,6 +880,11 @@ def _create_2_volumes_1_replica():
 
     csi_delete_1_replica_nvmf_volume1()
     csi_delete_1_replica_nvmf_volume2()
+
+
+@pytest.fixture(scope="function")
+def context():
+    return {}
 
 
 @when(
@@ -852,12 +938,13 @@ def check_local_volume_accessible_from_ms_nodes(list_2_volumes):
 
 @then("no topology restrictions should be imposed to non-local volumes")
 def check_no_topology_restrictions_for_non_local_volume(list_2_volumes):
-    vols = [v for v in list_2_volumes[1] if v.volume.volume_id != VOLUME3_UUID]
-    assert len(vols) == 2, "Invalid number of non-local volumes reported"
-    for v in vols:
-        assert (
-            len(v.volume.accessible_topology) == 0
-        ), "Non-local volume has topology restrictions"
+    """Non local volumes not supported at the moment"""
+    # vols = [v for v in list_2_volumes[1] if v.volume.volume_id != VOLUME3_UUID]
+    # assert len(vols) == 2, "Invalid number of non-local volumes reported"
+    # for v in vols:
+    #     assert (
+    #         len(v.volume.accessible_topology) == 0
+    #     ), "Non-local volume has topology restrictions"
 
 
 @when(
