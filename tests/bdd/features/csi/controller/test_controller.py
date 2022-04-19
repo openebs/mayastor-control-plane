@@ -94,6 +94,7 @@ def test_create_1_replica_nvmf_volume(setup):
     """create 1 replica nvmf volume"""
 
 
+@pytest.mark.skip(reason="local parameter not supported")
 @scenario("controller.feature", "unpinned volume creation")
 def test_unpinned_volume_creation(setup):
     """unpinned volume creation."""

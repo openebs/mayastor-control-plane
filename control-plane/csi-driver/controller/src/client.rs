@@ -188,7 +188,7 @@ impl MayastorApiClient {
         replicas: u8,
         size: u64,
         volume_topology: CreateVolumeTopology,
-        pinned_volume: bool,
+        _pinned_volume: bool,
     ) -> Result<Volume, ApiClientError> {
         let topology = Topology::new_all(
             Some(NodeTopology::explicit(ExplicitNodeTopology::new(
@@ -201,20 +201,12 @@ impl MayastorApiClient {
             ))),
         );
 
-        let labels = if pinned_volume {
-            let mut labels = HashMap::new();
-            labels.insert("local".to_string(), "true".to_string());
-            Some(labels)
-        } else {
-            None
-        };
-
         let req = CreateVolumeBody {
             replicas,
             size,
             topology: Some(topology),
             policy: VolumePolicy::new_all(true),
-            labels,
+            labels: None,
         };
 
         let result = self
