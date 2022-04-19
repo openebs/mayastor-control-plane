@@ -35,7 +35,7 @@ mod volume_opts {
     pub fn decode_local_volume_flag(encoded: Option<&String>) -> bool {
         match encoded {
             Some(v) => YAML_TRUE_VALUE.iter().any(|p| p == v),
-            None => false,
+            None => true,
         }
     }
 }
@@ -111,7 +111,7 @@ fn check_existing_volume(
     volume: &Volume,
     replica_count: u8,
     size: u64,
-    pinned_volume: bool,
+    _pinned_volume: bool,
 ) -> Result<(), Status> {
     // Check if the existing volume is compatible, which means
     //  - number of replicas is equal or greater
@@ -187,7 +187,7 @@ impl VolumeTopologyMapper {
         if let Some(labels) = &volume.spec.labels {
             volume_opts::decode_local_volume_flag(labels.get(volume_opts::LOCAL_VOLUME))
         } else {
-            false
+            true
         }
     }
 }
@@ -276,14 +276,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             None => 1,
         };
 
-        let pinned_volume =
-            volume_opts::decode_local_volume_flag(args.parameters.get(volume_opts::LOCAL_VOLUME));
-        // Check locality flag.
-        if !pinned_volume {
-            return Err(Status::invalid_argument(
-                "Non local volumes not currently supported",
-            ));
-        }
+        // Currently we only support pinned volumes
+        let pinned_volume = true;
 
         // For explanation of accessibilityRequirements refer to a table at
         // https://github.com/kubernetes-csi/external-provisioner.
