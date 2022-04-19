@@ -11,6 +11,7 @@ use crate::collect::{
         common::KUBERNETES_HOST_LABEL_KEY,
     },
     logs::k8s_log::{K8sLoggerClient, K8sLoggerError},
+    utils::log,
 };
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Pod;
@@ -24,6 +25,7 @@ pub(crate) enum LogError {
     K8sLogger(K8sLoggerError),
     IOError(std::io::Error),
     Custom(String),
+    MultipleErrors(Vec<LogError>),
 }
 
 impl From<loki::LokiError> for LogError {
@@ -213,13 +215,17 @@ impl Logger for LogCollection {
         resources: HashSet<LogResource>,
         working_dir: String,
     ) -> Result<(), LogError> {
+        let mut errors = Vec::new();
         for resource in resources.iter() {
+            log(format!(
+                "\t Collecting logs of service: {}, container: {} of host: {:?}",
+                resource.service_type, resource.container_name, resource.host_name,
+            ));
             let service_dir = std::path::Path::new(&working_dir.clone())
                 .join("logs")
                 .join(resource.service_type.clone());
 
             create_directory_if_not_exist(service_dir.clone())?;
-
             if let Some(loki_client) = self.loki_client.clone() {
                 if loki_client
                     .fetch_and_dump_logs(
@@ -235,14 +241,25 @@ impl Logger for LogCollection {
                 }
             }
 
-            self.k8s_logger_client
+            let _ = self
+                .k8s_logger_client
                 .dump_pod_logs(
                     resource.label_selector.as_str(),
                     service_dir.clone(),
                     resource.host_name.clone(),
                     &[resource.container_name.as_str()],
                 )
-                .await?;
+                .await
+                .map_err(|e| {
+                    log(format!(
+                        "\t Failed to collect logs of service: {}, container: {} of: host {:?}",
+                        resource.service_type, resource.container_name, resource.host_name,
+                    ));
+                    errors.push(LogError::K8sLogger(e));
+                });
+        }
+        if !errors.is_empty() {
+            return Err(LogError::MultipleErrors(errors));
         }
         Ok(())
     }

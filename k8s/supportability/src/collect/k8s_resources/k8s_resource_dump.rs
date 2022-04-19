@@ -28,6 +28,8 @@ pub(crate) enum K8sResourceDumperError {
     IOError(std::io::Error),
     YamlSerializationError(serde_yaml::Error),
     JsonSerializationError(serde_json::Error),
+    // Used to hold stack of multiple errors and used to continue collecting information
+    MultipleErrors(Vec<K8sResourceDumperError>),
 }
 
 impl From<std::io::Error> for K8sResourceDumperError {
@@ -115,65 +117,119 @@ impl K8sResourceDumperClient {
         // Create the configurations directory
         create_directory_if_not_exist(configurations_path.clone())?;
 
+        let mut errors = Vec::new();
         // Fetch all Daemonsets in provided NAMESPACE
-        let daemonsets = self.k8s_client.get_daemonsets("", "").await?;
-        // Create all Daemonsets configurations
-        create_app_configurations(
-            daemonsets.into_iter().map(DaemonSet).collect(),
-            configurations_path.clone(),
-        )?;
+        log("\t Collecting daemonsets configuration".to_string());
+        match self.k8s_client.get_daemonsets("", "").await {
+            Ok(daemonsets) => {
+                // Create all Daemonsets configurations
+                let _ = create_app_configurations(
+                    daemonsets.into_iter().map(DaemonSet).collect(),
+                    configurations_path.clone(),
+                )
+                .map_err(|e| errors.push(e));
+            }
+            Err(e) => {
+                errors.push(K8sResourceDumperError::K8sResourceError(e));
+            }
+        }
 
         // Fetch all Deployments in provided NAMESPACE
-        let deploys = self.k8s_client.get_deployments("", "").await?;
-        // Create all Daemonsets configurations
-        create_app_configurations(
-            deploys.into_iter().map(Deployment).collect(),
-            configurations_path.clone(),
-        )?;
+        log("\t Collecting deployments configuration".to_string());
+        match self.k8s_client.get_deployments("", "").await {
+            Ok(deploys) => {
+                // Create all Daemonsets configurations
+                let _ = create_app_configurations(
+                    deploys.into_iter().map(Deployment).collect(),
+                    configurations_path.clone(),
+                )
+                .map_err(|e| errors.push(e));
+            }
+            Err(e) => {
+                errors.push(K8sResourceDumperError::K8sResourceError(e));
+            }
+        }
 
         // Fetch all StatefulSets in provided NAMESPACE
-        let statefulsets = self.k8s_client.get_statefulsets("", "").await?;
-        // Create all Daemonsets configurations
-        create_app_configurations(
-            statefulsets.into_iter().map(StatefulSet).collect(),
-            configurations_path.clone(),
-        )?;
+        log("\t Collecting statefulsets configuration".to_string());
+        match self.k8s_client.get_statefulsets("", "").await {
+            Ok(statefulsets) => {
+                // Create all Daemonsets configurations
+                let _ = create_app_configurations(
+                    statefulsets.into_iter().map(StatefulSet).collect(),
+                    configurations_path.clone(),
+                )
+                .map_err(|e| errors.push(e));
+            }
+            Err(e) => {
+                errors.push(K8sResourceDumperError::K8sResourceError(e));
+            }
+        }
 
         // Fetch all events in provided NAMESPACE
-        let mut events = self.k8s_client.get_events("", "").await?;
-        // Sort the events based on event_time
-        events.sort_unstable_by_key(event_time);
-        create_file_and_write(
-            root_dir.clone(),
-            "k8s_events.json".to_string(),
-            serde_json::to_string_pretty(&events)?,
-        )?;
+        log("\t Collecting Kubernetes events".to_string());
+        match self.k8s_client.get_events("", "").await {
+            Ok(mut events) => {
+                // Sort the events based on event_time
+                events.sort_unstable_by_key(event_time);
+                // NOTE: Unmarshalling object recevied from K8s API-server will not fail
+                let _ = create_file_and_write(
+                    root_dir.clone(),
+                    "k8s_events.json".to_string(),
+                    serde_json::to_string_pretty(&events)?,
+                )
+                .map_err(|e| errors.push(K8sResourceDumperError::IOError(e)));
+            }
+            Err(e) => {
+                errors.push(K8sResourceDumperError::K8sResourceError(e));
+            }
+        }
 
         // Fetch all DiskPools in provided NAMESPACE
-        let disk_pools = self.k8s_client.list_pools(None, None).await?;
-        let filtered_pools = match required_pools {
-            Some(p_names) => {
-                let names: HashSet<String> = HashSet::from_iter(p_names);
-                disk_pools
-                    .into_iter()
-                    .filter(|p| names.contains(p.meta().name.as_ref().unwrap()))
-                    .collect::<Vec<DiskPool>>()
+        log("\t Collecting Kubernetes disk pool resources".to_string());
+        match self.k8s_client.list_pools(None, None).await {
+            Ok(disk_pools) => {
+                let filtered_pools = match required_pools {
+                    Some(p_names) => {
+                        let names: HashSet<String> = HashSet::from_iter(p_names);
+                        disk_pools
+                            .into_iter()
+                            .filter(|p| names.contains(p.meta().name.as_ref().unwrap()))
+                            .collect::<Vec<DiskPool>>()
+                    }
+                    None => disk_pools,
+                };
+                // NOTE: Unmarshalling object recevied from K8s API-server will not fail
+                let _ = create_file_and_write(
+                    root_dir.clone(),
+                    "k8s_disk_pools.yaml".to_string(),
+                    serde_yaml::to_string(&filtered_pools)?,
+                )
+                .map_err(|e| errors.push(K8sResourceDumperError::IOError(e)));
             }
-            None => disk_pools,
-        };
-        create_file_and_write(
-            root_dir.clone(),
-            "k8s_disk_pools.yaml".to_string(),
-            serde_yaml::to_string(&filtered_pools)?,
-        )?;
+            Err(e) => {
+                errors.push(K8sResourceDumperError::K8sResourceError(e));
+            }
+        }
 
         // Fetch all Pods in provided NAMESPACE
-        let pods = self.k8s_client.get_pods("", "").await?;
-        create_file_and_write(
-            root_dir.clone(),
-            "pods.yaml".to_string(),
-            serde_yaml::to_string(&pods)?,
-        )?;
+        log("\t Collecting Kuberbetes pod resources".to_string());
+        match self.k8s_client.get_pods("", "").await {
+            Ok(pods) => {
+                let _ = create_file_and_write(
+                    root_dir.clone(),
+                    "pods.yaml".to_string(),
+                    serde_yaml::to_string(&pods)?,
+                )
+                .map_err(|e| errors.push(K8sResourceDumperError::IOError(e)));
+            }
+            Err(e) => {
+                errors.push(K8sResourceDumperError::K8sResourceError(e));
+            }
+        }
+        if !errors.is_empty() {
+            return Err(K8sResourceDumperError::MultipleErrors(errors));
+        }
         Ok(())
     }
 }
@@ -204,7 +260,7 @@ fn create_app_configurations<T: EntityName>(
                     "Error serializing the app : {} , error: {}",
                     app.name(),
                     e
-                ))?;
+                ));
                 continue;
             }
         };
@@ -215,7 +271,7 @@ fn create_app_configurations<T: EntityName>(
                     "Error creating or writing file for the app : {} , error: {}",
                     app.name(),
                     e
-                ))?;
+                ));
                 continue;
             }
         }

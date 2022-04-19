@@ -56,6 +56,7 @@ impl EtcdStore {
             let pretty_json = serde_json::to_string_pretty(&val.1).unwrap_or_default();
             write!(etcd_dump_file, "{}:\n{}\n\n", val.0, pretty_json)?;
         }
+        etcd_dump_file.flush()?;
         Ok(())
     }
 }

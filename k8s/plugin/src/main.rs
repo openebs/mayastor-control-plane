@@ -59,7 +59,13 @@ async fn main() {
 
 async fn execute(cli_args: CliArgs) {
     // Initialise the REST client.
-    if let Err(e) = init_rest(cli_args.rest.clone(), *cli_args.timeout).await {
+    if let Err(e) = init_rest(
+        cli_args.rest.clone(),
+        *cli_args.timeout,
+        cli_args.kube_config_path.clone(),
+    )
+    .await
+    {
         println!("Failed to initialise the REST client. Error {}", e);
         std::process::exit(1);
     }
@@ -83,62 +89,77 @@ async fn execute(cli_args: CliArgs) {
             }
         },
         Operations::Dump(resources) => {
-            resources.dump(cli_args.kube_config_path).await.unwrap();
+            let _ignore = resources
+                .dump(cli_args.kube_config_path)
+                .await
+                .map_err(|_e| {
+                    println!("Partially collected dump information !!");
+                    std::process::exit(1);
+                });
+            println!("Completed collection of dump !!");
         }
     };
 }
 
 /// Initialise the REST client.
-async fn init_rest(url: Option<Url>, timeout: std::time::Duration) -> Result<()> {
+async fn init_rest(
+    url: Option<Url>,
+    timeout: std::time::Duration,
+    kube_config_path: Option<PathBuf>,
+) -> Result<()> {
     // Use the supplied URL if there is one otherwise obtain one from the kubeconfig file.
     let url = match url {
         Some(url) => url,
-        None => url_from_kubeconfig().await?,
+        None => url_from_kubeconfig(kube_config_path).await?,
     };
     RestClient::init(url, timeout)
 }
 
 /// Get the URL of the master node from the kubeconfig file.
-async fn url_from_kubeconfig() -> Result<Url> {
-    // Search for the kubeconfig.
-    // First look at the environment variable then look in the default directory.
-    let file = match env::var("KUBECONFIG") {
-        Ok(file_path) => Some(file_path),
-        Err(_) => {
-            // Look for kubeconfig file in default location.
-            #[cfg(target_os = "linux")]
-            let default_path = format!("{}/.kube/config", env::var("HOME")?);
-            #[cfg(target_os = "windows")]
-            let default_path = format!("{}/.kube/config", env::var("USERPROFILE")?);
-            match Path::new(&default_path).exists() {
-                true => Some(default_path),
-                false => None,
+async fn url_from_kubeconfig(kube_config_path: Option<PathBuf>) -> Result<Url> {
+    let file = match kube_config_path {
+        Some(config_path) => config_path,
+        None => {
+            let file_path = match env::var("KUBECONFIG") {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    // Look for kubeconfig file in default location.
+                    #[cfg(target_os = "linux")]
+                    let default_path = format!("{}/.kube/config", env::var("HOME")?);
+                    #[cfg(target_os = "windows")]
+                    let default_path = format!("{}/.kube/config", env::var("USERPROFILE")?);
+                    match Path::new(&default_path).exists() {
+                        true => Some(default_path),
+                        false => None,
+                    }
+                }
+            };
+            if file_path.is_none() {
+                return Err(anyhow::anyhow!(
+                    "kubeconfig file not found in default location"
+                ));
             }
+            let mut path = PathBuf::new();
+            path.push(file_path.unwrap_or_default());
+            path
         }
     };
 
-    match file {
-        Some(file) => {
-            // NOTE: Kubeconfig file may hold multiple contexts to communicate
-            //       with different kubernetes clusters. We have to pick master
-            //       address of current-context config
-            let kube_config = kube::config::Kubeconfig::read_from(&file)?;
-            let config =
-                kube::Config::from_custom_kubeconfig(kube_config, &Default::default()).await?;
-            let server_url = config
-                .cluster_url
-                .host()
-                .ok_or_else(|| anyhow::anyhow!("Failed to get master address"))?;
-            let mut url = Url::parse(("http://".to_owned() + server_url).as_str())?;
-            url.set_port(None)
-                .map_err(|_| anyhow::anyhow!("Failed to unset port"))?;
-            url.set_scheme("http")
-                .map_err(|_| anyhow::anyhow!("Failed to set REST client scheme"))?;
-            tracing::debug!(url=%url, "Found URL from the kubeconfig file,");
-            Ok(url)
-        }
-        None => Err(anyhow::anyhow!(
-            "Failed to get URL of master node from kubeconfig file."
-        )),
-    }
+    // NOTE: Kubeconfig file may hold multiple contexts to communicate
+    //       with different kubernetes clusters. We have to pick master
+    //       address of current-context config only
+    let kube_config = kube::config::Kubeconfig::read_from(&file)?;
+    let config = kube::Config::from_custom_kubeconfig(kube_config, &Default::default()).await?;
+    let server_url = config
+        .cluster_url
+        .host()
+        .ok_or_else(|| anyhow::anyhow!("Failed to get master address".to_string()))?;
+    let mut url = Url::parse(("http://".to_owned() + server_url).as_str())
+        .map_err(|e| anyhow::anyhow!(format!("Failed to parse URL, error: {}", e)))?;
+    url.set_port(None)
+        .map_err(|e| anyhow::anyhow!(format!("Failed to unset port {:?}", e)))?;
+    url.set_scheme("http").map_err(|e| {
+        anyhow::anyhow!(format!("Failed to set REST client scheme, Error: {:?}", e))
+    })?;
+    Ok(url)
 }
