@@ -1,4 +1,4 @@
-use crate::{ApiClientError, CreateVolumeTopology, MayastorApiClient};
+use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, MayastorApiClient};
 use regex::Regex;
 use rpc::csi::*;
 use std::collections::HashMap;
@@ -7,7 +7,7 @@ use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
 
 use common_lib::types::v0::openapi::models::{
-    Node, Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol,
+    Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol,
 };
 use utils::{DSP_OPERATOR, OPENEBS_CREATED_BY_KEY};
 
@@ -143,40 +143,23 @@ fn check_existing_volume(
     Ok(())
 }
 
-struct VolumeTopologyMapper {
-    nodes: Vec<Node>,
-}
+struct VolumeTopologyMapper {}
 
 impl VolumeTopologyMapper {
     async fn init() -> Result<VolumeTopologyMapper, Status> {
-        let nodes = MayastorApiClient::get_client()
-            .list_nodes()
-            .await
-            .map_err(|e| {
-                Status::failed_precondition(format!(
-                    "Failed to list Mayastor nodes, error = {:?}",
-                    e
-                ))
-            })?;
-
-        Ok(Self { nodes })
+        Ok(Self {})
     }
 
-    // Determine the list of nodes where the workload can be placed.
-    // If volume is created as pinned (i.e. local=true), then the nexus and the workload
-    // must be placed on the same node, which in fact means running workloads only on Mayastor
-    // daemonset nodes.
-    // For non-pinned volumes, workload can be put on any node in the Kubernetes cluster.
+    /// Determine the list of nodes where the workload can be placed.
+    /// If volume is created as pinned (i.e. local=true), then the nexus and the workload
+    /// must be placed on the same node, which in fact means running workloads only on IO Engine
+    /// daemonset nodes.
+    /// For non-pinned volumes, workload can be put on any node in the cluster.
     pub fn volume_accessible_topology(&self, pinned_volume: bool) -> Vec<CsiTopology> {
         if pinned_volume {
-            self.nodes
-                .iter()
-                .map(|n| {
-                    let mut segments = HashMap::new();
-                    segments.insert(K8S_HOSTNAME.to_string(), n.id.to_string());
-                    rpc::csi::Topology { segments }
-                })
-                .collect()
+            vec![rpc::csi::Topology {
+                segments: CsiControllerConfig::get_config().io_engine_selector(),
+            }]
         } else {
             Vec::new()
         }

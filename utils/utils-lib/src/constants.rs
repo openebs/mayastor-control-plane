@@ -17,6 +17,11 @@ pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 /// Mayastor container image used for testing
 pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:develop";
 
+/// IO-Engine node selector label key.
+pub const IO_ENGINE_SELECTOR_KEY: &str = "openebs.io/engine";
+/// IO-Engine node selector label value.
+pub const IO_ENGINE_SELECTOR_VALUE: &str = "io-engine";
+
 /// Mayastor environment variable that points to a mayastor binary
 /// This must be in sync with shell.nix
 pub const MAYASTOR_BINARY: &str = "MAYASTOR_BIN";

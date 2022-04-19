@@ -41,6 +41,8 @@ VOLUME2_SIZE = 1024 * 1024 * 22
 VOLUME3_SIZE = 1024 * 1024 * 28
 VOLUME4_SIZE = 1024 * 1024 * 32
 K8S_HOSTNAME = "kubernetes.io/hostname"
+IO_ENGINE_SELECTOR_KEY = "openebs.io/engine"
+IO_ENGINE_SELECTOR_VALUE = "io-engine"
 
 
 @pytest.fixture(scope="module")
@@ -348,16 +350,19 @@ def check_1_replica_local_nvmf_volume(create_1_replica_local_nvmf_volume):
 
 
 def check_local_volume_topology(volume):
-    topology = volume.volume.accessible_topology
-    assert len(topology) == 2, "Number of nodes in topology mismatches"
+    topologies = volume.volume.accessible_topology
 
-    for n in [NODE1, NODE2]:
-        found = False
-        for t in topology:
-            if t.segments[K8S_HOSTNAME] == n:
-                found = True
-                break
-        assert found, "Node %s is missing in volume topology"
+    found_key_value = False
+    for topology in topologies:
+        if IO_ENGINE_SELECTOR_KEY in topology.segments:
+            if (
+                topology.segments.get(IO_ENGINE_SELECTOR_KEY)
+                == IO_ENGINE_SELECTOR_VALUE
+            ):
+                found_key_value = True
+    assert (
+        found_key_value is True
+    ), f"{IO_ENGINE_SELECTOR_KEY}: {IO_ENGINE_SELECTOR_VALUE} not found in volume topology"
 
 
 @then("local volume must be accessible only from all existing Mayastor nodes")
