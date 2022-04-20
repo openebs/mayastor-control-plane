@@ -15,15 +15,16 @@ mod server;
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 
 /// Initialize all components before starting the CSI controller.
-fn initialize_controller(args: &ArgMatches) -> Result<(), String> {
-    CsiControllerConfig::initialize(args);
+fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
+    CsiControllerConfig::initialize(args)?;
     MayastorApiClient::initialize()
-        .map_err(|e| format!("Failed to initialize API client, error = {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to initialize API client, error = {}", e))?;
     Ok(())
 }
 
 #[tokio::main(worker_threads = 2)]
-pub async fn main() -> Result<(), String> {
+pub async fn main() -> anyhow::Result<()> {
+    let default_io_selector = CsiControllerConfig::default_io_selector();
     let args = App::new(utils::package_description!())
         .author(clap::crate_authors!())
         .version(utils::version_info_str!())
@@ -61,6 +62,18 @@ pub async fn main() -> Result<(), String> {
                 .env("REST_TIMEOUT")
                 .default_value("5s"),
         )
+        .arg(
+            Arg::with_name("io-engine-selector")
+                .long("io-engine-selector")
+                .multiple(true)
+                .number_of_values(1)
+                .allow_hyphen_values(true)
+                .default_value(&default_io_selector)
+                .help(
+                    "Adds io-engine selector labels (supports multiple values).\n\
+                Example:\n --io-engine-selector key:value --io-engine-selector key2:value2",
+                ),
+        )
         .get_matches();
 
     utils::print_package_info!();
@@ -89,5 +102,5 @@ pub async fn main() -> Result<(), String> {
     )
     .await;
     global::shutdown_tracer_provider();
-    result
+    result.map_err(|e| anyhow::anyhow!("e: {}", e))
 }
