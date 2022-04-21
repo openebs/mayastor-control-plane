@@ -195,31 +195,35 @@ SUBCOMMANDS:
 1. To collect entire mayastor system information into an archive file
    ```sh
    ## Command
-   kubectl mayastor dump system -o <output_directory> -n <mayastor_namespace>
+   kubectl mayastor dump system -d <output_directory> -n <mayastor_namespace>
    ```
 
-    - Example command while running inside Kubernetes cluster nodes
+    - Example command while running inside Kubernetes cluster nodes / system which
+      has access to cluster node ports
       ```sh
-      kubectl mayastor dump system -o /mayastor-dump -n mayastor
+      kubectl mayastor dump system -d /mayastor-dump -n mayastor
       ```
-    - Example command while running outside of Kubernetes cluster nodes
+    - Example command while running outside of Kubernetes cluster nodes where
+      nodes exist in private network (or) node ports are not exposed for outside cluster
       ```sh
-      kubectl mayastor dump system -o /mayastor-dump -l http://127.0.0.1:3100 -e http://127.0.0.1:2379 -n mayastor
+      kubectl mayastor dump system -d /mayastor-dump -r http://127.0.0.1:30011 -l http://127.0.0.1:3100 -e http://127.0.0.1:2379 -n mayastor
       ```
 
 2. To collect information about all mayastor volumes into an archive file
    ```sh
    ## Command
-   kubectl mayastor dump volumes -o <output_directory> -n <mayastor_namespace>
+   kubectl mayastor dump volumes -d <output_directory> -n <mayastor_namespace>
    ```
 
-    - Example command while running inside Kubernetes cluster nodes
+    - Example command while running inside Kubernetes cluster nodes / system which
+      has access to cluster node ports
       ```sh
-      kubectl mayastor dump volumes -o /mayastor-dump -n mayastor
+      kubectl mayastor dump volumes -d /mayastor-dump -n mayastor
       ```
-    - Example command while running outside of Kubernetes cluster nodes
+    - Example command while running outside of Kubernetes cluster nodes where
+      nodes exist in private network (or) node ports are not exposed for outside cluster
       ```sh
-      kubectl mayastor dump volumes -o /mayastor-dump -l http://127.0.0.1:3100 -e http://127.0.0.1:2379 -n mayastor
+      kubectl mayastor dump volumes -d /mayastor-dump -r http://127.0.0.1:30011 -l http://127.0.0.1:3100 -e http://127.0.0.1:2379 -n mayastor
       ```
 
    **Note**: similarly to dump pools/nodes information then replace `volumes` with an associated resource type(`pools/nodes`).
@@ -227,24 +231,32 @@ SUBCOMMANDS:
 3. To collect information about particular volume into an archive file
    ```sh
    ## Command
-   kubectl mayastor dump volume <volume_name> -o <output_directory> -n <mayastor_namespace>
+   kubectl mayastor dump volume <volume_name> -d <output_directory> -n <mayastor_namespace>
    ```
 
-    - Example command while running inside Kubernetes cluster nodes
+    - Example command while running inside Kubernetes cluster nodes / system which
+      has access to cluster node ports
       ```sh
-      kubectl mayastor dump volume volume-1 -o /mayastor-dump -n mayastor
+      kubectl mayastor dump volume volume-1 -d /mayastor-dump -n mayastor
       ```
-    - Example command while running outside of Kubernetes cluster nodes
+    - Example command while running outside of Kubernetes cluster nodes where
+      nodes exist in private network (or) node ports are not exposed for outside cluster
       ```sh
-      kubectl mayastor dump volume volume-1 -o /mayastor-dump -l http://127.0.0.1:3100 -e http://127.0.0.1:2379 -n mayastor
+      kubectl mayastor dump volume volume-1 -d /mayastor-dump -r http://127.0.0.1:30011 -l http://127.0.0.1:3100 -e http://127.0.0.1:2379 -n mayastor
       ```
 
-**Note**: As of now endpoint(s) of Loki service & mayastor-etcd service is mandatory
-only if tool is running outside of cluster nodes.
+**Note**: As of now endpoint(s) of Rest, Loki & mayastor-etcd services are mandatory
+only if tool is running outside of cluster nodes(where nodes are in private
+network/node ports are not exposed outside cluster).
 
 ### Tip
 To run `kubectl mayastor` command line tool outside Kubernetes cluster then it is recommended to
-make Loki and etcd service available outside the cluster. One way to access applications running inside the cluster is by using [kubectl port-forward](https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/)
+make Rest, Loki and etcd service available outside the cluster. One way to access applications running inside the cluster is by using [kubectl port-forward](https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/)
+- Command to forward traffic from local system to Rest service inside the
+    cluster
+  ```sh
+  kubectl port-forward service/rest 8081:8081 -n mayastor
+  ```
 - Command to forward traffic from local system to Loki service inside the cluster
   ```sh
   kubectl port-forward service/mayastor-loki 3100:3100 -n mayastor
