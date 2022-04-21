@@ -15,7 +15,7 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
 /// Mayastor container image used for testing
-pub const MAYASTOR_IMAGE: &str = "mayadata/mayastor:develop";
+pub const DATA_PLANE_IMAGE: &str = "mayadata/mayastor:develop";
 
 /// IO-Engine node selector label key.
 pub const IO_ENGINE_SELECTOR_KEY: &str = "openebs.io/engine";
@@ -24,16 +24,16 @@ pub const IO_ENGINE_SELECTOR_VALUE: &str = "io-engine";
 
 /// Mayastor environment variable that points to a mayastor binary
 /// This must be in sync with shell.nix
-pub const MAYASTOR_BINARY: &str = "MAYASTOR_BIN";
+pub const DATA_PLANE_BINARY: &str = "MAYASTOR_BIN";
 
 /// The period at which a component updates its resource cache
 pub const CACHE_POLL_PERIOD: &str = "30s";
 
 /// The key to mark the creation source of a pool in labels
-pub const OPENEBS_CREATED_BY_KEY: &str = "openebs.io/created-by";
+pub const CREATED_BY_KEY: &str = "openebs.io/created-by";
 
 /// The value to mark the creation source of a pool to be disk pool operator in labels
-pub const DSP_OPERATOR: &str = "diskpool-operator";
+pub const DSP_OPERATOR: &str = "operator-diskpool";
 
 /// The default value to be assigned as GRPC server addr if not overridden
 pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";

@@ -21,7 +21,7 @@ if [[ $check = "yes" ]]; then
     git diff --cached --exit-code "$POOL" 1>/dev/null && exit 0
 fi
 
-( cd "$TEMPLATES" && cargo run --bin diskpool-operator -- --write-crd "$POOL_CRD" )
+( cd "$TEMPLATES" && cargo run --bin operator-diskpool -- --write-crd "$POOL_CRD" )
 
 # If the openapi bindings were modified then fail the check
 git diff --exit-code "$TEMPLATES/$POOL_CRD"

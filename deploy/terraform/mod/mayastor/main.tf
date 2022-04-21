@@ -171,8 +171,8 @@ resource "kubernetes_daemonset" "mayastor" {
         dns_policy = "ClusterFirstWithHostNet"
 
         node_selector = {
-          "kubernetes.io/arch" = "amd64"
-          "openebs.io/engine"  = "mayastor"
+          "kubernetes.io/arch"  = "amd64"
+          "openebs.io/engine" = "mayastor"
         }
 
         host_network = true

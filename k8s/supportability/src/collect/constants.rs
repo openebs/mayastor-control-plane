@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-/// Defines the name of the core-agents service
-pub(crate) const CORE_AGENT_SERVICE: &str = "core-agents";
+/// Defines the name of the core-agent service
+pub(crate) const CORE_AGENT_SERVICE: &str = "agent-core";
 
 /// Defines the name of the csi-controller service
 pub(crate) const CSI_CONTROLLER_SERVICE: &str = "csi-controller";
@@ -14,10 +14,10 @@ pub(crate) const JAEGER_OPERATOR_SERVICE: &str = "jaeger-operator";
 pub(crate) const JAEGER_SERVICE: &str = "jaeger";
 
 /// Defines the name of the pool-operator service
-pub(crate) const POOL_OPERATOR_SERVICE: &str = "diskpool-operator";
+pub(crate) const POOL_OPERATOR_SERVICE: &str = "operator-diskpool";
 
 /// Defines the name of the rest service
-pub(crate) const REST_SERVICE: &str = "rest";
+pub(crate) const REST_SERVICE: &str = "api-rest";
 
 /// Defines the name of the csi node daemon service
 pub(crate) const CSI_NODE_SERVICE: &str = "csi-node";
@@ -26,10 +26,10 @@ pub(crate) const CSI_NODE_SERVICE: &str = "csi-node";
 pub(crate) const ETCD_SERVICE: &str = "etcd";
 
 /// Defines the name of mayastor service
-pub(crate) const MAYASTOR_SERVICE: &str = "mayastor";
+pub(crate) const MAYASTOR_SERVICE: &str = "io-engine";
 
 /// Defines the name of mayastor-io container(dataplane container)
-pub(crate) const DATA_PLANE_CONTAINER_NAME: &str = "mayastor";
+pub(crate) const DATA_PLANE_CONTAINER_NAME: &str = "io-engine";
 
 /// Defines the logging label(key-value pair) on mayastor services
 pub(crate) const LOGGING_LABEL_SELECTOR: &str = "openebs.io/logging=true";

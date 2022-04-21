@@ -75,7 +75,7 @@ def setup():
     Deployer.start(1, jaeger=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "diskpool-operator"}
+    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,
@@ -101,7 +101,7 @@ def csi_instance(start_csi_plugin, fix_socket_permissions):
 def test_plugin_info(csi_instance):
     info = csi_instance.identity.GetPluginInfo(pb.GetPluginInfoRequest())
     assert info.name == "io.openebs.csi-mayastor"
-    assert info.vendor_version == "0.2"
+    assert info.vendor_version == "1.0.0"
 
 
 def test_plugin_capabilities(csi_instance):
@@ -120,7 +120,7 @@ def test_probe(csi_instance):
 
 def test_node_info(csi_instance):
     info = csi_instance.node.NodeGetInfo(pb.NodeGetInfoRequest())
-    assert info.node_id == "mayastor://msn-test"
+    assert info.node_id == "csi-node://msn-test"
     assert info.max_volumes_per_node == 0
 
 

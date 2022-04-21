@@ -39,24 +39,24 @@ variable "control_resource_requests" {
 
 variable "dsp_operator_image" {
   type        = string
-  description = "diskpool operator image to use"
-  default     = "mayastor-diskpool-operator"
+  description = "operator image to use for managing disk pools"
+  default     = "mayastor-operator-diskpool"
 }
 
 variable "rest_image" {
   type    = string
-  default = "mayastor-rest"
+  default = "mayastor-api-rest"
 }
 
 variable "core_image" {
   type    = string
-  default = "mayastor-core"
+  default = "mayastor-agent-core"
 }
 
 variable "mayastor_image" {
   type        = string
-  description = "mayastor image to use"
-  default     = "mayastor"
+  description = "io engine image to use"
+  default     = "mayastor-io-engine"
 }
 
 variable "mayastor_hugepages_2Mi" {

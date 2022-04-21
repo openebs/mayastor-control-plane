@@ -12,22 +12,22 @@ variable "rust_log" {}
 resource "kubernetes_deployment" "deployment_diskpool_operator" {
   metadata {
     labels = {
-      app = "diskpool-operator"
+      app = "operator-diskpool"
     }
-    name      = "diskpool-operator"
+    name      = "operator-diskpool"
     namespace = "mayastor"
   }
   spec {
     replicas = 1
     selector {
       match_labels = {
-        app = "diskpool-operator"
+        app = "operator-diskpool"
       }
     }
     template {
       metadata {
         labels = {
-          app = "diskpool-operator"
+          app = "operator-diskpool"
         }
       }
       spec {
@@ -51,7 +51,7 @@ resource "kubernetes_deployment" "deployment_diskpool_operator" {
               }
             }
           }
-          name = "diskpool-operator"
+          name = "operator-diskpool"
 
           image = format("%s/%s:%s", var.registry, var.image, var.tag)
 

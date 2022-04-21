@@ -30,7 +30,7 @@ resource "kubernetes_daemonset" "csi_node" {
       }
 
       spec {
-        service_account_name = "mayastor-service-account"
+        service_account_name             = "mayastor-service-account"
         termination_grace_period_seconds = var.grace_period
 
         volume {
@@ -90,7 +90,7 @@ resource "kubernetes_daemonset" "csi_node" {
         container {
           name  = "mayastor-csi"
           image = format("%s/%s:%s", var.registry, var.image, var.tag)
-          args  = [
+          args = [
             "--csi-socket=/csi/csi.sock",
             "--node-name=$(MY_NODE_NAME)",
             "--grpc-endpoint=$(MY_POD_IP):10199",
