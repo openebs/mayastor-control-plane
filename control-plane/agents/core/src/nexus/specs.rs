@@ -212,7 +212,8 @@ impl ResourceSpecsLocked {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self.get_nexus(&request.uuid) {
-            SpecOperations::start_destroy(&nexus, registry, delete_owned, mode).await?;
+            let _guard =
+                SpecOperations::start_destroy(&nexus, registry, delete_owned, mode).await?;
 
             let result = node.destroy_nexus(request).await;
             self.on_delete_disown_replicas(&nexus);

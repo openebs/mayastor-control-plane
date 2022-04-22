@@ -36,6 +36,11 @@ impl TaskPoller for PoolReconciler {
         let pools = context.specs().get_locked_pools();
         let mut results = Vec::with_capacity(pools.len() * 2);
         for pool in pools {
+            let _guard = match pool.operation_guard(OperationMode::ReconcileStart) {
+                Ok(guard) => guard,
+                Err(_) => continue,
+            };
+
             results.push(missing_pool_state_reconciler(&pool, context).await);
             results.push(deleting_pool_spec_reconciler(&pool, context).await);
         }
@@ -65,10 +70,6 @@ async fn missing_pool_state_reconciler(
     let pool_id = pool_spec.lock().id.clone();
 
     if context.registry().get_pool_state(&pool_id).await.is_err() {
-        let _guard = match pool_spec.operation_guard(OperationMode::ReconcileStart) {
-            Ok(guard) => guard,
-            Err(_) => return PollResult::Ok(PollerState::Busy),
-        };
         let pool = pool_spec.lock().clone();
 
         let warn_missing = |pool_spec: &Arc<Mutex<PoolSpec>>, node_status: NodeStatus| {
@@ -153,7 +154,7 @@ async fn deleting_pool_spec_reconciler(
         };
         match context
             .specs()
-            .destroy_pool(context.registry(), &request, OperationMode::Exclusive)
+            .destroy_pool(context.registry(), &request, OperationMode::ReconcileStep)
             .await
         {
             Ok(_) => {

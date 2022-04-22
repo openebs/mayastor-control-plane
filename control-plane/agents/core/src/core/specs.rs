@@ -507,13 +507,10 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
                         .ok();
                     true
                 }
-                SpecStatus::Created(_) => {
-                    // A spec that was being updated is in the `Created` state
+                SpecStatus::Created(_) | SpecStatus::Deleting => {
+                    // A spec that was being updated is in the `Created` state.
+                    // Deleting is also a "temporary" update to the spec.
                     Self::handle_incomplete_updates(locked_spec, registry).await
-                }
-                SpecStatus::Deleting => {
-                    // Destroyed by the garbage collector
-                    true
                 }
             }
         } else {
