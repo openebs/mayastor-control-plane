@@ -218,7 +218,7 @@ impl ResourceSpecsLocked {
 
         let pool_spec = self.get_locked_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
-            SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
+            let _guard = SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
 
             let result = node.destroy_pool(request).await;
             SpecOperations::complete_destroy(result, pool_spec, registry).await
