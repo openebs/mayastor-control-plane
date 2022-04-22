@@ -70,10 +70,6 @@ async fn missing_pool_state_reconciler(
     let pool_id = pool_spec.lock().id.clone();
 
     if context.registry().get_pool_state(&pool_id).await.is_err() {
-        let _guard = match pool_spec.operation_guard(OperationMode::ReconcileStart) {
-            Ok(guard) => guard,
-            Err(_) => return PollResult::Ok(PollerState::Busy),
-        };
         let pool = pool_spec.lock().clone();
 
         let warn_missing = |pool_spec: &Arc<Mutex<PoolSpec>>, node_status: NodeStatus| {
