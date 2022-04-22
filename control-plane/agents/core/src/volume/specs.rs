@@ -448,7 +448,7 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         let volume = self.get_locked_volume(&request.uuid);
         if let Some(volume) = &volume {
-            SpecOperations::start_destroy(volume, registry, false, mode).await?;
+            let _guard = SpecOperations::start_destroy(volume, registry, false, mode).await?;
 
             let nexuses = self.get_volume_nexuses(&request.uuid);
             for nexus in nexuses {
