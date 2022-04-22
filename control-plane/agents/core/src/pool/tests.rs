@@ -4,9 +4,9 @@ use common_lib::{
     mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, Protocol,
-            Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus, ShareReplica,
-            UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NodeId,
+            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
+            ShareReplica, UnshareReplica, VolumeId,
         },
         openapi::{
             apis::StatusCode,
@@ -648,4 +648,93 @@ async fn reconciler_deleting_pool_on_node_down() {
         .status
         .to_string();
     assert_eq!(pool_2_status_after_reconciler_action, "Created");
+}
+
+/// Tests that resources in the deleting state are eventually deleted
+#[tokio::test]
+async fn reconciler_deleting_dirty_pool() {
+    let reconcile_period = Duration::from_millis(250);
+    let grpc_timeout = TimeoutOptions::default()
+        .with_max_retries(0)
+        .with_timeout(Duration::from_millis(250))
+        .with_req_timeout(None);
+    let req_timeout = grpc_timeout.base_timeout() * 2;
+    let store_timeout = Duration::from_millis(300);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_pools(1)
+        .with_agents(vec!["core"])
+        .with_req_timeouts(req_timeout, req_timeout)
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .with_store_timeout(store_timeout)
+        .with_bus_timeouts(grpc_timeout.clone())
+        .build()
+        .await
+        .unwrap();
+    let node = cluster.node(0);
+    let pool = cluster.pool(0, 0);
+
+    let node_client = cluster.grpc_client().node();
+    let pool_client = cluster.grpc_client().pool();
+
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+
+    let pools = pool_client.get(Filter::None, None).await.unwrap();
+    tracing::info!("Pools: {:?}", pools);
+
+    // 1. Pause the node, so the destroy call will timeout
+    cluster.composer().pause(node.as_str()).await.unwrap();
+
+    let _ = pool_client
+        .destroy(
+            &DestroyPool {
+                node: node.clone(),
+                id: pool.clone(),
+            },
+            None,
+        )
+        .await
+        .expect_err("timeout since the node is down");
+
+    // 2. Pause ETCD so we fail to undo the operation
+    cluster.composer().pause("etcd").await.unwrap();
+
+    tokio::time::sleep(req_timeout - grpc_timeout.base_timeout()).await;
+
+    // 3. Bring the node back so we can delete the pool
+    cluster.composer().thaw(node.as_str()).await.unwrap();
+
+    // 4. allow for the store write to time out (plus some slack)
+    tokio::time::sleep(store_timeout * 2).await;
+
+    // 5. Bring ETCD back up so we can resume operations
+    cluster.composer().thaw("etcd").await.unwrap();
+
+    // 6. The pool should "eventually" be deleted
+    wait_pool_deleted(&cluster, node, reconcile_period * 4).await;
+
+    async fn wait_pool_deleted(cluster: &Cluster, node: NodeId, timeout: Duration) {
+        let pool_client = cluster.grpc_client().pool();
+        let start = std::time::Instant::now();
+        loop {
+            let pools = pool_client
+                .get(Filter::Node(node.clone()), None)
+                .await
+                .unwrap();
+            let pools = pools.into_inner();
+
+            if pools.is_empty() {
+                return;
+            }
+
+            if std::time::Instant::now() > (start + timeout) {
+                panic!(
+                    "Timeout waiting for the pool to be deleted. Actual: '{:#?}'",
+                    pools
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
 }
