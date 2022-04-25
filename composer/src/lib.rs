@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, TcpStream},
+    path::Path,
     thread,
     time::Duration,
 };
@@ -210,6 +211,8 @@ pub struct ContainerSpec {
     privileged: Option<bool>,
     /// use default container mounts (like /tmp and /var/tmp)
     bypass_default_mounts: bool,
+    /// Bind binary directory instead of binary itself.
+    bind_binary_dir: bool,
 }
 
 impl ContainerSpec {
@@ -367,6 +370,18 @@ impl ContainerSpec {
         } else {
             None
         }
+    }
+    /// If host binary is used, enable binding of host binary directory
+    /// instead of the path of the binary itself.
+    ///
+    /// The allows to access files in binary directory within the container.
+    /// For example, this is needed when the binary is linked to
+    /// a shared library located in the same directory.
+    ///
+    /// This option is false by default.
+    pub fn with_bind_binary_dir(mut self, enable: bool) -> Self {
+        self.bind_binary_dir = enable;
+        self
     }
 
     /// Environment variables as a vector with each element as:
@@ -1095,9 +1110,14 @@ impl ComposeTest {
         binds.extend(spec.binds());
         if let Some(bin) = &spec.binary {
             binds.push("/nix:/nix:ro".into());
-            let path = std::path::PathBuf::from(&bin.path);
-            if !path.starts_with("/nix") || !path.starts_with(&self.srcdir) {
-                binds.push(format!("{}:{}", bin.path, bin.path));
+            if !bin.path.starts_with("/nix") || !bin.path.starts_with(&self.srcdir) {
+                let path = if spec.bind_binary_dir {
+                    Path::new(&bin.path).parent().unwrap()
+                } else {
+                    Path::new(&bin.path)
+                };
+                let path = path.to_str().unwrap();
+                binds.push(format!("{}:{}", path, path));
             }
             if (spec.image.is_some() || self.image.is_some()) && spec.init.unwrap_or(true) {
                 if let Ok(tini) = Binary::which("tini") {
