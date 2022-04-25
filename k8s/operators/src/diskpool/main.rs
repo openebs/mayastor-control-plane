@@ -275,23 +275,27 @@ impl ResourceContext {
         })
     }
 
+    /// Stop reconciliation immediately and notify k8s engine.
+    async fn stop_reconciliation(self) -> Result<ReconcilerAction, Error> {
+        self.k8s_notify(
+            "Failing pool creation",
+            "Creating",
+            &format!("Retry attempts ({}) exceeded", self.num_retries),
+            "Error",
+        )
+        .await;        // if we fail to notify k8s of the error, we will do so when we
+        // reestablish a connection
+        self.mark_error().await?;
+        // we updated the resource as an error stop reconciliation
+        Err(Error::ReconcileError { name: self.name() })
+    }
+
     /// Create or import the pool, on failure try again. When we reach max error
     /// count we fail the whole thing.
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
-    pub(crate) async fn create_or_import(self) -> Result<ReconcilerAction, Error> {
-        if self.num_retries == self.ctx.retries {
-            self.k8s_notify(
-                "Failing pool creation",
-                "Creating",
-                &format!("Retry attempts ({}) exceeded", self.num_retries),
-                "Error",
-            )
-            .await;
-            // if we fail to notify k8s of the error, we will do so when we
-            // reestablish a connection
-            self.mark_error().await?;
-            // we updated the resource as an error stop reconciliation
-            return Err(Error::ReconcileError { name: self.name() });
+    pub(crate) async fn create_or_import(mut self) -> Result<ReconcilerAction, Error> {
+        if self.num_retries >= self.ctx.retries {
+            return self.stop_reconciliation().await;
         }
         match self
             .block_devices_api()
