@@ -145,6 +145,10 @@ pub struct StartOptions {
     #[structopt(long)]
     pub mayastor_devices: Vec<String>,
 
+    /// Run each mayastor on a separate core.
+    #[structopt(long)]
+    pub mayastor_isolate: bool,
+
     /// Add the following environment variables to the mayastor containers
     #[structopt(long, env = "MAYASTOR_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub mayastor_env: Option<Vec<KeyValue>>,
@@ -370,6 +374,16 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_mayastor_env(mut self, key: &str, val: &str) -> Self {
+        let mut env = self.mayastor_env.unwrap_or_default();
+        env.push(KeyValue::new(key.to_string(), val.to_string()));
+        self.mayastor_env = Some(env);
+        self
+    }
+    pub fn with_isolated_mayastor(mut self, isolate: bool) -> Self {
+        self.mayastor_isolate = isolate;
+        self
+    }
     pub fn with_show_info(mut self, show_info: bool) -> Self {
         self.show_info = show_info;
         self
