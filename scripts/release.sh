@@ -220,8 +220,8 @@ if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
     alias_tag=$ALIAS
   elif [ "$BRANCH" == "develop" ]; then
     alias_tag=develop
-  elif [ "$BRANCH" == "master" ]; then
-    alias_tag=latest
+  elif [ "${BRANCH#release-}" != "${BRANCH}" ]; then
+    alias_tag="${BRANCH}"
   fi
   if [ -n "$alias_tag" ]; then
     for img in $UPLOAD; do

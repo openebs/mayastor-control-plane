@@ -84,7 +84,7 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'release/*'
+            branch 'release-*'
             branch 'hotfix-*'
             expression { run_linter == false }
           }
@@ -104,7 +104,6 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'release/*'
             branch 'hotfix-*'
           }
         }
@@ -168,7 +167,7 @@ pipeline {
           expression { params.build_images == true }
           anyOf {
             branch 'master'
-            branch 'release/*'
+            branch 'release-*'
             branch 'hotfix-*'
             branch 'develop'
           }
