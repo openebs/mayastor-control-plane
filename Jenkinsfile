@@ -34,12 +34,16 @@ def notifySlackUponStateChange(build) {
   }
 }
 
+def mainBranches() {
+    return BRANCH_NAME == "develop" || BRANCH_NAME.startsWith("release-");
+}
+
 run_linter = true
 rust_test = true
 bdd_test = true
 
 // Will skip steps for cases when we don't want to build
-if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause')) {
+if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') && mainBranches()) {
     print "INFO: Branch Indexing, skip tests and push the new images."
     run_linter = false
     rust_test = false
@@ -47,8 +51,8 @@ if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause')) {
     build_images = true
 }
 
-// Only schedule regular builds on develop branch, so we don't need to guard against it
-String cron_schedule = BRANCH_NAME == "develop" ? "0 2 * * *" : ""
+// Only schedule regular builds on main branches, so we don't need to guard against it
+String cron_schedule = mainBranches() ? "0 2 * * *" : ""
 
 pipeline {
   agent none
