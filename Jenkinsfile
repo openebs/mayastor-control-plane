@@ -38,9 +38,8 @@ run_linter = true
 rust_test = true
 bdd_test = true
 
-// Will ABORT current job for cases when we don't want to build
-if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') &&
-    BRANCH_NAME == "develop") {
+// Will skip steps for cases when we don't want to build
+if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause')) {
     print "INFO: Branch Indexing, skip tests and push the new images."
     run_linter = false
     rust_test = false
