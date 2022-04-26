@@ -25,6 +25,10 @@ impl ComponentAction for Mayastor {
             .with_args(vec!["-R", DEFAULT_GRPC_CLIENT_ADDR])
             .with_bind("/tmp", "/host/tmp");
 
+            if options.mayastor_isolate {
+                spec = spec.with_args(vec!["-l", format!("{}", i).as_str()]);
+            }
+
             if let Some(env) = &options.mayastor_env {
                 for kv in env {
                     spec = spec.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
