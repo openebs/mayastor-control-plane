@@ -43,7 +43,7 @@ spec:
             requests:
               cpu: 50m
               memory: 32Mi
-          image: mayadata/mcp-rest:v1.0.1
+          image: mayadata/mcp-rest:release-1.0.2
           imagePullPolicy: IfNotPresent
           args:
             - "--dummy-certificates"

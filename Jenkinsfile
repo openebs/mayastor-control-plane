@@ -84,7 +84,7 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'release/*'
+            branch 'hotfix-*'
             expression { run_linter == false }
           }
         }
@@ -96,6 +96,7 @@ pipeline {
         sh 'nix-shell --run "cargo clippy --all-targets -- -D warnings"'
         sh 'nix-shell --run "./scripts/generate-crds.sh --changes"'
         sh 'nix-shell --run "black tests/bdd"'
+        sh 'nix-shell --run "./scripts/check-deploy-yamls.sh"'
       }
     }
     stage('test') {
@@ -104,7 +105,7 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'release/*'
+            branch 'hotfix-*'
           }
         }
       }
@@ -145,7 +146,9 @@ pipeline {
           expression { params.build_images == true }
           anyOf {
             branch 'master'
+            branch 'release-*'
             branch 'release/*'
+            branch 'hotfix-*'
             branch 'develop'
           }
         }

@@ -53,3 +53,9 @@ repos:
         args: [ "--changes" ]
         pass_filenames: false
         language: system
+    -   id: helm-deploy
+        name: Helm Generator
+        description: Ensures the deploy is updated with the helm chart
+        entry: ./scripts/check-deploy-yamls.sh
+        pass_filenames: false
+        language: system

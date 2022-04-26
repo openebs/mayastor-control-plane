@@ -66,7 +66,7 @@ spec:
             requests:
               cpu: 16m
               memory: 64Mi
-          image: mayadata/mcp-csi-controller:v1.0.1
+          image: mayadata/mcp-csi-controller:release-1.0.2
           imagePullPolicy: IfNotPresent
           args:
             - "--csi-socket=/var/lib/csi/sockets/pluginproxy/csi.sock"
