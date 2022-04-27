@@ -56,10 +56,10 @@ impl RpcHandle {
             }
         }
 
-        let mayastor = MayastorClient::connect(format!("http://{}", endpoint.to_string()))
+        let mayastor = MayastorClient::connect(format!("http://{}", endpoint))
             .await
             .unwrap();
-        let bdev = BdevRpcClient::connect(format!("http://{}", endpoint.to_string()))
+        let bdev = BdevRpcClient::connect(format!("http://{}", endpoint))
             .await
             .unwrap();
 

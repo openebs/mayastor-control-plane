@@ -5,6 +5,7 @@ use crate::{
         states::{ResourceStates, ResourceStatesLocked},
     },
     node::service::NodeCommsTimeout,
+    NumRebuilds,
 };
 
 use common::{
@@ -26,7 +27,8 @@ use common_lib::{
 };
 
 use async_trait::async_trait;
-use common_lib::types::v0::store::ResourceUuid;
+use common_lib::types::v0::{message_bus, store::ResourceUuid};
+use parking_lot::RwLock;
 use rpc::mayastor::Null;
 use snafu::ResultExt;
 use std::{
@@ -38,6 +40,13 @@ use std::{
 type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
 /// Default timeout for GET* gRPC requests (ex: GetPools, GetNexuses, etc..)
 const GETS_TIMEOUT: MessageIdVs = MessageIdVs::Default;
+
+enum ResourceType {
+    All(Vec<message_bus::PoolState>, Vec<Replica>, Vec<Nexus>),
+    Nexus(Vec<Nexus>),
+    Pool(Vec<message_bus::PoolState>),
+    Replica(Vec<Replica>),
+}
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
 /// all pools and replicas from the node
@@ -60,6 +69,8 @@ pub(crate) struct NodeWrapper {
     comms_timeouts: NodeCommsTimeout,
     /// runtime state information
     states: ResourceStatesLocked,
+    /// number of rebuilds in progress on the node
+    num_rebuilds: Arc<RwLock<NumRebuilds>>,
 }
 
 impl NodeWrapper {
@@ -77,6 +88,7 @@ impl NodeWrapper {
             lock: Default::default(),
             comms_timeouts,
             states: ResourceStatesLocked::new(),
+            num_rebuilds: Arc::new(RwLock::new(0)),
         }
     }
 
@@ -402,7 +414,7 @@ impl NodeWrapper {
 
             match fetch_result {
                 Ok((replicas, pools, nexuses)) => {
-                    self.resources_mut().update(pools, replicas, nexuses);
+                    self.update_resources(ResourceType::All(pools, replicas, nexuses));
                     if setting_online {
                         // we only set it as online after we've updated the resource states
                         // so an online node should be "up-to-date"
@@ -520,22 +532,58 @@ impl NodeWrapper {
     /// Update all the nexus states.
     async fn update_nexus_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
         let nexuses = self.fetch_nexuses(client).await?;
-        self.resources_mut().update_nexuses(nexuses);
+        self.update_resources(ResourceType::Nexus(nexuses));
         Ok(())
     }
 
     /// Update all the pool states.
     async fn update_pool_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
         let pools = self.fetch_pools(client).await?;
-        self.resources_mut().update_pools(pools);
+        self.update_resources(ResourceType::Pool(pools));
         Ok(())
     }
 
     /// Update all the replica states.
     async fn update_replica_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
         let replicas = self.fetch_replicas(client).await?;
-        self.resources_mut().update_replicas(replicas);
+        self.update_resources(ResourceType::Replica(replicas));
         Ok(())
+    }
+
+    /// Update the states of the specified resource type.
+    /// Whenever the nexus states are updated the number of rebuilds must be updated.
+    fn update_resources(&self, resource_type: ResourceType) {
+        match resource_type {
+            ResourceType::All(pools, replicas, nexuses) => {
+                self.resources_mut().update(pools, replicas, nexuses);
+                self.update_num_rebuilds();
+            }
+            ResourceType::Nexus(nexuses) => {
+                self.resources_mut().update_nexuses(nexuses);
+                self.update_num_rebuilds();
+            }
+            ResourceType::Pool(pools) => {
+                self.resources_mut().update_pools(pools);
+            }
+            ResourceType::Replica(replicas) => {
+                self.resources_mut().update_replicas(replicas);
+            }
+        }
+    }
+
+    /// Update the number of rebuilds in progress on this node.
+    fn update_num_rebuilds(&self) {
+        let mut num_rebuilds = 0;
+        self.nexus_states().iter().for_each(|nexus_state| {
+            num_rebuilds += nexus_state.nexus.rebuilds;
+        });
+        let mut rebuilds = self.num_rebuilds.write();
+        *rebuilds = num_rebuilds;
+    }
+
+    /// Return the number of rebuilds in progress on this node.
+    pub(crate) fn num_rebuilds(&self) -> NumRebuilds {
+        *self.num_rebuilds.read()
     }
 }
 
