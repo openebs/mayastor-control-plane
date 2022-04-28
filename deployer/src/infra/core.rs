@@ -56,6 +56,9 @@ impl ComponentAction for Core {
         if let Some(size) = &options.otel_max_batch_size {
             binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
         }
+        if let Some(max_rebuilds) = &options.max_rebuilds {
+            binary = binary.with_args(vec!["--max-rebuilds", &max_rebuilds.to_string()]);
+        }
         Ok(cfg.add_container_bin(name, binary))
     }
     async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
