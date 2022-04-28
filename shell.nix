@@ -39,6 +39,7 @@ mkShell {
     tini
     nvme-cli
     fio
+    git
   ] ++ pkgs.lib.optional (!norust) channel.default.nightly;
 
   LIBCLANG_PATH = "${llvmPackages_11.libclang.lib}/lib";

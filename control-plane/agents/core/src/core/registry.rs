@@ -54,6 +54,9 @@ impl Deref for Registry {
     }
 }
 
+/// Number of rebuilds
+pub(crate) type NumRebuilds = u32;
+
 /// Generic Registry Inner with a Store trait
 #[derive(Debug)]
 pub struct RegistryInner<S: Store> {
@@ -72,6 +75,8 @@ pub struct RegistryInner<S: Store> {
     reconcile_period: std::time::Duration,
     reconciler: ReconcilerControl,
     config: CoreRegistryConfig,
+    /// system-wide maximum number of concurrent rebuilds allowed
+    max_rebuilds: Option<NumRebuilds>,
 }
 
 impl Registry {
@@ -85,6 +90,7 @@ impl Registry {
         store_lease_tll: std::time::Duration,
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
+        max_rebuilds: Option<NumRebuilds>,
     ) -> Self {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -107,6 +113,7 @@ impl Registry {
                 reconcile_idle_period,
                 reconciler: ReconcilerControl::new(),
                 config: Self::get_config_or_panic(store).await,
+                max_rebuilds,
             }),
         };
         registry.init().await;
@@ -275,6 +282,27 @@ impl Registry {
                 }
             }
             tokio::time::sleep(self.cache_period).await;
+        }
+    }
+
+    /// Determine if a rebuild is allowed to start.
+    /// Constrain the number of system-wide rebuilds to the maximum specified.
+    /// If a maximum is not specified, do not limit the number of rebuilds.
+    pub(crate) async fn rebuild_allowed(&self) -> Result<(), SvcError> {
+        match self.max_rebuilds {
+            Some(max_rebuilds) => {
+                let mut num_rebuilds = 0;
+                for (_id, node_wrapper) in self.nodes.read().await.iter() {
+                    num_rebuilds += node_wrapper.read().await.num_rebuilds();
+                }
+
+                if num_rebuilds < max_rebuilds {
+                    Ok(())
+                } else {
+                    Err(SvcError::MaxRebuilds { max_rebuilds })
+                }
+            }
+            None => Ok(()),
         }
     }
 }
