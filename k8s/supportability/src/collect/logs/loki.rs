@@ -160,7 +160,7 @@ impl LokiClient {
             Some(host_name) => {
                 let file_name = format!("{}-{}-{}.log", host_name, SERVICE_NAME, container_name);
                 let new_query_field = format!(
-                    "{{{},container=\"{}\",hostname=\"{}\"}}",
+                    "{{{},container=\"{}\",hostname=~\"{}.*\"}}",
                     label_filters, container_name, host_name
                 );
                 (file_name, new_query_field)
