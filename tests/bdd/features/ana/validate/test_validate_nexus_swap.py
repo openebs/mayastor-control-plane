@@ -1,6 +1,5 @@
 """Swap ANA enabled Nexus on ANA enabled host feature tests."""
 import http
-from time import sleep
 
 from pytest_bdd import (
     given,

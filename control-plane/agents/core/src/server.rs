@@ -11,6 +11,7 @@ pub mod watcher;
 use common_lib::types::v0::message_bus::ChannelVs;
 use http::Uri;
 
+use crate::core::registry::NumRebuilds;
 use common_lib::mbus_api::BusClient;
 use opentelemetry::{global, KeyValue};
 use structopt::StructOpt;
@@ -78,6 +79,10 @@ pub(crate) struct CliArgs {
     /// (supports the http/https schema)
     #[structopt(long, short, default_value = DEFAULT_GRPC_SERVER_ADDR)]
     pub(crate) grpc_server_addr: Uri,
+    /// The maximum number of system-wide rebuilds permitted at any given time.
+    /// If `None` do not limit the number of rebuilds.
+    #[structopt(long)]
+    max_rebuilds: Option<NumRebuilds>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -107,6 +112,7 @@ async fn server(cli_args: CliArgs) {
         cli_args.store_lease_ttl.into(),
         cli_args.reconcile_period.into(),
         cli_args.reconcile_idle_period.into(),
+        cli_args.max_rebuilds,
     )
     .await;
 

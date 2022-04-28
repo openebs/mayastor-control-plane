@@ -17,6 +17,8 @@ class StartOptions:
     jaeger: bool = True
     cluster_uid: str = "bdd"
     extra_args: [str] = ()
+    rest_env: str = ""
+    max_rebuilds: str = ""
 
     def args(self):
         args = [
@@ -42,8 +44,12 @@ class StartOptions:
             args.append(f"--agents-env={self.agents_env}")
         if len(self.cluster_uid) > 0:
             args.append(f"--cluster-uid={self.cluster_uid}")
+        if len(self.rest_env) > 0:
+            args.append(f"--rest-env={self.rest_env}")
         if len(self.extra_args) > 0:
             args.append(self.extra_args)
+        if len(self.max_rebuilds) > 0:
+            args.append(f"--max-rebuilds={self.max_rebuilds}")
         return args
 
 
@@ -58,8 +64,10 @@ class Deployer(object):
         cache_period="",
         mayastor_env="",
         agents_env="",
+        rest_env="",
         node_deadline="",
         jaeger=True,
+        max_rebuilds="",
     ):
         options = StartOptions(
             mayastors,
@@ -71,6 +79,7 @@ class Deployer(object):
             agents_env=agents_env,
             node_deadline=node_deadline,
             jaeger=jaeger,
+            max_rebuilds=max_rebuilds,
         )
         Deployer.start_with_opts(options)
 

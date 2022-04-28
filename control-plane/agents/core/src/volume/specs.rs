@@ -1105,6 +1105,10 @@ impl ResourceSpecsLocked {
         replica: &Replica,
         mode: OperationMode,
     ) -> Result<(), SvcError> {
+        // Adding a replica to a nexus will initiate a rebuild.
+        // First check that we are able to start a rebuild.
+        registry.rebuild_allowed().await?;
+
         let uri = self
             .make_replica_accessible(registry, replica, &nexus.node, mode)
             .await?;
