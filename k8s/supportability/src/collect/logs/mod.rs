@@ -100,10 +100,16 @@ impl LogCollection {
         let loki_endpoint = match loki_uri {
             Some(uri) => Some(uri),
             None => {
-                let e = client_set
+                match client_set
                     .get_service_endpoint(LOKI_SERVICE_LABEL_SELECTOR, LOKI_METRICS_PORT_NAME)
-                    .await?;
-                Some(format!("http://{}", e))
+                    .await
+                {
+                    Ok(endpoint) => Some(format!("http://{}", endpoint)),
+                    Err(_) => {
+                        log("Failed to get Loki endpoint. Continuing...".to_string());
+                        None
+                    }
+                }
             }
         };
         Ok(Box::new(Self {
