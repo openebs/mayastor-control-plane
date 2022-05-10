@@ -145,6 +145,10 @@ pub struct StartOptions {
     #[structopt(long)]
     pub mayastor_devices: Vec<String>,
 
+    /// Run each mayastor on a separate core.
+    #[structopt(long)]
+    pub mayastor_isolate: bool,
+
     /// Add the following environment variables to the mayastor containers
     #[structopt(long, env = "MAYASTOR_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub mayastor_env: Option<Vec<KeyValue>>,
@@ -253,6 +257,10 @@ pub struct StartOptions {
     /// Add process service tags to the traces
     #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     tracing_tags: Vec<KeyValue>,
+
+    /// Maximum number of concurrent rebuilds across the cluster.
+    #[structopt(long)]
+    max_rebuilds: Option<u32>,
 }
 
 /// List of KeyValues
@@ -370,6 +378,16 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_mayastor_env(mut self, key: &str, val: &str) -> Self {
+        let mut env = self.mayastor_env.unwrap_or_default();
+        env.push(KeyValue::new(key.to_string(), val.to_string()));
+        self.mayastor_env = Some(env);
+        self
+    }
+    pub fn with_isolated_mayastor(mut self, isolate: bool) -> Self {
+        self.mayastor_isolate = isolate;
+        self
+    }
     pub fn with_show_info(mut self, show_info: bool) -> Self {
         self.show_info = show_info;
         self
@@ -396,6 +414,11 @@ impl StartOptions {
                 self.tracing_tags.push(KeyValue::new(env.to_string(), val));
             }
         });
+        self
+    }
+    #[must_use]
+    pub fn with_max_rebuilds(mut self, max: Option<u32>) -> Self {
+        self.max_rebuilds = max;
         self
     }
 }
