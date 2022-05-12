@@ -2,7 +2,7 @@ use openapi::{
     apis::{volumes_api, Url, Uuid},
     models,
 };
-use testlib::ClusterBuilder;
+use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn concurrent_rebuilds() {
@@ -86,15 +86,18 @@ async fn concurrent_rebuilds() {
         };
         replica_count = 2;
 
-        check_volumes(vol_cli, &volumes).await;
+        check_volumes(&cluster, vol_cli, &volumes).await;
     }
 
     async fn check_volumes(
+        cluster: &Cluster,
         vol_cli: &dyn volumes_api::tower::client::direct::Volumes,
         volumes: &[models::Volume],
     ) {
         let start = std::time::Instant::now();
-        let timeout = std::time::Duration::from_secs(120);
+        let mut timeout = std::time::Duration::from_secs(120);
+        let timeout_slack = timeout / 2;
+        let mut added_slack = false;
         let check_interval = std::time::Duration::from_secs(5);
         loop {
             let curr_volumes = vol_cli.get_volumes(0, None).await.unwrap().entries;
@@ -124,6 +127,34 @@ async fn concurrent_rebuilds() {
 
             if online.len() == volumes.len() {
                 break;
+            }
+
+            if start.elapsed() >= timeout {
+                // if the nodes are still responsive allow for a bit more slack if the CI
+                // performance is slow.
+                let mut nodes_ok = true;
+                let nodes = cluster.rest_v00().nodes_api().get_nodes().await.unwrap();
+                for node in nodes {
+                    if let Ok(mut handle) = cluster.grpc_handle(&node.id).await {
+                        if handle
+                            .mayastor
+                            .list_nexus(rpc::mayastor::Null {})
+                            .await
+                            .is_err()
+                        {
+                            nodes_ok = false;
+                            break;
+                        }
+                    }
+                }
+                if nodes_ok {
+                    tracing::warn!("Timeout has been hit but the nodes are not locked up");
+                    if !added_slack {
+                        tracing::warn!("Increasing the timeout slack just once since the nodes are not locked up");
+                        added_slack = true;
+                        timeout += timeout_slack;
+                    }
+                }
             }
 
             if start.elapsed() >= timeout {
