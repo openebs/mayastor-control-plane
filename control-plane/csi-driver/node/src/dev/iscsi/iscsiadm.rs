@@ -140,7 +140,7 @@ impl IscsiAdmin {
     }
 
     fn get_binary() -> Result<&'static str, DeviceError> {
-        const MAYASTOR_ISCSIADM: &str = "/bin/mayastor-iscsiadm";
+        const IO_ENGINE_ISCSIADM: &str = "/bin/io-engine-iscsiadm";
 
         lazy_static! {
             static ref ISCSIADM: String = match env::var("ISCSIADM") {
@@ -148,10 +148,10 @@ impl IscsiAdmin {
                     debug!("using environment: ISCSIADM={}", &path);
                     path
                 }
-                _ => match which::which(MAYASTOR_ISCSIADM) {
+                _ => match which::which(IO_ENGINE_ISCSIADM) {
                     Ok(_) => {
-                        debug!("using hardcoded default: {}", MAYASTOR_ISCSIADM);
-                        String::from(MAYASTOR_ISCSIADM)
+                        debug!("using hardcoded default: {}", IO_ENGINE_ISCSIADM);
+                        String::from(IO_ENGINE_ISCSIADM)
                     }
                     _ => match which::which("iscsiadm") {
                         Ok(path) => {

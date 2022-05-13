@@ -1,4 +1,4 @@
-{ norust ? false, mayastor ? "" }:
+{ norust ? false, io-engine ? "" }:
 let
   sources = import ./nix/sources.nix;
   pkgs = import sources.nixpkgs {
@@ -9,7 +9,7 @@ with pkgs;
 let
   norust_moth =
     "You have requested an environment without rust, you should provide it!";
-  mayastor_moth = "Using the following mayastor binary: ${mayastor}";
+  io-engine-moth = "Using the following io-engine binary: ${io-engine}";
   channel = import ./nix/lib/rust.nix { inherit sources; };
   # python environment for tests/bdd
   pytest_inputs = python3.withPackages
@@ -17,7 +17,7 @@ let
   rust_chan = channel.default_src;
 in
 mkShell {
-  name = "mayastor-control-plane-shell";
+  name = "control-plane-shell";
   buildInputs = [
     cargo-expand
     cargo-udeps
@@ -73,9 +73,9 @@ mkShell {
     fi
     pre-commit install
     pre-commit install --hook commit-msg
-    export MCP_SRC=`pwd`
-    [ ! -z "${mayastor}" ] && cowsay "${mayastor_moth}"
-    [ ! -z "${mayastor}" ] && export MAYASTOR_BIN="${mayastor}"
+    export WORKSPACE_ROOT=`pwd`
+    [ ! -z "${io-engine}" ] && cowsay "${io-engine-moth}"
+    [ ! -z "${io-engine}" ] && export IO_ENGINE_BIN="${io-engine-moth}"
     export PATH="$PATH:$(pwd)/target/debug"
     DOCKER_CONFIG=~/.docker/config.json
     if [ -f "$DOCKER_CONFIG" ]; then

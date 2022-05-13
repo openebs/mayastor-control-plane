@@ -1,7 +1,7 @@
-//! Mayastor CSI plugin.
+//! IoEngine CSI plugin.
 //!
 //! Implementation of gRPC methods from the CSI spec. This includes mounting
-//! of mayastor volumes using iscsi/nvmf protocols on the node.
+//! of volumes using iscsi/nvmf protocols on the node.
 
 extern crate clap;
 #[macro_use]
@@ -17,7 +17,7 @@ use csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
 use k8s_openapi::api::core::v1::Node as K8sNode;
 use kube::{Api, Client, Resource};
-use nodeplugin_grpc::MayastorNodePluginGrpcServer;
+use nodeplugin_grpc::IoEngineNodePluginGrpcServer;
 use std::{
     env,
     pin::Pin,
@@ -159,7 +159,7 @@ pub async fn get_nodename(hostname: &str) -> String {
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let matches = App::new(utils::package_description!())
-        .about("k8s sidecar for Mayastor implementing CSI among others")
+        .about("k8s sidecar for IoEngine implementing CSI among others")
         .version(utils::version_info_str!())
         .arg(
             Arg::with_name("csi-socket")
@@ -263,7 +263,7 @@ async fn main() -> Result<(), String> {
 
     let _ = tokio::join!(
         CsiServer::run(csi_socket, &node_name),
-        MayastorNodePluginGrpcServer::run(sock_addr.parse().expect("Invalid gRPC endpoint")),
+        IoEngineNodePluginGrpcServer::run(sock_addr.parse().expect("Invalid gRPC endpoint")),
     );
 
     Ok(())

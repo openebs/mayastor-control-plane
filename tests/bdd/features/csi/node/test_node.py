@@ -106,7 +106,7 @@ def start_csi_plugin(setup):
     proc = subprocess.Popen(
         args=[
             "sudo",
-            os.environ["MCP_SRC"] + "/target/debug/csi-node",
+            os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
             "--csi-socket=/var/tmp/csi.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",

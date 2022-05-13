@@ -7,7 +7,7 @@ mod client;
 mod config;
 mod controller;
 mod identity;
-use client::{ApiClientError, CreateVolumeTopology, MayastorApiClient};
+use client::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
 use config::CsiControllerConfig;
 
 mod server;
@@ -17,7 +17,7 @@ const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 /// Initialize all components before starting the CSI controller.
 fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
     CsiControllerConfig::initialize(args)?;
-    MayastorApiClient::initialize()
+    IoEngineApiClient::initialize()
         .map_err(|e| anyhow::anyhow!("Failed to initialize API client, error = {}", e))?;
     Ok(())
 }
@@ -38,7 +38,7 @@ pub async fn main() -> anyhow::Result<()> {
                 .short("-r")
                 .env("ENDPOINT")
                 .default_value("http://ksnode-1:30011")
-                .help("an URL endpoint to the mayastor control plane"),
+                .help("a URL endpoint to the control plane's rest endpoint"),
         )
         .arg(
             Arg::with_name("socket")
@@ -91,13 +91,13 @@ pub async fn main() -> anyhow::Result<()> {
     initialize_controller(&args)?;
 
     info!(
-        "Starting Mayastor CSI Controller, REST endpoint = {}",
+        "Starting IoEngine CSI Controller, REST endpoint = {}",
         CsiControllerConfig::get_config().rest_endpoint()
     );
 
     let result = server::CsiServer::run(
         args.value_of("socket")
-            .expect("CSI socket must be specfied")
+            .expect("CSI socket must be specified")
             .to_string(),
     )
     .await;

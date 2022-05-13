@@ -1,4 +1,4 @@
-use crate::MayastorApiClient;
+use crate::IoEngineApiClient;
 use futures::TryFutureExt;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -73,12 +73,12 @@ pub struct CsiServer {}
 async fn ping_rest_api() {
     info!("Checking REST API endpoint accessibility ...");
 
-    match MayastorApiClient::get_client().list_nodes().await {
+    match IoEngineApiClient::get_client().list_nodes().await {
         Err(e) => error!(?e, "REST API endpoint is not accessible"),
         Ok(nodes) => {
             let names: Vec<String> = nodes.into_iter().map(|n| n.id).collect();
             info!(
-                "REST API endpoints available, {} Mayastor node(s) reported: {:?}",
+                "REST API endpoints available, {} IoEngine node(s) reported: {:?}",
                 names.len(),
                 names,
             );

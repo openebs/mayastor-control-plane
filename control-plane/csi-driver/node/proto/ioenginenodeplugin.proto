@@ -1,6 +1,6 @@
-// The definition of mayastor node plugin gRPC interface.
+// The definition of ioengine node plugin gRPC interface.
 // The node plugin service runs on all nodes running
-// the Mayastor CSI node plugin, and is complementary
+// the IoEngine CSI node plugin, and is complementary
 // to the CSI node plugin service.
 
 // This interface is supposed to be independent on particular computing
@@ -9,13 +9,13 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "io.grpc.examples.mayastornodeplugin";
-option java_outer_classname = "MayastorNodePluginProto";
+option java_package = "io.grpc.examples.ioenginenodeplugin";
+option java_outer_classname = "IoEngineNodePluginProto";
 
-package mayastornodeplugin;
+package ioenginenodeplugin;
 
 // Service for freezing and unfreezing file systems.
-service MayastorNodePlugin {
+service IoEngineNodePlugin {
   // Freeze the file system identified by the volume ID
   // no check is made if the file system had been previously frozen.
   rpc FreezeFS (FreezeFSRequest) returns (FreezeFSReply) {}

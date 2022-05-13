@@ -4,13 +4,10 @@ This crate contains CSI protocol implementation, the part that implements
 `identity` and `node` grpc CSI services. It is an asynchronous server
 implementation making use of tokio.rs.
 
-The mayastor-csi plugin implements two gRPC services:
+The io engine node csi plugin implements two gRPC services:
 
 * identity CSI service
 * node CSI service
-
-See [grpc proto file](../rpc/proto/mayastor.proto) for the details of the gRPC
-interface.
 
 ## Building and running the gRPC server
 
@@ -19,7 +16,7 @@ To get a debug output just from the server and not other libraries (i.e.
 tokio, tower-grpc, etc.), run it as follows:
 
 ```bash
-RUST_LOG=mayastor_grpc=trace ./target/debug/mayastor-csi
+RUST_LOG=csi_node=trace ./target/debug/csi-node
 ```
 
 # CSI
@@ -31,7 +28,7 @@ is installed and GOPATH set, csc tool can be installed as:
 go get github.com/rexray/gocsi && make -C $GOPATH/src/github.com/rexray/gocsi csi-sp
 ```
 
-Now assuming that mayastor-client server is running and for example we want to
+Now assuming that csi-node server is running and for example we want to
 invoke a probe method from csi identity service, we can type:
 
 ```bash

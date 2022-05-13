@@ -53,7 +53,7 @@ impl identity_server::Identity for Identity {
         &self,
         _request: Request<ProbeRequest>,
     ) -> Result<Response<ProbeResponse>, Status> {
-        // CSI plugin is independent of mayastor so it's always ready
+        // CSI plugin is independent of the io-engine so it's always ready
         Ok(Response::new(ProbeResponse { ready: Some(true) }))
     }
 }

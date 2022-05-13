@@ -1,11 +1,11 @@
-//! The mayastor node plugin gRPC service
+//! The io_engine node plugin gRPC service
 //! This provides access to functionality that needs to be executed on the same
-//! node as a Mayastor CSI node plugin, but it is not possible to do so within
+//! node as a IoEngine CSI node plugin, but it is not possible to do so within
 //! the CSI framework. This service must be deployed on all nodes the
-//! Mayastor CSI node plugin is deployed.
+//! IoEngine CSI node plugin is deployed.
 use crate::{nodeplugin_svc, shutdown_event::Shutdown};
-use mayastor_node_plugin::{
-    mayastor_node_plugin_server::{MayastorNodePlugin, MayastorNodePluginServer},
+use io_engine_node_plugin::{
+    io_engine_node_plugin_server::{IoEngineNodePlugin, IoEngineNodePluginServer},
     FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
     UnfreezeFsRequest, VolumeType,
 };
@@ -13,12 +13,12 @@ use nodeplugin_svc::{find_volume, freeze_volume, unfreeze_volume, ServiceError, 
 use tonic::{transport::Server, Code, Request, Response, Status};
 
 #[allow(clippy::upper_case_acronyms)]
-pub mod mayastor_node_plugin {
-    tonic::include_proto!("mayastornodeplugin");
+pub mod io_engine_node_plugin {
+    tonic::include_proto!("ioenginenodeplugin");
 }
 
 #[derive(Debug, Default)]
-pub struct MayastorNodePluginSvc {}
+pub struct IoEngineNodePluginSvc {}
 
 impl From<ServiceError> for Status {
     fn from(err: ServiceError) -> Self {
@@ -39,7 +39,7 @@ impl From<ServiceError> for Status {
 }
 
 #[tonic::async_trait]
-impl MayastorNodePlugin for MayastorNodePluginSvc {
+impl IoEngineNodePlugin for IoEngineNodePluginSvc {
     async fn freeze_fs(
         &self,
         request: Request<FreezeFsRequest>,
@@ -77,16 +77,16 @@ impl MayastorNodePlugin for MayastorNodePluginSvc {
     }
 }
 
-pub struct MayastorNodePluginGrpcServer {}
+pub struct IoEngineNodePluginGrpcServer {}
 
-impl MayastorNodePluginGrpcServer {
+impl IoEngineNodePluginGrpcServer {
     pub async fn run(endpoint: std::net::SocketAddr) -> Result<(), ()> {
         info!(
-            "Mayastor node plugin gRPC server configured at address {:?}",
+            "IoEngine node plugin gRPC server configured at address {:?}",
             endpoint
         );
         if let Err(e) = Server::builder()
-            .add_service(MayastorNodePluginServer::new(MayastorNodePluginSvc {}))
+            .add_service(IoEngineNodePluginServer::new(IoEngineNodePluginSvc {}))
             .serve_with_shutdown(endpoint, Shutdown::wait())
             .await
         {

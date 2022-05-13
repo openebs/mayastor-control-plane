@@ -1,4 +1,4 @@
-use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, MayastorApiClient};
+use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 use regex::Regex;
 use rpc::csi::*;
 use std::collections::HashMap;
@@ -76,7 +76,7 @@ fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, Status>
     }
 }
 
-/// Transform Kubernetes Mayastor node ID into its real hostname.
+/// Transform Kubernetes node ID into its real hostname.
 fn normalize_hostname(name: &str) -> String {
     if let Some(hostname) = name.strip_prefix(CSI_NODE_PREFIX) {
         hostname.to_string()
@@ -309,7 +309,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
         // First check if the volume already exists.
-        match MayastorApiClient::get_client().get_volume(&u).await {
+        match IoEngineApiClient::get_client().get_volume(&u).await {
             Ok(volume) => {
                 check_existing_volume(&volume, replica_count, size, pinned_volume)?;
                 debug!(
@@ -325,7 +325,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     inclusive_label_topology,
                 );
 
-                MayastorApiClient::get_client()
+                IoEngineApiClient::get_client()
                     .create_volume(&u, replica_count, size, volume_topology, pinned_volume)
                     .await?;
 
@@ -362,7 +362,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
 
-        MayastorApiClient::get_client()
+        IoEngineApiClient::get_client()
             .delete_volume(&volume_uuid)
             .await
             .map_err(|e| {
@@ -413,7 +413,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         };
 
         // Check if the volume is already published.
-        let volume = MayastorApiClient::get_client()
+        let volume = IoEngineApiClient::get_client()
             .get_volume(&volume_id)
             .await?;
 
@@ -454,7 +454,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 },
             _ => {
                 // Volume is not published.
-                let v = MayastorApiClient::get_client()
+                let v = IoEngineApiClient::get_client()
                     .publish_volume(&volume_id, &node_id, protocol)
                     .await?;
 
@@ -475,7 +475,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             }
         };
 
-        // Prepare the context for the Mayastor Node CSI plugin.
+        // Prepare the context for the IoEngine Node CSI plugin.
         let mut publish_context = HashMap::new();
         publish_context.insert("uri".to_string(), uri);
 
@@ -504,7 +504,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
         // Check if target volume exists.
-        let volume = match MayastorApiClient::get_client()
+        let volume = match IoEngineApiClient::get_client()
             .get_volume(&volume_uuid)
             .await
         {
@@ -534,7 +534,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }
 
         // Do forced volume upublish as Kubernetes already detached the volume.
-        MayastorApiClient::get_client()
+        IoEngineApiClient::get_client()
             .unpublish_volume(&volume_uuid, true)
             .await
             .map_err(|e| {
@@ -560,7 +560,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
-        let _volume = MayastorApiClient::get_client()
+        let _volume = IoEngineApiClient::get_client()
             .get_volume(&volume_uuid)
             .await
             .map_err(|_e| Status::unimplemented("Not implemented"))?;
@@ -614,7 +614,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
-        let volumes = MayastorApiClient::get_client()
+        let volumes = IoEngineApiClient::get_client()
             .list_volumes(max_entries, args.starting_token)
             .await
             .map_err(|e| Status::internal(format!("Failed to list volumes, error = {:?}", e)))?;
@@ -639,7 +639,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             })
             .collect();
 
-        debug!("Available Mayastor k8s volumes: {:?}", entries);
+        debug!("Available k8s volumes: {:?}", entries);
 
         Ok(Response::new(ListVolumesResponse {
             entries,
@@ -667,7 +667,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let pools: Vec<Pool> = if let Some(node) = node {
             debug!("Calculating pool capacity for node {}", node);
-            MayastorApiClient::get_client()
+            IoEngineApiClient::get_client()
                 .get_node_pools(node)
                 .await
                 .map_err(|e| {
@@ -678,7 +678,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 })?
         } else {
             debug!("Calculating overall pool capacity");
-            MayastorApiClient::get_client()
+            IoEngineApiClient::get_client()
                 .list_pools()
                 .await
                 .map_err(|e| {
