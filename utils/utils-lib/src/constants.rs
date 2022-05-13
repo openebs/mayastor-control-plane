@@ -15,7 +15,7 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
 /// Mayastor container image used for testing
-pub const DATA_PLANE_IMAGE: &str = "mayadata/mayastor:develop";
+pub const DATA_PLANE_IMAGE: &str = "mayadata/mayastor-io-engine:develop";
 
 /// IO-Engine node selector label key.
 pub const IO_ENGINE_SELECTOR_KEY: &str = "openebs.io/engine";

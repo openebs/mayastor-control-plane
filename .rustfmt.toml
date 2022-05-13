@@ -13,5 +13,5 @@ edition = "2018"
 
 ignore = [
     "openapi",
-    "utils/mayastor-dependencies"
+    "utils/dependencies"
 ]

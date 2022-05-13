@@ -1,5 +1,5 @@
 [patch.crates-io]
-h2 = { path = "./utils/mayastor-dependencies/h2" }
+h2 = { path = "./utils/dependencies/h2" }
 
 [profile.dev]
 panic = "abort"
@@ -22,11 +22,11 @@ members = [
     "utils/utils-lib",
     "utils/pstor-usage",
     "utils/shutdown",
-    "utils/mayastor-dependencies/composer",
-    "utils/mayastor-dependencies/devinfo",
-    "utils/mayastor-dependencies/nvmeadm",
-    "utils/mayastor-dependencies/sysfs",
-    "utils/mayastor-dependencies/version-info",
+    "utils/dependencies/composer",
+    "utils/dependencies/devinfo",
+    "utils/dependencies/nvmeadm",
+    "utils/dependencies/sysfs",
+    "utils/dependencies/version-info",
     # Test io-engine through the rest api
     "tests/io-engine",
 ]

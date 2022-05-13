@@ -1025,6 +1025,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "backtrace",
+ "chrono",
  "common-lib",
  "composer",
  "deployer",
@@ -1034,6 +1035,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "rpc",
+ "serde_json",
  "structopt",
  "tokio",
  "tonic",
@@ -3343,6 +3345,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "clap 3.1.18",
  "ctrlp-tests",
  "gag",
@@ -3354,6 +3357,7 @@ dependencies = [
  "opentelemetry-jaeger",
  "prettytable-rs",
  "serde",
+ "serde_derive",
  "serde_json",
  "serde_yaml",
  "shutdown_hooks",
@@ -3364,6 +3368,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
  "utils",
+ "uuid",
 ]
 
 [[package]]

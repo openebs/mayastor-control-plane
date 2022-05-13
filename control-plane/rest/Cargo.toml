@@ -47,7 +47,7 @@ grpc = { path = "../grpc" }
 
 [dev-dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
-composer = { path = "../../utils/mayastor-dependencies/composer", default-features = false }
+composer = { path = "../../utils/dependencies/composer", default-features = false }
 ctrlp-tests = { path = "../../tests/io-engine" }
 
 [dependencies.serde]
