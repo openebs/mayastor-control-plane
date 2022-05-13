@@ -17,7 +17,7 @@ async fn setup() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_pools(1)
         .build()
         .await

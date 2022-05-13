@@ -150,7 +150,7 @@ VOLUME_SIZE = 10485761
 
 @pytest.fixture(scope="module")
 def background():
-    Deployer.start(2, node_deadline="250ms", mayastor_env="MAYASTOR_HB_INTERVAL_SEC=0")
+    Deployer.start(2, node_deadline="250ms", io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0")
     yield
     Deployer.stop()
 

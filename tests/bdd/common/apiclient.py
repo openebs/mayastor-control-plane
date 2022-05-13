@@ -13,7 +13,7 @@ from openapi import configuration
 
 REST_SERVER = "http://localhost:8081/v0"
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-NODE_NAME = "mayastor-1"
+NODE_NAME = "io-engine-1"
 
 
 # Return a configuration which can be used for API calls.

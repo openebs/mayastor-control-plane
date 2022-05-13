@@ -93,7 +93,7 @@ def the_pool_should_be_created_successfully(pool_attempt):
 
 """" Implementations """
 
-POOL_NODE = "mayastor-1"
+POOL_NODE = "io-engine-1"
 POOL_NAME = "p0"
 POOL_DISK_COUNT = 2
 

@@ -22,9 +22,9 @@ pub const IO_ENGINE_SELECTOR_KEY: &str = "openebs.io/engine";
 /// IO-Engine node selector label value.
 pub const IO_ENGINE_SELECTOR_VALUE: &str = "io-engine";
 
-/// Mayastor environment variable that points to a mayastor binary
+/// Environment variable that points to an io-engine binary
 /// This must be in sync with shell.nix
-pub const DATA_PLANE_BINARY: &str = "MAYASTOR_BIN";
+pub const DATA_PLANE_BINARY: &str = "IO_ENGINE_BIN";
 
 /// The period at which a component updates its resource cache
 pub const CACHE_POLL_PERIOD: &str = "30s";

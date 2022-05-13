@@ -24,8 +24,8 @@ from openapi.model.node_status import NodeStatus
 POOL1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL2_UUID = "4cc6ee64-7232-497d-a26f-38284a444990"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-NODE1_NAME = "mayastor-1"
-NODE2_NAME = "mayastor-2"
+NODE1_NAME = "io-engine-1"
+NODE2_NAME = "io-engine-2"
 VOLUME_CTX_KEY = "volume"
 
 

@@ -273,7 +273,7 @@ mod tests {
         let cluster = ClusterBuilder::builder()
             .with_rest(true)
             .with_agents(vec!["core"])
-            .with_mayastors(1)
+            .with_io_engines(1)
             .with_tmpfs_pool(POOL_SIZE_BYTES)
             .with_cache_period("1s")
             .with_reconcile_period(reconcile_period, reconcile_period)

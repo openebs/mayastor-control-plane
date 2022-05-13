@@ -30,9 +30,9 @@ from openapi.exceptions import ApiException
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-POOL_NODE = "mayastor-3"
-TARGET_NODE_1 = "mayastor-1"
-TARGET_NODE_2 = "mayastor-2"
+POOL_NODE = "io-engine-3"
+TARGET_NODE_1 = "io-engine-1"
+TARGET_NODE_2 = "io-engine-2"
 FIO_RUNTIME = 10
 
 
@@ -106,7 +106,7 @@ def background():
     Deployer.start(
         3,
         cache_period="1s",
-        mayastor_env="NEXUS_NVMF_ANA_ENABLE=1,NEXUS_NVMF_RESV_ENABLE=1",
+        io_engine_env="NEXUS_NVMF_ANA_ENABLE=1,NEXUS_NVMF_RESV_ENABLE=1",
         agents_env="TEST_NEXUS_NVMF_ANA_ENABLE=1",
     )
 

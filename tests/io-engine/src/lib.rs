@@ -3,7 +3,7 @@ pub mod rest_client;
 use composer::{Builder, ComposeTest};
 use deployer_lib::{
     default_agents,
-    infra::{Components, Error, Mayastor},
+    infra::{Components, Error, IoEngine},
     StartOptions,
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
@@ -66,7 +66,7 @@ pub fn default_options() -> StartOptions {
     options
         .with_agents(default_agents().split(',').collect())
         .with_jaeger(true)
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_show_info(true)
         .with_build_all(true)
         .with_env_tags(vec!["CARGO_PKG_NAME"])
@@ -191,7 +191,7 @@ impl Cluster {
 
     /// node id for `index`
     pub fn node(&self, index: u32) -> message_bus::NodeId {
-        Mayastor::name(index, &self.builder.opts).into()
+        IoEngine::name(index, &self.builder.opts).into()
     }
 
     /// node ip for `index`
@@ -554,7 +554,7 @@ impl ClusterBuilder {
     #[must_use]
     pub fn with_pools(mut self, count: u32) -> Self {
         for _ in 0 .. count {
-            for node in 0 .. self.opts.mayastors {
+            for node in 0 .. self.opts.io_engines {
                 if let Some(pools) = self.pools.get_mut(&node) {
                     pools.push(PoolDisk::Malloc(100 * 1024 * 1024));
                 } else {
@@ -579,7 +579,7 @@ impl ClusterBuilder {
     /// Add a tmpfs img pool with `disk` to each mayastor node with the specified `size`
     #[must_use]
     pub fn with_tmpfs_pool(mut self, size: u64) -> Self {
-        for node in 0 .. self.opts.mayastors {
+        for node in 0 .. self.opts.io_engines {
             let disk = TmpDiskFile::new(&Uuid::new_v4().to_string(), size);
             if let Some(pools) = self.pools.get_mut(&node) {
                 pools.push(PoolDisk::Tmp(disk));
@@ -595,10 +595,10 @@ impl ClusterBuilder {
         self.replicas = Replica { count, size, share };
         self
     }
-    /// Specify `count` mayastors for the cluster
+    /// Specify `count` io_engines for the cluster
     #[must_use]
-    pub fn with_mayastors(mut self, count: u32) -> Self {
-        self.opts = self.opts.with_mayastors(count);
+    pub fn with_io_engines(mut self, count: u32) -> Self {
+        self.opts = self.opts.with_io_engines(count);
         self
     }
     /// Specify which agents to use
@@ -833,7 +833,7 @@ impl ClusterBuilder {
         for (node, i_pools) in &self.pools {
             for (pool_index, pool) in i_pools.iter().enumerate() {
                 let mut pool = Pool {
-                    node: Mayastor::name(*node, &self.opts),
+                    node: IoEngine::name(*node, &self.opts),
                     disk: pool.clone(),
                     index: (pool_index + 1) as u32,
                     replicas: vec![],

@@ -25,8 +25,8 @@ VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
 NUM_VOLUME_REPLICAS = 2
 
-MAYASTOR_1 = "mayastor-1"
-MAYASTOR_2 = "mayastor-2"
+IO_ENGINE_1 = "io-engine-1"
+IO_ENGINE_2 = "io-engine-2"
 
 POOL_DISK1 = "pdisk1.img"
 POOL1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
@@ -60,12 +60,12 @@ def init(create_pool_disk_images):
 
     # Create pools
     ApiClient.pools_api().put_node_pool(
-        MAYASTOR_1,
+        IO_ENGINE_1,
         POOL1_UUID,
         CreatePoolBody(["aio:///host/tmp/{}".format(POOL_DISK1)]),
     )
     ApiClient.pools_api().put_node_pool(
-        MAYASTOR_2,
+        IO_ENGINE_2,
         POOL2_UUID,
         CreatePoolBody(["aio:///host/tmp/{}".format(POOL_DISK2)]),
     )
@@ -73,7 +73,9 @@ def init(create_pool_disk_images):
     # Create and publish a volume on node 1
     request = CreateVolumeBody(VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE)
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
-    ApiClient.volumes_api().put_volume_target(VOLUME_UUID, MAYASTOR_1, Protocol("nvmf"))
+    ApiClient.volumes_api().put_volume_target(
+        VOLUME_UUID, IO_ENGINE_1, Protocol("nvmf")
+    )
 
     yield
     Deployer.stop()
@@ -89,7 +91,7 @@ def a_replica_which_is_managed_but_does_not_have_any_owners():
     """a replica which is managed but does not have any owners."""
 
     # Kill the Mayastor instance which does not host the nexus.
-    Docker.kill_container(MAYASTOR_2)
+    Docker.kill_container(IO_ENGINE_2)
 
     # Attempt to delete the volume. This will leave a replica behind on the node that is
     # inaccessible.
@@ -112,7 +114,7 @@ def the_replica_should_eventually_be_destroyed():
 
     # Restart the previously killed Mayastor instance. This makes the previously inaccessible
     # node accessible, allowing the garbage collector to delete the replica.
-    Docker.restart_container(MAYASTOR_2)
+    Docker.restart_container(IO_ENGINE_2)
     check_zero_replicas()
 
 

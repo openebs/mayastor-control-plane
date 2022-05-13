@@ -10,7 +10,7 @@ authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
 [dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
-ctrlp-tests = { path = "../../tests/tests-mayastor" }
+ctrlp-tests = { path = "../../tests/io-engine" }
 utils = { path = "../utils-lib" }
 anyhow = "1.0.52"
 structopt = "0.3.25"

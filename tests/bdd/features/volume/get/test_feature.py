@@ -37,7 +37,7 @@ NUM_VOLUME_REPLICAS = 1
 NUM_VOLUMES_KEY = "num_volumes"
 VOLUME_RESULTS_KEY = "volume_results"
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-NODE_NAME = "mayastor-1"
+NODE_NAME = "io-engine-1"
 PAGINATED_MAX_ENTRIES_KEY = "max_entries"
 PAGINATED_STARTING_TOKEN = "starting_token"
 

@@ -40,12 +40,14 @@ def a_published_selfhealing_volume():
         VOLUME_SIZE,
         topology=Topology(
             pool_topology=PoolTopology(
-                labelled=LabelledTopology(exclusion={}, inclusion={"node": MAYASTOR_2})
+                labelled=LabelledTopology(exclusion={}, inclusion={"node": IO_ENGINE_2})
             )
         ),
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
-    ApiClient.volumes_api().put_volume_target(VOLUME_UUID, MAYASTOR_1, Protocol("nvmf"))
+    ApiClient.volumes_api().put_volume_target(
+        VOLUME_UUID, IO_ENGINE_1, Protocol("nvmf")
+    )
 
 
 @when("its nexus target is faulted")
@@ -54,7 +56,7 @@ def its_nexus_target_is_faulted():
     # Stop remote mayastor instance, which should fault the volume nexus child
     # By Stopping instead of killing, the control plane should see the node is down due to the
     # DeRegister event.
-    Docker.stop_container(MAYASTOR_2)
+    Docker.stop_container(IO_ENGINE_2)
     check_target_faulted()
 
 
@@ -62,7 +64,7 @@ def its_nexus_target_is_faulted():
 def one_or_more_of_its_healthy_replicas_are_back_online():
     """one or more of its healthy replicas are back online."""
     # Brings back the mayastor instance, which should expose the replicas upon pool import
-    Docker.restart_container(MAYASTOR_2)
+    Docker.restart_container(IO_ENGINE_2)
     check_replicas_online()
 
 
@@ -84,8 +86,8 @@ VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
 NUM_VOLUME_REPLICAS = 1
 
-MAYASTOR_1 = "mayastor-1"
-MAYASTOR_2 = "mayastor-2"
+IO_ENGINE_1 = "io-engine-1"
+IO_ENGINE_2 = "io-engine-2"
 
 POOL_DISK1 = "cdisk1.img"
 POOL1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
@@ -116,9 +118,9 @@ def init(create_pool_disk_images):
 
     # Create pools
     ApiClient.pools_api().put_node_pool(
-        MAYASTOR_2,
+        IO_ENGINE_2,
         POOL2_UUID,
-        CreatePoolBody([f"aio:///host/tmp/{POOL_DISK2}"], labels={"node": MAYASTOR_2}),
+        CreatePoolBody([f"aio:///host/tmp/{POOL_DISK2}"], labels={"node": IO_ENGINE_2}),
     )
 
     yield

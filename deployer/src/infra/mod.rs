@@ -4,10 +4,10 @@ pub mod dns;
 mod elastic;
 mod empty;
 mod etcd;
+mod io_engine;
 mod jaeger;
 mod jsongrpc;
 mod kibana;
-mod mayastor;
 pub mod nats;
 mod rest;
 
@@ -422,7 +422,7 @@ impl_component! {
     Kibana,     1,
     Core,       3,
     Rest,       3,
-    Mayastor,   4,
+    IoEngine,   4,
     JsonGrpc,   5,
     Csi,        5,
 }

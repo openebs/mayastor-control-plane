@@ -31,7 +31,7 @@ VOLUME_SIZE = 10485761
 NUM_VOLUME_REPLICAS = 1
 CREATE_REQUEST_KEY = "create_request"
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-NODE_NAME = "mayastor-1"
+NODE_NAME = "io-engine-1"
 
 
 # This fixture will be automatically used by all tests.
@@ -84,14 +84,14 @@ def a_control_plane_a_mayastor_instance_and_a_pool():
 
     # Check all Mayastor instances are running
     try:
-        mayastors = docker_client.containers.list(
-            all=True, filters={"name": "mayastor"}
+        io_engines = docker_client.containers.list(
+            all=True, filters={"name": "io-engine"}
         )
     except docker.errors.NotFound:
         raise Exception("No Mayastor instances")
 
-    for mayastor in mayastors:
-        Docker.check_container_running(mayastor.attrs["Name"])
+    for io_engine in io_engines:
+        Docker.check_container_running(io_engine.attrs["Name"])
 
     # Check for a pool
     pool = ApiClient.pools_api().get_pool(POOL_UUID)
@@ -112,14 +112,14 @@ def a_create_operation_takes_longer_than_the_grpc_timeout():
     # than the gRPC timeout.
     docker_client = docker.from_env()
     try:
-        mayastors = docker_client.containers.list(
-            all=True, filters={"name": "mayastor"}
+        io_engines = docker_client.containers.list(
+            all=True, filters={"name": "io-engine"}
         )
     except docker.errors.NotFound:
         raise Exception("No Mayastor instances")
 
-    for mayastor in mayastors:
-        mayastor.kill()
+    for io_engine in io_engines:
+        io_engine.kill()
 
 
 @when("the number of suitable pools is less than the number of desired volume replicas")
@@ -152,7 +152,7 @@ def there_are_no_available_mayastor_instances():
     """there are no available Mayastor instances."""
     # Kill mayastor instance
     docker_client = docker.from_env()
-    container = docker_client.containers.get("mayastor-1")
+    container = docker_client.containers.get("io-engine-1")
     container.kill()
 
 
@@ -231,7 +231,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
     expected_replica_toplogy = {}
     for key, value in volume.state.replica_topology.items():
         expected_replica_toplogy[key] = ReplicaTopology(
-            ReplicaState("Online"), node="mayastor-1", pool=POOL_UUID
+            ReplicaState("Online"), node="io-engine-1", pool=POOL_UUID
         )
     expected_state = VolumeState(
         VOLUME_SIZE,

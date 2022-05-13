@@ -19,7 +19,7 @@ from openapi.model.volume_policy import VolumePolicy
 from common.csi import CsiHandle
 
 VOLUME_UUID = "f04e4756-999f-446f-8610-fbf879aff2a7"
-NODE1 = "mayastor-1"
+NODE1 = "io-engine-1"
 
 
 @scenario(
@@ -147,7 +147,7 @@ def setup():
 
     pool_api = ApiClient.pools_api()
     pool = pool_api.put_node_pool(
-        "mayastor-1",
+        "io-engine-1",
         "pool-1",
         CreatePoolBody(["malloc:///disk?size_mb=200"]),
     )

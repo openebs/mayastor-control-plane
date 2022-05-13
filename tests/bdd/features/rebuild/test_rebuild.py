@@ -26,9 +26,9 @@ from openapi.model.volume_policy import VolumePolicy
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
 NUM_VOLUME_REPLICAS = 2
-NODE_1_NAME = "mayastor-1"
-NODE_2_NAME = "mayastor-2"
-NODE_3_NAME = "mayastor-3"
+NODE_1_NAME = "io-engine-1"
+NODE_2_NAME = "io-engine-2"
+NODE_3_NAME = "io-engine-3"
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL_3_UUID = "4d471e62-ca17-44d1-a6d3-8820f6156c1a"
@@ -39,7 +39,7 @@ MAX_REBUILDS = 0  # Prevent all rebuilds
 @pytest.fixture(autouse=True)
 def init():
     Deployer.start(
-        mayastors="3",
+        io_engines="3",
         wait="10s",
         reconcile_period=f"{RECONCILE_PERIOD_SECS}s",
         cache_period="1s",

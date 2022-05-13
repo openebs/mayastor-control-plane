@@ -141,7 +141,7 @@ mod tests {
         let cluster = ClusterBuilder::builder()
             .with_rest(false)
             .with_agents(vec!["core"])
-            .with_mayastors(expected_nodes as u32)
+            .with_io_engines(expected_nodes as u32)
             .with_node_deadline("2s")
             .build()
             .await

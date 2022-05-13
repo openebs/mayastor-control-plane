@@ -23,7 +23,7 @@ async fn nexus() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_agents(vec!["core"])
-        .with_mayastors(2)
+        .with_io_engines(2)
         .with_pools(2)
         .build()
         .await

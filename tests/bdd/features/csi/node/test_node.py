@@ -20,7 +20,7 @@ from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
-NODE1 = "mayastor-1"
+NODE1 = "io-engine-1"
 VOLUME_SIZE = 32 * 1024 * 1024
 
 

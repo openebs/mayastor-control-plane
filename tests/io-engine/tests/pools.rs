@@ -153,7 +153,7 @@ async fn create_pool_idempotent_same_disk_different_query() {
 #[tokio::test]
 async fn create_pool_idempotent_different_nvmf_host() {
     let cluster = ClusterBuilder::builder()
-        .with_options(|opts| opts.with_mayastors(3))
+        .with_options(|opts| opts.with_io_engines(3))
         .build()
         .await
         .unwrap();

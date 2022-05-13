@@ -140,7 +140,7 @@ async fn create_nexus_local_replica() {
 async fn create_nexus_replicas() {
     let size = 10 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()
-        .with_mayastors(2)
+        .with_io_engines(2)
         .with_pools(1)
         .with_replicas(1, size, v0::Protocol::None)
         .build()
@@ -180,7 +180,9 @@ async fn create_nexus_replicas() {
 async fn create_nexus_replica_not_available() {
     let size = 10 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()
-        .with_mayastors(2)
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
         .with_pools(1)
         .with_replicas(1, size, v0::Protocol::None)
         .build()

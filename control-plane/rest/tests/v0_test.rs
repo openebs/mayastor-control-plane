@@ -376,7 +376,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .await
         .expect("Failed to get block devices");
 
-    test.stop("mayastor-1").await.unwrap();
+    test.stop("io-engine-1").await.unwrap();
     wait_until_node_not_online(&client, &mayastor1, Duration::from_secs(1)).await;
     node.state.as_mut().unwrap().status = models::NodeStatus::Unknown;
     assert_eq!(

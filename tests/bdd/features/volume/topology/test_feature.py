@@ -30,9 +30,9 @@ VOLUME_SIZE = 10485761
 NUM_VOLUME_REPLICAS = 1
 CREATE_REQUEST_KEY = "create_request"
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-NODE_1_NAME = "mayastor-1"
+NODE_1_NAME = "io-engine-1"
 POOL_2_UUID = "24d36c1a-3e6c-4e05-893d-917ec9f4c1bb"
-NODE_2_NAME = "mayastor-2"
+NODE_2_NAME = "io-engine-2"
 NUM_MAYASTORS = 2
 REPLICA_CONTEXT_KEY = "replica"
 REPLICA_ERROR = "replica_error"
@@ -138,15 +138,15 @@ def a_control_plane_two_mayastor_instances_two_pools():
 
     # Check all Mayastor instances are running
     try:
-        mayastors = docker_client.containers.list(
-            all=True, filters={"name": "mayastor"}
+        io_engines = docker_client.containers.list(
+            all=True, filters={"name": "io-engine"}
         )
 
     except docker.errors.NotFound:
         raise Exception("No Mayastor instances")
 
-    for mayastor in mayastors:
-        Docker.check_container_running(mayastor.attrs["Name"])
+    for io_engine in io_engines:
+        Docker.check_container_running(io_engine.attrs["Name"])
 
     # Check for a pools
     pools = ApiClient.pools_api().get_pools()

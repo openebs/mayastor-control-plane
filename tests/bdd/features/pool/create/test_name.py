@@ -118,7 +118,7 @@ def the_pool_creation_should_succeed(context, attempt_create_valid_pool_p0):
 
 """" Implementations """
 
-POOL_NODE = "mayastor-1"
+POOL_NODE = "io-engine-1"
 POOL_NAME_P0 = "p0"
 POOL_NAME_P1 = "p1"
 
