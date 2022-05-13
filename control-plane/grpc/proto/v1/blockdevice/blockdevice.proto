@@ -13,7 +13,7 @@ message BlockDevice {
   uint32 devmajor = 3;
   // minor device number
   uint32 devminor = 4;
-  // device model - useful for identifying mayastor devices
+  // device model - useful for identifying devices
   string model = 5;
   // official device path
   string devpath = 6;
@@ -62,7 +62,7 @@ message BlockDevices {
 }
 
 message GetBlockDevicesRequest {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // specifies whether to get all devices or only usable devices
   bool all = 2;

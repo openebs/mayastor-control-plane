@@ -23,7 +23,7 @@ fn init_tracing() {
     }
 }
 
-const NODE_NAME: &str = "mayastor-node";
+const NODE_NAME: &str = "io-engine-node";
 const POOL_NAME: &str = "test-pool";
 
 #[tokio::main]

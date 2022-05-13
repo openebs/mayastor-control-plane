@@ -40,7 +40,7 @@ async fn test_setup(auth: &bool) -> Cluster {
         .with_rest_auth(true, rest_jwk)
         .with_options(|o| o.with_jaeger(true))
         .with_agents(vec!["core", "jsongrpc"])
-        .with_mayastors(2)
+        .with_io_engines(2)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
@@ -84,18 +84,18 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let nodes = client.nodes_api().get_nodes().await.unwrap();
     info!("Nodes: {:#?}", nodes);
     assert_eq!(nodes.len(), 2);
-    let mayastor1 = cluster.node(0);
-    let mayastor2 = cluster.node(1);
+    let io_engine1 = cluster.node(0);
+    let io_engine2 = cluster.node(1);
 
-    let listed_node = client.nodes_api().get_node(mayastor1.as_str()).await;
+    let listed_node = client.nodes_api().get_node(io_engine1.as_str()).await;
     let mut node = models::Node {
-        id: mayastor1.to_string(),
+        id: io_engine1.to_string(),
         spec: Some(models::NodeSpec {
-            id: mayastor1.to_string(),
+            id: io_engine1.to_string(),
             grpc_endpoint: "10.1.0.7:10124".to_string(),
         }),
         state: Some(models::NodeState {
-            id: mayastor1.to_string(),
+            id: io_engine1.to_string(),
             grpc_endpoint: "10.1.0.7:10124".to_string(),
             status: models::NodeStatus::Online,
         }),
@@ -106,7 +106,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let pool = client
         .pools_api()
         .put_node_pool(
-            mayastor1.as_str(),
+            io_engine1.as_str(),
             "pooloop",
             models::CreatePoolBody::new(vec![
                 "malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0",
@@ -120,8 +120,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         pool,
         models::Pool::new_all(
             "pooloop",
-            models::PoolSpec::new(vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", &mayastor1, models::SpecStatus::Created),
-            models::PoolState::new(100663296u64, vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", &mayastor1, models::PoolStatus::Online, 0u64)
+            models::PoolSpec::new(vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", &io_engine1, models::SpecStatus::Created),
+            models::PoolState::new(100663296u64, vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", &io_engine1, models::PoolStatus::Online, 0u64)
         )
     );
 
@@ -133,7 +133,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let pool = client
         .pools_api()
         .put_node_pool(
-            mayastor2.as_str(),
+            io_engine2.as_str(),
             "pooloop2",
             models::CreatePoolBody::new(vec![
                 "malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b1",
@@ -195,7 +195,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let nexus = client
         .nexuses_api()
         .put_node_nexus(
-            mayastor1.as_str(),
+            io_engine1.as_str(),
             &NexusId::try_from("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
             models::CreateNexusBody::new(
                 vec!["malloc:///malloc1?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"],
@@ -209,7 +209,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     assert_eq!(
         nexus,
         models::Nexus {
-            node: mayastor1.to_string(),
+            node: io_engine1.to_string(),
             uuid: NexusId::try_from("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap().into(),
             size: 12582912,
             state: models::NexusState::Online,
@@ -278,7 +278,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .volumes_api()
         .put_volume_target(
             &volume.state.uuid,
-            mayastor1.as_str(),
+            io_engine1.as_str(),
             models::VolumeShareProtocol::Nvmf,
         )
         .await
@@ -366,23 +366,27 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     client
         .json_grpc_api()
-        .put_node_jsongrpc(mayastor1.as_str(), "rpc_get_methods", serde_json::json!({}))
+        .put_node_jsongrpc(
+            io_engine1.as_str(),
+            "rpc_get_methods",
+            serde_json::json!({}),
+        )
         .await
         .expect("Failed to call JSON gRPC method");
 
     client
         .block_devices_api()
-        .get_node_block_devices(mayastor1.as_str(), Some(false))
+        .get_node_block_devices(io_engine1.as_str(), Some(false))
         .await
         .expect("Failed to get block devices");
 
     test.stop("io-engine-1").await.unwrap();
-    wait_until_node_not_online(&client, &mayastor1, Duration::from_secs(1)).await;
+    wait_until_node_not_online(&client, &io_engine1, Duration::from_secs(1)).await;
     node.state.as_mut().unwrap().status = models::NodeStatus::Unknown;
     assert_eq!(
         client
             .nodes_api()
-            .get_node(mayastor1.as_str())
+            .get_node(io_engine1.as_str())
             .await
             .unwrap(),
         node

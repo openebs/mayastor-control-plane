@@ -302,7 +302,7 @@ mod tests {
         volumes_api
             .del_volume_target(&volume.spec.uuid, Some(false))
             .await
-            .expect_err("Mayastor is down");
+            .expect_err("io-engine is down");
         cluster.composer().kill(&node).await.unwrap();
 
         let volume = volumes_api.get_volume(&volume.spec.uuid).await.unwrap();

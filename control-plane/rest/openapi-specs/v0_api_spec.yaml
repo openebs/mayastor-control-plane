@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Mayastor RESTful API
+  title: IoEngine RESTful API
   version: v0
 servers:
   - url: /v0
@@ -1331,7 +1331,7 @@ paths:
       operationId: put_volume_target
       description: |-
         Create a volume target connectable for front-end IO from the specified node.
-        Due to a limitation, this must currently be a mayastor storage node.
+        Due to a limitation, this must currently be an io-engine storage node.
       parameters:
         - in: path
           name: volume_id
@@ -1623,7 +1623,7 @@ components:
             - mountpoint
             - uuid
         model:
-          description: device model - useful for identifying mayastor devices
+          description: device model - useful for identifying devices
           type: string
         partition:
           example:
@@ -1970,7 +1970,7 @@ components:
              Missing property and empty string are treated the same.
           type: string
         node:
-          description: id of the mayastor instance
+          description: id of the io-engine instance
           type: string
         rebuilds:
           description: total number of rebuild tasks
@@ -2010,11 +2010,11 @@ components:
       example:
         grpcEndpoint: '10.1.0.5:10124'
         id: io-engine-1
-      description: mayastor storage node information
+      description: io-engine storage node information
       type: object
       properties:
         grpcEndpoint:
-          description: gRPC endpoint of the mayastor instance
+          description: gRPC endpoint of the io-engine instance
           type: string
         id:
           $ref: '#/components/schemas/NodeId'
@@ -2026,11 +2026,11 @@ components:
         grpcEndpoint: '10.1.0.5:10124'
         id: io-engine-1
         status: Online
-      description: mayastor storage node information
+      description: io-engine storage node information
       type: object
       properties:
         grpcEndpoint:
-          description: gRPC endpoint of the mayastor instance
+          description: gRPC endpoint of the io-engine instance
           type: string
         id:
           $ref: '#/components/schemas/NodeId'
@@ -2041,7 +2041,7 @@ components:
         - id
         - status
     Node:
-      description: mayastor storage node information
+      description: io-engine storage node information
       type: object
       properties:
         id:
@@ -2074,7 +2074,7 @@ components:
         - id
       minProperties: 2
     PoolState:
-      description: State of a pool, as reported by mayastor
+      description: State of a pool, as reported by io-engine
       type: object
       properties:
         capacity:

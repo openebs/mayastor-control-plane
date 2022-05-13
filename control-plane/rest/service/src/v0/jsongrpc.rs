@@ -14,7 +14,7 @@ impl apis::actix_server::JsonGrpc for RestApi {
     // # Example
     // To create a malloc bdev:
     // ```
-    //  curl -X PUT "https://localhost:8080/v0/nodes/mayastor/jsongrpc/bdev_malloc_create" \
+    //  curl -X PUT "https://localhost:8080/v0/nodes/io-engine/jsongrpc/bdev_malloc_create" \
     //  -H "accept: application/json" -H "Content-Type: application/json" \
     //  -d '{"block_size": 512, "num_blocks": 64, "name": "Malloc0"}'
     // ```

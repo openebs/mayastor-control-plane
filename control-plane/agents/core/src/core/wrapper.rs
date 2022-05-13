@@ -202,7 +202,7 @@ impl NodeWrapper {
 
         let mut ctx = self.grpc_client_timeout(timeouts).await?;
         let _ = ctx
-            .mayastor
+            .io_engine
             .get_mayastor_info(rpc::mayastor::Null {})
             .await
             .map_err(|_| SvcError::NodeNotOnline {
@@ -376,7 +376,7 @@ impl NodeWrapper {
         self.status() == NodeStatus::Online
     }
 
-    /// Load the node by fetching information from mayastor
+    /// Load the node by fetching information from io-engine
     pub(crate) async fn load(&mut self) -> Result<(), SvcError> {
         tracing::info!(
             "Preloading node '{}' on endpoint '{}'",
@@ -404,7 +404,7 @@ impl NodeWrapper {
         }
     }
 
-    /// Update the node by updating its state from the states fetched from mayastor
+    /// Update the node by updating its state from the states fetched from io-engine
     fn update(
         &mut self,
         setting_online: bool,
@@ -534,7 +534,7 @@ impl NodeStateFetcher {
     fn id(&self) -> &NodeId {
         self.node_state.id()
     }
-    /// Fetch the various resources from Mayastor.
+    /// Fetch the various resources from the Io Engine.
     async fn fetch_resources(
         &self,
         client: &mut GrpcClient,
@@ -552,7 +552,7 @@ impl NodeStateFetcher {
     ) -> Result<Vec<Replica>, SvcError> {
         let rpc_replicas =
             client
-                .mayastor
+                .io_engine
                 .list_replicas_v2(Null {})
                 .await
                 .context(GrpcRequestError {
@@ -579,7 +579,7 @@ impl NodeStateFetcher {
         client: &mut GrpcClient,
     ) -> Result<Vec<PoolState>, SvcError> {
         let rpc_pools = client
-            .mayastor
+            .io_engine
             .list_pools(Null {})
             .await
             .context(GrpcRequestError {
@@ -600,7 +600,7 @@ impl NodeStateFetcher {
     ) -> Result<Vec<Nexus>, SvcError> {
         let rpc_nexuses =
             client
-                .mayastor
+                .io_engine
                 .list_nexus_v2(Null {})
                 .await
                 .context(GrpcRequestError {
@@ -622,7 +622,7 @@ impl NodeStateFetcher {
     }
 }
 
-/// CRUD Operations on a locked mayastor `NodeWrapper` such as:
+/// CRUD Operations on a locked io-engine `NodeWrapper` such as:
 /// pools, replicas, nexuses and their children
 #[async_trait]
 pub(crate) trait ClientOps {
@@ -659,7 +659,7 @@ pub(crate) trait ClientOps {
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError>;
 }
 
-/// Internal Operations on a mayastor locked `NodeWrapper` for the implementor
+/// Internal Operations on a io-engine locked `NodeWrapper` for the implementor
 /// of the `ClientOps` trait and the `Registry` itself
 #[async_trait]
 pub(crate) trait InternalOps {
@@ -678,7 +678,7 @@ pub(crate) trait InternalOps {
     async fn on_register(&self) -> Result<bool, SvcError>;
 }
 
-/// Getter operations on a mayastor locked `NodeWrapper` to get copies of its
+/// Getter operations on a io-engine locked `NodeWrapper` to get copies of its
 /// resources, such as pools, replicas and nexuses
 #[async_trait]
 pub(crate) trait GetterOps {
@@ -798,7 +798,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_pool =
-            ctx.mayastor
+            ctx.io_engine
                 .create_pool(request.to_rpc())
                 .await
                 .context(GrpcRequestError {
@@ -815,7 +815,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .mayastor
+            .io_engine
             .destroy_pool(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -837,7 +837,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         }
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_replica = ctx
-            .mayastor
+            .io_engine
             .create_replica_v2(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -856,7 +856,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let share = ctx
-            .mayastor
+            .io_engine
             .share_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -874,7 +874,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let local_uri = ctx
-            .mayastor
+            .io_engine
             .share_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -892,7 +892,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .mayastor
+            .io_engine
             .destroy_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -905,7 +905,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         if let Some(replica) = self.read().await.replica(&request.uuid) {
             if replica.pool == request.pool {
                 return Err(SvcError::Internal {
-                    details: "replica was not destroyed by mayastor".to_string(),
+                    details: "replica was not destroyed by the io-engine".to_string(),
                 });
             }
         }
@@ -923,7 +923,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         }
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let rpc_nexus = ctx
-            .mayastor
+            .io_engine
             .create_nexus_v2(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -943,7 +943,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .mayastor
+            .io_engine
             .destroy_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -958,14 +958,14 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Share a nexus on the node via gRPC
     async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let share =
-            ctx.mayastor
-                .publish_nexus(request.to_rpc())
-                .await
-                .context(GrpcRequestError {
-                    resource: ResourceKind::Nexus,
-                    request: "publish_nexus",
-                })?;
+        let share = ctx
+            .io_engine
+            .publish_nexus(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Nexus,
+                request: "publish_nexus",
+            })?;
         let share = share.into_inner().device_uri;
         let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
         self.update_nexus_states(ctx.deref_mut()).await?;
@@ -976,7 +976,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
         let _ = ctx
-            .mayastor
+            .io_engine
             .unpublish_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -991,7 +991,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Add a child to a nexus via gRPC
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let result = ctx.mayastor.add_child_nexus(request.to_rpc()).await;
+        let result = ctx.io_engine.add_child_nexus(request.to_rpc()).await;
         let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
         self.update_nexus_states(ctx.deref_mut()).await?;
         let rpc_child = match result {
@@ -1023,7 +1023,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Remove a child from its parent nexus via gRPC
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
         let mut ctx = self.grpc_client_locked(request.id()).await?;
-        let result = ctx.mayastor.remove_child_nexus(request.to_rpc()).await;
+        let result = ctx.io_engine.remove_child_nexus(request.to_rpc()).await;
 
         let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
         self.update_nexus_states(ctx.deref_mut()).await?;

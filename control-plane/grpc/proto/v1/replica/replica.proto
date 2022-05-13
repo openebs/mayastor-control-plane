@@ -7,7 +7,7 @@ package v1.replica;
 
 // Replica information
 message Replica{
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   string name = 2;
@@ -46,7 +46,7 @@ enum ReplicaStatus {
 
 // Create Replica Request
 message CreateReplicaRequest{
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;
@@ -74,7 +74,7 @@ message ReplicaOwners {
 
 // Destroy Replica Request
 message DestroyReplicaRequest{
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;
@@ -87,7 +87,7 @@ message DestroyReplicaRequest{
 }
 
 message ShareReplicaRequest {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;
@@ -105,7 +105,7 @@ enum ReplicaShareProtocol{
 }
 
 message UnshareReplicaRequest {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;

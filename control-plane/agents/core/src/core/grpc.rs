@@ -83,8 +83,8 @@ impl GrpcContext {
 pub(crate) struct GrpcClient {
     #[allow(dead_code)]
     context: GrpcContext,
-    /// gRPC Mayastor Client
-    pub(crate) mayastor: MayaClient,
+    /// gRPC IoEngine Client
+    pub(crate) io_engine: MayaClient,
 }
 pub(crate) type MayaClient = MayastorClient<Channel>;
 impl GrpcClient {
@@ -108,7 +108,7 @@ impl GrpcClient {
 
         Ok(Self {
             context: context.clone(),
-            mayastor: client,
+            io_engine: client,
         })
     }
 }

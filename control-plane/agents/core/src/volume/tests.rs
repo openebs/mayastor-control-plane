@@ -428,7 +428,7 @@ async fn unused_reconcile(cluster: &Cluster) {
     // (because we'll add a replica a rebuild)
     wait_till_volume_status(cluster, &volume.spec.uuid, models::VolumeStatus::Online).await;
 
-    // 6. Bring back the mayastor and the original nexus and replica should be deleted
+    // 6. Bring back the io-engine and the original nexus and replica should be deleted
     cluster.composer().start(&nexus_node.id).await.unwrap();
     let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
@@ -474,8 +474,8 @@ async fn wait_till_replica_disowned(cluster: &Cluster, replica_id: Uuid) {
     }
 }
 
-/// Creates a volume nexus on a mayastor instance, which will have both spec and state.
-/// Stops/Kills the mayastor container. At some point we will have no nexus state, because the node
+/// Creates a volume nexus on a node, which will have both spec and state.
+/// Stop/Kill the io-engine container. At some point we will have no nexus state, because the node
 /// is gone. We then restart the node and the volume nexus reconciler will then recreate the nexus!
 /// At this point, we'll have a state again and the volume will be Online!
 async fn missing_nexus_reconcile(cluster: &Cluster) {

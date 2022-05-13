@@ -1,11 +1,11 @@
-//! Registry containing all mayastor instances which register themselves via the
+//! Registry containing all io-engine instances which register themselves via the
 //! `Register` Message.
 //! Said instances may also send `Deregister` to unregister themselves
 //! during node/pod shutdown/restart. When this happens the node state is
 //! set as `Unknown`. It's TBD how to detect when a node is really going
 //! away for good.
 //!
-//! A mayastor instance sends `Register` every N seconds as sort of a keep
+//! An io-engine instance sends `Register` every N seconds as sort of a keep
 //! alive message.
 //! A watchful watchdog is started for each node and it will change the
 //! state of said node to `Offline` if it is not petted before its
@@ -37,7 +37,7 @@ use std::{
 };
 use tokio::sync::{Mutex, RwLock};
 
-/// Registry containing all mayastor instances (aka nodes)
+/// Registry containing all io-engine instances (aka nodes)
 #[derive(Clone, Debug)]
 pub struct Registry {
     inner: Arc<RegistryInner<Etcd>>,

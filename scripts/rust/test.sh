@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 cleanup_handler() {
-  for c in $(docker ps -a --filter "label=io.mayastor.test.name" --format '{{.ID}}') ; do
+  for c in $(docker ps -a --filter "label=io.deployer.test.name" --format '{{.ID}}') ; do
     docker kill "$c" || true
     docker rm -v "$c" || true
   done
 
-  for n in $(docker network ls --filter "label=io.mayastor.test.name" --format '{{.ID}}') ; do
+  for n in $(docker network ls --filter "label=io.deployer.test.name" --format '{{.ID}}') ; do
     docker network rm "$n" || true
   done
 }

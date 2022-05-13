@@ -418,18 +418,18 @@ impl TmpDiskFile {
             inner: std::sync::Arc::new(TmpDiskFileInner::new(name, size)),
         }
     }
-    /// Disk URI to be used by mayastor
+    /// Disk URI to be used by the dataplane
     pub fn uri(&self) -> &str {
         self.inner.uri()
     }
 }
 impl TmpDiskFileInner {
     fn new(name: &str, size: u64) -> Self {
-        let path = format!("/tmp/mayastor-{}", name);
+        let path = format!("/tmp/io-engine-disk-{}", name);
         let file = std::fs::File::create(&path).expect("to create the tmp file");
         file.set_len(size).expect("to truncate the tmp file");
         Self {
-            // mayastor is setup with a bind mount from /tmp to /host/tmp
+            // the io-engine is setup with a bind mount from /tmp to /host/tmp
             uri: format!(
                 "aio:///host{}?blk_size=512&uuid={}",
                 path,
@@ -576,7 +576,7 @@ impl ClusterBuilder {
         }
         self
     }
-    /// Add a tmpfs img pool with `disk` to each mayastor node with the specified `size`
+    /// Add a tmpfs img pool with `disk` to each io-engine node with the specified `size`
     #[must_use]
     pub fn with_tmpfs_pool(mut self, size: u64) -> Self {
         for node in 0 .. self.opts.io_engines {

@@ -14,7 +14,7 @@ pub(super) struct JsonGrpcSvc {}
 
 /// JSON gRPC service implementation
 impl JsonGrpcSvc {
-    /// Generic JSON gRPC call issued to Mayastor using the JsonRpcClient.
+    /// Generic JSON gRPC call issued to the IoEngine using the JsonRpcClient.
     pub(super) async fn json_grpc_call(
         request: &JsonGrpcRequest,
     ) -> Result<serde_json::Value, SvcError> {

@@ -38,14 +38,12 @@ pub(crate) struct CliArgs {
     #[structopt(long, default_value = "10s")]
     pub(crate) reconcile_period: humantime::Duration,
 
-    /// Deadline for the mayastor instance keep alive registration
-    /// Default: 10s
+    /// Deadline for the io-engine instance keep alive registration
     #[structopt(long, short, default_value = "10s")]
     pub(crate) deadline: humantime::Duration,
 
     /// The Persistent Store URLs to connect to
     /// (supports the http/https schema)
-    /// Default: http://localhost:2379
     #[structopt(long, short, default_value = "http://localhost:2379")]
     pub(crate) store: String,
 

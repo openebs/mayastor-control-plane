@@ -274,7 +274,7 @@ impl Service {
         let mut client = grpc.connect().await?;
 
         let result = client
-            .mayastor
+            .io_engine
             .list_block_devices(ListBlockDevicesRequest { all: request.all })
             .await;
 

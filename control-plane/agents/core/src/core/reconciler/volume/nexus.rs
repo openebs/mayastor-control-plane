@@ -15,7 +15,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 /// Volume nexus reconciler
-/// When mayastor instances restart they come up "empty" and so we need to recreate
+/// When io-engine instances restart they come up "empty" and so we need to recreate
 /// any previously created nexuses
 #[derive(Debug)]
 pub(super) struct VolumeNexusReconciler {}

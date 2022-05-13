@@ -210,7 +210,7 @@ impl From<Replicas> for replica::Replicas {
 /// CreateReplicaInfo trait for the replica creation to be implemented by entities which want to
 /// avail this operation
 pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
-    /// Id of the mayastor instanc
+    /// Id of the IoEngine instanc
     fn node(&self) -> NodeId;
     /// Name of the replica
     fn name(&self) -> Option<ReplicaName>;
@@ -347,7 +347,7 @@ impl ValidateRequestTypes for CreateReplicaRequest {
 /// DestroyReplicaInfo trait for the replica deletion to be implemented by entities which want to
 /// avail this operation
 pub trait DestroyReplicaInfo: Send + Sync + std::fmt::Debug {
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node(&self) -> NodeId;
     /// Id of the pool
     fn pool(&self) -> PoolId;
@@ -433,7 +433,7 @@ impl ValidateRequestTypes for DestroyReplicaRequest {
 /// ShareReplicaInfo trait for the replica sharing to be implemented by entities which want to avail
 /// this operation
 pub trait ShareReplicaInfo: Send + Sync + std::fmt::Debug {
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node(&self) -> NodeId;
     /// Id of the pool
     fn pool(&self) -> PoolId;
@@ -520,7 +520,7 @@ impl ValidateRequestTypes for ShareReplicaRequest {
 /// UnshareReplicaInfo trait for the replica sharing to be implemented by entities which want to
 /// avail this operation
 pub trait UnshareReplicaInfo: Send + Sync + std::fmt::Debug {
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node(&self) -> NodeId;
     /// Id of the pool
     fn pool(&self) -> PoolId;
