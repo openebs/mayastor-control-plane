@@ -26,10 +26,10 @@ impl From<Child> for models::Child {
     }
 }
 
-bus_impl_string_id_percent_decoding!(ChildUri, "URI of a mayastor nexus child");
+bus_impl_string_id_percent_decoding!(ChildUri, "URI of a nexus child");
 
 impl ChildUri {
-    /// Get the mayastor bdev uuid from the ChildUri
+    /// Get the io-engine bdev uuid from the ChildUri
     pub fn uuid_str(&self) -> Option<String> {
         match url::Url::from_str(self.as_str()) {
             Ok(url) => {

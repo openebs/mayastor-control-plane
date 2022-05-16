@@ -31,7 +31,7 @@ use grpc::{
         replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
     },
 };
-use rpc::mayastor::RpcHandle;
+use rpc::io_engine::RpcHandle;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},

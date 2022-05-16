@@ -1,5 +1,5 @@
 use super::*;
-use rpc::mayastor::RpcHandle;
+use rpc::io_engine::RpcHandle;
 use std::net::{IpAddr, SocketAddr};
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
@@ -67,8 +67,8 @@ impl ComponentAction for IoEngine {
             let container_ip = cfg.container_ip_as_ref(&name);
             let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
             let mut hdl = RpcHandle::connect(&name, socket).await?;
-            hdl.mayastor
-                .list_nexus(rpc::mayastor::Null {})
+            hdl.io_engine
+                .list_nexus(rpc::io_engine::Null {})
                 .await
                 .unwrap();
         }

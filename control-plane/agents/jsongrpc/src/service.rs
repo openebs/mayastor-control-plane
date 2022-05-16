@@ -2,11 +2,11 @@
 #![allow(clippy::unit_arg)]
 
 use crate::CORE_CLIENT;
-use ::rpc::mayastor::{JsonRpcReply, JsonRpcRequest};
+use ::rpc::io_engine::{JsonRpcReply, JsonRpcRequest};
 use common::errors::{JsonRpcDeserialise, NodeNotOnline, SvcError};
 use common_lib::types::v0::message_bus::{Filter, JsonGrpcRequest, Node, NodeId};
 use grpc::operations::node::traits::NodeOperations;
-use rpc::mayastor::json_rpc_client::JsonRpcClient;
+use rpc::io_engine::json_rpc_client::JsonRpcClient;
 use snafu::{OptionExt, ResultExt};
 
 #[derive(Clone, Default)]

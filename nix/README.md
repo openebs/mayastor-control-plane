@@ -34,4 +34,4 @@ Build environment for mayastor including all test and debug dependencies.
 It can be run with two arguments:
 
 * `--arg norust true`: to use your own rust toolchain.
-* `--arg nomayastor true`: to use your own mayastor binaries.
+* `--arg noengine true`: to use your own io-engine binaries.

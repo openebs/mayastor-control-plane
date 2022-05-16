@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! All the different messages which can be sent/received to/from the control
-//! plane services and mayastor
+//! plane services and io-engine
 //! We could split these out further into categories when they start to grow
 
 mod mbus_nats;

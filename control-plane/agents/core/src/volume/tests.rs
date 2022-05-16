@@ -18,7 +18,7 @@ use common_lib::{
     },
 };
 
-use rpc::mayastor::FaultNexusChildRequest;
+use rpc::io_engine::FaultNexusChildRequest;
 use testlib::{Cluster, ClusterBuilder};
 
 use common_lib::{
@@ -600,7 +600,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
 
     let fault_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .mayastor
+        .io_engine
         .fault_nexus_child(FaultNexusChildRequest {
             uuid: nexus.uuid.to_string(),
             uri: fault_child.clone(),
@@ -611,8 +611,8 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );
@@ -728,8 +728,8 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     // todo: this sometimes fails??
     // is the reconciler interleaving with the add_child_nexus?
     rpc_handle
-        .mayastor
-        .add_child_nexus(rpc::mayastor::AddChildNexusRequest {
+        .io_engine
+        .add_child_nexus(rpc::io_engine::AddChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: unknown_replica.clone(),
             norebuild: true,
@@ -740,8 +740,8 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );
@@ -801,8 +801,8 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 
     let missing_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .mayastor
-        .remove_child_nexus(rpc::mayastor::RemoveChildNexusRequest {
+        .io_engine
+        .remove_child_nexus(rpc::io_engine::RemoveChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: missing_child.clone(),
         })
@@ -812,8 +812,8 @@ async fn hotspare_missing_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );

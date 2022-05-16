@@ -19,7 +19,7 @@ use grpc::{
         registration::traits::{DeregisterInfo, RegisterInfo, RegistrationOperations},
     },
 };
-use rpc::mayastor::ListBlockDevicesRequest;
+use rpc::io_engine::ListBlockDevicesRequest;
 use snafu::ResultExt;
 use std::{collections::HashMap, sync::Arc};
 

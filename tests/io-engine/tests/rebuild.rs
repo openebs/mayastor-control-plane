@@ -137,8 +137,8 @@ async fn concurrent_rebuilds() {
                 for node in nodes {
                     if let Ok(mut handle) = cluster.grpc_handle(&node.id).await {
                         if handle
-                            .mayastor
-                            .list_nexus(rpc::mayastor::Null {})
+                            .io_engine
+                            .list_nexus(rpc::io_engine::Null {})
                             .await
                             .is_err()
                         {

@@ -10,7 +10,7 @@ fn main() {
             .expect("failed to execute git command ");
 
         if !output.status.success() {
-            panic!("submodule checkout failed");
+            panic!("API repository checkout failed");
         }
     }
 
@@ -18,7 +18,7 @@ fn main() {
         .build_server(false)
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .compile(&["api/protobuf/mayastor.proto"], &["api/protobuf"])
-        .unwrap_or_else(|e| panic!("mayastor protobuf compilation failed: {}", e));
+        .unwrap_or_else(|e| panic!("io-engine protobuf compilation failed: {}", e));
 
     tonic_build::configure()
         .build_server(true)

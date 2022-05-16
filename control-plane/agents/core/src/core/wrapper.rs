@@ -29,7 +29,7 @@ use common_lib::{
 use async_trait::async_trait;
 use common_lib::types::v0::{message_bus, store::ResourceUuid};
 use parking_lot::RwLock;
-use rpc::mayastor::Null;
+use rpc::io_engine::Null;
 use snafu::ResultExt;
 use std::{
     cmp::Ordering,
@@ -203,7 +203,7 @@ impl NodeWrapper {
         let mut ctx = self.grpc_client_timeout(timeouts).await?;
         let _ = ctx
             .io_engine
-            .get_mayastor_info(rpc::mayastor::Null {})
+            .get_mayastor_info(rpc::io_engine::Null {})
             .await
             .map_err(|_| SvcError::NodeNotOnline {
                 node: self.id().to_owned(),
@@ -1051,7 +1051,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 }
 
 /// convert rpc pool to a message bus pool
-fn rpc_pool_to_bus(rpc_pool: &rpc::mayastor::Pool, id: &NodeId) -> PoolState {
+fn rpc_pool_to_bus(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) -> PoolState {
     let mut pool = rpc_pool.to_mbus();
     pool.node = id.clone();
     pool
@@ -1059,7 +1059,7 @@ fn rpc_pool_to_bus(rpc_pool: &rpc::mayastor::Pool, id: &NodeId) -> PoolState {
 
 /// convert rpc replica to a message bus replica
 fn rpc_replica_to_bus(
-    rpc_replica: &rpc::mayastor::ReplicaV2,
+    rpc_replica: &rpc::io_engine::ReplicaV2,
     id: &NodeId,
 ) -> Result<Replica, SvcError> {
     let mut replica = rpc_replica.try_to_mbus()?;
@@ -1067,12 +1067,15 @@ fn rpc_replica_to_bus(
     Ok(replica)
 }
 
-fn rpc_nexus_v2_to_bus(rpc_nexus: &rpc::mayastor::NexusV2, id: &NodeId) -> Result<Nexus, SvcError> {
+fn rpc_nexus_v2_to_bus(
+    rpc_nexus: &rpc::io_engine::NexusV2,
+    id: &NodeId,
+) -> Result<Nexus, SvcError> {
     let mut nexus = rpc_nexus.try_to_mbus()?;
     nexus.node = id.clone();
     Ok(nexus)
 }
-fn rpc_nexus_to_bus(rpc_nexus: &rpc::mayastor::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
+fn rpc_nexus_to_bus(rpc_nexus: &rpc::io_engine::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
     let mut nexus = rpc_nexus.try_to_mbus()?;
     nexus.node = id.clone();
     Ok(nexus)
