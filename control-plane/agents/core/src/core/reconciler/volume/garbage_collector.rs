@@ -263,8 +263,8 @@ async fn is_replica_healthy(
 #[cfg(test)]
 mod tests {
     use common_lib::types::v0::openapi::models;
+    use deployer_cluster::ClusterBuilder;
     use std::time::Duration;
-    use testlib::ClusterBuilder;
 
     #[tokio::test]
     async fn disown_unused_replicas() {

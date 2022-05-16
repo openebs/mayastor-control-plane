@@ -48,5 +48,5 @@ opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-threa
 [dev-dependencies]
 # Test dependencies
 shutdown_hooks = "0.1.0"
-ctrlp-tests = { path = "../../tests/io-engine" }
+deployer-cluster = { path = "../../utils/deployer-cluster" }
 gag = "1.0.0"

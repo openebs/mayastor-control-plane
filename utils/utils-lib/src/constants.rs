@@ -14,8 +14,8 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 /// The lease lock ttl for the persistent store after which we'll lose the exclusive access
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
-/// Mayastor container image used for testing
-pub const DATA_PLANE_IMAGE: &str = "mayadata/mayastor-io-engine:develop";
+/// Io-Engine container image used for testing
+pub const IO_ENGINE_IMAGE: &str = "mayadata/mayastor-io-engine:develop";
 
 /// IO-Engine node selector label key.
 pub const IO_ENGINE_SELECTOR_KEY: &str = "openebs.io/engine";

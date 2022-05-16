@@ -136,7 +136,7 @@ impl Simulation {
         let (client, cluster) = match external_cluster {
             None => {
                 // cluster will be terminated on drop
-                let cluster = testlib::ClusterBuilder::builder()
+                let cluster = deployer_cluster::ClusterBuilder::builder()
                     .with_silence_test_traces()
                     .with_build(false)
                     .with_build_all(false)

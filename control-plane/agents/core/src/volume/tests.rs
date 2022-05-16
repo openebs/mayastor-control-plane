@@ -18,8 +18,8 @@ use common_lib::{
     },
 };
 
+use deployer_cluster::{Cluster, ClusterBuilder};
 use rpc::io_engine::FaultNexusChildRequest;
-use testlib::{Cluster, ClusterBuilder};
 
 use common_lib::{
     mbus_api::TimeoutOptions,

@@ -1,8 +1,8 @@
 #![feature(allow_fail)]
 
 use common_lib::{mbus_api::Message, types::v0::message_bus as v0};
+use deployer_cluster::{result_either, test_result, Cluster, ClusterBuilder};
 use openapi::models;
-use testlib::{result_either, test_result, Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn create_nexus_malloc() {

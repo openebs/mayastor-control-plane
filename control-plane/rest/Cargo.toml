@@ -48,7 +48,7 @@ grpc = { path = "../grpc" }
 [dev-dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
 composer = { path = "../../utils/dependencies/composer", default-features = false }
-ctrlp-tests = { path = "../../tests/io-engine" }
+deployer-cluster = { path = "../../utils/deployer-cluster" }
 
 [dependencies.serde]
 features = ["derive"]

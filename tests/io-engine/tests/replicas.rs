@@ -3,7 +3,7 @@
 use common_lib::types::v0::message_bus as v0;
 use grpc::operations::replica::traits::ReplicaOperations;
 
-use testlib::{result_either, test_result_grpc, ClusterBuilder};
+use deployer_cluster::{result_either, test_result_grpc, ClusterBuilder};
 
 // FIXME: CAS-721
 #[tokio::test]

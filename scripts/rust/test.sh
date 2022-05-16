@@ -17,7 +17,7 @@ set -euxo pipefail
 export PATH=$PATH:${HOME}/.cargo/bin
 # test dependencies
 cargo build --bins
-for test in grpc agents rest ctrlp-tests kubectl-plugin shutdown csi-driver; do
+for test in grpc agents rest io-engine-tests kubectl-plugin shutdown csi-driver; do
     cargo test -p ${test} -- --test-threads=1
 done
 cleanup_handler

@@ -11,12 +11,12 @@ use common_lib::{
         store::nexus::NexusSpec,
     },
 };
+use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     node::traits::NodeOperations, registry::traits::RegistryOperations,
     replica::traits::ReplicaOperations,
 };
 use std::{convert::TryFrom, time::Duration};
-use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn nexus() {

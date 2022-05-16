@@ -12,12 +12,12 @@ use common_lib::types::v0::{
         clients::tower::{Error, ResponseError},
     },
 };
+use deployer_cluster::{Cluster, ClusterBuilder};
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
     time::Duration,
 };
-use testlib::{Cluster, ClusterBuilder};
 use tracing::info;
 
 // Returns the path to the JWK file.

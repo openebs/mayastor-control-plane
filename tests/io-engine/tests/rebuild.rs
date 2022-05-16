@@ -1,8 +1,8 @@
+use deployer_cluster::{Cluster, ClusterBuilder};
 use openapi::{
     apis::{volumes_api, Url, Uuid},
     models,
 };
-use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn concurrent_rebuilds() {

@@ -16,6 +16,7 @@ use common_lib::{
         store::replica::ReplicaSpec,
     },
 };
+use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::{
     context::Context,
     operations::{
@@ -25,7 +26,6 @@ use grpc::{
 };
 use itertools::Itertools;
 use std::{convert::TryFrom, time::Duration};
-use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn pool() {
@@ -458,7 +458,7 @@ const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 /// point, we'll have a state again.
 #[tokio::test]
 async fn reconciler_missing_pool_state() {
-    let disk = testlib::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
+    let disk = deployer_cluster::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
 
     let cluster = ClusterBuilder::builder()
         .with_rest(true)

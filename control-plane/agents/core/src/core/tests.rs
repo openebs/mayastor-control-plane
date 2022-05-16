@@ -12,7 +12,7 @@ use common_lib::{
         },
     },
 };
-use testlib::{etcd_client::Client, *};
+use deployer_cluster::{etcd_client::Client, *};
 
 /// Test that the content of the registry is correctly loaded from the persistent store on start up.
 #[tokio::test]

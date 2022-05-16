@@ -9,8 +9,8 @@ use common_lib::{
         },
     },
 };
+use deployer_cluster::ClusterBuilder;
 use std::{thread::sleep, time::Duration};
-use testlib::ClusterBuilder;
 
 #[tokio::test]
 async fn test_disown_missing_owners() {

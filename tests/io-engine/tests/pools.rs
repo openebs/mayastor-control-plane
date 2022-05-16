@@ -1,9 +1,9 @@
 #![feature(allow_fail)]
 
 use common_lib::types::v0::message_bus as v0;
+use deployer_cluster::ClusterBuilder;
 use grpc::operations::pool::traits::PoolOperations;
 use openapi::models;
-use testlib::ClusterBuilder;
 
 #[tokio::test]
 async fn create_pool_malloc() {
