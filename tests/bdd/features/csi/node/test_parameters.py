@@ -34,9 +34,9 @@ def a_csi_node_plugin_with_io_queues_configured(io):
     """a csi node plugin with <IO> queues configured."""
 
 
-@given("a mayastor cluster")
-def a_mayastor_cluster(setup):
-    """a mayastor cluster."""
+@given("an io-engine cluster")
+def an_io_engine_cluster(setup):
+    """an io-engine cluster."""
 
 
 @when("staging a volume")

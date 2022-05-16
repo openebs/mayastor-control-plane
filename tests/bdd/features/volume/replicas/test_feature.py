@@ -28,7 +28,7 @@ NODE_1_NAME = "io-engine-1"
 NODE_2_NAME = "io-engine-2"
 NODE_3_NAME = "io-engine-3"
 VOLUME_SIZE = 10485761
-NUM_MAYASTORS = 3
+NUM_IO_ENGINES = 3
 NUM_VOLUME_REPLICAS = 2
 REPLICA_CONTEXT_KEY = "replica"
 
@@ -37,7 +37,7 @@ REPLICA_CONTEXT_KEY = "replica"
 # The deployer uses the default parameterisation.
 @pytest.fixture()
 def init():
-    Deployer.start(NUM_MAYASTORS)
+    Deployer.start(NUM_IO_ENGINES)
     init_resources()
     yield
     Deployer.stop()
@@ -48,7 +48,7 @@ def init():
 @pytest.fixture()
 def init_parameterised_deployer():
     # Shorten the reconcile periods and cache period to speed up the tests.
-    Deployer.start(NUM_MAYASTORS, reconcile_period="1s", cache_period="1s")
+    Deployer.start(NUM_IO_ENGINES, reconcile_period="1s", cache_period="1s")
     init_resources()
     yield
     Deployer.stop()
@@ -175,7 +175,7 @@ def a_user_attempts_to_increase_the_number_of_volume_replicas(replica_ctx):
 @when("the number of runtime replicas is 1")
 def the_number_of_runtime_replicas_is_1():
     """the number of runtime replicas is 1."""
-    # Stopping a mayastor instance will cause a replica to be faulted and removed from the volume.
+    # Stopping an io-engine instance will cause a replica to be faulted and removed from the volume.
     Docker.stop_container(NODE_2_NAME)
     # Wait for the replica to be removed from the volume.
     wait_for_volume_replica_count(1)

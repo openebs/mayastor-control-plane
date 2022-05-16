@@ -51,12 +51,12 @@ def a_client_connected_to_one_nexus_via_single_io_path(connect_to_first_path):
 
 
 @given(
-    "a control plane, 2 ANA-enabled Mayastor instances, 1 ANA-enabled host and a published volume"
+    "a control plane, 2 ANA-enabled Io-Engine instances, 1 ANA-enabled host and a published volume"
 )
-def a_control_plane_2_anaenabled_mayastor_instances_1_anaenabled_host_and_a_published_volume(
+def a_control_plane_2_anaenabled_io_engine_instances_1_anaenabled_host_and_a_published_volume(
     background,
 ):
-    """a control plane, 2 ANA-enabled Mayastor instances, 1 ANA-enabled host and a published volume."""
+    """a control plane, 2 ANA-enabled Io-Engine instances, 1 ANA-enabled host and a published volume."""
     volume = background
     assert hasattr(volume.state, "target")
     pass

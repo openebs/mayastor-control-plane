@@ -33,7 +33,7 @@ POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 NODE_1_NAME = "io-engine-1"
 POOL_2_UUID = "24d36c1a-3e6c-4e05-893d-917ec9f4c1bb"
 NODE_2_NAME = "io-engine-2"
-NUM_MAYASTORS = 2
+NUM_IO_ENGINES = 2
 REPLICA_CONTEXT_KEY = "replica"
 REPLICA_ERROR = "replica_error"
 
@@ -43,7 +43,7 @@ REPLICA_ERROR = "replica_error"
 # A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
 def init():
-    Deployer.start(NUM_MAYASTORS)
+    Deployer.start(NUM_IO_ENGINES)
     ApiClient.pools_api().put_node_pool(
         NODE_1_NAME,
         POOL_1_UUID,
@@ -127,23 +127,23 @@ def test_sufficient_suitable_pools_which_do_not_contain_volume_topology_labels()
     """sufficient suitable pools which do not contain volume topology labels."""
 
 
-@given("a control plane, two Mayastor instances, two pools")
-def a_control_plane_two_mayastor_instances_two_pools():
-    """a control plane, two Mayastor instances, two pools."""
+@given("a control plane, two Io-Engine instances, two pools")
+def a_control_plane_two_io_engine_instances_two_pools():
+    """a control plane, two Io-Engine instances, two pools."""
     docker_client = docker.from_env()
 
     # The control plane comprises the core agents, rest server and etcd instance.
     for component in ["core", "rest", "etcd"]:
         Docker.check_container_running(component)
 
-    # Check all Mayastor instances are running
+    # Check all Io-Engine instances are running
     try:
         io_engines = docker_client.containers.list(
             all=True, filters={"name": "io-engine"}
         )
 
     except docker.errors.NotFound:
-        raise Exception("No Mayastor instances")
+        raise Exception("No Io-Engine instances")
 
     for io_engine in io_engines:
         Docker.check_container_running(io_engine.attrs["Name"])

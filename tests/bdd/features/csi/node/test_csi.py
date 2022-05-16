@@ -132,7 +132,7 @@ def test_node_capabilities(csi_instance):
 
 
 @pytest.fixture(scope="module")
-def mayastor_volumes(setup):
+def volumes(setup):
     volumes = []
 
     for n in range(5):
@@ -186,16 +186,14 @@ def volume_id(fs_type):
 
 
 @pytest.fixture
-def mayastor_published_nexus(mayastor_volumes, share_type, volume_id):
+def published_nexus(volumes, share_type, volume_id):
     uuid = volume_id
     volume = ApiClient.volumes_api().put_volume_target(uuid, NODE1, Protocol("nvmf"))
     yield volume.state["target"]
     ApiClient.volumes_api().del_volume_target(volume.spec.uuid)
 
 
-def test_get_volume_stats(
-    csi_instance, mayastor_published_nexus, volume_id, target_path
-):
+def test_get_volume_stats(csi_instance, published_nexus, volume_id, target_path):
     with pytest.raises(grpc.RpcError) as error:
         csi_instance.node.NodeGetVolumeStats(
             pb.NodeGetVolumeStatsRequest(volume_id=volume_id, volume_path=target_path)
@@ -234,13 +232,13 @@ def publish_mount_flags(read_only):
 
 
 @pytest.fixture
-def stage_context(mayastor_published_nexus, io_timeout):
-    yield {"uri": mayastor_published_nexus["deviceUri"], "ioTimeout": io_timeout}
+def stage_context(published_nexus, io_timeout):
+    yield {"uri": published_nexus["deviceUri"], "ioTimeout": io_timeout}
 
 
 @pytest.fixture
-def publish_context(mayastor_published_nexus, volume_id):
-    yield {"uri": mayastor_published_nexus["deviceUri"]}
+def publish_context(published_nexus, volume_id):
+    yield {"uri": published_nexus["deviceUri"]}
 
 
 @pytest.fixture

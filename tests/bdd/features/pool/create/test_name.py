@@ -52,9 +52,9 @@ def test_recreating_an_unexported_pool_with_a_different_name_and_the_same_disk()
     """recreating a pool with a different name and the same disk."""
 
 
-@given("a control plane and Mayastor instances")
-def a_control_plane_and_mayastor_instances(background):
-    """a control plane and Mayastor instances."""
+@given("a control plane and Io-Engine instances")
+def a_control_plane_and_io_engine_instances(background):
+    """a control plane and Io-Engine instances."""
 
 
 @given('a pool named "p0"')
@@ -176,7 +176,7 @@ def a_pool_named_p0(context):
 
 @pytest.fixture
 def an_unexported_pool_named_p0(context):
-    # todo: Unexport pool first, just in case that affects the return code from mayastor
+    # todo: Unexport pool first, just in case that affects the return code from the io-engine
     pool = attempt_create_valid_pool(POOL_NAME_P0, POOL_NODE, context)
     pool_creation_succeeds(pool, context)
     yield pool

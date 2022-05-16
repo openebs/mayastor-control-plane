@@ -53,8 +53,8 @@ def create_request():
     return {}
 
 
-@scenario("feature.feature", "provisioning failure due to missing Mayastor")
-def test_provisioning_failure_due_to_missing_mayastor():
+@scenario("feature.feature", "provisioning failure due to missing Io-Engine")
+def test_provisioning_failure_due_to_missing_io_engine():
     """provisioning failure."""
 
 
@@ -73,22 +73,22 @@ def test_sufficient_suitable_pools():
     """sufficient suitable pools."""
 
 
-@given("a control plane, Mayastor instances and a pool")
-def a_control_plane_a_mayastor_instance_and_a_pool():
-    """a control plane, Mayastor instances and a pool."""
+@given("a control plane, Io-Engine instances and a pool")
+def a_control_plane_io_engine_instances_and_a_pool():
+    """a control plane, Io-Engine instances and a pool."""
     docker_client = docker.from_env()
 
     # The control plane comprises the core agents, rest server and etcd instance.
     for component in ["core", "rest", "etcd"]:
         Docker.check_container_running(component)
 
-    # Check all Mayastor instances are running
+    # Check all Io-Engine instances are running
     try:
         io_engines = docker_client.containers.list(
             all=True, filters={"name": "io-engine"}
         )
     except docker.errors.NotFound:
-        raise Exception("No Mayastor instances")
+        raise Exception("No Io-Engine instances")
 
     for io_engine in io_engines:
         Docker.check_container_running(io_engine.attrs["Name"])
@@ -108,7 +108,7 @@ def a_request_for_a_volume(create_request):
 @when("a create operation takes longer than the gRPC timeout")
 def a_create_operation_takes_longer_than_the_grpc_timeout():
     """a create operation takes longer than the gRPC timeout."""
-    # Delete the Mayastor instances to ensure the operation can't complete and so takes longer
+    # Delete the Io-Engine instances to ensure the operation can't complete and so takes longer
     # than the gRPC timeout.
     docker_client = docker.from_env()
     try:
@@ -116,7 +116,7 @@ def a_create_operation_takes_longer_than_the_grpc_timeout():
             all=True, filters={"name": "io-engine"}
         )
     except docker.errors.NotFound:
-        raise Exception("No Mayastor instances")
+        raise Exception("No Io-Engine instances")
 
     for io_engine in io_engines:
         io_engine.kill()
@@ -147,10 +147,10 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
     assert num_volume_replicas <= num_pools
 
 
-@when("there are no available Mayastor instances")
-def there_are_no_available_mayastor_instances():
-    """there are no available Mayastor instances."""
-    # Kill mayastor instance
+@when("there are no available Io-Engine instances")
+def there_are_no_available_io_engine_instances():
+    """there are no available Io-Engine instances."""
+    # Kill io-engine instance
     docker_client = docker.from_env()
     container = docker_client.containers.get("io-engine-1")
     container.kill()

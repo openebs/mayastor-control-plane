@@ -1,7 +1,7 @@
 Feature: Swap ANA enabled Nexus on ANA enabled host
 
   Background:
-    Given a control plane, 2 ANA-enabled Mayastor instances, 1 ANA-enabled host and a published volume
+    Given a control plane, 2 ANA-enabled Io-Engine instances, 1 ANA-enabled host and a published volume
 
   Scenario: replace failed I/O path on demand for NVMe controller
     Given a client connected to one nexus via single I/O path

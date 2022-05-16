@@ -26,9 +26,9 @@ def test_the_target_nexus_is_faulted():
     """the target nexus is faulted."""
 
 
-@given("a control plane, two Mayastor instances, two pools")
-def a_control_plane_two_mayastor_instances_two_pools(init):
-    """a control plane, two Mayastor instances, two pools."""
+@given("a control plane, two Io-Engine instances, two pools")
+def a_control_plane_two_io_engine_instances_two_pools(init):
+    """a control plane, two Io-Engine instances, two pools."""
 
 
 @given("a published self-healing volume")
@@ -53,7 +53,7 @@ def a_published_selfhealing_volume():
 @when("its nexus target is faulted")
 def its_nexus_target_is_faulted():
     """its nexus target is faulted."""
-    # Stop remote mayastor instance, which should fault the volume nexus child
+    # Stop remote io-engine instance, which should fault the volume nexus child
     # By Stopping instead of killing, the control plane should see the node is down due to the
     # DeRegister event.
     Docker.stop_container(IO_ENGINE_2)
@@ -63,7 +63,7 @@ def its_nexus_target_is_faulted():
 @when("one or more of its healthy replicas are back online")
 def one_or_more_of_its_healthy_replicas_are_back_online():
     """one or more of its healthy replicas are back online."""
-    # Brings back the mayastor instance, which should expose the replicas upon pool import
+    # Brings back the io-engine instance, which should expose the replicas upon pool import
     Docker.restart_container(IO_ENGINE_2)
     check_replicas_online()
 
@@ -97,7 +97,7 @@ POOL2_UUID = "4cc6ee64-7232-497d-a26f-38284a444990"
 
 @pytest.fixture(scope="function")
 def create_pool_disk_images():
-    # When starting Mayastor instances with the deployer a bind mount is created from /tmp to
+    # When starting Io-Engine instances with the deployer a bind mount is created from /tmp to
     # /host/tmp, so create disk images in /tmp
     for disk in [POOL_DISK1, POOL_DISK2]:
         path = f"/tmp/{disk}"

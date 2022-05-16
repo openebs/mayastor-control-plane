@@ -177,7 +177,7 @@ def io_timeout():
 
 
 @pytest.fixture(scope="module")
-def mayastor_volumes(setup):
+def volumes(setup):
     volumes = []
 
     for n in range(5):
@@ -312,7 +312,7 @@ def test_unstaging_a_single_writer_volume():
 
 
 @pytest.fixture
-def published_nexuses(setup, mayastor_volumes):
+def published_nexuses(setup, volumes):
     published = {}
     yield published
     for uuid in published.keys():
@@ -320,7 +320,7 @@ def published_nexuses(setup, mayastor_volumes):
 
 
 @pytest.fixture
-def publish_nexus(setup, mayastor_volumes, published_nexuses):
+def publish_nexus(setup, volumes, published_nexuses):
     def publish(uuid, protocol):
         volume = ApiClient.volumes_api().put_volume_target(
             uuid, NODE1, Protocol("nvmf")
@@ -394,13 +394,13 @@ def publish_volume(csi_instance, publish_nexus, published_volumes):
     yield publish
 
 
-@given("a mayastor instance")
-def get_mayastor_instance(setup):
+@given("an io-engine instance")
+def get_an_io_engine_instance(setup):
     pass
 
 
-@given("a mayastor-csi instance")
-def get_mayastor_csi_instance(csi_instance):
+@given("a csi-node instance")
+def get_a_csi_node__instance(csi_instance):
     pass
 
 

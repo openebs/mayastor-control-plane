@@ -1,8 +1,8 @@
 Feature: CSI node plugin
 
   Background:
-    Given a mayastor instance
-    And a mayastor-csi instance
+    Given an io-engine instance
+    And a csi-node instance
     And a nexus published via "nvmf"
 
   Scenario: stage volume request without specified volume_id

@@ -1,7 +1,7 @@
 Feature: Managing a Volume Nexus Target
 
   Background:
-    Given a control plane, two Mayastor instances, two pools
+    Given a control plane, two Io-Engine instances, two pools
 
   Scenario: the target nexus is faulted
     Given a published self-healing volume

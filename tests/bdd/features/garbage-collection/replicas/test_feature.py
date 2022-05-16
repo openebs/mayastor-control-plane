@@ -36,7 +36,7 @@ POOL2_UUID = "4cc6ee64-7232-497d-a26f-38284a444990"
 
 @pytest.fixture(scope="function")
 def create_pool_disk_images():
-    # When starting Mayastor instances with the deployer a bind mount is created from /tmp to
+    # When starting Io-Engine instances with the deployer a bind mount is created from /tmp to
     # /host/tmp, so create disk images in /tmp
     for disk in [POOL_DISK1, POOL_DISK2]:
         path = "/tmp/{}".format(disk)
@@ -90,7 +90,7 @@ def test_destroying_an_orphaned_replica():
 def a_replica_which_is_managed_but_does_not_have_any_owners():
     """a replica which is managed but does not have any owners."""
 
-    # Kill the Mayastor instance which does not host the nexus.
+    # Kill the Io-Engine instance which does not host the nexus.
     Docker.kill_container(IO_ENGINE_2)
 
     # Attempt to delete the volume. This will leave a replica behind on the node that is
@@ -98,7 +98,7 @@ def a_replica_which_is_managed_but_does_not_have_any_owners():
     try:
         ApiClient.volumes_api().del_volume(VOLUME_UUID)
     except Exception as e:
-        # A Mayastor node is inaccessible, so deleting the volume will fail because the replica
+        # An Io-Engine node is inaccessible, so deleting the volume will fail because the replica
         # on this node cannot be destroyed. Attempting to do so results in a timeout. This is
         # expected and results in a replica being orphaned.
         exception_info = e.__dict__
@@ -112,7 +112,7 @@ def a_replica_which_is_managed_but_does_not_have_any_owners():
 def the_replica_should_eventually_be_destroyed():
     """the replica should eventually be destroyed."""
 
-    # Restart the previously killed Mayastor instance. This makes the previously inaccessible
+    # Restart the previously killed Io-Engine instance. This makes the previously inaccessible
     # node accessible, allowing the garbage collector to delete the replica.
     Docker.restart_container(IO_ENGINE_2)
     check_zero_replicas()
