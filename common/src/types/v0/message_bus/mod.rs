@@ -45,15 +45,15 @@ pub const VERSION: &str = "v0";
 pub enum ChannelVs {
     /// Default
     Default,
-    /// Registration of mayastor instances with the control plane
+    /// Registration of io-engine instances with the control plane
     Registry,
-    /// Node Service which exposes the registered mayastor instances
+    /// Node Service which exposes the registered io-engine instances
     Node,
-    /// Pool Service which manages mayastor pools and replicas
+    /// Pool Service which manages io-engine pools and replicas
     Pool,
-    /// Volume Service which manages mayastor volumes
+    /// Volume Service which manages io-engine volumes
     Volume,
-    /// Nexus Service which manages mayastor nexuses
+    /// Nexus Service which manages io-engine nexuses
     Nexus,
     /// Keep it In Sync Service
     Kiiss,
@@ -88,9 +88,9 @@ pub enum MessageIdVs {
     ConfigUpdate,
     /// Request current Config
     ConfigGetCurrent,
-    /// Register mayastor
+    /// Register the io-engine
     Register,
-    /// Deregister mayastor
+    /// Deregister the io-engine
     Deregister,
     /// Node Service
     /// Get all node information

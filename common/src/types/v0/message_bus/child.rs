@@ -130,7 +130,7 @@ impl From<ChildState> for models::ChildState {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveNexusChild {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// uuid of the nexus
     pub nexus: NexusId,
@@ -161,7 +161,7 @@ impl From<AddNexusChild> for RemoveNexusChild {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AddNexusChild {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// uuid of the nexus
     pub nexus: NexusId,

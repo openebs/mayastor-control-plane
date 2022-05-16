@@ -210,7 +210,7 @@ impl ToString for MessageId {
     }
 }
 
-/// Sender identification (eg which mayastor instance sent the message)
+/// Sender identification (eg which io-engine instance sent the message)
 pub type SenderId = String;
 
 /// This trait defines all Bus Messages which must:

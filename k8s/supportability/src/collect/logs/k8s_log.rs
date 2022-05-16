@@ -67,9 +67,9 @@ impl K8sLoggerClient {
     /// Dumper function that creates the component level dump.
     /// It takes the component directory, and creates subfolders based on hostname and pods,
     /// adds the previous logs(if any), and current container logs in individual files.
-    /// param `label_selector` --> to select particular component log, ex(app=mayastor)
+    /// param `label_selector` --> to select particular component log, ex(app=io-engine)
     /// param `service_dir` --> to add the created pod directories and log files into this directory
-    /// ex (logs/mayastor/pod1/cont1.log)
+    /// ex (logs/io-engine/pod1/cont1.log)
     /// param `hostname` --> if specified only those node's pods will be
     /// filtered out, if not specified all nodes would be considered.
     /// param `containers` --> to specify exactly which container logs we want

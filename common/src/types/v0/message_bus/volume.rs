@@ -4,7 +4,7 @@ use crate::{types::v0::store::volume::VolumeSpec, IntoOption};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom, fmt::Debug};
 
-bus_impl_string_uuid!(VolumeId, "UUID of a mayastor volume");
+bus_impl_string_uuid!(VolumeId, "UUID of a volume");
 
 /// Volumes
 ///
@@ -520,7 +520,7 @@ impl DestroyVolume {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplicaTopology {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     node: Option<NodeId>,
     /// id of the pool
     pool: Option<PoolId>,

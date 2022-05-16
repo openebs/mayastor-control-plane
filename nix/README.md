@@ -30,8 +30,8 @@ With the overlay in place you can start nix-shell a within the project root.
 
 ## nix-shell
 
-Build environment for mayastor including all test and debug dependencies.
+Build environment including all test and debug dependencies.
 It can be run with two arguments:
 
 * `--arg norust true`: to use your own rust toolchain.
-* `--arg noengine true`: to use your own io-engine binaries.
+* `--arg io-engine $path`: to use your own io-engine binary.

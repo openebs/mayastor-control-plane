@@ -397,12 +397,11 @@ impl ResourceContext {
         }
     }
 
-    /// Delete the pool from the mayastor instance
+    /// Delete the pool from the io-engine instance
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
     async fn delete_pool(&self) -> Result<ReconcilerAction, Error> {
         // Do not delete pools which are in the error state. We have no way of
-        // knowing whats wrong with the physical pool. Simply discard
-        // the CRD.
+        // knowing whats wrong with the physical pool. Simply discard the CRD.
         if matches!(
             self.status,
             Some(DiskPoolStatus {
@@ -850,14 +849,13 @@ async fn main() -> anyhow::Result<()> {
                 .short("e")
                 .env("ENDPOINT")
                 .default_value("http://ksnode-1:30011")
-                .help("an URL endpoint to the mayastor control plane"),
+                .help("an URL endpoint to the control plane's rest endpoint"),
         )
         .arg(
             Arg::with_name("namespace")
                 .long("namespace")
                 .short("-n")
                 .env("NAMESPACE")
-                .default_value("mayastor")
                 .help("the default namespace we are supposed to operate in"),
         )
         .arg(
