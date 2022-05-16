@@ -53,50 +53,50 @@ variable "core_image" {
   default = "mayastor-agent-core"
 }
 
-variable "mayastor_image" {
+variable "io-engine_image" {
   type        = string
   description = "io engine image to use"
   default     = "mayastor-io-engine"
 }
 
-variable "mayastor_hugepages_2Mi" {
+variable "io-engine_hugepages_2Mi" {
   type        = string
-  description = "amount of hugepages to allocate for mayastor"
+  description = "amount of hugepages to allocate for io-engine"
   default     = "2Gi"
 }
 
-variable "mayastor_cpus" {
+variable "io-engine_cpus" {
   type        = string
   description = "number of CPUs to use"
   default     = 2
 }
-variable "mayastor_cpu_list" {
+variable "io-engine_cpu_list" {
   type        = string
   description = "List of cores to run on, eg: 2,3"
   default     = "2,3"
 }
 
-variable "mayastor_memory" {
+variable "io-engine_memory" {
   type        = string
-  description = "amount of memory to request for mayastor"
+  description = "amount of memory to request for io-engine"
   default     = "4Gi"
 }
 
-variable "mayastor_rust_log" {
+variable "io-engine_rust_log" {
   type        = string
-  description = "The RUST_LOG environment filter for mayastor"
+  description = "The RUST_LOG environment filter for io-engine"
   default     = "debug,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info"
 }
 
 variable "csi_node_image" {
   type        = string
-  description = "mayastor CSI agent image to use"
+  description = "CSI agent image to use"
   default     = "mayastor-csi-node"
 }
 
 variable "csi_node_grace_period" {
   type        = string
-  description = "termination grace period in seconds for the mayastor CSI pod"
+  description = "termination grace period in seconds for the CSI pod"
   default     = 30
 }
 
@@ -120,7 +120,7 @@ variable "csi_provisioner" {
 
 variable "csi_controller_image" {
   type        = string
-  description = "mayastor CSI controller image to use"
+  description = "CSI controller image to use"
   default     = "mayastor-csi-controller"
 }
 
@@ -145,5 +145,5 @@ variable "with_jaeger" {
 variable "control_rust_log" {
   type        = string
   description = "The RUST_LOG environment filter for all control-plane components"
-  default     = "info,core=debug,rest=debug,csi_controller=debug,mayastor_csi=debug,diskpool_operator=debug,common_lib=debug,grpc=debug"
+  default     = "info,core=debug,rest=debug,csi_controller=debug,csi_node=debug,diskpool_operator=debug,common_lib=debug,grpc=debug"
 }

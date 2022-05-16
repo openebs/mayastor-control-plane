@@ -9,13 +9,13 @@ variable "res_requests" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 
-resource "kubernetes_service" "service_mayastor_rest" {
+resource "kubernetes_service" "api-rest" {
   metadata {
     labels = {
       "app" = "rest"
     }
     name      = "rest"
-    namespace = "mayastor"
+    namespace = "io"
   }
   spec {
     port {
@@ -41,33 +41,33 @@ resource "kubernetes_service" "service_mayastor_rest" {
 resource "kubernetes_deployment" "rest_deployment" {
   metadata {
     labels = {
-      app = "rest"
+      app = "api-rest"
     }
-    name      = "rest"
-    namespace = "mayastor"
+    name      = "api-rest"
+    namespace = "io"
   }
   spec {
     replicas = 1
     selector {
       match_labels = {
-        app = "rest"
+        app = "api-rest"
       }
     }
     template {
       metadata {
         labels = {
-          app = "rest"
+          app = "api-rest"
         }
       }
       spec {
-        service_account_name = "mayastor-service-account"
+        service_account_name = "io-engine-service-account"
         container {
           args = concat([
             "--dummy-certificates",
             "--no-auth",
             "--http=0.0.0.0:8081",
             "--request-timeout=${var.request_timeout}",
-            "--core-grpc=https://core:50051"
+            "--core-grpc=https://agent-core:50051"
             ],
             var.jaeger_agent_argument
           )
@@ -87,7 +87,7 @@ resource "kubernetes_deployment" "rest_deployment" {
 
           image             = format("%s/%s:%s", var.registry, var.image, var.tag)
           image_pull_policy = "Always"
-          name              = "rest-service"
+          name              = "api-rest"
 
           resources {
             limits   = var.res_limits

@@ -5,13 +5,13 @@ variable "control_node" {
 
 }
 
-resource "kubernetes_stateful_set" "mayastor" {
+resource "kubernetes_stateful_set" "io-engine" {
   metadata {
-    name      = "mayastor-etcd"
-    namespace = "mayastor"
+    name      = "io-engine-etcd"
+    namespace = "io"
 
     labels = {
-      "app.kubernetes.io/instance" = "mayastor"
+      "app.kubernetes.io/instance" = "io-engine"
       "app.kubernetes.io/name"     = "etcd"
     }
   }
@@ -20,7 +20,7 @@ resource "kubernetes_stateful_set" "mayastor" {
     replicas = 1
     selector {
       match_labels = {
-        "app.kubernetes.io/instance" = "mayastor"
+        "app.kubernetes.io/instance" = "io-engine"
         "app.kubernetes.io/name"     = "etcd"
       }
     }
@@ -28,8 +28,8 @@ resource "kubernetes_stateful_set" "mayastor" {
     template {
       metadata {
         labels = {
-          app                          = "mayastor-etcd"
-          "app.kubernetes.io/instance" = "mayastor"
+          app                          = "io-engine-etcd"
+          "app.kubernetes.io/instance" = "io-engine"
           "app.kubernetes.io/name"     = "etcd"
         }
       }
@@ -122,7 +122,7 @@ resource "kubernetes_stateful_set" "mayastor" {
 
           env {
             name  = "ETCD_ADVERTISE_CLIENT_URLS"
-            value = "http://$(MY_POD_NAME).mayastor-etcd-headless.mayastor.svc.cluster.local:2379"
+            value = "http://$(MY_POD_NAME).io-engine-etcd-headless.io-engine.svc.cluster.local:2379"
           }
 
           env {
@@ -132,7 +132,7 @@ resource "kubernetes_stateful_set" "mayastor" {
 
           env {
             name  = "ETCD_INITIAL_ADVERTISE_PEER_URLS"
-            value = "http://$(MY_POD_NAME).mayastor-etcd-headless.mayastor.svc.cluster.local:2380"
+            value = "http://$(MY_POD_NAME).io-engine-etcd-headless.io-engine.svc.cluster.local:2380"
           }
 
           env {
@@ -188,12 +188,12 @@ resource "kubernetes_stateful_set" "mayastor" {
             required_during_scheduling_ignored_during_execution {
               label_selector {
                 match_labels = {
-                  "app.kubernetes.io/instance" = "mayastor"
+                  "app.kubernetes.io/instance" = "io-engine"
                   "app.kubernetes.io/name"     = "etcd"
                 }
               }
 
-              namespaces   = ["mayastor"]
+              namespaces   = ["io-engine"]
               topology_key = "kubernetes.io/hostname"
             }
 
@@ -216,7 +216,7 @@ resource "kubernetes_stateful_set" "mayastor" {
       }
     }
 
-    service_name          = "mayastor-etcd-headless"
+    service_name          = "io-engine-etcd-headless"
     pod_management_policy = "Parallel"
 
     update_strategy {
@@ -225,13 +225,13 @@ resource "kubernetes_stateful_set" "mayastor" {
   }
 }
 
-resource "kubernetes_service" "mayastor_etcd" {
+resource "kubernetes_service" "io-engine_etcd" {
   metadata {
-    name      = "mayastor-etcd"
-    namespace = "mayastor"
+    name      = "io-engine-etcd"
+    namespace = "io"
 
     labels = {
-      "app.kubernetes.io/instance" = "mayastor"
+      "app.kubernetes.io/instance" = "io-engine"
       "app.kubernetes.io/name"     = "etcd"
     }
   }
@@ -250,7 +250,7 @@ resource "kubernetes_service" "mayastor_etcd" {
     }
 
     selector = {
-      "app.kubernetes.io/instance" = "mayastor"
+      "app.kubernetes.io/instance" = "io-engine"
 
       "app.kubernetes.io/name" = "etcd"
     }
@@ -259,13 +259,13 @@ resource "kubernetes_service" "mayastor_etcd" {
   }
 }
 
-resource "kubernetes_service" "mayastor_etcd_headless" {
+resource "kubernetes_service" "io-engine_etcd_headless" {
   metadata {
-    name      = "mayastor-etcd-headless"
-    namespace = "mayastor"
+    name      = "io-engine-etcd-headless"
+    namespace = "io"
 
     labels = {
-      "app.kubernetes.io/instance" = "mayastor"
+      "app.kubernetes.io/instance" = "io-engine"
       "app.kubernetes.io/name"     = "etcd"
     }
 
@@ -288,7 +288,7 @@ resource "kubernetes_service" "mayastor_etcd_headless" {
     }
 
     selector = {
-      "app.kubernetes.io/instance" = "mayastor"
+      "app.kubernetes.io/instance" = "io-engine"
 
       "app.kubernetes.io/name" = "etcd"
     }

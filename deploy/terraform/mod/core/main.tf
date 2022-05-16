@@ -10,13 +10,13 @@ variable "credentials" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 
-resource "kubernetes_service" "core" {
+resource "kubernetes_service" "agent-core" {
   metadata {
-    name      = "core"
-    namespace = "mayastor"
+    name      = "agent-core"
+    namespace = "io"
 
     labels = {
-      app = "core-agents"
+      app = "agent-core"
     }
   }
 
@@ -28,7 +28,7 @@ resource "kubernetes_service" "core" {
     }
 
     selector = {
-      app = "core-agents"
+      app = "agent-core"
     }
 
     cluster_ip = "None"
@@ -38,30 +38,30 @@ resource "kubernetes_service" "core" {
 resource "kubernetes_deployment" "core_deployment" {
   metadata {
     labels = {
-      app = "core-agents"
+      app = "agent-core"
     }
-    name      = "core-agents"
-    namespace = "mayastor"
+    name      = "agent-core"
+    namespace = "io"
   }
   spec {
     replicas     = 1
     selector {
       match_labels = {
-        app = "core-agents"
+        app = "agent-core"
       }
     }
 
     template {
       metadata {
         labels = {
-          app = "core-agents"
+          app = "agent-core"
         }
       }
       spec {
-        service_account_name = "mayastor-service-account"
+        service_account_name = "io-engine-service-account"
         container {
           args = concat([
-            "-smayastor-etcd",
+            "-sio-engine-etcd",
             "--request-timeout=${var.request_timeout}",
             "--cache-period=${var.cache_period}",
             ],
@@ -69,7 +69,7 @@ resource "kubernetes_deployment" "core_deployment" {
           )
           image             = format("%s/%s:%s", var.registry, var.image, var.tag)
           image_pull_policy = "Always"
-          name              = "core-agent"
+          name              = "agent-core"
           resources {
             limits   = var.res_limits
             requests = var.res_requests

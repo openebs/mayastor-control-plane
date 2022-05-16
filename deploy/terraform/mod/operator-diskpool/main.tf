@@ -9,13 +9,13 @@ variable "cache_period" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 
-resource "kubernetes_deployment" "deployment_diskpool_operator" {
+resource "kubernetes_deployment" "diskpool_deployment" {
   metadata {
     labels = {
       app = "operator-diskpool"
     }
     name      = "operator-diskpool"
-    namespace = "mayastor"
+    namespace = "io"
   }
   spec {
     replicas = 1
@@ -31,10 +31,10 @@ resource "kubernetes_deployment" "deployment_diskpool_operator" {
         }
       }
       spec {
-        service_account_name = "mayastor-service-account"
+        service_account_name = "io-engine-service-account"
         container {
           args = concat([
-            "-e http://rest:8081",
+            "-e http://api-rest:8081",
             "--interval=${var.cache_period}"
             ],
             var.jaeger_agent_argument

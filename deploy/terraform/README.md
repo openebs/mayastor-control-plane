@@ -2,8 +2,8 @@
 
 
 The terraform scripts here assume that there is a k8s cluster with at least 3
-nodes up and running.  The nodes on which mayastor should run should be labeled
-as usual. Control plane components are to be scheduled on node(s) that have the
+nodes up and running.  The nodes on which to run should be labeled as usual.
+Control plane components are to be scheduled on node(s) that have the
 label `openebs.io/engine=none`.
 
 The terraform plugin required is Kubernetes 2.4.1. other versions are likely to
