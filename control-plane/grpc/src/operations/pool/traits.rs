@@ -205,7 +205,7 @@ impl From<get_pools_request::Filter> for Filter {
 pub trait CreatePoolInfo: Send + Sync + std::fmt::Debug {
     /// Id of the pool
     fn pool_id(&self) -> PoolId;
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node_id(&self) -> NodeId;
     /// Disk device paths or URIs to be claimed by the pool
     fn disks(&self) -> Vec<PoolDeviceUri>;
@@ -218,7 +218,7 @@ pub trait CreatePoolInfo: Send + Sync + std::fmt::Debug {
 pub trait DestroyPoolInfo: Sync + Send + std::fmt::Debug {
     /// Id of the pool
     fn pool_id(&self) -> PoolId;
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node_id(&self) -> NodeId;
 }
 

@@ -8,7 +8,7 @@ use structopt::StructOpt;
 use strum::VariantNames;
 pub(crate) use utils::tracing_telemetry::KeyValue;
 
-const TEST_LABEL_PREFIX: &str = "io.mayastor.test";
+const TEST_LABEL_PREFIX: &str = "io.composer.test";
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
@@ -124,34 +124,38 @@ pub struct StartOptions {
     #[structopt(long, conflicts_with = "no_rest")]
     pub rest_jwk: Option<String>,
 
-    /// Use `N` mayastor instances
-    /// Note: the mayastor containers have the host's /tmp directory mapped into the container
+    /// Use `N` io_engine instances
+    /// Note: the io_engine containers have the host's /tmp directory mapped into the container
     /// as /host/tmp. This is useful to create pool's from file images.
     #[structopt(short, long, default_value = "1")]
-    pub mayastors: u32,
+    pub io_engines: u32,
 
-    /// Use the following docker image for the mayastor instances
-    #[structopt(long, env = "DATA_PLANE_IMAGE", default_value = utils::DATA_PLANE_IMAGE)]
-    pub mayastor_image: String,
+    /// Use the following docker image for the io_engine instances
+    #[structopt(long, env = "IO_ENGINE_IMAGE", default_value = utils::IO_ENGINE_IMAGE)]
+    pub io_engine_image: String,
 
-    /// Use the following runnable binary for the mayastor instances
-    #[structopt(long, env = "MAYASTOR_BIN", conflicts_with = "mayastor_image")]
-    pub mayastor_bin: Option<String>,
+    /// Use the following image pull policy when creating containers from images.
+    #[structopt(long, default_value = "ifnotpresent")]
+    pub image_pull_policy: composer::ImagePullPolicy,
 
-    /// Add host block devices to the mayastor containers as a docker bind mount
-    /// A raw block device: --mayastor-devices /dev/sda /dev/sdb
-    /// An lvm volume group: --mayastor-devices /dev/sdavg
-    /// Note: the mayastor containers will run as `privileged`!
+    /// Use the following runnable binary for the io_engine instances
+    #[structopt(long, env = "IO_ENGINE_BIN", conflicts_with = "io_engine_image")]
+    pub io_engine_bin: Option<String>,
+
+    /// Add host block devices to the io_engine containers as a docker bind mount
+    /// A raw block device: --io_engine-devices /dev/sda /dev/sdb
+    /// An lvm volume group: --io_engine-devices /dev/sdavg
+    /// Note: the io_engine containers will run as `privileged`!
     #[structopt(long)]
-    pub mayastor_devices: Vec<String>,
+    pub io_engine_devices: Vec<String>,
 
-    /// Run each mayastor on a separate core.
+    /// Run each io_engine on a separate core.
     #[structopt(long)]
-    pub mayastor_isolate: bool,
+    pub io_engine_isolate: bool,
 
-    /// Add the following environment variables to the mayastor containers
-    #[structopt(long, env = "MAYASTOR_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
-    pub mayastor_env: Option<Vec<KeyValue>>,
+    /// Add the following environment variables to the io_engine containers
+    #[structopt(long, env = "IO_ENGINE_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    pub io_engine_env: Option<Vec<KeyValue>>,
 
     /// Add the following environment variables to the agent containers
     #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
@@ -250,7 +254,7 @@ pub struct StartOptions {
     #[structopt(short, long)]
     pub reuse_cluster: bool,
 
-    /// Set the developer delayed env flag of the mayastor reactor
+    /// Set the developer delayed env flag of the io_engine reactor
     #[structopt(short, long)]
     pub developer_delayed: bool,
 
@@ -373,19 +377,24 @@ impl StartOptions {
         self
     }
     #[must_use]
-    pub fn with_mayastors(mut self, mayastors: u32) -> Self {
-        self.mayastors = mayastors;
+    pub fn with_io_engines(mut self, io_engines: u32) -> Self {
+        self.io_engines = io_engines;
         self
     }
     #[must_use]
-    pub fn with_mayastor_env(mut self, key: &str, val: &str) -> Self {
-        let mut env = self.mayastor_env.unwrap_or_default();
-        env.push(KeyValue::new(key.to_string(), val.to_string()));
-        self.mayastor_env = Some(env);
+    pub fn with_pull_policy(mut self, policy: composer::ImagePullPolicy) -> Self {
+        self.image_pull_policy = policy;
         self
     }
-    pub fn with_isolated_mayastor(mut self, isolate: bool) -> Self {
-        self.mayastor_isolate = isolate;
+    #[must_use]
+    pub fn with_io_engine_env(mut self, key: &str, val: &str) -> Self {
+        let mut env = self.io_engine_env.unwrap_or_default();
+        env.push(KeyValue::new(key.to_string(), val.to_string()));
+        self.io_engine_env = Some(env);
+        self
+    }
+    pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
+        self.io_engine_isolate = isolate;
         self
     }
     pub fn with_show_info(mut self, show_info: bool) -> Self {

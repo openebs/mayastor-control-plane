@@ -9,27 +9,27 @@ variable "tag" {}
 
 variable "rust_log" {}
 
-resource "kubernetes_daemonset" "mayastor" {
+resource "kubernetes_daemonset" "io-engine" {
   metadata {
-    name      = "mayastor"
-    namespace = "mayastor"
+    name      = "io-engine"
+    namespace = "io"
 
     labels = {
-      "openebs/engine" = "mayastor"
+      "openebs/engine" = "io-engine"
     }
   }
 
   spec {
     selector {
       match_labels = {
-        app = "mayastor"
+        app = "io-engine"
       }
     }
 
     template {
       metadata {
         labels = {
-          app = "mayastor"
+          app = "io-engine"
         }
       }
 
@@ -72,7 +72,7 @@ resource "kubernetes_daemonset" "mayastor" {
           name = "configlocation"
 
           host_path {
-            path = "/var/local/mayastor/"
+            path = "/var/local/io-engine/"
             type = "DirectoryOrCreate"
           }
         }
@@ -84,19 +84,19 @@ resource "kubernetes_daemonset" "mayastor" {
         }
 
         container {
-          name = "mayastor"
+          name = "io-engine"
 
           image = format("%s/%s:%s", var.registry, var.image, var.tag)
           args = [
             "-N$(MY_NODE_NAME)",
             "-g$(MY_POD_IP)",
-            "-Rhttps://core:50051",
+            "-Rhttps://agent-core:50051",
             format("-l%s", var.cpu_list),
-            "-pmayastor-etcd"
+            "-pio-engine-etcd"
           ]
 
           port {
-            name           = "mayastor"
+            name           = "io-engine"
             container_port = 10124
             protocol       = "TCP"
           }
@@ -172,7 +172,7 @@ resource "kubernetes_daemonset" "mayastor" {
 
         node_selector = {
           "kubernetes.io/arch"  = "amd64"
-          "openebs.io/engine" = "mayastor"
+          "openebs.io/engine" = "io-engine"
         }
 
         host_network = true

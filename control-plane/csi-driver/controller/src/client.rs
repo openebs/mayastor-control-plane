@@ -83,18 +83,18 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
     }
 }
 
-static REST_CLIENT: OnceCell<MayastorApiClient> = OnceCell::new();
+static REST_CLIENT: OnceCell<IoEngineApiClient> = OnceCell::new();
 
 /// Single instance API client for accessing REST API gateway.
 /// Encapsulates communication with REST API by exposing a set of
 /// high-level API functions, which perform (de)serialization
 /// of API request/response objects.
 #[derive(Debug)]
-pub struct MayastorApiClient {
+pub struct IoEngineApiClient {
     rest_client: clients::tower::ApiClient,
 }
 
-impl MayastorApiClient {
+impl IoEngineApiClient {
     /// Initialize API client instance. Must be called prior to
     /// obtaining the client instance.
     pub fn initialize() -> Result<()> {
@@ -129,25 +129,25 @@ impl MayastorApiClient {
 
     /// Obtain client instance. Panics if called before the client
     /// has been initialized.
-    pub fn get_client() -> &'static MayastorApiClient {
+    pub fn get_client() -> &'static IoEngineApiClient {
         REST_CLIENT.get().expect("Rest client is not initialized")
     }
 }
 
-impl MayastorApiClient {
-    /// List all nodes available in Mayastor cluster.
+impl IoEngineApiClient {
+    /// List all nodes available in IoEngine cluster.
     pub async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
         let response = self.rest_client.nodes_api().get_nodes().await?;
         Ok(response.into_body())
     }
 
-    /// List all pools available in Mayastor cluster.
+    /// List all pools available in IoEngine cluster.
     pub async fn list_pools(&self) -> Result<Vec<Pool>, ApiClientError> {
         let response = self.rest_client.pools_api().get_pools().await?;
         Ok(response.into_body())
     }
 
-    /// List all volumes available in Mayastor cluster.
+    /// List all volumes available in IoEngine cluster.
     pub async fn list_volumes(
         &self,
         max_entries: i32,
@@ -172,7 +172,7 @@ impl MayastorApiClient {
         Ok(response.into_body())
     }
 
-    /// List pools available on target Mayastor node.
+    /// List pools available on target IoEngine node.
     pub async fn get_node_pools(&self, node: &str) -> Result<Vec<Pool>, ApiClientError> {
         let pools = self.rest_client.pools_api().get_node_pools(node).await?;
         Ok(pools.into_body())

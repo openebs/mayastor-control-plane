@@ -18,8 +18,8 @@ use common_lib::{
     },
 };
 
-use rpc::mayastor::FaultNexusChildRequest;
-use testlib::{Cluster, ClusterBuilder};
+use deployer_cluster::{Cluster, ClusterBuilder};
+use rpc::io_engine::FaultNexusChildRequest;
 
 use common_lib::{
     mbus_api::TimeoutOptions,
@@ -47,7 +47,7 @@ async fn volume() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(3)
+        .with_io_engines(3)
         .with_pools(1)
         .with_cache_period("1s")
         // don't let the reconcile interfere with the tests
@@ -78,7 +78,7 @@ async fn hotspare() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(3)
+        .with_io_engines(3)
         .with_pools(2)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
@@ -104,7 +104,7 @@ async fn volume_nexus_reconcile() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(2)
+        .with_io_engines(2)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
@@ -125,7 +125,7 @@ async fn garbage_collection() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(3)
+        .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
         .with_reconcile_period(reconcile_period, reconcile_period)
@@ -428,7 +428,7 @@ async fn unused_reconcile(cluster: &Cluster) {
     // (because we'll add a replica a rebuild)
     wait_till_volume_status(cluster, &volume.spec.uuid, models::VolumeStatus::Online).await;
 
-    // 6. Bring back the mayastor and the original nexus and replica should be deleted
+    // 6. Bring back the io-engine and the original nexus and replica should be deleted
     cluster.composer().start(&nexus_node.id).await.unwrap();
     let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
@@ -474,8 +474,8 @@ async fn wait_till_replica_disowned(cluster: &Cluster, replica_id: Uuid) {
     }
 }
 
-/// Creates a volume nexus on a mayastor instance, which will have both spec and state.
-/// Stops/Kills the mayastor container. At some point we will have no nexus state, because the node
+/// Creates a volume nexus on a node, which will have both spec and state.
+/// Stop/Kill the io-engine container. At some point we will have no nexus state, because the node
 /// is gone. We then restart the node and the volume nexus reconciler will then recreate the nexus!
 /// At this point, we'll have a state again and the volume will be Online!
 async fn missing_nexus_reconcile(cluster: &Cluster) {
@@ -600,7 +600,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
 
     let fault_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .mayastor
+        .io_engine
         .fault_nexus_child(FaultNexusChildRequest {
             uuid: nexus.uuid.to_string(),
             uri: fault_child.clone(),
@@ -611,8 +611,8 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );
@@ -728,8 +728,8 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     // todo: this sometimes fails??
     // is the reconciler interleaving with the add_child_nexus?
     rpc_handle
-        .mayastor
-        .add_child_nexus(rpc::mayastor::AddChildNexusRequest {
+        .io_engine
+        .add_child_nexus(rpc::io_engine::AddChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: unknown_replica.clone(),
             norebuild: true,
@@ -740,8 +740,8 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );
@@ -801,8 +801,8 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 
     let missing_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .mayastor
-        .remove_child_nexus(rpc::mayastor::RemoveChildNexusRequest {
+        .io_engine
+        .remove_child_nexus(rpc::io_engine::RemoveChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: missing_child.clone(),
         })
@@ -812,8 +812,8 @@ async fn hotspare_missing_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );

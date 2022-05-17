@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tracing::Instrument;
 
 /// Pool Reconciler loop which:
-/// 1. recreates pools which are not present following a mayastor restart
+/// 1. recreates pools which are not present following an io-engine restart
 #[derive(Debug)]
 pub struct PoolReconciler {
     counter: PollTimer,
@@ -52,11 +52,11 @@ impl TaskPoller for PoolReconciler {
     }
 }
 
-/// If a pool has a spec but not state, it means that the mayastor instance where the pool should
+/// If a pool has a spec but not state, it means that the io-engine instance where the pool should
 /// exist does not have the pool open.
-/// This can happen if the pool is destroyed under the control plane, or if mayastor
+/// This can happen if the pool is destroyed under the control plane, or if the io-engine
 /// crashed/restarted.
-/// In such a case, we issue a new create pool request against the mayastor instance where the pool
+/// In such a case, we issue a new create pool request against the io-engine instance where the pool
 /// should exist.
 #[tracing::instrument(skip(pool_spec, context), level = "trace", fields(pool.uuid = %pool_spec.lock().id, request.reconcile = true))]
 async fn missing_pool_state_reconciler(
@@ -119,7 +119,7 @@ async fn missing_pool_state_reconciler(
     }
 }
 
-/// If a pool is tried to be deleted after its corresponding mayastor node is down,
+/// If a pool is tried to be deleted after its corresponding io-engine node is down,
 /// the pool deletion gets struck in Deleting state, this creates a problem as when
 /// the node comes up we cannot create a pool with same specs, the deleting_pool_spec_reconciler
 /// cleans up any such pool when node comes up.

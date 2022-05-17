@@ -8,7 +8,7 @@ use common::errors::SvcError;
 use common_lib::types::v0::store::{nexus::NexusSpec, TraceStrLog};
 
 /// Return healthy replicas for volume/nexus
-/// The persistent store has the latest information from mayastor, which tells us if any replica
+/// The persistent store has the latest information from io-engine, which tells us if any replica
 /// has been faulted and therefore cannot be used by the nexus.
 async fn get_healthy_children(
     request: &GetPersistedNexusChildren,
@@ -27,7 +27,7 @@ async fn get_healthy_children(
 
 /// Get all usable healthy child replicas for nexus recreation
 /// (only children which are ReplicaSpec's are returned).
-/// The persistent store has the latest information from mayastor, which tells us if any replica
+/// The persistent store has the latest information from io-engine, which tells us if any replica
 /// has been faulted and therefore cannot be used by the nexus.
 pub(crate) async fn get_healthy_nexus_children(
     nexus_spec: &NexusSpec,

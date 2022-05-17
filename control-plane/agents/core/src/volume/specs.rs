@@ -497,7 +497,7 @@ impl ResourceSpecsLocked {
                     });
                 }
 
-                // Delete the NexusInfo entry persisted by Mayastor.
+                // Delete the NexusInfo entry persisted by the IoEngine.
                 Self::delete_nexus_info(
                     &NexusInfoKey::new(&Some(request.uuid.clone()), &nexus.uuid),
                     registry,

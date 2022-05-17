@@ -14,16 +14,16 @@ provider "helm" {
   }
 }
 
-resource "kubernetes_namespace" "mayastor_ns" {
+resource "kubernetes_namespace" "io-engine_ns" {
   metadata {
-    name = "mayastor"
+    name = "io-engine"
   }
 }
 
 resource "kubernetes_secret" "regcred" {
   metadata {
     name      = "regcred"
-    namespace = "mayastor"
+    namespace = "io"
   }
   data = {
     ".dockerconfigjson" = "${file("~/.docker/config.json")}"
@@ -31,7 +31,7 @@ resource "kubernetes_secret" "regcred" {
 
   type = "kubernetes.io/dockerconfigjson"
   depends_on = [
-    kubernetes_namespace.mayastor_ns,
+    kubernetes_namespace.io-engine_ns,
   ]
 }
 
@@ -40,7 +40,7 @@ module "rbac" {
 }
 
 module "jaegertracing" {
-  depends_on = [kubernetes_namespace.mayastor_ns, module.rbac]
+  depends_on = [kubernetes_namespace.io-engine_ns, module.rbac]
   source     = "./mod/jaeger"
   count      = var.with_jaeger ? 1 : 0
 }
@@ -52,7 +52,7 @@ module "jaegertracing" {
 module "etcd" {
   source = "./mod/etcd"
   depends_on = [
-    kubernetes_namespace.mayastor_ns,
+    kubernetes_namespace.io-engine_ns,
     kubernetes_secret.regcred
   ]
   image        = var.etcd_image
@@ -72,7 +72,7 @@ module "csi-node" {
   registrar_image = var.csi_registar_image
   grace_period   = var.csi_node_grace_period
   rust_log       = var.control_rust_log
-  io_queues      = var.mayastor_cpus
+  io_queues      = var.io-engine_cpus
 }
 
 module "csi-controller" {
@@ -80,7 +80,7 @@ module "csi-controller" {
   depends_on = [
     module.core,
     module.rest,
-    module.mayastor
+    module.io-engine
   ]
   image                 = var.csi_controller_image
   registry              = var.registry
@@ -94,12 +94,12 @@ module "csi-controller" {
 }
 
 module "dsp-operator" {
-  source = "./mod/dsp-operator"
+  source = "./mod/operator-diskpool"
   depends_on = [
     module.rbac,
     module.core,
     module.rest,
-    module.mayastor
+    module.io-engine
   ]
   image                 = var.dsp_operator_image
   registry              = var.registry
@@ -117,7 +117,7 @@ module "rest" {
   source = "./mod/rest"
   depends_on = [
     kubernetes_secret.regcred,
-    kubernetes_namespace.mayastor_ns,
+    kubernetes_namespace.io-engine_ns,
     module.core,
   ]
   image                 = var.rest_image
@@ -161,20 +161,20 @@ module "sc" {
  * dataplane
  */
 
-module "mayastor" {
-  source = "./mod/mayastor"
+module "io-engine" {
+  source = "./mod/io-engine"
   depends_on = [
     module.etcd,
     module.core
   ]
-  hugepages = var.mayastor_hugepages_2Mi
-  cpus      = var.mayastor_cpus
-  cpu_list  = var.mayastor_cpu_list
-  memory    = var.mayastor_memory
-  image     = var.mayastor_image
+  hugepages = var.io-engine_hugepages_2Mi
+  cpus      = var.io-engine_cpus
+  cpu_list  = var.io-engine_cpu_list
+  memory    = var.io-engine_memory
+  image     = var.io-engine_image
   registry  = var.registry
   tag       = var.tag
-  rust_log  = var.mayastor_rust_log
+  rust_log  = var.io-engine_rust_log
 }
 
 locals {

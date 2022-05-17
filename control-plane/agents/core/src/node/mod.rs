@@ -43,9 +43,9 @@ mod tests {
         message_bus::{Filter, Node, NodeId, NodeState, NodeStatus},
         store::node::{NodeLabels, NodeSpec},
     };
+    use deployer_cluster::ClusterBuilder;
     use grpc::operations::node::traits::NodeOperations;
     use std::time::Duration;
-    use testlib::ClusterBuilder;
 
     /// Get new `Node` from the given parameters
     fn new_node(id: NodeId, endpoint: String, status: NodeStatus) -> Node {
@@ -141,7 +141,7 @@ mod tests {
         let cluster = ClusterBuilder::builder()
             .with_rest(false)
             .with_agents(vec!["core"])
-            .with_mayastors(expected_nodes as u32)
+            .with_io_engines(expected_nodes as u32)
             .with_node_deadline("2s")
             .build()
             .await

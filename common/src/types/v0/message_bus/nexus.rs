@@ -20,7 +20,7 @@ pub struct GetNexuses {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Nexus {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// name of the nexus
     pub name: String,
@@ -62,7 +62,7 @@ impl From<Nexus> for models::Nexus {
     }
 }
 
-bus_impl_string_uuid!(NexusId, "UUID of a mayastor nexus");
+bus_impl_string_uuid!(NexusId, "UUID of a nexus");
 
 /// Nexus State information
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
@@ -156,7 +156,7 @@ impl TryFrom<Protocol> for NexusShareProtocol {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateNexus {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// the nexus uuid will be set to this
     pub uuid: NexusId,
@@ -284,7 +284,7 @@ impl CreateNexus {
         name.unwrap_or_else(|| self.uuid.to_string())
     }
 
-    /// Return the key that should be used by Mayastor to persist the NexusInfo.
+    /// Return the key that should be used by the Io-Engine to persist the NexusInfo.
     pub fn nexus_info_key(&self) -> String {
         match &self.owner {
             Some(volume_id) => NexusInfoKey::new(&Some(volume_id.clone()), &self.uuid).key(),
@@ -297,7 +297,7 @@ impl CreateNexus {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DestroyNexus {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// uuid of the nexus
     pub uuid: NexusId,
@@ -316,7 +316,7 @@ impl From<Nexus> for DestroyNexus {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareNexus {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// uuid of the nexus
     pub uuid: NexusId,
@@ -357,7 +357,7 @@ impl From<ShareNexus> for UnshareNexus {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UnshareNexus {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// uuid of the nexus
     pub uuid: NexusId,

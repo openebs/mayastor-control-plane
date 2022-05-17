@@ -1,15 +1,15 @@
-resource "kubernetes_service_account" "mayastor" {
+resource "kubernetes_service_account" "io-engine" {
   metadata {
-    name      = "mayastor-service-account"
-    namespace = "mayastor"
+    name      = "io-engine-service-account"
+    namespace = "io"
   }
 }
 
-resource "kubernetes_cluster_role" "mayastor" {
+resource "kubernetes_cluster_role" "io-engine" {
   depends_on = [null_resource.cleanup_leftovers]
 
   metadata {
-    name = "mayastor-cluster-role"
+    name = "io-engine-cluster-role"
   }
 
   rule {
@@ -27,13 +27,13 @@ resource "kubernetes_cluster_role" "mayastor" {
   rule {
     verbs      = ["get", "list", "watch", "update", "patch", "replace"]
     api_groups = ["openebs.io"]
-    resources  = ["mayastorpools"]
+    resources  = ["diskpools"]
   }
 
   rule {
     verbs      = ["update", "patch"]
     api_groups = ["openebs.io"]
-    resources  = ["mayastorpools/status"]
+    resources  = ["diskpools/status"]
   }
 
   rule {
@@ -103,23 +103,23 @@ resource "kubernetes_cluster_role" "mayastor" {
   }
 }
 
-resource "kubernetes_cluster_role_binding" "mayastor" {
+resource "kubernetes_cluster_role_binding" "io-engine" {
   depends_on = [null_resource.cleanup_leftovers]
 
   metadata {
-    name = "mayastor-cluster-role-binding"
+    name = "io-engine-cluster-role-binding"
   }
 
   subject {
     kind      = "ServiceAccount"
-    name      = "mayastor-service-account"
-    namespace = "mayastor"
+    name      = "io-engine-service-account"
+    namespace = "io"
   }
 
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = "mayastor-cluster-role"
+    name      = "io-engine-cluster-role"
   }
 }
 
@@ -127,11 +127,11 @@ resource "kubernetes_cluster_role_binding" "mayastor" {
 ## Most things are easy to delete by hand by removing the namespace, but these are not namespaced...
 resource "null_resource" "cleanup_leftovers" {
   provisioner "local-exec" {
-    command    = "kubectl delete clusterroles.rbac.authorization.k8s.io mayastor-cluster-role"
+    command    = "kubectl delete clusterroles.rbac.authorization.k8s.io io-engine-cluster-role"
     on_failure = continue
   }
   provisioner "local-exec" {
-    command    = "kubectl delete clusterrolebindings.rbac.authorization.k8s.io mayastor-cluster-role-binding"
+    command    = "kubectl delete clusterrolebindings.rbac.authorization.k8s.io io-engine-cluster-role-binding"
     on_failure = continue
   }
   triggers = {

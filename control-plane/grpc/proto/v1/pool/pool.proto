@@ -5,9 +5,9 @@ import "google/protobuf/wrappers.proto";
 
 package v1.pool;
 
-// A Mayastor Storage Pool
+// An IoEngine Storage Pool
 // It may have a spec which is the specification provided by the creator
-// It may have a state if such state is retrieved from a mayastor storage node
+// It may have a state if such state is retrieved from a io-engine storage node
 message Pool {
   // Desired specification of the pool and metadata
   optional PoolDefinition definition = 1;
@@ -38,7 +38,7 @@ message Metadata {
 
 // User specification of a pool.
 message PoolSpec {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // id of the pool
   string pool_id = 2;
@@ -50,7 +50,7 @@ message PoolSpec {
 
 // Pool information
 message PoolState {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // id of the pool
   string pool_id = 2;
@@ -87,7 +87,7 @@ message GetPoolsRequest {
 
 // Create Pool Request
 message CreatePoolRequest {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // id of the pool
   string pool_id = 2;

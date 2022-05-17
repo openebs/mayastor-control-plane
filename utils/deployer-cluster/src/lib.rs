@@ -3,7 +3,7 @@ pub mod rest_client;
 use composer::{Builder, ComposeTest};
 use deployer_lib::{
     default_agents,
-    infra::{Components, Error, Mayastor},
+    infra::{Components, Error, IoEngine},
     StartOptions,
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
@@ -31,7 +31,7 @@ use grpc::{
         replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
     },
 };
-use rpc::mayastor::RpcHandle;
+use rpc::io_engine::RpcHandle;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
@@ -50,10 +50,10 @@ const RUST_LOG_QUIET_DEFAULTS: &str =
     "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info,bollard=info,composer=info";
 
 #[tokio::test]
-#[ignore]
 async fn smoke_test() {
     // make sure the cluster can bootstrap properly
     let _cluster = ClusterBuilder::builder()
+        .with_pull_policy(composer::ImagePullPolicy::Always)
         .build()
         .await
         .expect("Should bootstrap the cluster!");
@@ -66,7 +66,7 @@ pub fn default_options() -> StartOptions {
     options
         .with_agents(default_agents().split(',').collect())
         .with_jaeger(true)
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_show_info(true)
         .with_build_all(true)
         .with_env_tags(vec!["CARGO_PKG_NAME"])
@@ -191,7 +191,7 @@ impl Cluster {
 
     /// node id for `index`
     pub fn node(&self, index: u32) -> message_bus::NodeId {
-        Mayastor::name(index, &self.builder.opts).into()
+        IoEngine::name(index, &self.builder.opts).into()
     }
 
     /// node ip for `index`
@@ -251,7 +251,7 @@ impl Cluster {
 
         let unknown_module = "unknown".to_string();
         let mut test_module = None;
-        if let Ok(mcp_root) = std::env::var("MCP_SRC") {
+        if let Ok(mcp_root) = std::env::var("WORKSPACE_ROOT") {
             backtrace::trace(|frame| {
                 backtrace::resolve_frame(frame, |symbol| {
                     if let Some(name) = symbol.name() {
@@ -418,18 +418,18 @@ impl TmpDiskFile {
             inner: std::sync::Arc::new(TmpDiskFileInner::new(name, size)),
         }
     }
-    /// Disk URI to be used by mayastor
+    /// Disk URI to be used by the dataplane
     pub fn uri(&self) -> &str {
         self.inner.uri()
     }
 }
 impl TmpDiskFileInner {
     fn new(name: &str, size: u64) -> Self {
-        let path = format!("/tmp/mayastor-{}", name);
+        let path = format!("/tmp/io-engine-disk-{}", name);
         let file = std::fs::File::create(&path).expect("to create the tmp file");
         file.set_len(size).expect("to truncate the tmp file");
         Self {
-            // mayastor is setup with a bind mount from /tmp to /host/tmp
+            // the io-engine is setup with a bind mount from /tmp to /host/tmp
             uri: format!(
                 "aio:///host{}?blk_size=512&uuid={}",
                 path,
@@ -512,12 +512,12 @@ impl ClusterBuilder {
             .as_str(),
         )
     }
-    /// Silence common_lib and testlib traces by setting them to WARN.
+    /// Silence common_lib and deployer_cluster traces by setting them to WARN.
     #[must_use]
     pub fn with_silence_test_traces(mut self) -> Self {
         self.env_filter = self.env_filter.map(|f| {
             f.add_directive(Directive::from_str("common_lib=warn").unwrap())
-                .add_directive(Directive::from_str("testlib=warn").unwrap())
+                .add_directive(Directive::from_str("deployer_cluster=warn").unwrap())
         });
         self
     }
@@ -554,7 +554,7 @@ impl ClusterBuilder {
     #[must_use]
     pub fn with_pools(mut self, count: u32) -> Self {
         for _ in 0 .. count {
-            for node in 0 .. self.opts.mayastors {
+            for node in 0 .. self.opts.io_engines {
                 if let Some(pools) = self.pools.get_mut(&node) {
                     pools.push(PoolDisk::Malloc(100 * 1024 * 1024));
                 } else {
@@ -576,10 +576,10 @@ impl ClusterBuilder {
         }
         self
     }
-    /// Add a tmpfs img pool with `disk` to each mayastor node with the specified `size`
+    /// Add a tmpfs img pool with `disk` to each io-engine node with the specified `size`
     #[must_use]
     pub fn with_tmpfs_pool(mut self, size: u64) -> Self {
-        for node in 0 .. self.opts.mayastors {
+        for node in 0 .. self.opts.io_engines {
             let disk = TmpDiskFile::new(&Uuid::new_v4().to_string(), size);
             if let Some(pools) = self.pools.get_mut(&node) {
                 pools.push(PoolDisk::Tmp(disk));
@@ -595,10 +595,16 @@ impl ClusterBuilder {
         self.replicas = Replica { count, size, share };
         self
     }
-    /// Specify `count` mayastors for the cluster
+    /// Specify `count` io_engines for the cluster
     #[must_use]
-    pub fn with_mayastors(mut self, count: u32) -> Self {
-        self.opts = self.opts.with_mayastors(count);
+    pub fn with_io_engines(mut self, count: u32) -> Self {
+        self.opts = self.opts.with_io_engines(count);
+        self
+    }
+    /// Specify the image pull policy.
+    #[must_use]
+    pub fn with_pull_policy(mut self, policy: composer::ImagePullPolicy) -> Self {
+        self.opts = self.opts.with_pull_policy(policy);
         self
     }
     /// Specify which agents to use
@@ -725,7 +731,11 @@ impl ClusterBuilder {
     }
     fn build_prepare(&self) -> Result<(Components, Builder), Error> {
         // Ensure that the composer is initialised with the correct root path.
-        composer::initialize(std::path::Path::new(std::env!("MCP_SRC")).to_str().unwrap());
+        composer::initialize(
+            std::path::Path::new(std::env!("WORKSPACE_ROOT"))
+                .to_str()
+                .unwrap(),
+        );
         let components = Components::new(self.opts.clone());
         let composer = Builder::new()
             .name(&self.opts.cluster_label.name())
@@ -738,6 +748,7 @@ impl ClusterBuilder {
             .with_logs(true);
         Ok((components, composer))
     }
+
     async fn new_cluster(
         &mut self,
         components: Components,
@@ -829,7 +840,7 @@ impl ClusterBuilder {
         for (node, i_pools) in &self.pools {
             for (pool_index, pool) in i_pools.iter().enumerate() {
                 let mut pool = Pool {
-                    node: Mayastor::name(*node, &self.opts),
+                    node: IoEngine::name(*node, &self.opts),
                     disk: pool.clone(),
                     index: (pool_index + 1) as u32,
                     replicas: vec![],

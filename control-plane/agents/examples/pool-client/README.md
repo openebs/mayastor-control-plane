@@ -24,9 +24,9 @@ nats-server
 cargo run --bin node
 ```
 
-3. mayastor - specifying the message bus endpoint and node name as "mayastor-node"
+3. io_engine - specifying the message bus endpoint and node name as "io-engine-node"
 ```bash
-sudo ./target/debug/mayastor -n 127.0.0.1:4222 -N mayastor-node
+sudo ./target/debug/io-engine -n 127.0.0.1:4222 -N node
 ```
 
 4. pool service

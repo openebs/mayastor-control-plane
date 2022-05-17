@@ -34,8 +34,8 @@ PVC_VOLUME3_NAME = "pvc-%s" % VOLUME3_UUID
 PVC_VOLUME4_NAME = "pvc-%s" % VOLUME4_UUID
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 POOL2_UUID = "bcabda21-9e66-4d81-8c75-bf9f3b687cdc"
-NODE1 = "mayastor-1"
-NODE2 = "mayastor-2"
+NODE1 = "io-engine-1"
+NODE2 = "io-engine-2"
 VOLUME1_SIZE = 1024 * 1024 * 32
 VOLUME2_SIZE = 1024 * 1024 * 22
 VOLUME3_SIZE = 1024 * 1024 * 28
@@ -202,7 +202,7 @@ def a_csi_instance():
     return csi_rpc_handle()
 
 
-@given("2 Mayastor nodes with one pool on each node", target_fixture="two_pools")
+@given("2 Io-Engine nodes with one pool on each node", target_fixture="two_pools")
 def two_nodes_with_one_pool_each():
     pool_api = ApiClient.pools_api()
     pool1 = pool_api.get_pool(POOL1_UUID)
@@ -264,7 +264,7 @@ def start_stop_ms1():
     try:
         node1 = docker_client.containers.list(all=True, filters={"name": NODE1})[0]
     except docker.errors.NotFound:
-        raise Exception("No Mayastor instance found that hosts the nexus")
+        raise Exception("No Io-Engine instance found that hosts the nexus")
     # Stop the nexus node and wait till nexus offline status is also reflected in volume target info.
     # Wait at most 60 seconds.
     node1.stop()
@@ -365,7 +365,7 @@ def check_local_volume_topology(volume):
     ), f"{IO_ENGINE_SELECTOR_KEY}: {IO_ENGINE_SELECTOR_VALUE} not found in volume topology"
 
 
-@then("local volume must be accessible only from all existing Mayastor nodes")
+@then("local volume must be accessible only from all existing Io-Engine nodes")
 def check_1_replica_local_nvmf_volume_topology(create_1_replica_local_nvmf_volume):
     check_local_volume_topology(create_1_replica_local_nvmf_volume)
 
@@ -935,7 +935,7 @@ def an_existing_volume(_create_1_replica_local_nvmf_volume):
     return _create_1_replica_local_nvmf_volume
 
 
-@then("listed local volume must be accessible only from all existing Mayastor nodes")
+@then("listed local volume must be accessible only from all existing Io-Engine nodes")
 def check_local_volume_accessible_from_ms_nodes(list_2_volumes):
     vols = [v for v in list_2_volumes[1] if v.volume.volume_id == VOLUME3_UUID]
     assert len(vols) == 1, "Invalid number of local volumes reported"

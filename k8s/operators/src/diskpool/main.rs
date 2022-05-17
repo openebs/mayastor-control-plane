@@ -283,8 +283,8 @@ impl ResourceContext {
             &format!("Retry attempts ({}) exceeded", self.num_retries),
             "Error",
         )
-        .await;        // if we fail to notify k8s of the error, we will do so when we
-        // reestablish a connection
+        .await; // if we fail to notify k8s of the error, we will do so when we
+                // reestablish a connection
         self.mark_error().await?;
         // we updated the resource as an error stop reconciliation
         Err(Error::ReconcileError { name: self.name() })
@@ -293,7 +293,7 @@ impl ResourceContext {
     /// Create or import the pool, on failure try again. When we reach max error
     /// count we fail the whole thing.
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
-    pub(crate) async fn create_or_import(mut self) -> Result<ReconcilerAction, Error> {
+    pub(crate) async fn create_or_import(self) -> Result<ReconcilerAction, Error> {
         if self.num_retries >= self.ctx.retries {
             return self.stop_reconciliation().await;
         }
@@ -397,12 +397,11 @@ impl ResourceContext {
         }
     }
 
-    /// Delete the pool from the mayastor instance
+    /// Delete the pool from the io-engine instance
     #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
     async fn delete_pool(&self) -> Result<ReconcilerAction, Error> {
         // Do not delete pools which are in the error state. We have no way of
-        // knowing whats wrong with the physical pool. Simply discard
-        // the CRD.
+        // knowing whats wrong with the physical pool. Simply discard the CRD.
         if matches!(
             self.status,
             Some(DiskPoolStatus {
@@ -850,14 +849,13 @@ async fn main() -> anyhow::Result<()> {
                 .short("e")
                 .env("ENDPOINT")
                 .default_value("http://ksnode-1:30011")
-                .help("an URL endpoint to the mayastor control plane"),
+                .help("an URL endpoint to the control plane's rest endpoint"),
         )
         .arg(
             Arg::with_name("namespace")
                 .long("namespace")
                 .short("-n")
                 .env("NAMESPACE")
-                .default_value("mayastor")
                 .help("the default namespace we are supposed to operate in"),
         )
         .arg(

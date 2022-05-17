@@ -10,7 +10,7 @@ use common_lib::{
         openapi::apis::IntoVec,
     },
 };
-use rpc::mayastor as rpc;
+use rpc::io_engine as rpc;
 use std::convert::TryFrom;
 
 /// Trait for converting rpc messages to message bus messages.

@@ -13,7 +13,7 @@ bus_impl_string_id!(JsonGrpcMethod, "JSON gRPC method");
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct JsonGrpcRequest {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// JSON gRPC method to call
     pub method: JsonGrpcMethod,

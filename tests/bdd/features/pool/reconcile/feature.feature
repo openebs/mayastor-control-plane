@@ -1,7 +1,7 @@
 Feature: Pool reconciliation
 
   Background:
-    Given a control plane, Mayastor instances
+    Given a control plane, Io-Engine instances
     And file based pool disks
 
   Scenario: destroying a pool that needs to be deleted

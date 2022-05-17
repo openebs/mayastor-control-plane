@@ -51,9 +51,9 @@ def test_deleting_an_existing_unused_pool():
     """deleting an existing unused pool."""
 
 
-@given("a control plane, Mayastor instances")
-def a_control_plane_mayastor_instances(background):
-    """a control plane, Mayastor instances."""
+@given("a control plane, Io-Engine instances")
+def a_control_plane_io_engine_instances(background):
+    """a control plane, Io-Engine instances."""
 
 
 @given("file based pool disks")
@@ -150,7 +150,7 @@ VOLUME_SIZE = 10485761
 
 @pytest.fixture(scope="module")
 def background():
-    Deployer.start(2, node_deadline="250ms", mayastor_env="MAYASTOR_HB_INTERVAL_SEC=0")
+    Deployer.start(2, node_deadline="250ms", io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0")
     yield
     Deployer.stop()
 
@@ -180,7 +180,7 @@ def node_disks(tmp_files):
             with open(disk, "w") as file:
                 file.truncate(100 * 1024 * 1024)
 
-    # /tmp is mapped into /host/tmp within the mayastor containers
+    # /tmp is mapped into /host/tmp within the io-engine containers
     yield list(map(lambda arr: list(map(lambda file: f"/host{file}", arr)), tmp_files))
 
     for node_disks in tmp_files:

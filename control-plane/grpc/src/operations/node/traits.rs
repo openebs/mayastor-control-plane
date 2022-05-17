@@ -150,7 +150,7 @@ impl From<NodeStatus> for node::NodeStatus {
 /// GetBlockDeviceInfo trait for the getblockdevices
 /// operation
 pub trait GetBlockDeviceInfo: Send + Sync {
-    /// id of the mayastor instance
+    /// id of the IoEngine instance
     fn node_id(&self) -> NodeId;
     /// specifies whether to get all devices or only usable devices
     fn all(&self) -> bool;

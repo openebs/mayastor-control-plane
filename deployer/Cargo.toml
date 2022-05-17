@@ -16,7 +16,7 @@ name = "deployer_lib"
 path = "src/lib.rs"
 
 [dependencies]
-composer = { path = "../utils/mayastor-dependencies/composer", default-features = false }
+composer = { path = "../utils/dependencies/composer", default-features = false }
 common-lib = { path = "../common" }
 rpc = { path = "../rpc" }
 utils = { path = "../utils/utils-lib" }

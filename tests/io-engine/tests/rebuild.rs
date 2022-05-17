@@ -1,23 +1,23 @@
+use deployer_cluster::{Cluster, ClusterBuilder};
 use openapi::{
     apis::{volumes_api, Url, Uuid},
     models,
 };
-use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn concurrent_rebuilds() {
     let nr_volumes = 20u32;
-    let mayastors = 2u32;
+    let io_engines = 2u32;
     let gig = 1024 * 1024 * 1024u64;
-    let pool_size_bytes = (nr_volumes as u64) * (mayastors as u64 + 1) * gig;
+    let pool_size_bytes = (nr_volumes as u64) * (io_engines as u64 + 1) * gig;
     let rebuild_loops = 1;
     let mut replica_count = 1;
 
     let cluster = ClusterBuilder::builder()
         .with_options(|o| {
-            o.with_mayastors(mayastors as u32)
-                .with_isolated_mayastor(true)
-                .with_mayastor_env("NVME_QPAIR_CONNECT_ASYNC", "true")
+            o.with_io_engines(io_engines as u32)
+                .with_isolated_io_engine(true)
+                .with_io_engine_env("NVME_QPAIR_CONNECT_ASYNC", "true")
         })
         .with_cache_period("10s")
         .with_tmpfs_pool(pool_size_bytes)
@@ -30,7 +30,7 @@ async fn concurrent_rebuilds() {
 
     let mut volumes = vec![];
     for i in 0 .. nr_volumes {
-        let i = i % mayastors;
+        let i = i % io_engines;
         #[allow(clippy::identity_op)]
         let volume = vol_cli
             .put_volume(
@@ -137,8 +137,8 @@ async fn concurrent_rebuilds() {
                 for node in nodes {
                     if let Ok(mut handle) = cluster.grpc_handle(&node.id).await {
                         if handle
-                            .mayastor
-                            .list_nexus(rpc::mayastor::Null {})
+                            .io_engine
+                            .list_nexus(rpc::io_engine::Null {})
                             .await
                             .is_err()
                         {
@@ -178,9 +178,9 @@ async fn loopback_nvmf() {
     let repl_size_mb = repl_size / (1024 * 1024);
 
     let cluster = ClusterBuilder::builder()
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_pools(1)
-        .with_options(|o| o.with_mayastor_env("NVME_QPAIR_CONNECT_ASYNC", "true"))
+        .with_options(|o| o.with_io_engine_env("NVME_QPAIR_CONNECT_ASYNC", "true"))
         .build()
         .await
         .unwrap();

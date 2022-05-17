@@ -1,5 +1,6 @@
 #[cfg(test)]
 use crate::resources::utils::{print_table, CreateRows, GetHeaderRow, OutputFormat};
+use deployer_cluster::{Cluster, ClusterBuilder};
 use gag::BufferRedirect;
 use once_cell::sync::OnceCell;
 use openapi::{
@@ -8,7 +9,6 @@ use openapi::{
 };
 use serde::ser;
 use std::io::Read;
-use testlib::{Cluster, ClusterBuilder};
 
 static CLUSTER: OnceCell<std::sync::Mutex<Option<std::sync::Arc<Cluster>>>> = OnceCell::new();
 const VOLUME_UUID: &str = "1e3cf927-80c2-47a8-adf0-95c486bdd7b7";
@@ -17,7 +17,7 @@ async fn setup() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_pools(1)
         .build()
         .await

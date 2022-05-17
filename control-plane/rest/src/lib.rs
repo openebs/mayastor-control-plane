@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 #![allow(clippy::field_reassign_with_default)]
-//! Client library which exposes information from the different mayastor
+//! Client library which exposes information from the different Io Engines
 //! control plane services through REST
 //! Different versions are exposed through `versions`
 //!

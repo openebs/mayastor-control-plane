@@ -62,7 +62,7 @@ pub struct BlockDevice {
     pub devmajor: u32,
     /// minor device number
     pub devminor: u32,
-    /// device model - useful for identifying mayastor devices
+    /// device model - useful for identifying devices
     pub model: String,
     /// official device path
     pub devpath: String,
@@ -101,7 +101,7 @@ impl From<BlockDevice> for models::BlockDevice {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetBlockDevices {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// specifies whether to get all devices or only usable devices
     pub all: bool,

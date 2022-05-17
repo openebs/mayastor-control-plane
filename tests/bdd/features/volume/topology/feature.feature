@@ -5,7 +5,7 @@ Feature: Volume Topology
   can be scheduled on any available pool.
 
   Background:
-    Given a control plane, two Mayastor instances, two pools
+    Given a control plane, two Io-Engine instances, two pools
 
   Scenario: sufficient suitable pools which contain volume topology labels
     Given a request for a volume with topology same as pool labels

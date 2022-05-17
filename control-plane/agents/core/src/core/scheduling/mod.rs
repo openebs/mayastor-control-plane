@@ -258,7 +258,7 @@ pub(crate) struct AddReplicaSorters {}
 impl AddReplicaSorters {
     /// Sorted by:
     /// 1. replicas local to the nexus
-    /// 2. replicas which have not been marked as faulted by mayastor
+    /// 2. replicas which have not been marked as faulted by the io-engine
     /// 3. replicas from pools with more free space
     pub(crate) fn sort(
         request: &VolumeReplicasForNexusCtx,

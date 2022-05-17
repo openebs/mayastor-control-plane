@@ -1,20 +1,16 @@
 [package]
-name = "ctrlp-tests"
+name = "deployer-cluster"
 version = "1.0.0"
 authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
-edition = "2018"
-description = "Control Plane 'Compose' Tests"
+edition = "2021"
+description = "Create and Manage local deployer clusters"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "testlib"
-path = "src/lib.rs"
 
 [dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
 openapi = { path = "../../openapi", features = [ "tower-client", "tower-trace" ] }
-composer = { path = "../../utils/mayastor-dependencies/composer", default-features = false }
+composer = { path = "../../utils/dependencies/composer", default-features = false }
 deployer = { path = "../../deployer" }
 rpc = { path = "../../rpc" }
 utils = { path = "../../utils/utils-lib" }

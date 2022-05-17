@@ -12,16 +12,16 @@ use strum_macros::{EnumString, ToString};
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Register {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub id: NodeId,
-    /// grpc endpoint of the mayastor instance
+    /// grpc endpoint of the io-engine instance
     pub grpc_endpoint: String,
 }
 
 /// Deregister message payload
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Deregister {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub id: NodeId,
 }
 
@@ -109,9 +109,9 @@ impl Default for NodeStatus {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeState {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub id: NodeId,
-    /// grpc_endpoint of the mayastor instance
+    /// grpc_endpoint of the io-engine instance
     pub grpc_endpoint: String,
     /// deemed status of the node
     pub status: NodeStatus,
@@ -139,7 +139,7 @@ impl NodeState {
     }
 }
 
-bus_impl_string_id!(NodeId, "ID of a mayastor node");
+bus_impl_string_id!(NodeId, "ID of a node");
 
 impl From<NodeState> for models::NodeState {
     fn from(src: NodeState) -> Self {

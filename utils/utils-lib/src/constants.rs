@@ -14,17 +14,17 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 /// The lease lock ttl for the persistent store after which we'll lose the exclusive access
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
-/// Mayastor container image used for testing
-pub const DATA_PLANE_IMAGE: &str = "mayadata/mayastor:develop";
+/// Io-Engine container image used for testing
+pub const IO_ENGINE_IMAGE: &str = "mayadata/mayastor-io-engine:develop";
 
 /// IO-Engine node selector label key.
 pub const IO_ENGINE_SELECTOR_KEY: &str = "openebs.io/engine";
 /// IO-Engine node selector label value.
 pub const IO_ENGINE_SELECTOR_VALUE: &str = "io-engine";
 
-/// Mayastor environment variable that points to a mayastor binary
+/// Environment variable that points to an io-engine binary
 /// This must be in sync with shell.nix
-pub const DATA_PLANE_BINARY: &str = "MAYASTOR_BIN";
+pub const DATA_PLANE_BINARY: &str = "IO_ENGINE_BIN";
 
 /// The period at which a component updates its resource cache
 pub const CACHE_POLL_PERIOD: &str = "30s";

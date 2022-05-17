@@ -12,15 +12,15 @@ impl apis::actix_server::BlockDevices for RestApi {
     //
     // # Examples
     // Get only usable block devices with query parameter:
-    //      curl -X GET "https://localhost:8080/v0/nodes/mayastor/block_devices?all=false" \
+    //      curl -X GET "https://localhost:8080/v0/nodes/io-engine/block_devices?all=false" \
     //      -H  "accept: application/json"
     //
     // Get all block devices with query parameter:
-    //      curl -X GET "https://localhost:8080/v0/nodes/mayastor/block_devices?all=true" \
+    //      curl -X GET "https://localhost:8080/v0/nodes/io-engine/block_devices?all=true" \
     //      -H  "accept: application/json" -k
     //
     // Get all block devices without query parameter:
-    //      curl -X GET "https://localhost:8080/v0/nodes/mayastor/block_devices" \
+    //      curl -X GET "https://localhost:8080/v0/nodes/io-engine/block_devices" \
     //      -H  "accept: application/json" -k
     //
     async fn get_node_block_devices(

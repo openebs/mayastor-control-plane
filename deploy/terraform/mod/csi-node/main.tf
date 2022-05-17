@@ -8,29 +8,26 @@ variable "io_queues" {}
 
 resource "kubernetes_daemonset" "csi_node" {
   metadata {
-    name      = "mayastor-csi"
-    namespace = "mayastor"
-    labels = {
-      "openebs/engine" = "mayastor"
-    }
+    name      = "csi-node"
+    namespace = "io"
   }
 
   spec {
     selector {
       match_labels = {
-        app = "mayastor-csi"
+        app = "csi-node"
       }
     }
 
     template {
       metadata {
         labels = {
-          app = "mayastor-csi"
+          app = "csi-node"
         }
       }
 
       spec {
-        service_account_name             = "mayastor-service-account"
+        service_account_name             = "io-engine-service-account"
         termination_grace_period_seconds = var.grace_period
 
         volume {
@@ -73,7 +70,7 @@ resource "kubernetes_daemonset" "csi_node" {
           name = "plugin-dir"
 
           host_path {
-            path = "/var/lib/kubelet/plugins/mayastor.openebs.io/"
+            path = "/var/lib/kubelet/plugins/io.openebs.mayastor/"
             type = "DirectoryOrCreate"
           }
         }
@@ -88,7 +85,7 @@ resource "kubernetes_daemonset" "csi_node" {
         }
 
         container {
-          name  = "mayastor-csi"
+          name  = "csi-node"
           image = format("%s/%s:%s", var.registry, var.image, var.tag)
           args = [
             "--csi-socket=/csi/csi.sock",
@@ -162,7 +159,7 @@ resource "kubernetes_daemonset" "csi_node" {
           image = var.registrar_image
           args = [
             "--csi-address=/csi/csi.sock",
-            "--kubelet-registration-path=/var/lib/kubelet/plugins/mayastor.openebs.io/csi.sock"
+            "--kubelet-registration-path=/var/lib/kubelet/plugins/io.openebs.mayastor/csi.sock"
           ]
 
           volume_mount {

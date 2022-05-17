@@ -136,13 +136,13 @@ impl Simulation {
         let (client, cluster) = match external_cluster {
             None => {
                 // cluster will be terminated on drop
-                let cluster = testlib::ClusterBuilder::builder()
+                let cluster = deployer_cluster::ClusterBuilder::builder()
                     .with_silence_test_traces()
                     .with_build(false)
                     .with_build_all(false)
                     .with_nats(false)
                     .with_jaeger(false)
-                    .with_mayastors(args.volume_replicas.into())
+                    .with_io_engines(args.volume_replicas.into())
                     .build()
                     .await
                     .map_err(|e| anyhow!("Failed to build cluster: {}", e))?;

@@ -6,7 +6,7 @@ import "google/protobuf/wrappers.proto";
 package v1.nexus;
 
 message Nexus {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the nexus
   string name = 2;

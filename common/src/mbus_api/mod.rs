@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! All the different messages which can be sent/received to/from the control
-//! plane services and mayastor
+//! plane services and io-engine
 //! We could split these out further into categories when they start to grow
 
 mod mbus_nats;
@@ -210,7 +210,7 @@ impl ToString for MessageId {
     }
 }
 
-/// Sender identification (eg which mayastor instance sent the message)
+/// Sender identification (eg which io-engine instance sent the message)
 pub type SenderId = String;
 
 /// This trait defines all Bus Messages which must:

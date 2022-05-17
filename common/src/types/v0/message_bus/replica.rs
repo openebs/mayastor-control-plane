@@ -25,7 +25,7 @@ impl GetReplicas {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Replica {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// name of the replica
     pub name: ReplicaName,
@@ -120,7 +120,7 @@ impl From<Replica> for models::Replica {
     }
 }
 
-bus_impl_string_uuid!(ReplicaId, "UUID of a mayastor pool replica");
+bus_impl_string_uuid!(ReplicaId, "UUID of a pool replica");
 
 impl From<Replica> for DestroyReplica {
     fn from(replica: Replica) -> Self {
@@ -138,7 +138,7 @@ impl From<Replica> for DestroyReplica {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateReplica {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// name of the replica
     pub name: Option<ReplicaName>,
@@ -251,7 +251,7 @@ impl From<ReplicaOwners> for models::ReplicaSpecOwners {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DestroyReplica {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
     pub pool: PoolId,
@@ -285,7 +285,7 @@ impl DestroyReplica {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareReplica {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
     pub pool: PoolId,
@@ -345,7 +345,7 @@ impl From<UnshareReplica> for ShareReplica {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UnshareReplica {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
     pub pool: PoolId,
@@ -441,7 +441,7 @@ impl From<ReplicaStatus> for models::ReplicaState {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AddNexusReplica {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// uuid of the nexus
     pub nexus: NexusId,
@@ -478,7 +478,7 @@ impl From<&AddNexusReplica> for AddNexusChild {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveNexusReplica {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// uuid of the nexus
     pub nexus: NexusId,

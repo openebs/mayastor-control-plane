@@ -30,8 +30,8 @@ impl CoreRegistryConfig {
 pub enum NodeRegistration {
     /// Nodes have to be registered via the RestApi before they can be used.
     Manual,
-    /// Nodes are automatically registered when a Register message is received from a
-    /// mayastor instance.
+    /// Nodes are automatically registered when a Register message is received from an
+    /// io-engine instance.
     /// They can be explicitly removed via the RestApi.
     Automatic,
 }

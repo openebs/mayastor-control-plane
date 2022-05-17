@@ -14,7 +14,7 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
       app = "csi-controller"
     }
     name      = "csi-controller"
-    namespace = "mayastor"
+    namespace = "io"
   }
   spec {
     replicas = 1
@@ -31,7 +31,7 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
       }
       spec {
         host_network         = true
-        service_account_name = "mayastor-service-account"
+        service_account_name = "io-engine-service-account"
         dns_policy           = "ClusterFirstWithHostNet"
 
         volume {

@@ -32,10 +32,10 @@ mod tests {
             store::definitions::{ObjectKey, Store},
         },
     };
+    use deployer_cluster::*;
     use grpc::operations::volume::traits::VolumeOperations;
     use once_cell::sync::OnceCell;
     use std::{net::SocketAddr, str::FromStr, time::Duration};
-    use testlib::*;
     use tokio::net::TcpStream;
 
     static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();

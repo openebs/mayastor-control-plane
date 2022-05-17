@@ -252,7 +252,7 @@ impl Service {
     }
 
     /// Create replica
-    #[tracing::instrument(level = "info", skip(self), err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn create_replica(
         &self,
         request: &CreateReplica,
@@ -263,7 +263,7 @@ impl Service {
     }
 
     /// Destroy replica
-    #[tracing::instrument(level = "info", skip(self), err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         self.specs()
             .destroy_replica(&self.registry, request, false, OperationMode::Exclusive)
@@ -271,7 +271,7 @@ impl Service {
     }
 
     /// Share replica
-    #[tracing::instrument(level = "info", skip(self), err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         self.specs()
             .share_replica(&self.registry, request, OperationMode::Exclusive)
@@ -279,7 +279,7 @@ impl Service {
     }
 
     /// Unshare replica
-    #[tracing::instrument(level = "info", skip(self), err)]
+    #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
         self.specs()
             .unshare_replica(&self.registry, request, OperationMode::Exclusive)
