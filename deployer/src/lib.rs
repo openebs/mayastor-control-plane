@@ -8,7 +8,7 @@ use structopt::StructOpt;
 use strum::VariantNames;
 pub(crate) use utils::tracing_telemetry::KeyValue;
 
-const TEST_LABEL_PREFIX: &str = "io.deployer.test";
+const TEST_LABEL_PREFIX: &str = "io.composer.test";
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
@@ -133,6 +133,10 @@ pub struct StartOptions {
     /// Use the following docker image for the io_engine instances
     #[structopt(long, env = "IO_ENGINE_IMAGE", default_value = utils::IO_ENGINE_IMAGE)]
     pub io_engine_image: String,
+
+    /// Use the following image pull policy when creating containers from images.
+    #[structopt(long, default_value = "ifnotpresent")]
+    pub image_pull_policy: composer::ImagePullPolicy,
 
     /// Use the following runnable binary for the io_engine instances
     #[structopt(long, env = "IO_ENGINE_BIN", conflicts_with = "io_engine_image")]
@@ -375,6 +379,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_io_engines(mut self, io_engines: u32) -> Self {
         self.io_engines = io_engines;
+        self
+    }
+    #[must_use]
+    pub fn with_pull_policy(mut self, policy: composer::ImagePullPolicy) -> Self {
+        self.image_pull_policy = policy;
         self
     }
     #[must_use]

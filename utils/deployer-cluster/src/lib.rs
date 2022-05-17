@@ -50,10 +50,10 @@ const RUST_LOG_QUIET_DEFAULTS: &str =
     "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info,bollard=info,composer=info";
 
 #[tokio::test]
-#[ignore]
 async fn smoke_test() {
     // make sure the cluster can bootstrap properly
     let _cluster = ClusterBuilder::builder()
+        .with_pull_policy(composer::ImagePullPolicy::Always)
         .build()
         .await
         .expect("Should bootstrap the cluster!");
@@ -599,6 +599,12 @@ impl ClusterBuilder {
     #[must_use]
     pub fn with_io_engines(mut self, count: u32) -> Self {
         self.opts = self.opts.with_io_engines(count);
+        self
+    }
+    /// Specify the image pull policy.
+    #[must_use]
+    pub fn with_pull_policy(mut self, policy: composer::ImagePullPolicy) -> Self {
+        self.opts = self.opts.with_pull_policy(policy);
         self
     }
     /// Specify which agents to use

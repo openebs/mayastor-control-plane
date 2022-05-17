@@ -19,6 +19,7 @@ impl ComponentAction for IoEngine {
                     .with_bind_binary_dir(true)
             } else {
                 ContainerSpec::from_image(&name, &options.io_engine_image)
+                    .with_pull_policy(options.image_pull_policy.clone())
             }
             .with_args(vec!["-N", &name])
             .with_args(vec!["-g", &io_engine_socket])

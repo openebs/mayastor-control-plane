@@ -141,6 +141,7 @@ pipeline {
               sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
             }
             sh 'printenv'
+            sh 'nix-shell --run "cargo test -p deployer-cluster"'
             sh 'nix-shell --run "./scripts/python/test.sh"'
           }
           post {
