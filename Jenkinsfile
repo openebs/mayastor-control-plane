@@ -158,7 +158,7 @@ pipeline {
           agent { label 'nixos-mayastor' }
           steps {
             sh './scripts/nix/git-submodule-init.sh --force'
-            sh './scripts/release.sh --skip-publish --debug'
+            sh './scripts/release.sh --skip-publish --debug --build-bins'
           }
         }
       }// parallel stages block

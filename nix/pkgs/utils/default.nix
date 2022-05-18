@@ -38,7 +38,7 @@ let
             patchShebangs ./scripts/rust/generate-openapi-bindings.sh
             ./scripts/rust/generate-openapi-bindings.sh --skip-git-diff
           fi
-          sed -i '/io-engine-tests.*=/d' ./control-plane/plugin/Cargo.toml
+          sed -i '/deployer-cluster.*=/d' ./control-plane/plugin/Cargo.toml
           export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C link-args=''$(echo $NIX_LDFLAGS | tr ' ' '\n' | grep -- '^-L' | tr '\n' ' ')"
           export NIX_LDFLAGS=
         '';
@@ -66,7 +66,7 @@ let
             patchShebangs ./scripts/rust/generate-openapi-bindings.sh
             ./scripts/rust/generate-openapi-bindings.sh --skip-git-diff
           fi
-          sed -i '/io-engine-tests.*=/d' ./control-plane/plugin/Cargo.toml
+          sed -i '/deployer-cluster.*=/d' ./control-plane/plugin/Cargo.toml
           export OPENSSL_STATIC=1
         '';
         inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;

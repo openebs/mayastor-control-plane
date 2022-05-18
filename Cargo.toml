@@ -27,6 +27,7 @@ members = [
     "utils/dependencies/nvmeadm",
     "utils/dependencies/sysfs",
     "utils/dependencies/version-info",
+    "utils/deployer-cluster",
     # Test io-engine through the rest api
     "tests/io-engine",
 ]
