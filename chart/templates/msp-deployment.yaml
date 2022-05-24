@@ -27,6 +27,7 @@ spec:
           imagePullPolicy: {{ .Values.mayastorCP.pullPolicy }}
           args:
             - "-e http://rest:8081"
+            - "--request-timeout={{ .Values.base.default_req_timeout }}"
             - "--interval={{ .Values.base.cache_poll_period }}"{{ if .Values.base.jaeger.enabled }}
             - "--jaeger={{ .Values.base.jaeger.agent.name }}:{{ .Values.base.jaeger.agent.port }}"{{ end }}
           env:
