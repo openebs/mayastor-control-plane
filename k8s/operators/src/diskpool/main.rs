@@ -772,8 +772,16 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
     let dsp: Api<DiskPool> = Api::namespaced(k8s.clone(), namespace);
     let lp = ListParams::default();
     let url = Url::parse(args.value_of("endpoint").unwrap()).expect("endpoint is not a valid URL");
-    let cfg = clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
-        .map_err(|error| {
+
+    let timeout: Duration = args
+        .value_of("request-timeout")
+        .unwrap()
+        .parse::<humantime::Duration>()
+        .expect("timeout value is invalid")
+        .into();
+
+    let cfg =
+        clients::tower::Configuration::new(url, timeout, None, None, true).map_err(|error| {
             anyhow::anyhow!(
                 "Failed to create openapi configuration, Error: '{:?}'",
                 error
@@ -835,6 +843,14 @@ async fn main() -> anyhow::Result<()> {
                 .env("INTERVAL")
                 .default_value(utils::CACHE_POLL_PERIOD)
                 .help("specify timer based reconciliation loop"),
+        )
+        .arg(
+            Arg::with_name("request-timeout")
+                .short("t")
+                .long("request-timeout")
+                .env("REQUEST_TIMEOUT")
+                .default_value(utils::DEFAULT_REQ_TIMEOUT)
+                .help("the timeout for remote requests"),
         )
         .arg(
             Arg::with_name("retries")
