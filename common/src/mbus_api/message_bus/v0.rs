@@ -7,11 +7,10 @@ use crate::{
     types::v0::message_bus::{
         AddNexusChild, AddVolumeNexus, Child, CreateNexus, CreatePool, CreateReplica, CreateVolume,
         DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter, GetBlockDevices,
-        GetNexuses, GetNodes, GetPools, GetReplicas, GetSpecs, GetStates, GetVolumes,
-        JsonGrpcRequest, Nexus, Node, NodeId, Pool, PublishVolume, RemoveNexusChild,
-        RemoveVolumeNexus, Replica, SetVolumeReplica, ShareNexus, ShareReplica, ShareVolume, Specs,
-        States, UnpublishVolume, UnshareNexus, UnshareReplica, UnshareVolume, Volume, VolumeId,
-        VolumeShareProtocol,
+        GetNexuses, GetNodes, GetPools, GetReplicas, GetSpecs, GetStates, JsonGrpcRequest, Nexus,
+        Node, NodeId, Pool, PublishVolume, RemoveNexusChild, RemoveVolumeNexus, Replica,
+        SetVolumeReplica, ShareNexus, ShareReplica, ShareVolume, Specs, States, UnpublishVolume,
+        UnshareNexus, UnshareReplica, UnshareVolume, Volume, VolumeId, VolumeShareProtocol,
     },
 };
 use async_trait::async_trait;
@@ -184,20 +183,6 @@ pub trait MessageBusTrait: Sized {
     async fn remove_nexus_child(request: RemoveNexusChild) -> BusResult<()> {
         request.request().await?;
         Ok(())
-    }
-
-    /// Get volumes with filter
-    #[tracing::instrument(level = "debug", err)]
-    async fn get_volumes(filter: Filter) -> BusResult<Vec<Volume>> {
-        let volumes = GetVolumes { filter }.request().await?;
-        Ok(volumes.into_inner())
-    }
-
-    /// Get volume with filter
-    #[tracing::instrument(level = "debug", err)]
-    async fn get_volume(filter: Filter) -> BusResult<Volume> {
-        let volumes = Self::get_volumes(filter.clone()).await?;
-        only_one!(volumes, ResourceKind::Volume)
     }
 
     /// create volume

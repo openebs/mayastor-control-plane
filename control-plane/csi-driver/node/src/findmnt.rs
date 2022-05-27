@@ -72,7 +72,7 @@ fn jsonmap_to_hashmap(json_map: &serde_json::Map<String, Value>) -> HashMap<Stri
 /// filter key-value pair, and populates a vector with those
 /// entries as hashmaps of strings.
 ///
-/// For Mayastor usage the assumptions made on the structure are:
+/// The assumptions made on the structure are:
 ///  1. An object has keys named "target" and "source" for a mount point.
 ///  2. An object may contain nested arrays of objects.
 ///

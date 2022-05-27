@@ -4,7 +4,7 @@ use serde_json::value::Value;
 
 use crate::{
     bus_impl_all, bus_impl_message, bus_impl_message_all, bus_impl_publish, bus_impl_request,
-    bus_impl_vector_request, types::v0::message_bus::*,
+    bus_impl_vector_request, bus_impl_vector_request_token, types::v0::message_bus::*,
 };
 
 // Only V0 should export this macro
@@ -64,7 +64,7 @@ bus_impl_message_all!(RemoveNexusChild, RemoveNexusChild, (), Nexus);
 
 bus_impl_message_all!(AddNexusChild, AddNexusChild, Child, Nexus);
 
-bus_impl_vector_request!(Volumes, Volume);
+bus_impl_vector_request_token!(Volumes, Volume);
 bus_impl_message_all!(GetVolumes, GetVolumes, Volumes, Volume);
 
 bus_impl_message_all!(CreateVolume, CreateVolume, Volume, Volume);

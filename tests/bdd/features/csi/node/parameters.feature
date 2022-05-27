@@ -1,7 +1,7 @@
 Feature: CSI Node plugin parameters
 
   Background:
-    Given a mayastor cluster
+    Given an io-engine cluster
 
   Scenario Outline: stage volume request with a specified nvme nr io queues
     Given a csi node plugin with <io> IO queues configured

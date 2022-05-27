@@ -1,7 +1,7 @@
 Feature: Volume creation
 
   Background:
-    Given a control plane, Mayastor instances and a pool
+    Given a control plane, Io-Engine instances and a pool
 
   Scenario: sufficient suitable pools
     Given a request for a volume
@@ -13,9 +13,9 @@ Feature: Volume creation
     When the number of suitable pools is less than the number of desired volume replicas
     Then volume creation should fail with an insufficient storage error
 
-  Scenario: provisioning failure due to missing Mayastor
+  Scenario: provisioning failure due to missing Io-Engine
     Given a request for a volume
-    When there are no available Mayastor instances
+    When there are no available Io-Engine instances
     Then volume creation should fail with a precondition failed error
 
   Scenario: provisioning failure due to gRPC timeout

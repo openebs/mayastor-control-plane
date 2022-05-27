@@ -1,9 +1,7 @@
-use crate::{
-    core::{
-        specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
-        wrapper::ClientOps,
-    },
+use crate::core::{
     registry::Registry,
+    specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+    wrapper::ClientOps,
 };
 use common::errors::{SvcError, SvcError::PoolNotFound};
 use common_lib::{
@@ -220,7 +218,7 @@ impl ResourceSpecsLocked {
 
         let pool_spec = self.get_locked_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
-            SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
+            let _guard = SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
 
             let result = node.destroy_pool(request).await;
             SpecOperations::complete_destroy(result, pool_spec, registry).await
@@ -417,6 +415,17 @@ impl ResourceSpecsLocked {
     pub(crate) fn get_replicas(&self) -> Vec<Arc<Mutex<ReplicaSpec>>> {
         let specs = self.read();
         specs.replicas.to_vec()
+    }
+
+    /// Get a vector of ReplicaSpec's
+    pub(crate) fn get_cloned_replicas(&self) -> Vec<ReplicaSpec> {
+        let specs = self.read();
+        specs
+            .replicas
+            .to_vec()
+            .into_iter()
+            .map(|r| r.lock().clone())
+            .collect::<Vec<_>>()
     }
 
     /// Worker that reconciles dirty PoolSpec's with the persistent store.

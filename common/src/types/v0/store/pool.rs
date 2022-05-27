@@ -27,7 +27,7 @@ pub struct Pool {
 /// This should eventually satisfy the PoolSpec.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]
 pub struct PoolState {
-    /// Pool information returned by Mayastor.
+    /// Pool information returned by the Io-Engine.
     pub pool: message_bus::PoolState,
 }
 
@@ -72,7 +72,7 @@ impl PartialEq<CreatePool> for PoolSpec {
 /// User specification of a pool.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PoolSpec {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
     pub id: PoolId,

@@ -173,7 +173,7 @@ impl CreateVolumeNexus {
 
     /// Get `Self` with a default set of filters for replicas/children according to the following
     /// criteria (any order):
-    /// 1. if it's a nexus recreation, then use only children marked as healthy by mayastor
+    /// 1. if it's a nexus recreation, then use only children marked as healthy by the io-engine
     /// 2. use only replicas which report the status of online by their state
     /// 3. use only replicas which are large enough for the volume
     pub(crate) async fn builder_with_defaults(

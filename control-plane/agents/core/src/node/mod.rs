@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use common::{errors::SvcError, Service};
 use common_lib::{
     mbus_api::{v0::*, *},
-    types::v0::message_bus::{ChannelVs, GetBlockDevices, GetNodes, GetSpecs, GetStates},
+    types::v0::message_bus::{ChannelVs, GetBlockDevices, GetNodes, GetStates},
 };
 use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
 use std::{convert::TryInto, marker::PhantomData, sync::Arc};
@@ -23,10 +23,8 @@ pub(crate) async fn configure(builder: Service) -> Service {
         .with_shared_state(node_grpc_service)
         .with_shared_state(registration_service)
         .with_channel(ChannelVs::Registry)
-        .with_subscription(handler!(GetSpecs))
         .with_subscription(handler!(GetStates))
         .with_channel(ChannelVs::Node)
-        .with_subscription(handler!(GetBlockDevices))
 }
 
 async fn create_node_service(builder: &Service) -> service::Service {
@@ -45,9 +43,9 @@ mod tests {
         message_bus::{Filter, Node, NodeId, NodeState, NodeStatus},
         store::node::{NodeLabels, NodeSpec},
     };
+    use deployer_cluster::ClusterBuilder;
     use grpc::operations::node::traits::NodeOperations;
     use std::time::Duration;
-    use testlib::ClusterBuilder;
 
     /// Get new `Node` from the given parameters
     fn new_node(id: NodeId, endpoint: String, status: NodeStatus) -> Node {
@@ -143,7 +141,7 @@ mod tests {
         let cluster = ClusterBuilder::builder()
             .with_rest(false)
             .with_agents(vec!["core"])
-            .with_mayastors(expected_nodes as u32)
+            .with_io_engines(expected_nodes as u32)
             .with_node_deadline("2s")
             .build()
             .await

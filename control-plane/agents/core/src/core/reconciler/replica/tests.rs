@@ -9,15 +9,15 @@ use common_lib::{
         },
     },
 };
+use deployer_cluster::ClusterBuilder;
 use std::{thread::sleep, time::Duration};
-use testlib::ClusterBuilder;
 
 #[tokio::test]
 async fn test_disown_missing_owners() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_pools(1)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
@@ -31,7 +31,7 @@ async fn test_disown_missing_owners() {
         .rest_v00()
         .replicas_api()
         .put_pool_replica(
-            "mayastor-1-pool-1",
+            "io-engine-1-pool-1",
             &replica_id,
             CreateReplicaBody {
                 share: None,

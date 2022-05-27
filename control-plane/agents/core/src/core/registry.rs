@@ -1,11 +1,11 @@
-//! Registry containing all mayastor instances which register themselves via the
+//! Registry containing all io-engine instances which register themselves via the
 //! `Register` Message.
 //! Said instances may also send `Deregister` to unregister themselves
 //! during node/pod shutdown/restart. When this happens the node state is
 //! set as `Unknown`. It's TBD how to detect when a node is really going
 //! away for good.
 //!
-//! A mayastor instance sends `Register` every N seconds as sort of a keep
+//! An io-engine instance sends `Register` every N seconds as sort of a keep
 //! alive message.
 //! A watchful watchdog is started for each node and it will change the
 //! state of said node to `Offline` if it is not petted before its
@@ -37,7 +37,7 @@ use std::{
 };
 use tokio::sync::{Mutex, RwLock};
 
-/// Registry containing all mayastor instances (aka nodes)
+/// Registry containing all io-engine instances (aka nodes)
 #[derive(Clone, Debug)]
 pub struct Registry {
     inner: Arc<RegistryInner<Etcd>>,
@@ -53,6 +53,9 @@ impl Deref for Registry {
         &self.inner
     }
 }
+
+/// Number of rebuilds
+pub(crate) type NumRebuilds = u32;
 
 /// Generic Registry Inner with a Store trait
 #[derive(Debug)]
@@ -72,6 +75,8 @@ pub struct RegistryInner<S: Store> {
     reconcile_period: std::time::Duration,
     reconciler: ReconcilerControl,
     config: CoreRegistryConfig,
+    /// system-wide maximum number of concurrent rebuilds allowed
+    max_rebuilds: Option<NumRebuilds>,
 }
 
 impl Registry {
@@ -85,6 +90,7 @@ impl Registry {
         store_lease_tll: std::time::Duration,
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
+        max_rebuilds: Option<NumRebuilds>,
     ) -> Self {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -107,6 +113,7 @@ impl Registry {
                 reconcile_idle_period,
                 reconciler: ReconcilerControl::new(),
                 config: Self::get_config_or_panic(store).await,
+                max_rebuilds,
             }),
         };
         registry.init().await;
@@ -121,12 +128,18 @@ impl Registry {
         }
     }
 
-    /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default
+    /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default.
+    /// If the mayastor_v1 config exists, then reuse it.
     async fn get_config_or_panic<S: Store>(mut store: S) -> CoreRegistryConfig {
         let config = CoreRegistryConfig::new(NodeRegistration::Automatic);
         match store.get_obj(&config.key()).await {
-            Ok(config) => config,
-            Err(StoreError::MissingEntry { .. }) => config,
+            Ok(store_config) => store_config,
+            Err(StoreError::MissingEntry { .. }) => {
+                store.put_obj(&config).await.expect(
+                    "Must be able to access the persistent store to persist configuration information",
+                );
+                config
+            },
             Err(error) => panic!(
                 "Must be able to access the persistent store to load configuration information. Got error: '{:#?}'", error
             ),
@@ -277,6 +290,27 @@ impl Registry {
                 }
             }
             tokio::time::sleep(self.cache_period).await;
+        }
+    }
+
+    /// Determine if a rebuild is allowed to start.
+    /// Constrain the number of system-wide rebuilds to the maximum specified.
+    /// If a maximum is not specified, do not limit the number of rebuilds.
+    pub(crate) async fn rebuild_allowed(&self) -> Result<(), SvcError> {
+        match self.max_rebuilds {
+            Some(max_rebuilds) => {
+                let mut num_rebuilds = 0;
+                for (_id, node_wrapper) in self.nodes.read().await.iter() {
+                    num_rebuilds += node_wrapper.read().await.num_rebuilds();
+                }
+
+                if num_rebuilds < max_rebuilds {
+                    Ok(())
+                } else {
+                    Err(SvcError::MaxRebuilds { max_rebuilds })
+                }
+            }
+            None => Ok(()),
         }
     }
 }

@@ -3,14 +3,13 @@ syntax = "proto3";
 import "v1/misc/common.proto";
 import "v1/nexus/nexus.proto";
 import "v1/replica/replica.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
 package v1.volume;
 
-// A Mayastor Volume
+// An IoEngine Volume
 // It has a spec which is the specification provided by the creator
-// It has a state if such state is retrieved from a mayastor storage nodes
+// It has a state if such state is retrieved from an io-engine storage nodes
 message Volume {
   // Desired specification of the pool and metadata
   VolumeDefinition definition = 1;
@@ -20,7 +19,12 @@ message Volume {
 
 // Multiple volumes
 message Volumes {
-  repeated Volume volumes = 1;
+  repeated Volume entries = 1;
+  // This token allows you to get the next page of entries for
+  // `GetVolumes` request. If the number of entries is larger than
+  // `max_entries`, use the `next_token` as a value for the
+  // `starting_token` field in the next `GetVolumes` request.
+  optional uint64 next_token = 3;
 }
 
 message VolumeDefinition {
@@ -51,7 +55,7 @@ message VolumeSpec {
 
 message Metadata {
   // spec status of the volume
-  common.SpecStatus status = 4;
+  common.SpecStatus spec_status = 1;
 }
 
 message VolumeTarget {
@@ -107,7 +111,7 @@ message ExplicitNodeTopology {
 message VolumeState {
   // uuid of the volume
   google.protobuf.StringValue uuid = 1;
-  // Actual size of the volume as returned by Mayastor
+  // Actual size of the volume as returned by the IoEngine
   uint64 size = 2;
   // current status of the volume
   nexus.NexusStatus status = 3;
@@ -118,7 +122,7 @@ message VolumeState {
 }
 
 message ReplicaTopology {
-  // id of the mayastor instance
+  // id of the io-engine instance
   optional string node = 1;
   // id of the pool
   optional string pool = 2;
@@ -127,10 +131,12 @@ message ReplicaTopology {
 }
 
 message GetVolumesRequest {
-  /// filter volumes
+  // filter volumes
   oneof filter {
-    common.VolumeFilter volume = 2;
+    common.VolumeFilter volume = 1;
   }
+  // pagination to allow for multiple requests to get all volumes
+  common.Pagination pagination = 2;
 }
 
 // volume creation request

@@ -1,0 +1,269 @@
+:source-highlighter: highlightjs
+:toc:
+
+== Quick start
+
+. Ensure you have libvirtd or lxd running and configured **correctly** (do not use btrfs or ZFS as a storage pool for LXD).
+. Edit `variables.tf` in particular make sure the public key and the path to private key is correct. Do not set `num_nodes` to less than two.
+. Edit `main.tf` if you want to use LXD instead of libvirtd.
+. If on NixOS, enter the nix-shell before running the terraform commands.
+. Run `terraform init`.
+. Run `terraform plan`.
+. Run `terraform apply`.
+
+Once the cluster VMs/containers are running, you can use kubectl to manage
+your cluster from the host. You just need to copy '/etc/kubernetes/admin.conf`
+from ksnode-1 to `~/.kube/config` on your host.
+
+And you are all set to deploy mayastor.
+
+== Problem statement
+
+When we want to deploy our "k8s storage" system, we want to create and destroy
+k8s clusters very quickly and without any pain regardless of where you deploy
+it.
+
+So this means we want to deploy it to:
+
+1. KVM (locally)
+2. LXD (locally)
+3. AWS
+4. GCE
+5. Azure
+6. Rancher
+7. ...
+
+We, however, do not "just" want to deploy k8s, but also want to be able to
+interact with the hosts themselves. For example; verify that we indeed have a
+new nvmf target or what have you.
+
+So we need a form of infra management but also - configuration management.
+These scripts are intended to do just that.
+
+Currently the scripts only support KVM and LXD deployments.
+
+== Terraform
+
+Terraform is used to construct the actual cluster and install Kubernetes. By
+default only the libvirtd and lxd providers are available.
+
+However, the code has been structured such that we can change the provider
+module in `main.tf` to any other provider and get the same k8s cluster.
+
+We can, for example, add `mod/vbox` which will then deploy 3 virtual vbox nodes.
+The k8s deployment code is decoupled from the actual VMs. The VMs are assumed to
+be *Ubuntu* based and makes use of *cloud-init*
+
+After the deployment of the VMs, the `k8s` module runs. This module will invoke
+using the output from the previous provider, provisioners to install k8s on the
+master node.
+
+=== Setting up libvirt
+
+. Follow OS-specific steps to install libvirt
+. Download one of the following ubuntu images in qcow2 format:
+.. `wget https://cloud-images.ubuntu.com/releases/bionic/release/ubuntu-18.04-server-cloudimg-amd64.img`
+.. `wget https://cloud-images.ubuntu.com/releases/focal/release/ubuntu-20.04-server-cloudimg-amd64.img`
+. Set `qcow2_image` TF variable to a location of the downloaded image
+
+TF commands don't need to be run with sudo, though internally TF uses
+`qemu:///system` context so when checking libvirt resources by virsh
+use either `--connect qemu:///system` parameter or
+`export LIBVIRT_DEFAULT_URI=qemu:///system`.
+
+Once the cluster is set up using TF, at the end will be printed ansible
+inventory file that makes guests management so much easier. Save the output
+to a file (i.e. ansible-hosts), install ansible on your host and you can
+run any command using ad-hoc ansible module on any or all hosts.
+
+For example to create kube config file for use with kubectl, run following
+command and copy paste the output to `~/.kube/config`:
+
+[source,bash]
+----
+ansible -i ansible-hosts -a 'sudo cat /etc/kubernetes/admin.conf' master
+----
+
+Note that for libvirt the configuration works with Terraform versions 0.13 upwards.
+=== Setting up libvirt on Nixos
+
+To use the libvirt provider, you must enable libvirtd
+
+[source]
+----
+boot.extraModprobeConfig = "options kvm_intel nested=1"; // <1>
+virtualisation.libvirtd.enable = true;
+
+users.users.gila = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "libvirtd" "vboxusers" ]; // <2>
+};
+----
+<1> depends on CPU vendor (intel vs amd)
+<2> make sure you pick the right user name
+
+=== Setting up LXD
+
+Using LXD is faster and requires fewer resources. Also, you can do many things
+with lxd that you typically can't do quickly or easily with VMs.
+
+Beware that for an unknown reason filesystem probe done by csi agent fails
+(it is unable to unmount xfs filesystem that it mounted before). Hence without
+removing the probe code from the agent and publishing a patched docker image
+it is not really possible to test us on an LXD cluster! As an alternative
+use VMs.
+
+The following kernel modules must be loaded:
+```
+ip_tables
+ip6_tables
+nf_nat
+overlay
+netlink_diag
+br_netfilter
+```
+
+And if you decide to use LVM storage backend then also:
+```
+dm-snapshot
+dm-mirror
+dm_thin_pool
+```
+
+See linux distribution specific section on how to install LXD on the
+distro of your choice.
+
+After that run `lxd init` and configure it to suit k8s cluster and your
+needs. In particular:
+
+. **do not use btrfs or ZFS** as a storage pool. Docker's AUFS storage driver does not work with them out of the box.
+. **use eth0** for network interface name in the containers. dhcp config script depends on it.
+
+TODO: add copy-paste of screen with user inputs for lxd init.
+
+It is *important* to test that LXD works before you move to terraform
+apply step. Create a container and test that it can reach the internet.
+
+[source,bash]
+----
+lxc launch ubuntu:18.04 first
+lxc exec first -- /bin/bash -c 'curl http://google.com/'
+----
+
+Once the cluster is set up, copy kube config file from lxd guest
+to your host:
+
+[source,bash]
+----
+lxc exec ksnode-1 -- cat /etc/kubernetes/admin.conf > ~/.kube/config
+----
+
+Later you will need `/dev/nbd` device(s) in /dev of
+the lxc containers. To propagate nbd0 device from the host to ksnode-1
+container run:
+
+[source,bash]
+----
+lxc config device add ksnode-1 nbd0 unix-block path=/dev/nbd0
+----
+
+==== LXD on Nixos
+
+Make sure that your system is using *unstable channel* for nixpkgs (at least
+LXD v4 is required).
+
+LXD config in `/etc/nixos/configuration.nix`:
+
+[source,nix]
+----
+  virtualisation.lxd.enable = true;
+  virtualisation.lxd.zfsSupport = false;
+  users.extraGroups.lxd.members = [ "your-user" ];
+  users.extraGroups.lxc.members = [ "your-user" ];
+
+  # Following line needed only if you choose LVM backend for LXC
+  # Following line is a workaround for the issue of lvm tools not being
+  # in the PATH of LXD (https://github.com/NixOS/nixpkgs/issues/31117)
+  systemd.services.lxd.path = with pkgs; [ lvm2 thin-provisioning-tools e2fsprogs ];
+
+  # Needed for kube-proxy pod that crashes if the hashsize is not big enough.
+  # It can't be modified from inside the container even if sys is mounted rw.
+  boot.extraModprobeConfig = ''
+    options nf_conntrack hashsize=393216
+  '';
+----
+
+==== LXD on other linux distros
+
+There is no requirement to use LXD v4 as on the NixOS. LXD v3 works just fine.
+
+When it comes to installing terraform with LXD provider, manually install the
+lxd provider from https://github.com/sl1pm4t/terraform-provider-lxd by
+downloading a release, extracting it to `~/.terraform.d/plugins` then renaming
+the binary, dropping the version.
+
+The way the terraform plugin works is not -- default. All plugins are evaluated
+in the terraform-providers expression, which reads other files from disks. So a
+simple override -- as far as I know,  won't work in this case more so, because
+the expression removes attributes and whatnot.
+
+As such a workaround is to install the plugin via nix-env and then run:
+
+```
+export NIX_TERRAFORM_PLUGIN_DIR=/home/gila/.nix-profile/bin
+```
+
+=== Main configuration file
+
+The main configuration file is `variables.tf` where all fields **must** be set.
+The `image_path` variable assumes a pre-downloaded image, but you can also set
+it to fetch from HTTP. For example:
+
+[source,bash]
+----
+cd /path/to/my/images
+wget https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
+----
+
+== Private docker repo
+
+On NixOS just add following lines to your /etc/nixos/configuration.nix and
+run `nixos-rebuild switch`.
+
+[source,nix]
+----
+  services.dockerRegistry = {
+    enable = true;
+    listenAddress = "0.0.0.0";
+    enableDelete = true;
+    # port = 5000;
+  };
+----
+
+On other distros you should edit the docker daemon config file to suit your
+needs. An example configuration could be something like the following:
+
+[source,bash]
+----
+
+cd /path/to/store
+mkdir data
+
+cat << EOF > docker-compose.yml
+version: '3'
+
+services:
+  registry:
+    image: registry:2
+    ports:
+    - "5000:5000"
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /data
+    volumes:
+      - ./data:/data
+EOF
+
+docker-compose up
+----
+
+

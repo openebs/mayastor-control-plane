@@ -34,13 +34,16 @@ def notifySlackUponStateChange(build) {
   }
 }
 
+def mainBranches() {
+    return BRANCH_NAME == "develop" || BRANCH_NAME.startsWith("release-");
+}
+
 run_linter = true
 rust_test = true
 bdd_test = true
 
-// Will ABORT current job for cases when we don't want to build
-if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') &&
-    BRANCH_NAME == "develop") {
+// Will skip steps for cases when we don't want to build
+if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') && mainBranches()) {
     print "INFO: Branch Indexing, skip tests and push the new images."
     run_linter = false
     rust_test = false
@@ -48,8 +51,8 @@ if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') &&
     build_images = true
 }
 
-// Only schedule regular builds on develop branch, so we don't need to guard against it
-String cron_schedule = BRANCH_NAME == "develop" ? "0 2 * * *" : ""
+// Only schedule regular builds on main branches, so we don't need to guard against it
+String cron_schedule = mainBranches() ? "0 2 * * *" : ""
 
 pipeline {
   agent none
@@ -84,7 +87,7 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'release/*'
+            branch 'release-*'
             branch 'hotfix-*'
             expression { run_linter == false }
           }
@@ -95,7 +98,6 @@ pipeline {
         sh 'nix-shell --run "./scripts/rust/generate-openapi-bindings.sh"'
         sh 'nix-shell --run "cargo fmt --all -- --check"'
         sh 'nix-shell --run "cargo clippy --all-targets -- -D warnings"'
-        sh 'nix-shell --run "./scripts/deploy/generate-crds.sh --changes"'
         sh 'nix-shell --run "black tests/bdd"'
       }
     }
@@ -105,7 +107,6 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'release/*'
             branch 'hotfix-*'
           }
         }
@@ -117,6 +118,9 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+            }
             sh 'printenv'
             sh 'nix-shell --run "./scripts/rust/test.sh"'
           }
@@ -133,8 +137,28 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+            }
             sh 'printenv'
+            sh 'nix-shell --run "cargo test -p deployer-cluster"'
             sh 'nix-shell --run "./scripts/python/test.sh"'
+          }
+          post {
+            always {
+              // in case of abnormal termination of any nvmf test
+              sh 'sudo nvme disconnect-all'
+            }
+          }
+        }
+        stage('image build test') {
+          when {
+            branch 'staging'
+          }
+          agent { label 'nixos-mayastor' }
+          steps {
+            sh './scripts/nix/git-submodule-init.sh --force'
+            sh './scripts/release.sh --skip-publish --debug --build-bins'
           }
         }
       }// parallel stages block
@@ -147,7 +171,7 @@ pipeline {
           expression { params.build_images == true }
           anyOf {
             branch 'master'
-            branch 'release/*'
+            branch 'release-*'
             branch 'hotfix-*'
             branch 'develop'
           }

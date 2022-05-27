@@ -38,9 +38,9 @@ def test_creating_a_pool_with_multiple_disks():
     """creating a pool with multiple disks."""
 
 
-@given("a control plane and Mayastor instances")
-def a_control_plane_and_mayastor_instances(background):
-    """a control plane and Mayastor instances."""
+@given("a control plane and Io-Engine instances")
+def a_control_plane_and_io_engine_instances(background):
+    """a control plane and Io-Engine instances."""
 
 
 @when("the user attempts to create a pool specifying a URI representing a uring disk")
@@ -93,7 +93,7 @@ def the_pool_should_be_created_successfully(pool_attempt):
 
 """" Implementations """
 
-POOL_NODE = "mayastor-1"
+POOL_NODE = "io-engine-1"
 POOL_NAME = "p0"
 POOL_DISK_COUNT = 2
 
@@ -130,7 +130,7 @@ def disks(tmp_files):
             os.remove(disk)
         with open(disk, "w") as file:
             file.truncate(100 * 1024 * 1024)
-    # /tmp is mapped into /host/tmp within the mayastor containers
+    # /tmp is mapped into /host/tmp within the io-engine containers
     yield list(map(lambda file: f"/host{file}", tmp_files))
     for disk in tmp_files:
         if os.path.exists(disk):

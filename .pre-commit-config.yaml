@@ -46,17 +46,3 @@ repos:
         pass_filenames: true
         types: [file, python]
         language: system
-    -   id: crd-check
-        name: CRD Generator
-        description: Ensures the Operator CRD files are up to date
-        entry: ./scripts/deploy/generate-crds.sh
-        args: [ "--changes" ]
-        pass_filenames: false
-        language: system
-    -   id: helm-develop-deploy
-        name: Helm Generator
-        description: Ensures the deploy is updated with the develop yamls
-        entry: ./scripts/deploy/generate-yamls.sh
-        args: [ "-c", "develop" ]
-        pass_filenames: false
-        language: system

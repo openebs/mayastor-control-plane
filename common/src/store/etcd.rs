@@ -33,12 +33,17 @@ impl std::fmt::Debug for Etcd {
 impl Etcd {
     /// Create a new instance of the etcd client
     pub async fn new(endpoint: &str) -> Result<Etcd, StoreError> {
-        Ok(Self {
-            client: Client::connect([endpoint], None)
+        let _ = crate::platform::init_cluster_info()
+            .await
+            .map_err(|error| StoreError::NotReady {
+                reason: format!("Platform not ready: {}", error),
+            })?;
+        Ok(Self::from(
+            &Client::connect([endpoint], None)
                 .await
                 .context(Connect {})?,
-            lease_lock_info: None,
-        })
+            None,
+        ))
     }
     /// Create `Etcd` from an existing instance of the etcd `Client`
     pub(crate) fn from(client: &Client, lease_lock_info: Option<LeaseLockInfo>) -> Etcd {
@@ -54,6 +59,12 @@ impl Etcd {
         service_name: ControlPlaneService,
         lease_time: std::time::Duration,
     ) -> Result<Etcd, StoreError> {
+        let _ = crate::platform::init_cluster_info()
+            .await
+            .map_err(|error| StoreError::NotReady {
+                reason: format!("Platform not ready: {}", error),
+            })?;
+
         let client = Client::connect(endpoints, None).await.context(Connect {})?;
 
         let lease_info = EtcdSingletonLock::start(client.clone(), service_name, lease_time).await?;
@@ -251,7 +262,9 @@ impl Store for Etcd {
             .map(|kv| {
                 (
                     kv.key_str().unwrap().to_string(),
-                    serde_json::from_slice(kv.value()).unwrap(),
+                    // unwrap_or_default is used since when using to dump data, the lease entry
+                    // does not have a value, which can cause panic
+                    serde_json::from_slice(kv.value()).unwrap_or_default(),
                 )
             })
             .collect();
@@ -342,4 +355,10 @@ fn deserialise_kv(kv: &KeyValue) -> Result<(String, Value), StoreError> {
         value: value_str.to_string(),
     })?;
     Ok((key_str, value))
+}
+
+/// Returns the key prefix that is used for the keys.
+/// The platform info and namespace where the product is running must be specified.
+pub fn build_key_prefix(platform: impl crate::platform::PlatformInfo, namespace: String) -> String {
+    crate::types::v0::store::definitions::build_key_prefix(&platform, namespace)
 }

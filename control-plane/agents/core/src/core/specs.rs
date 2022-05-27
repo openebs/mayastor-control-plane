@@ -7,7 +7,7 @@ use common_lib::{
         openapi::apis::Uuid,
         store::{
             definitions::{
-                key_prefix, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
+                key_prefix_obj, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
             },
             nexus::NexusSpec,
             node::NodeSpec,
@@ -507,13 +507,10 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
                         .ok();
                     true
                 }
-                SpecStatus::Created(_) => {
-                    // A spec that was being updated is in the `Created` state
+                SpecStatus::Created(_) | SpecStatus::Deleting => {
+                    // A spec that was being updated is in the `Created` state.
+                    // Deleting is also a "temporary" update to the spec.
                     Self::handle_incomplete_updates(locked_spec, registry).await
-                }
-                SpecStatus::Deleting => {
-                    // Destroyed by the garbage collector
-                    true
                 }
             }
         } else {
@@ -781,7 +778,7 @@ impl ResourceSpecsLocked {
         store: &mut S,
         spec_type: StorableObjectType,
     ) -> Result<(), SpecError> {
-        let prefix = key_prefix(spec_type);
+        let prefix = key_prefix_obj(spec_type);
         let store_entries =
             store
                 .get_values_prefix(&prefix)

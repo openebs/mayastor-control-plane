@@ -19,7 +19,7 @@ let
     agents = rec {
       recurseForDerivations = true;
       agents_builder = { buildType, builder }: builder.build { inherit buildType; cargoBuildFlags = [ "-p agents" ]; };
-      agent_installer = { name, src }: installer { inherit name src; suffix = "-agent"; };
+      agent_installer = { name, src }: installer { inherit name src; suffix = "agent"; };
       jsongrpc = agent_installer {
         src = agents_builder { inherit buildType builder; };
         name = "jsongrpc";
@@ -30,7 +30,7 @@ let
       };
     };
 
-    rest = installer {
+    api-rest = installer {
       src = builder.build { inherit buildType; cargoBuildFlags = [ "-p rest" ]; };
       name = "rest";
       suffix = "-api";
@@ -38,9 +38,9 @@ let
 
     operators = rec {
       operator_installer = { name, src }: installer { inherit name src; suffix = "-operator"; };
-      msp = operator_installer {
-        src = builder.build { inherit buildType; cargoBuildFlags = [ "-p msp-operator" ]; };
-        name = "msp-operator";
+      diskpool = operator_installer {
+        src = builder.build { inherit buildType; cargoBuildFlags = [ "-p operator-diskpool" ]; };
+        name = "operator-diskpool";
       };
       recurseForDerivations = true;
     };

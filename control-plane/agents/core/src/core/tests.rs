@@ -12,7 +12,7 @@ use common_lib::{
         },
     },
 };
-use testlib::{etcd_client::Client, *};
+use deployer_cluster::{etcd_client::Client, *};
 
 /// Test that the content of the registry is correctly loaded from the persistent store on start up.
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn store_lease_lock() {
         .with_rest(false)
         .with_jaeger(false)
         .with_nats(false)
-        .with_mayastors(0)
+        .with_io_engines(0)
         .with_agents(vec![])
         .build()
         .await
@@ -122,7 +122,7 @@ async fn core_agent_lease_lock() {
     let lease_ttl = std::time::Duration::from_secs(2);
     let lease_ttl_wait = lease_ttl + std::time::Duration::from_secs(1);
     let cluster = ClusterBuilder::builder()
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_agents(vec!["core"])
         .with_store_lease_ttl(lease_ttl)
         .build()

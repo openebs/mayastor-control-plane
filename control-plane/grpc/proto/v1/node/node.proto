@@ -20,16 +20,16 @@ message Node {
 message NodeSpec {
   // Node identification
   string node_id = 1;
-  // Endpoint of the mayastor instance (gRPC)
+  // Endpoint of the io-engine instance (gRPC)
   string endpoint = 2;
   // Node labels.
   common.StringMapValue labels = 3;
 }
 
 message NodeState {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
-  // grpc_endpoint of the mayastor instance
+  // grpc_endpoint of the io-engine instance
   string endpoint = 2;
   // deemed status of the node
   NodeStatus status = 3;

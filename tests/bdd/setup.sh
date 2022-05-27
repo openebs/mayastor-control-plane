@@ -8,7 +8,7 @@ TESTS_DIR="$ROOT_DIR"/tests
 BDD_DIR="$TESTS_DIR"/bdd
 VENV_DIR="$BDD_DIR/venv"
 CSI_OUT="$DIR_NAME/autogen"
-CSI_PROTO="$DIR_NAME"/../../rpc/mayastor-api/protobuf/
+CSI_PROTO="$DIR_NAME"/../../rpc/api/protobuf/
 
 virtualenv --no-setuptools "$VENV_DIR"
 

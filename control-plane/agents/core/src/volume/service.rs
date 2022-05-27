@@ -12,9 +12,12 @@ use common_lib::{
 };
 use grpc::{
     context::Context,
-    operations::volume::traits::{
-        CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
-        ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+    operations::{
+        volume::traits::{
+            CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
+            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+        },
+        Pagination,
     },
 };
 
@@ -37,9 +40,14 @@ impl VolumeOperations for Service {
         Ok(volume)
     }
 
-    async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Volumes, ReplyError> {
+    async fn get(
+        &self,
+        filter: Filter,
+        pagination: Option<Pagination>,
+        _ctx: Option<Context>,
+    ) -> Result<Volumes, ReplyError> {
         let req = GetVolumes { filter };
-        let volumes = self.get_volumes(&req).await?;
+        let volumes = self.get_volumes(&req, pagination).await?;
         Ok(volumes)
     }
 
@@ -130,12 +138,24 @@ impl Service {
 
     /// Get volumes
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid))]
-    pub(super) async fn get_volumes(&self, request: &GetVolumes) -> Result<Volumes, SvcError> {
-        let volumes = self.registry.get_volumes().await;
+    pub(super) async fn get_volumes(
+        &self,
+        request: &GetVolumes,
+        pagination: Option<Pagination>,
+    ) -> Result<Volumes, SvcError> {
+        // The last result can only ever be false if using pagination.
+        let mut last_result = true;
 
         // The filter criteria is matched against the volume state.
         let filtered_volumes = match &request.filter {
-            Filter::None => volumes,
+            Filter::None => match &pagination {
+                Some(p) => {
+                    let paginated_volumes = self.registry.get_paginated_volume(p).await;
+                    last_result = paginated_volumes.last();
+                    paginated_volumes.result()
+                }
+                None => self.registry.get_volumes().await,
+            },
             Filter::Volume(volume_id) => {
                 tracing::Span::current().record("volume.uuid", &volume_id.as_str());
                 vec![self.registry.get_volume(volume_id).await?]
@@ -147,7 +167,13 @@ impl Service {
             }
         };
 
-        Ok(Volumes(filtered_volumes))
+        Ok(Volumes {
+            entries: filtered_volumes,
+            next_token: match last_result {
+                true => None,
+                false => pagination.map(|p| p.starting_token() + p.max_entries()),
+            },
+        })
     }
 
     /// Create volume

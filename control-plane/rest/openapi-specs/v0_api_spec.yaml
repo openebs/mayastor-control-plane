@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Mayastor RESTful API
+  title: IoEngine RESTful API
   version: v0
 servers:
   - url: /v0
@@ -1194,15 +1194,26 @@ paths:
       tags:
         - Volumes
       operationId: get_volumes
+      parameters:
+        - in: query
+          name: max_entries
+          description: the maximum number of results to return
+          schema:
+            type: integer
+            default: 0
+          required: true
+        - in: query
+          name: starting_token
+          description: the offset to start pagination from
+          schema:
+            type: integer
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Volume'
+               $ref: '#/components/schemas/Volumes'
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -1320,7 +1331,7 @@ paths:
       operationId: put_volume_target
       description: |-
         Create a volume target connectable for front-end IO from the specified node.
-        Due to a limitation, this must currently be a mayastor storage node.
+        Due to a limitation, this must currently be an io-engine storage node.
       parameters:
         - in: path
           name: volume_id
@@ -1525,7 +1536,7 @@ components:
       format: uuid
     NodeId:
       description: storage node identifier
-      example: mayastor-1
+      example: io-engine-1
       type: string
     PoolId:
       description: storage pool identifier
@@ -1612,7 +1623,7 @@ components:
             - mountpoint
             - uuid
         model:
-          description: device model - useful for identifying mayastor devices
+          description: device model - useful for identifying devices
           type: string
         partition:
           example:
@@ -1939,7 +1950,7 @@ components:
             state: Online
             uri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:replica1'
         deviceUri: null
-        node: mayastor-1
+        node: io-engine-1
         rebuilds: 0
         protocol: nvmf
         size: 8024024
@@ -1959,7 +1970,7 @@ components:
              Missing property and empty string are treated the same.
           type: string
         node:
-          description: id of the mayastor instance
+          description: id of the io-engine instance
           type: string
         rebuilds:
           description: total number of rebuild tasks
@@ -1998,12 +2009,12 @@ components:
     NodeSpec:
       example:
         grpcEndpoint: '10.1.0.5:10124'
-        id: mayastor-1
-      description: mayastor storage node information
+        id: io-engine-1
+      description: io-engine storage node information
       type: object
       properties:
         grpcEndpoint:
-          description: gRPC endpoint of the mayastor instance
+          description: gRPC endpoint of the io-engine instance
           type: string
         id:
           $ref: '#/components/schemas/NodeId'
@@ -2013,13 +2024,13 @@ components:
     NodeState:
       example:
         grpcEndpoint: '10.1.0.5:10124'
-        id: mayastor-1
+        id: io-engine-1
         status: Online
-      description: mayastor storage node information
+      description: io-engine storage node information
       type: object
       properties:
         grpcEndpoint:
-          description: gRPC endpoint of the mayastor instance
+          description: gRPC endpoint of the io-engine instance
           type: string
         id:
           $ref: '#/components/schemas/NodeId'
@@ -2030,7 +2041,7 @@ components:
         - id
         - status
     Node:
-      description: mayastor storage node information
+      description: io-engine storage node information
       type: object
       properties:
         id:
@@ -2063,7 +2074,7 @@ components:
         - id
       minProperties: 2
     PoolState:
-      description: State of a pool, as reported by mayastor
+      description: State of a pool, as reported by io-engine
       type: object
       properties:
         capacity:
@@ -2157,6 +2168,9 @@ components:
         details:
           description: detailed error information
           type: string
+        message:
+          description: last reported error information
+          type: string
         kind:
           description: error kind
           type: string
@@ -2188,6 +2202,7 @@ components:
       required:
         - details
         - kind
+        - message
     RestWatch:
       example:
         callback: 'https://api.myserver.com/volume/e2fc5ce8-a56e-47a1-94e9-04dd2f73b88f/callback'
@@ -2238,7 +2253,7 @@ components:
         children:
           - 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:37d83441-e8ef-4e17-a29e-25169d91cb96'
         managed: false
-        node: mayastor-1
+        node: io-engine-1
         operation: null
         owner: null
         share: none
@@ -2427,7 +2442,7 @@ components:
         num_replicas: 2
         size: 80241024
         state: Created
-        target_node: mayastor-1
+        target_node: io-engine-1
         uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
       description: User specification of a volume.
       type: object
@@ -2494,7 +2509,7 @@ components:
         - policy
     VolumeTarget:
       example:
-        node: mayastor-1
+        node: io-engine-1
         protocol: nvmf
       description: Specification of a volume target
       type: object
@@ -2566,7 +2581,7 @@ components:
               uri: 'nvmf://10.1.0.6:8420/nqn.2019-05.io.openebs:a76adcd6-9df0-47a1-90a5-2d5bf4151572'
           deviceUri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:nexus-a76adcd6-9df0-47a1-90a5-2d5bf4151573'
           protocol: nvmf
-          node: mayastor-1
+          node: io-engine-1
           rebuilds: 0
           share: none
           size: 80241024
@@ -2577,7 +2592,7 @@ components:
         uuid: 4be37dbd-4b60-44f3-b807-08f6693522ac
         replica_topology:
           03f0c3f1-4d3e-44e5-b768-4c50e53f7a34:
-            node: mayastor-1
+            node: io-engine-1
             pool: pool-1
             state: Online
       description: Runtime state of the volume
@@ -2608,6 +2623,19 @@ components:
         - uuid
         - status
         - replica_topology
+    Volumes:
+      description: |-
+        Array of volumes plus the next token for subsequent get requests when using pagination
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Volume'
+        next_token:
+          type: integer
+      required:
+        - entries
     Volume:
       description: |-
         Volumes

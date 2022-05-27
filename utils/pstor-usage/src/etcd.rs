@@ -28,7 +28,14 @@ impl Etcd {
         let byte = 1;
         let kilo = byte * 1024;
         let mega = kilo * 1024;
-        if bytes > mega {
+        if bytes > 10 * mega {
+            let mut megas = bytes / mega;
+            let kilos = (bytes - (megas * mega)) / kilo;
+            if kilos > 100 {
+                megas += 1;
+            }
+            format!("{} MiB", megas)
+        } else if bytes > mega {
             let megas = bytes / mega;
             let kilos = (bytes - (megas * mega)) / kilo;
             format!("{} MiB {} KiB", megas, kilos)
@@ -121,8 +128,17 @@ impl Sampler for EtcdSampler {
     }
 }
 
-struct DiskUsage {
+/// ResourceSample for etcd disk usage.
+pub(crate) struct DiskUsage {
     points: Vec<u64>,
+}
+impl DiskUsage {
+    /// Get new `Self` with the provided data.
+    pub(crate) fn new(points: impl Iterator<Item = u64>) -> Self {
+        Self {
+            points: points.collect(),
+        }
+    }
 }
 impl ResourceSample for DiskUsage {
     fn points(&self) -> &Vec<u64> {

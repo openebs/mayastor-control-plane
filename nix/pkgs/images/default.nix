@@ -23,12 +23,16 @@ let
       } // config;
     };
   build-agent-image = { buildType, name }:
-    build-control-plane-image { inherit buildType name; package = control-plane.${buildType}.agents.${name}; };
+    build-control-plane-image {
+      inherit buildType;
+      name = "agent-${name}";
+      package = control-plane.${buildType}.agents.${name};
+    };
   build-rest-image = { buildType }:
     build-control-plane-image {
       inherit buildType;
-      name = "rest";
-      package = control-plane.${buildType}.rest;
+      name = "api-rest";
+      package = control-plane.${buildType}.api-rest;
       config = {
         ExposedPorts = {
           "8080/tcp" = { };
@@ -39,7 +43,7 @@ let
   build-operator-image = { buildType, name }:
     build-control-plane-image {
       inherit buildType;
-      name = "${name}-operator";
+      name = "operator-${name}";
       package = control-plane.${buildType}.operators.${name};
     };
   build-csi-image = { buildType, name, config ? { } }:
@@ -61,7 +65,7 @@ let
     };
   };
   build-operator-images = { buildType }: {
-    msp = build-operator-image { inherit buildType; name = "msp"; };
+    diskpool = build-operator-image { inherit buildType; name = "diskpool"; };
   };
   build-csi-images = { buildType }: {
     controller = build-csi-image { inherit buildType; name = "controller"; };

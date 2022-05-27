@@ -9,6 +9,11 @@ pub struct CoreRegistryConfig {
     id: CoreRegistryConfigKey,
     /// Node registration
     registration: NodeRegistration,
+    /// Also query healthy replicas info from etcd on the v1 path where mayastor v1 used to it, at
+    /// the root of etcd, eg: "7a43f237-b2f8-4070-ac37-18df0bd7b115"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    mayastor_compat_v1: Option<bool>,
 }
 
 impl CoreRegistryConfig {
@@ -17,7 +22,12 @@ impl CoreRegistryConfig {
         Self {
             id: CoreRegistryConfigKey::default(),
             registration,
+            mayastor_compat_v1: None,
         }
+    }
+    /// Get the `mayastor_compat_v1`.
+    pub fn mayastor_compat_v1(&self) -> bool {
+        self.mayastor_compat_v1.unwrap_or(false)
     }
     /// Get a reference to the `NodeRegistration`
     pub fn node_registration(&self) -> &NodeRegistration {
@@ -30,14 +40,19 @@ impl CoreRegistryConfig {
 pub enum NodeRegistration {
     /// Nodes have to be registered via the RestApi before they can be used.
     Manual,
-    /// Nodes are automatically registered when a Register message is received from a
-    /// mayastor instance.
+    /// Nodes are automatically registered when a Register message is received from an
+    /// io-engine instance.
     /// They can be explicitly removed via the RestApi.
     Automatic,
 }
 impl NodeRegistration {
     pub fn automatic(&self) -> bool {
         self == &Self::Automatic
+    }
+}
+impl Default for NodeRegistration {
+    fn default() -> Self {
+        Self::Automatic
     }
 }
 

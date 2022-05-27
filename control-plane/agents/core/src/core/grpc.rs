@@ -1,7 +1,7 @@
 use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
 use common_lib::{mbus_api::MessageIdTimeout, types::v0::message_bus::NodeId};
-use rpc::mayastor::mayastor_client::MayastorClient;
+use rpc::io_engine::IoEngineClient;
 use snafu::ResultExt;
 use std::{
     ops::{Deref, DerefMut},
@@ -83,10 +83,10 @@ impl GrpcContext {
 pub(crate) struct GrpcClient {
     #[allow(dead_code)]
     context: GrpcContext,
-    /// gRPC Mayastor Client
-    pub(crate) mayastor: MayaClient,
+    /// gRPC IoEngine Client
+    pub(crate) io_engine: MayaClient,
 }
-pub(crate) type MayaClient = MayastorClient<Channel>;
+pub(crate) type MayaClient = IoEngineClient<Channel>;
 impl GrpcClient {
     pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
         let client = match tokio::time::timeout(
@@ -108,7 +108,7 @@ impl GrpcClient {
 
         Ok(Self {
             context: context.clone(),
-            mayastor: client,
+            io_engine: client,
         })
     }
 }

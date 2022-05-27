@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tracing::Instrument;
 
 /// Pool Reconciler loop which:
-/// 1. recreates pools which are not present following a mayastor restart
+/// 1. recreates pools which are not present following an io-engine restart
 #[derive(Debug)]
 pub struct PoolReconciler {
     counter: PollTimer,
@@ -33,10 +33,16 @@ impl PoolReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let mut results = vec![];
-        for pool in context.specs().get_locked_pools() {
-            results.push(missing_pool_state_reconciler(pool.clone(), context).await);
-            results.push(deleting_pool_spec_reconciler(pool.clone(), context).await);
+        let pools = context.specs().get_locked_pools();
+        let mut results = Vec::with_capacity(pools.len() * 2);
+        for pool in pools {
+            let _guard = match pool.operation_guard(OperationMode::ReconcileStart) {
+                Ok(guard) => guard,
+                Err(_) => continue,
+            };
+
+            results.push(missing_pool_state_reconciler(&pool, context).await);
+            results.push(deleting_pool_spec_reconciler(&pool, context).await);
         }
         Self::squash_results(results)
     }
@@ -46,15 +52,15 @@ impl TaskPoller for PoolReconciler {
     }
 }
 
-/// If a pool has a spec but not state, it means that the mayastor instance where the pool should
+/// If a pool has a spec but not state, it means that the io-engine instance where the pool should
 /// exist does not have the pool open.
-/// This can happen if the pool is destroyed under the control plane, or if mayastor
+/// This can happen if the pool is destroyed under the control plane, or if the io-engine
 /// crashed/restarted.
-/// In such a case, we issue a new create pool request against the mayastor instance where the pool
+/// In such a case, we issue a new create pool request against the io-engine instance where the pool
 /// should exist.
 #[tracing::instrument(skip(pool_spec, context), level = "trace", fields(pool.uuid = %pool_spec.lock().id, request.reconcile = true))]
 async fn missing_pool_state_reconciler(
-    pool_spec: Arc<Mutex<PoolSpec>>,
+    pool_spec: &Arc<Mutex<PoolSpec>>,
     context: &PollContext,
 ) -> PollResult {
     if !pool_spec.lock().status().created() {
@@ -64,10 +70,6 @@ async fn missing_pool_state_reconciler(
     let pool_id = pool_spec.lock().id.clone();
 
     if context.registry().get_pool_state(&pool_id).await.is_err() {
-        let _guard = match pool_spec.operation_guard(OperationMode::ReconcileStart) {
-            Ok(guard) => guard,
-            Err(_) => return PollResult::Ok(PollerState::Busy),
-        };
         let pool = pool_spec.lock().clone();
 
         let warn_missing = |pool_spec: &Arc<Mutex<PoolSpec>>, node_status: NodeStatus| {
@@ -83,11 +85,11 @@ async fn missing_pool_state_reconciler(
         let node = match context.registry().get_node_wrapper(&pool.node).await {
             Ok(node) if !node.read().await.is_online() => {
                 let node_status = node.read().await.status();
-                warn_missing(&pool_spec, node_status);
+                warn_missing(pool_spec, node_status);
                 return PollResult::Ok(PollerState::Idle);
             }
             Err(_) => {
-                warn_missing(&pool_spec, NodeStatus::Unknown);
+                warn_missing(pool_spec, NodeStatus::Unknown);
                 return PollResult::Ok(PollerState::Idle);
             }
             Ok(node) => node,
@@ -117,13 +119,13 @@ async fn missing_pool_state_reconciler(
     }
 }
 
-/// If a pool is tried to be deleted after its corresponding mayastor node is down,
+/// If a pool is tried to be deleted after its corresponding io-engine node is down,
 /// the pool deletion gets struck in Deleting state, this creates a problem as when
 /// the node comes up we cannot create a pool with same specs, the deleting_pool_spec_reconciler
 /// cleans up any such pool when node comes up.
 #[tracing::instrument(skip(pool_spec, context), level = "trace", fields(pool.uuid = %pool_spec.lock().id, request.reconcile = true))]
 async fn deleting_pool_spec_reconciler(
-    pool_spec: Arc<Mutex<PoolSpec>>,
+    pool_spec: &Arc<Mutex<PoolSpec>>,
     context: &PollContext,
 ) -> PollResult {
     if !pool_spec.lock().status().deleting() {
@@ -152,7 +154,7 @@ async fn deleting_pool_spec_reconciler(
         };
         match context
             .specs()
-            .destroy_pool(context.registry(), &request, OperationMode::Exclusive)
+            .destroy_pool(context.registry(), &request, OperationMode::ReconcileStep)
             .await
         {
             Ok(_) => {

@@ -1,6 +1,6 @@
 //! Implement services required by the node plugin
-//! find volumes provisioned by Mayastor
-//! freeze and unfreeze filesystem volumes provisioned by Mayastor
+//! find volumes provisioned by us
+//! freeze and unfreeze filesystem volumes provisioned by us
 use crate::{
     dev::{Device, DeviceError},
     findmnt, mount,

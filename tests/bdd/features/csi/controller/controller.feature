@@ -8,17 +8,17 @@ Scenario: get controller capabilities
     Then CSI controller should report all its capabilities
 
 Scenario: get overall storage capacity
-    Given 2 Mayastor nodes with one pool on each node
+    Given 2 Io-Engine nodes with one pool on each node
     When a GetCapacity request is sent to the controller
     Then CSI controller should report overall capacity equal to aggregated sizes of the pools
 
 Scenario: get node storage capacity
-    Given 2 Mayastor nodes with one pool on each node
+    Given 2 Io-Engine nodes with one pool on each node
     When GetCapacity request with node name is sent to the controller
     Then CSI controller should report capacity for target node
 
 Scenario: create 1 replica nvmf volume
-    Given 2 Mayastor nodes with one pool on each node
+    Given 2 Io-Engine nodes with one pool on each node
     When a CreateVolume request is sent to create a 1 replica nvmf volume
     Then a new volume of requested size should be successfully created
     And volume context should reflect volume creation parameters
@@ -97,16 +97,25 @@ Scenario: republish volume on a different node
     And volume should report itself as published
 
 Scenario: create 1 replica local nvmf volume
-    Given 2 Mayastor nodes with one pool on each node
+    Given 2 Io-Engine nodes with one pool on each node
     When a CreateVolume request is sent to create a 1 replica local nvmf volume (local=true)
     Then a new local volume of requested size should be successfully created
-    And local volume must be accessible only from all existing Mayastor nodes
+    And local volume must be accessible only from all existing Io-Engine nodes
+
+Scenario: unpinned volume creation
+    Given 2 Io-Engine nodes with one pool on each node
+    When a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)
+    Then volume creation should fail with invalid argument
+
+    Given 2 Io-Engine nodes with one pool on each node
+    When a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)
+    Then volume creation should fail with invalid argument
 
 Scenario: list local volume
     Given 2 existing volumes
     Given an existing unpublished local volume
     When a ListVolumesRequest is sent to CSI controller
-    Then listed local volume must be accessible only from all existing Mayastor nodes
+    Then listed local volume must be accessible only from all existing Io-Engine nodes
     And no topology restrictions should be imposed to non-local volumes
 
 Scenario: unpublish volume when nexus node is offline
@@ -114,3 +123,15 @@ Scenario: unpublish volume when nexus node is offline
     When a node that hosts the nexus becomes offline
     Then a ControllerUnpublishVolume request should succeed as if nexus node was online
     And volume should be successfully republished on the other node
+
+Scenario: list existing volumes with pagination
+    Given 2 existing volumes
+    When a ListVolumesRequest is sent to CSI controller with max_entries set to 1
+    Then only a single volume should be returned
+    And a subsequent ListVolumesRequest using the next token should return the next volume
+
+Scenario: list existing volumes with pagination max entries set to 0
+    Given 2 existing volumes
+    When a ListVolumesRequest is sent to CSI controller with max_entries set to 0
+    Then all volumes should be returned
+    And the next token should be empty

@@ -9,6 +9,6 @@ fn main() {
     tonic_build::configure()
         .build_server(true)
         .build_client(true)
-        .compile(&["node/proto/mayastornodeplugin.proto"], &["node/proto"])
-        .expect("mayastor node grpc service protobuf compilation failed");
+        .compile(&["node/proto/ioenginenodeplugin.proto"], &["node/proto"])
+        .expect("node grpc service protobuf compilation failed");
 }

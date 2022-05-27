@@ -1,5 +1,6 @@
 [package]
 name = "rest"
+description = "Control plane REST server"
 version = "1.0.0"
 authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
 edition = "2018"
@@ -46,8 +47,8 @@ grpc = { path = "../grpc" }
 
 [dev-dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
-composer = { path = "../../utils/mayastor-dependencies/composer", default-features = false }
-ctrlp-tests = { path = "../../tests/tests-mayastor" }
+composer = { path = "../../utils/dependencies/composer", default-features = false }
+deployer-cluster = { path = "../../utils/deployer-cluster" }
 
 [dependencies.serde]
 features = ["derive"]

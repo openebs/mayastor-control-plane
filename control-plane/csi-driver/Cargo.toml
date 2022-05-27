@@ -1,5 +1,6 @@
 [package]
 name = "csi-driver"
+description = "CSI controller"
 version = "1.0.0"
 edition = "2021"
 
@@ -39,7 +40,6 @@ opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
 
 async-trait = "0.1.51"
 chrono = "0.4.19"
-env_logger = "0.9.0"
 failure = "0.1.8"
 glob = "0.3.0"
 lazy_static = "1.4.0"
@@ -55,10 +55,10 @@ url = "2.2.2"
 uuid = { version = "0.8.2", features = ["v4"] }
 which = "4.2.2"
 k8s-openapi = { version = "0.13.0", default-features = false, features = ["v1_20"] }
-kube = { version = "0.60.0", features = ["derive" ] }
-devinfo = { path = "../../utils/mayastor-dependencies/devinfo" }
-nvmeadm = { path = "../../utils/mayastor-dependencies/nvmeadm" }
-sysfs = { path = "../../utils/mayastor-dependencies/sysfs" }
+kube = { version = "0.60.0", features = ["derive"] }
+devinfo = { path = "../../utils/dependencies/devinfo" }
+nvmeadm = { path = "../../utils/dependencies/nvmeadm" }
+sysfs = { path = "../../utils/dependencies/sysfs" }
 common-lib = { path = "../../common" }
 utils = { path = "../../utils/utils-lib" }
 shutdown = { path = "../../utils/shutdown" }

@@ -22,7 +22,7 @@ If applicable, add screenshots to help explain your problem.
 ** OS info (please complete the following information):**
  - Distro: [e.g. NixOS]
  - Kernel version
- - MayaStor revision or container image
+ - Revision or container images
 
 **Additional context**
 Add any other context about the problem here.

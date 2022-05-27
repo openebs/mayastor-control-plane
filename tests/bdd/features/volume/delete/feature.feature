@@ -8,7 +8,7 @@ Feature: Volume deletion
     When a user attempts to delete a volume
     Then the volume should be deleted
 
-  # The following scenario reflects the current behaviour where Mayastor will unshare and delete
+  # The following scenario reflects the current behaviour where the Io-Engine will unshare and delete
   # a shared volume.
   Scenario: delete a volume that is shared/published
     Given a volume that is shared/published

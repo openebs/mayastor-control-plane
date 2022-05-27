@@ -79,7 +79,18 @@ impl Registry {
                     None => NexusInfoKey::new(&None, nexus_uuid),
                 };
 
-                match self.load_obj::<NexusInfo>(&nexus_info_key).await {
+                let result = match self.load_obj::<NexusInfo>(&nexus_info_key).await {
+                    Ok(result) => Ok(result),
+                    Err(SvcError::StoreMissingEntry { .. })
+                        if self.config().mayastor_compat_v1() =>
+                    {
+                        self.load_obj::<NexusInfo>(&nexus_info_key.with_mayastor_compat_v1(true))
+                            .await
+                    }
+                    Err(error) => Err(error),
+                };
+
+                match result {
                     Ok(mut info) => {
                         info.uuid = nexus_uuid.clone();
                         Ok(Some(info))

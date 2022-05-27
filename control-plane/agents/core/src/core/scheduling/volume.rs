@@ -498,7 +498,7 @@ impl AddVolumeNexusReplicas {
     /// 3. use only replicas which are large enough for the volume
     /// Sorted by:
     /// 1. nexus local replicas
-    /// 2. replicas which have never been marked as faulted by mayastor
+    /// 2. replicas which have never been marked as faulted by io-engine
     /// 3. replicas from pools with more free space
     pub(crate) async fn builder_with_defaults(
         vol_spec: &VolumeSpec,

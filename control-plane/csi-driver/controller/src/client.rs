@@ -1,17 +1,16 @@
+use crate::CsiControllerConfig;
 use common_lib::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
     models::{
         CreateVolumeBody, ExplicitNodeTopology, LabelledTopology, Node, NodeTopology, Pool,
-        PoolTopology, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol,
+        PoolTopology, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol, Volumes,
     },
 };
 
-use crate::CsiControllerConfig;
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
-
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 use tracing::{debug, info, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -29,6 +28,8 @@ pub enum ApiClientError {
     InvalidResponse(String),
     /// URL is malformed.
     MalformedUrl(String),
+    /// Invalid argument.
+    InvalidArgument(String),
 }
 
 /// Placeholder for volume topology for volume creation operation.
@@ -82,18 +83,18 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
     }
 }
 
-static REST_CLIENT: OnceCell<MayastorApiClient> = OnceCell::new();
+static REST_CLIENT: OnceCell<IoEngineApiClient> = OnceCell::new();
 
 /// Single instance API client for accessing REST API gateway.
 /// Encapsulates communication with REST API by exposing a set of
 /// high-level API functions, which perform (de)serialization
 /// of API request/response objects.
 #[derive(Debug)]
-pub struct MayastorApiClient {
+pub struct IoEngineApiClient {
     rest_client: clients::tower::ApiClient,
 }
 
-impl MayastorApiClient {
+impl IoEngineApiClient {
     /// Initialize API client instance. Must be called prior to
     /// obtaining the client instance.
     pub fn initialize() -> Result<()> {
@@ -106,14 +107,13 @@ impl MayastorApiClient {
 
         let url = clients::tower::Url::parse(endpoint)
             .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
-        let tower =
-            clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration, Error: '{:?}'",
-                        error
-                    )
-                })?;
+        let tower = clients::tower::Configuration::new(url, cfg.io_timeout(), None, None, true)
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to create openapi configuration, Error: '{:?}'",
+                    error
+                )
+            })?;
 
         REST_CLIENT.get_or_init(|| Self {
             rest_client: clients::tower::ApiClient::new(tower),
@@ -129,31 +129,50 @@ impl MayastorApiClient {
 
     /// Obtain client instance. Panics if called before the client
     /// has been initialized.
-    pub fn get_client() -> &'static MayastorApiClient {
+    pub fn get_client() -> &'static IoEngineApiClient {
         REST_CLIENT.get().expect("Rest client is not initialized")
     }
 }
 
-impl MayastorApiClient {
-    /// List all nodes available in Mayastor cluster.
+impl IoEngineApiClient {
+    /// List all nodes available in IoEngine cluster.
     pub async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
         let response = self.rest_client.nodes_api().get_nodes().await?;
         Ok(response.into_body())
     }
 
-    /// List all pools available in Mayastor cluster.
+    /// List all pools available in IoEngine cluster.
     pub async fn list_pools(&self) -> Result<Vec<Pool>, ApiClientError> {
         let response = self.rest_client.pools_api().get_pools().await?;
         Ok(response.into_body())
     }
 
-    /// List all volumes available in Mayastor cluster.
-    pub async fn list_volumes(&self) -> Result<Vec<Volume>, ApiClientError> {
-        let response = self.rest_client.volumes_api().get_volumes().await?;
+    /// List all volumes available in IoEngine cluster.
+    pub async fn list_volumes(
+        &self,
+        max_entries: i32,
+        starting_token: String,
+    ) -> Result<Volumes, ApiClientError> {
+        let max_entries = max_entries as isize;
+        let starting_token = if starting_token.is_empty() {
+            0
+        } else {
+            starting_token.parse::<isize>().map_err(|_| {
+                ApiClientError::InvalidArgument(
+                    "Failed to parse starting token as an isize".to_string(),
+                )
+            })?
+        };
+
+        let response = self
+            .rest_client
+            .volumes_api()
+            .get_volumes(max_entries, Some(starting_token))
+            .await?;
         Ok(response.into_body())
     }
 
-    /// List pools available on target Mayastor node.
+    /// List pools available on target IoEngine node.
     pub async fn get_node_pools(&self, node: &str) -> Result<Vec<Pool>, ApiClientError> {
         let pools = self.rest_client.pools_api().get_node_pools(node).await?;
         Ok(pools.into_body())
@@ -169,7 +188,7 @@ impl MayastorApiClient {
         replicas: u8,
         size: u64,
         volume_topology: CreateVolumeTopology,
-        pinned_volume: bool,
+        _pinned_volume: bool,
     ) -> Result<Volume, ApiClientError> {
         let topology = Topology::new_all(
             Some(NodeTopology::explicit(ExplicitNodeTopology::new(
@@ -182,20 +201,12 @@ impl MayastorApiClient {
             ))),
         );
 
-        let labels = if pinned_volume {
-            let mut labels = HashMap::new();
-            labels.insert("local".to_string(), "true".to_string());
-            Some(labels)
-        } else {
-            None
-        };
-
         let req = CreateVolumeBody {
             replicas,
             size,
             topology: Some(topology),
             policy: VolumePolicy::new_all(true),
-            labels,
+            labels: None,
         };
 
         let result = self

@@ -25,7 +25,7 @@ Feature: Adjusting the volume replicas
 
   # TODO: Enable this after handling the simple cases
 #  Scenario: replacing a faulted replica
-#    When Mayastor has marked a replica as faulted
+#    When the Io-Engine has marked a replica as faulted
 #    And the number of volume replicas is greater than the number of healthy replicas
 #    And there are suitable pools where a replacement replica can be created
 #    Then a new replica should eventually be added to the volume

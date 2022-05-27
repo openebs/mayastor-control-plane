@@ -6,21 +6,24 @@ from dataclasses import dataclass
 
 @dataclass
 class StartOptions:
-    mayastors: int = 1
+    io_engines: int = 1
     wait: str = "10s"
     csi: bool = False
     reconcile_period: str = ""
     cache_period: str = ""
-    mayastor_env: str = ""
+    io_engine_env: str = ""
     agents_env: str = ""
     node_deadline: str = ""
     jaeger: bool = True
+    cluster_uid: str = "bdd"
     extra_args: [str] = ()
+    rest_env: str = ""
+    max_rebuilds: str = ""
 
     def args(self):
         args = [
-            "--mayastors",
-            str(self.mayastors),
+            "--io-engines",
+            str(self.io_engines),
             "--wait-timeout",
             self.wait,
         ]
@@ -35,12 +38,18 @@ class StartOptions:
             args.append(f"--cache-period={self.cache_period}")
         if len(self.node_deadline) > 0:
             args.append(f"--node-deadline={self.node_deadline}")
-        if len(self.mayastor_env) > 0:
-            args.append(f"--mayastor-env={self.mayastor_env}")
+        if len(self.io_engine_env) > 0:
+            args.append(f"--io-engine-env={self.io_engine_env}")
         if len(self.agents_env) > 0:
             args.append(f"--agents-env={self.agents_env}")
+        if len(self.cluster_uid) > 0:
+            args.append(f"--cluster-uid={self.cluster_uid}")
+        if len(self.rest_env) > 0:
+            args.append(f"--rest-env={self.rest_env}")
         if len(self.extra_args) > 0:
             args.append(self.extra_args)
+        if len(self.max_rebuilds) > 0:
+            args.append(f"--max-rebuilds={self.max_rebuilds}")
         return args
 
 
@@ -48,26 +57,29 @@ class Deployer(object):
     # Start containers with the provided arguments
     @staticmethod
     def start(
-        mayastors=2,
+        io_engines=2,
         wait="10s",
         csi=False,
         reconcile_period="",
         cache_period="",
-        mayastor_env="",
+        io_engine_env="",
         agents_env="",
+        rest_env="",
         node_deadline="",
         jaeger=True,
+        max_rebuilds="",
     ):
         options = StartOptions(
-            mayastors,
+            io_engines,
             wait,
             csi=csi,
             reconcile_period=reconcile_period,
             cache_period=cache_period,
-            mayastor_env=mayastor_env,
+            io_engine_env=io_engine_env,
             agents_env=agents_env,
             node_deadline=node_deadline,
             jaeger=jaeger,
+            max_rebuilds=max_rebuilds,
         )
         Deployer.start_with_opts(options)
 

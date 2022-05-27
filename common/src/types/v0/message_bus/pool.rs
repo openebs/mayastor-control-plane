@@ -59,7 +59,7 @@ impl From<PoolStatus> for models::PoolStatus {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolState {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
     pub id: PoolId,
@@ -86,7 +86,7 @@ impl From<PoolState> for models::PoolState {
     }
 }
 
-bus_impl_string_id!(PoolId, "ID of a mayastor pool");
+bus_impl_string_id!(PoolId, "ID of a pool");
 
 // online > degraded > unknown/faulted
 impl PartialOrd for PoolStatus {
@@ -120,9 +120,9 @@ impl PartialOrd for PoolStatus {
     }
 }
 
-/// A Mayastor Storage Pool
+/// A Storage Pool
 /// It may have a spec which is the specification provided by the creator
-/// It may have a state if such state is retrieved from a mayastor storage node
+/// It may have a state if such state is retrieved from a storage node
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Pool {
@@ -244,7 +244,7 @@ impl From<PoolDeviceUri> for String {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatePool {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
     pub id: PoolId,
@@ -275,7 +275,7 @@ impl CreatePool {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DestroyPool {
-    /// id of the mayastor instance
+    /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
     pub id: PoolId,

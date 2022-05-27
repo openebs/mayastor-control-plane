@@ -11,22 +11,25 @@ use common_lib::{
         store::nexus::NexusSpec,
     },
 };
-use grpc::operations::{node::traits::NodeOperations, replica::traits::ReplicaOperations};
+use deployer_cluster::{Cluster, ClusterBuilder};
+use grpc::operations::{
+    node::traits::NodeOperations, registry::traits::RegistryOperations,
+    replica::traits::ReplicaOperations,
+};
 use std::{convert::TryFrom, time::Duration};
-use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn nexus() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_agents(vec!["core"])
-        .with_mayastors(2)
+        .with_io_engines(2)
         .with_pools(2)
         .build()
         .await
         .unwrap();
 
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
     let node_client = cluster.grpc_client().node();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
@@ -53,7 +56,7 @@ async fn nexus() {
     let local = "malloc:///local?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b".into();
 
     let nexus = CreateNexus {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec![replica.uri.clone().into(), local],
@@ -68,7 +71,7 @@ async fn nexus() {
     assert_eq!(Some(&nexus), nexuses.first());
 
     ShareNexus {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         key: None,
         protocol: NexusShareProtocol::Nvmf,
@@ -78,7 +81,7 @@ async fn nexus() {
     .unwrap();
 
     DestroyNexus {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
     }
     .request()
@@ -106,8 +109,8 @@ fn bus_timeout_opts() -> TimeoutOptions {
 }
 
 /// Get the nexus spec
-async fn nexus_spec(replica: &Nexus) -> Option<NexusSpec> {
-    let specs = GetSpecs {}.request().await.unwrap().nexuses;
+async fn nexus_spec(replica: &Nexus, client: &dyn RegistryOperations) -> Option<NexusSpec> {
+    let specs = client.get_specs(&GetSpecs {}, None).await.unwrap().nexuses;
     specs.iter().find(|r| r.uuid == replica.uuid).cloned()
 }
 
@@ -123,15 +126,16 @@ async fn nexus_share_transaction() {
         .build()
         .await
         .unwrap();
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
 
     let node_client = cluster.grpc_client().node();
+    let registry_client = cluster.grpc_client().registry();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
     let nexus = CreateNexus {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec![local],
@@ -142,46 +146,64 @@ async fn nexus_share_transaction() {
     .unwrap();
     let share = ShareNexus::from((&nexus, None, NexusShareProtocol::Nvmf));
 
-    async fn check_share_operation(nexus: &Nexus, protocol: Protocol) {
+    async fn check_share_operation(
+        nexus: &Nexus,
+        protocol: Protocol,
+        registry_client: &dyn RegistryOperations,
+    ) {
         // operation in progress
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_some());
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is completed
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
-        assert_eq!(nexus_spec(nexus).await.unwrap().share, protocol);
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_none());
+        assert_eq!(
+            nexus_spec(nexus, registry_client).await.unwrap().share,
+            protocol
+        );
     }
 
-    // pause mayastor
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    // pause io_engine
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     share
         .request_ext(bus_timeout_opts())
         .await
-        .expect_err("mayastor is down");
+        .expect_err("io_engine is down");
 
-    check_share_operation(&nexus, Protocol::None).await;
+    check_share_operation(&nexus, Protocol::None, &registry_client).await;
 
-    // unpause mayastor
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    // unpause io_engine
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     // now it should be shared successfully
     let uri = share.request().await.unwrap();
     println!("Share uri: {}", uri);
 
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     UnshareNexus::from(&nexus)
         .request_ext(bus_timeout_opts())
         .await
-        .expect_err("mayastor down");
+        .expect_err("io_engine down");
 
-    check_share_operation(&nexus, Protocol::Nvmf).await;
+    check_share_operation(&nexus, Protocol::Nvmf, &registry_client).await;
 
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     UnshareNexus::from(&nexus).request().await.unwrap();
 
-    assert_eq!(nexus_spec(&nexus).await.unwrap().share, Protocol::None);
+    assert_eq!(
+        nexus_spec(&nexus, &registry_client).await.unwrap().share,
+        Protocol::None
+    );
 }
 
 /// Tests Store Write Failures for Nexus Child Operations
@@ -196,23 +218,24 @@ async fn nexus_child_op_transaction_store<R>(
     R: Message,
     R::Reply: std::fmt::Debug,
 {
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
 
-    // pause mayastor
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    // pause io_engine
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     request
         .request_ext(bus_timeout_opts())
         .await
-        .expect_err("mayastor down");
+        .expect_err("io_engine down");
 
     // ensure the op will succeed but etcd store will fail
-    // by pausing etcd and releasing mayastor
+    // by pausing etcd and releasing io_engine
     cluster.composer().pause("etcd").await.unwrap();
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
+    let registry_client = cluster.grpc_client().registry();
     // hopefully we have enough time before the store times out
-    let spec = nexus_spec(nexus).await.unwrap();
+    let spec = nexus_spec(nexus, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_none());
 
     // let the store write time out
@@ -220,7 +243,7 @@ async fn nexus_child_op_transaction_store<R>(
 
     // and now we have a result but the operation is still pending until
     // we can sync the spec
-    let spec = nexus_spec(nexus).await.unwrap();
+    let spec = nexus_spec(nexus, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_some());
 
     // thaw etcd allowing the worker thread to sync the "dirty" spec
@@ -230,7 +253,7 @@ async fn nexus_child_op_transaction_store<R>(
     tokio::time::sleep(reconcile_period * 2).await;
 
     // and now we're in sync and the pending operation is no more
-    let spec = nexus_spec(nexus).await.unwrap();
+    let spec = nexus_spec(nexus, &registry_client).await.unwrap();
     assert!(spec.operation.is_none());
     assert_eq!(spec.children.len(), children);
     assert_eq!(spec.share, share);
@@ -242,7 +265,7 @@ async fn nexus_child_op_transaction_store<R>(
 }
 
 /// Tests nexus share and unshare operations when the store is temporarily down
-/// TODO: these tests don't work anymore because mayastor also writes child healthy states
+/// TODO: these tests don't work anymore because the io_engine also writes child healthy states
 /// to etcd so we can't simply pause etcd anymore..
 #[tokio::test]
 #[ignore]
@@ -261,11 +284,11 @@ async fn nexus_share_transaction_store() {
         .build()
         .await
         .unwrap();
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
 
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
     let nexus = CreateNexus {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec![local],
@@ -309,14 +332,15 @@ async fn nexus_child_transaction() {
         .build()
         .await
         .unwrap();
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
     let node_client = cluster.grpc_client().node();
+    let registry_client = cluster.grpc_client().registry();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let child2 = "malloc:///ch2?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b";
     let nexus = CreateNexus {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
@@ -326,61 +350,87 @@ async fn nexus_child_transaction() {
     .await
     .unwrap();
     let add_child = AddNexusChild {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         nexus: nexus.uuid.clone(),
         uri: child2.into(),
         auto_rebuild: true,
     };
     let rm_child = RemoveNexusChild {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         nexus: nexus.uuid.clone(),
         uri: child2.into(),
     };
 
-    async fn check_child_operation(nexus: &Nexus, children: usize) {
+    async fn check_child_operation(
+        nexus: &Nexus,
+        children: usize,
+        registry_client: &dyn RegistryOperations,
+    ) {
         // operation in progress
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_some());
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_some());
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is complete
-        assert!(nexus_spec(nexus).await.unwrap().operation.is_none());
-        assert_eq!(nexus_spec(nexus).await.unwrap().children.len(), children);
+        assert!(nexus_spec(nexus, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_none());
+        assert_eq!(
+            nexus_spec(nexus, registry_client)
+                .await
+                .unwrap()
+                .children
+                .len(),
+            children
+        );
     }
 
-    // pause mayastor
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    // pause io_engine
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     add_child
         .request_ext(bus_timeout_opts())
         .await
-        .expect_err("mayastor is down");
+        .expect_err("io_engine is down");
 
-    check_child_operation(&nexus, 1).await;
+    check_child_operation(&nexus, 1, &registry_client).await;
 
-    // unpause mayastor
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    // unpause io_engine
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     // now it should be shared successfully
     let uri = add_child.request().await.unwrap();
     println!("Share uri: {:?}", uri);
 
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     rm_child
         .request_ext(bus_timeout_opts())
         .await
-        .expect_err("mayastor down");
+        .expect_err("io_engine down");
 
-    check_child_operation(&nexus, 2).await;
+    check_child_operation(&nexus, 2, &registry_client).await;
 
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     rm_child.request().await.unwrap();
 
-    assert_eq!(nexus_spec(&nexus).await.unwrap().children.len(), 1);
+    assert_eq!(
+        nexus_spec(&nexus, &registry_client)
+            .await
+            .unwrap()
+            .children
+            .len(),
+        1
+    );
 }
 
 /// Tests child add and remove operations when the store is temporarily down
-/// TODO: these tests don't work anymore because mayastor also writes child healthy states
+/// TODO: these tests don't work anymore because the io_engine also writes child healthy states
 /// to etcd so we can't simply pause etcd anymore..
 #[tokio::test]
 #[ignore]
@@ -399,10 +449,10 @@ async fn nexus_child_transaction_store() {
         .build()
         .await
         .unwrap();
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
 
     let nexus = CreateNexus {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
         size: 5242880,
         children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
@@ -414,7 +464,7 @@ async fn nexus_child_transaction_store() {
 
     let child2 = "malloc:///ch2?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0db";
     let add_child = AddNexusChild {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         nexus: nexus.uuid.clone(),
         uri: child2.into(),
         auto_rebuild: true,
@@ -428,7 +478,7 @@ async fn nexus_child_transaction_store() {
     .await;
 
     let del_child = RemoveNexusChild {
-        node: mayastor.clone(),
+        node: io_engine.clone(),
         nexus: nexus.uuid.clone(),
         uri: child2.into(),
     };

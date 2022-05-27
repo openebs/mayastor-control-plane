@@ -106,7 +106,7 @@ def plugin_information_info_request(csi_instance):
 @then("CSI controller should report its name and version")
 def check_csi_controller_info(info_request):
     assert info_request.name == "io.openebs.csi-mayastor"
-    assert info_request.vendor_version == "0.5"
+    assert info_request.vendor_version == "1.0.0"
 
 
 @when(

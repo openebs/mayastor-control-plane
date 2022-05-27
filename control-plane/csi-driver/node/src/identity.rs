@@ -6,7 +6,7 @@ use tonic::{Request, Response, Status};
 
 const PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
 // TODO: can we generate version with commit SHA dynamically?
-const PLUGIN_VERSION: &str = "0.2";
+const PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Clone, Debug)]
 pub struct Identity {}
@@ -53,7 +53,7 @@ impl identity_server::Identity for Identity {
         &self,
         _request: Request<ProbeRequest>,
     ) -> Result<Response<ProbeResponse>, Status> {
-        // CSI plugin is independent of mayastor so it's always ready
+        // CSI plugin is independent of the io-engine so it's always ready
         Ok(Response::new(ProbeResponse { ready: Some(true) }))
     }
 }

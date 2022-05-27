@@ -10,9 +10,9 @@ impl Shutdown {
 
 #[cfg(test)]
 mod tests {
-    use crate::nodeplugin_grpc::mayastor_node_plugin::{
-        mayastor_node_plugin_client::MayastorNodePluginClient,
-        mayastor_node_plugin_server::{MayastorNodePlugin, MayastorNodePluginServer},
+    use crate::nodeplugin_grpc::io_engine_node_plugin::{
+        io_engine_node_plugin_client::IoEngineNodePluginClient,
+        io_engine_node_plugin_server::{IoEngineNodePlugin, IoEngineNodePluginServer},
         FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
         UnfreezeFsRequest, VolumeType,
     };
@@ -27,10 +27,10 @@ mod tests {
     };
 
     #[derive(Debug, Default)]
-    struct MayastorNodePluginSvc {
+    struct IoEngineNodePluginSvc {
         first_call: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     }
-    impl MayastorNodePluginSvc {
+    impl IoEngineNodePluginSvc {
         fn new(chan: tokio::sync::oneshot::Sender<()>) -> Self {
             Self {
                 first_call: Arc::new(Mutex::new(Some(chan))),
@@ -39,7 +39,7 @@ mod tests {
     }
 
     #[tonic::async_trait]
-    impl MayastorNodePlugin for MayastorNodePluginSvc {
+    impl IoEngineNodePlugin for IoEngineNodePluginSvc {
         async fn freeze_fs(
             &self,
             _request: Request<FreezeFsRequest>,
@@ -88,7 +88,7 @@ mod tests {
 
         tokio::spawn(async move {
             if let Err(e) = Server::builder()
-                .add_service(MayastorNodePluginServer::new(MayastorNodePluginSvc::new(
+                .add_service(IoEngineNodePluginServer::new(IoEngineNodePluginSvc::new(
                     first_sender,
                 )))
                 .serve_with_shutdown("0.0.0.0:50011".parse().unwrap(), wait(shutdown_receiver))
@@ -103,7 +103,7 @@ mod tests {
                 .connect()
                 .await
                 .unwrap();
-        let mut cli = MayastorNodePluginClient::new(channel);
+        let mut cli = IoEngineNodePluginClient::new(channel);
 
         // 1. schedule the first request
         let mut cli_first = cli.clone();

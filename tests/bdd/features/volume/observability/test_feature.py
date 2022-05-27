@@ -25,7 +25,7 @@ from openapi.model.replica_topology import ReplicaTopology
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-NODE_NAME = "mayastor-1"
+NODE_NAME = "io-engine-1"
 VOLUME_CTX_KEY = "volume"
 VOLUME_SIZE = 10485761
 
@@ -90,7 +90,7 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
     expected_replica_toplogy = {}
     for key, value in volume.state.replica_topology.items():
         expected_replica_toplogy[key] = ReplicaTopology(
-            ReplicaState("Online"), node="mayastor-1", pool=POOL_UUID
+            ReplicaState("Online"), node="io-engine-1", pool=POOL_UUID
         )
     expected_state = VolumeState(
         VOLUME_SIZE,

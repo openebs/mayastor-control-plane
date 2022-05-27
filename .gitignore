@@ -16,3 +16,4 @@ __pycache__
 !/openapi/Cargo.toml
 !/openapi/build.rs
 /tests/bdd/autogen/
+/terraform/cluster/ansible-hosts

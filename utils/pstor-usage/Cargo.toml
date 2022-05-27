@@ -1,5 +1,6 @@
 [package]
 name = "pstor-usage"
+description = "Persistent Storage Usage"
 version = "0.1.0"
 edition = "2018"
 authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
@@ -9,7 +10,7 @@ authors = ["Tiago Castro <tiago.castro@mayadata.io>"]
 [dependencies]
 tokio = { version = "1.12.0", features = ["full"] }
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
-ctrlp-tests = { path = "../../tests/tests-mayastor" }
+deployer-cluster = { path = "../../utils/deployer-cluster" }
 utils = { path = "../utils-lib" }
 anyhow = "1.0.52"
 structopt = "0.3.25"
@@ -17,3 +18,6 @@ parse-size = "1.0.0"
 async-trait = "0.1.52"
 etcd-client = "0.7.2"
 prettytable-rs = "0.8.0"
+serde = "1.0.130"
+serde_yaml = "0.8.21"
+itertools = "0.10.1"

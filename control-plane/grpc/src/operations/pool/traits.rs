@@ -35,6 +35,53 @@ pub trait PoolOperations: Send + Sync {
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Pools, ReplyError>;
 }
 
+impl TryFrom<pool::PoolDefinition> for PoolSpec {
+    type Error = ReplyError;
+
+    fn try_from(pool_definition: pool::PoolDefinition) -> Result<Self, Self::Error> {
+        let pool_spec = match pool_definition.spec {
+            Some(spec) => spec,
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Pool,
+                    "pool.definition.spec",
+                ))
+            }
+        };
+        let pool_meta = match pool_definition.metadata {
+            Some(meta) => meta,
+            None => {
+                return Err(ReplyError::missing_argument(
+                    ResourceKind::Pool,
+                    "pool.definition.metadata",
+                ))
+            }
+        };
+        let pool_spec_status = match common::SpecStatus::from_i32(pool_meta.spec_status) {
+            Some(status) => status.into(),
+            None => {
+                return Err(ReplyError::invalid_argument(
+                    ResourceKind::Pool,
+                    "pool.metadata.spec_status",
+                    "".to_string(),
+                ))
+            }
+        };
+        Ok(PoolSpec {
+            node: pool_spec.node_id.into(),
+            id: pool_spec.pool_id.into(),
+            disks: pool_spec.disks.iter().map(|i| i.into()).collect(),
+            status: pool_spec_status,
+            labels: match pool_spec.labels {
+                Some(labels) => Some(labels.value),
+                None => None,
+            },
+            sequencer: Default::default(),
+            operation: None,
+        })
+    }
+}
+
 impl TryFrom<pool::Pool> for Pool {
     type Error = ReplyError;
     fn try_from(pool: pool::Pool) -> Result<Self, Self::Error> {
@@ -60,54 +107,7 @@ impl TryFrom<pool::Pool> for Pool {
         };
         let pool_spec = match pool.definition {
             None => None,
-            Some(pool_definition) => {
-                let pool_spec = match pool_definition.spec {
-                    Some(spec) => spec,
-                    None => {
-                        return Err(ReplyError::missing_argument(
-                            ResourceKind::Pool,
-                            "pool.definition.spec",
-                        ))
-                    }
-                };
-                let pool_meta = match pool_definition.metadata {
-                    Some(meta) => meta,
-                    None => {
-                        return Err(ReplyError::missing_argument(
-                            ResourceKind::Pool,
-                            "pool.definition.metadata",
-                        ))
-                    }
-                };
-                let pool_spec_status = match common::SpecStatus::from_i32(pool_meta.status) {
-                    Some(status) => match status {
-                        common::SpecStatus::Created => match pool_state {
-                            None => PoolSpecStatus::Created(message_bus::PoolStatus::Unknown),
-                            Some(ref state) => PoolSpecStatus::Created(state.status.clone()),
-                        },
-                        _ => status.into(),
-                    },
-                    None => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Pool,
-                            "pool.metadata.status",
-                            "".to_string(),
-                        ))
-                    }
-                };
-                Some(PoolSpec {
-                    node: pool_spec.node_id.into(),
-                    id: pool_spec.pool_id.into(),
-                    disks: pool_spec.disks.iter().map(|i| i.into()).collect(),
-                    status: pool_spec_status,
-                    labels: match pool_spec.labels {
-                        Some(labels) => Some(labels.value),
-                        None => None,
-                    },
-                    sequencer: Default::default(),
-                    operation: None,
-                })
-            }
+            Some(pool_definition) => Some(PoolSpec::try_from(pool_definition)?),
         };
         match Pool::try_new(pool_spec, pool_state) {
             Some(pool) => Ok(pool),
@@ -119,28 +119,29 @@ impl TryFrom<pool::Pool> for Pool {
     }
 }
 
+impl From<PoolSpec> for pool::PoolDefinition {
+    fn from(pool_spec: PoolSpec) -> Self {
+        let spec_status: common::SpecStatus = pool_spec.status.into();
+        pool::PoolDefinition {
+            spec: Some(pool::PoolSpec {
+                node_id: pool_spec.node.to_string(),
+                pool_id: pool_spec.id.to_string(),
+                disks: pool_spec.disks.iter().map(|i| i.to_string()).collect(),
+                labels: pool_spec
+                    .labels
+                    .map(|labels| crate::common::StringMapValue { value: labels }),
+            }),
+            metadata: Some(pool::Metadata {
+                uuid: None,
+                spec_status: spec_status as i32,
+            }),
+        }
+    }
+}
+
 impl From<Pool> for pool::Pool {
     fn from(pool: Pool) -> Self {
-        let pool_definition = match pool.spec() {
-            None => None,
-            Some(pool_spec) => {
-                let status: common::SpecStatus = pool_spec.status.into();
-                Some(pool::PoolDefinition {
-                    spec: Some(pool::PoolSpec {
-                        node_id: pool_spec.node.to_string(),
-                        pool_id: pool_spec.id.to_string(),
-                        disks: pool_spec.disks.iter().map(|i| i.to_string()).collect(),
-                        labels: pool_spec
-                            .labels
-                            .map(|labels| crate::common::StringMapValue { value: labels }),
-                    }),
-                    metadata: Some(pool::Metadata {
-                        uuid: None,
-                        status: status as i32,
-                    }),
-                })
-            }
-        };
+        let pool_definition = pool.spec().map(|pool_spec| pool_spec.into());
         let pool_state = match pool.state() {
             None => None,
             Some(pool_state) => Some(pool::PoolState {
@@ -204,7 +205,7 @@ impl From<get_pools_request::Filter> for Filter {
 pub trait CreatePoolInfo: Send + Sync + std::fmt::Debug {
     /// Id of the pool
     fn pool_id(&self) -> PoolId;
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node_id(&self) -> NodeId;
     /// Disk device paths or URIs to be claimed by the pool
     fn disks(&self) -> Vec<PoolDeviceUri>;
@@ -217,7 +218,7 @@ pub trait CreatePoolInfo: Send + Sync + std::fmt::Debug {
 pub trait DestroyPoolInfo: Sync + Send + std::fmt::Debug {
     /// Id of the pool
     fn pool_id(&self) -> PoolId;
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node_id(&self) -> NodeId;
 }
 

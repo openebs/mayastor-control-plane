@@ -1,20 +1,17 @@
 use common_lib::{types::v0::store::ResourceUuid, IntoVec};
+use indexmap::{map::Values, IndexMap};
 use parking_lot::Mutex;
-use std::{
-    collections::{hash_map::Values, HashMap},
-    hash::Hash,
-    sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 #[derive(Default, Debug)]
 pub struct ResourceMap<I, S> {
-    map: HashMap<I, Arc<Mutex<S>>>,
+    map: IndexMap<I, Arc<Mutex<S>>>,
 }
 
 impl<I, S> ResourceMap<I, S>
 where
     I: Eq + Hash,
-    S: Clone + ResourceUuid<Id = I>,
+    S: Clone + ResourceUuid<Id = I> + Debug,
 {
     /// Get the resource with the given key.
     pub fn get(&self, key: &I) -> Option<&Arc<Mutex<S>>> {
@@ -66,5 +63,20 @@ where
     /// Return the maps values.
     pub fn values(&self) -> Values<'_, I, Arc<Mutex<S>>> {
         self.map.values()
+    }
+
+    /// Return the length of the map.
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    /// Return a subset of the map (i.e. a paginated result).
+    pub fn paginate(&self, offset: u64, len: u64) -> Vec<S> {
+        self.map
+            .values()
+            .skip(offset as usize)
+            .take(len as usize)
+            .map(|v| v.lock().clone())
+            .collect()
     }
 }

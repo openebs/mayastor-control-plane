@@ -1,14 +1,13 @@
 syntax = "proto3";
 
 import "v1/misc/common.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
 package v1.replica;
 
 // Replica information
 message Replica{
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   string name = 2;
@@ -47,7 +46,7 @@ enum ReplicaStatus {
 
 // Create Replica Request
 message CreateReplicaRequest{
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;
@@ -75,7 +74,7 @@ message ReplicaOwners {
 
 // Destroy Replica Request
 message DestroyReplicaRequest{
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;
@@ -88,7 +87,7 @@ message DestroyReplicaRequest{
 }
 
 message ShareReplicaRequest {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;
@@ -106,7 +105,7 @@ enum ReplicaShareProtocol{
 }
 
 message UnshareReplicaRequest {
-  // id of the mayastor instance
+  // id of the io-engine instance
   string node_id = 1;
   // name of the replica
   optional string name = 2;
@@ -164,6 +163,30 @@ message GetReplicasRequest {
     common.ReplicaFilter replica = 7;
     common.VolumeFilter volume = 8;
   }
+}
+
+// Replica information
+message ReplicaSpec{
+  // name of the replica
+  string name = 1;
+  // uuid of the replica
+  google.protobuf.StringValue replica_id = 2;
+  // size of the replica in bytes
+  uint64 size = 3;
+  // id of the pool
+  string pool_id = 4;
+  // Protocol used for exposing the replica.
+  common.Protocol share = 5;
+  // thin provisioning
+  bool thin = 6;
+  // The spec status of replica
+  common.SpecStatus spec_status = 7;
+  // Managed by our control plane
+  bool managed = 8;
+  // Owner Resource
+  ReplicaOwners owners = 9;
+  // Record of the operation in progress
+  optional common.SpecOperation operation = 10;
 }
 
 // Service for managing replicas

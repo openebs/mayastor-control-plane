@@ -24,11 +24,11 @@ POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL_3_UUID = "0b6cd331-60d9-48ae-ac00-dbe0430d6c1f"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-NODE_1_NAME = "mayastor-1"
-NODE_2_NAME = "mayastor-2"
-NODE_3_NAME = "mayastor-3"
+NODE_1_NAME = "io-engine-1"
+NODE_2_NAME = "io-engine-2"
+NODE_3_NAME = "io-engine-3"
 VOLUME_SIZE = 10485761
-NUM_MAYASTORS = 3
+NUM_IO_ENGINES = 3
 NUM_VOLUME_REPLICAS = 2
 REPLICA_CONTEXT_KEY = "replica"
 
@@ -37,7 +37,7 @@ REPLICA_CONTEXT_KEY = "replica"
 # The deployer uses the default parameterisation.
 @pytest.fixture()
 def init():
-    Deployer.start(NUM_MAYASTORS)
+    Deployer.start(NUM_IO_ENGINES)
     init_resources()
     yield
     Deployer.stop()
@@ -48,7 +48,7 @@ def init():
 @pytest.fixture()
 def init_parameterised_deployer():
     # Shorten the reconcile periods and cache period to speed up the tests.
-    Deployer.start(NUM_MAYASTORS, reconcile_period="1s", cache_period="1s")
+    Deployer.start(NUM_IO_ENGINES, reconcile_period="1s", cache_period="1s")
     init_resources()
     yield
     Deployer.stop()
@@ -175,7 +175,7 @@ def a_user_attempts_to_increase_the_number_of_volume_replicas(replica_ctx):
 @when("the number of runtime replicas is 1")
 def the_number_of_runtime_replicas_is_1():
     """the number of runtime replicas is 1."""
-    # Stopping a mayastor instance will cause a replica to be faulted and removed from the volume.
+    # Stopping an io-engine instance will cause a replica to be faulted and removed from the volume.
     Docker.stop_container(NODE_2_NAME)
     # Wait for the replica to be removed from the volume.
     wait_for_volume_replica_count(1)

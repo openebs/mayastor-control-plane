@@ -2,7 +2,7 @@ Feature: Pool creation
   Test pool creation with different name related scenarios
 
   Background:
-    Given a control plane and Mayastor instances
+    Given a control plane and Io-Engine instances
 
   Scenario: creating a pool with a valid name
     When the user attempts to create a pool with a valid name "p0"

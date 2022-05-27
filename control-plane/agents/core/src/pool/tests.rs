@@ -1,12 +1,12 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::{Message, ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
+    mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         message_bus::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, Protocol,
-            Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus, ShareReplica,
-            UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NodeId,
+            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
+            ShareReplica, UnshareReplica, VolumeId,
         },
         openapi::{
             apis::StatusCode,
@@ -16,16 +16,16 @@ use common_lib::{
         store::replica::ReplicaSpec,
     },
 };
+use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::{
     context::Context,
     operations::{
         node::traits::NodeOperations, pool::traits::PoolOperations,
-        replica::traits::ReplicaOperations,
+        registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
     },
 };
 use itertools::Itertools;
 use std::{convert::TryFrom, time::Duration};
-use testlib::{Cluster, ClusterBuilder};
 
 #[tokio::test]
 async fn pool() {
@@ -40,14 +40,14 @@ async fn pool() {
     let pool_client = cluster.grpc_client().pool();
     let rep_client = cluster.grpc_client().replica();
 
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pool = pool_client
         .create(
             &CreatePool {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 id: "pooloop".into(),
                 disks: vec!["malloc:///disk0?size_mb=100".into()],
                 labels: None,
@@ -64,7 +64,7 @@ async fn pool() {
     let replica = rep_client
         .create(
             &CreateReplica {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
                 pool: "pooloop".into(),
                 size: 12582912, /* actual size will be a multiple of 4MB so just
@@ -87,7 +87,7 @@ async fn pool() {
     assert_eq!(
         replica,
         Replica {
-            node: mayastor.clone(),
+            node: io_engine.clone(),
             name: ReplicaName::from("cf36a440-74c6-4042-b16c-4f7eddfc24da"),
             uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
             pool: "pooloop".into(),
@@ -102,7 +102,7 @@ async fn pool() {
     let uri = rep_client
         .share(
             &ShareReplica {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
                 pool: "pooloop".into(),
                 protocol: ReplicaShareProtocol::Nvmf,
@@ -123,7 +123,7 @@ async fn pool() {
     let error = pool_client
         .destroy(
             &DestroyPool {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 id: "pooloop".into(),
             },
             None,
@@ -142,7 +142,7 @@ async fn pool() {
     rep_client
         .destroy(
             &DestroyReplica {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
                 pool: "pooloop".into(),
                 name: None,
@@ -163,7 +163,7 @@ async fn pool() {
     pool_client
         .destroy(
             &DestroyPool {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 id: "pooloop".into(),
             },
             None,
@@ -191,9 +191,9 @@ fn bus_timeout_opts() -> TimeoutOptions {
 }
 
 /// Get the replica spec
-async fn replica_spec(replica: &Replica) -> Option<ReplicaSpec> {
-    GetSpecs {}
-        .request()
+async fn replica_spec(replica: &Replica, client: &dyn RegistryOperations) -> Option<ReplicaSpec> {
+    client
+        .get_specs(&GetSpecs {}, None)
         .await
         .unwrap()
         .replicas
@@ -214,8 +214,9 @@ async fn replica_transaction() {
         .build()
         .await
         .unwrap();
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
 
+    let registry_client = cluster.grpc_client().registry();
     let node_client = cluster.grpc_client().node();
     let pool_client = cluster.grpc_client().pool();
     let rep_client = cluster.grpc_client().replica();
@@ -229,7 +230,7 @@ async fn replica_transaction() {
     let replica = rep_client
         .create(
             &CreateReplica {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 uuid: ReplicaId::new(),
                 pool: cluster.pool(0, 0),
                 size: 12582912,
@@ -242,17 +243,32 @@ async fn replica_transaction() {
         .await
         .unwrap();
 
-    async fn check_operation(replica: &Replica, protocol: Protocol) {
+    async fn check_operation(
+        replica: &Replica,
+        protocol: Protocol,
+        registry_client: &dyn RegistryOperations,
+    ) {
         // operation in progress
-        assert!(replica_spec(replica).await.unwrap().operation.is_some());
+        assert!(replica_spec(replica, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_some());
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // operation is completed
-        assert!(replica_spec(replica).await.unwrap().operation.is_none());
-        assert_eq!(replica_spec(replica).await.unwrap().share, protocol);
+        assert!(replica_spec(replica, registry_client)
+            .await
+            .unwrap()
+            .operation
+            .is_none());
+        assert_eq!(
+            replica_spec(replica, registry_client).await.unwrap().share,
+            protocol
+        );
     }
 
-    // pause mayastor
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    // pause io_engine
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     let _ = rep_client
         .share(
@@ -260,12 +276,12 @@ async fn replica_transaction() {
             Some(Context::new(bus_timeout_opts())),
         )
         .await
-        .expect_err("mayastor down");
+        .expect_err("io_engine down");
 
-    check_operation(&replica, Protocol::None).await;
+    check_operation(&replica, Protocol::None, &registry_client).await;
 
-    // unpause mayastor
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    // unpause io_engine
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     // now it should be shared successfully
     let uri = rep_client
@@ -274,7 +290,7 @@ async fn replica_transaction() {
         .unwrap();
     println!("Share uri: {}", uri);
 
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     let _ = rep_client
         .unshare(
@@ -282,18 +298,24 @@ async fn replica_transaction() {
             Some(Context::new(bus_timeout_opts())),
         )
         .await
-        .expect_err("mayastor down");
+        .expect_err("io_engine down");
 
-    check_operation(&replica, Protocol::Nvmf).await;
+    check_operation(&replica, Protocol::Nvmf, &registry_client).await;
 
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     let _ = rep_client
         .unshare(&UnshareReplica::from(&replica), None)
         .await
         .unwrap();
 
-    assert_eq!(replica_spec(&replica).await.unwrap().share, Protocol::None);
+    assert_eq!(
+        replica_spec(&replica, &registry_client)
+            .await
+            .unwrap()
+            .share,
+        Protocol::None
+    );
 }
 
 /// Tests Store Write Failures for Replica Operations
@@ -307,33 +329,34 @@ async fn replica_op_transaction_store(
     share: Option<ShareReplica>,
     unshare: Option<UnshareReplica>,
 ) {
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
 
-    // pause mayastor
-    cluster.composer().pause(mayastor.as_str()).await.unwrap();
+    // pause io_engine
+    cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
     let rep_client = cluster.grpc_client().replica();
+    let registry_client = cluster.grpc_client().registry();
 
     if share.clone().is_some() {
         rep_client
             .share(&share.as_ref().unwrap().clone(), None)
             .await
-            .expect_err("mayastor down");
+            .expect_err("io_engine down");
     }
     if unshare.clone().is_some() {
         rep_client
             .unshare(&unshare.as_ref().unwrap().clone(), None)
             .await
-            .expect_err("mayastor down");
+            .expect_err("io_engine down");
     }
 
     // ensure the share will succeed but etcd store will fail
-    // by pausing etcd and releasing mayastor
+    // by pausing etcd and releasing the io_engine
     cluster.composer().pause("etcd").await.unwrap();
-    cluster.composer().thaw(mayastor.as_str()).await.unwrap();
+    cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     // hopefully we have enough time before the store times out
-    let spec = replica_spec(replica).await.unwrap();
+    let spec = replica_spec(replica, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_none());
 
     // let the store write time out
@@ -341,7 +364,7 @@ async fn replica_op_transaction_store(
 
     // and now we have a result but the operation is still pending until
     // we can sync the spec
-    let spec = replica_spec(replica).await.unwrap();
+    let spec = replica_spec(replica, &registry_client).await.unwrap();
     assert!(spec.operation.unwrap().result.is_some());
 
     // thaw etcd allowing the worker thread to sync the "dirty" spec
@@ -351,7 +374,7 @@ async fn replica_op_transaction_store(
     tokio::time::sleep(reconcile_period * 2).await;
 
     // and now we've sync and the pending operation is no more
-    let spec = replica_spec(replica).await.unwrap();
+    let spec = replica_spec(replica, &registry_client).await.unwrap();
     assert!(spec.operation.is_none() && spec.share == protocol);
 
     if share.clone().is_some() {
@@ -386,12 +409,12 @@ async fn replica_transaction_store() {
         .await
         .unwrap();
     let rep_client = cluster.grpc_client().replica();
-    let mayastor = cluster.node(0);
+    let io_engine = cluster.node(0);
 
     let replica = rep_client
         .create(
             &CreateReplica {
-                node: mayastor.clone(),
+                node: io_engine.clone(),
                 uuid: ReplicaId::new(),
                 pool: cluster.pool(0, 0),
                 size: 12582912,
@@ -429,18 +452,18 @@ const RECONCILE_TIMEOUT_SECS: u64 = 7;
 const POOL_FILE_NAME: &str = "disk1.img";
 const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 
-/// Creates a pool on a mayastor instance, which will have both spec and state.
-/// Stops/Kills the mayastor container. At some point we will have no pool state, because the node
+/// Creates a pool on a io_engine instance, which will have both spec and state.
+/// Stops/Kills the io_engine container. At some point we will have no pool state, because the node
 /// is gone. We then restart the node and the pool reconciler will then recreate the pool! At this
 /// point, we'll have a state again.
 #[tokio::test]
 async fn reconciler_missing_pool_state() {
-    let disk = testlib::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
+    let disk = deployer_cluster::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
 
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(1)
+        .with_io_engines(1)
         .with_pool(0, disk.uri())
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
@@ -487,7 +510,7 @@ async fn reconciler_missing_pool_state() {
         assert_eq!(pool.state.as_ref(), state);
     }
 
-    // let's stop the mayastor container, gracefully
+    // let's stop the io_engine container, gracefully
     cluster.composer().stop(maya.as_str()).await.unwrap();
     pool_checker(&cluster, pool.state.as_ref()).await;
 
@@ -542,7 +565,7 @@ async fn reconciler_deleting_pool_on_node_down() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(2)
+        .with_io_engines(2)
         .with_pools(2)
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
@@ -561,10 +584,10 @@ async fn reconciler_deleting_pool_on_node_down() {
     let pools_api = client.pools_api();
     let start = std::time::Instant::now();
 
-    // Kill the mayastor node 1
+    // Kill the io_engine node 1
     cluster.composer().kill(node_1_id.as_str()).await.unwrap();
 
-    // Delete the pool on the mayastor node 1
+    // Delete the pool on the io_engine node 1
     let _ = cluster
         .rest_v00()
         .pools_api()
@@ -625,4 +648,93 @@ async fn reconciler_deleting_pool_on_node_down() {
         .status
         .to_string();
     assert_eq!(pool_2_status_after_reconciler_action, "Created");
+}
+
+/// Tests that resources in the deleting state are eventually deleted
+#[tokio::test]
+async fn reconciler_deleting_dirty_pool() {
+    let reconcile_period = Duration::from_millis(250);
+    let grpc_timeout = TimeoutOptions::default()
+        .with_max_retries(0)
+        .with_timeout(Duration::from_millis(250))
+        .with_req_timeout(None);
+    let req_timeout = grpc_timeout.base_timeout() * 2;
+    let store_timeout = Duration::from_millis(300);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_pools(1)
+        .with_agents(vec!["core"])
+        .with_req_timeouts(req_timeout, req_timeout)
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .with_store_timeout(store_timeout)
+        .with_bus_timeouts(grpc_timeout.clone())
+        .build()
+        .await
+        .unwrap();
+    let node = cluster.node(0);
+    let pool = cluster.pool(0, 0);
+
+    let node_client = cluster.grpc_client().node();
+    let pool_client = cluster.grpc_client().pool();
+
+    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+
+    let pools = pool_client.get(Filter::None, None).await.unwrap();
+    tracing::info!("Pools: {:?}", pools);
+
+    // 1. Pause the node, so the destroy call will timeout
+    cluster.composer().pause(node.as_str()).await.unwrap();
+
+    let _ = pool_client
+        .destroy(
+            &DestroyPool {
+                node: node.clone(),
+                id: pool.clone(),
+            },
+            None,
+        )
+        .await
+        .expect_err("timeout since the node is down");
+
+    // 2. Pause ETCD so we fail to undo the operation
+    cluster.composer().pause("etcd").await.unwrap();
+
+    tokio::time::sleep(req_timeout - grpc_timeout.base_timeout()).await;
+
+    // 3. Bring the node back so we can delete the pool
+    cluster.composer().thaw(node.as_str()).await.unwrap();
+
+    // 4. allow for the store write to time out (plus some slack)
+    tokio::time::sleep(store_timeout * 2).await;
+
+    // 5. Bring ETCD back up so we can resume operations
+    cluster.composer().thaw("etcd").await.unwrap();
+
+    // 6. The pool should "eventually" be deleted
+    wait_pool_deleted(&cluster, node, reconcile_period * 4).await;
+
+    async fn wait_pool_deleted(cluster: &Cluster, node: NodeId, timeout: Duration) {
+        let pool_client = cluster.grpc_client().pool();
+        let start = std::time::Instant::now();
+        loop {
+            let pools = pool_client
+                .get(Filter::Node(node.clone()), None)
+                .await
+                .unwrap();
+            let pools = pools.into_inner();
+
+            if pools.is_empty() {
+                return;
+            }
+
+            if std::time::Instant::now() > (start + timeout) {
+                panic!(
+                    "Timeout waiting for the pool to be deleted. Actual: '{:#?}'",
+                    pools
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
 }

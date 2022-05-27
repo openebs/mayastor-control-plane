@@ -1,7 +1,7 @@
 Feature: Pool deletion
 
   Background:
-    Given a control plane, Mayastor instances
+    Given a control plane, Io-Engine instances
     And file based pool disks
 
   Scenario: deleting an existing unused pool

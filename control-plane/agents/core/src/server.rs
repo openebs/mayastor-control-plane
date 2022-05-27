@@ -4,20 +4,21 @@ pub mod lib;
 pub mod nexus;
 pub mod node;
 pub mod pool;
+pub mod registry;
 pub mod volume;
 pub mod watcher;
 
-use crate::core::registry;
 use common_lib::types::v0::message_bus::ChannelVs;
 use http::Uri;
 
+use crate::core::registry::NumRebuilds;
 use common_lib::mbus_api::BusClient;
 use opentelemetry::{global, KeyValue};
 use structopt::StructOpt;
-use utils::{package_info, DEFAULT_GRPC_SERVER_ADDR};
+use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
 #[derive(Debug, StructOpt)]
-#[structopt(version = package_info!())]
+#[structopt(name = utils::package_description!(), version = version_info_str!())]
 pub(crate) struct CliArgs {
     /// The Nats Server URL to connect to
     /// (supports the nats schema)
@@ -37,14 +38,12 @@ pub(crate) struct CliArgs {
     #[structopt(long, default_value = "10s")]
     pub(crate) reconcile_period: humantime::Duration,
 
-    /// Deadline for the mayastor instance keep alive registration
-    /// Default: 10s
+    /// Deadline for the io-engine instance keep alive registration
     #[structopt(long, short, default_value = "10s")]
     pub(crate) deadline: humantime::Duration,
 
     /// The Persistent Store URLs to connect to
     /// (supports the http/https schema)
-    /// Default: http://localhost:2379
     #[structopt(long, short, default_value = "http://localhost:2379")]
     pub(crate) store: String,
 
@@ -78,6 +77,10 @@ pub(crate) struct CliArgs {
     /// (supports the http/https schema)
     #[structopt(long, short, default_value = DEFAULT_GRPC_SERVER_ADDR)]
     pub(crate) grpc_server_addr: Uri,
+    /// The maximum number of system-wide rebuilds permitted at any given time.
+    /// If `None` do not limit the number of rebuilds.
+    #[structopt(long)]
+    max_rebuilds: Option<NumRebuilds>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -99,13 +102,15 @@ async fn main() {
 }
 
 async fn server(cli_args: CliArgs) {
-    let registry = registry::Registry::new(
+    common_lib::init_cluster_info_or_panic().await;
+    let registry = core::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),
         cli_args.store_timeout.into(),
         cli_args.store_lease_ttl.into(),
         cli_args.reconcile_period.into(),
         cli_args.reconcile_idle_period.into(),
+        cli_args.max_rebuilds,
     )
     .await;
 
@@ -121,11 +126,11 @@ async fn server(cli_args: CliArgs) {
         .with_shared_state(cli_args.grpc_server_addr.clone())
         .configure_async(node::configure)
         .await
-        .configure_async(pool::configure)
-        .await
+        .configure(pool::configure)
         .configure(nexus::configure)
         .configure(volume::configure)
-        .configure(watcher::configure);
+        .configure(watcher::configure)
+        .configure(registry::configure);
 
     let service = lib::Service::new(base_service);
     registry.start().await;

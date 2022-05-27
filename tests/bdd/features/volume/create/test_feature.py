@@ -31,7 +31,7 @@ VOLUME_SIZE = 10485761
 NUM_VOLUME_REPLICAS = 1
 CREATE_REQUEST_KEY = "create_request"
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
-NODE_NAME = "mayastor-1"
+NODE_NAME = "io-engine-1"
 
 
 # This fixture will be automatically used by all tests.
@@ -53,8 +53,8 @@ def create_request():
     return {}
 
 
-@scenario("feature.feature", "provisioning failure due to missing Mayastor")
-def test_provisioning_failure_due_to_missing_mayastor():
+@scenario("feature.feature", "provisioning failure due to missing Io-Engine")
+def test_provisioning_failure_due_to_missing_io_engine():
     """provisioning failure."""
 
 
@@ -73,25 +73,25 @@ def test_sufficient_suitable_pools():
     """sufficient suitable pools."""
 
 
-@given("a control plane, Mayastor instances and a pool")
-def a_control_plane_a_mayastor_instance_and_a_pool():
-    """a control plane, Mayastor instances and a pool."""
+@given("a control plane, Io-Engine instances and a pool")
+def a_control_plane_io_engine_instances_and_a_pool():
+    """a control plane, Io-Engine instances and a pool."""
     docker_client = docker.from_env()
 
     # The control plane comprises the core agents, rest server and etcd instance.
     for component in ["core", "rest", "etcd"]:
         Docker.check_container_running(component)
 
-    # Check all Mayastor instances are running
+    # Check all Io-Engine instances are running
     try:
-        mayastors = docker_client.containers.list(
-            all=True, filters={"name": "mayastor"}
+        io_engines = docker_client.containers.list(
+            all=True, filters={"name": "io-engine"}
         )
     except docker.errors.NotFound:
-        raise Exception("No Mayastor instances")
+        raise Exception("No Io-Engine instances")
 
-    for mayastor in mayastors:
-        Docker.check_container_running(mayastor.attrs["Name"])
+    for io_engine in io_engines:
+        Docker.check_container_running(io_engine.attrs["Name"])
 
     # Check for a pool
     pool = ApiClient.pools_api().get_pool(POOL_UUID)
@@ -108,18 +108,18 @@ def a_request_for_a_volume(create_request):
 @when("a create operation takes longer than the gRPC timeout")
 def a_create_operation_takes_longer_than_the_grpc_timeout():
     """a create operation takes longer than the gRPC timeout."""
-    # Delete the Mayastor instances to ensure the operation can't complete and so takes longer
+    # Delete the Io-Engine instances to ensure the operation can't complete and so takes longer
     # than the gRPC timeout.
     docker_client = docker.from_env()
     try:
-        mayastors = docker_client.containers.list(
-            all=True, filters={"name": "mayastor"}
+        io_engines = docker_client.containers.list(
+            all=True, filters={"name": "io-engine"}
         )
     except docker.errors.NotFound:
-        raise Exception("No Mayastor instances")
+        raise Exception("No Io-Engine instances")
 
-    for mayastor in mayastors:
-        mayastor.kill()
+    for io_engine in io_engines:
+        io_engine.kill()
 
 
 @when("the number of suitable pools is less than the number of desired volume replicas")
@@ -147,12 +147,12 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
     assert num_volume_replicas <= num_pools
 
 
-@when("there are no available Mayastor instances")
-def there_are_no_available_mayastor_instances():
-    """there are no available Mayastor instances."""
-    # Kill mayastor instance
+@when("there are no available Io-Engine instances")
+def there_are_no_available_io_engine_instances():
+    """there are no available Io-Engine instances."""
+    # Kill io-engine instance
     docker_client = docker.from_env()
-    container = docker_client.containers.get("mayastor-1")
+    container = docker_client.containers.get("io-engine-1")
     container.kill()
 
 
@@ -190,7 +190,7 @@ def volume_creation_should_fail_with_a_precondition_failed_error(create_request)
         assert exception_info["status"] == requests.codes["precondition_failed"]
 
     # Check that the volume wasn't created.
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes().entries
     assert len(volumes) == 0
 
 
@@ -205,7 +205,7 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
         assert exception_info["status"] == requests.codes["insufficient_storage"]
     finally:
         # Check that the volume wasn't created.
-        volumes = ApiClient.volumes_api().get_volumes()
+        volumes = ApiClient.volumes_api().get_volumes().entries
         assert len(volumes) == 0
 
 
@@ -231,7 +231,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
     expected_replica_toplogy = {}
     for key, value in volume.state.replica_topology.items():
         expected_replica_toplogy[key] = ReplicaTopology(
-            ReplicaState("Online"), node="mayastor-1", pool=POOL_UUID
+            ReplicaState("Online"), node="io-engine-1", pool=POOL_UUID
         )
     expected_state = VolumeState(
         VOLUME_SIZE,

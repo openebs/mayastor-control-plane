@@ -18,7 +18,7 @@ from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
-NODE1 = "mayastor-1"
+NODE1 = "io-engine-1"
 VOLUME_SIZE = 32 * 1024 * 1024
 
 
@@ -47,7 +47,7 @@ def start_csi_plugin(setup, staging_target_path):
     proc = subprocess.Popen(
         args=[
             "sudo",
-            os.environ["MCP_SRC"] + "/target/debug/csi-node",
+            os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
             "--csi-socket=/var/tmp/csi.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",
@@ -75,7 +75,7 @@ def setup():
     Deployer.start(1, jaeger=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "msp-operator"}
+    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,
@@ -101,7 +101,7 @@ def csi_instance(start_csi_plugin, fix_socket_permissions):
 def test_plugin_info(csi_instance):
     info = csi_instance.identity.GetPluginInfo(pb.GetPluginInfoRequest())
     assert info.name == "io.openebs.csi-mayastor"
-    assert info.vendor_version == "0.2"
+    assert info.vendor_version == "1.0.0"
 
 
 def test_plugin_capabilities(csi_instance):
@@ -120,7 +120,7 @@ def test_probe(csi_instance):
 
 def test_node_info(csi_instance):
     info = csi_instance.node.NodeGetInfo(pb.NodeGetInfoRequest())
-    assert info.node_id == "mayastor://msn-test"
+    assert info.node_id == "csi-node://msn-test"
     assert info.max_volumes_per_node == 0
 
 
@@ -132,7 +132,7 @@ def test_node_capabilities(csi_instance):
 
 
 @pytest.fixture(scope="module")
-def mayastor_volumes(setup):
+def volumes(setup):
     volumes = []
 
     for n in range(5):
@@ -186,16 +186,14 @@ def volume_id(fs_type):
 
 
 @pytest.fixture
-def mayastor_published_nexus(mayastor_volumes, share_type, volume_id):
+def published_nexus(volumes, share_type, volume_id):
     uuid = volume_id
     volume = ApiClient.volumes_api().put_volume_target(uuid, NODE1, Protocol("nvmf"))
     yield volume.state["target"]
     ApiClient.volumes_api().del_volume_target(volume.spec.uuid)
 
 
-def test_get_volume_stats(
-    csi_instance, mayastor_published_nexus, volume_id, target_path
-):
+def test_get_volume_stats(csi_instance, published_nexus, volume_id, target_path):
     with pytest.raises(grpc.RpcError) as error:
         csi_instance.node.NodeGetVolumeStats(
             pb.NodeGetVolumeStatsRequest(volume_id=volume_id, volume_path=target_path)
@@ -234,13 +232,13 @@ def publish_mount_flags(read_only):
 
 
 @pytest.fixture
-def stage_context(mayastor_published_nexus, io_timeout):
-    yield {"uri": mayastor_published_nexus["deviceUri"], "ioTimeout": io_timeout}
+def stage_context(published_nexus, io_timeout):
+    yield {"uri": published_nexus["deviceUri"], "ioTimeout": io_timeout}
 
 
 @pytest.fixture
-def publish_context(mayastor_published_nexus, volume_id):
-    yield {"uri": mayastor_published_nexus["deviceUri"]}
+def publish_context(published_nexus, volume_id):
+    yield {"uri": published_nexus["deviceUri"]}
 
 
 @pytest.fixture

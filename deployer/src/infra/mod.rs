@@ -1,11 +1,13 @@
+mod core;
 mod csi;
 pub mod dns;
 mod elastic;
 mod empty;
 mod etcd;
+mod io_engine;
 mod jaeger;
+mod jsongrpc;
 mod kibana;
-mod mayastor;
 pub mod nats;
 mod rest;
 
@@ -16,8 +18,9 @@ use common_lib::{
     mbus_api::Message,
     types::v0::message_bus::{ChannelVs, Liveness},
 };
+
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
 use paste::paste;
 use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
 use structopt::StructOpt;
@@ -90,77 +93,6 @@ macro_rules! impl_ctrlp_agents {
                 }
             }
         }
-
-        $(#[async_trait]
-        impl ComponentAction for $name {
-            fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
-                let name = stringify!($name).to_ascii_lowercase();
-                if options.build {
-                    let status = std::process::Command::new("cargo")
-                        .args(&["build", "-p", "agents", "--bin", &name])
-                        .status()?;
-                    build_error(&format!("the {} agent", name), status.code())?;
-                }
-                let mut binary = Binary::from_dbg(&name);
-                if options.no_nats == false {
-                    binary = binary.with_nats("-n");
-                }
-                if let Some(env) = &options.agents_env {
-                    for kv in env {
-                        binary = binary.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
-                    }
-                }
-
-                if name == "core" {
-                    let etcd = format!("etcd.{}:2379", options.cluster_label.name());
-                    binary = binary.with_args(vec!["--store", &etcd]);
-                    if let Some(cache_period) = &options.cache_period {
-                        binary = binary.with_args(vec!["-c", &cache_period.to_string()]);
-                    }
-                    if let Some(deadline) = &options.node_deadline {
-                        binary = binary.with_args(vec!["-d", &deadline.to_string()]);
-                    }
-                    if let Some(timeout) = &options.node_conn_timeout {
-                        binary = binary.with_args(vec!["--connect-timeout", &timeout.to_string()]);
-                    }
-                    if let Some(timeout) = &options.request_timeout {
-                        binary = binary.with_args(vec!["--request-timeout", &timeout.to_string()]);
-                    }
-                    if options.no_min_timeouts {
-                        binary = binary.with_arg("--no-min-timeouts");
-                    }
-                    if let Some(timeout) = &options.store_timeout {
-                        binary = binary.with_args(vec!["--store-timeout", &timeout.to_string()]);
-                    }
-                    if let Some(ttl) = &options.store_lease_ttl {
-                        binary = binary.with_args(vec!["--store-lease-ttl", &ttl.to_string()]);
-                    }
-                    if let Some(period) = &options.reconcile_period {
-                        binary = binary.with_args(vec!["--reconcile-period", &period.to_string()]);
-                    }
-                    if let Some(period) = &options.reconcile_idle_period {
-                        binary = binary.with_args(vec!["--reconcile-idle-period", &period.to_string()]);
-                    }
-                    if cfg.container_exists("jaeger") {
-                        let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
-                        binary = binary.with_args(vec!["--jaeger", &jaeger_config]);
-                    }
-                }
-                if let Some(size) = &options.otel_max_batch_size {
-                    binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
-                }
-                Ok(cfg.add_container_bin(&name, binary))
-            }
-            async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
-                let name = stringify!($name).to_ascii_lowercase();
-                cfg.start(&name).await?;
-                Ok(())
-            }
-            async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
-                Liveness {}.request_on_bus(ChannelVs::$name, bus()).await?;
-                Ok(())
-            }
-        })+
     };
     ($($name:ident), +) => {
         impl_ctrlp_agents!($($name,)+);
@@ -183,14 +115,23 @@ pub fn build_error(name: &str, status: Option<i32>) -> Result<(), Error> {
 }
 
 impl Components {
-    /// Wait for the url endpoint to return success to a GET request with a default timeout
+    /// Wait for the url endpoint to return success to a GET request with a default timeout.
     pub async fn wait_url(url: &str) -> Result<(), Error> {
         Self::wait_url_timeout(url, std::time::Duration::from_secs(20)).await
     }
-    /// Wait for the url endpoint to return success to a GET request with a provided timeout
+    /// Wait for the url endpoint to return success to a GET request with a provided timeout.
     pub async fn wait_url_timeout(url: &str, timeout: std::time::Duration) -> Result<(), Error> {
+        Self::wait_url_timeouts(url, timeout, std::time::Duration::from_millis(200)).await
+    }
+    /// Wait for the url endpoint to return success to a GET request with provided timeouts.
+    pub async fn wait_url_timeouts(
+        url: &str,
+        total: std::time::Duration,
+        each: std::time::Duration,
+    ) -> Result<(), Error> {
         let start_time = std::time::Instant::now();
-        let get_timeout = std::time::Duration::from_millis(200);
+        let get_timeout = each;
+        let timeout = total;
         loop {
             let request = reqwest::Client::new().get(url).timeout(get_timeout);
             match request.send().await {
@@ -237,9 +178,12 @@ impl Components {
                 .0
                 .iter()
                 .filter(|c| c.boot_order() == component.boot_order());
-            for component in components {
-                component.start(&self.1, cfg).await?;
-            }
+
+            let start_components = components.map(|component| async move {
+                tracing::trace!(component=%component.to_string(), "Starting");
+                component.start(&self.1, cfg).await
+            });
+            try_join_all(start_components).await?;
             last_done = Some(component.boot_order());
         }
         Ok(())
@@ -248,6 +192,7 @@ impl Components {
     /// component to make sure they start orderly
     async fn start_wait_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
         let mut last_done = None;
+
         for component in &self.0 {
             if let Some(last_done) = last_done {
                 if component.boot_order() == last_done {
@@ -260,9 +205,10 @@ impl Components {
                 .filter(|c| c.boot_order() == component.boot_order())
                 .collect::<Vec<&Component>>();
 
-            for component in &components {
-                component.start(&self.1, cfg).await?;
-            }
+            let wait_components = components
+                .iter()
+                .map(|c| async move { c.start(&self.1, cfg).await });
+            try_join_all(wait_components).await?;
             self.wait_on_components(&components, cfg).await?;
             last_done = Some(component.boot_order());
         }
@@ -316,7 +262,15 @@ macro_rules! impl_component {
                 for component in &self.0 {
                     cfg = component.configure(&self.1, cfg)?;
                 }
-                Ok(cfg)
+                Ok(cfg.with_spec_map(|spec| {
+                    let spec = spec.with_direct_bind("/etc/machine-id")
+                                   .with_direct_bind("/sys/class/dmi/id/product_uuid");
+                    if let Some(uid) = &self.1.cluster_uid {
+                        spec.with_env("NOPLATFORM_UUID", uid)
+                    } else {
+                        spec
+                    }
+                }))
             }
         }
 
@@ -387,16 +341,19 @@ macro_rules! impl_component {
         #[async_trait]
         impl ComponentAction for Component {
             fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
+                let _trace = TraceFn::new(self, "configure");
                 match self {
                     $(Self::$name(obj) => obj.configure(options, cfg),)+
                 }
             }
             async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+                let _trace = TraceFn::new(self, "start");
                 match self {
                     $(Self::$name(obj) => obj.start(options, cfg).await,)+
                 }
             }
             async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+                let _trace = TraceFn::new(self, "wait_on");
                 match self {
                     $(Self::$name(obj) => obj.wait_on(options, cfg).await,)+
                 }
@@ -437,6 +394,20 @@ macro_rules! impl_component {
     };
 }
 
+struct TraceFn(String, String);
+impl TraceFn {
+    fn new(component: &Component, func: &str) -> Self {
+        let component = component.to_string();
+        tracing::trace!(component=%component, func=%func, "Entering");
+        Self(component, func.to_string())
+    }
+}
+impl Drop for TraceFn {
+    fn drop(&mut self) {
+        tracing::trace!(component=%self.0, func=%self.1, "Exiting");
+    }
+}
+
 // Component Name and bootstrap ordering
 // from lower to high
 impl_component! {
@@ -444,14 +415,14 @@ impl_component! {
     // Note: NATS needs to be the first to support usage of this library in cargo tests
     // to make sure that the IP does not change between tests
     Nats,       0,
+    Jaeger,     0,
     Dns,        1,
     Etcd,       1,
     Elastic,    1,
     Kibana,     1,
-    Jaeger,     2,
     Core,       3,
     Rest,       3,
-    Mayastor,   4,
+    IoEngine,   4,
     JsonGrpc,   5,
     Csi,        5,
 }

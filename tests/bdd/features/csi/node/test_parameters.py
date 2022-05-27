@@ -19,7 +19,7 @@ from openapi.model.volume_policy import VolumePolicy
 from common.csi import CsiHandle
 
 VOLUME_UUID = "f04e4756-999f-446f-8610-fbf879aff2a7"
-NODE1 = "mayastor-1"
+NODE1 = "io-engine-1"
 
 
 @scenario(
@@ -34,9 +34,9 @@ def a_csi_node_plugin_with_io_queues_configured(io):
     """a csi node plugin with <IO> queues configured."""
 
 
-@given("a mayastor cluster")
-def a_mayastor_cluster(setup):
-    """a mayastor cluster."""
+@given("an io-engine cluster")
+def an_io_engine_cluster(setup):
+    """an io-engine cluster."""
 
 
 @when("staging a volume")
@@ -117,7 +117,7 @@ def start_csi_plugin(setup, io, staging_target_path):
     proc = subprocess.Popen(
         args=[
             "sudo",
-            os.environ["MCP_SRC"] + "/target/debug/csi-node",
+            os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
             "--csi-socket=/var/tmp/csi.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",
@@ -147,7 +147,7 @@ def setup():
 
     pool_api = ApiClient.pools_api()
     pool = pool_api.put_node_pool(
-        "mayastor-1",
+        "io-engine-1",
         "pool-1",
         CreatePoolBody(["malloc:///disk?size_mb=200"]),
     )

@@ -109,12 +109,24 @@ impl ReplicaItem {
 }
 
 /// Individual nexus child (replicas) which can be used for nexus creation
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct ChildItem {
     replica_spec: ReplicaSpec,
     replica_state: Replica,
     pool_state: PoolWrapper,
     child_info: Option<ChildInfo>,
+}
+
+// todo: keep original Debug and use valuable trait from tracing instead
+impl std::fmt::Debug for ChildItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChildItem")
+            .field("replica_spec", &self.replica_spec)
+            .field("replica_state", &self.replica_state)
+            .field("pool_state", self.pool_state.state())
+            .field("child_info", &self.child_info.as_ref())
+            .finish()
+    }
 }
 
 /// If the nexus is shutdown uncleanly, only one child/replica may be used and it must be healthy

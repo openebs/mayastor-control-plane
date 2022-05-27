@@ -302,7 +302,7 @@ impl From<i32> for Protocol {
 
 /// Convert a device URI to a share Protocol
 /// Uses the URI scheme to determine the protocol
-/// Temporary WA until the share is added to the mayastor RPC
+/// Temporary WA until the share is added to the io-engine RPC
 impl TryFrom<&str> for Protocol {
     type Error = String;
 

@@ -1,6 +1,7 @@
 use crate::{
     core::{
         reconciler::PollTriggerEvent,
+        registry::Registry,
         scheduling::{
             nexus::GetPersistedNexusChildren,
             resources::{ChildItem, HealthyChildItems, ReplicaItem},
@@ -12,7 +13,6 @@ use crate::{
         },
         specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     },
-    registry::Registry,
     volume::scheduling,
 };
 use common::{
@@ -27,7 +27,7 @@ use common_lib::{
     types::v0::{
         message_bus::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
-            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, Protocol, PublishVolume,
+            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, PoolId, Protocol, PublishVolume,
             RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
             ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
             VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
@@ -43,6 +43,7 @@ use common_lib::{
         },
     },
 };
+use grpc::operations::{PaginatedResult, Pagination};
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::{convert::From, ops::Deref, sync::Arc};
@@ -222,6 +223,26 @@ impl ResourceSpecs {
     pub(crate) fn get_volumes(&self) -> Vec<VolumeSpec> {
         self.volumes.values().map(|v| v.lock().clone()).collect()
     }
+
+    /// Get a subset of the volumes based on the pagination argument.
+    pub(crate) fn get_paginated_volumes(
+        &self,
+        pagination: &Pagination,
+    ) -> PaginatedResult<VolumeSpec> {
+        let num_volumes = self.volumes.len() as u64;
+        let max_entries = pagination.max_entries() as u64;
+        let offset = std::cmp::min(pagination.starting_token() as u64, num_volumes);
+        let mut last_result = false;
+        let length = match offset + max_entries >= num_volumes {
+            true => {
+                last_result = true;
+                num_volumes - offset
+            }
+            false => pagination.max_entries(),
+        };
+
+        PaginatedResult::new(self.volumes.paginate(offset, length), last_result)
+    }
 }
 impl ResourceSpecsLocked {
     /// Get the protected VolumeSpec for the given volume `id`, if any exists
@@ -248,6 +269,16 @@ impl ResourceSpecsLocked {
         let specs = self.read();
         specs.get_volumes()
     }
+
+    /// Get a subset of volumes based on the pagination argument.
+    pub(crate) fn get_paginated_volumes(
+        &self,
+        pagination: &Pagination,
+    ) -> PaginatedResult<VolumeSpec> {
+        let specs = self.read();
+        specs.get_paginated_volumes(pagination)
+    }
+
     /// Gets a copy of all locked VolumeSpec's
     pub(crate) fn get_locked_volumes(&self) -> Vec<Arc<Mutex<VolumeSpec>>> {
         let specs = self.read();
@@ -282,6 +313,22 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
+    /// Get a list of cloned volume replicas owned by the given volume `id`.
+    pub(crate) fn get_cloned_volume_replicas(&self, id: &VolumeId) -> Vec<ReplicaSpec> {
+        self.read()
+            .replicas
+            .values()
+            .filter_map(|r| {
+                let r = r.lock();
+                if r.owners.owned_by(id) {
+                    Some(r.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Get the `NodeId` where `replica` lives
     pub(crate) async fn get_replica_node(
         registry: &Registry,
@@ -290,6 +337,18 @@ impl ResourceSpecsLocked {
         let pools = registry.get_pool_states_inner().await;
         pools.iter().find_map(|p| {
             if p.id == replica.pool {
+                Some(p.node.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get the `NodeId` where `pool` lives.
+    pub(crate) async fn get_pool_node(registry: &Registry, pool: PoolId) -> Option<NodeId> {
+        let pools = registry.get_pool_states_inner().await;
+        pools.iter().find_map(|p| {
+            if p.id == pool {
                 Some(p.node.clone())
             } else {
                 None
@@ -422,13 +481,13 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         let volume = self.get_locked_volume(&request.uuid);
         if let Some(volume) = &volume {
-            SpecOperations::start_destroy(volume, registry, false, mode).await?;
+            let _guard = SpecOperations::start_destroy(volume, registry, false, mode).await?;
 
             let nexuses = self.get_volume_nexuses(&request.uuid);
             for nexus in nexuses {
                 let nexus = nexus.lock().deref().clone();
                 if let Err(error) = self
-                    .destroy_nexus(registry, &DestroyNexus::from(nexus.clone()), true, mode)
+                    .destroy_nexus(registry, &DestroyNexus::from(&nexus), true, mode)
                     .await
                 {
                     nexus.warn_span(|| {
@@ -438,7 +497,7 @@ impl ResourceSpecsLocked {
                     });
                 }
 
-                // Delete the NexusInfo entry persisted by Mayastor.
+                // Delete the NexusInfo entry persisted by the IoEngine.
                 Self::delete_nexus_info(
                     &NexusInfoKey::new(&Some(request.uuid.clone()), &nexus.uuid),
                     registry,
@@ -1046,6 +1105,10 @@ impl ResourceSpecsLocked {
         replica: &Replica,
         mode: OperationMode,
     ) -> Result<(), SvcError> {
+        // Adding a replica to a nexus will initiate a rebuild.
+        // First check that we are able to start a rebuild.
+        registry.rebuild_allowed().await?;
+
         let uri = self
             .make_replica_accessible(registry, replica, &nexus.node, mode)
             .await?;

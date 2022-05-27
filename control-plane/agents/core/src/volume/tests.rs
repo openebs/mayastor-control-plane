@@ -18,8 +18,8 @@ use common_lib::{
     },
 };
 
-use rpc::mayastor::FaultNexusChildRequest;
-use testlib::{Cluster, ClusterBuilder};
+use deployer_cluster::{Cluster, ClusterBuilder};
+use rpc::io_engine::FaultNexusChildRequest;
 
 use common_lib::{
     mbus_api::TimeoutOptions,
@@ -33,8 +33,8 @@ use common_lib::{
     },
 };
 use grpc::operations::{
-    node::traits::NodeOperations, replica::traits::ReplicaOperations,
-    volume::traits::VolumeOperations,
+    node::traits::NodeOperations, registry::traits::RegistryOperations,
+    replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
 };
 use std::{
     convert::{TryFrom, TryInto},
@@ -47,7 +47,7 @@ async fn volume() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(3)
+        .with_io_engines(3)
         .with_pools(1)
         .with_cache_period("1s")
         // don't let the reconcile interfere with the tests
@@ -78,13 +78,14 @@ async fn hotspare() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(3)
+        .with_io_engines(3)
         .with_pools(2)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
         .await
         .unwrap();
+
     let node_client = cluster.grpc_client().node();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
@@ -103,13 +104,14 @@ async fn volume_nexus_reconcile() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(2)
+        .with_io_engines(2)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
         .await
         .unwrap();
+
     let node_client = cluster.grpc_client().node();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
@@ -123,13 +125,14 @@ async fn garbage_collection() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
-        .with_mayastors(3)
+        .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
         .with_reconcile_period(reconcile_period, reconcile_period)
         .build()
         .await
         .unwrap();
+
     let node_client = cluster.grpc_client().node();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
@@ -203,8 +206,8 @@ async fn wait_till_volume_deleted(cluster: &Cluster) {
     let client = cluster.grpc_client().volume();
     let start = std::time::Instant::now();
     loop {
-        let volumes = client.get(Filter::None, None).await.unwrap();
-        if volumes.0.is_empty() {
+        let volumes = client.get(Filter::None, None, None).await.unwrap();
+        if volumes.entries.is_empty() {
             return;
         }
 
@@ -425,7 +428,7 @@ async fn unused_reconcile(cluster: &Cluster) {
     // (because we'll add a replica a rebuild)
     wait_till_volume_status(cluster, &volume.spec.uuid, models::VolumeStatus::Online).await;
 
-    // 6. Bring back the mayastor and the original nexus and replica should be deleted
+    // 6. Bring back the io-engine and the original nexus and replica should be deleted
     cluster.composer().start(&nexus_node.id).await.unwrap();
     let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
@@ -471,8 +474,8 @@ async fn wait_till_replica_disowned(cluster: &Cluster, replica_id: Uuid) {
     }
 }
 
-/// Creates a volume nexus on a mayastor instance, which will have both spec and state.
-/// Stops/Kills the mayastor container. At some point we will have no nexus state, because the node
+/// Creates a volume nexus on a node, which will have both spec and state.
+/// Stop/Kill the io-engine container. At some point we will have no nexus state, because the node
 /// is gone. We then restart the node and the volume nexus reconciler will then recreate the nexus!
 /// At this point, we'll have a state again and the volume will be Online!
 async fn missing_nexus_reconcile(cluster: &Cluster) {
@@ -564,6 +567,7 @@ async fn wait_till_nexus_state(
 /// Faults a volume nexus replica and waits for it to be replaced with a new one
 async fn hotspare_faulty_children(cluster: &Cluster) {
     let volume_client = cluster.grpc_client().volume();
+    let registry_client = cluster.grpc_client().registry();
     let volume = volume_client
         .create(
             &CreateVolume {
@@ -596,7 +600,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
 
     let fault_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .mayastor
+        .io_engine
         .fault_nexus_child(FaultNexusChildRequest {
             uuid: nexus.uuid.to_string(),
             uri: fault_child.clone(),
@@ -607,13 +611,20 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );
 
-    let children = wait_till_volume_nexus(volume.uuid(), 2, &fault_child, &volume_client).await;
+    let children = wait_till_volume_nexus(
+        volume.uuid(),
+        2,
+        &fault_child,
+        &volume_client,
+        &registry_client,
+    )
+    .await;
     tracing::info!("volume children: {:?}", children);
 
     assert_eq!(children.len(), 2);
@@ -632,18 +643,19 @@ async fn wait_till_volume_nexus(
     volume: &VolumeId,
     replicas: usize,
     no_child: &str,
-    client: &dyn VolumeOperations,
+    volume_client: &dyn VolumeOperations,
+    registry_client: &dyn RegistryOperations,
 ) -> Vec<Child> {
     let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
     loop {
-        let volume = client
-            .get(GetVolumes::new(volume).filter, None)
+        let volume = volume_client
+            .get(GetVolumes::new(volume).filter, None, None)
             .await
             .unwrap();
-        let volume_state = volume.0.clone().first().unwrap().state();
+        let volume_state = volume.entries.clone().first().unwrap().state();
         let nexus = volume_state.target.clone().unwrap();
-        let specs = GetSpecs::default().request().await.unwrap();
+        let specs = registry_client.get_specs(&GetSpecs {}, None).await.unwrap();
         let nexus_spec = specs.nexuses.first().unwrap().clone();
 
         if !nexus.contains_child(&ChildUri::from(no_child))
@@ -665,16 +677,17 @@ async fn wait_till_volume_nexus(
 /// Get the children of the specified volume (assumes non ANA)
 async fn volume_children(volume: &VolumeId, client: &dyn VolumeOperations) -> Vec<Child> {
     let volume = client
-        .get(GetVolumes::new(volume).filter, None)
+        .get(GetVolumes::new(volume).filter, None, None)
         .await
         .unwrap();
-    let volume_state = volume.0.first().unwrap().state();
+    let volume_state = volume.entries.first().unwrap().state();
     volume_state.target.unwrap().children
 }
 
 /// Adds a child to the volume nexus (under the control plane) and waits till it gets removed
 async fn hotspare_unknown_children(cluster: &Cluster) {
     let volume_client = cluster.grpc_client().volume();
+    let registry_client = cluster.grpc_client().registry();
     let volume = volume_client
         .create(
             &CreateVolume {
@@ -715,8 +728,8 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     // todo: this sometimes fails??
     // is the reconciler interleaving with the add_child_nexus?
     rpc_handle
-        .mayastor
-        .add_child_nexus(rpc::mayastor::AddChildNexusRequest {
+        .io_engine
+        .add_child_nexus(rpc::io_engine::AddChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: unknown_replica.clone(),
             norebuild: true,
@@ -727,12 +740,19 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );
-    let children = wait_till_volume_nexus(volume.uuid(), 2, &unknown_replica, &volume_client).await;
+    let children = wait_till_volume_nexus(
+        volume.uuid(),
+        2,
+        &unknown_replica,
+        &volume_client,
+        &registry_client,
+    )
+    .await;
     tracing::info!("volume children: {:?}", children);
 
     assert_eq!(children.len(), 2);
@@ -748,6 +768,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
 /// Remove a child from a volume nexus (under the control plane) and waits till it gets added back
 async fn hotspare_missing_children(cluster: &Cluster) {
     let volume_client = cluster.grpc_client().volume();
+    let registry_client = cluster.grpc_client().registry();
     let volume = volume_client
         .create(
             &CreateVolume {
@@ -780,8 +801,8 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 
     let missing_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .mayastor
-        .remove_child_nexus(rpc::mayastor::RemoveChildNexusRequest {
+        .io_engine
+        .remove_child_nexus(rpc::io_engine::RemoveChildNexusRequest {
             uuid: nexus.uuid.to_string(),
             uri: missing_child.clone(),
         })
@@ -791,12 +812,19 @@ async fn hotspare_missing_children(cluster: &Cluster) {
     tracing::debug!(
         "Nexus: {:?}",
         rpc_handle
-            .mayastor
-            .list_nexus(rpc::mayastor::Null {})
+            .io_engine
+            .list_nexus(rpc::io_engine::Null {})
             .await
             .unwrap()
     );
-    let children = wait_till_volume_nexus(volume.uuid(), 2, &missing_child, &volume_client).await;
+    let children = wait_till_volume_nexus(
+        volume.uuid(),
+        2,
+        &missing_child,
+        &volume_client,
+        &registry_client,
+    )
+    .await;
     tracing::info!("volume children: {:?}", children);
 
     assert_eq!(children.len(), 2);
@@ -825,6 +853,7 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
 
     let replica_count = nodes.len();
     let volume_client = cluster.grpc_client().volume();
+    let registry_client = cluster.grpc_client().registry();
     let volume = volume_client
         .create(
             &CreateVolume {
@@ -864,7 +893,13 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
         .expect("Should have restarted by now");
 
     // check we have the new replica_count
-    wait_till_volume(volume.uuid(), replica_count, &volume_client).await;
+    wait_till_volume(
+        volume.uuid(),
+        replica_count,
+        &volume_client,
+        &registry_client,
+    )
+    .await;
 
     {
         let volume = cluster
@@ -900,6 +935,7 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
 async fn hotspare_replica_count(cluster: &Cluster) {
     let replica_client = cluster.grpc_client().replica();
     let volume_client = cluster.grpc_client().volume();
+    let registry_client = cluster.grpc_client().registry();
     let volume = volume_client
         .create(
             &CreateVolume {
@@ -913,7 +949,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
         .await
         .unwrap();
 
-    let specs = GetSpecs::default().request().await.unwrap();
+    let specs = registry_client.get_specs(&GetSpecs {}, None).await.unwrap();
 
     let replica_spec = specs.replicas.first().cloned().unwrap();
     let replicas = replica_client
@@ -931,7 +967,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
     }
 
     // check we have 2 replicas
-    wait_till_volume(volume.uuid(), 2, &volume_client).await;
+    wait_till_volume(volume.uuid(), 2, &volume_client, &registry_client).await;
 
     // now add one extra replica (it should be removed)
     replica_client
@@ -952,7 +988,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
         .await
         .unwrap();
 
-    wait_till_volume(volume.uuid(), 2, &volume_client).await;
+    wait_till_volume(volume.uuid(), 2, &volume_client, &registry_client).await;
 
     volume_client
         .destroy(&DestroyVolume::new(volume.uuid()), None)
@@ -963,6 +999,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
 /// Remove a replica that belongs to a volume. Another should be created.
 async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     let volume_client = cluster.grpc_client().volume();
+    let registry_client = cluster.grpc_client().registry();
     let volume = volume_client
         .create(
             &CreateVolume {
@@ -1011,6 +1048,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
         volume_spec.num_replicas as usize,
         "",
         &volume_client,
+        &registry_client,
     )
     .await;
 
@@ -1031,6 +1069,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
         volume_spec.num_replicas as usize,
         "",
         &volume_client,
+        &registry_client,
     )
     .await;
 
@@ -1041,18 +1080,25 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
 }
 
 /// Wait for the unpublished volume to have the specified replica count
-async fn wait_till_volume(volume: &VolumeId, replicas: usize, client: &dyn VolumeOperations) {
+async fn wait_till_volume(
+    volume: &VolumeId,
+    replicas: usize,
+    volume_client: &dyn VolumeOperations,
+    registry_client: &dyn RegistryOperations,
+) {
     let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let start = std::time::Instant::now();
     loop {
-        let specs = GetSpecs::default().request().await.unwrap();
+        let specs = registry_client.get_specs(&GetSpecs {}, None).await.unwrap();
         let replica_specs = specs
             .replicas
             .iter()
             .filter(|r| r.owners.owned_by(volume))
             .collect::<Vec<_>>();
 
-        if replica_specs.len() == replicas && existing_replicas(volume, client).await == replicas {
+        if replica_specs.len() == replicas
+            && existing_replicas(volume, volume_client).await == replicas
+        {
             return;
         }
 
@@ -1069,14 +1115,14 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize, client: &dyn Volum
 /// Return the number of replicas that exist and have a state.
 async fn existing_replicas(volume_id: &VolumeId, client: &dyn VolumeOperations) -> usize {
     let volumes = client
-        .get(GetVolumes::new(volume_id).filter, None)
+        .get(GetVolumes::new(volume_id).filter, None, None)
         .await
         .unwrap();
 
     // Get volumes with the given uuid.
     // There should only be one.
     let filtered_volumes: Vec<Volume> = volumes
-        .into_inner()
+        .entries
         .into_iter()
         .filter(|v| v.uuid() == volume_id)
         .collect();
@@ -1292,10 +1338,10 @@ async fn nexus_persistence_test_iteration(
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client
@@ -1323,10 +1369,10 @@ async fn publishing_test(cluster: &Cluster) {
         .await
         .unwrap();
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0;
+        .entries;
     tracing::info!("Volumes: {:?}", volumes);
     assert_eq!(Some(&volume), volumes.first());
 
@@ -1429,11 +1475,11 @@ async fn publishing_test(cluster: &Cluster) {
     tracing::info!("Published on '{}' with share '{}'", nx.node, nx.device_uri);
 
     let volumes = volume_client
-        .get(Filter::Volume(volume_state.uuid.clone()), None)
+        .get(Filter::Volume(volume_state.uuid.clone()), None, None)
         .await
         .unwrap();
 
-    let first_volume_state = volumes.0.first().unwrap().state();
+    let first_volume_state = volumes.entries.first().unwrap().state();
     assert_eq!(
         first_volume_state.target_protocol(),
         Some(VolumeShareProtocol::Nvmf)
@@ -1491,11 +1537,11 @@ async fn publishing_test(cluster: &Cluster) {
     );
 
     let volumes = volume_client
-        .get(Filter::Volume(volume_state.uuid.clone()), None)
+        .get(Filter::Volume(volume_state.uuid.clone()), None, None)
         .await
         .unwrap();
 
-    let first_volume_state = volumes.0.first().unwrap().state();
+    let first_volume_state = volumes.entries.first().unwrap().state();
     assert_eq!(
         first_volume_state.target_protocol(),
         None,
@@ -1537,10 +1583,10 @@ async fn publishing_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client
@@ -1553,10 +1599,10 @@ async fn publishing_test(cluster: &Cluster) {
 
 async fn get_volume(volume: &VolumeState, client: &dyn VolumeOperations) -> Volume {
     let request = client
-        .get(Filter::Volume(volume.uuid.clone()), None)
+        .get(Filter::Volume(volume.uuid.clone()), None, None)
         .await
         .unwrap();
-    request.into_inner().first().cloned().unwrap()
+    request.entries.first().cloned().unwrap()
 }
 
 async fn wait_for_node_online(cluster: &Cluster, node: &NodeId) {
@@ -1616,10 +1662,10 @@ async fn replica_count_test(cluster: &Cluster) {
         .unwrap();
 
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0;
+        .entries;
     tracing::info!("Volumes: {:?}", volumes);
     assert_eq!(Some(&volume), volumes.first());
 
@@ -1786,10 +1832,10 @@ async fn replica_count_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client
@@ -1812,10 +1858,10 @@ async fn smoke_test(cluster: &Cluster) {
 
     let volume = volume_client.create(&create_volume, None).await.unwrap();
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0;
+        .entries;
     tracing::info!("Volumes: {:?}", volumes);
 
     assert_eq!(Some(&volume), volumes.first());
@@ -1831,10 +1877,10 @@ async fn smoke_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None)
+        .get(GetVolumes::default().filter, None, None)
         .await
         .unwrap()
-        .0
+        .entries
         .is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(replica_client

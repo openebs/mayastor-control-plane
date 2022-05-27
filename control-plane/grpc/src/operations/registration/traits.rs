@@ -15,15 +15,15 @@ pub trait RegistrationOperations: Send + Sync {
 
 /// Trait to be implemented for Register operation
 pub trait RegisterInfo: Send + Sync {
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node_id(&self) -> NodeId;
-    /// Grpc endpoint of the mayastor instance
+    /// Grpc endpoint of the IoEngine instance
     fn grpc_endpoint(&self) -> String;
 }
 
 /// Trait to be implemented for Register operation
 pub trait DeregisterInfo: Send + Sync {
-    /// Id of the mayastor instance
+    /// Id of the IoEngine instance
     fn node_id(&self) -> NodeId;
 }
 

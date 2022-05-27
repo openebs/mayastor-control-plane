@@ -1,5 +1,5 @@
 [patch.crates-io]
-h2 = { path = "./utils/mayastor-dependencies/h2" }
+h2 = { path = "./utils/dependencies/h2" }
 
 [profile.dev]
 panic = "abort"
@@ -8,21 +8,26 @@ panic = "abort"
 members = [
     "common",
     "control-plane/agents",
-    "control-plane/msp-operator",
     "control-plane/rest",
     "control-plane/csi-driver",
     "control-plane/grpc",
+    "control-plane/plugin",
+    "k8s/operators",
+    "k8s/plugin",
+    ## Supportability tool to create bundle
+    "k8s/supportability",
     "deployer",
-    "kubectl-plugin",
     "openapi",
     "rpc",
     "utils/utils-lib",
     "utils/pstor-usage",
     "utils/shutdown",
-    "utils/mayastor-dependencies/composer",
-    "utils/mayastor-dependencies/devinfo",
-    "utils/mayastor-dependencies/nvmeadm",
-    "utils/mayastor-dependencies/sysfs",
-    # Test mayastor through the rest api
-    "tests/tests-mayastor",
+    "utils/dependencies/composer",
+    "utils/dependencies/devinfo",
+    "utils/dependencies/nvmeadm",
+    "utils/dependencies/sysfs",
+    "utils/dependencies/version-info",
+    "utils/deployer-cluster",
+    # Test io-engine through the rest api
+    "tests/io-engine",
 ]

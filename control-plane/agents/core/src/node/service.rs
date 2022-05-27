@@ -8,7 +8,7 @@ use common::{
     v0::msg_translation::RpcToMessageBus,
 };
 use common_lib::types::v0::message_bus::{
-    Deregister, Filter, GetSpecs, Node, NodeId, NodeState, NodeStatus, Register, Specs, States,
+    Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register, States,
 };
 
 use crate::core::wrapper::InternalOps;
@@ -19,7 +19,7 @@ use grpc::{
         registration::traits::{DeregisterInfo, RegisterInfo, RegistrationOperations},
     },
 };
-use rpc::mayastor::ListBlockDevicesRequest;
+use rpc::io_engine::ListBlockDevicesRequest;
 use snafu::ResultExt;
 use std::{collections::HashMap, sync::Arc};
 
@@ -274,7 +274,7 @@ impl Service {
         let mut client = grpc.connect().await?;
 
         let result = client
-            .mayastor
+            .io_engine
             .list_block_devices(ListBlockDevicesRequest { all: request.all })
             .await;
 
@@ -291,17 +291,6 @@ impl Service {
             .map(|rpc_bdev| rpc_bdev.to_mbus())
             .collect();
         Ok(BlockDevices(bdevs))
-    }
-
-    /// Get specs from the registry
-    pub(crate) async fn get_specs(&self, _request: &GetSpecs) -> Result<Specs, SvcError> {
-        let specs = self.specs().write();
-        Ok(Specs {
-            volumes: specs.get_volumes(),
-            nexuses: specs.get_nexuses(),
-            replicas: specs.get_replicas(),
-            pools: specs.get_pools(),
-        })
     }
 
     /// Get state information for all resources.

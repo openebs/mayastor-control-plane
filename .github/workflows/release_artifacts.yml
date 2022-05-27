@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - master
-      - 'release/**'
+      - 'release-**'
       - 'hotfix-v**'
 
 jobs:

@@ -33,7 +33,7 @@ def setup():
         pass
     proc = subprocess.Popen(
         args=[
-            os.environ["MCP_SRC"] + "/target/debug/csi-node",
+            os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
             "--csi-socket=/var/tmp/csi.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",
@@ -83,7 +83,7 @@ def plugin_information_info_request(csi_instance):
 @then("CSI node should report its name and version")
 def check_csi_node_info(info_request):
     assert info_request.name == "io.openebs.csi-mayastor"
-    assert info_request.vendor_version == "0.2"
+    assert info_request.vendor_version == "1.0.0"
 
 
 @when(

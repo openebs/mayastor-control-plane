@@ -34,13 +34,15 @@ PVC_VOLUME3_NAME = "pvc-%s" % VOLUME3_UUID
 PVC_VOLUME4_NAME = "pvc-%s" % VOLUME4_UUID
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 POOL2_UUID = "bcabda21-9e66-4d81-8c75-bf9f3b687cdc"
-NODE1 = "mayastor-1"
-NODE2 = "mayastor-2"
+NODE1 = "io-engine-1"
+NODE2 = "io-engine-2"
 VOLUME1_SIZE = 1024 * 1024 * 32
 VOLUME2_SIZE = 1024 * 1024 * 22
 VOLUME3_SIZE = 1024 * 1024 * 28
 VOLUME4_SIZE = 1024 * 1024 * 32
 K8S_HOSTNAME = "kubernetes.io/hostname"
+IO_ENGINE_SELECTOR_KEY = "openebs.io/engine"
+IO_ENGINE_SELECTOR_VALUE = "io-engine"
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +51,7 @@ def setup():
     subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "msp-operator"}
+    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,
@@ -94,6 +96,12 @@ def test_create_1_replica_nvmf_volume(setup):
     """create 1 replica nvmf volume"""
 
 
+@pytest.mark.skip(reason="local parameter not supported")
+@scenario("controller.feature", "unpinned volume creation")
+def test_unpinned_volume_creation(setup):
+    """unpinned volume creation."""
+
+
 @scenario("controller.feature", "volume creation idempotency")
 def test_volume_creation_idempotency(setup):
     """volume creation idempotency"""
@@ -112,6 +120,18 @@ def test_volume_removal_idempotency(setup):
 @scenario("controller.feature", "list existing volumes")
 def test_list_existing_volumes(setup):
     """list existing volumes"""
+
+
+@scenario("controller.feature", "list existing volumes with pagination")
+def test_list_existing_volumes_with_pagination(setup):
+    """list existing volumes with pagination."""
+
+
+@scenario(
+    "controller.feature", "list existing volumes with pagination max entries set to 0"
+)
+def test_list_existing_volumes_with_pagination_max_entries_set_to_0(setup):
+    """list existing volumes with pagination max entries set to 0."""
 
 
 @scenario("controller.feature", "validate SINGLE_NODE_WRITER volume capability")
@@ -182,7 +202,7 @@ def a_csi_instance():
     return csi_rpc_handle()
 
 
-@given("2 Mayastor nodes with one pool on each node", target_fixture="two_pools")
+@given("2 Io-Engine nodes with one pool on each node", target_fixture="two_pools")
 def two_nodes_with_one_pool_each():
     pool_api = ApiClient.pools_api()
     pool1 = pool_api.get_pool(POOL1_UUID)
@@ -244,7 +264,7 @@ def start_stop_ms1():
     try:
         node1 = docker_client.containers.list(all=True, filters={"name": NODE1})[0]
     except docker.errors.NotFound:
-        raise Exception("No Mayastor instance found that hosts the nexus")
+        raise Exception("No Io-Engine instance found that hosts the nexus")
     # Stop the nexus node and wait till nexus offline status is also reflected in volume target info.
     # Wait at most 60 seconds.
     node1.stop()
@@ -285,6 +305,30 @@ def create_1_replica_local_nvmf_volume(_create_1_replica_local_nvmf_volume):
     return _create_1_replica_local_nvmf_volume
 
 
+@when("a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)")
+def a_createvolume_request_is_sent_to_create_a_1_replica_nvmf_volume_localfalse(
+    _create_1_replica_nvmf_volume_local_false,
+):
+    """a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)."""
+
+
+@when("a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)")
+def a_createvolume_request_is_sent_to_create_a_1_replica_nvmf_volume_local_unset(
+    _create_1_replica_nvmf_volume_local_unset,
+):
+    """a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)."""
+
+
+@then("volume creation should fail with invalid argument")
+def volume_creation_should_fail_with_invalid_argument(context):
+    """volume creation should fail with invalid argument."""
+    create_volume_result = context["create_result"]
+    assert isinstance(
+        create_volume_result, grpc.RpcError
+    ), "Expect the volume not to be created"
+    assert create_volume_result.code() is grpc.StatusCode.INVALID_ARGUMENT
+
+
 @when(
     "a ControllerPublishVolume request is sent to CSI controller to re-publish volume on a different node",
     target_fixture="republish_volume_on_a_different_node",
@@ -306,19 +350,22 @@ def check_1_replica_local_nvmf_volume(create_1_replica_local_nvmf_volume):
 
 
 def check_local_volume_topology(volume):
-    topology = volume.volume.accessible_topology
-    assert len(topology) == 2, "Number of nodes in topology mismatches"
+    topologies = volume.volume.accessible_topology
 
-    for n in [NODE1, NODE2]:
-        found = False
-        for t in topology:
-            if t.segments[K8S_HOSTNAME] == n:
-                found = True
-                break
-        assert found, "Node %s is missing in volume topology"
+    found_key_value = False
+    for topology in topologies:
+        if IO_ENGINE_SELECTOR_KEY in topology.segments:
+            if (
+                topology.segments.get(IO_ENGINE_SELECTOR_KEY)
+                == IO_ENGINE_SELECTOR_VALUE
+            ):
+                found_key_value = True
+    assert (
+        found_key_value is True
+    ), f"{IO_ENGINE_SELECTOR_KEY}: {IO_ENGINE_SELECTOR_VALUE} not found in volume topology"
 
 
-@then("local volume must be accessible only from all existing Mayastor nodes")
+@then("local volume must be accessible only from all existing Io-Engine nodes")
 def check_1_replica_local_nvmf_volume_topology(create_1_replica_local_nvmf_volume):
     check_local_volume_topology(create_1_replica_local_nvmf_volume)
 
@@ -510,6 +557,32 @@ def list_all_volumes(two_volumes):
     return [two_volumes, vols.entries]
 
 
+@when(
+    "a ListVolumesRequest is sent to CSI controller with max_entries set to 0",
+    target_fixture="paginated_volumes_list",
+)
+def a_listvolumesrequest_is_sent_to_csi_controller_with_max_entries_set_to_0(
+    two_volumes,
+):
+    """a ListVolumesRequest is sent to CSI controller with max_entries set to 0."""
+    vols = csi_rpc_handle().controller.ListVolumes(pb.ListVolumesRequest(max_entries=0))
+    return [two_volumes, vols.entries, vols.next_token]
+
+
+@when(
+    "a ListVolumesRequest is sent to CSI controller with max_entries set to 1",
+    target_fixture="paginated_volumes_list",
+)
+def a_listvolumesrequest_is_sent_to_csi_controller_with_max_entries_set_to_1(
+    two_volumes,
+):
+    """a ListVolumesRequest is sent to CSI controller with max_entries set to 1."""
+    vols = csi_rpc_handle().controller.ListVolumes(
+        pb.ListVolumesRequest(max_entries=1, starting_token="0")
+    )
+    return [two_volumes, vols.entries, vols.next_token]
+
+
 @then("all 2 volumes are listed")
 def check_list_all_volumes(list_2_volumes):
     created_volumes = sorted(list_2_volumes[0], key=lambda v: v.volume.volume_id)
@@ -525,6 +598,32 @@ def check_list_all_volumes(list_2_volumes):
         ), "Volumes have different sizes"
 
         check_volume_context(vol1.volume_context, vol2.volume_context)
+
+
+@then("all volumes should be returned")
+def all_volumes_should_be_returned(paginated_volumes_list):
+    """all volumes should be returned."""
+    created_volumes = paginated_volumes_list[0]
+    listed_volumes = paginated_volumes_list[1]
+    assert len(listed_volumes) == len(created_volumes)
+
+
+@then(
+    "a subsequent ListVolumesRequest using the next token should return the next volume"
+)
+def a_subsequent_listvolumesrequest_using_the_next_token_should_return_the_next_volume(
+    paginated_volumes_list,
+):
+    """a subsequent ListVolumesRequest using the next token should return the next volume."""
+    created_volumes = paginated_volumes_list[0]
+    next_token = paginated_volumes_list[2]
+    vols = csi_rpc_handle().controller.ListVolumes(
+        pb.ListVolumesRequest(max_entries=1, starting_token=next_token)
+    )
+    assert len(created_volumes) == 2
+    assert len(vols.entries) == 1
+    # The returned volume ID should match the ID of the second created volume.
+    assert created_volumes[1].volume.volume_id == vols.entries[0].volume.volume_id
 
 
 @when(
@@ -610,6 +709,7 @@ def csi_create_1_replica_nvmf_volume1():
         "protocol": "nvmf",
         "ioTimeout": "30",
         "repl": "1",
+        "local": "true",
     }
 
     req = pb.CreateVolumeRequest(
@@ -625,6 +725,7 @@ def csi_create_2_replica_nvmf_volume4():
         "protocol": "nvmf",
         "ioTimeout": "30",
         "repl": "2",
+        "local": "true",
     }
 
     req = pb.CreateVolumeRequest(
@@ -651,13 +752,39 @@ def csi_create_1_replica_nvmf_volume2():
         "protocol": "nvmf",
         "ioTimeout": "30",
         "repl": "1",
+        "local": "true",
     }
 
     req = pb.CreateVolumeRequest(
         name=PVC_VOLUME2_NAME, capacity_range=capacity, parameters=parameters
     )
 
-    return csi_rpc_handle().controller.CreateVolume(req)
+    try:
+        return csi_rpc_handle().controller.CreateVolume(req)
+    except grpc.RpcError as e:
+        return e
+
+
+def csi_create_1_replica_nvmf_volume_local(local_set=False, local=False):
+    capacity = pb.CapacityRange(required_bytes=VOLUME2_SIZE, limit_bytes=0)
+    parameters = {
+        "protocol": "nvmf",
+        "ioTimeout": "30",
+        "repl": "1",
+    }
+    if local_set and local:
+        parameters["local"] = "true"
+    elif local_set and not local:
+        parameters["local"] = "false"
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME2_NAME, capacity_range=capacity, parameters=parameters
+    )
+
+    try:
+        return csi_rpc_handle().controller.CreateVolume(req)
+    except grpc.RpcError as e:
+        return e
 
 
 def check_nvmf_target(uri):
@@ -707,6 +834,12 @@ def csi_delete_1_replica_local_nvmf_volume1():
     )
 
 
+def csi_delete_1_replica_nvmf_volume_local():
+    csi_rpc_handle().controller.DeleteVolume(
+        pb.DeleteVolumeRequest(volume_id=VOLUME2_UUID)
+    )
+
+
 def csi_delete_1_replica_nvmf_volume2():
     csi_rpc_handle().controller.DeleteVolume(
         pb.DeleteVolumeRequest(volume_id=VOLUME2_UUID)
@@ -727,6 +860,24 @@ def _create_1_replica_local_nvmf_volume():
 
 
 @pytest.fixture
+def _create_1_replica_nvmf_volume_local_false(context):
+    csi_delete_1_replica_nvmf_volume_local()
+    result = csi_create_1_replica_nvmf_volume_local(True, False)
+    context["create_result"] = result
+    yield result
+    csi_delete_1_replica_nvmf_volume_local()
+
+
+@pytest.fixture
+def _create_1_replica_nvmf_volume_local_unset(context):
+    csi_delete_1_replica_nvmf_volume_local()
+    result = csi_create_1_replica_nvmf_volume_local(False)
+    context["create_result"] = result
+    yield result
+    csi_delete_1_replica_nvmf_volume_local()
+
+
+@pytest.fixture
 def _create_2_volumes_1_replica():
     vol1 = csi_create_1_replica_nvmf_volume1()
     vol2 = csi_create_1_replica_nvmf_volume2()
@@ -735,6 +886,11 @@ def _create_2_volumes_1_replica():
 
     csi_delete_1_replica_nvmf_volume1()
     csi_delete_1_replica_nvmf_volume2()
+
+
+@pytest.fixture(scope="function")
+def context():
+    return {}
 
 
 @when(
@@ -779,7 +935,7 @@ def an_existing_volume(_create_1_replica_local_nvmf_volume):
     return _create_1_replica_local_nvmf_volume
 
 
-@then("listed local volume must be accessible only from all existing Mayastor nodes")
+@then("listed local volume must be accessible only from all existing Io-Engine nodes")
 def check_local_volume_accessible_from_ms_nodes(list_2_volumes):
     vols = [v for v in list_2_volumes[1] if v.volume.volume_id == VOLUME3_UUID]
     assert len(vols) == 1, "Invalid number of local volumes reported"
@@ -788,12 +944,13 @@ def check_local_volume_accessible_from_ms_nodes(list_2_volumes):
 
 @then("no topology restrictions should be imposed to non-local volumes")
 def check_no_topology_restrictions_for_non_local_volume(list_2_volumes):
-    vols = [v for v in list_2_volumes[1] if v.volume.volume_id != VOLUME3_UUID]
-    assert len(vols) == 2, "Invalid number of non-local volumes reported"
-    for v in vols:
-        assert (
-            len(v.volume.accessible_topology) == 0
-        ), "Non-local volume has topology restrictions"
+    """Non local volumes not supported at the moment"""
+    # vols = [v for v in list_2_volumes[1] if v.volume.volume_id != VOLUME3_UUID]
+    # assert len(vols) == 2, "Invalid number of non-local volumes reported"
+    # for v in vols:
+    #     assert (
+    #         len(v.volume.accessible_topology) == 0
+    #     ), "Non-local volume has topology restrictions"
 
 
 @when(
@@ -830,6 +987,24 @@ def check_identical_volume_creation(create_the_same_volume):
     check_volume_specs(
         create_the_same_volume[0].volume, create_the_same_volume[1].volume
     )
+
+
+@then("only a single volume should be returned")
+def only_a_single_volume_should_be_returned(paginated_volumes_list):
+    """only a single volume should be returned."""
+    created_volumes = paginated_volumes_list[0]
+    listed_volumes = paginated_volumes_list[1]
+    assert len(created_volumes) == 2
+    assert len(listed_volumes) == 1
+    # The returned volume ID should match the ID of the first created volume.
+    assert created_volumes[0].volume.volume_id == listed_volumes[0].volume.volume_id
+
+
+@then("the next token should be empty")
+def the_next_token_should_be_empty(paginated_volumes_list):
+    """the next token should be empty."""
+    next_token = paginated_volumes_list[2]
+    assert next_token == ""
 
 
 @when("a DeleteVolume request is sent to CSI controller to delete existing volume")

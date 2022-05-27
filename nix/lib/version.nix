@@ -9,7 +9,7 @@ let
       src;
 in
 stdenv.mkDerivation {
-  name = "mayastor-version";
+  name = "git-version";
   src = whitelistSource ../../. [ ".git" ];
   buildCommand = ''
     cd $src

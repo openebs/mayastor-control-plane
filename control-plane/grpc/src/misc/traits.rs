@@ -24,6 +24,7 @@ impl From<ResourceKind> for common::ResourceKind {
             ResourceKind::JsonGrpc => Self::JsonGrpc,
             ResourceKind::Block => Self::Block,
             ResourceKind::Watch => Self::Watch,
+            ResourceKind::Spec => Self::Spec,
         }
     }
 }
@@ -43,6 +44,7 @@ impl From<common::ResourceKind> for ResourceKind {
             common::ResourceKind::JsonGrpc => Self::JsonGrpc,
             common::ResourceKind::Block => Self::Block,
             common::ResourceKind::Watch => Self::Watch,
+            common::ResourceKind::Spec => Self::Spec,
         }
     }
 }
@@ -148,3 +150,7 @@ impl From<crate::common::ReplyError> for ReplyError {
         }
     }
 }
+
+/// A newtype that is similar to a google StringValue generated code
+/// for simpler conversion to uuids
+pub struct StringValue(pub Option<String>);

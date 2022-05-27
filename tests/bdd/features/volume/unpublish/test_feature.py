@@ -19,7 +19,7 @@ from openapi.model.volume_policy import VolumePolicy
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-NODE_NAME = "mayastor-1"
+NODE_NAME = "io-engine-1"
 VOLUME_CTX_KEY = "volume"
 VOLUME_SIZE = 10485761
 

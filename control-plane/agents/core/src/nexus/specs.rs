@@ -212,7 +212,8 @@ impl ResourceSpecsLocked {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self.get_nexus(&request.uuid) {
-            SpecOperations::start_destroy(&nexus, registry, delete_owned, mode).await?;
+            let _guard =
+                SpecOperations::start_destroy(&nexus, registry, delete_owned, mode).await?;
 
             let result = node.destroy_nexus(request).await;
             self.on_delete_disown_replicas(&nexus);
@@ -432,9 +433,8 @@ impl ResourceSpecsLocked {
                                 .ok_or(SvcError::ReplicaNotFound {
                                     replica_id: replica.uuid().clone(),
                                 })?;
-                        let replica_spec_clone = replica_spec.lock().clone();
-
-                        match Self::get_replica_node(registry, &replica_spec_clone).await {
+                        let pool_id = replica_spec.lock().pool.clone();
+                        match Self::get_pool_node(registry, pool_id).await {
                             Some(node) => {
                                 if let Err(error) = self
                                     .disown_and_destroy_replica(registry, &node, replica.uuid())

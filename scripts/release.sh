@@ -37,6 +37,9 @@ Options:
   --image                    Specify what image to build.
   --alias-tag                Explicit alias for short commit hash tag.
   --incremental              Builds components in two stages allowing for faster rebuilds during development.
+  --build-binaries           Builds all the static binaries.
+  --build-bin                Specify which binary to build.
+  --build-binary-out <path>  Specify the outlink path for the binaries (otherwise it's the current directory).
 
 Examples:
   $(basename $0) --registry 127.0.0.1:5000
@@ -50,7 +53,7 @@ SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 IMAGES=
-DEFAULT_IMAGES="agents.core agents.jsongrpc operators.msp rest csi.controller csi.node"
+DEFAULT_IMAGES="agents.core operators.diskpool rest csi.controller csi.node"
 UPLOAD=
 SKIP_PUBLISH=
 SKIP_BUILD=
@@ -60,6 +63,11 @@ ALIAS=
 BUILD_TYPE="release"
 ALL_IN_ONE="true"
 INCREMENTAL="false"
+DEFAULT_BINARIES="kubectl-plugin"
+BUILD_BINARIES=
+BIN_TARGET_PLAT="linux-musl"
+BINARY_OUT_LINK="."
+
 
 # Check if all needed tools are installed
 curl --version >/dev/null
@@ -127,6 +135,20 @@ while [ "$#" -gt 0 ]; do
       INCREMENTAL="true"
       shift
       ;;
+    --build-bin)
+      shift
+      BUILD_BINARIES="$BUILD_BINARIES $1"
+      shift
+      ;;
+    --build-bins)
+      BUILD_BINARIES="$DEFAULT_BINARIES"
+      shift
+      ;;
+    --build-binary-out)
+      shift
+      BINARY_OUT_LINK="$1"
+      shift
+      ;;
     *)
       echo "Unknown option: $1"
       exit 1
@@ -135,6 +157,14 @@ while [ "$#" -gt 0 ]; do
 done
 
 cd $SCRIPTDIR/..
+
+if [ -n "$BUILD_BINARIES" ]; then
+  mkdir -p $BINARY_OUT_LINK
+  for name in $BUILD_BINARIES; do
+    echo "Building static $name ..."
+    $NIX_BUILD --out-link $BINARY_OUT_LINK/$name -A utils.$BUILD_TYPE.$BIN_TARGET_PLAT.$name
+  done
+fi
 
 if [ -z "$IMAGES" ]; then
   IMAGES="$DEFAULT_IMAGES"
@@ -190,8 +220,8 @@ if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
     alias_tag=$ALIAS
   elif [ "$BRANCH" == "develop" ]; then
     alias_tag=develop
-  elif [ "$BRANCH" == "master" ]; then
-    alias_tag=latest
+  elif [ "${BRANCH#release-}" != "${BRANCH}" ]; then
+    alias_tag="${BRANCH}"
   fi
   if [ -n "$alias_tag" ]; then
     for img in $UPLOAD; do
