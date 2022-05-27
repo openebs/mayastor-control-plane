@@ -506,10 +506,14 @@ impl NodeWrapper {
 
     /// Update the number of rebuilds in progress on this node.
     fn update_num_rebuilds(&self) {
-        let mut num_rebuilds = 0;
-        self.nexus_states().iter().for_each(|nexus_state| {
-            num_rebuilds += nexus_state.nexus.rebuilds;
-        });
+        // Note: Each nexus returns the total number of rebuilds on the node **NOT** the number of
+        // rebuilds per nexus. Therefore retrieve the number of rebuilds from one nexus only.
+        // If there are no nexuses, the number of rebuilds is reset.
+        let num_rebuilds = self
+            .nexus_states()
+            .first()
+            .map(|nexus_state| nexus_state.nexus.rebuilds)
+            .unwrap_or(0);
         let mut rebuilds = self.num_rebuilds.write();
         *rebuilds = num_rebuilds;
     }
