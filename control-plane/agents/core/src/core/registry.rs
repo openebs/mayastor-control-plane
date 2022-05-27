@@ -128,12 +128,18 @@ impl Registry {
         }
     }
 
-    /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default
+    /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default.
+    /// If the mayastor_v1 config exists, then reuse it.
     async fn get_config_or_panic<S: Store>(mut store: S) -> CoreRegistryConfig {
         let config = CoreRegistryConfig::new(NodeRegistration::Automatic);
         match store.get_obj(&config.key()).await {
-            Ok(config) => config,
-            Err(StoreError::MissingEntry { .. }) => config,
+            Ok(store_config) => store_config,
+            Err(StoreError::MissingEntry { .. }) => {
+                store.put_obj(&config).await.expect(
+                    "Must be able to access the persistent store to persist configuration information",
+                );
+                config
+            },
             Err(error) => panic!(
                 "Must be able to access the persistent store to load configuration information. Got error: '{:#?}'", error
             ),

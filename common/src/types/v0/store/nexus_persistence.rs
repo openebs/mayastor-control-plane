@@ -50,6 +50,7 @@ pub struct ChildInfo {
 pub struct NexusInfoKey {
     volume_id: Option<VolumeId>,
     nexus_id: NexusId,
+    mayastor_compat_v1: bool,
 }
 
 impl NexusInfoKey {
@@ -58,7 +59,13 @@ impl NexusInfoKey {
         Self {
             volume_id: volume_id.clone(),
             nexus_id: nexus_id.clone(),
+            mayastor_compat_v1: false,
         }
+    }
+    /// Set the `mayastor_compat_v1`.
+    pub fn with_mayastor_compat_v1(mut self, compat: bool) -> Self {
+        self.mayastor_compat_v1 = compat;
+        self
     }
 
     /// Get the volume ID.
@@ -70,10 +77,18 @@ impl NexusInfoKey {
     pub fn nexus_id(&self) -> &NexusId {
         &self.nexus_id
     }
+
+    fn nexus_key_mayastor_v1(&self) -> String {
+        // compatibility mode, return key at the root!
+        self.nexus_id.to_string()
+    }
 }
 
 impl ObjectKey for NexusInfoKey {
     fn key(&self) -> String {
+        if self.mayastor_compat_v1 {
+            return self.nexus_key_mayastor_v1();
+        }
         let namespace = key_prefix();
         let nexus_uuid = self.nexus_id.clone();
         match &self.volume_id {
@@ -107,6 +122,7 @@ impl StorableObject for NexusInfo {
         NexusInfoKey {
             volume_id: self.volume_uuid.clone(),
             nexus_id: self.uuid.clone(),
+            mayastor_compat_v1: false,
         }
     }
 }
