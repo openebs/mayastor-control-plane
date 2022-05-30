@@ -1,10 +1,10 @@
 variable "namespace" {}
-variable "product_name" {}
+variable "product_name_prefix" {}
 variable "create_sa_secret" {}
 
 resource "kubernetes_service_account" "sa" {
   metadata {
-    name      = "${var.product_name}-service-account"
+    name      = "${var.product_name_prefix}service-account"
     namespace = var.namespace
   }
 }
@@ -12,10 +12,10 @@ resource "kubernetes_service_account" "sa" {
 resource "kubernetes_secret" "secret" {
   count = var.create_sa_secret ? 1 : 0
   metadata {
-    name      = "${var.product_name}-service-account-token"
+    name      = "${var.product_name_prefix}service-account-token"
     namespace = var.namespace
     annotations = {
-      "kubernetes.io/service-account.name" = "${var.product_name}-service-account"
+      "kubernetes.io/service-account.name" = "${var.product_name_prefix}service-account"
     }
   }
   type = "kubernetes.io/service-account-token"
@@ -24,7 +24,7 @@ resource "kubernetes_secret" "secret" {
 resource "null_resource" "link_sa_token" {
   count = var.create_sa_secret ? 1 : 0
   provisioner "local-exec" {
-    command    = "kubectl -n ${var.namespace} patch serviceaccount ${var.product_name}-service-account -p '{\"secrets\": [{\"name\": \"${var.product_name}-service-account-token\"}]}'"
+    command    = "kubectl -n ${var.namespace} patch serviceaccount ${var.product_name_prefix}service-account -p '{\"secrets\": [{\"name\": \"${var.product_name_prefix}service-account-token\"}]}'"
     on_failure = continue
   }
   triggers = {
@@ -139,7 +139,7 @@ resource "kubernetes_cluster_role_binding" "crb" {
 
   subject {
     kind      = "ServiceAccount"
-    name      = "${var.product_name}-service-account"
+    name      = "${var.product_name_prefix}service-account"
     namespace = var.namespace
   }
 

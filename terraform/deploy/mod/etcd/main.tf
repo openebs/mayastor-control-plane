@@ -204,7 +204,7 @@ resource "kubernetes_stateful_set" "etcd" {
                 match_expressions {
                   key      = "kubernetes.io/hostname"
                   operator = "In"
-                  values   = [var.control_node]
+                  values   = var.control_node
                 }
               }
             }
@@ -248,8 +248,7 @@ resource "kubernetes_service" "etcd" {
 
     selector = {
       "app.kubernetes.io/instance" = var.product_name
-
-      "app.kubernetes.io/name" = "etcd"
+      "app.kubernetes.io/name"     = "etcd"
     }
 
     type = "ClusterIP"

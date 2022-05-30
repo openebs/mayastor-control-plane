@@ -36,10 +36,10 @@ resource "kubernetes_secret" "regcred" {
 }
 
 module "rbac" {
-  source           = "./mod/rbac"
-  namespace        = var.namespace
-  product_name     = var.product_name
-  create_sa_secret = var.kube_create_sa_secret
+  source              = "./mod/rbac"
+  namespace           = var.namespace
+  product_name_prefix = local.product_name_prefix
+  create_sa_secret    = var.kube_create_sa_secret
 }
 
 module "jaegertracing" {
@@ -62,6 +62,7 @@ module "etcd" {
   image        = var.etcd_image
   control_node = var.control_node
   namespace    = var.namespace
+  product_name = var.product_name
 }
 
 /*
@@ -70,17 +71,18 @@ module "etcd" {
 
 
 module "csi-node" {
-  source            = "./mod/csi/node"
-  image             = format("%s%s", local.image_prefix, var.csi_node_image)
-  tag               = var.tag
-  registry          = var.registry
-  registrar_image   = var.csi_registar_image
-  grace_period      = var.csi_node_grace_period
-  rust_log          = var.control_rust_log
-  io_queues         = var.io_engine_cpus
-  credentials       = kubernetes_secret.regcred.metadata[0].name
-  namespace         = var.namespace
-  image_pull_policy = var.image_pull_policy
+  source              = "./mod/csi/node"
+  image               = format("%s%s", local.image_prefix, var.csi_node_image)
+  tag                 = var.tag
+  registry            = var.registry
+  registrar_image     = var.csi_registar_image
+  grace_period        = var.csi_node_grace_period
+  rust_log            = var.control_rust_log
+  io_queues           = var.io_engine_cpus
+  credentials         = kubernetes_secret.regcred.metadata[0].name
+  namespace           = var.namespace
+  image_pull_policy   = var.image_pull_policy
+  product_name_prefix = local.product_name_prefix
 
   depends_on = [
     module.rbac
@@ -105,6 +107,7 @@ module "csi-controller" {
   rust_log              = var.control_rust_log
   namespace             = var.namespace
   image_pull_policy     = var.image_pull_policy
+  product_name_prefix   = local.product_name_prefix
 }
 
 module "operator-diskpool" {
@@ -127,6 +130,7 @@ module "operator-diskpool" {
   rust_log              = var.control_rust_log
   namespace             = var.namespace
   image_pull_policy     = var.image_pull_policy
+  product_name_prefix   = local.product_name_prefix
 }
 
 module "rest" {
@@ -148,6 +152,7 @@ module "rest" {
   rust_log              = var.control_rust_log
   namespace             = var.namespace
   image_pull_policy     = var.image_pull_policy
+  product_name_prefix   = local.product_name_prefix
 }
 
 module "agent-core" {
@@ -169,11 +174,13 @@ module "agent-core" {
   rust_log              = var.control_rust_log
   namespace             = var.namespace
   image_pull_policy     = var.image_pull_policy
+  product_name_prefix   = local.product_name_prefix
 }
 
 module "sc" {
-  source    = "./mod/sc"
-  namespace = var.namespace
+  source              = "./mod/sc"
+  namespace           = var.namespace
+  product_name_prefix = local.product_name_prefix
 }
 
 /*
@@ -197,11 +204,13 @@ module "io-engine" {
   credentials       = kubernetes_secret.regcred.metadata[0].name
   namespace         = var.namespace
   image_pull_policy = var.image_pull_policy
+  product_name      = var.product_name
 }
 
 locals {
   jaeger_agent_argument = var.with_jaeger ? [module.jaegertracing[0].jaeger_agent_argument] : []
-  image_prefix          = var.product_name == "" ? "" : "${var.product_name}-"
+  image_prefix          = var.image_prefix
+  product_name_prefix   = var.product_name == "" ? "" : "${var.product_name}-"
 }
 
 
