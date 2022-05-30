@@ -10,7 +10,7 @@ variable "credentials" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 variable "namespace" {}
-variable "product_name" {}
+variable "product_name_prefix" {}
 variable "image_pull_policy" {}
 
 resource "kubernetes_service" "agent-core" {
@@ -61,7 +61,7 @@ resource "kubernetes_deployment" "core_deployment" {
         }
       }
       spec {
-        service_account_name = "${var.product_name}-service-account"
+        service_account_name = "${var.product_name_prefix}service-account"
         container {
           args = concat([
             "-setcd",
@@ -117,7 +117,7 @@ resource "kubernetes_deployment" "core_deployment" {
                 match_expressions {
                   key      = "kubernetes.io/hostname"
                   operator = "In"
-                  values   = [var.control_node]
+                  values   = var.control_node
                 }
               }
             }

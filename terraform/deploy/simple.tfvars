@@ -13,7 +13,7 @@ registry = "kvmhost:5000/mayadata"
 #tag      = "latest"
 
 # control plane configuration
-control_node = "ksnode-2"
+#control_node = ["ksnode-1", "ksnode-2"]
 control_resource_requests = {
   "cpu"    = "100m"
   "memory" = "100Mi"
@@ -23,5 +23,5 @@ control_resource_limits = {
   "memory" = "250Mi"
 }
 
-# csi agent configuration
+# csi node configuration
 csi_node_grace_period = 2

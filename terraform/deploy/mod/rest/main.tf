@@ -9,7 +9,7 @@ variable "res_requests" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 variable "namespace" {}
-variable "product_name" {}
+variable "product_name_prefix" {}
 variable "image_pull_policy" {}
 
 resource "kubernetes_service" "api-rest" {
@@ -63,7 +63,7 @@ resource "kubernetes_deployment" "rest_deployment" {
         }
       }
       spec {
-        service_account_name = "${var.product_name}-service-account"
+        service_account_name = "${var.product_name_prefix}service-account"
         container {
           args = concat([
             "--dummy-certificates",
@@ -106,7 +106,7 @@ resource "kubernetes_deployment" "rest_deployment" {
                 match_expressions {
                   key      = "kubernetes.io/hostname"
                   operator = "In"
-                  values   = [var.control_node]
+                  values   = var.control_node
                 }
               }
             }

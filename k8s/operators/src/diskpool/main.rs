@@ -875,6 +875,7 @@ async fn main() -> anyhow::Result<()> {
                 .long("namespace")
                 .short("-n")
                 .env("NAMESPACE")
+                .default_value("mayastor")
                 .help("the default namespace we are supposed to operate in"),
         )
         .arg(

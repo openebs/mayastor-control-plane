@@ -16,6 +16,12 @@ variable "image_pull_policy" {
   default     = "IfNotPresent"
 }
 
+variable "image_prefix" {
+  type        = string
+  description = "Prefix of every image"
+  default     = "mayastor-"
+}
+
 variable "product_name" {
   type        = string
   description = "Name of the product, prefixed on every resource"
@@ -35,8 +41,8 @@ variable "etcd_image" {
 }
 
 variable "control_node" {
-  type        = string
-  default     = "ksnode-1"
+  type        = list(string)
+  default     = ["ksnode-2"]
   description = "The node on which control plane components are scheduled - soft requirement"
 }
 
@@ -91,13 +97,13 @@ variable "io_engine_cpus" {
 variable "io_engine_cpu_list" {
   type        = string
   description = "List of cores to run on, eg: 2,3"
-  default     = "2,3"
+  default     = "1,2"
 }
 
 variable "io_engine_memory" {
   type        = string
   description = "amount of memory to request for io-engine"
-  default     = "4Gi"
+  default     = "1Gi"
 }
 
 variable "io_engine_rust_log" {

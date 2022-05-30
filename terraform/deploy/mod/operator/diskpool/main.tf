@@ -9,7 +9,7 @@ variable "cache_period" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 variable "namespace" {}
-variable "product_name" {}
+variable "product_name_prefix" {}
 variable "image_pull_policy" {}
 
 resource "kubernetes_deployment" "diskpool_deployment" {
@@ -34,7 +34,7 @@ resource "kubernetes_deployment" "diskpool_deployment" {
         }
       }
       spec {
-        service_account_name = "${var.product_name}-service-account"
+        service_account_name = "${var.product_name_prefix}service-account"
         container {
           args = concat([
             "-e http://api-rest:8081",
@@ -74,7 +74,7 @@ resource "kubernetes_deployment" "diskpool_deployment" {
                 match_expressions {
                   key      = "kubernetes.io/hostname"
                   operator = "In"
-                  values   = [var.control_node]
+                  values   = var.control_node
                 }
               }
             }

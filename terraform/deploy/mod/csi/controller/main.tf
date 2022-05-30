@@ -8,7 +8,7 @@ variable "csi_attacher_image" {}
 variable "jaeger_agent_argument" {}
 variable "rust_log" {}
 variable "namespace" {}
-variable "product_name" {}
+variable "product_name_prefix" {}
 variable "image_pull_policy" {}
 
 resource "kubernetes_deployment" "deployment_csi_controller" {
@@ -34,7 +34,7 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
       }
       spec {
         host_network         = true
-        service_account_name = "${var.product_name}-service-account"
+        service_account_name = "${var.product_name_prefix}service-account"
         dns_policy           = "ClusterFirstWithHostNet"
 
         volume {
@@ -117,7 +117,7 @@ resource "kubernetes_deployment" "deployment_csi_controller" {
                 match_expressions {
                   key      = "kubernetes.io/hostname"
                   operator = "In"
-                  values   = [var.control_node]
+                  values   = var.control_node
                 }
               }
             }

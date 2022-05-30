@@ -7,7 +7,7 @@ variable "rust_log" {}
 variable "io_queues" {}
 variable "credentials" {}
 variable "namespace" {}
-variable "product_name" {}
+variable "product_name_prefix" {}
 variable "image_pull_policy" {}
 
 resource "kubernetes_daemonset" "csi_node" {
@@ -34,7 +34,7 @@ resource "kubernetes_daemonset" "csi_node" {
         image_pull_secrets {
           name = var.credentials
         }
-        service_account_name             = "${var.product_name}-service-account"
+        service_account_name             = "${var.product_name_prefix}service-account"
         termination_grace_period_seconds = var.grace_period
 
         volume {
