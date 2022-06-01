@@ -35,7 +35,7 @@ output "kluster" {
 }
 
 locals {
-  ssh_key_pub  = var.ssh_key_pub == "" ? file(pathexpand("~/.ssh/id_rsa.pub")) : var.ssh_key_pub
+  ssh_key_pub  = var.ssh_key_pub == "" ? file(pathexpand("~/.ssh/id_rsa.pub")) : file(var.ssh_key_pub)
   ssh_key_priv = var.ssh_key_priv == "" ? pathexpand("~/.ssh/id_rsa") : var.ssh_key_priv
   qcow2_image  = var.qcow2_image == "" ? pathexpand("~/terraform_images/ubuntu-20.04-server-cloudimg-amd64.img") : pathexpand(var.qcow2_image)
 }

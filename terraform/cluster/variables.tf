@@ -6,7 +6,7 @@ variable "ssh_key_priv" {
 
 variable "ssh_key_pub" {
   type        = string
-  description = "SSH pub key to use"
+  description = "SSH pub key path"
   default     = ""
 }
 
