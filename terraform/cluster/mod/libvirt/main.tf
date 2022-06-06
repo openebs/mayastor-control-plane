@@ -11,6 +11,8 @@ variable "private_key_path" {}
 variable "disk_size" {}
 variable "pooldisk_size" {}
 variable "qcow2_image" {}
+variable "network_mode" {}
+variable "bridge_name" {}
 
 provider "libvirt" {
   uri = "qemu:///system"
@@ -64,6 +66,52 @@ data "template_file" "network_config" {
   template = file("${path.module}/network_config.cfg")
 }
 
+resource "libvirt_network" "kube_network_nat" {
+  count = var.network_mode == "nat" ? 1 : 0
+
+  # the name used by libvirt
+  name = "k8snet"
+
+  # mode can be: "nat" (default), "none", "route", "bridge"
+  mode = var.network_mode
+
+  #  the domain used by the DNS server in this network
+  domain = "k8s.local"
+
+  #  list of subnets the addresses allowed for domains connected
+  # also derived to define the host addresses
+  # also derived to define the addresses served by the DHCP server
+  addresses = ["10.0.0.0/24"]
+
+  # (Optional) Set to true to start the network on host boot up.
+  # If not specified false is assumed.
+  autostart = "true"
+
+  # (Optional) DNS configuration
+  dns {
+    # (Optional, default false)
+    # Set to true, if no other option is specified and you still want to
+    # enable dns.
+    enabled = true
+    # (Optional, default false)
+    # true: DNS requests under this domain will only be resolved by the
+    # virtual network's own DNS server
+    # false: Unresolved requests will be forwarded to the host's
+    # upstream DNS server if the virtual network's DNS server does not
+    # have an answer.
+    local_only = true
+  }
+}
+
+resource "libvirt_network" "kube_network_bridge" {
+  count  = var.network_mode == "bridge" ? 1 : 0
+  bridge = var.bridge_name
+
+  name      = "k8snet"
+  mode      = "bridge"
+  autostart = "true"
+}
+
 # our cloud-init disk resource
 resource "libvirt_cloudinit_disk" "commoninit" {
   name           = format("commoninit-%d.iso", count.index + 1)
@@ -104,7 +152,7 @@ resource "libvirt_domain" "ubuntu-domain" {
   }
 
   network_interface {
-    network_name   = "default"
+    network_name   = var.network_mode == "default" ? "default" : "k8snet"
     hostname       = format(var.hostname_formatter, count.index + 1)
     wait_for_lease = true
   }

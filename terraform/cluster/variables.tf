@@ -45,6 +45,18 @@ variable "num_nodes" {
   description = "The number of nodes to create (should be > 1)"
 }
 
+variable "network_mode" {
+  type        = string
+  default     = "nat"
+  description = "mode can be: nat, bridge, default. If default, the default libvirt network is used."
+}
+
+variable "bridge_name" {
+  type        = string
+  default     = "virbr0"
+  description = "Name of the bridge - when using bridge network mode."
+}
+
 variable "qcow2_image" {
   type        = string
   description = "Ubuntu image for VMs - only needed for libvirt provider"

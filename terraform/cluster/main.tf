@@ -28,6 +28,8 @@ module "provider" {
   disk_size          = var.disk_size
   pooldisk_size      = var.pooldisk_size
   qcow2_image        = local.qcow2_image
+  network_mode       = var.network_mode
+  bridge_name        = var.bridge_name
 }
 
 output "kluster" {
