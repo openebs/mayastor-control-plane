@@ -64,7 +64,7 @@ mkShell {
     ${pkgs.lib.optionalString (norust) "echo"}
     if [ -n "$USE_NIX_RUST" ]; then
       RUST_SRC_PATH="${rust_chan.nightly_src}/lib/rustlib/src/rust/library/"
-      if ! diff "$RUST_SRC_PATH" "$RUST_SRC_CLONE" &>/dev/null; then
+      if ! diff -r "$RUST_SRC_PATH" "$RUST_SRC_CLONE" &>/dev/null; then
         rm -rf "$RUST_SRC_CLONE"
         mkdir -p "$RUST_SRC_CLONE" 2>/dev/null
         cp -r "$RUST_SRC_PATH"/* "$RUST_SRC_CLONE"
