@@ -75,10 +75,10 @@ resource "libvirt_network" "kube_network_nat" {
   # mode can be: "nat" (default), "none", "route", "bridge"
   mode = var.network_mode
 
-  #  the domain used by the DNS server in this network
+  # the domain used by the DNS server in this network
   domain = "k8s.local"
 
-  #  list of subnets the addresses allowed for domains connected
+  # list of subnets the addresses allowed for domains connected
   # also derived to define the host addresses
   # also derived to define the addresses served by the DHCP server
   addresses = ["10.0.0.0/24"]

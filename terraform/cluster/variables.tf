@@ -13,7 +13,7 @@ variable "ssh_key_pub" {
 variable "ssh_user" {
   type        = string
   description = "The user that should be created and who has sudo power"
-  default     = "tiago"
+  default     = ""
 }
 
 variable "image_path" {
