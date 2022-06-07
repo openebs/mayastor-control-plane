@@ -13,7 +13,7 @@ variable "ssh_key_pub" {
 variable "ssh_user" {
   type        = string
   description = "The user that should be created and who has sudo power"
-  default     = "tiago"
+  default     = ""
 }
 
 variable "image_path" {
@@ -43,6 +43,18 @@ variable "num_nodes" {
   type        = number
   default     = 3
   description = "The number of nodes to create (should be > 1)"
+}
+
+variable "network_mode" {
+  type        = string
+  default     = "nat"
+  description = "mode can be: nat, bridge, default. If default, the default libvirt network is used."
+}
+
+variable "bridge_name" {
+  type        = string
+  default     = "virbr0"
+  description = "Name of the bridge - when using bridge network mode."
 }
 
 variable "qcow2_image" {

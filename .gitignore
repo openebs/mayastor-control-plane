@@ -17,3 +17,4 @@ __pycache__
 !/openapi/build.rs
 /tests/bdd/autogen/
 /terraform/cluster/ansible-hosts
+/terraform/cluster/current_user.txt
