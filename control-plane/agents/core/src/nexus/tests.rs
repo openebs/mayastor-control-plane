@@ -13,8 +13,8 @@ use common_lib::{
 };
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
-    node::traits::NodeOperations, registry::traits::RegistryOperations,
-    replica::traits::ReplicaOperations,
+    nexus::traits::NexusOperations, node::traits::NodeOperations,
+    registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
 };
 use std::{convert::TryFrom, time::Duration};
 
@@ -35,6 +35,7 @@ async fn nexus() {
     tracing::info!("Nodes: {:?}", nodes);
 
     let rep_client = cluster.grpc_client().replica();
+    let nexus_client = cluster.grpc_client().nexus();
 
     let replica = rep_client
         .create(
@@ -55,45 +56,63 @@ async fn nexus() {
 
     let local = "malloc:///local?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b".into();
 
-    let nexus = CreateNexus {
-        node: io_engine.clone(),
-        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-        size: 5242880,
-        children: vec![replica.uri.clone().into(), local],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let nexus = nexus_client
+        .create(
+            &CreateNexus {
+                node: io_engine.clone(),
+                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+                size: 5242880,
+                children: vec![replica.uri.clone().into(), local],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    let nexuses = GetNexuses::default().request().await.unwrap().0;
+    let nexuses = nexus_client
+        .get(GetNexuses::default().filter, None)
+        .await
+        .unwrap()
+        .0;
     tracing::info!("Nexuses: {:?}", nexuses);
     assert_eq!(Some(&nexus), nexuses.first());
 
-    ShareNexus {
-        node: io_engine.clone(),
-        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-        key: None,
-        protocol: NexusShareProtocol::Nvmf,
-    }
-    .request()
-    .await
-    .unwrap();
+    nexus_client
+        .share(
+            &ShareNexus {
+                node: io_engine.clone(),
+                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+                key: None,
+                protocol: NexusShareProtocol::Nvmf,
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
-    DestroyNexus {
-        node: io_engine.clone(),
-        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-    }
-    .request()
-    .await
-    .unwrap();
+    nexus_client
+        .destroy(
+            &DestroyNexus {
+                node: io_engine.clone(),
+                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     rep_client
         .destroy(&DestroyReplica::from(replica), None)
         .await
         .unwrap();
 
-    assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
+    assert!(nexus_client
+        .get(GetNexuses::default().filter, None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
 }
 
 /// The tests below revolve around transactions and are dependent on the core agent's command line
@@ -130,20 +149,25 @@ async fn nexus_share_transaction() {
 
     let node_client = cluster.grpc_client().node();
     let registry_client = cluster.grpc_client().registry();
+    let nexus_client = cluster.grpc_client().nexus();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
-    let nexus = CreateNexus {
-        node: io_engine.clone(),
-        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-        size: 5242880,
-        children: vec![local],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let nexus = nexus_client
+        .create(
+            &CreateNexus {
+                node: io_engine.clone(),
+                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+                size: 5242880,
+                children: vec![local],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
     let share = ShareNexus::from((&nexus, None, NexusShareProtocol::Nvmf));
 
     async fn check_share_operation(
@@ -173,8 +197,8 @@ async fn nexus_share_transaction() {
     // pause io_engine
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
-    share
-        .request_ext(bus_timeout_opts())
+    nexus_client
+        .share(&share, None)
         .await
         .expect_err("io_engine is down");
 
@@ -184,13 +208,14 @@ async fn nexus_share_transaction() {
     cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     // now it should be shared successfully
-    let uri = share.request().await.unwrap();
+    let uri = nexus_client.share(&share, None).await.unwrap();
+
     println!("Share uri: {}", uri);
 
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
-    UnshareNexus::from(&nexus)
-        .request_ext(bus_timeout_opts())
+    nexus_client
+        .unshare(&UnshareNexus::from(&nexus), None)
         .await
         .expect_err("io_engine down");
 
@@ -198,7 +223,10 @@ async fn nexus_share_transaction() {
 
     cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
-    UnshareNexus::from(&nexus).request().await.unwrap();
+    nexus_client
+        .unshare(&UnshareNexus::from(&nexus), None)
+        .await
+        .unwrap();
 
     assert_eq!(
         nexus_spec(&nexus, &registry_client).await.unwrap().share,
@@ -209,24 +237,48 @@ async fn nexus_share_transaction() {
 /// Tests Store Write Failures for Nexus Child Operations
 /// As it stands, the tests expects the operation to not be undone, and
 /// a reconcile thread should eventually sync the specs when the store reappears
-async fn nexus_child_op_transaction_store<R>(
+async fn nexus_child_op_transaction_store(
     nexus: &Nexus,
     cluster: &Cluster,
     (store_timeout, reconcile_period, grpc_timeout): (Duration, Duration, Duration),
-    (request, children, share): (R, usize, Protocol),
-) where
-    R: Message,
-    R::Reply: std::fmt::Debug,
-{
+    (share_request, unshare_request, add_nexus_child_request, remove_nexus_child_request): (
+        Option<ShareNexus>,
+        Option<UnshareNexus>,
+        Option<AddNexusChild>,
+        Option<RemoveNexusChild>,
+    ),
+    nexus_client: &dyn NexusOperations,
+    (children, share): (usize, Protocol),
+) {
     let io_engine = cluster.node(0);
 
     // pause io_engine
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
-    request
-        .request_ext(bus_timeout_opts())
-        .await
-        .expect_err("io_engine down");
+    if share_request.is_some() {
+        nexus_client
+            .share(&share_request.clone().unwrap(), None)
+            .await
+            .expect_err("io_engine down");
+    }
+    if unshare_request.is_some() {
+        nexus_client
+            .unshare(&unshare_request.clone().unwrap(), None)
+            .await
+            .expect_err("io_engine down");
+    }
+    if add_nexus_child_request.is_some() {
+        nexus_client
+            .add_nexus_child(&add_nexus_child_request.clone().unwrap(), None)
+            .await
+            .expect_err("io_engine down");
+    }
+    if remove_nexus_child_request.is_some() {
+        nexus_client
+            .remove_nexus_child(&remove_nexus_child_request.clone().unwrap(), None)
+            .await
+            .expect_err("io_engine down");
+    }
 
     // ensure the op will succeed but etcd store will fail
     // by pausing etcd and releasing io_engine
@@ -258,10 +310,30 @@ async fn nexus_child_op_transaction_store<R>(
     assert_eq!(spec.children.len(), children);
     assert_eq!(spec.share, share);
 
-    request
-        .request_ext(bus_timeout_opts())
-        .await
-        .expect_err("operation already performed");
+    if share_request.is_some() {
+        nexus_client
+            .share(&share_request.unwrap(), None)
+            .await
+            .expect_err("operation already performed");
+    }
+    if unshare_request.is_some() {
+        nexus_client
+            .unshare(&unshare_request.unwrap(), None)
+            .await
+            .expect_err("operation already performed");
+    }
+    if add_nexus_child_request.is_some() {
+        nexus_client
+            .add_nexus_child(&add_nexus_child_request.unwrap(), None)
+            .await
+            .expect_err("operation already performed");
+    }
+    if remove_nexus_child_request.is_some() {
+        nexus_client
+            .remove_nexus_child(&remove_nexus_child_request.unwrap(), None)
+            .await
+            .expect_err("operation already performed");
+    }
 }
 
 /// Tests nexus share and unshare operations when the store is temporarily down
@@ -285,36 +357,45 @@ async fn nexus_share_transaction_store() {
         .await
         .unwrap();
     let io_engine = cluster.node(0);
-
+    let nexus_client = cluster.grpc_client().nexus();
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
-    let nexus = CreateNexus {
-        node: io_engine.clone(),
-        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-        size: 5242880,
-        children: vec![local],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let nexus = nexus_client
+        .create(
+            &CreateNexus {
+                node: io_engine.clone(),
+                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+                size: 5242880,
+                children: vec![local],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     // test the share operation
     let share = ShareNexus::from((&nexus, None, NexusShareProtocol::Nvmf));
+
     nexus_child_op_transaction_store(
         &nexus,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (share, 1, Protocol::Nvmf),
+        (Some(share), None, None, None),
+        &nexus_client,
+        (1, Protocol::Nvmf),
     )
     .await;
 
     // test the unshare operation
     let unshare = UnshareNexus::from(&nexus);
+
     nexus_child_op_transaction_store(
         &nexus,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (unshare, 1, Protocol::None),
+        (None, Some(unshare), None, None),
+        &nexus_client,
+        (1, Protocol::None),
     )
     .await;
 }
@@ -335,20 +416,26 @@ async fn nexus_child_transaction() {
     let io_engine = cluster.node(0);
     let node_client = cluster.grpc_client().node();
     let registry_client = cluster.grpc_client().registry();
+    let nexus_client = cluster.grpc_client().nexus();
     let nodes = node_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let child2 = "malloc:///ch2?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b";
-    let nexus = CreateNexus {
-        node: io_engine.clone(),
-        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-        size: 5242880,
-        children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let nexus = nexus_client
+        .create(
+            &CreateNexus {
+                node: io_engine.clone(),
+                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+                size: 5242880,
+                children: vec![
+                    "malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into(),
+                ],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
     let add_child = AddNexusChild {
         node: io_engine.clone(),
         nexus: nexus.uuid.clone(),
@@ -392,8 +479,8 @@ async fn nexus_child_transaction() {
     // pause io_engine
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
-    add_child
-        .request_ext(bus_timeout_opts())
+    nexus_client
+        .add_nexus_child(&add_child, None)
         .await
         .expect_err("io_engine is down");
 
@@ -403,13 +490,16 @@ async fn nexus_child_transaction() {
     cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
     // now it should be shared successfully
-    let uri = add_child.request().await.unwrap();
+    let uri = nexus_client
+        .add_nexus_child(&add_child, None)
+        .await
+        .unwrap();
     println!("Share uri: {:?}", uri);
 
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
-    rm_child
-        .request_ext(bus_timeout_opts())
+    nexus_client
+        .remove_nexus_child(&rm_child, None)
         .await
         .expect_err("io_engine down");
 
@@ -417,7 +507,10 @@ async fn nexus_child_transaction() {
 
     cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
-    rm_child.request().await.unwrap();
+    nexus_client
+        .remove_nexus_child(&rm_child, None)
+        .await
+        .unwrap();
 
     assert_eq!(
         nexus_spec(&nexus, &registry_client)
@@ -450,17 +543,23 @@ async fn nexus_child_transaction_store() {
         .await
         .unwrap();
     let io_engine = cluster.node(0);
+    let nexus_client = cluster.grpc_client().nexus();
 
-    let nexus = CreateNexus {
-        node: io_engine.clone(),
-        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-        size: 5242880,
-        children: vec!["malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into()],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    let nexus = nexus_client
+        .create(
+            &CreateNexus {
+                node: io_engine.clone(),
+                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+                size: 5242880,
+                children: vec![
+                    "malloc:///ch1?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into(),
+                ],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     let child2 = "malloc:///ch2?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0db";
     let add_child = AddNexusChild {
@@ -473,7 +572,9 @@ async fn nexus_child_transaction_store() {
         &nexus,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (add_child, 2, Protocol::None),
+        (None, None, Some(add_child), None),
+        &nexus_client,
+        (2, Protocol::None),
     )
     .await;
 
@@ -486,7 +587,9 @@ async fn nexus_child_transaction_store() {
         &nexus,
         &cluster,
         (store_timeout, reconcile_period, grpc_timeout),
-        (del_child, 1, Protocol::None),
+        (None, None, None, Some(del_child)),
+        &nexus_client,
+        (1, Protocol::None),
     )
     .await;
 }

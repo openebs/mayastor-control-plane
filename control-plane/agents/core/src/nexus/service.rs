@@ -1,7 +1,7 @@
 use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
-    mbus_api::message_bus::v0::Nexuses,
+    mbus_api::{message_bus::v0::Nexuses, ReplyError},
     types::v0::{
         message_bus::{
             AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
@@ -10,12 +10,95 @@ use common_lib::{
         store::OperationMode,
     },
 };
+use grpc::{
+    context::Context,
+    operations::nexus::traits::{
+        AddNexusChildInfo, CreateNexusInfo, DestroyNexusInfo, NexusOperations,
+        RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
     registry: Registry,
 }
 
+#[tonic::async_trait]
+impl NexusOperations for Service {
+    async fn create(
+        &self,
+        nexus: &dyn CreateNexusInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Nexus, ReplyError> {
+        let req = nexus.into();
+        let service = self.clone();
+        let nexus = Context::spawn(async move { service.create_nexus(&req).await }).await??;
+        Ok(nexus)
+    }
+
+    async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Nexuses, ReplyError> {
+        let req = GetNexuses { filter };
+        let nexuses = self.get_nexuses(&req).await?;
+        Ok(nexuses)
+    }
+
+    async fn destroy(
+        &self,
+        req: &dyn DestroyNexusInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let destroy_nexus = req.into();
+        let service = self.clone();
+        Context::spawn(async move { service.destroy_nexus(&destroy_nexus).await }).await??;
+        Ok(())
+    }
+
+    async fn share(
+        &self,
+        req: &dyn ShareNexusInfo,
+        _ctx: Option<Context>,
+    ) -> Result<String, ReplyError> {
+        let share_nexus = req.into();
+        let service = self.clone();
+        let response =
+            Context::spawn(async move { service.share_nexus(&share_nexus).await }).await??;
+        Ok(response)
+    }
+
+    async fn unshare(
+        &self,
+        req: &dyn UnshareNexusInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let unshare_nexus = req.into();
+        let service = self.clone();
+        Context::spawn(async move { service.unshare_nexus(&unshare_nexus).await }).await??;
+        Ok(())
+    }
+
+    async fn add_nexus_child(
+        &self,
+        req: &dyn AddNexusChildInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Child, ReplyError> {
+        let add_nexus_child = req.into();
+        let service = self.clone();
+        let child = Context::spawn(async move { service.add_nexus_child(&add_nexus_child).await })
+            .await??;
+        Ok(child)
+    }
+
+    async fn remove_nexus_child(
+        &self,
+        req: &dyn RemoveNexusChildInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let unshare_nexus = req.into();
+        let service = self.clone();
+        Context::spawn(async move { service.remove_nexus_child(&unshare_nexus).await }).await??;
+        Ok(())
+    }
+}
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
         Self { registry }

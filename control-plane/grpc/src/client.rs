@@ -1,6 +1,7 @@
 use crate::{
     context::Context,
     operations::{
+        nexus::{client::NexusClient, traits::NexusOperations},
         node::{client::NodeClient, traits::NodeOperations},
         pool::{client::PoolClient, traits::PoolOperations},
         registry::{client::RegistryClient, traits::RegistryOperations},
@@ -19,6 +20,7 @@ pub struct CoreClient {
     volume: VolumeClient,
     node: NodeClient,
     registry: RegistryClient,
+    nexus: NexusClient,
 }
 
 impl CoreClient {
@@ -29,13 +31,15 @@ impl CoreClient {
         let replica_client = ReplicaClient::new(addr.clone(), timeout_opts.clone()).await;
         let volume_client = VolumeClient::new(addr.clone(), timeout_opts.clone()).await;
         let node_client = NodeClient::new(addr.clone(), timeout_opts.clone()).await;
-        let registry_client = RegistryClient::new(addr, timeout_opts).await;
+        let registry_client = RegistryClient::new(addr.clone(), timeout_opts.clone()).await;
+        let nexus_client = NexusClient::new(addr, timeout_opts).await;
         Self {
             pool: pool_client,
             replica: replica_client,
             volume: volume_client,
             node: node_client,
             registry: registry_client,
+            nexus: nexus_client,
         }
     }
     /// retrieve the corresponding pool client
@@ -57,6 +61,10 @@ impl CoreClient {
     /// retrieve the corresponding registry client
     pub fn registry(&self) -> impl RegistryOperations {
         self.registry.clone()
+    }
+    /// retrieve the corresponding nexus client
+    pub fn nexus(&self) -> impl NexusOperations {
+        self.nexus.clone()
     }
     /// Try to wait until the Core Agent is ready, up to a timeout, by using the Probe method.
     pub async fn wait_ready(&self, timeout_opts: Option<TimeoutOptions>) -> Result<(), ()> {

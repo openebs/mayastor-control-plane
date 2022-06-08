@@ -210,7 +210,7 @@ impl From<Replicas> for replica::Replicas {
 /// CreateReplicaInfo trait for the replica creation to be implemented by entities which want to
 /// avail this operation
 pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
-    /// Id of the IoEngine instanc
+    /// Id of the IoEngine instance
     fn node(&self) -> NodeId;
     /// Name of the replica
     fn name(&self) -> Option<ReplicaName>;

@@ -26,8 +26,8 @@ pub use send::*;
 use serde::{de::StdError, Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use std::{
-    collections::HashMap, fmt::Debug, io, marker::PhantomData, ops::Deref, str::FromStr,
-    time::Duration,
+    collections::HashMap, fmt::Debug, io, marker::PhantomData, num::TryFromIntError, ops::Deref,
+    str::FromStr, time::Duration,
 };
 use strum_macros::{AsRefStr, ToString};
 use tokio::task::JoinError;
@@ -365,6 +365,13 @@ impl From<ReplyError> for tonic::Status {
 impl From<tonic::transport::Error> for ReplyError {
     fn from(e: tonic::transport::Error) -> Self {
         Self::tonic_reply_error(ReplyErrorKind::Aborted, e.to_string(), e.full_string())
+    }
+}
+
+/// Error type for invalid integer type conversion
+impl From<TryFromIntError> for ReplyError {
+    fn from(e: TryFromIntError) -> Self {
+        Self::invalid_argument(ResourceKind::Unknown, "", e.to_string())
     }
 }
 
