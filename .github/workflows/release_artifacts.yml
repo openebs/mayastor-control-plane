@@ -1,26 +1,36 @@
-name: "Release Artifacts"
+name: Release Artifacts
 on:
   push:
     branches:
       - master
       - 'release-**'
+      - 'release/**'
       - 'hotfix-v**'
 
 jobs:
   kubectl-plugin:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: apple-darwin
+          - os: ubuntu-latest
+            target: linux-musl
+# TODO: not currently working
+#          - os: ubuntu-latest
+#            target: windows-gnu
+#            suffix: .exe
     steps:
-    - uses: actions/checkout@v2.4.0
-    - uses: cachix/install-nix-action@v15
-      with:
-        nix_path: nixpkgs=channel:nixos
-    - run: nix-build -A utils.release.linux-musl.kubectl-plugin
-    - uses: actions/upload-artifact@v2
-      with:
-        name: kubectl-mayastor
-        path: ./result/bin/kubectl-mayastor
-    - run: nix-build -A utils.release.windows-gnu.kubectl-plugin
-    - uses: actions/upload-artifact@v2
-      with:
-        name: kubectl-mayastor.exe
-        path: ./result/bin/kubectl-mayastor.exe
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: cachix/install-nix-action@v17
+        with:
+          nix_path: nixpkgs=channel:nixos
+      - run: nix-build -A utils.release.${{ matrix.target }}.kubectl-plugin
+      - uses: actions/upload-artifact@v3
+        with:
+          name: kubectl-mayastor-${{ matrix.target }}
+          path: ./result/bin/kubectl-mayastor${{ matrix.suffix }}
+          if-no-files-found: error
