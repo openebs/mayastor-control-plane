@@ -1,10 +1,13 @@
 use super::*;
 
-use crate::types::v0::store::{
-    definitions::ObjectKey, nexus_child::NexusChild, nexus_persistence::NexusInfoKey,
+use crate::{
+    mbus_api::{ReplyError, ResourceKind},
+    types::v0::store::{
+        definitions::ObjectKey, nexus_child::NexusChild, nexus_persistence::NexusInfoKey,
+    },
 };
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Debug};
+use std::{convert::TryFrom, fmt::Debug, ops::RangeInclusive};
 use strum_macros::{EnumString, ToString};
 
 /// Volume Nexuses
@@ -200,6 +203,24 @@ impl NvmfControllerIdRange {
         const MAX_CONTROLLER_ID: u16 = 0xffef;
         MIN_CONTROLLER_ID ..= MAX_CONTROLLER_ID
     }
+    /// create a new NvmfControllerIdRange using provided range
+    pub fn new(start: u16, end: u16) -> Result<Self, ReplyError> {
+        if NvmfControllerIdRange::controller_id_range().contains(&start)
+            && NvmfControllerIdRange::controller_id_range().contains(&end)
+            && start < end
+        {
+            Ok(NvmfControllerIdRange(RangeInclusive::new(start, end)))
+        } else {
+            Err(ReplyError::invalid_argument(
+                ResourceKind::Nexus,
+                "nvmf_controller_id_range",
+                format!(
+                    "{}, {} values don't fall in controller id range",
+                    start, end
+                ),
+            ))
+        }
+    }
 }
 impl Default for NvmfControllerIdRange {
     fn default() -> Self {
@@ -235,6 +256,30 @@ impl NexusNvmfConfig {
     /// reservation key to be preempted
     pub fn preempt_key(&self) -> u64 {
         self.preempt_reservation_key.unwrap_or_default()
+    }
+    /// create a new NexusNvmfConfig with the args
+    pub fn new(
+        controller_id_range: NvmfControllerIdRange,
+        reservation_key: u64,
+        preempt_reservation_key: Option<u64>,
+    ) -> Self {
+        Self {
+            controller_id_range,
+            reservation_key,
+            preempt_reservation_key,
+        }
+    }
+    /// get controller_id_range
+    pub fn controller_id_range(&self) -> NvmfControllerIdRange {
+        self.controller_id_range.clone()
+    }
+    /// get reservation_key
+    pub fn reservation_key(&self) -> u64 {
+        self.reservation_key
+    }
+    /// get preempt_reservation_key
+    pub fn preempt_reservation_key(&self) -> Option<u64> {
+        self.preempt_reservation_key
     }
 }
 

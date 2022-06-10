@@ -144,6 +144,17 @@ message NodePoolFilter{
   string pool_id = 2;
 }
 
+// Filter by Nexus Id
+message NexusFilter{
+  string nexus_id = 1;
+}
+
+// Filter by Node and Nexus id
+message NodeNexusFilter{
+  string node_id = 1;
+  string nexus_id = 2;
+}
+
 // Pagination related parameters.
 // This allows a large response to be split over multiple requests to prevent timeouts.
 message Pagination {

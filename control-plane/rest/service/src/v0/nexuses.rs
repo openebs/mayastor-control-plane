@@ -3,10 +3,15 @@ use common_lib::types::v0::{
     message_bus::{DestroyNexus, Filter, ShareNexus, UnshareNexus},
     openapi::apis::Uuid,
 };
+use grpc::operations::nexus::traits::NexusOperations;
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
     ReplyErrorKind, ResourceKind,
 };
+
+fn client() -> impl NexusOperations {
+    core_grpc().nexus()
+}
 
 async fn destroy_nexus(filter: Filter) -> Result<(), RestError<RestJsonError>> {
     let destroy = match filter.clone() {
@@ -34,7 +39,8 @@ async fn destroy_nexus(filter: Filter) -> Result<(), RestError<RestJsonError>> {
         }
     };
 
-    MessageBus::destroy_nexus(destroy).await?;
+    client().destroy(&destroy, None).await?;
+
     Ok(())
 }
 
@@ -53,39 +59,56 @@ impl apis::actix_server::Nexuses for RestApi {
     async fn del_node_nexus_share(
         Path((node_id, nexus_id)): Path<(String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
-        MessageBus::unshare_nexus(UnshareNexus {
-            node: node_id.into(),
-            uuid: nexus_id.into(),
-        })
-        .await?;
+        client()
+            .unshare(
+                &UnshareNexus {
+                    node: node_id.into(),
+                    uuid: nexus_id.into(),
+                },
+                None,
+            )
+            .await?;
         Ok(())
     }
 
     async fn get_nexus(
         Path(nexus_id): Path<Uuid>,
     ) -> Result<models::Nexus, RestError<RestJsonError>> {
-        let nexus = MessageBus::get_nexus(Filter::Nexus(nexus_id.into())).await?;
+        let nexus = nexus(
+            Some(nexus_id.to_string()),
+            client()
+                .get(Filter::Nexus(nexus_id.into()), None)
+                .await?
+                .into_inner()
+                .get(0),
+        )?;
         Ok(nexus.into())
     }
 
     async fn get_nexuses() -> Result<Vec<models::Nexus>, RestError<RestJsonError>> {
-        let nexuses = MessageBus::get_nexuses(Filter::None).await?;
-        Ok(nexuses.into_iter().map(From::from).collect())
+        let nexuses = client().get(Filter::None, None).await?;
+        Ok(nexuses.into_inner().into_iter().map(From::from).collect())
     }
 
     async fn get_node_nexus(
         Path((node_id, nexus_id)): Path<(String, Uuid)>,
     ) -> Result<models::Nexus, RestError<RestJsonError>> {
-        let nexus =
-            MessageBus::get_nexus(Filter::NodeNexus(node_id.into(), nexus_id.into())).await?;
+        let nexus = nexus(
+            Some(nexus_id.to_string()),
+            client()
+                .get(Filter::NodeNexus(node_id.into(), nexus_id.into()), None)
+                .await?
+                .into_inner()
+                .get(0),
+        )?;
         Ok(nexus.into())
     }
 
     async fn get_node_nexuses(
         Path(id): Path<String>,
     ) -> Result<Vec<models::Nexus>, RestError<RestJsonError>> {
-        let nexuses = MessageBus::get_nexuses(Filter::Node(id.into())).await?;
-        Ok(nexuses.into_iter().map(From::from).collect())
+        let nexuses = client().get(Filter::Node(id.into()), None).await?;
+        Ok(nexuses.into_inner().into_iter().map(From::from).collect())
     }
 
     async fn put_node_nexus(
@@ -94,7 +117,7 @@ impl apis::actix_server::Nexuses for RestApi {
     ) -> Result<models::Nexus, RestError<RestJsonError>> {
         let create =
             CreateNexusBody::from(create_nexus_body).bus_request(node_id.into(), nexus_id.into());
-        let nexus = MessageBus::create_nexus(create).await?;
+        let nexus = client().create(&create, None).await?;
         Ok(nexus.into())
     }
 
@@ -107,7 +130,23 @@ impl apis::actix_server::Nexuses for RestApi {
             key: None,
             protocol: protocol.into(),
         };
-        let share_uri = MessageBus::share_nexus(share).await?;
+        let share_uri = client().share(&share, None).await?;
         Ok(share_uri)
+    }
+}
+
+/// returns nexus from nexus option and returns an error on non existence
+pub fn nexus(nexus_id: Option<String>, nexus: Option<&Nexus>) -> Result<Nexus, ReplyError> {
+    match nexus {
+        Some(nexus) => Ok(nexus.clone()),
+        None => Err(ReplyError {
+            kind: ReplyErrorKind::NotFound,
+            resource: ResourceKind::Nexus,
+            source: "Requested nexus was not found".to_string(),
+            extra: match nexus_id {
+                None => "".to_string(),
+                Some(id) => format!("Nexus id : {}", id),
+            },
+        }),
     }
 }

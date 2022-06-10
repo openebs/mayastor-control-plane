@@ -27,6 +27,11 @@ message Nexus {
   common.Protocol share = 9;
 }
 
+// Multiple nexus
+message Nexuses {
+  repeated Nexus nexuses = 1;
+}
+
 enum NexusStatus {
   // Default Unknown state
   Unknown = 0;
@@ -81,6 +86,7 @@ message NexusSpec {
   optional common.SpecOperation operation = 10;
 }
 
+// Nexus children (replica or "raw" URI)
 message NexusChild {
   oneof child {
     // When the child is a pool replica (in case of a volume)
@@ -90,11 +96,175 @@ message NexusChild {
   }
 }
 
+// ReplicaUri used by managed nexus creation
+// Includes the ReplicaId which is unique and allows us to pinpoint the exact replica
 message Replica {
   google.protobuf.StringValue replica_id = 1;
   string ChildUri = 2;
 }
 
+// URI of a nexus child
 message Uri {
   string ChildUri = 1;
+}
+
+// Get all nexuses based on the filter criteria
+message GetNexusesRequest {
+  oneof filter {
+    common.NodeFilter node = 1;
+    common.NodeNexusFilter node_nexus = 2;
+    common.NexusFilter nexus = 3;
+  }
+}
+
+// Reply type for a GetNexuses request
+message GetNexusesReply {
+  oneof reply {
+    Nexuses nexuses = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+message CreateNexusRequest {
+  // id of the io-engine instance
+  string node_id = 1;
+  // the nexus uuid will be set to this
+  google.protobuf.StringValue nexus_id = 2;
+  // size of the device in bytes
+  uint64 size = 3;
+  // replica can be iscsi and nvmf remote targets or a local spdk bdev
+  // (i.e. bdev:///name-of-the-bdev).
+  // uris to the targets we connect to
+  repeated NexusChild children = 4;
+  // Managed by our control plane
+  bool managed = 5;
+  // Volume which owns this nexus, if any
+  google.protobuf.StringValue owner = 6;
+  // Nexus Nvmf Configuration
+  optional NexusNvmfConfig config = 7;
+}
+
+// Nvmf Controller Id Range
+// Ranges between 1 to 0xFFEF
+message NvmfControllerIdRange {
+  uint32 start = 1;
+  uint32 end = 2;
+}
+
+// Nexus Nvmf Configuration
+message NexusNvmfConfig {
+  // limits the controller id range
+  NvmfControllerIdRange controller_id_range = 1;
+  // persistent reservation key
+  uint64 reservation_key = 2;
+  // preempts this reservation key
+  optional uint64 preempt_reservation_key = 3;
+}
+
+// Reply type for CreateNexusRequest
+message CreateNexusReply {
+  oneof reply {
+    Nexus nexus = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Destroy Nexus Request
+message DestroyNexusRequest {
+  // id of the io-engine instance
+  string node_id = 1;
+  // uuid of the nexus
+  google.protobuf.StringValue nexus_id = 2;
+}
+
+// Reply type for DestroyNexusRequest
+message DestroyNexusReply {
+  optional common.ReplyError error = 1;
+}
+
+// Share Nexus Request
+message ShareNexusRequest {
+  // id of the io-engine instance
+  string node_id = 1;
+  // uuid of the nexus
+  google.protobuf.StringValue nexus_id = 2;
+  // encryption key
+  optional string key = 3;
+  // share protocol
+  NexusShareProtocol protocol = 4;
+}
+
+// Reply type for a ShareNexusRequest
+message ShareNexusReply {
+  oneof reply {
+    string response = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Unshare Nexus Request
+message UnshareNexusRequest {
+  // id of the io-engine instance
+  string node_id = 1;
+  // uuid of the nexus
+  google.protobuf.StringValue nexus_id = 2;
+}
+
+// Reply type for a UnshareNexus request
+message UnshareNexusReply {
+  optional common.ReplyError error = 1;
+}
+
+// The protocol used to share the nexus.
+enum NexusShareProtocol {
+  // shared as NVMe-oF TCP
+  Nvmf = 0;
+  // shared as iSCSI
+  Iscsi = 1;
+}
+
+// Add child to Nexus Request
+message AddNexusChildRequest {
+  // id of the io-engine instance
+  string node_id = 1;
+  // uuid of the nexus
+  google.protobuf.StringValue nexus_id = 2;
+  // URI of the child device to be added
+  string uri = 3;
+  // auto start rebuilding
+  bool auto_rebuild = 4;
+}
+
+// Remove Child from Nexus Request
+message RemoveNexusChildRequest {
+  // id of the io-engine instance
+  string node_id = 1;
+  // uuid of the nexus
+  google.protobuf.StringValue nexus_id = 2;
+  // URI of the child device to be added
+  string uri = 3;
+}
+
+// Reply type for a AddNexusChildRequest request
+message AddNexusChildReply {
+  oneof reply {
+    Child child = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a RemoveNexusChildRequest request
+message RemoveNexusChildReply {
+  optional common.ReplyError error = 1;
+}
+
+// Nexus Grpc Service
+service NexusGrpc {
+  rpc GetNexuses (GetNexusesRequest) returns (GetNexusesReply) {}
+  rpc CreateNexus (CreateNexusRequest) returns (CreateNexusReply) {}
+  rpc DestroyNexus (DestroyNexusRequest) returns (DestroyNexusReply) {}
+  rpc ShareNexus (ShareNexusRequest) returns (ShareNexusReply) {}
+  rpc UnshareNexus (UnshareNexusRequest) returns (UnshareNexusReply) {}
+  rpc AddNexusChild (AddNexusChildRequest) returns (AddNexusChildReply) {}
+  rpc RemoveNexusChild (RemoveNexusChildRequest) returns (RemoveNexusChildReply) {}
 }

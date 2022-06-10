@@ -1,17 +1,30 @@
 use super::*;
+use crate::v0::nexuses::nexus;
 use common_lib::types::v0::{
     message_bus::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
     openapi::apis::Uuid,
 };
+use grpc::operations::nexus::traits::NexusOperations;
 use mbus_api::{
     message_bus::v0::{BusError, MessageBus, MessageBusTrait},
     ReplyErrorKind, ResourceKind,
 };
 
+fn client() -> impl NexusOperations {
+    core_grpc().nexus()
+}
+
 async fn get_children_response(
     filter: Filter,
 ) -> Result<Vec<models::Child>, RestError<RestJsonError>> {
-    let nexus = MessageBus::get_nexus(filter).await?;
+    let nexus = nexus(
+        match &filter {
+            Filter::NodeNexus(_, id) => Some(id.to_string()),
+            Filter::Nexus(id) => Some(id.to_string()),
+            _ => None,
+        },
+        client().get(filter, None).await?.into_inner().get(0),
+    )?;
     Ok(nexus.children.into_iter().map(From::from).collect())
 }
 
@@ -21,7 +34,14 @@ async fn get_child_response(
     filter: Filter,
 ) -> Result<models::Child, RestError<RestJsonError>> {
     let child_id = build_child_uri(child_id, query);
-    let nexus = MessageBus::get_nexus(filter).await?;
+    let nexus = nexus(
+        match &filter {
+            Filter::NodeNexus(_, id) => Some(id.to_string()),
+            Filter::Nexus(id) => Some(id.to_string()),
+            _ => None,
+        },
+        client().get(filter, None).await?.into_inner().get(0),
+    )?;
     let child = find_nexus_child(&nexus, &child_id)?;
     Ok(child.into())
 }
@@ -46,7 +66,14 @@ async fn add_child_filtered(
 ) -> Result<models::Child, RestError<RestJsonError>> {
     let child_uri = build_child_uri(child_id, query);
 
-    let nexus = match MessageBus::get_nexus(filter).await {
+    let nexus = match nexus(
+        match &filter {
+            Filter::NodeNexus(_, id) => Some(id.to_string()),
+            Filter::Nexus(id) => Some(id.to_string()),
+            _ => None,
+        },
+        client().get(filter, None).await?.into_inner().get(0),
+    ) {
         Ok(nexus) => nexus,
         Err(error) => return Err(RestError::from(error)),
     };
@@ -57,7 +84,7 @@ async fn add_child_filtered(
         uri: child_uri,
         auto_rebuild: true,
     };
-    let child = MessageBus::add_nexus_child(create).await?;
+    let child = client().add_nexus_child(&create, None).await?;
     Ok(child.into())
 }
 
@@ -68,7 +95,14 @@ async fn delete_child_filtered(
 ) -> Result<(), RestError<RestJsonError>> {
     let child_uri = build_child_uri(child_id, query);
 
-    let nexus = match MessageBus::get_nexus(filter).await {
+    let nexus = match nexus(
+        match &filter {
+            Filter::NodeNexus(_, id) => Some(id.to_string()),
+            Filter::Nexus(id) => Some(id.to_string()),
+            _ => None,
+        },
+        client().get(filter, None).await?.into_inner().get(0),
+    ) {
         Ok(nexus) => nexus,
         Err(error) => return Err(RestError::from(error)),
     };

@@ -1,25 +1,30 @@
 #![feature(allow_fail)]
 
-use common_lib::{mbus_api::Message, types::v0::message_bus as v0};
-use deployer_cluster::{result_either, test_result, Cluster, ClusterBuilder};
+use common_lib::types::v0::message_bus as v0;
+use deployer_cluster::{result_either, test_result_grpc, Cluster, ClusterBuilder};
+use grpc::operations::nexus::traits::NexusOperations;
 use openapi::models;
 
 #[tokio::test]
 async fn create_nexus_malloc() {
     let cluster = ClusterBuilder::builder().build().await.unwrap();
+    let nexus_client = cluster.grpc_client().nexus();
 
-    v0::CreateNexus {
-        node: cluster.node(0),
-        uuid: v0::NexusId::new(),
-        size: 10 * 1024 * 1024,
-        children: vec![
-            "malloc:///disk?size_mb=100&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into(),
-        ],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    nexus_client
+        .create(
+            &v0::CreateNexus {
+                node: cluster.node(0),
+                uuid: v0::NexusId::new(),
+                size: 10 * 1024 * 1024,
+                children: vec![
+                    "malloc:///disk?size_mb=100&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into(),
+                ],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -30,6 +35,7 @@ async fn create_nexus_sizes() {
         .compose_build(|c| c.with_logs(false))
         .await
         .unwrap();
+    let nexus_client = cluster.grpc_client().nexus();
 
     for size_mb in &vec![6, 10, 100] {
         let size = size_mb * 1024 * 1024;
@@ -42,25 +48,31 @@ async fn create_nexus_sizes() {
         let sizes = vec![Ok(size / 2), Ok(size), Err(size + 512)];
         for test in sizes {
             let size = result_either!(test);
-            test_result(&test, async {
-                let nexus = v0::CreateNexus {
-                    node: cluster.node(0),
-                    uuid: v0::NexusId::new(),
-                    size,
-                    children: vec![disk().into()],
-                    ..Default::default()
-                }
-                .request()
-                .await;
+            test_result_grpc(&test, async {
+                let nexus = nexus_client
+                    .create(
+                        &v0::CreateNexus {
+                            node: cluster.node(0),
+                            uuid: v0::NexusId::new(),
+                            size,
+                            children: vec![disk().into()],
+                            ..Default::default()
+                        },
+                        None,
+                    )
+                    .await;
 
                 if let Ok(nexus) = &nexus {
-                    v0::DestroyNexus {
-                        node: nexus.node.clone(),
-                        uuid: nexus.uuid.clone(),
-                    }
-                    .request()
-                    .await
-                    .unwrap();
+                    nexus_client
+                        .destroy(
+                            &v0::DestroyNexus {
+                                node: nexus.node.clone(),
+                                uuid: nexus.uuid.clone(),
+                            },
+                            None,
+                        )
+                        .await
+                        .unwrap();
                 }
                 nexus
             })
@@ -80,24 +92,30 @@ async fn create_nexus_sizes() {
         let sizes = vec![Err(size / 2), Err(size), Err(size + 512)];
         for test in sizes {
             let size = result_either!(test);
-            test_result(&test, async {
-                let nexus = v0::CreateNexus {
-                    node: cluster.node(0),
-                    uuid: v0::NexusId::new(),
-                    size,
-                    children: vec![disk().into()],
-                    ..Default::default()
-                }
-                .request()
-                .await;
+            test_result_grpc(&test, async {
+                let nexus = nexus_client
+                    .create(
+                        &v0::CreateNexus {
+                            node: cluster.node(0),
+                            uuid: v0::NexusId::new(),
+                            size,
+                            children: vec![disk().into()],
+                            ..Default::default()
+                        },
+                        None,
+                    )
+                    .await;
                 if let Ok(nexus) = &nexus {
-                    v0::DestroyNexus {
-                        node: nexus.node.clone(),
-                        uuid: nexus.uuid.clone(),
-                    }
-                    .request()
-                    .await
-                    .unwrap();
+                    nexus_client
+                        .destroy(
+                            &v0::DestroyNexus {
+                                node: nexus.node.clone(),
+                                uuid: nexus.uuid.clone(),
+                            },
+                            None,
+                        )
+                        .await
+                        .unwrap();
                 }
                 nexus
             })
@@ -116,6 +134,7 @@ async fn create_nexus_local_replica() {
         .build()
         .await
         .unwrap();
+    let nexus_client = cluster.grpc_client().nexus();
 
     let replica = cluster
         .rest_v00()
@@ -124,16 +143,19 @@ async fn create_nexus_local_replica() {
         .await
         .unwrap();
 
-    v0::CreateNexus {
-        node: cluster.node(0),
-        uuid: v0::NexusId::new(),
-        size,
-        children: vec![replica.uri.into()],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    nexus_client
+        .create(
+            &v0::CreateNexus {
+                node: cluster.node(0),
+                uuid: v0::NexusId::new(),
+                size,
+                children: vec![replica.uri.into()],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -146,7 +168,7 @@ async fn create_nexus_replicas() {
         .build()
         .await
         .unwrap();
-
+    let nexus_client = cluster.grpc_client().nexus();
     let local = cluster
         .rest_v00()
         .replicas_api()
@@ -164,16 +186,19 @@ async fn create_nexus_replicas() {
         .await
         .unwrap();
 
-    v0::CreateNexus {
-        node: cluster.node(0),
-        uuid: v0::NexusId::new(),
-        size,
-        children: vec![local.uri.into(), remote.into()],
-        ..Default::default()
-    }
-    .request()
-    .await
-    .unwrap();
+    nexus_client
+        .create(
+            &v0::CreateNexus {
+                node: cluster.node(0),
+                uuid: v0::NexusId::new(),
+                size,
+                children: vec![local.uri.into(), remote.into()],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
