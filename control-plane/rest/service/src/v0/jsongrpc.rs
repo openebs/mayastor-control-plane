@@ -3,7 +3,7 @@
 
 use super::*;
 use common_lib::types::v0::message_bus::JsonGrpcRequest;
-use mbus_api::message_bus::v0::{MessageBus, MessageBusTrait};
+use grpc::operations::jsongrpc::traits::JsonGrpcOperations;
 use serde_json::Value;
 
 #[async_trait::async_trait]
@@ -22,12 +22,16 @@ impl apis::actix_server::JsonGrpc for RestApi {
         Path((node, method)): Path<(String, String)>,
         Body(body): Body<Value>,
     ) -> Result<Value, RestError<RestJsonError>> {
-        let result = MessageBus::json_grpc_call(JsonGrpcRequest {
-            node: node.into(),
-            method: method.into(),
-            params: body.to_string().into(),
-        })
-        .await?;
+        let result = json_grpc()?
+            .call(
+                &JsonGrpcRequest {
+                    node: node.into(),
+                    method: method.into(),
+                    params: body.to_string().into(),
+                },
+                None,
+            )
+            .await?;
         Ok(result)
     }
 }

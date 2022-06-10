@@ -421,9 +421,9 @@ impl_component! {
     Elastic,    1,
     Kibana,     1,
     Core,       3,
+    JsonGrpc,   3,
     Rest,       3,
     IoEngine,   4,
-    JsonGrpc,   5,
     Csi,        5,
 }
 

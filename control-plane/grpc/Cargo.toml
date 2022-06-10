@@ -24,6 +24,7 @@ opentelemetry-semantic-conventions = "0.8.0"
 tracing = "0.1.28"
 http-body = "0.4.4"
 tower = { version = "0.4.8", features = [ "timeout", "util" ] }
+serde_json = "1.0.81"
 
 [build-dependencies]
 tonic-build = "0.5.2"

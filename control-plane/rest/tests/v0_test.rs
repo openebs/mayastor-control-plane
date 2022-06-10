@@ -92,11 +92,17 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         id: io_engine1.to_string(),
         spec: Some(models::NodeSpec {
             id: io_engine1.to_string(),
-            grpc_endpoint: "10.1.0.7:10124".to_string(),
+            grpc_endpoint: format!(
+                "{}:10124",
+                cluster.composer().container_ip(cluster.node(0).as_str())
+            ),
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),
-            grpc_endpoint: "10.1.0.7:10124".to_string(),
+            grpc_endpoint: format!(
+                "{}:10124",
+                cluster.composer().container_ip(cluster.node(0).as_str())
+            ),
             status: models::NodeStatus::Online,
         }),
     };

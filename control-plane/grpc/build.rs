@@ -12,6 +12,7 @@ fn main() {
                 "proto/v1/node/node.proto",
                 "proto/v1/blockdevice/blockdevice.proto",
                 "proto/v1/registry/registry.proto",
+                "proto/v1/jsongrpc/jsongrpc.proto",
             ],
             &["proto/"],
         )
