@@ -30,7 +30,7 @@ pub use common_lib::{
     IntoVec,
 };
 use futures::future::Ready;
-use grpc::client::CoreClient;
+use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
 use once_cell::sync::OnceCell;
 use rest_client::versions::v0::*;
@@ -38,12 +38,27 @@ use serde::Deserialize;
 
 /// Once cell static variable to store the grpc client and initialise once at startup
 pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
+/// Once cell static variable to store the json grpc client and initialise once at startup
+pub static JSON_GRPC_CLIENT: OnceCell<JsonGrpcClient> = OnceCell::new();
 
 /// Get Core gRPC Client
 pub(crate) fn core_grpc<'a>() -> &'a CoreClient {
     CORE_CLIENT
         .get()
         .expect("gRPC Core Client should have been initialised")
+}
+
+/// Get Json gRPC Client
+pub(crate) fn json_grpc<'a>() -> Result<&'a JsonGrpcClient, ReplyError> {
+    match JSON_GRPC_CLIENT.get() {
+        None => Err(ReplyError {
+            kind: ReplyErrorKind::Unavailable,
+            resource: ResourceKind::JsonGrpc,
+            source: "JsonGrpc Service is not configured/running.".to_string(),
+            extra: "".to_string(),
+        }),
+        Some(client) => Ok(client),
+    }
 }
 
 fn version() -> String {

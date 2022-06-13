@@ -1,7 +1,7 @@
 mod authentication;
 mod v0;
 
-use crate::v0::CORE_CLIENT;
+use crate::v0::{CORE_CLIENT, JSON_GRPC_CLIENT};
 use actix_service::ServiceFactory;
 use actix_web::{
     body::MessageBody,
@@ -10,7 +10,6 @@ use actix_web::{
 };
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, rsa_private_keys};
-
 use std::{fs::File, io::BufReader};
 use structopt::StructOpt;
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
@@ -32,6 +31,10 @@ pub(crate) struct CliArgs {
     /// The CORE gRPC Server URL or address to connect to the services.
     #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
     core_grpc: Uri,
+
+    /// The json gRPC Server URL or address to connect to the service.
+    #[structopt(long, short = "J")]
+    json_grpc: Option<Uri>,
 
     /// Path to the certificate file
     #[structopt(long, short, required_unless = "dummy-certificates")]
@@ -91,7 +94,7 @@ use common_lib::{
     mbus_api,
     mbus_api::{BusClient, RequestMinTimeout, TimeoutOptions},
 };
-use grpc::client::CoreClient;
+use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use http::Uri;
 use opentelemetry::{global, KeyValue};
 
@@ -178,6 +181,7 @@ fn get_jwk_path() -> Option<String> {
 async fn main() -> anyhow::Result<()> {
     utils::print_package_info!();
     let cli_args = CliArgs::args();
+    println!("Using options: {:?}", &cli_args);
     utils::tracing_telemetry::init_tracing(
         "rest-server",
         cli_args.tracing_tags.clone(),
@@ -201,6 +205,14 @@ async fn main() -> anyhow::Result<()> {
         .set(CoreClient::new(CliArgs::args().core_grpc, None).await)
         .ok()
         .expect("Expect to be initialised only once");
+
+    // Initialise the json grpc client to be used in rest
+    if CliArgs::args().json_grpc.is_some() {
+        JSON_GRPC_CLIENT
+            .set(JsonGrpcClient::new(CliArgs::args().json_grpc.unwrap(), None).await)
+            .ok()
+            .expect("Expect to be initialised only once");
+    }
 
     let server = HttpServer::new(app).bind_rustls(CliArgs::args().https, get_certificates()?)?;
     let result = if let Some(http) = CliArgs::args().http {

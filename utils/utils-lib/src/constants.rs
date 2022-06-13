@@ -41,6 +41,12 @@ pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";
 /// The default value to be assigned as GRPC client addr if not overridden
 pub const DEFAULT_GRPC_CLIENT_ADDR: &str = "https://core:50051";
 
+/// The default value to be assigned as JSON GRPC server addr if not overridden
+pub const DEFAULT_JSON_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50052";
+
+/// The default value to be assigned as JSON GRPC client addr if not overridden
+pub const DEFAULT_JSON_GRPC_CLIENT_ADDR: &str = "https://jsongrpc:50052";
+
 /// The default value for a concurrency limit.
 pub const DEFAULT_GRPC_CLIENT_CONCURRENCY: usize = 25;
 

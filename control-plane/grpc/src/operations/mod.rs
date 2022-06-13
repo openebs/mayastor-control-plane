@@ -21,6 +21,9 @@ pub mod registration;
 /// module for all corresponding client, server, traits for registry transport
 pub mod registry;
 
+/// module for all corresponding client, server, traits for jsongrpc transport
+pub mod jsongrpc;
+
 /// The type of max entries.
 pub type MaxEntries = u64;
 

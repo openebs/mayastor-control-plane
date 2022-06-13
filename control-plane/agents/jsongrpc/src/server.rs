@@ -1,85 +1,35 @@
-pub mod service;
+mod service;
 
-use async_trait::async_trait;
-use common::{errors::SvcError, *};
-use common_lib::{
-    mbus_api::*,
-    types::v0::message_bus::{ChannelVs, JsonGrpcRequest},
-};
-use grpc::client::CoreClient;
+use crate::service::JsonGrpcSvc;
+use common::ServiceError;
+use futures::FutureExt;
+use grpc::{client::CoreClient, operations::jsongrpc::server::JsonGrpcServer};
 use http::Uri;
 use once_cell::sync::OnceCell;
-use service::*;
-use std::{convert::TryInto, marker::PhantomData};
+use std::sync::Arc;
 use structopt::StructOpt;
-use tracing::info;
-use utils::DEFAULT_GRPC_CLIENT_ADDR;
+use tracing::{error, info};
+use utils::{DEFAULT_GRPC_CLIENT_ADDR, DEFAULT_JSON_GRPC_SERVER_ADDR};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
-    /// The Nats Server URL to connect to
-    /// (supports the nats schema)
-    /// Default: nats://127.0.0.1:4222
-    #[structopt(long, short, default_value = "nats://127.0.0.1:4222")]
-    nats: String,
+    /// The json grpc server URL or address to connect to the its services.
+    #[structopt(long, short = "J", default_value = DEFAULT_JSON_GRPC_SERVER_ADDR)]
+    json_grpc_server_addr: Uri,
 
-    /// The CORE gRPC Server URL or address to connect to the services.
+    /// The CORE gRPC client URL or address to connect to the core services.
     #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
     core_grpc: Uri,
-
-    /// Don't use minimum timeouts for specific requests
-    #[structopt(long)]
-    no_min_timeouts: bool,
 }
 
-/// Needed so we can implement the ServiceSubscriber trait for
-/// the message types external to the crate
-#[derive(Clone, Default)]
-struct ServiceHandler<T> {
-    data: PhantomData<T>,
-}
-
-/// Once cell static variable to store the grpc client and initialise once at startup
 pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
-
-macro_rules! impl_service_handler {
-    // RequestType is the message bus request type
-    // ServiceFnName is the name of the service function to route the request
-    // into
-    ($RequestType:ident, $ServiceFnName:ident) => {
-        #[async_trait]
-        impl ServiceSubscriber for ServiceHandler<$RequestType> {
-            async fn handler(&self, args: Arguments<'_>) -> Result<(), SvcError> {
-                let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
-
-                let reply = JsonGrpcSvc::$ServiceFnName(&request.inner()).await?;
-                Ok(request.reply(reply).await?)
-            }
-            fn filter(&self) -> Vec<MessageId> {
-                vec![$RequestType::default().id()]
-            }
-        }
-    };
-}
-
-impl_service_handler!(JsonGrpcRequest, json_grpc_call);
-
-fn init_tracing() {
-    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
-        tracing_subscriber::fmt().with_env_filter(filter).init();
-    } else {
-        tracing_subscriber::fmt().with_env_filter("info").init();
-    }
-}
 
 #[tokio::main]
 async fn main() {
     let cli_args = CliArgs::from_args();
     utils::print_package_info!();
     info!("Using options: {:?}", &cli_args);
-
-    init_tracing();
 
     let grpc_addr = &cli_args.core_grpc;
     // Initialise the core client to be used in rest
@@ -92,14 +42,26 @@ async fn main() {
 }
 
 async fn server(cli_args: CliArgs) {
-    Service::builder(Some(cli_args.nats), ChannelVs::JsonGrpc)
-        .connect_message_bus(
-            CliArgs::from_args().no_min_timeouts,
-            BusClient::JsonGrpcAgent,
-        )
-        .await
-        .with_subscription(ServiceHandler::<JsonGrpcRequest>::default())
-        .with_default_liveness()
-        .run()
-        .await;
+    let grpc_addr = cli_args.json_grpc_server_addr;
+    let json_grpc_service = JsonGrpcServer::new(Arc::new(JsonGrpcSvc::new())).into_grpc_server();
+
+    let tonic_router = tonic::transport::Server::builder().add_service(json_grpc_service);
+
+    let tonic_thread = tokio::spawn(async move {
+        tonic_router
+            .serve_with_shutdown(
+                grpc_addr.authority().unwrap().to_string().parse().unwrap(),
+                JsonGrpcSvc::shutdown_signal().map(|_| ()),
+            )
+            .await
+            .map_err(|source| ServiceError::GrpcServer { source })
+    });
+
+    match tonic_thread.await {
+        Err(error) => error!("Failed to wait for thread: {:?}", error),
+        Ok(Err(error)) => {
+            error!(error=?error, "Error running service thread");
+        }
+        _ => {}
+    }
 }

@@ -444,6 +444,19 @@ impl ReplyError {
             extra: format!("Argument {} was not provided", arg_name),
         }
     }
+    /// for errors that can occur when serializing or deserializing JSON data
+    pub fn serde_error(
+        resource: ResourceKind,
+        error_kind: ReplyErrorKind,
+        error: serde_json::Error,
+    ) -> Self {
+        Self {
+            kind: error_kind,
+            resource,
+            source: error.to_string(),
+            extra: "".to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for ReplyError {

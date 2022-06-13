@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package v1.jsongrpc;
+import "v1/misc/common.proto";
+
+// Generic JSON gRPC request
+message JsonGrpcRequest {
+  // id of the io-engine instance
+  string NodeId = 1;
+  // JSON gRPC method to call
+  string JsonGrpcMethod = 2;
+  // parameters to be passed to the above method
+  string JsonGrpcParams = 3;
+}
+
+// Reply type for json grpc request
+message JsonGrpcReply {
+    oneof reply {
+        string response = 1;
+        common.ReplyError error = 2;
+    }
+}
+
+message ProbeRequest {
+  // Intentionally empty.
+}
+
+message ProbeResponse {
+  bool ready = 1;
+}
+
+// Service for managing json grpc calls
+service JsonGrpc {
+  rpc JsonGrpcCall (JsonGrpcRequest) returns (JsonGrpcReply) {}
+  rpc Probe (ProbeRequest) returns (ProbeResponse) {}
+}

@@ -1,5 +1,6 @@
 use super::*;
 use std::time::Duration;
+use utils::DEFAULT_JSON_GRPC_CLIENT_ADDR;
 
 #[async_trait]
 impl ComponentAction for Rest {
@@ -46,6 +47,10 @@ impl ComponentAction for Rest {
                 let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
                 binary = binary.with_args(vec!["--jaeger", &jaeger_config])
             };
+
+            if cfg.container_exists("jsongrpc") {
+                binary = binary.with_args(vec!["--json-grpc", DEFAULT_JSON_GRPC_CLIENT_ADDR]);
+            }
 
             if let Some(size) = &options.otel_max_batch_size {
                 binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
