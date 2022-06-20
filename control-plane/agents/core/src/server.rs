@@ -6,7 +6,7 @@ pub mod node;
 pub mod pool;
 pub mod registry;
 pub mod volume;
-pub mod watcher;
+pub mod watch;
 
 use common_lib::types::v0::message_bus::ChannelVs;
 use http::Uri;
@@ -129,7 +129,7 @@ async fn server(cli_args: CliArgs) {
         .configure(pool::configure)
         .configure(nexus::configure)
         .configure(volume::configure)
-        .configure(watcher::configure)
+        .configure(watch::configure)
         .configure(registry::configure);
 
     let service = lib::Service::new(base_service);

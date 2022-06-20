@@ -7,6 +7,7 @@ use crate::{
         registry::{client::RegistryClient, traits::RegistryOperations},
         replica::{client::ReplicaClient, traits::ReplicaOperations},
         volume::{client::VolumeClient, traits::VolumeOperations},
+        watch::{client::WatchClient, traits::WatchOperations},
     },
 };
 use common_lib::mbus_api::TimeoutOptions;
@@ -21,6 +22,7 @@ pub struct CoreClient {
     node: NodeClient,
     registry: RegistryClient,
     nexus: NexusClient,
+    watch: WatchClient,
 }
 
 impl CoreClient {
@@ -32,7 +34,8 @@ impl CoreClient {
         let volume_client = VolumeClient::new(addr.clone(), timeout_opts.clone()).await;
         let node_client = NodeClient::new(addr.clone(), timeout_opts.clone()).await;
         let registry_client = RegistryClient::new(addr.clone(), timeout_opts.clone()).await;
-        let nexus_client = NexusClient::new(addr, timeout_opts).await;
+        let nexus_client = NexusClient::new(addr.clone(), timeout_opts.clone()).await;
+        let watch_client = WatchClient::new(addr, timeout_opts).await;
         Self {
             pool: pool_client,
             replica: replica_client,
@@ -40,6 +43,7 @@ impl CoreClient {
             node: node_client,
             registry: registry_client,
             nexus: nexus_client,
+            watch: watch_client,
         }
     }
     /// retrieve the corresponding pool client
@@ -65,6 +69,10 @@ impl CoreClient {
     /// retrieve the corresponding nexus client
     pub fn nexus(&self) -> impl NexusOperations {
         self.nexus.clone()
+    }
+    /// retrieve the corresponding watch client
+    pub fn watch(&self) -> impl WatchOperations {
+        self.watch.clone()
     }
     /// Try to wait until the Core Agent is ready, up to a timeout, by using the Probe method.
     pub async fn wait_ready(&self, timeout_opts: Option<TimeoutOptions>) -> Result<(), ()> {

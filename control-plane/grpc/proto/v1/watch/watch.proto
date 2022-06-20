@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+import "google/protobuf/wrappers.proto";
+
+package v1.watch;
+
+// WatchResource in the store
+message Watch{
+  // id of the resource to watch on
+  WatchResourceId id = 1;
+  // callback used to notify the Watch of a change
+  WatchCallback callback = 2;
+  // type of Watch
+  WatchType watch_type = 3;
+}
+
+// Multiple Watch
+message Watches {repeated Watch watches = 1;}
+
+// The different resource types that can be watched
+message WatchResourceId {
+  oneof resourceId {
+    // nodes
+    string NodeId = 1;
+    // pools
+    string PoolId = 2;
+    // replicas
+    google.protobuf.StringValue ReplicaId = 3;
+    // replica state
+    google.protobuf.StringValue ReplicaStateId = 4;
+    // replica spec
+    google.protobuf.StringValue ReplicaSpecId = 5;
+    // nexuses
+    google.protobuf.StringValue NexusId = 6;
+    // volumes
+    google.protobuf.StringValue VolumeId = 7;
+  }
+}
+
+// Watch Callback types
+message WatchCallback {
+  // HTTP URI callback
+  oneof callback {Uri uri = 1;}
+}
+
+// The difference types of watch
+enum WatchType {
+  /// Watch for changes on the desired state
+  Desired = 0;
+  /// Watch for changes on the actual state
+  Actual = 1;
+  /// Watch for both `Desired` and `Actual` changes
+  All = 2;
+}
+
+// HTTP URI callback
+message Uri {string content = 1;}
+
+// Reply type for a CreateWatch and DeleteWatch request
+message WatchReply {optional common.ReplyError error = 2;}
+
+// GetWatches Request type
+message GetWatchesRequest {WatchResourceId resource = 1;}
+
+// GetWatches Reply type
+message GetWatchesReply {
+  oneof reply {
+    Watches watches = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Service for managing Watches
+service WatchGrpc {
+  // Get Resource Watches
+  rpc GetWatches(GetWatchesRequest) returns (GetWatchesReply) {}
+  /// Delete Watch which was previously created by CreateWatch
+  /// Fields should match the ones used for the creation
+  rpc DeleteWatch(Watch) returns (WatchReply) {}
+  // Create new Resource Watch, uniquely
+  // identifiable by resource_id and callback
+  rpc CreateWatch(Watch) returns (WatchReply) {}
+}

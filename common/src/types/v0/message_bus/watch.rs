@@ -4,19 +4,19 @@ use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug};
 
 ///
-/// Watcher Agent
+/// Watch Agent
 
 /// Create new Resource Watch
 /// Uniquely identifiable by resource_id and callback
 pub type CreateWatch = Watch;
 
-/// Watch Resource in the store
+/// watch Resource in the store
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Watch {
     /// id of the resource to watch on
     pub id: WatchResourceId,
-    /// callback used to notify the watcher of a change
+    /// callback used to notify the watch of a change
     pub callback: WatchCallback,
     /// type of watch
     pub watch_type: WatchType,
@@ -39,7 +39,7 @@ impl TryFrom<&Watch> for models::RestWatch {
 /// Get Resource Watches
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct GetWatchers {
+pub struct GetWatches {
     /// id of the resource to get
     pub resource: WatchResourceId,
 }
@@ -96,11 +96,11 @@ impl ToString for WatchResourceId {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum WatchType {
-    /// Watch for changes on the desired state
+    /// watch for changes on the desired state
     Desired,
-    /// Watch for changes on the actual state
+    /// watch for changes on the actual state
     Actual,
-    /// Watch for both `Desired` and `Actual` changes
+    /// watch for both `Desired` and `Actual` changes
     All,
 }
 impl Default for WatchType {
@@ -109,7 +109,7 @@ impl Default for WatchType {
     }
 }
 
-/// Delete Watch which was previously created by CreateWatcher
+/// Delete watch which was previously created by CreateWatch
 /// Fields should match the ones used for the creation
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -122,7 +122,7 @@ pub struct DeleteWatch {
     pub watch_type: WatchType,
 }
 
-/// Watcher Callback types
+/// Watch Callback types
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum WatchCallback {

@@ -65,9 +65,9 @@ async fn etcd() {
     let result: TestStruct = serde_json::from_value(v).expect("Failed to deserialise value");
     assert_eq!(data, result);
 
-    // Start a watcher which should send a message when the subsequent 'put'
+    // Start a watch which should send a message when the subsequent 'put'
     // event occurs.
-    let (put_hdl, r) = spawn_watcher(&key, &mut store).await;
+    let (put_hdl, r) = spawn_watch(&key, &mut store).await;
 
     // Modify entry.
     data.value = 200;
@@ -76,7 +76,7 @@ async fn etcd() {
         .await
         .expect("Failed to 'put' to etcd");
 
-    // Wait up to 1 second for the watcher to see the put event.
+    // Wait up to 1 second for the watch to see the put event.
     let msg = r
         .recv_timeout(Duration::from_secs(1))
         .expect("Timed out waiting for message");
@@ -86,12 +86,12 @@ async fn etcd() {
     };
     assert_eq!(result, data);
 
-    // Start a watcher which should send a message when the subsequent 'delete'
+    // Start a watch which should send a message when the subsequent 'delete'
     // event occurs.
-    let (del_hdl, r) = spawn_watcher(&key, &mut store).await;
+    let (del_hdl, r) = spawn_watch(&key, &mut store).await;
     store.delete_kv(&key).await.unwrap();
 
-    // Wait up to 1 second for the watcher to see the delete event.
+    // Wait up to 1 second for the watch to see the delete event.
     let msg = r
         .recv_timeout(Duration::from_secs(1))
         .expect("Timed out waiting for message");
@@ -110,16 +110,16 @@ async fn etcd() {
     del_hdl.await.unwrap();
 }
 
-/// Spawn a watcher thread which watches for a single change to the entry with
+/// Spawn a watch thread which watches for a single change to the entry with
 /// the given key.
-async fn spawn_watcher<W: Store>(
+async fn spawn_watch<W: Store>(
     key: &serde_json::Value,
     store: &mut W,
 ) -> (JoinHandle<()>, Receiver<WatchEvent>) {
     let (s, r) = oneshot::channel();
-    let mut watcher = store.watch_kv(&key).await.expect("Failed to watch");
+    let mut watch = store.watch_kv(&key).await.expect("Failed to watch");
     let hdl = tokio::spawn(async move {
-        match watcher.recv().await.unwrap() {
+        match watch.recv().await.unwrap() {
             Ok(event) => {
                 s.send(event).unwrap();
             }

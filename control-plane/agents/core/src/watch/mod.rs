@@ -1,25 +1,15 @@
 pub mod service;
-mod watch;
+mod watches;
 
-use std::{convert::TryInto, marker::PhantomData};
-
-use super::{core::registry::Registry, handler, impl_request_handler};
-use async_trait::async_trait;
-use common::errors::SvcError;
-use common_lib::{
-    mbus_api::*,
-    types::v0::message_bus::{ChannelVs, CreateWatch, DeleteWatch, GetWatchers},
-};
+use super::core::registry::Registry;
+use grpc::operations::watch::server::WatchServer;
+use std::sync::Arc;
 
 pub(crate) fn configure(builder: common::Service) -> common::Service {
     let registry = builder.get_shared_state::<Registry>().clone();
-    builder
-        .with_channel(ChannelVs::Watcher)
-        .with_default_liveness()
-        .with_shared_state(service::Service::new(registry))
-        .with_subscription(handler!(CreateWatch))
-        .with_subscription(handler!(GetWatchers))
-        .with_subscription(handler!(DeleteWatch))
+    let new_service = Arc::new(service::Service::new(registry));
+    let watch_service = WatchServer::new(new_service);
+    builder.with_shared_state(watch_service)
 }
 
 #[cfg(test)]
@@ -40,7 +30,7 @@ mod tests {
 
     static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();
 
-    async fn setup_watcher(
+    async fn setup_watch(
         client: &dyn VolumeOperations,
     ) -> (Volume, tokio::sync::mpsc::Receiver<()>) {
         let volume = client
@@ -95,20 +85,20 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn watcher() {
+    async fn watch() {
         let cluster = ClusterBuilder::builder().with_pools(1).build().await;
         let cluster = cluster.unwrap();
         let client = cluster.rest_v00();
         let client = client.watches_api();
         let volume_client = cluster.grpc_client().volume();
 
-        let (volume, mut callback_ch) = setup_watcher(&volume_client).await;
+        let (volume, mut callback_ch) = setup_watch(&volume_client).await;
 
         let watch_volume = WatchResourceId::Volume(volume.spec().uuid);
         let callback = url::Url::parse("http://10.1.0.1:8082/test").unwrap();
 
-        let watchers = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
-        assert!(watchers.is_empty());
+        let watches = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
+        assert!(watches.is_empty());
 
         let mut store = Etcd::new("0.0.0.0:2379")
             .await
@@ -129,15 +119,15 @@ mod tests {
             .await
             .unwrap();
 
-        let watchers = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
+        let watches = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
         assert_eq!(
-            watchers.first(),
+            watches.first(),
             Some(&models::RestWatch {
                 resource: watch_volume.to_string(),
                 callback: callback.to_string(),
             })
         );
-        assert_eq!(watchers.len(), 1);
+        assert_eq!(watches.len(), 1);
 
         store
             .put_kv(&watch_volume.key(), &serde_json::json!("aaa"))
@@ -162,7 +152,7 @@ mod tests {
             .await
             .expect_err("should have been deleted so no callback");
 
-        let watchers = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
-        assert!(watchers.is_empty());
+        let watches = client.get_watch_volume(&volume.spec().uuid).await.unwrap();
+        assert!(watches.is_empty());
     }
 }

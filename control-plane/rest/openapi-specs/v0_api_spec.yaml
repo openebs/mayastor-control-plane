@@ -2211,7 +2211,7 @@ components:
       type: object
       properties:
         callback:
-          description: callback used to notify the watcher of a change
+          description: callback used to notify the watch of a change
           type: string
         resource:
           description: id of the resource to watch on

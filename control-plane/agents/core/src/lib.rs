@@ -6,7 +6,7 @@ use grpc::{
     operations::{
         nexus::server::NexusServer, node::server::NodeServer, pool::server::PoolServer,
         registration::server::RegistrationServer, registry::server::RegistryServer,
-        replica::server::ReplicaServer, volume::server::VolumeServer,
+        replica::server::ReplicaServer, volume::server::VolumeServer, watch::server::WatchServer,
     },
     tracing::OpenTelServer,
 };
@@ -47,6 +47,7 @@ impl Service {
             .get_shared_state::<RegistryServer>()
             .clone();
         let nexus_service = self.base_service.get_shared_state::<NexusServer>().clone();
+        let watch_service = self.base_service.get_shared_state::<WatchServer>().clone();
 
         let tonic_router = self
             .tonic_grpc_server
@@ -57,7 +58,8 @@ impl Service {
             .add_service(node_service.into_grpc_server())
             .add_service(registration_service.into_grpc_server())
             .add_service(registry_service.into_grpc_server())
-            .add_service(nexus_service.into_grpc_server());
+            .add_service(nexus_service.into_grpc_server())
+            .add_service(watch_service.into_grpc_server());
 
         let mut threads = if self.base_service.nats_enabled() {
             self.base_service.mbus_handles().await
