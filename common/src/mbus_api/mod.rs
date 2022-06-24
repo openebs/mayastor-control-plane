@@ -330,6 +330,8 @@ pub enum ResourceKind {
     Watch,
     /// Spec
     Spec,
+    /// State
+    State,
 }
 
 /// Error type which is returned over the bus

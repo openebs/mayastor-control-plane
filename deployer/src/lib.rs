@@ -197,10 +197,6 @@ pub struct StartOptions {
     #[structopt(long)]
     pub no_etcd: bool,
 
-    /// Disable the nats service
-    #[structopt(long)]
-    pub no_nats: bool,
-
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
     #[structopt(long)]
@@ -359,11 +355,6 @@ impl StartOptions {
     #[must_use]
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {
         self.jaeger = jaeger;
-        self
-    }
-    #[must_use]
-    pub fn with_nats(mut self, nats: bool) -> Self {
-        self.no_nats = !nats;
         self
     }
     #[must_use]

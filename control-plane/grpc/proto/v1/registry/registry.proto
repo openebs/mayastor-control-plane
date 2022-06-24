@@ -17,7 +17,15 @@ message Specs {
   repeated replica.ReplicaSpec replicas = 4;
 }
 
+message States {
+  repeated pool.PoolState pools = 1;
+  repeated nexus.Nexus nexuses = 2;
+  repeated replica.Replica replicas = 3;
+}
+
 message GetSpecsRequest {}
+
+message GetStatesRequest {}
 
 message GetSpecsReply {
   oneof reply {
@@ -26,6 +34,14 @@ message GetSpecsReply {
   }
 }
 
+message GetStatesReply {
+  oneof reply {
+    States states = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 service RegistryGrpc {
   rpc GetSpecs (GetSpecsRequest) returns (GetSpecsReply) {}
+  rpc GetStates (GetStatesRequest) returns (GetStatesReply) {}
 }

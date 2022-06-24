@@ -82,28 +82,36 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
     }
 }
 
+impl TryFrom<pool::PoolState> for PoolState {
+    type Error = ReplyError;
+
+    fn try_from(pool_state: pool::PoolState) -> Result<Self, Self::Error> {
+        Ok(PoolState {
+            node: pool_state.node_id.into(),
+            id: pool_state.pool_id.into(),
+            disks: pool_state.disks_uri.iter().map(|i| i.into()).collect(),
+            status: match pool::PoolStatus::from_i32(pool_state.status) {
+                Some(status) => status.into(),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Pool,
+                        "pool.state.status",
+                        "".to_string(),
+                    ))
+                }
+            },
+            capacity: pool_state.capacity,
+            used: pool_state.used,
+        })
+    }
+}
+
 impl TryFrom<pool::Pool> for Pool {
     type Error = ReplyError;
     fn try_from(pool: pool::Pool) -> Result<Self, Self::Error> {
         let pool_state = match pool.state {
             None => None,
-            Some(pool_state) => Some(PoolState {
-                node: pool_state.node_id.into(),
-                id: pool_state.pool_id.into(),
-                disks: pool_state.disks_uri.iter().map(|i| i.into()).collect(),
-                status: match pool::PoolStatus::from_i32(pool_state.status) {
-                    Some(status) => status.into(),
-                    None => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Pool,
-                            "pool.state.status",
-                            "".to_string(),
-                        ))
-                    }
-                },
-                capacity: pool_state.capacity,
-                used: pool_state.used,
-            }),
+            Some(pool_state) => Some(PoolState::try_from(pool_state)?),
         };
         let pool_spec = match pool.definition {
             None => None,
@@ -139,20 +147,23 @@ impl From<PoolSpec> for pool::PoolDefinition {
     }
 }
 
+impl From<PoolState> for pool::PoolState {
+    fn from(pool_state: PoolState) -> Self {
+        pool::PoolState {
+            node_id: pool_state.node.to_string(),
+            pool_id: pool_state.id.to_string(),
+            disks_uri: pool_state.disks.iter().map(|i| i.to_string()).collect(),
+            status: pool_state.status as i32,
+            capacity: pool_state.capacity,
+            used: pool_state.used,
+        }
+    }
+}
+
 impl From<Pool> for pool::Pool {
     fn from(pool: Pool) -> Self {
         let pool_definition = pool.spec().map(|pool_spec| pool_spec.into());
-        let pool_state = match pool.state() {
-            None => None,
-            Some(pool_state) => Some(pool::PoolState {
-                node_id: pool_state.node.to_string(),
-                pool_id: pool_state.id.to_string(),
-                disks_uri: pool_state.disks.iter().map(|i| i.to_string()).collect(),
-                status: pool_state.status as i32,
-                capacity: pool_state.capacity,
-                used: pool_state.used,
-            }),
-        };
+        let pool_state = pool.state().map(|pool_state| pool_state.into());
         pool::Pool {
             definition: pool_definition,
             state: pool_state,

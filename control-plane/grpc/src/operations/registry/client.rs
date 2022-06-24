@@ -1,11 +1,11 @@
 use crate::{
     context::{Client, Context, TracedChannel},
-    operations::registry::traits::{GetSpecsInfo, RegistryOperations},
-    registry::{get_specs_reply, registry_grpc_client::RegistryGrpcClient},
+    operations::registry::traits::{GetSpecsInfo, GetStatesInfo, RegistryOperations},
+    registry::{get_specs_reply, get_states_reply, registry_grpc_client::RegistryGrpcClient},
 };
 use common_lib::{
     mbus_api::{ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::{MessageIdVs, Specs},
+    types::v0::message_bus::{MessageIdVs, Specs, States},
 };
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
@@ -46,6 +46,22 @@ impl RegistryOperations for RegistryClient {
                 get_specs_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Spec)),
+        }
+    }
+
+    async fn get_states(
+        &self,
+        request: &dyn GetStatesInfo,
+        ctx: Option<Context>,
+    ) -> Result<States, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::GetStates);
+        let response = self.client().get_states(req).await?.into_inner();
+        match response.reply {
+            Some(get_states_reply) => match get_states_reply {
+                get_states_reply::Reply::States(states) => Ok(States::try_from(states)?),
+                get_states_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::State)),
         }
     }
 }

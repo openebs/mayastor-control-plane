@@ -31,7 +31,6 @@ mkShell {
     libudev
     libxfs
     llvmPackages.libclang
-    nats-server
     nvme-cli
     openapi-generator
     openssl
@@ -50,7 +49,6 @@ mkShell {
 
   # variables used to easily create containers with docker files
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";
-  NATS_BIN = "${pkgs.nats-server}/bin/nats-server";
 
   # using the nix rust toolchain
   USE_NIX_RUST = "${toString (!norust)}";
