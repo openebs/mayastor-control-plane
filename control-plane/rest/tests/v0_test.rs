@@ -327,12 +327,12 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let _watch_volume = WatchResourceId::Volume(volume_uuid.into());
     let callback = url::Url::parse("http://lala/test").unwrap();
 
-    let watchers = client
+    let watches = client
         .watches_api()
         .get_watch_volume(&volume_uuid)
         .await
         .unwrap();
-    assert!(watchers.is_empty());
+    assert!(watches.is_empty());
 
     client
         .watches_api()
@@ -346,12 +346,12 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .await
         .expect_err("Does not exist");
 
-    let watchers = client
+    let watches = client
         .watches_api()
         .get_watch_volume(&volume_uuid)
         .await
         .unwrap();
-    assert!(watchers.is_empty());
+    assert!(watches.is_empty());
 
     client.volumes_api().del_volume(&volume_uuid).await.unwrap();
 

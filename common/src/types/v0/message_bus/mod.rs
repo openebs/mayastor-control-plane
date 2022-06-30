@@ -61,8 +61,8 @@ pub enum ChannelVs {
     JsonGrpc,
     /// Core Agent combines Node, Pool and Volume services
     Core,
-    /// Watcher Agent
-    Watcher,
+    /// Watch Agent
+    Watch,
 }
 impl Default for ChannelVs {
     fn default() -> Self {

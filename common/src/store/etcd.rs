@@ -292,7 +292,7 @@ impl Store for Etcd {
 
 /// Watch for events in the key-value store.
 /// When an event occurs, a WatchEvent is sent over the channel.
-/// When a 'delete' event is received, the watcher stops watching.
+/// When a 'delete' event is received, the watch stops watching.
 fn watch(
     _watcher: Watcher,
     mut stream: WatchStream,

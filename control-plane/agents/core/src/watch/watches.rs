@@ -4,7 +4,7 @@ use common_lib::{
     mbus_api::{message_bus::v0::Watches, ResourceKind},
     types::v0::{
         message_bus::{
-            CreateWatch, DeleteWatch, GetWatchers, Watch, WatchCallback, WatchResourceId, WatchType,
+            CreateWatch, DeleteWatch, GetWatches, Watch, WatchCallback, WatchResourceId, WatchType,
         },
         store::definitions::{
             ObjectKey, StorableObject, StorableObjectType, Store, StoreError, StoreWatchReceiver,
@@ -39,7 +39,7 @@ impl ObjectKey for WatchCfgId {
 #[serde(rename_all = "camelCase")]
 struct WatchCfg {
     pub watch_id: WatchCfgId,
-    pub watchers: Vec<WatchParamsCfg>,
+    pub watches: Vec<WatchParamsCfg>,
 }
 impl StorableObject for WatchCfg {
     type Key = WatchCfgId;
@@ -59,13 +59,13 @@ struct WatchParams {
     type_: WatchType,
 }
 
-/// Watch parameters with handle to the watcher worker thread
+/// Watch parameters with handle to the watch worker thread
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 struct WatchParamsCfg {
     /// inner configurable watch parameters
     params: WatchParams,
-    /// handle to the watcher (logic on the drop)
+    /// handle to the watch (logic on the drop)
     #[serde(skip)]
     #[allow(dead_code)]
     handle: Option<WatchHandle>,
@@ -94,8 +94,8 @@ impl From<&CreateWatch> for WatchCfgId {
         WatchCfgId { id: req.id.clone() }
     }
 }
-impl From<&GetWatchers> for WatchCfgId {
-    fn from(req: &GetWatchers) -> Self {
+impl From<&GetWatches> for WatchCfgId {
+    fn from(req: &GetWatches) -> Self {
         WatchCfgId {
             id: req.resource.clone(),
         }
@@ -107,17 +107,17 @@ impl From<&DeleteWatch> for WatchCfgId {
     }
 }
 
-/// In memory record of existing watchers
+/// In memory record of existing watches
 /// Gets populated on startup by reading from the store
 #[derive(Debug, Clone)]
-pub(crate) struct StoreWatcher {
+pub(crate) struct StoreWatch {
     /// clone of the core registry
     pub(crate) registry: Registry,
-    /// record of all watchers
+    /// record of all watches
     watches: Vec<Arc<Mutex<WatchCfg>>>,
 }
 
-impl StoreWatcher {
+impl StoreWatch {
     pub fn new(registry: Registry) -> Self {
         Self {
             registry,
@@ -135,13 +135,13 @@ impl WatchCfg {
         }
     }
 
-    /// Add a new watch element to this watcher
+    /// Add a new watch element to this watch
     async fn add(
         &mut self,
         watch: &WatchParams,
         store: Arc<Mutex<impl Store + 'static>>,
     ) -> Result<(), SvcError> {
-        if self.watchers.iter().any(|item| &item.params == watch) {
+        if self.watches.iter().any(|item| &item.params == watch) {
             return Err(SvcError::WatchAlreadyExists {});
         }
 
@@ -163,7 +163,7 @@ impl WatchCfg {
             params: watch.clone(),
             handle: Some(handle),
         };
-        self.watchers.push(watch);
+        self.watches.push(watch);
         Ok(())
     }
 
@@ -180,12 +180,12 @@ impl WatchCfg {
         }
     }
 
-    /// Delete a watcher using its parameters
+    /// Delete a watch using its parameters
     fn del(&mut self, watch: &WatchParams) -> Result<(), SvcError> {
-        if !self.watchers.iter().any(|item| &item.params == watch) {
+        if !self.watches.iter().any(|item| &item.params == watch) {
             Err(SvcError::WatchNotFound {})
         } else {
-            self.watchers.retain(|item| &item.params != watch);
+            self.watches.retain(|item| &item.params != watch);
             Ok(())
         }
     }
@@ -205,7 +205,7 @@ impl WatchCfg {
             let store = store_arc.clone();
             let (cancel_sender, cancel) = tokio::sync::broadcast::channel(1);
             let thread = tokio::spawn(async move {
-                Self::watcher_worker(cancel, channel, watch, id, store).await;
+                Self::watch_worker(cancel, channel, watch, id, store).await;
             });
             Arc::new((cancel_sender, thread))
         };
@@ -216,8 +216,8 @@ impl WatchCfg {
     }
 
     /// Worker thread which listens for events from the store (etcd) for a
-    /// specific watcher which is created through `create_watcher`.
-    async fn watcher_worker(
+    /// specific watch which is created through `create_watch`.
+    async fn watch_worker(
         mut cancel: tokio::sync::broadcast::Receiver<()>,
         mut channel: StoreWatchReceiver,
         params: WatchParams,
@@ -271,7 +271,7 @@ impl WatchCfg {
         }
     }
 
-    /// Notify the watcher using its callback
+    /// Notify the watch using its callback
     async fn notify(cancel: &mut tokio::sync::broadcast::Receiver<()>, callback: &WatchCallback) {
         let mut tries = 0;
         let mut log_failure = true;
@@ -387,13 +387,13 @@ async fn backoff(tries: &mut u32, max: Duration) {
     tokio::time::sleep(backoff).await;
 }
 
-impl StoreWatcher {
-    /// Get all the watchers for `watch_id`
-    pub async fn get_watchers(&self, watch_id: &WatchCfgId) -> Result<Watches, SvcError> {
+impl StoreWatch {
+    /// Get all the watches for `watch_id`
+    pub async fn get_watches(&self, watch_id: &WatchCfgId) -> Result<Watches, SvcError> {
         let watches = match self.get_watch_cfg(watch_id).await {
             Some(db) => {
                 let db = db.lock().await;
-                db.watchers
+                db.watches
                     .iter()
                     .map(|e| Watch {
                         id: watch_id.id.clone(),

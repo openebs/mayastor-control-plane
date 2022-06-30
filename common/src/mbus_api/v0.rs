@@ -89,13 +89,13 @@ bus_impl_message_all!(JsonGrpcRequest, JsonGrpc, Value, JsonGrpc);
 bus_impl_vector_request!(BlockDevices, BlockDevice);
 bus_impl_message_all!(GetBlockDevices, GetBlockDevices, BlockDevices, Node);
 
-bus_impl_message_all!(CreateWatch, CreateWatch, (), Watcher);
+bus_impl_message_all!(CreateWatch, CreateWatch, (), Watch);
 
 bus_impl_vector_request!(Watches, Watch);
 
-bus_impl_message_all!(GetWatchers, GetWatches, Watches, Watcher);
+bus_impl_message_all!(GetWatches, GetWatches, Watches, Watch);
 
-bus_impl_message_all!(DeleteWatch, DeleteWatch, (), Watcher);
+bus_impl_message_all!(DeleteWatch, DeleteWatch, (), Watch);
 
 bus_impl_message_all!(GetSpecs, GetSpecs, Specs, Registry);
 

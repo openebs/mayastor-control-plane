@@ -1,12 +1,16 @@
 use super::*;
 use common_lib::types::v0::{
     message_bus::{
-        CreateWatch, DeleteWatch, GetWatchers, WatchCallback, WatchResourceId, WatchType,
+        CreateWatch, DeleteWatch, GetWatches, WatchCallback, WatchResourceId, WatchType,
     },
     openapi::apis::Uuid,
 };
-use mbus_api::Message;
+use grpc::operations::watch::traits::WatchOperations;
 use std::convert::TryFrom;
+
+fn client() -> impl WatchOperations {
+    core_grpc().watch()
+}
 
 #[async_trait::async_trait]
 impl apis::actix_server::Watches for RestApi {
@@ -14,13 +18,16 @@ impl apis::actix_server::Watches for RestApi {
         Path(volume_id): Path<Uuid>,
         Query(callback): Query<url::Url>,
     ) -> Result<(), RestError<RestJsonError>> {
-        DeleteWatch {
-            id: WatchResourceId::Volume(volume_id.into()),
-            callback: WatchCallback::Uri(callback.to_string()),
-            watch_type: WatchType::Actual,
-        }
-        .request()
-        .await?;
+        client()
+            .destroy(
+                &DeleteWatch {
+                    id: WatchResourceId::Volume(volume_id.into()),
+                    callback: WatchCallback::Uri(callback.to_string()),
+                    watch_type: WatchType::Actual,
+                },
+                None,
+            )
+            .await?;
 
         Ok(())
     }
@@ -28,11 +35,14 @@ impl apis::actix_server::Watches for RestApi {
     async fn get_watch_volume(
         Path(volume_id): Path<Uuid>,
     ) -> Result<Vec<models::RestWatch>, RestError<RestJsonError>> {
-        let watches = GetWatchers {
-            resource: WatchResourceId::Volume(volume_id.into()),
-        }
-        .request()
-        .await?;
+        let watches = client()
+            .get(
+                &GetWatches {
+                    resource: WatchResourceId::Volume(volume_id.into()),
+                },
+                None,
+            )
+            .await?;
         let watches = watches.0.iter();
         let watches = watches
             .filter_map(|w| models::RestWatch::try_from(w).ok())
@@ -44,13 +54,16 @@ impl apis::actix_server::Watches for RestApi {
         Path(volume_id): Path<Uuid>,
         Query(callback): Query<url::Url>,
     ) -> Result<(), RestError<RestJsonError>> {
-        CreateWatch {
-            id: WatchResourceId::Volume(volume_id.into()),
-            callback: WatchCallback::Uri(callback.to_string()),
-            watch_type: WatchType::Actual,
-        }
-        .request()
-        .await?;
+        client()
+            .create(
+                &CreateWatch {
+                    id: WatchResourceId::Volume(volume_id.into()),
+                    callback: WatchCallback::Uri(callback.to_string()),
+                    watch_type: WatchType::Actual,
+                },
+                None,
+            )
+            .await?;
 
         Ok(())
     }
