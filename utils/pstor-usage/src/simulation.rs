@@ -140,7 +140,6 @@ impl Simulation {
                     .with_silence_test_traces()
                     .with_build(false)
                     .with_build_all(false)
-                    .with_nats(false)
                     .with_jaeger(false)
                     .with_io_engines(args.volume_replicas.into())
                     .build()

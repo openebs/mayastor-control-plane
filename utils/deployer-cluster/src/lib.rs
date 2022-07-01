@@ -8,7 +8,7 @@ use deployer_lib::{
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
-use common_lib::{mbus_api, mbus_api::TimeoutOptions, types::v0::message_bus};
+use common_lib::{mbus_api::TimeoutOptions, types::v0::message_bus};
 use openapi::apis::Uuid;
 
 use common_lib::{
@@ -294,23 +294,7 @@ impl Cluster {
             builder: ClusterBuilder::builder(),
         };
 
-        if components.nats_enabled() {
-            // the deployer uses a "fake" message bus so now it's time to
-            // connect to the "real" message bus
-            cluster.connect_to_bus_timeout("nats", bus_timeout).await;
-        }
-
         Ok(cluster)
-    }
-
-    /// connect to message bus helper for the cargo test code with bus timeouts
-    async fn connect_to_bus_timeout(&self, name: &str, bus_timeout: TimeoutOptions) {
-        tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            mbus_api::message_bus_init_options(None, self.composer.container_ip(name), bus_timeout)
-                .await
-        })
-        .await
-        .unwrap();
     }
 }
 
@@ -675,12 +659,6 @@ impl ClusterBuilder {
     #[must_use]
     pub fn with_rest(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_rest(enabled, None);
-        self
-    }
-    /// Specify whether nats is enabled or not
-    #[must_use]
-    pub fn with_nats(mut self, enabled: bool) -> Self {
-        self.opts = self.opts.with_nats(enabled);
         self
     }
     /// Specify whether jaeger is enabled or not

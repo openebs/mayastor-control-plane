@@ -8,7 +8,7 @@ use common::{
     v0::msg_translation::RpcToMessageBus,
 };
 use common_lib::types::v0::message_bus::{
-    Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register, States,
+    Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 
 use crate::core::wrapper::InternalOps;
@@ -295,27 +295,5 @@ impl Service {
             .map(|rpc_bdev| rpc_bdev.to_mbus())
             .collect();
         Ok(BlockDevices(bdevs))
-    }
-
-    /// Get state information for all resources.
-    pub(crate) async fn get_states(&self, _request: &GetStates) -> Result<States, SvcError> {
-        let mut nexuses = vec![];
-        let mut pools = vec![];
-        let mut replicas = vec![];
-
-        // Aggregate the state information from each node.
-        let nodes = self.registry.nodes().read().await;
-        for (_node_id, locked_node_wrapper) in nodes.iter() {
-            let node_wrapper = locked_node_wrapper.read().await;
-            nexuses.extend(node_wrapper.nexus_states());
-            pools.extend(node_wrapper.pool_states());
-            replicas.extend(node_wrapper.replica_states());
-        }
-
-        Ok(States {
-            nexuses,
-            pools,
-            replicas,
-        })
     }
 }

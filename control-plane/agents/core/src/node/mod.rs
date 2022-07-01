@@ -4,15 +4,14 @@ mod specs;
 /// node watchdog to keep track of a node's liveness
 pub(crate) mod watchdog;
 
-use super::{core::registry::Registry, handler, impl_request_handler, CliArgs};
-use async_trait::async_trait;
-use common::{errors::SvcError, Service};
+use super::{core::registry::Registry, CliArgs};
+use common::Service;
 use common_lib::{
     mbus_api::{v0::*, *},
-    types::v0::message_bus::{ChannelVs, GetBlockDevices, GetNodes, GetStates},
+    types::v0::message_bus::{GetBlockDevices, GetNodes},
 };
 use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
-use std::{convert::TryInto, marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 pub(crate) async fn configure(builder: Service) -> Service {
     let node_service = create_node_service(&builder).await;
@@ -22,9 +21,6 @@ pub(crate) async fn configure(builder: Service) -> Service {
         .with_shared_state(node_service)
         .with_shared_state(node_grpc_service)
         .with_shared_state(registration_service)
-        .with_channel(ChannelVs::Registry)
-        .with_subscription(handler!(GetStates))
-        .with_channel(ChannelVs::Node)
 }
 
 async fn create_node_service(builder: &Service) -> service::Service {

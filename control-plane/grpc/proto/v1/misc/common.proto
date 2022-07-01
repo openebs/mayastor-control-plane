@@ -97,6 +97,8 @@ enum ResourceKind {
   Watch = 11;
   // Spec
   Spec = 13;
+  // State
+  State = 14;
 }
 
 // Filter by Node and Replica id

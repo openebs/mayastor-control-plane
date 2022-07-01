@@ -8,16 +8,10 @@ mod io_engine;
 mod jaeger;
 mod jsongrpc;
 mod kibana;
-pub mod nats;
 mod rest;
 
-use self::nats::bus;
 use super::StartOptions;
 use async_trait::async_trait;
-use common_lib::{
-    mbus_api::Message,
-    types::v0::message_bus::{ChannelVs, Liveness},
-};
 
 use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
 use futures::future::{join_all, try_join_all};
@@ -224,9 +218,7 @@ impl Components {
             .collect::<Vec<_>>();
         ordered
     }
-    pub fn nats_enabled(&self) -> bool {
-        !self.1.no_nats
-    }
+
     /// to check whether core agent is being deployed or not
     pub fn core_enabled(&self) -> bool {
         self.0.contains(&Component::Core(Default::default()))
@@ -412,9 +404,6 @@ impl Drop for TraceFn {
 // from lower to high
 impl_component! {
     Empty,      0,
-    // Note: NATS needs to be the first to support usage of this library in cargo tests
-    // to make sure that the IP does not change between tests
-    Nats,       0,
     Jaeger,     0,
     Dns,        1,
     Etcd,       1,

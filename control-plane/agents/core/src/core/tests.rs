@@ -1,10 +1,9 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::Message,
     store::etcd::Etcd,
     types::v0::{
-        message_bus::{self, ChannelVs, Liveness},
+        message_bus,
         openapi::models,
         store::{
             definitions::Store,
@@ -56,7 +55,10 @@ async fn bootstrap_registry() {
     cluster.restart_core().await;
 
     // Wait for core service to restart.
-    Liveness {}.request_on(ChannelVs::Core).await.unwrap();
+    cluster
+        .node_service_liveness(None)
+        .await
+        .expect("Should have restarted by now");
 
     // Get the specs after the core agent has restarted and check that they match what was there
     // before.
@@ -75,7 +77,6 @@ async fn store_lease_lock() {
     let _cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_jaeger(false)
-        .with_nats(false)
         .with_io_engines(0)
         .with_agents(vec![])
         .build()

@@ -25,6 +25,7 @@ impl From<ResourceKind> for common::ResourceKind {
             ResourceKind::Block => Self::Block,
             ResourceKind::Watch => Self::Watch,
             ResourceKind::Spec => Self::Spec,
+            ResourceKind::State => Self::State,
         }
     }
 }
@@ -45,6 +46,7 @@ impl From<common::ResourceKind> for ResourceKind {
             common::ResourceKind::Block => Self::Block,
             common::ResourceKind::Watch => Self::Watch,
             common::ResourceKind::Spec => Self::Spec,
+            common::ResourceKind::State => Self::State,
         }
     }
 }
