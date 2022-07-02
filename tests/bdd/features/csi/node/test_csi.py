@@ -120,7 +120,7 @@ def test_probe(csi_instance):
 
 def test_node_info(csi_instance):
     info = csi_instance.node.NodeGetInfo(pb.NodeGetInfoRequest())
-    assert info.node_id == "csi-node://msn-test"
+    assert info.node_id == "msn-test"
     assert info.max_volumes_per_node == 0
 
 

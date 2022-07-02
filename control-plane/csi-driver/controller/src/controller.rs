@@ -1,7 +1,7 @@
 use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 use regex::Regex;
 use rpc::csi::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tonic::{Response, Status};
 use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
@@ -13,11 +13,10 @@ use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
 use rpc::csi::Topology as CsiTopology;
 
-const K8S_HOSTNAME: &str = "kubernetes.io/hostname";
+const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 const SUPPORTED_FS_TYPES: [&str; 2] = ["ext4", "xfs"];
-const CSI_NODE_PREFIX: &str = "csi-node://";
 
 #[derive(Debug, Default)]
 pub struct CsiControllerSvc {}
@@ -73,15 +72,6 @@ fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, Status>
             "Invalid protocol: {:?}",
             proto
         ))),
-    }
-}
-
-/// Transform Kubernetes node ID into its real hostname.
-fn normalize_hostname(name: &str) -> String {
-    if let Some(hostname) = name.strip_prefix(CSI_NODE_PREFIX) {
-        hostname.to_string()
-    } else {
-        name.to_string()
     }
 }
 
@@ -272,31 +262,33 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         //
         // The requisite array contains all nodes in the cluster irrespective
         // of what node was chosen for running the app.
-        let mut allowed_nodes: Vec<String> = Vec::new();
-        let mut preferred_nodes: Vec<String> = Vec::new();
+        let mut allowed_nodes: HashSet<String> = HashSet::new();
+        let mut preferred_nodes: HashSet<String> = HashSet::new();
         let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
+        let supported_keys = vec![OPENEBS_TOPOLOGY_KEY];
 
         inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
 
         if let Some(reqs) = args.accessibility_requirements {
             for r in reqs.requisite.iter() {
                 for (k, v) in r.segments.iter() {
-                    // We are not able to evaluate any other topology requirements than
-                    // the hostname req. Reject all others.
-                    if k != K8S_HOSTNAME {
-                        return Err(Status::invalid_argument(
-                            "Volume topology other than hostname not supported",
-                        ));
+                    // Reject all others than `supported_keys`
+                    if supported_keys.contains(&k.as_str()) {
+                        allowed_nodes.insert(v.to_string());
+                    } else {
+                        return Err(Status::invalid_argument(format!(
+                            "Volume topology key other than {} is not supported",
+                            OPENEBS_TOPOLOGY_KEY
+                        )));
                     }
-                    allowed_nodes.push(v.to_string());
                 }
             }
 
             for p in reqs.preferred.iter() {
                 for (k, v) in p.segments.iter() {
-                    // Ignore others than hostname (it's only preferred)
-                    if k == K8S_HOSTNAME {
-                        preferred_nodes.push(v.to_string());
+                    // Reject all others than `supported_keys`
+                    if supported_keys.contains(&k.as_str()) {
+                        preferred_nodes.insert(v.to_string());
                     }
                 }
             }
@@ -320,8 +312,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             // If the volume doesn't exist, create it.
             Err(ApiClientError::ResourceNotExists(_)) => {
                 let volume_topology = CreateVolumeTopology::new(
-                    allowed_nodes,
-                    preferred_nodes,
+                    allowed_nodes.into_iter().collect::<Vec<String>>(),
+                    preferred_nodes.into_iter().collect::<Vec<String>>(),
                     inclusive_label_topology,
                 );
 
@@ -394,7 +386,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         if args.node_id.is_empty() {
             return Err(Status::invalid_argument("Node ID must not be empty"));
         }
-        let node_id = normalize_hostname(&args.node_id);
+        let node_id = args.node_id;
 
         if args.volume_id.is_empty() {
             return Err(Status::invalid_argument("Volume ID must not be empty"));
@@ -518,7 +510,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         // Check if target volume is published and the node matches.
         if let Some(target) = &volume.spec.target.as_ref() {
-            if !args.node_id.is_empty() && target.node != normalize_hostname(&args.node_id) {
+            if !args.node_id.is_empty() && target.node != args.node_id {
                 return Err(Status::not_found(format!(
                     "Volume {} is published on a different node: {}",
                     &args.volume_id, target.node
@@ -660,7 +652,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         // Determine target node, if requested.
         let node: Option<&String> = if let Some(topology) = args.accessible_topology.as_ref() {
-            topology.segments.get(K8S_HOSTNAME)
+            topology.segments.get(OPENEBS_TOPOLOGY_KEY)
         } else {
             None
         };

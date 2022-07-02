@@ -15,8 +15,6 @@ use crate::{identity::Identity, mount::probe_filesystems, node::Node, shutdown_e
 use clap::{App, Arg};
 use csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
-use k8s_openapi::api::core::v1::Node as K8sNode;
-use kube::{Api, Client, Resource};
 use nodeplugin_grpc::IoEngineNodePluginGrpcServer;
 use std::{
     env,
@@ -30,7 +28,6 @@ use tokio::{
 use tonic::transport::{server::Connected, Server};
 use tracing::info;
 
-#[allow(dead_code)]
 #[allow(clippy::type_complexity)]
 #[allow(clippy::unit_arg)]
 #[allow(clippy::redundant_closure)]
@@ -108,53 +105,6 @@ impl AsyncWrite for UnixStream {
 }
 
 const GRPC_PORT: u16 = 10199;
-
-// Get node name from Kubernetes API server. In case no Kubernetes API server is available,
-// keep the hostname as it is.
-pub async fn get_nodename(hostname: &str) -> String {
-    // Check if we're running under Kubernetes.
-    if env::var("KUBERNETES_SERVICE_HOST").is_err() {
-        info!(
-            "No Kubernetes API server available, using hostname directly: {}",
-            hostname
-        );
-        return hostname.to_string();
-    }
-
-    // In case we're running under Kubernetes, host name resolution must be successful.
-    let k8s = Client::try_default()
-        .await
-        .expect("Failed to initialize k8s API client");
-    let nodes: Api<K8sNode> = Api::all(k8s);
-
-    let node = nodes.get(hostname).await.unwrap_or_else(|error| {
-        panic!(
-            "Node '{}' not found in Kubernetes cluster: {}",
-            hostname, error
-        )
-    });
-
-    let labels = node
-        .meta()
-        .labels
-        .as_ref()
-        .unwrap_or_else(|| panic!("No labels available for node '{}'", hostname));
-
-    let l = labels
-        .get("kubernetes.io/hostname")
-        .unwrap_or_else(|| {
-            panic!(
-                "No 'kubernetes.io/hostname' label found for node '{}'",
-                hostname
-            )
-        })
-        .to_string();
-    info!(
-        "Retrieved hostname({}) from 'kubernetes.io/hostname' label: {}",
-        hostname, l
-    );
-    l
-}
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -259,10 +209,10 @@ async fn main() -> Result<(), String> {
     };
 
     *config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
-    let node_name = get_nodename(matches.value_of("node-name").unwrap()).await;
+    let node_name = matches.value_of("node-name").unwrap();
 
     let _ = tokio::join!(
-        CsiServer::run(csi_socket, &node_name),
+        CsiServer::run(csi_socket, node_name),
         IoEngineNodePluginGrpcServer::run(sock_addr.parse().expect("Invalid gRPC endpoint")),
     );
 
@@ -272,7 +222,7 @@ async fn main() -> Result<(), String> {
 struct CsiServer {}
 
 impl CsiServer {
-    pub async fn run(csi_socket: &str, node_name: &str) -> Result<(), ()> {
+    async fn run(csi_socket: &str, node_name: &str) -> Result<(), ()> {
         let incoming = {
             let uds = UnixListener::bind(csi_socket).unwrap();
             info!("CSI plugin bound to {}", csi_socket);
