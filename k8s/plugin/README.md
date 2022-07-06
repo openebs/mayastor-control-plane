@@ -114,6 +114,22 @@ The plugin needs to be able to connect to the REST server in order to make the a
  93b1e1e9-ffcd-4c56-971e-294a530ea5cd  ksnode-2  pool-on-ksnode-2  Online
  88d89a92-40cf-4147-97d4-09e64979f548  ksnode-3  pool-on-ksnode-3  Online
 ```
+
+9. Get BlockDevices by NodeID
+```
+❯ kubectl mayastor get block-devices worker-node1 --all
+ DEVNAME          DEVTYPE    SIZE       AVAILABLE  MODEL                       DEVPATH                                                         FSTYPE  FSUUID  MOUNTPOINT  PARTTYPE                              MAJOR            MINOR                                     DEVLINKS
+ /dev/nvme1n1     disk       4194304    no         Amazon Elastic Block Store  /devices/pci0000:00/0000:00:1f.0/nvme/nvme1/nvme1n1             259     4       ext4        4616cd08-7a7d-49fe-ae6d-908f9e864fc7                                                             "/dev/disk/by-uuid/4616cd08-7a7d-49fe-ae6d-908f9e864fc7", "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol04bfba0a58c4ffdae", "/dev/disk/by-id/nvme-nvme.1d0f-766f6c303462666261306135386334666664
+ /dev/nvme4n1     disk       20971520   yes        Amazon Elastic Block Store  /devices/pci0000:00/0000:00:1d.0/nvme/nvme4/nvme4n1             259     12                                                                                                                   "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol06eb486c9593587a9", "/dev/disk/by-id/nvme-nvme.1d0f-766f6c3036656234383663393539333538376139-416d617a6f6e20456c617374696320426c6f636b2053746f7265-00000001", "/dev/disk/by-path/pci-0000:00:1d.0-nvme-1"
+ /dev/nvme2n1     disk       104857600  no         Amazon Elastic Block Store  /devices/pci0000:00/0000:00:1e.0/nvme/nvme2/nvme2n1             259     5                                                                                                                    "/dev/disk/by-id/nvme-nvme.1d0f-766f6c3033623636623930363535636636656465-416d617a6f6e20456c617374696320426c6f636b2053746f7265-00000001", "/dev/disk/by-path/pci-0000:00:1e.0-nvme-1", "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol03b66b90655cf6ede"
+```
+```
+❯ kubectl mayastor get block-devices worker-node1
+ DEVNAME       DEVTYPE  SIZE      AVAILABLE  MODEL                       DEVPATH                                              MAJOR  MINOR  DEVLINKS
+ /dev/nvme4n1  disk     20971520  yes        Amazon Elastic Block Store  /devices/pci0000:00/0000:00:1d.0/nvme/nvme4/nvme4n1  259    12     "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol06eb486c9593587a9", "/dev/disk/by-id/nvme-nvme.1d0f-766f6c3036656234383663393539333538376139-416d617a6f6e20456c617374696320426c6f636b2053746f7265-00000001", "/dev/disk/by-path/pci-0000:00:1d.0-nvme-1"
+```
+**NOTE: The above command lists usable blockdevices if `--all` flag is not used, but currently since there isn't a way to identify whether the `disk` has a blobstore pool, `disks` not used by `pools` created by `control-plane` are shown as usable if they lack any filesystem uuid.**
+
 </details>
 
 <details>
