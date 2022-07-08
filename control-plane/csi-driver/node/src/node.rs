@@ -27,6 +27,7 @@ pub struct Node {
 
 const ATTACH_TIMEOUT_INTERVAL: Duration = Duration::from_millis(100);
 const ATTACH_RETRIES: u32 = 100;
+const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 
 // Determine if given access mode in conjunction with ro mount flag makes
 // sense or not. If access mode is not supported or the combination does
@@ -117,9 +118,9 @@ impl node_server::Node for Node {
         &self,
         _request: Request<NodeGetInfoRequest>,
     ) -> Result<Response<NodeGetInfoResponse>, Status> {
-        let node_id = format!("csi-node://{}", &self.node_name);
+        let node_id = self.node_name.clone();
         let mut segments = HashMap::new();
-        segments.insert("kubernetes.io/hostname".to_owned(), self.node_name.clone());
+        segments.insert(OPENEBS_TOPOLOGY_KEY.to_owned(), self.node_name.clone());
 
         debug!("NodeGetInfo request: ID={}", node_id);
 

@@ -40,7 +40,7 @@ VOLUME1_SIZE = 1024 * 1024 * 32
 VOLUME2_SIZE = 1024 * 1024 * 22
 VOLUME3_SIZE = 1024 * 1024 * 28
 VOLUME4_SIZE = 1024 * 1024 * 32
-K8S_HOSTNAME = "kubernetes.io/hostname"
+OPENEBS_TOPOLOGY_KEY = "openebs.io/nodename"
 IO_ENGINE_SELECTOR_KEY = "openebs.io/engine"
 IO_ENGINE_SELECTOR_VALUE = "io-engine"
 
@@ -684,7 +684,7 @@ def get_node_capacity(two_pools):
     capacity = []
 
     for n in [NODE1, NODE2]:
-        topology = pb.Topology(segments=[[K8S_HOSTNAME, n]])
+        topology = pb.Topology(segments=[[OPENEBS_TOPOLOGY_KEY, n]])
         cap = csi_rpc_handle().controller.GetCapacity(
             pb.GetCapacityRequest(accessible_topology=topology)
         )
@@ -698,6 +698,7 @@ def check_get_node_capacity(get_nodes_capacity):
 
     for i, p in enumerate([POOL1_UUID, POOL2_UUID]):
         pool = pool_api.get_pool(p)
+
         assert (
             pool.state.capacity == get_nodes_capacity[i]
         ), "Node pool size does not match reported node capacity"
@@ -971,11 +972,11 @@ def check_volume_specs(volume1, volume2):
     ), "Volumes have different contexts"
 
     topology1 = sorted(
-        volume1.accessible_topology, key=lambda t: t.segments[K8S_HOSTNAME]
+        volume1.accessible_topology, key=lambda t: t.segments[OPENEBS_TOPOLOGY_KEY]
     )
 
     topology2 = sorted(
-        volume2.accessible_topology, key=lambda t: t.segments[K8S_HOSTNAME]
+        volume2.accessible_topology, key=lambda t: t.segments[OPENEBS_TOPOLOGY_KEY]
     )
 
     assert topology1 == topology2, "Volumes have different topologies"
