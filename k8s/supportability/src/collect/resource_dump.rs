@@ -241,8 +241,7 @@ impl ResourceDumper {
         flush_tool_log_file()?;
 
         // Copy folder into archive
-        let _ = self
-            .archive
+        self.archive
             .copy_to_archive(self.dir_path.clone(), ".".to_string())
             .map_err(|e| {
                 log(format!(
@@ -252,7 +251,7 @@ impl ResourceDumper {
                 e
             })?;
 
-        let _ = self.delete_temporary_directory().map_err(|e| {
+        self.delete_temporary_directory().map_err(|e| {
             log(format!(
                 "Failed to delete temporary directory, error: {:?}",
                 e

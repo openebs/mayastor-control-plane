@@ -96,7 +96,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         Self: PartialEq<Self::Create>,
     {
         // we're busy with another request, try again later
-        let _ = self.busy()?;
+        self.busy()?;
         if self.uuid() == Uuid::default().to_string() {
             return Err(SvcError::InvalidUuid {
                 uuid: self.uuid(),

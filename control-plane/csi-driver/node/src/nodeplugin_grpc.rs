@@ -12,8 +12,9 @@ use io_engine_node_plugin::{
 use nodeplugin_svc::{find_volume, freeze_volume, unfreeze_volume, ServiceError, TypeOfMount};
 use tonic::{transport::Server, Code, Request, Response, Status};
 
-#[allow(clippy::upper_case_acronyms)]
 pub mod io_engine_node_plugin {
+    #![allow(clippy::derive_partial_eq_without_eq)]
+    #![allow(clippy::upper_case_acronyms)]
     tonic::include_proto!("ioenginenodeplugin");
 }
 

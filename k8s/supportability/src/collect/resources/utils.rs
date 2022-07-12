@@ -119,8 +119,7 @@ where
 
     fn get_k8s_resource_names(&self) -> Vec<String> {
         self.iter()
-            .map(|t| t.get_k8s_resource_names())
-            .flatten()
+            .flat_map(|t| t.get_k8s_resource_names())
             .collect::<Vec<String>>()
     }
 }

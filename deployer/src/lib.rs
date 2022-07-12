@@ -3,7 +3,7 @@ pub mod infra;
 use infra::*;
 
 use composer::Builder;
-use std::{collections::HashMap, convert::TryInto, str::FromStr, time::Duration};
+use std::{collections::HashMap, convert::TryInto, fmt::Write, str::FromStr, time::Duration};
 use structopt::StructOpt;
 use strum::VariantNames;
 pub(crate) use utils::tracing_telemetry::KeyValue;
@@ -292,7 +292,7 @@ impl KeyValues {
                 if !arg_start.is_empty() {
                     arg_start.push(',');
                 }
-                arg_start.push_str(&format!("{}={}", k, v));
+                let _ = write!(arg_start, "{}={}", k, v);
             });
             Some(arg_start)
         } else {
@@ -485,7 +485,7 @@ impl StopOptions {
             .build()
             .await?;
         let _ = composer.stop_network_containers().await;
-        let _ = composer
+        composer
             .remove_network_containers(&self.cluster_label.name())
             .await?;
         Ok(())

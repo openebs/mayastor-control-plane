@@ -1,5 +1,3 @@
-#![feature(allow_fail)]
-
 use common_lib::types::v0::message_bus as v0;
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::pool::traits::PoolOperations;
@@ -115,13 +113,8 @@ async fn create_pool_idempotent() {
 
 /// FIXME: CAS-710
 #[tokio::test]
-#[allow_fail]
 async fn create_pool_idempotent_same_disk_different_query() {
-    let cluster = ClusterBuilder::builder()
-        // don't log whilst we have the allow_fail
-        .compose_build(|c| c.with_logs(false))
-        .await
-        .unwrap();
+    let cluster = ClusterBuilder::builder().build().await.unwrap();
     let pool_client = cluster.grpc_client().pool();
     pool_client
         .create(

@@ -1,5 +1,3 @@
-#![feature(allow_fail)]
-
 use common_lib::types::v0::message_bus as v0;
 use deployer_cluster::{result_either, test_result_grpc, Cluster, ClusterBuilder};
 use grpc::operations::nexus::traits::NexusOperations;

@@ -32,7 +32,7 @@ pub(crate) struct ClusterOpts {
 impl ClusterOpts {
     /// Get the cluster config.
     pub(crate) fn simulation(&self) -> Option<SimulationOpts> {
-        self.config.as_ref().map(|c| c.simulation()).flatten()
+        self.config.as_ref().and_then(|c| c.simulation())
     }
     /// Get the all the specified clusters.
     pub(crate) fn clusters(&self) -> Option<HashMap<ClusterName, ClusterConfig>> {

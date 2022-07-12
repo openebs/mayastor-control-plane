@@ -36,7 +36,7 @@ async fn test_setup(auth: &bool) -> Cluster {
         false => None,
     };
 
-    let cluster = ClusterBuilder::builder()
+    ClusterBuilder::builder()
         .with_rest_auth(true, rest_jwk)
         .with_options(|o| o.with_jaeger(true))
         .with_agents(vec!["core", "jsongrpc"])
@@ -45,9 +45,7 @@ async fn test_setup(auth: &bool) -> Cluster {
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
         .await
-        .unwrap();
-
-    cluster
+        .unwrap()
 }
 
 // Return a bearer token to be sent with REST requests.
@@ -336,13 +334,13 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     client
         .watches_api()
-        .put_watch_volume(&volume_uuid, &callback.to_string())
+        .put_watch_volume(&volume_uuid, callback.as_ref())
         .await
         .expect_err("volume does not exist in the store");
 
     client
         .watches_api()
-        .del_watch_volume(&volume_uuid, &callback.to_string())
+        .del_watch_volume(&volume_uuid, callback.as_ref())
         .await
         .expect_err("Does not exist");
 

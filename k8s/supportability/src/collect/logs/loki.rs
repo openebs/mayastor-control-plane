@@ -149,8 +149,8 @@ impl LokiClient {
             .map(|key_value_pair| {
                 let pairs = key_value_pair.split('=').collect::<Vec<&str>>();
                 format!("{}=\"{}\",", pairs[0], pairs[1])
-                    .replace(".", "_")
-                    .replace("/", "_")
+                    .replace('.', "_")
+                    .replace('/', "_")
             })
             .collect::<String>();
         if !label_filters.is_empty() {
@@ -269,7 +269,7 @@ impl LokiPoll {
             .data
             .result
             .iter()
-            .map(|stream| -> Vec<String> {
+            .flat_map(|stream| -> Vec<String> {
                 stream
                     .values
                     .iter()
@@ -277,7 +277,6 @@ impl LokiPoll {
                     .filter(|val| !val.is_empty())
                     .collect::<Vec<String>>()
             })
-            .flatten()
             .collect::<Vec<String>>();
         Ok(Some(logs))
     }

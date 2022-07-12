@@ -70,7 +70,7 @@ impl JsonGrpcSvc {
             })?
             .into_inner();
 
-        Ok(serde_json::from_str(&response.result).context(JsonRpcDeserialise)?)
+        serde_json::from_str(&response.result).context(JsonRpcDeserialise)
     }
 
     /// Get a shutdown_signal as a oneshot channel when the process receives either TERM or INT.

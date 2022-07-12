@@ -1,5 +1,3 @@
-#![feature(allow_fail)]
-
 use common_lib::types::v0::message_bus as v0;
 use grpc::operations::replica::traits::ReplicaOperations;
 
@@ -7,7 +5,7 @@ use deployer_cluster::{result_either, test_result_grpc, ClusterBuilder};
 
 // FIXME: CAS-721
 #[tokio::test]
-#[allow_fail]
+#[should_panic]
 async fn create_replica() {
     let cluster = ClusterBuilder::builder()
         .with_pools(1)
@@ -128,7 +126,7 @@ async fn create_replica_sizes() {
 
 // FIXME: CAS-731
 #[tokio::test]
-#[allow_fail]
+#[should_panic]
 async fn create_replica_idempotent_different_sizes() {
     let cluster = ClusterBuilder::builder()
         .with_pools(1)
@@ -197,7 +195,7 @@ async fn create_replica_idempotent_different_sizes() {
 
 // FIXME: CAS-731
 #[tokio::test]
-#[allow_fail]
+#[should_panic]
 async fn create_replica_idempotent_different_protocols() {
     let cluster = ClusterBuilder::builder()
         .with_pools(1)
