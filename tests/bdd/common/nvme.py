@@ -133,8 +133,30 @@ def nvme_find_device(uri):
 
     # we should only have one connection
     assert len(dev) == 1
-    device = "/dev/{}".format(dev[0]["Namespaces"][0].get("NameSpace"))
-    return device
+
+    # The device list seems to differ locally and CI, possibly due to kernel differences
+    # See the example snippet for some details
+    # 5.10.52 #1-NixOS SMP Tue Jul 20 14:05:59 UTC 2021 x86_64 GNU/Linux
+    #   Controllers:
+    #   - Controller: nvme2
+    #     Namespaces:
+    #     - NameSpace: nvme2c2n1
+    #       NSID: 1
+    #   Namespaces:
+    #   - NameSpace: nvme2n1
+    #     NSID: 1
+    #  VS
+    # 5.18.10 #1-NixOS SMP PREEMPT_DYNAMIC Thu Jul 7 15:55:01 UTC 2022 x86_64 GNU/Linux
+    #   Controllers:
+    #   - Controller: nvme2
+    #     Namespaces:
+    #     - NameSpace: nvme2n1
+    #       NSID: 1
+    if "Namespaces" in dev[0]:
+        return "/dev/{}".format(dev[0]["Namespaces"][0].get("NameSpace"))
+    return "/dev/{}".format(
+        dev[0]["Controllers"][0].get("Namespaces")[0].get("NameSpace")
+    )
 
 
 def nvme_disconnect(uri):
