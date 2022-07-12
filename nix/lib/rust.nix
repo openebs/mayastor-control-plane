@@ -7,7 +7,7 @@ let
 in
 rec {
   rust_default = { override ? { } }: rec {
-    nightly_pkg = pkgs.rust-bin.nightly."2021-11-22";
+    nightly_pkg = pkgs.rust-bin.nightly."2022-06-22";
     stable_pkg = pkgs.rust-bin.stable.latest;
 
     nightly = nightly_pkg.default.override (override);
