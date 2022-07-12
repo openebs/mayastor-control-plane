@@ -13,6 +13,7 @@ stdenv.mkDerivation {
   src = whitelistSource ../../. [ ".git" ];
   buildCommand = ''
     cd $src
+    export GIT_DIR=".git"
     vers=`${git}/bin/git tag --points-at HEAD`
     if [ -z "$vers" ]; then
       vers=`${git}/bin/git rev-parse --short=12 HEAD`
