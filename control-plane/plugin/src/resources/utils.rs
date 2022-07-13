@@ -31,6 +31,32 @@ lazy_static! {
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS",];
     pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row!["ID", "NODE", "POOL", "STATUS"];
+    pub static ref BLOCKDEVICE_HEADERS_ALL: Row = row![
+        "DEVNAME",
+        "DEVTYPE",
+        "SIZE",
+        "AVAILABLE",
+        "MODEL",
+        "DEVPATH",
+        "FSTYPE",
+        "FSUUID",
+        "MOUNTPOINT",
+        "PARTTYPE",
+        "MAJOR",
+        "MINOR",
+        "DEVLINKS",
+    ];
+    pub static ref BLOCKDEVICE_HEADERS_USABLE: Row = row![
+        "DEVNAME",
+        "DEVTYPE",
+        "SIZE",
+        "AVAILABLE",
+        "MODEL",
+        "DEVPATH",
+        "MAJOR",
+        "MINOR",
+        "DEVLINKS",
+    ];
 }
 
 // table_printer takes the above defined headers and the rows created at execution,
@@ -46,12 +72,12 @@ pub fn table_printer(titles: Row, rows: Vec<Row>) {
     table.printstd();
 }
 
-// CreateRows trait to be implemented by Vec<Volume/Pool> to create the rows.
+// CreateRows trait to be implemented by Vec<`resource`> to create the rows.
 pub trait CreateRows {
     fn create_rows(&self) -> Vec<Row>;
 }
 
-// GetHeaderRow trait to be implemented by Volume/Pool to fetch the corresponding headers.
+// GetHeaderRow trait to be implemented by Vec<`resource`> to fetch the corresponding headers.
 pub trait GetHeaderRow {
     fn get_header_row(&self) -> Row;
 }

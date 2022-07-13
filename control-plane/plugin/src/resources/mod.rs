@@ -1,3 +1,6 @@
+use crate::resources::blockdevice::BlockDeviceArgs;
+
+pub mod blockdevice;
 pub mod node;
 pub mod pool;
 pub mod utils;
@@ -15,7 +18,7 @@ pub enum GetResources {
     Volumes,
     /// Get volume with the given ID.
     Volume { id: VolumeId },
-    /// Get the replica toplogy for the volume with the given ID
+    /// Get the replica topology for the volume with the given ID
     VolumeReplicaTopology { id: VolumeId },
     /// Get all pools.
     Pools,
@@ -25,6 +28,10 @@ pub enum GetResources {
     Nodes,
     /// Get node with the given ID.
     Node { id: NodeId },
+    /// Get BlockDevices present on the Node. Lists usable devices by default.
+    /// Currently disks having blobstore pools not created by control-plane are also shown as
+    /// usable.
+    BlockDevices(BlockDeviceArgs),
 }
 
 /// The types of resources that support the 'scale' operation.
