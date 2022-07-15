@@ -2,8 +2,13 @@ use clap::Parser;
 use openapi::tower::client::Url;
 use opentelemetry::global;
 use plugin::{
-    operations::{Cordoning, Get, GetBlockDevices, List, Operations, ReplicaTopology, Scale},
-    resources::{blockdevice, node, pool, volume, CordonResources, GetResources, ScaleResources},
+    operations::{
+        Cordoning, Drain, DrainList, Get, GetBlockDevices, List, Operations, ReplicaTopology, Scale,
+    },
+    resources::{
+        blockdevice, node, pool, volume, CordonResources, DrainResources, GetResources,
+        ScaleResources,
+    },
     rest_wrapper::RestClient,
 };
 use std::env;
@@ -54,6 +59,17 @@ async fn execute(cli_args: CliArgs) {
 
     // Perform the operations based on the subcommand, with proper output format.
     match &cli_args.operations {
+        Operations::Drain(resource) => match resource {
+            DrainResources::Node(drain_node_args) => {
+                node::Node::drain(
+                    &drain_node_args.node_id(),
+                    drain_node_args.label(),
+                    drain_node_args.drain_timeout(),
+                    &cli_args.output,
+                )
+                .await
+            }
+        },
         Operations::Get(resource) => match resource {
             GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
             GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
@@ -62,10 +78,18 @@ async fn execute(cli_args: CliArgs) {
             }
             GetResources::Pools => pool::Pools::list(&cli_args.output).await,
             GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
-            GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
+            GetResources::Nodes(args) => {
+                if args.show_drain() {
+                    node::Nodes::list_nodes_with_drain_info(&cli_args.output).await
+                } else {
+                    node::Nodes::list(&cli_args.output).await
+                }
+            }
             GetResources::Node(args) => {
                 if args.show_cordon_labels() {
-                    node::Node::get_labels(&args.node_id(), &cli_args.output).await
+                    node::Node::get_node_with_cordon_labels(&args.node_id(), &cli_args.output).await
+                } else if args.show_drain() {
+                    node::Node::get_node_with_drain_info(&args.node_id(), &cli_args.output).await
                 } else {
                     node::Node::get(&args.node_id(), &cli_args.output).await
                 }

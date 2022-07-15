@@ -23,6 +23,12 @@ message NodeCordon {
   repeated string label = 2;
 }
 
+// Node drain information
+message NodeDrain {
+  // Node drain label.
+  repeated string label = 2;
+}
+
 message NodeSpec {
   // Node identification
   string node_id = 1;
@@ -32,7 +38,8 @@ message NodeSpec {
   common.StringMapValue labels = 3;
   // Cordon information.
   NodeCordon cordon = 4;
-
+  // Drain information.
+  NodeDrain drain = 5;
 }
 
 message NodeState {
@@ -42,6 +49,8 @@ message NodeState {
   string endpoint = 2;
   // deemed status of the node
   NodeStatus status = 3;
+  // drain state
+  DrainStatus drain_status = 4;
 }
 
 // Multiple nodes
@@ -59,6 +68,16 @@ enum NodeStatus {
   // Node is deemed offline if has missed the
   // registration keep alive deadline
   Offline = 2;
+}
+
+// Status of the Node
+enum DrainStatus {
+    // Node has no drain labels
+    NotDraining = 0;
+    // Node has at least 1 drain label and at least 1 nexus
+    Draining = 1;
+    // Node has at least 1 drain label and no nexuses
+    Drained = 2;
 }
 
 // Get storage nodes by filter
@@ -113,10 +132,25 @@ message UncordonNodeReply {
   }
 }
 
+message DrainNodeRequest {
+  // Node identification
+  string node_id = 1;
+  // Node cordon label
+  string label = 2;
+}
+
+message DrainNodeReply {
+  oneof reply {
+    Node node = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 service NodeGrpc {
   rpc GetNodes (GetNodesRequest) returns (GetNodesReply) {}
   rpc GetBlockDevices (blockdevice.GetBlockDevicesRequest) returns (blockdevice.GetBlockDevicesReply) {}
   rpc Probe (ProbeRequest) returns (ProbeResponse) {}
   rpc CordonNode (CordonNodeRequest) returns (CordonNodeReply) {}
   rpc UncordonNode (UncordonNodeRequest) returns (UncordonNodeReply) {}
+  rpc DrainNode (DrainNodeRequest) returns (DrainNodeReply) {}
 }

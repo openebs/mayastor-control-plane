@@ -95,6 +95,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
             cordon_labels: vec![],
+            drain_labels: vec![],
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),
@@ -103,6 +104,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
             status: models::NodeStatus::Online,
+            drain_status: models::DrainStatus::NotDraining,
         }),
     };
     assert_eq!(listed_node.unwrap(), node);

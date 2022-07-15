@@ -3,7 +3,7 @@ use crate::{
     blockdevice::GetBlockDevicesRequest,
     context::Context,
     node,
-    node::{get_nodes_request, NodeCordon},
+    node::{get_nodes_request, NodeCordon, NodeDrain},
 };
 use common_lib::{
     transport_api::{
@@ -13,8 +13,8 @@ use common_lib::{
     types::v0::{
         store::node::NodeSpec,
         transport::{
-            BlockDevice, Filesystem, Filter, GetBlockDevices, Node, NodeId, NodeState, NodeStatus,
-            Partition,
+            BlockDevice, DrainStatus, Filesystem, Filter, GetBlockDevices, Node, NodeId, NodeState,
+            NodeStatus, Partition,
         },
     },
 };
@@ -37,6 +37,8 @@ pub trait NodeOperations: Send + Sync {
     async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
     /// Uncordon the node with the given ID by removing the associated label.
     async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
+    /// Drain the node with the given ID and associate the label with the draining node.
+    async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
 }
 
 impl TryFrom<node::Node> for Node {
@@ -48,6 +50,7 @@ impl TryFrom<node::Node> for Node {
                 spec.endpoint,
                 spec.labels.unwrap_or_default().value,
                 spec.cordon.map(|cordon| cordon.label),
+                spec.drain.map(|drain| drain.label),
             )
         });
         let node_state = match node_grpc_type.state {
@@ -62,7 +65,23 @@ impl TryFrom<node::Node> for Node {
                         ))
                     }
                 };
-                Some(NodeState::new(state.node_id.into(), state.endpoint, status))
+                let drain_status: DrainStatus =
+                    match node::DrainStatus::from_i32(state.drain_status) {
+                        Some(drain_status) => drain_status.into(),
+                        None => {
+                            return Err(ReplyError::invalid_argument(
+                                ResourceKind::Node,
+                                "node.state.drain_status",
+                                "".to_string(),
+                            ))
+                        }
+                    };
+                Some(NodeState::new(
+                    state.node_id.into(),
+                    state.endpoint,
+                    status,
+                    drain_status,
+                ))
             }
             None => None,
         };
@@ -85,15 +104,20 @@ impl From<Node> for node::Node {
             cordon: Some(NodeCordon {
                 label: spec.cordon_labels(),
             }),
+            drain: Some(NodeDrain {
+                label: spec.drain_labels(),
+            }),
         });
         let node_state = match node.state() {
             None => None,
             Some(state) => {
                 let status: node::NodeStatus = state.status.clone().into();
+                let drain_status: node::DrainStatus = state.drain_status.clone().into();
                 Some(node::NodeState {
                     node_id: state.id.to_string(),
                     endpoint: state.grpc_endpoint.to_string(),
                     status: status as i32,
+                    drain_status: drain_status as i32,
                 })
             }
         };
@@ -154,6 +178,26 @@ impl From<NodeStatus> for node::NodeStatus {
             NodeStatus::Unknown => Self::Unknown,
             NodeStatus::Online => Self::Online,
             NodeStatus::Offline => Self::Offline,
+        }
+    }
+}
+
+impl From<node::DrainStatus> for DrainStatus {
+    fn from(src: node::DrainStatus) -> Self {
+        match src {
+            node::DrainStatus::NotDraining => Self::NotDraining,
+            node::DrainStatus::Draining => Self::Draining,
+            node::DrainStatus::Drained => Self::Drained,
+        }
+    }
+}
+
+impl From<DrainStatus> for node::DrainStatus {
+    fn from(src: DrainStatus) -> Self {
+        match src {
+            DrainStatus::NotDraining => Self::NotDraining,
+            DrainStatus::Draining => Self::Draining,
+            DrainStatus::Drained => Self::Drained,
         }
     }
 }

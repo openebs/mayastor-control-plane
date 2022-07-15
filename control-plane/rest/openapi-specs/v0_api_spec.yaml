@@ -285,6 +285,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/nodes/{id}/drain/{label}':
+    put:
+      tags:
+        - Nodes
+      operationId: put_node_drain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: label
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/nodes/{id}/nexuses':
     get:
       tags:
@@ -1836,6 +1865,13 @@ components:
       required:
         - size
         - thin
+    DrainStatus:
+      description: current drain state
+      type: string
+      enum:
+        - NotDraining
+        - Draining
+        - Drained
     PoolTopology:
       example:
         explicit: null
@@ -2073,6 +2109,7 @@ components:
         grpcEndpoint: '10.1.0.5:10124'
         id: io-engine-1
         cordonLabels: [label-1]
+        drainLabels: [label-1]
       description: io-engine storage node information
       type: object
       properties:
@@ -2085,10 +2122,15 @@ components:
           type: array
           items:
             type: string
+        drainLabels:
+          type: array
+          items:
+            type: string
       required:
         - grpcEndpoint
         - id
         - cordonLabels
+        - drainLabels
     NodeState:
       example:
         grpcEndpoint: '10.1.0.5:10124'
@@ -2104,10 +2146,13 @@ components:
           $ref: '#/components/schemas/NodeId'
         status:
           $ref: '#/components/schemas/NodeStatus'
+        drainStatus:
+            $ref: '#/components/schemas/DrainStatus'
       required:
         - grpcEndpoint
         - id
         - status
+        - drainStatus
     Node:
       description: io-engine storage node information
       type: object

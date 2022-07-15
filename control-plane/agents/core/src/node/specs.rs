@@ -31,6 +31,7 @@ impl ResourceSpecsLocked {
                         node.grpc_endpoint.clone(),
                         NodeLabels::new(),
                         None,
+                        None,
                     );
                     specs.nodes.insert(node.clone());
                     (true, node)
@@ -87,7 +88,7 @@ impl ResourceSpecsLocked {
         let cordoned_node_spec = {
             let mut locked_node = node.lock();
             // Do not allow the same label to be applied more than once.
-            if locked_node.cordon_labels().contains(&label) {
+            if locked_node.has_cordon_label(label.clone()) {
                 return Err(SvcError::CordonLabel {
                     node_id: node_id.to_string(),
                     label,
@@ -110,7 +111,7 @@ impl ResourceSpecsLocked {
     ) -> Result<NodeSpec, SvcError> {
         let node = self.get_locked_node(node_id)?;
         // Return an error if the uncordon label doesn't exist.
-        if !node.lock().cordon_labels().contains(&label) {
+        if !node.lock().has_cordon_label(label.clone()) {
             return Err(SvcError::UncordonLabel {
                 node_id: node_id.to_string(),
                 label,
@@ -139,5 +140,30 @@ impl ResourceSpecsLocked {
                 }
             })
             .collect()
+    }
+
+    /// Drain the node with the given ID.
+    /// Return the NodeSpec after draining.
+    pub(crate) async fn drain_node(
+        &self,
+        registry: &Registry,
+        node_id: &NodeId,
+        label: String,
+    ) -> Result<NodeSpec, SvcError> {
+        let node = self.get_locked_node(node_id)?;
+        let drained_node_spec = {
+            let mut locked_node = node.lock();
+            // Do not allow the same label to be applied more than once.
+            if locked_node.has_cordon_label(label.clone()) {
+                return Err(SvcError::CordonLabel {
+                    node_id: node_id.to_string(),
+                    label,
+                });
+            }
+            locked_node.drain(label);
+            locked_node.clone()
+        };
+        registry.store_obj(&drained_node_spec).await?;
+        Ok(drained_node_spec.clone())
     }
 }

@@ -8,7 +8,7 @@ use common::{
     v0::msg_translation::IoEngineToAgent,
 };
 use common_lib::types::v0::transport::{
-    Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
+    Deregister, DrainStatus, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 
 use crate::core::wrapper::InternalOps;
@@ -103,6 +103,11 @@ impl NodeOperations for Service {
         let node = self.uncordon(id, label).await?;
         Ok(node)
     }
+
+    async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let node = self.drain(id, label).await?;
+        Ok(node)
+    }
 }
 
 #[tonic::async_trait]
@@ -185,8 +190,8 @@ impl Service {
             id: registration.id.clone(),
             grpc_endpoint: registration.grpc_endpoint.clone(),
             status: NodeStatus::Online,
+            drain_status: DrainStatus::NotDraining,
         };
-
         let nodes = self.registry.nodes();
         let node = nodes.write().await.get_mut(&node_state.id).cloned();
         let send_event = match node {
@@ -250,7 +255,10 @@ impl Service {
     pub(crate) async fn get_nodes(&self, request: &GetNodes) -> Result<Nodes, SvcError> {
         match request.filter() {
             Filter::None => {
-                let node_states = self.registry.get_node_states().await;
+                let node_states = match self.registry.get_node_states().await {
+                    Ok(ns) => ns,
+                    Err(e) => return Err(e),
+                };
                 let node_specs = self.specs().get_nodes();
                 let mut nodes = HashMap::new();
 
@@ -338,6 +346,16 @@ impl Service {
             .registry
             .specs()
             .uncordon_node(&self.registry, &id, label)
+            .await?;
+        let state = self.registry.get_node_state(&id).await.ok();
+        Ok(Node::new(id, Some(spec), state))
+    }
+
+    async fn drain(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
+        let spec = self
+            .registry
+            .specs()
+            .drain_node(&self.registry, &id, label)
             .await?;
         let state = self.registry.get_node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))

@@ -38,7 +38,7 @@ mod tests {
     use super::*;
     use common_lib::types::v0::{
         store::node::{NodeLabels, NodeSpec},
-        transport::{Filter, Node, NodeId, NodeState, NodeStatus},
+        transport::{DrainStatus, Filter, Node, NodeId, NodeState, NodeStatus},
     };
     use deployer_cluster::ClusterBuilder;
     use grpc::operations::node::traits::NodeOperations;
@@ -53,8 +53,14 @@ mod tests {
                 endpoint.clone(),
                 NodeLabels::new(),
                 None,
+                None,
             )),
-            Some(NodeState::new(id, endpoint, status)),
+            Some(NodeState::new(
+                id,
+                endpoint,
+                status,
+                DrainStatus::NotDraining,
+            )),
         )
     }
 
