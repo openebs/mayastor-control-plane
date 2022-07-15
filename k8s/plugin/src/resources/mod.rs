@@ -1,10 +1,13 @@
 use clap::Parser;
-use plugin::resources::{CordonResources, GetResources, ScaleResources};
+use plugin::resources::{CordonResources, DrainResources, GetResources, ScaleResources};
 use supportability::DumpArgs;
 
 /// The types of operations that are supported.
 #[derive(Parser, Debug)]
 pub enum Operations {
+    /// 'Drain' resources.
+    #[clap(subcommand)]
+    Drain(DrainResources),
     /// 'Get' resources.
     #[clap(subcommand)]
     Get(GetResources),

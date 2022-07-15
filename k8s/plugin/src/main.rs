@@ -3,8 +3,11 @@ use clap::Parser;
 use openapi::tower::client::Url;
 use opentelemetry::global;
 use plugin::{
-    operations::{Cordoning, Get, GetBlockDevices, List, ReplicaTopology, Scale},
-    resources::{blockdevice, node, pool, volume, CordonResources, GetResources, ScaleResources},
+    operations::{Cordoning, Drain, Get, GetBlockDevices, List, ReplicaTopology, Scale},
+    resources::{
+        blockdevice, cordon, drain, node, pool, volume, CordonResources, DrainResources,
+        GetCordonArgs, GetDrainArgs, GetResources, ScaleResources,
+    },
     rest_wrapper::RestClient,
 };
 use std::{
@@ -73,6 +76,18 @@ async fn execute(cli_args: CliArgs) {
     // Perform the operations based on the subcommand, with proper output format.
     match cli_args.operations {
         Operations::Get(resource) => match resource {
+            GetResources::Cordon(get_cordon_resource) => match get_cordon_resource {
+                GetCordonArgs::Node { id: node_id } => {
+                    cordon::NodeCordon::get(&node_id, &cli_args.output).await
+                }
+                GetCordonArgs::Nodes => cordon::NodeCordons::list(&cli_args.output).await,
+            },
+            GetResources::Drain(get_drain_resource) => match get_drain_resource {
+                GetDrainArgs::Node { id: node_id } => {
+                    drain::NodeDrain::get(&node_id, &cli_args.output).await
+                }
+                GetDrainArgs::Nodes => drain::NodeDrains::list(&cli_args.output).await,
+            },
             GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
             GetResources::Volume { id } => volume::Volume::get(&id, &cli_args.output).await,
             GetResources::VolumeReplicaTopology { id } => {
@@ -81,17 +96,22 @@ async fn execute(cli_args: CliArgs) {
             GetResources::Pools => pool::Pools::list(&cli_args.output).await,
             GetResources::Pool { id } => pool::Pool::get(&id, &cli_args.output).await,
             GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
-            GetResources::Node(args) => {
-                if args.show_cordon_labels() {
-                    node::Node::get_labels(&args.node_id(), &cli_args.output).await
-                } else {
-                    node::Node::get(&args.node_id(), &cli_args.output).await
-                }
-            }
+            GetResources::Node(args) => node::Node::get(&args.node_id(), &cli_args.output).await,
             GetResources::BlockDevices(bdargs) => {
                 blockdevice::BlockDevice::get_blockdevices(
                     &bdargs.node_id(),
                     &bdargs.all(),
+                    &cli_args.output,
+                )
+                .await
+            }
+        },
+        Operations::Drain(resource) => match resource {
+            DrainResources::Node(drain_node_args) => {
+                node::Node::drain(
+                    &drain_node_args.node_id(),
+                    drain_node_args.label(),
+                    drain_node_args.drain_timeout(),
                     &cli_args.output,
                 )
                 .await

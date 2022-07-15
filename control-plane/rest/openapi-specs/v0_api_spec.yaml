@@ -285,6 +285,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/nodes/{id}/drain/{label}':
+    put:
+      tags:
+        - Nodes
+      operationId: put_node_drain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: label
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/nodes/{id}/nexuses':
     get:
       tags:
@@ -2073,6 +2102,8 @@ components:
         grpcEndpoint: '10.1.0.5:10124'
         id: io-engine-1
         cordonLabels: [label-1]
+        drainLabels: [label-1]
+        isDraining: false
       description: io-engine storage node information
       type: object
       properties:
@@ -2085,10 +2116,18 @@ components:
           type: array
           items:
             type: string
+        drainLabels:
+          type: array
+          items:
+            type: string
+        isDraining:
+          type: bool
       required:
         - grpcEndpoint
         - id
         - cordonLabels
+        - drainLabels
+        - isDraining
     NodeState:
       example:
         grpcEndpoint: '10.1.0.5:10124'
@@ -2108,6 +2147,7 @@ components:
         - grpcEndpoint
         - id
         - status
+        - drainStatus
     Node:
       description: io-engine storage node information
       type: object

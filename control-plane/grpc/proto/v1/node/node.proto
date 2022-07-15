@@ -17,12 +17,6 @@ message Node {
   optional NodeState state = 3;
 }
 
-// Node cordon information
-message NodeCordon {
-  // Node cordon label.
-  repeated string label = 2;
-}
-
 message NodeSpec {
   // Node identification
   string node_id = 1;
@@ -31,8 +25,11 @@ message NodeSpec {
   // Node labels.
   common.StringMapValue labels = 3;
   // Cordon information.
-  NodeCordon cordon = 4;
-
+  repeated string cordon_labels = 4;
+  // Drain information.
+  repeated string drain_labels = 5;
+  // Is the node draining
+  bool is_draining = 6;
 }
 
 message NodeState {
@@ -113,10 +110,25 @@ message UncordonNodeReply {
   }
 }
 
+message DrainNodeRequest {
+  // Node identification
+  string node_id = 1;
+  // Node cordon label
+  string label = 2;
+}
+
+message DrainNodeReply {
+  oneof reply {
+    Node node = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 service NodeGrpc {
   rpc GetNodes (GetNodesRequest) returns (GetNodesReply) {}
   rpc GetBlockDevices (blockdevice.GetBlockDevicesRequest) returns (blockdevice.GetBlockDevicesReply) {}
   rpc Probe (ProbeRequest) returns (ProbeResponse) {}
   rpc CordonNode (CordonNodeRequest) returns (CordonNodeReply) {}
   rpc UncordonNode (UncordonNodeRequest) returns (UncordonNodeReply) {}
+  rpc DrainNode (DrainNodeRequest) returns (DrainNodeReply) {}
 }

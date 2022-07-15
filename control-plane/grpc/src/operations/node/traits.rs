@@ -1,9 +1,6 @@
 use crate::{
-    blockdevice,
-    blockdevice::GetBlockDevicesRequest,
-    context::Context,
-    node,
-    node::{get_nodes_request, NodeCordon},
+    blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
+    node::get_nodes_request,
 };
 use common_lib::{
     transport_api::{
@@ -37,6 +34,8 @@ pub trait NodeOperations: Send + Sync {
     async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
     /// Uncordon the node with the given ID by removing the associated label.
     async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
+    /// Drain the node with the given ID and associate the label with the draining node.
+    async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
 }
 
 impl TryFrom<node::Node> for Node {
@@ -47,7 +46,9 @@ impl TryFrom<node::Node> for Node {
                 spec.node_id.into(),
                 spec.endpoint,
                 spec.labels.unwrap_or_default().value,
-                spec.cordon.map(|cordon| cordon.label),
+                Some(spec.cordon_labels),
+                Some(spec.drain_labels),
+                Some(spec.is_draining),
             )
         });
         let node_state = match node_grpc_type.state {
@@ -82,9 +83,9 @@ impl From<Node> for node::Node {
             labels: Some(crate::common::StringMapValue {
                 value: spec.labels().clone(),
             }),
-            cordon: Some(NodeCordon {
-                label: spec.cordon_labels(),
-            }),
+            cordon_labels: spec.cordon_labels(),
+            drain_labels: spec.drain_labels(),
+            is_draining: spec.is_draining(),
         });
         let node_state = match node.state() {
             None => None,

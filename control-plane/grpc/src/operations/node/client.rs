@@ -3,8 +3,9 @@ use crate::{
     common::NodeFilter,
     context::{Client, Context, TracedChannel},
     node::{
-        cordon_node_reply, get_nodes_reply, get_nodes_request, node_grpc_client::NodeGrpcClient,
-        uncordon_node_reply, CordonNodeRequest, GetNodesRequest, ProbeRequest, UncordonNodeRequest,
+        cordon_node_reply, drain_node_reply, get_nodes_reply, get_nodes_request,
+        node_grpc_client::NodeGrpcClient, uncordon_node_reply, CordonNodeRequest, DrainNodeRequest,
+        GetNodesRequest, ProbeRequest, UncordonNodeRequest,
     },
     operations::node::traits::{GetBlockDeviceInfo, NodeOperations},
 };
@@ -112,6 +113,21 @@ impl NodeOperations for NodeClient {
             Some(uncordon_node_reply) => match uncordon_node_reply {
                 uncordon_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
                 uncordon_node_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Node)),
+        }
+    }
+    #[tracing::instrument(name = "NodeClient::drain", level = "debug", skip(self), err)]
+    async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let req = DrainNodeRequest {
+            node_id: id.to_string(),
+            label,
+        };
+        let response = self.client().drain_node(req).await?.into_inner();
+        match response.reply {
+            Some(drain_node_reply) => match drain_node_reply {
+                drain_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
+                drain_node_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Node)),
         }
