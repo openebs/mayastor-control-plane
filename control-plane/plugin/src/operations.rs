@@ -1,9 +1,12 @@
-use crate::resources::{utils, CordonResources, GetResources, ScaleResources};
+use crate::resources::{utils, CordonResources, DrainResources, GetResources, ScaleResources};
 use async_trait::async_trait;
 
 /// The types of operations that are supported.
 #[derive(clap::Subcommand, Debug)]
 pub enum Operations {
+    /// 'Drain' resources.
+    #[clap(subcommand)]
+    Drain(DrainResources),
     /// 'Get' resources.
     #[clap(subcommand)]
     Get(GetResources),
@@ -16,6 +19,19 @@ pub enum Operations {
     /// 'Uncordon' resources.
     #[clap(subcommand)]
     Uncordon(CordonResources),
+}
+
+/// Drain trait.
+/// To be implemented by resources which support the 'drain' operation.
+#[async_trait(?Send)]
+pub trait Drain {
+    type ID;
+    async fn drain(
+        id: &Self::ID,
+        label: String,
+        drain_timeout: Option<humantime::Duration>,
+        output: &utils::OutputFormat,
+    );
 }
 
 /// List trait.
@@ -64,5 +80,4 @@ pub trait Cordoning {
     type ID;
     async fn cordon(id: &Self::ID, label: &str, output: &utils::OutputFormat);
     async fn uncordon(id: &Self::ID, label: &str, output: &utils::OutputFormat);
-    async fn get_labels(id: &Self::ID, output: &utils::OutputFormat);
 }

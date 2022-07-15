@@ -2,10 +2,11 @@ use crate::{
     blockdevice::{get_block_devices_reply, GetBlockDevicesReply, GetBlockDevicesRequest},
     node,
     node::{
-        cordon_node_reply, get_nodes_reply,
+        cordon_node_reply, drain_node_reply, get_nodes_reply,
         node_grpc_server::{NodeGrpc, NodeGrpcServer},
-        uncordon_node_reply, CordonNodeReply, CordonNodeRequest, GetNodesReply, GetNodesRequest,
-        ProbeRequest, ProbeResponse, UncordonNodeReply, UncordonNodeRequest,
+        uncordon_node_reply, CordonNodeReply, CordonNodeRequest, DrainNodeReply, DrainNodeRequest,
+        GetNodesReply, GetNodesRequest, ProbeRequest, ProbeResponse, UncordonNodeReply,
+        UncordonNodeRequest,
     },
     operations::node::traits::NodeOperations,
 };
@@ -98,6 +99,21 @@ impl NodeGrpc for NodeServer {
             })),
             Err(err) => Ok(Response::new(UncordonNodeReply {
                 reply: Some(uncordon_node_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn drain_node(
+        &self,
+        request: tonic::Request<DrainNodeRequest>,
+    ) -> Result<tonic::Response<DrainNodeReply>, tonic::Status> {
+        let req: DrainNodeRequest = request.into_inner();
+        match self.service.drain(req.node_id.into(), req.label).await {
+            Ok(node) => Ok(Response::new(DrainNodeReply {
+                reply: Some(drain_node_reply::Reply::Node(node.into())),
+            })),
+            Err(err) => Ok(Response::new(DrainNodeReply {
+                reply: Some(drain_node_reply::Reply::Error(err.into())),
             })),
         }
     }

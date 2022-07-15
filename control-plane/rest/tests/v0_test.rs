@@ -94,7 +94,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 "{}:10124",
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
-            cordon_labels: vec![],
+            cordondrainstate: None,
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),
