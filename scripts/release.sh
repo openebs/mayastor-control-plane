@@ -21,6 +21,13 @@ get_tag() {
   fi
   echo -n $vers
 }
+nix_experimental() {
+  if (nix eval 2>&1 || true) | grep "extra-experimental-features" 1>/dev/null; then
+      echo -n " --extra-experimental-features nix-command "
+  else
+      echo -n " "
+  fi
+}
 
 help() {
   cat <<EOF
@@ -48,7 +55,7 @@ EOF
 
 DOCKER="docker"
 NIX_BUILD="nix-build"
-NIX_EVAL="nix eval --extra-experimental-features nix-command"
+NIX_EVAL="nix eval$(nix_experimental)"
 RM="rm"
 SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
