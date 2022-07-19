@@ -33,7 +33,7 @@ pub(crate) async fn get_volume_replica_remove_candidates(
     request: &GetChildForRemoval,
     registry: &Registry,
 ) -> Result<volume::DecreaseVolumeReplica, SvcError> {
-    Ok(volume::DecreaseVolumeReplica::builder_with_defaults(request, registry).await?)
+    volume::DecreaseVolumeReplica::builder_with_defaults(request, registry).await
 }
 
 /// Return a nexus child candidate to be removed from a nexus

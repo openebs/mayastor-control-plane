@@ -12,7 +12,7 @@
 , version
 , openapi-generator
 , which
-, libudev
+, udev
 , utillinux
   # with allInOne set to true all components are built as part of the same "cargo build" derivation
   # this allows for a quicker build of all components but slower single components
@@ -72,7 +72,7 @@ let
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [ clang pkg-config openapi-generator which git ];
-    buildInputs = [ llvmPackages.libclang protobuf openssl libudev utillinux ];
+    buildInputs = [ llvmPackages.libclang protobuf openssl udev utillinux ];
     doCheck = false;
   };
   release_build = { "release" = true; "debug" = false; };

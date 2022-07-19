@@ -304,7 +304,7 @@ async fn replica_transaction() {
 
     cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
-    let _ = rep_client
+    rep_client
         .unshare(&UnshareReplica::from(&replica), None)
         .await
         .unwrap();

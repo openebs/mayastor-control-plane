@@ -29,9 +29,13 @@ def test_stage_volume_request_with_a_specified_nvme_nr_io_queues():
     """stage volume request with a specified nvme nr io queues."""
 
 
-@given(parsers.parse("a csi node plugin with {io:d} IO queues configured"))
+@given(
+    parsers.parse("a csi node plugin with {io:d} IO queues configured"),
+    target_fixture="io_queues",
+)
 def a_csi_node_plugin_with_io_queues_configured(io):
     """a csi node plugin with <IO> queues configured."""
+    return io
 
 
 @given("an io-engine cluster")
@@ -45,10 +49,18 @@ def staging_a_volume(staging_a_volume):
 
 
 @then(parsers.parse("the nvme device should report {total:d} TOTAL queues"))
-def the_nvme_device_should_report_total_queues(
-    total, the_nvme_device_should_report_total_queues
-):
+def the_nvme_device_should_report_total_queues(total):
     """the nvme device should report <TOTAL> queues."""
+    print(total)
+    device = volume_device()
+    print(device)
+    dev = device.replace("/dev/", "").replace("n1", "")
+    file = f"/sys/class/nvme/{dev}/queue_count"
+    queue_count = int(subprocess.run(["sudo", "cat", file], capture_output=True).stdout)
+    print(f"queue_count: {queue_count}")
+    # max io queues is cpu_count
+    # admin q is 1
+    assert queue_count == min(total, os.cpu_count() + 1)
 
 
 @pytest.fixture
@@ -89,7 +101,6 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
     ApiClient.volumes_api().del_volume(volume.spec.uuid)
 
 
-@pytest.fixture(scope="function")
 def volume_device():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     device = nvme_find_device(volume.state["target"]["deviceUri"])
@@ -102,7 +113,7 @@ def staging_target_path():
 
 
 @pytest.fixture
-def start_csi_plugin(setup, io, staging_target_path):
+def start_csi_plugin(setup, io_queues, staging_target_path):
     def monitor(proc, result):
         stdout, stderr = proc.communicate()
         result["stdout"] = stdout.decode()
@@ -121,7 +132,7 @@ def start_csi_plugin(setup, io, staging_target_path):
             "--csi-socket=/var/tmp/csi.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",
-            f"--nvme-nr-io-queues={io}",
+            f"--nvme-nr-io-queues={io_queues}",
             "-v",
         ],
         stdout=subprocess.PIPE,
@@ -165,15 +176,3 @@ def fix_socket_permissions(start_csi_plugin):
 @pytest.fixture
 def csi_instance(start_csi_plugin, fix_socket_permissions):
     yield CsiHandle("unix:///var/tmp/csi.sock")
-
-
-@pytest.fixture
-def the_nvme_device_should_report_total_queues(total, request, volume_device):
-    print(volume_device)
-    dev = volume_device.replace("/dev/", "").replace("n1", "")
-    file = f"/sys/class/nvme/{dev}/queue_count"
-    queue_count = int(subprocess.run(["sudo", "cat", file], capture_output=True).stdout)
-    print(f"queue_count: {queue_count}")
-    # max io queues is cpu_count
-    # admin q is 1
-    assert queue_count == min(total, os.cpu_count() + 1)

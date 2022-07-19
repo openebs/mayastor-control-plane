@@ -730,16 +730,12 @@ async fn reconcile(
         Some(DiskPoolStatus {
             state: PoolState::Creating,
             ..
-        }) => {
-            return dsp.create_or_import().await;
-        }
+        }) => dsp.create_or_import().await,
 
         Some(DiskPoolStatus {
             state: PoolState::Created,
             ..
-        }) => {
-            return dsp.online_pool().await;
-        }
+        }) => dsp.online_pool().await,
 
         Some(DiskPoolStatus {
             state: PoolState::Online,
@@ -748,9 +744,7 @@ async fn reconcile(
         | Some(DiskPoolStatus {
             state: PoolState::Unknown,
             ..
-        }) => {
-            return dsp.pool_check().await;
-        }
+        }) => dsp.pool_check().await,
 
         Some(DiskPoolStatus {
             state: PoolState::Error,
@@ -762,7 +756,7 @@ async fn reconcile(
 
         // We use this state to indicate its a new CRD however, we could (and
         // perhaps should) use the finalizer callback.
-        None => return dsp.start().await,
+        None => dsp.start().await,
     }
 }
 

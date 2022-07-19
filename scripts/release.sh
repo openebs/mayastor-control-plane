@@ -21,6 +21,13 @@ get_tag() {
   fi
   echo -n $vers
 }
+nix_experimental() {
+  if (nix eval 2>&1 || true) | grep "extra-experimental-features" 1>/dev/null; then
+      echo -n " --extra-experimental-features nix-command "
+  else
+      echo -n " "
+  fi
+}
 
 help() {
   cat <<EOF
@@ -48,6 +55,7 @@ EOF
 
 DOCKER="docker"
 NIX_BUILD="nix-build"
+NIX_EVAL="nix eval$(nix_experimental)"
 RM="rm"
 SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
@@ -170,7 +178,7 @@ if [ -z "$IMAGES" ]; then
   IMAGES="$DEFAULT_IMAGES"
 elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
   image=$(echo "$IMAGES" | xargs)
-  if nix eval -f . "images.debug.$image.imageName" 1>/dev/null 2>/dev/null; then
+  if $NIX_EVAL -f . "images.debug.$image.imageName" 1>/dev/null 2>/dev/null; then
     if [ "$INCREMENTAL" == "true" ]; then
       # if we're building a single image incrementally, then build only that image
       ALL_IN_ONE="false"
@@ -179,7 +187,7 @@ elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
 fi
 
 for name in $IMAGES; do
-  image_basename=$(nix eval -f . images.$BUILD_TYPE.$name.imageName | xargs)
+  image_basename=$($NIX_EVAL -f . images.$BUILD_TYPE.$name.imageName | xargs)
   image=$image_basename
   if [ -n "$REGISTRY" ]; then
     image="${REGISTRY}/${image}"

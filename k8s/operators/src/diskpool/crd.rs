@@ -3,7 +3,9 @@ use openapi::models::Pool;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(CustomResource, Serialize, Deserialize, Default, Debug, PartialEq, Clone, JsonSchema)]
+#[derive(
+    CustomResource, Serialize, Deserialize, Default, Debug, Eq, PartialEq, Clone, JsonSchema,
+)]
 #[kube(
 group = "openebs.io",
 version = "v1alpha1",
@@ -41,7 +43,7 @@ impl DiskPoolSpec {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
 #[non_exhaustive]
 pub enum PoolState {
     /// The pool is a new OR missing resource, and it has not been created or
@@ -64,7 +66,7 @@ pub enum PoolState {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
 /// Status of the pool which is driven and changed by the controller loop
 pub struct DiskPoolStatus {
     /// The state of the pool
@@ -139,7 +141,7 @@ impl From<Pool> for DiskPoolStatus {
 /// converts the pool state into a string
 impl ToString for PoolState {
     fn to_string(&self) -> String {
-        match &*self {
+        match self {
             PoolState::Creating => "Creating",
             PoolState::Created => "Created",
             PoolState::Online => "Online",

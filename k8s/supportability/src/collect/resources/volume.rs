@@ -88,8 +88,7 @@ impl Topologer for VolumeTopology {
         self.replicas_topology
             .clone()
             .into_iter()
-            .map(|r| r.get_k8s_resource_names())
-            .flatten()
+            .flat_map(|r| r.get_k8s_resource_names())
             .collect::<Vec<String>>()
     }
 }

@@ -34,6 +34,7 @@ use tracing::info;
 #[allow(clippy::enum_variant_names)]
 #[allow(clippy::upper_case_acronyms)]
 pub mod csi {
+    #![allow(clippy::derive_partial_eq_without_eq)]
     tonic::include_proto!("csi.v1");
 }
 

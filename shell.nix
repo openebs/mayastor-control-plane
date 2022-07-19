@@ -1,4 +1,4 @@
-{ norust ? false, io-engine ? "" }:
+{ norust ? false, rust-profile ? "nightly", io-engine ? "" }:
 let
   sources = import ./nix/sources.nix;
   pkgs = import sources.nixpkgs {
@@ -28,7 +28,7 @@ mkShell {
     fio
     git
     jq
-    libudev
+    udev
     libxfs
     llvmPackages.libclang
     nvme-cli
@@ -41,7 +41,7 @@ mkShell {
     tini
     utillinux
     which
-  ] ++ pkgs.lib.optional (!norust) rust_chan.nightly;
+  ] ++ pkgs.lib.optional (!norust) rust_chan.${rust-profile};
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";

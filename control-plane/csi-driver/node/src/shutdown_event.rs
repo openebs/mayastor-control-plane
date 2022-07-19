@@ -108,12 +108,11 @@ mod tests {
         // 1. schedule the first request
         let mut cli_first = cli.clone();
         let first_request = tokio::spawn(async move {
-            let response = cli_first
+            cli_first
                 .find_volume(FindVolumeRequest {
                     volume_id: "".to_string(),
                 })
-                .await;
-            response
+                .await
         });
         // 2. wait until the first request is being processed
         first_receiver.await.unwrap();

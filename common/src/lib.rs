@@ -1,3 +1,5 @@
+#![allow(clippy::crate_in_macro_def)]
+
 pub mod mbus_api;
 /// Platform specific information, such as the cluster uid which is used as part of the pstor(etcd)
 /// key prefix.
