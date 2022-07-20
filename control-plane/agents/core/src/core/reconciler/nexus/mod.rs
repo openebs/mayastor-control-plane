@@ -13,20 +13,20 @@ use crate::{
     nexus::scheduling::get_healthy_nexus_children,
 };
 use common_lib::{
-    mbus_api::ErrorChain,
+    transport_api::ErrorChain,
     types::v0::{
-        message_bus::{CreateNexus, NexusShareProtocol, NodeStatus, ShareNexus, UnshareNexus},
         store::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
             OperationMode, TraceSpan, TraceStrLog,
         },
+        transport::{CreateNexus, NexusShareProtocol, NodeStatus, ShareNexus, UnshareNexus},
     },
 };
 use garbage_collector::GarbageCollector;
 
 use crate::core::wrapper::NodeWrapper;
-use common_lib::types::v0::message_bus::NexusStatus;
+use common_lib::types::v0::transport::NexusStatus;
 use parking_lot::Mutex;
 use std::{convert::TryFrom, sync::Arc};
 use tokio::sync::RwLock;

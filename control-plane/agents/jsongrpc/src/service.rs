@@ -5,8 +5,8 @@ use crate::CORE_CLIENT;
 use ::rpc::io_engine::{JsonRpcReply, JsonRpcRequest};
 use common::errors::{JsonRpcDeserialise, NodeNotOnline, SvcError};
 use common_lib::{
-    mbus_api::ReplyError,
-    types::v0::message_bus::{Filter, JsonGrpcRequest, Node, NodeId},
+    transport_api::ReplyError,
+    types::v0::transport::{Filter, JsonGrpcRequest, Node, NodeId},
 };
 use grpc::{
     context::Context,

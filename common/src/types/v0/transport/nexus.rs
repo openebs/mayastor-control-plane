@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::{
-    mbus_api::{ReplyError, ResourceKind},
+    transport_api::{ReplyError, ResourceKind},
     types::v0::store::{
         definitions::ObjectKey, nexus_child::NexusChild, nexus_persistence::NexusInfoKey,
     },

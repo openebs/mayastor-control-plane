@@ -1,14 +1,14 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::*,
+    transport_api::*,
     types::v0::{
-        message_bus::{
+        store::nexus::NexusSpec,
+        transport::{
             AddNexusChild, CreateNexus, CreateReplica, DestroyNexus, DestroyReplica, Filter,
             GetNexuses, GetSpecs, Nexus, NexusId, NexusShareProtocol, Protocol, RemoveNexusChild,
             ReplicaId, ShareNexus, UnshareNexus,
         },
-        store::nexus::NexusSpec,
     },
 };
 use deployer_cluster::{Cluster, ClusterBuilder};

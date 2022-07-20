@@ -1,9 +1,7 @@
 use super::*;
 use common_lib::types::v0::{
-    message_bus::{
-        CreateWatch, DeleteWatch, GetWatches, WatchCallback, WatchResourceId, WatchType,
-    },
     openapi::apis::Uuid,
+    transport::{CreateWatch, DeleteWatch, GetWatches, WatchCallback, WatchResourceId, WatchType},
 };
 use grpc::operations::watch::traits::WatchOperations;
 use std::convert::TryFrom;

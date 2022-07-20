@@ -5,13 +5,13 @@ use crate::{
     pool::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
 };
 use common_lib::{
-    mbus_api::{v0::Pools, ReplyError, ResourceKind},
+    transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
-        message_bus,
-        message_bus::{
+        store::pool::{PoolLabel, PoolSpec, PoolSpecStatus},
+        transport,
+        transport::{
             CreatePool, DestroyPool, Filter, NodeId, Pool, PoolDeviceUri, PoolId, PoolState,
         },
-        store::pool::{PoolLabel, PoolSpec, PoolSpecStatus},
     },
 };
 use std::convert::TryFrom;
@@ -334,7 +334,7 @@ impl From<&dyn DestroyPoolInfo> for DestroyPool {
     }
 }
 
-impl From<pool::PoolStatus> for message_bus::PoolStatus {
+impl From<pool::PoolStatus> for transport::PoolStatus {
     fn from(src: pool::PoolStatus) -> Self {
         match src {
             pool::PoolStatus::Online => Self::Online,
@@ -345,13 +345,13 @@ impl From<pool::PoolStatus> for message_bus::PoolStatus {
     }
 }
 
-impl From<message_bus::PoolStatus> for pool::PoolStatus {
-    fn from(pool_status: message_bus::PoolStatus) -> Self {
+impl From<transport::PoolStatus> for pool::PoolStatus {
+    fn from(pool_status: transport::PoolStatus) -> Self {
         match pool_status {
-            message_bus::PoolStatus::Unknown => Self::Unknown,
-            message_bus::PoolStatus::Online => Self::Online,
-            message_bus::PoolStatus::Degraded => Self::Degraded,
-            message_bus::PoolStatus::Faulted => Self::Faulted,
+            transport::PoolStatus::Unknown => Self::Unknown,
+            transport::PoolStatus::Online => Self::Online,
+            transport::PoolStatus::Degraded => Self::Degraded,
+            transport::PoolStatus::Faulted => Self::Faulted,
         }
     }
 }

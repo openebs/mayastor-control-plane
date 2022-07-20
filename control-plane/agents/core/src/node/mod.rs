@@ -7,8 +7,8 @@ pub(crate) mod watchdog;
 use super::{core::registry::Registry, CliArgs};
 use common::Service;
 use common_lib::{
-    mbus_api::{v0::*, *},
-    types::v0::message_bus::{GetBlockDevices, GetNodes},
+    transport_api::{v0::*, *},
+    types::v0::transport::{GetBlockDevices, GetNodes},
 };
 use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
 use std::sync::Arc;
@@ -36,8 +36,8 @@ async fn create_node_service(builder: &Service) -> service::Service {
 mod tests {
     use super::*;
     use common_lib::types::v0::{
-        message_bus::{Filter, Node, NodeId, NodeState, NodeStatus},
         store::node::{NodeLabels, NodeSpec},
+        transport::{Filter, Node, NodeId, NodeState, NodeStatus},
     };
     use deployer_cluster::ClusterBuilder;
     use grpc::operations::node::traits::NodeOperations;

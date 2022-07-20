@@ -1,12 +1,12 @@
 use crate::{
-    mbus_api::{ReplyError, ReplyErrorKind},
+    transport_api::{ReplyError, ReplyErrorKind},
     types::v0::{
-        message_bus::ChannelVs,
         openapi::{
             actix::server::RestError,
             apis::StatusCode,
             models::{rest_json_error::Kind, RestJsonError},
         },
+        transport::ChannelVs,
     },
 };
 

@@ -91,8 +91,8 @@ fn bus_timeout_opts() -> TimeoutOptions {
 
 use actix_web_opentelemetry::RequestTracing;
 use common_lib::{
-    mbus_api,
-    mbus_api::{BusClient, RequestMinTimeout, TimeoutOptions},
+    transport_api,
+    transport_api::{BusClient, RequestMinTimeout, TimeoutOptions},
 };
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use http::Uri;
@@ -197,7 +197,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     if let Some(addr) = CliArgs::args().nats {
-        mbus_api::message_bus_init_options(BusClient::RestServer, addr, bus_timeout_opts()).await;
+        transport_api::message_bus_init_options(BusClient::RestServer, addr, bus_timeout_opts())
+            .await;
     }
 
     // Initialise the core client to be used in rest

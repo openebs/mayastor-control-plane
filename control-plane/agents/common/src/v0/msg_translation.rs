@@ -2,12 +2,12 @@
 
 use crate::errors::SvcError;
 use common_lib::{
-    mbus_api::ResourceKind,
+    transport_api::ResourceKind,
     types::v0::{
-        message_bus::{
+        openapi::apis::IntoVec,
+        transport::{
             self, ChildState, NexusId, NexusStatus, Protocol, ReplicaId, ReplicaName, ReplicaStatus,
         },
-        openapi::apis::IntoVec,
     },
 };
 use rpc::io_engine as rpc;
@@ -29,7 +29,7 @@ pub trait RpcToMessageBus {
 }
 
 impl RpcToMessageBus for rpc::block_device::Partition {
-    type BusMessage = message_bus::Partition;
+    type BusMessage = transport::Partition;
     fn to_mbus(&self) -> Self::BusMessage {
         Self::BusMessage {
             parent: self.parent.clone(),
@@ -43,7 +43,7 @@ impl RpcToMessageBus for rpc::block_device::Partition {
 }
 
 impl RpcToMessageBus for rpc::block_device::Filesystem {
-    type BusMessage = message_bus::Filesystem;
+    type BusMessage = transport::Filesystem;
     fn to_mbus(&self) -> Self::BusMessage {
         Self::BusMessage {
             fstype: self.fstype.clone(),
@@ -57,7 +57,7 @@ impl RpcToMessageBus for rpc::block_device::Filesystem {
 /// Node Agent Conversions
 
 impl RpcToMessageBus for rpc::BlockDevice {
-    type BusMessage = message_bus::BlockDevice;
+    type BusMessage = transport::BlockDevice;
     fn to_mbus(&self) -> Self::BusMessage {
         Self::BusMessage {
             devname: self.devname.clone(),
@@ -70,13 +70,13 @@ impl RpcToMessageBus for rpc::BlockDevice {
             size: self.size,
             partition: match &self.partition {
                 Some(partition) => partition.to_mbus(),
-                None => message_bus::Partition {
+                None => transport::Partition {
                     ..Default::default()
                 },
             },
             filesystem: match &self.filesystem {
                 Some(filesystem) => filesystem.to_mbus(),
-                None => message_bus::Filesystem {
+                None => transport::Filesystem {
                     ..Default::default()
                 },
             },
@@ -88,7 +88,7 @@ impl RpcToMessageBus for rpc::BlockDevice {
 ///  Pool Agent conversions
 
 impl RpcToMessageBus for rpc::Pool {
-    type BusMessage = message_bus::PoolState;
+    type BusMessage = transport::PoolState;
     fn to_mbus(&self) -> Self::BusMessage {
         Self::BusMessage {
             node: Default::default(),
@@ -102,7 +102,7 @@ impl RpcToMessageBus for rpc::Pool {
 }
 
 impl TryRpcToMessageBus for rpc::ReplicaV2 {
-    type BusMessage = message_bus::Replica;
+    type BusMessage = transport::Replica;
     fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
         Ok(Self::BusMessage {
             node: Default::default(),
@@ -124,7 +124,7 @@ impl TryRpcToMessageBus for rpc::ReplicaV2 {
 /// Volume Agent conversions
 
 impl TryRpcToMessageBus for rpc::NexusV2 {
-    type BusMessage = message_bus::Nexus;
+    type BusMessage = transport::Nexus;
 
     fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
         Ok(Self::BusMessage {
@@ -145,7 +145,7 @@ impl TryRpcToMessageBus for rpc::NexusV2 {
     }
 }
 impl TryRpcToMessageBus for rpc::Nexus {
-    type BusMessage = message_bus::Nexus;
+    type BusMessage = transport::Nexus;
 
     fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
         Ok(Self::BusMessage {
@@ -166,7 +166,7 @@ impl TryRpcToMessageBus for rpc::Nexus {
 }
 
 impl RpcToMessageBus for rpc::Child {
-    type BusMessage = message_bus::Child;
+    type BusMessage = transport::Child;
 
     fn to_mbus(&self) -> Self::BusMessage {
         Self::BusMessage {
@@ -187,7 +187,7 @@ pub trait MessageBusToRpc {
 
 /// Pool Agent Conversions
 
-impl MessageBusToRpc for message_bus::CreateReplica {
+impl MessageBusToRpc for transport::CreateReplica {
     type RpcMessage = rpc::CreateReplicaRequestV2;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -201,7 +201,7 @@ impl MessageBusToRpc for message_bus::CreateReplica {
     }
 }
 
-impl MessageBusToRpc for message_bus::ShareReplica {
+impl MessageBusToRpc for transport::ShareReplica {
     type RpcMessage = rpc::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -212,7 +212,7 @@ impl MessageBusToRpc for message_bus::ShareReplica {
     }
 }
 
-impl MessageBusToRpc for message_bus::UnshareReplica {
+impl MessageBusToRpc for transport::UnshareReplica {
     type RpcMessage = rpc::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -222,7 +222,7 @@ impl MessageBusToRpc for message_bus::UnshareReplica {
     }
 }
 
-impl MessageBusToRpc for message_bus::CreatePool {
+impl MessageBusToRpc for transport::CreatePool {
     type RpcMessage = rpc::CreatePoolRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -232,7 +232,7 @@ impl MessageBusToRpc for message_bus::CreatePool {
     }
 }
 
-impl MessageBusToRpc for message_bus::DestroyReplica {
+impl MessageBusToRpc for transport::DestroyReplica {
     type RpcMessage = rpc::DestroyReplicaRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -241,7 +241,7 @@ impl MessageBusToRpc for message_bus::DestroyReplica {
     }
 }
 
-impl MessageBusToRpc for message_bus::DestroyPool {
+impl MessageBusToRpc for transport::DestroyPool {
     type RpcMessage = rpc::DestroyPoolRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -252,7 +252,7 @@ impl MessageBusToRpc for message_bus::DestroyPool {
 
 /// Volume Agent Conversions
 
-impl MessageBusToRpc for message_bus::CreateNexus {
+impl MessageBusToRpc for transport::CreateNexus {
     type RpcMessage = rpc::CreateNexusV2Request;
     fn to_rpc(&self) -> Self::RpcMessage {
         let nexus_config = self.config.clone().unwrap_or_default();
@@ -270,7 +270,7 @@ impl MessageBusToRpc for message_bus::CreateNexus {
     }
 }
 
-impl MessageBusToRpc for message_bus::ShareNexus {
+impl MessageBusToRpc for transport::ShareNexus {
     type RpcMessage = rpc::PublishNexusRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -281,7 +281,7 @@ impl MessageBusToRpc for message_bus::ShareNexus {
     }
 }
 
-impl MessageBusToRpc for message_bus::UnshareNexus {
+impl MessageBusToRpc for transport::UnshareNexus {
     type RpcMessage = rpc::UnpublishNexusRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -290,7 +290,7 @@ impl MessageBusToRpc for message_bus::UnshareNexus {
     }
 }
 
-impl MessageBusToRpc for message_bus::DestroyNexus {
+impl MessageBusToRpc for transport::DestroyNexus {
     type RpcMessage = rpc::DestroyNexusRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -299,7 +299,7 @@ impl MessageBusToRpc for message_bus::DestroyNexus {
     }
 }
 
-impl MessageBusToRpc for message_bus::AddNexusChild {
+impl MessageBusToRpc for transport::AddNexusChild {
     type RpcMessage = rpc::AddChildNexusRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {
@@ -310,7 +310,7 @@ impl MessageBusToRpc for message_bus::AddNexusChild {
     }
 }
 
-impl MessageBusToRpc for message_bus::RemoveNexusChild {
+impl MessageBusToRpc for transport::RemoveNexusChild {
     type RpcMessage = rpc::RemoveChildNexusRequest;
     fn to_rpc(&self) -> Self::RpcMessage {
         Self::RpcMessage {

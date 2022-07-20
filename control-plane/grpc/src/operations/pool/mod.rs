@@ -13,7 +13,7 @@ mod test {
         context::Context,
         operations::pool::{client::PoolClient, server::PoolServer, traits::PoolOperations},
     };
-    use common_lib::{mbus_api::TimeoutOptions, types::v0::message_bus::Filter};
+    use common_lib::{transport_api::TimeoutOptions, types::v0::transport::Filter};
     use once_cell::sync::OnceCell;
     use std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -104,8 +104,8 @@ mod test {
             },
         };
         use common_lib::{
-            mbus_api::{v0::Pools, ReplyError},
-            types::v0::message_bus::{Filter, Pool},
+            transport_api::{v0::Pools, ReplyError},
+            types::v0::transport::{Filter, Pool},
         };
         use std::time::Duration;
 

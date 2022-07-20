@@ -10,7 +10,7 @@ use crate::{
     },
     operations::nexus::traits::NexusOperations,
 };
-use common_lib::types::v0::message_bus::Filter;
+use common_lib::types::v0::transport::Filter;
 use std::{convert::TryFrom, sync::Arc};
 use tonic::Response;
 

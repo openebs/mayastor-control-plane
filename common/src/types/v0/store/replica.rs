@@ -1,14 +1,14 @@
 //! Definition of replica types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{
-        self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
-        ReplicaName, ReplicaOwners, ReplicaShareProtocol,
-    },
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         OperationSequence, OperationSequencer, ResourceUuid, SpecStatus, SpecTransaction,
+    },
+    transport::{
+        self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
+        ReplicaName, ReplicaOwners, ReplicaShareProtocol,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ pub struct Replica {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
 pub struct ReplicaState {
     /// Replica information.
-    pub replica: message_bus::Replica,
+    pub replica: transport::Replica,
 }
 
 impl From<MbusReplica> for ReplicaState {
@@ -141,7 +141,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
         if let Some(op) = self.operation.clone() {
             match op.operation {
                 ReplicaOperation::Create => {
-                    self.status = SpecStatus::Created(message_bus::ReplicaStatus::Online);
+                    self.status = SpecStatus::Created(transport::ReplicaStatus::Online);
                 }
                 ReplicaOperation::Destroy => {
                     self.status = SpecStatus::Deleted;
@@ -211,7 +211,7 @@ impl StorableObject for ReplicaSpec {
     }
 }
 
-impl From<&ReplicaSpec> for message_bus::Replica {
+impl From<&ReplicaSpec> for transport::Replica {
     fn from(replica: &ReplicaSpec) -> Self {
         Self {
             node: NodeId::default(),
@@ -222,13 +222,13 @@ impl From<&ReplicaSpec> for message_bus::Replica {
             size: replica.size,
             share: replica.share,
             uri: "".to_string(),
-            status: message_bus::ReplicaStatus::Unknown,
+            status: transport::ReplicaStatus::Unknown,
         }
     }
 }
 
 /// State of the Replica Spec
-pub type ReplicaSpecStatus = SpecStatus<message_bus::ReplicaStatus>;
+pub type ReplicaSpecStatus = SpecStatus<transport::ReplicaStatus>;
 
 impl From<&CreateReplica> for ReplicaSpec {
     fn from(request: &CreateReplica) -> Self {
@@ -255,8 +255,8 @@ impl PartialEq<CreateReplica> for ReplicaSpec {
         &other == self
     }
 }
-impl PartialEq<message_bus::Replica> for ReplicaSpec {
-    fn eq(&self, other: &message_bus::Replica) -> bool {
+impl PartialEq<transport::Replica> for ReplicaSpec {
+    fn eq(&self, other: &transport::Replica) -> bool {
         self.share == other.share && self.pool == other.pool
     }
 }

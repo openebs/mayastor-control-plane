@@ -1,12 +1,12 @@
 use common_lib::{
     store::etcd::Etcd,
     types::v0::{
-        message_bus::{NexusId, ReplicaId, ReplicaOwners, VolumeId},
         openapi::models::CreateReplicaBody,
         store::{
             definitions::Store,
             replica::{ReplicaSpec, ReplicaSpecKey},
         },
+        transport::{NexusId, ReplicaId, ReplicaOwners, VolumeId},
     },
 };
 use deployer_cluster::ClusterBuilder;

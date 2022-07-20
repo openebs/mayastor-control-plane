@@ -1,4 +1,4 @@
-use common_lib::types::v0::message_bus as v0;
+use common_lib::types::v0::transport as v0;
 use grpc::operations::replica::traits::ReplicaOperations;
 
 use deployer_cluster::{result_either, test_result_grpc, ClusterBuilder};

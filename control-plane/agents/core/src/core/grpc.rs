@@ -1,6 +1,6 @@
 use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
-use common_lib::{mbus_api::MessageIdTimeout, types::v0::message_bus::NodeId};
+use common_lib::{transport_api::MessageIdTimeout, types::v0::transport::NodeId};
 use rpc::io_engine::IoEngineClient;
 use snafu::ResultExt;
 use std::{

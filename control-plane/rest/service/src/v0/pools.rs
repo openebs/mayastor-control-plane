@@ -1,7 +1,7 @@
 use super::*;
-use common_lib::types::v0::message_bus::{DestroyPool, Filter};
+use common_lib::types::v0::transport::{DestroyPool, Filter};
 use grpc::operations::pool::traits::PoolOperations;
-use mbus_api::{BusError, ReplyErrorKind, ResourceKind};
+use transport_api::{BusError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl PoolOperations {
     core_grpc().pool()

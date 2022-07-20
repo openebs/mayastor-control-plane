@@ -1,19 +1,19 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::{v0::Replicas, ReplyError, ReplyErrorKind, ResourceKind},
     store::etcd::Etcd,
+    transport_api::{v0::Replicas, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
-        message_bus::{
-            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, Filter, GetNexuses,
-            GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume,
-            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol, VolumeState,
-            VolumeStatus,
-        },
         openapi::apis::{StatusCode, Uuid},
         store::{
             definitions::Store,
             nexus_persistence::{NexusInfo, NexusInfoKey},
+        },
+        transport::{
+            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, Filter, GetNexuses,
+            GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume,
+            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol, VolumeState,
+            VolumeStatus,
         },
     },
 };
@@ -22,14 +22,14 @@ use deployer_cluster::{Cluster, ClusterBuilder};
 use rpc::io_engine::FaultNexusChildRequest;
 
 use common_lib::{
-    mbus_api::TimeoutOptions,
+    transport_api::TimeoutOptions,
     types::v0::{
-        message_bus::{
+        openapi::{models, models::NodeStatus, tower::client::Error},
+        store::{definitions::StorableObject, volume::VolumeSpec},
+        transport::{
             ChildUri, CreateNexus, DestroyReplica, GetSpecs, NexusId, ReplicaId, ReplicaOwners,
             VolumeId,
         },
-        openapi::{models, models::NodeStatus, tower::client::Error},
-        store::{definitions::StorableObject, volume::VolumeSpec},
     },
 };
 use grpc::operations::{

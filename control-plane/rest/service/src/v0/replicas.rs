@@ -1,8 +1,8 @@
 use super::*;
 use crate::v0::pools::pool;
-use common_lib::{mbus_api::BusError, types::v0::openapi::apis::Uuid};
+use common_lib::{transport_api::BusError, types::v0::openapi::apis::Uuid};
 use grpc::operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations};
-use mbus_api::{ReplyErrorKind, ResourceKind};
+use transport_api::{ReplyErrorKind, ResourceKind};
 
 fn pool_client() -> impl PoolOperations {
     core_grpc().pool()

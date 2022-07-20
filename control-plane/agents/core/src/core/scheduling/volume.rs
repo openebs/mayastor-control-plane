@@ -9,8 +9,8 @@ use crate::core::{
 
 use common::errors::SvcError;
 use common_lib::types::v0::{
-    message_bus::{ChildUri, CreateVolume, VolumeState},
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
+    transport::{ChildUri, CreateVolume, VolumeState},
 };
 
 use itertools::Itertools;

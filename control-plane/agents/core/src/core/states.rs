@@ -1,6 +1,6 @@
 use common_lib::types::v0::{
-    message_bus::{self, Nexus, NexusId, PoolId, Replica, ReplicaId},
     store::{nexus::NexusState, pool::PoolState, replica::ReplicaState},
+    transport::{self, Nexus, NexusId, PoolId, Replica, ReplicaId},
 };
 use indexmap::map::Values;
 use std::{ops::Deref, sync::Arc};
@@ -37,7 +37,7 @@ impl ResourceStates {
     /// Update the various resource states.
     pub(crate) fn update(
         &mut self,
-        pools: Vec<message_bus::PoolState>,
+        pools: Vec<transport::PoolState>,
         replicas: Vec<Replica>,
         nexuses: Vec<Nexus>,
     ) {
@@ -68,7 +68,7 @@ impl ResourceStates {
     }
 
     /// Update pool states.
-    pub(crate) fn update_pools(&mut self, pools: Vec<message_bus::PoolState>) {
+    pub(crate) fn update_pools(&mut self, pools: Vec<transport::PoolState>) {
         self.pools.clear();
         self.pools.populate(pools);
     }

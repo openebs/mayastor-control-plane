@@ -1,5 +1,5 @@
 use super::*;
-use common_lib::types::v0::message_bus::GetBlockDevices;
+use common_lib::types::v0::transport::GetBlockDevices;
 use grpc::operations::node::traits::NodeOperations;
 
 fn client() -> impl NodeOperations {

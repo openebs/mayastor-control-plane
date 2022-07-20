@@ -1,15 +1,15 @@
 //! Definition of nexus types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{
-        self, ChildState, ChildUri, CreateNexus, DestroyNexus, Nexus as MbusNexus, NexusId,
-        NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
-    },
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         nexus_child::NexusChild,
         ResourceUuid, SpecStatus, SpecTransaction,
+    },
+    transport::{
+        self, ChildState, ChildUri, CreateNexus, DestroyNexus, Nexus as MbusNexus, NexusId,
+        NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
     },
 };
 
@@ -21,7 +21,7 @@ use std::convert::TryFrom;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Nexus {
     /// Current state of the nexus.
-    pub status: Option<message_bus::NexusStatus>,
+    pub status: Option<transport::NexusStatus>,
     /// Desired nexus specification.
     pub spec: NexusSpec,
 }
@@ -30,7 +30,7 @@ pub struct Nexus {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
 pub struct NexusState {
     /// Nexus information.
-    pub nexus: message_bus::Nexus,
+    pub nexus: transport::Nexus,
 }
 
 impl From<MbusNexus> for NexusState {
@@ -74,7 +74,7 @@ impl StorableObject for NexusState {
 }
 
 /// Status of the Nexus Spec
-pub type NexusSpecStatus = SpecStatus<message_bus::NexusStatus>;
+pub type NexusSpecStatus = SpecStatus<transport::NexusStatus>;
 
 /// User specification of a nexus.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -253,7 +253,7 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                     self.spec_status = SpecStatus::Deleted;
                 }
                 NexusOperation::Create => {
-                    self.spec_status = SpecStatus::Created(message_bus::NexusStatus::Online);
+                    self.spec_status = SpecStatus::Created(transport::NexusStatus::Online);
                 }
                 NexusOperation::Share(share) => {
                     self.share = share.into();
@@ -350,24 +350,24 @@ impl PartialEq<CreateNexus> for NexusSpec {
         &other == self
     }
 }
-impl PartialEq<message_bus::Nexus> for NexusSpec {
-    fn eq(&self, status: &message_bus::Nexus) -> bool {
+impl PartialEq<transport::Nexus> for NexusSpec {
+    fn eq(&self, status: &transport::Nexus) -> bool {
         self.share == status.share && self.children == status.children && self.node == status.node
     }
 }
 
-impl From<&NexusSpec> for message_bus::Nexus {
+impl From<&NexusSpec> for transport::Nexus {
     fn from(nexus: &NexusSpec) -> Self {
         Self {
             node: nexus.node.clone(),
             name: nexus.name.clone(),
             uuid: nexus.uuid.clone(),
             size: nexus.size,
-            status: message_bus::NexusStatus::Unknown,
+            status: transport::NexusStatus::Unknown,
             children: nexus
                 .children
                 .iter()
-                .map(|child| message_bus::Child {
+                .map(|child| transport::Child {
                     uri: child.uri(),
                     state: ChildState::Unknown,
                     rebuild_progress: None,

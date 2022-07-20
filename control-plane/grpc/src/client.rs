@@ -10,7 +10,7 @@ use crate::{
         watch::{client::WatchClient, traits::WatchOperations},
     },
 };
-use common_lib::mbus_api::TimeoutOptions;
+use common_lib::transport_api::TimeoutOptions;
 use std::time::Duration;
 use tonic::transport::Uri;
 

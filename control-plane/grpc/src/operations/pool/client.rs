@@ -8,8 +8,8 @@ use crate::{
     },
 };
 use common_lib::{
-    mbus_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::{Filter, MessageIdVs, Pool},
+    transport_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
+    types::v0::transport::{Filter, MessageIdVs, Pool},
 };
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;

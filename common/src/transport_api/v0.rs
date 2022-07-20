@@ -3,7 +3,7 @@ use super::*;
 
 use crate::{
     bus_impl_message, bus_impl_vector_request, bus_impl_vector_request_token,
-    types::v0::message_bus::*,
+    types::v0::transport::*,
 };
 
 // Only V0 should export this macro

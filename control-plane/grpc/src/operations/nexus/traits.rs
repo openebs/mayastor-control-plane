@@ -9,16 +9,16 @@ use crate::{
     },
 };
 use common_lib::{
-    mbus_api::{v0::Nexuses, ReplyError, ResourceKind},
+    transport_api::{v0::Nexuses, ReplyError, ResourceKind},
     types::v0::{
-        message_bus::{
-            AddNexusChild, Child, ChildState, ChildUri, CreateNexus, DestroyNexus, Filter, Nexus,
-            NexusId, NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId,
-            NvmfControllerIdRange, RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
-        },
         store::{
             nexus::{NexusOperation, NexusOperationState, NexusSpec, NexusSpecStatus, ReplicaUri},
             nexus_child::NexusChild,
+        },
+        transport::{
+            AddNexusChild, Child, ChildState, ChildUri, CreateNexus, DestroyNexus, Filter, Nexus,
+            NexusId, NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId,
+            NvmfControllerIdRange, RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
         },
     },
 };

@@ -1,11 +1,11 @@
 use super::*;
 use crate::v0::nexuses::nexus;
 use common_lib::types::v0::{
-    message_bus::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
     openapi::apis::Uuid,
+    transport::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use mbus_api::{BusError, ReplyErrorKind, ResourceKind};
+use transport_api::{BusError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()

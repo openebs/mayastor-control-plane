@@ -18,8 +18,8 @@ use crate::operations::replica::traits::{
     CreateReplicaInfo, DestroyReplicaInfo, ShareReplicaInfo, UnshareReplicaInfo,
 };
 use common_lib::{
-    mbus_api::{v0::Replicas, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::{Filter, MessageIdVs, Replica},
+    transport_api::{v0::Replicas, ReplyError, ResourceKind, TimeoutOptions},
+    types::v0::transport::{Filter, MessageIdVs, Replica},
 };
 
 /// RPC Replica Client

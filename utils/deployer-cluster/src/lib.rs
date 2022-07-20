@@ -8,17 +8,17 @@ use deployer_lib::{
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
-use common_lib::{mbus_api::TimeoutOptions, types::v0::message_bus};
+use common_lib::{transport_api::TimeoutOptions, types::v0::transport};
 use openapi::apis::Uuid;
 
 use common_lib::{
-    mbus_api::ReplyError,
+    transport_api::ReplyError,
     types::v0::{
-        message_bus::CreatePool,
         store::{
             definitions::ObjectKey,
             registry::{ControlPlaneService, StoreLeaseLockKey},
         },
+        transport::CreatePool,
     },
 };
 pub use etcd_client;
@@ -190,7 +190,7 @@ impl Cluster {
     }
 
     /// node id for `index`
-    pub fn node(&self, index: u32) -> message_bus::NodeId {
+    pub fn node(&self, index: u32) -> transport::NodeId {
         IoEngine::name(index, &self.builder.opts).into()
     }
 
@@ -201,16 +201,16 @@ impl Cluster {
     }
 
     /// pool id for `pool` index on `node` index
-    pub fn pool(&self, node: u32, pool: u32) -> message_bus::PoolId {
+    pub fn pool(&self, node: u32, pool: u32) -> transport::PoolId {
         format!("{}-pool-{}", self.node(node), pool + 1).into()
     }
 
     /// replica id with index for `pool` index and `replica` index
-    pub fn replica(node: u32, pool: usize, replica: u32) -> message_bus::ReplicaId {
+    pub fn replica(node: u32, pool: usize, replica: u32) -> transport::ReplicaId {
         if replica > 254 || pool > 254 || node > 254 {
             panic!("too large");
         }
-        let mut uuid = message_bus::ReplicaId::default().to_string();
+        let mut uuid = transport::ReplicaId::default().to_string();
         // we can't use a uuid with all zeroes, as spdk seems to ignore it and generate new one
         let replica = replica + 1;
         let _ = uuid.drain(24 .. uuid.len());
@@ -386,7 +386,7 @@ impl TmpDiskFileInner {
             uri: format!(
                 "aio:///host{}?blk_size=512&uuid={}",
                 path,
-                message_bus::PoolId::new()
+                transport::PoolId::new()
             ),
             path,
         }
@@ -418,7 +418,7 @@ pub struct ClusterBuilder {
 struct Replica {
     count: u32,
     size: u64,
-    share: message_bus::Protocol,
+    share: transport::Protocol,
 }
 
 /// default timeout options for every bus request
@@ -544,7 +544,7 @@ impl ClusterBuilder {
     }
     /// Specify `count` replicas to add to each node per pool
     #[must_use]
-    pub fn with_replicas(mut self, count: u32, size: u64, share: message_bus::Protocol) -> Self {
+    pub fn with_replicas(mut self, count: u32, size: u64, share: transport::Protocol) -> Self {
         self.replicas = Replica { count, size, share };
         self
     }
@@ -794,7 +794,7 @@ impl ClusterBuilder {
                 };
                 for replica_index in 0 .. self.replicas.count {
                     let rep_id = Cluster::replica(*node, pool_index, replica_index);
-                    pool.replicas.push(message_bus::CreateReplica {
+                    pool.replicas.push(transport::CreateReplica {
                         node: pool.node.clone().into(),
                         name: None,
                         uuid: rep_id,
@@ -817,14 +817,14 @@ struct Pool {
     node: String,
     disk: PoolDisk,
     index: u32,
-    replicas: Vec<message_bus::CreateReplica>,
+    replicas: Vec<transport::CreateReplica>,
 }
 
 impl Pool {
-    fn id(&self) -> message_bus::PoolId {
+    fn id(&self) -> transport::PoolId {
         format!("{}-pool-{}", self.node, self.index).into()
     }
-    fn disk(&self) -> message_bus::PoolDeviceUri {
+    fn disk(&self) -> transport::PoolDeviceUri {
         match &self.disk {
             PoolDisk::Malloc(size) => {
                 let size = size / (1024 * 1024);
@@ -832,7 +832,7 @@ impl Pool {
                     "malloc:///disk{}?size_mb={}&uuid={}",
                     self.index,
                     size,
-                    message_bus::PoolId::new()
+                    transport::PoolId::new()
                 )
                 .into()
             }

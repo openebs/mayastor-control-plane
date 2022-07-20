@@ -17,9 +17,9 @@ mod tests {
     use common_lib::{
         store::etcd::Etcd,
         types::v0::{
-            message_bus::{CreateVolume, Volume, VolumeId, WatchResourceId},
             openapi::models,
             store::definitions::{ObjectKey, Store},
+            transport::{CreateVolume, Volume, VolumeId, WatchResourceId},
         },
     };
     use deployer_cluster::*;

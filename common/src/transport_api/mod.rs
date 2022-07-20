@@ -13,7 +13,7 @@ pub use mbus_nats::{message_bus_init, message_bus_init_options, NatsMessageBus};
 pub use send::*;
 
 use crate::types::{
-    v0::message_bus::{MessageIdVs, VERSION},
+    v0::transport::{MessageIdVs, VERSION},
     Channel,
 };
 use async_trait::async_trait;

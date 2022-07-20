@@ -1,8 +1,8 @@
 use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::{NodeNotFound, SvcError};
 use common_lib::types::v0::{
-    message_bus::{NodeId, Register},
     store::node::{NodeLabels, NodeSpec},
+    transport::{NodeId, Register},
 };
 use parking_lot::Mutex;
 use snafu::OptionExt;

@@ -4,8 +4,8 @@ use crate::{
     operations::jsongrpc::traits::{JsonGrpcOperations, JsonGrpcRequestInfo},
 };
 use common_lib::{
-    mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::MessageIdVs,
+    transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
+    types::v0::transport::MessageIdVs,
 };
 use serde_json::Value;
 use std::{ops::Deref, time::Duration};

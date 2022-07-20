@@ -1,5 +1,5 @@
 use super::*;
-use common_lib::types::v0::message_bus::{GetStates, States};
+use common_lib::types::v0::transport::{GetStates, States};
 use grpc::operations::registry::traits::RegistryOperations;
 
 fn client() -> impl RegistryOperations {

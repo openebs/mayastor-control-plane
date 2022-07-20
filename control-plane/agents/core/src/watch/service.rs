@@ -3,10 +3,10 @@ use crate::{
     watch::watches::{StoreWatch, WatchCfgId},
 };
 pub use common::errors::SvcError;
-pub use common_lib::mbus_api::{Message, MessageId};
+pub use common_lib::transport_api::{Message, MessageId};
 use common_lib::{
-    mbus_api::{v0::Watches, ReplyError},
-    types::v0::message_bus::{CreateWatch, DeleteWatch, GetWatches},
+    transport_api::{v0::Watches, ReplyError},
+    types::v0::transport::{CreateWatch, DeleteWatch, GetWatches},
 };
 use grpc::{
     context::Context,

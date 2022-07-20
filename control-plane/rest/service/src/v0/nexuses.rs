@@ -1,10 +1,10 @@
 use super::*;
 use common_lib::types::v0::{
-    message_bus::{DestroyNexus, Filter, ShareNexus, UnshareNexus},
     openapi::apis::Uuid,
+    transport::{DestroyNexus, Filter, ShareNexus, UnshareNexus},
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use mbus_api::{BusError, ReplyErrorKind, ResourceKind};
+use transport_api::{BusError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()

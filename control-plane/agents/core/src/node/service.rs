@@ -7,7 +7,7 @@ use common::{
     errors::{GrpcRequestError, SvcError},
     v0::msg_translation::RpcToMessageBus,
 };
-use common_lib::types::v0::message_bus::{
+use common_lib::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 

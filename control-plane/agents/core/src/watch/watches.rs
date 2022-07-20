@@ -1,14 +1,14 @@
 use crate::core::registry::Registry;
 use common::errors::{Store as SvcStoreError, SvcError};
 use common_lib::{
-    mbus_api::{v0::Watches, ResourceKind},
+    transport_api::{v0::Watches, ResourceKind},
     types::v0::{
-        message_bus::{
-            CreateWatch, DeleteWatch, GetWatches, Watch, WatchCallback, WatchResourceId, WatchType,
-        },
         store::definitions::{
             ObjectKey, StorableObject, StorableObjectType, Store, StoreError, StoreWatchReceiver,
             WatchEvent,
+        },
+        transport::{
+            CreateWatch, DeleteWatch, GetWatches, Watch, WatchCallback, WatchResourceId, WatchType,
         },
     },
 };

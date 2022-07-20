@@ -1,13 +1,13 @@
 use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
-    mbus_api::{v0::Nexuses, ReplyError},
+    transport_api::{v0::Nexuses, ReplyError},
     types::v0::{
-        message_bus::{
+        store::OperationMode,
+        transport::{
             AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
             RemoveNexusChild, ShareNexus, UnshareNexus,
         },
-        store::OperationMode,
     },
 };
 use grpc::{

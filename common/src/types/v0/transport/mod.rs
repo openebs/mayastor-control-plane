@@ -30,7 +30,7 @@ use crate::types::v0::openapi::*;
 use std::fmt::Debug;
 use strum_macros::{EnumString, ToString};
 
-use crate::mbus_api::{BusClient, DynBus, MessageIdTimeout, TimeoutOptions};
+use crate::transport_api::{BusClient, DynBus, MessageIdTimeout, TimeoutOptions};
 pub use crate::{
     bus_impl_string_id, bus_impl_string_id_inner, bus_impl_string_id_percent_decoding,
     bus_impl_string_uuid, bus_impl_string_uuid_inner,

@@ -13,21 +13,21 @@ use common::{
     v0::msg_translation::{MessageBusToRpc, RpcToMessageBus, TryRpcToMessageBus},
 };
 use common_lib::{
-    mbus_api::{Message, MessageId, MessageIdTimeout, ResourceKind},
+    transport_api::{Message, MessageId, MessageIdTimeout, ResourceKind},
     types::v0::{
-        message_bus::{
+        store,
+        store::{nexus::NexusState, replica::ReplicaState},
+        transport::{
             AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
             DestroyPool, DestroyReplica, MessageIdVs, Nexus, NexusId, NodeId, NodeState,
             NodeStatus, PoolId, PoolState, PoolStatus, Protocol, RemoveNexusChild, Replica,
             ReplicaId, ShareNexus, ShareReplica, UnshareNexus, UnshareReplica,
         },
-        store,
-        store::{nexus::NexusState, replica::ReplicaState},
     },
 };
 
 use async_trait::async_trait;
-use common_lib::types::v0::{message_bus, store::ResourceUuid};
+use common_lib::types::v0::{store::ResourceUuid, transport};
 use parking_lot::RwLock;
 use rpc::io_engine::Null;
 use snafu::ResultExt;
@@ -42,9 +42,9 @@ type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
 const GETS_TIMEOUT: MessageIdVs = MessageIdVs::Default;
 
 enum ResourceType {
-    All(Vec<message_bus::PoolState>, Vec<Replica>, Vec<Nexus>),
+    All(Vec<transport::PoolState>, Vec<Replica>, Vec<Nexus>),
     Nexus(Vec<Nexus>),
-    Pool(Vec<message_bus::PoolState>),
+    Pool(Vec<transport::PoolState>),
     Replica(Vec<Replica>),
 }
 

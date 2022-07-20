@@ -2,9 +2,11 @@
 use super::super::RestClient;
 
 pub use common_lib::{
-    mbus_api,
+    transport_api,
     types::v0::{
-        message_bus::{
+        openapi::{apis, apis::actix_server::RestError, models, tower::client},
+        store::pool::PoolLabel,
+        transport::{
             AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
             CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
             GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri,
@@ -12,8 +14,6 @@ pub use common_lib::{
             ShareNexus, ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica, VolumeId,
             VolumeLabels, VolumePolicy, Watch, WatchCallback, WatchResourceId,
         },
-        openapi::{apis, apis::actix_server::RestError, models, tower::client},
-        store::pool::PoolLabel,
     },
 };
 

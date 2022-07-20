@@ -9,14 +9,14 @@ use crate::{
     },
 };
 use common_lib::{
-    mbus_api::{v0::Replicas, ReplyError, ResourceKind},
+    transport_api::{v0::Replicas, ReplyError, ResourceKind},
     types::v0::{
-        message_bus,
-        message_bus::{
+        store::replica::{ReplicaOperation, ReplicaOperationState, ReplicaSpec, ReplicaSpecStatus},
+        transport,
+        transport::{
             CreateReplica, DestroyReplica, Filter, NexusId, NodeId, PoolId, Replica, ReplicaId,
             ReplicaName, ReplicaOwners, ShareReplica, UnshareReplica, VolumeId,
         },
-        store::replica::{ReplicaOperation, ReplicaOperationState, ReplicaSpec, ReplicaSpecStatus},
     },
 };
 use std::convert::TryFrom;
@@ -223,7 +223,7 @@ pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
     /// Thin provisioning
     fn thin(&self) -> bool;
     /// Protocol to expose the replica over
-    fn share(&self) -> message_bus::Protocol;
+    fn share(&self) -> transport::Protocol;
     /// Managed by our control plane
     fn managed(&self) -> bool;
     /// Owners of the resource
@@ -255,7 +255,7 @@ impl CreateReplicaInfo for CreateReplica {
         self.thin
     }
 
-    fn share(&self) -> message_bus::Protocol {
+    fn share(&self) -> transport::Protocol {
         self.share
     }
 
@@ -273,7 +273,7 @@ impl CreateReplicaInfo for CreateReplica {
 pub struct ValidatedCreateReplicaRequest {
     inner: CreateReplicaRequest,
     uuid: ReplicaId,
-    share: message_bus::Protocol,
+    share: transport::Protocol,
     owners: ReplicaOwners,
 }
 
@@ -302,7 +302,7 @@ impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
         self.inner.thin
     }
 
-    fn share(&self) -> message_bus::Protocol {
+    fn share(&self) -> transport::Protocol {
         self.share
     }
 
@@ -442,7 +442,7 @@ pub trait ShareReplicaInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the replica
     fn uuid(&self) -> ReplicaId;
     /// Protocol used for exposing the replica
-    fn protocol(&self) -> message_bus::ReplicaShareProtocol;
+    fn protocol(&self) -> transport::ReplicaShareProtocol;
 }
 
 impl ShareReplicaInfo for ShareReplica {
@@ -462,7 +462,7 @@ impl ShareReplicaInfo for ShareReplica {
         self.uuid.clone()
     }
 
-    fn protocol(&self) -> message_bus::ReplicaShareProtocol {
+    fn protocol(&self) -> transport::ReplicaShareProtocol {
         self.protocol
     }
 }
@@ -472,7 +472,7 @@ impl ShareReplicaInfo for ShareReplica {
 pub struct ValidatedShareReplicaRequest {
     inner: ShareReplicaRequest,
     uuid: ReplicaId,
-    protocol: message_bus::ReplicaShareProtocol,
+    protocol: transport::ReplicaShareProtocol,
 }
 
 impl ShareReplicaInfo for ValidatedShareReplicaRequest {
@@ -492,7 +492,7 @@ impl ShareReplicaInfo for ValidatedShareReplicaRequest {
         self.uuid.clone()
     }
 
-    fn protocol(&self) -> message_bus::ReplicaShareProtocol {
+    fn protocol(&self) -> transport::ReplicaShareProtocol {
         self.protocol
     }
 }
@@ -687,7 +687,7 @@ impl From<&dyn UnshareReplicaInfo> for UnshareReplica {
     }
 }
 
-impl From<common::Protocol> for message_bus::Protocol {
+impl From<common::Protocol> for transport::Protocol {
     fn from(src: common::Protocol) -> Self {
         match src {
             common::Protocol::None => Self::None,
@@ -698,18 +698,18 @@ impl From<common::Protocol> for message_bus::Protocol {
     }
 }
 
-impl From<message_bus::Protocol> for common::Protocol {
-    fn from(src: message_bus::Protocol) -> Self {
+impl From<transport::Protocol> for common::Protocol {
+    fn from(src: transport::Protocol) -> Self {
         match src {
-            message_bus::Protocol::None => Self::None,
-            message_bus::Protocol::Nvmf => Self::Nvmf,
-            message_bus::Protocol::Iscsi => Self::Iscsi,
-            message_bus::Protocol::Nbd => Self::Nbd,
+            transport::Protocol::None => Self::None,
+            transport::Protocol::Nvmf => Self::Nvmf,
+            transport::Protocol::Iscsi => Self::Iscsi,
+            transport::Protocol::Nbd => Self::Nbd,
         }
     }
 }
 
-impl From<replica::ReplicaStatus> for message_bus::ReplicaStatus {
+impl From<replica::ReplicaStatus> for transport::ReplicaStatus {
     fn from(src: replica::ReplicaStatus) -> Self {
         match src {
             replica::ReplicaStatus::Unknown => Self::Unknown,
@@ -720,18 +720,18 @@ impl From<replica::ReplicaStatus> for message_bus::ReplicaStatus {
     }
 }
 
-impl From<message_bus::ReplicaStatus> for replica::ReplicaStatus {
-    fn from(src: message_bus::ReplicaStatus) -> Self {
+impl From<transport::ReplicaStatus> for replica::ReplicaStatus {
+    fn from(src: transport::ReplicaStatus) -> Self {
         match src {
-            message_bus::ReplicaStatus::Unknown => Self::Unknown,
-            message_bus::ReplicaStatus::Online => Self::Online,
-            message_bus::ReplicaStatus::Degraded => Self::Degraded,
-            message_bus::ReplicaStatus::Faulted => Self::Faulted,
+            transport::ReplicaStatus::Unknown => Self::Unknown,
+            transport::ReplicaStatus::Online => Self::Online,
+            transport::ReplicaStatus::Degraded => Self::Degraded,
+            transport::ReplicaStatus::Faulted => Self::Faulted,
         }
     }
 }
 
-impl From<replica::ReplicaShareProtocol> for message_bus::ReplicaShareProtocol {
+impl From<replica::ReplicaShareProtocol> for transport::ReplicaShareProtocol {
     fn from(src: replica::ReplicaShareProtocol) -> Self {
         match src {
             replica::ReplicaShareProtocol::NvmfProtocol => Self::Nvmf,
@@ -739,10 +739,10 @@ impl From<replica::ReplicaShareProtocol> for message_bus::ReplicaShareProtocol {
     }
 }
 
-impl From<message_bus::ReplicaShareProtocol> for replica::ReplicaShareProtocol {
-    fn from(src: message_bus::ReplicaShareProtocol) -> Self {
+impl From<transport::ReplicaShareProtocol> for replica::ReplicaShareProtocol {
+    fn from(src: transport::ReplicaShareProtocol) -> Self {
         match src {
-            message_bus::ReplicaShareProtocol::Nvmf => Self::NvmfProtocol,
+            transport::ReplicaShareProtocol::Nvmf => Self::NvmfProtocol,
         }
     }
 }

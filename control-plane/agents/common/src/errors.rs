@@ -1,8 +1,8 @@
 use common_lib::{
-    mbus_api::{BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
+    transport_api::{BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
-        message_bus::{Filter, NodeId, PoolId, ReplicaId},
         store::definitions::StoreError,
+        transport::{Filter, NodeId, PoolId, ReplicaId},
     },
 };
 use snafu::{Error, Snafu};

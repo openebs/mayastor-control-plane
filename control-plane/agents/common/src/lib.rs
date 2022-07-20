@@ -15,8 +15,8 @@ use tracing::error;
 
 use crate::errors::SvcError;
 use common_lib::{
-    mbus_api,
-    mbus_api::{BusClient, DynBus, TimeoutOptions},
+    transport_api,
+    transport_api::{BusClient, DynBus, TimeoutOptions},
     types::Channel,
 };
 
@@ -126,7 +126,7 @@ impl Service {
             };
             // todo: parse connection options when nats has better support
             if let Some(server) = self.server.clone() {
-                mbus_api::message_bus_init_options(client, server, timeout_opts).await;
+                transport_api::message_bus_init_options(client, server, timeout_opts).await;
                 self.server_connected = true;
             }
             self.no_min_timeouts = no_min_timeouts;

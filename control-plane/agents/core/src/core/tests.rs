@@ -3,12 +3,12 @@
 use common_lib::{
     store::etcd::Etcd,
     types::v0::{
-        message_bus,
         openapi::models,
         store::{
             definitions::Store,
             registry::{ControlPlaneService, StoreLeaseOwner, StoreLeaseOwnerKey},
         },
+        transport,
     },
 };
 use deployer_cluster::{etcd_client::Client, *};
@@ -20,7 +20,7 @@ async fn bootstrap_registry() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_pools(1)
-        .with_replicas(1, size, message_bus::Protocol::None)
+        .with_replicas(1, size, transport::Protocol::None)
         .with_agents(vec!["core"])
         .build()
         .await
@@ -37,7 +37,7 @@ async fn bootstrap_registry() {
         .nexuses_api()
         .put_node_nexus(
             cluster.node(0).as_str(),
-            &message_bus::NexusId::new(),
+            &transport::NexusId::new(),
             models::CreateNexusBody::new(vec![replica.uri], size),
         )
         .await

@@ -1,6 +1,6 @@
 use crate::core::{registry::Registry, wrapper::NodeWrapper};
 use common::errors::SvcError;
-use common_lib::types::v0::message_bus::{NodeId, NodeState, Register};
+use common_lib::types::v0::transport::{NodeId, NodeState, Register};
 
 use std::sync::Arc;
 use tokio::sync::RwLock;

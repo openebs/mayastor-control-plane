@@ -1,19 +1,19 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
+    transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
-        message_bus::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NodeId,
-            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
-            ShareReplica, UnshareReplica, VolumeId,
-        },
         openapi::{
             apis::StatusCode,
             clients::tower::Error,
             models::{CreateVolumeBody, Pool, PoolState, VolumePolicy},
         },
         store::replica::ReplicaSpec,
+        transport::{
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NodeId,
+            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
+            ShareReplica, UnshareReplica, VolumeId,
+        },
     },
 };
 use deployer_cluster::{Cluster, ClusterBuilder};

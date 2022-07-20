@@ -4,8 +4,8 @@ use crate::{
     registry::{get_specs_reply, get_states_reply, registry_grpc_client::RegistryGrpcClient},
 };
 use common_lib::{
-    mbus_api::{ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::{MessageIdVs, Specs, States},
+    transport_api::{ReplyError, ResourceKind, TimeoutOptions},
+    types::v0::transport::{MessageIdVs, Specs, States},
 };
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;

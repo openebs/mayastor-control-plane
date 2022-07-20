@@ -8,11 +8,11 @@ pub mod registry;
 pub mod volume;
 pub mod watch;
 
-use common_lib::types::v0::message_bus::ChannelVs;
+use common_lib::types::v0::transport::ChannelVs;
 use http::Uri;
 
 use crate::core::registry::NumRebuilds;
-use common_lib::mbus_api::BusClient;
+use common_lib::transport_api::BusClient;
 use opentelemetry::{global, KeyValue};
 use structopt::StructOpt;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};

@@ -1,6 +1,6 @@
 use crate::tracing::OpenTelClient;
-pub use common_lib::mbus_api::TimeoutOptions;
-use common_lib::types::v0::message_bus::MessageIdVs;
+pub use common_lib::transport_api::TimeoutOptions;
+use common_lib::types::v0::transport::MessageIdVs;
 use opentelemetry::trace::FutureExt;
 use std::time::Duration;
 use tonic::{

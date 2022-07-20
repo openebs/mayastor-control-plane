@@ -11,16 +11,16 @@ use crate::{
     },
 };
 use common_lib::{
-    mbus_api::{v0::Volumes, ReplyError, ResourceKind},
+    transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
-        message_bus::{
+        store::volume::{VolumeSpec, VolumeTarget},
+        transport::{
             CreateVolume, DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus,
             NexusId, NodeId, NodeTopology, PoolTopology, PublishVolume, ReplicaId, ReplicaStatus,
             ReplicaTopology, SetVolumeReplica, ShareVolume, Topology, UnpublishVolume,
             UnshareVolume, Volume, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol,
             VolumeState,
         },
-        store::volume::{VolumeSpec, VolumeTarget},
     },
 };
 use std::{collections::HashMap, convert::TryFrom};
