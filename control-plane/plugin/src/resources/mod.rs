@@ -1,4 +1,4 @@
-use crate::resources::blockdevice::BlockDeviceArgs;
+use crate::resources::{blockdevice::BlockDeviceArgs, node::GetNodeArgs};
 
 pub mod blockdevice;
 pub mod node;
@@ -27,7 +27,7 @@ pub enum GetResources {
     /// Get all nodes.
     Nodes,
     /// Get node with the given ID.
-    Node { id: NodeId },
+    Node(GetNodeArgs),
     /// Get BlockDevices present on the Node. Lists usable devices by default.
     /// Currently disks having blobstore pools not created by control-plane are also shown as
     /// usable.
@@ -44,6 +44,13 @@ pub enum ScaleResources {
         /// Replica count of the volume.
         replica_count: ReplicaCount,
     },
+}
+
+/// The types of resources that support cordoning.
+#[derive(clap::Subcommand, Debug)]
+pub enum CordonResources {
+    /// Cordon the node with the given ID by applying the cordon label to that node.
+    Node { id: NodeId, label: String },
 }
 
 /// Tabular Output Tests

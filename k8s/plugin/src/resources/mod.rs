@@ -1,5 +1,5 @@
 use clap::Parser;
-use plugin::resources::{GetResources, ScaleResources};
+use plugin::resources::{CordonResources, GetResources, ScaleResources};
 use supportability::DumpArgs;
 
 /// The types of operations that are supported.
@@ -11,6 +11,12 @@ pub enum Operations {
     /// 'Scale' resources.
     #[clap(subcommand)]
     Scale(ScaleResources),
+    /// 'Cordon' resources.
+    #[clap(subcommand)]
+    Cordon(CordonResources),
+    /// 'Uncordon' resources.
+    #[clap(subcommand)]
+    Uncordon(CordonResources),
     /// `Dump` resources.
     Dump(DumpArgs),
 }
