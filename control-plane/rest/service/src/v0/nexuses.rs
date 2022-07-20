@@ -4,10 +4,7 @@ use common_lib::types::v0::{
     openapi::apis::Uuid,
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use mbus_api::{
-    message_bus::v0::{BusError, MessageBus, MessageBusTrait},
-    ReplyErrorKind, ResourceKind,
-};
+use mbus_api::{message_bus::v0::BusError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()
@@ -20,8 +17,8 @@ async fn destroy_nexus(filter: Filter) -> Result<(), RestError<RestJsonError>> {
             uuid: nexus_id,
         },
         Filter::Nexus(nexus_id) => {
-            let node_id = match MessageBus::get_nexus(filter).await {
-                Ok(nexus) => nexus.node,
+            let node_id = match client().get(filter, None).await {
+                Ok(nexuses) => nexus(Some(nexus_id.to_string()), nexuses.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
             };
             DestroyNexus {

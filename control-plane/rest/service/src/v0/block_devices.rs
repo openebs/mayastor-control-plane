@@ -1,9 +1,11 @@
 use super::*;
 use common_lib::types::v0::message_bus::GetBlockDevices;
 use grpc::operations::node::traits::NodeOperations;
+
 fn client() -> impl NodeOperations {
     core_grpc().node()
 }
+
 #[async_trait::async_trait]
 impl apis::actix_server::BlockDevices for RestApi {
     // Get block devices takes a query parameter 'all' which is used to determine

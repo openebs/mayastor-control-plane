@@ -5,10 +5,7 @@ use common_lib::types::v0::{
     openapi::apis::Uuid,
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use mbus_api::{
-    message_bus::v0::{BusError, MessageBus, MessageBusTrait},
-    ReplyErrorKind, ResourceKind,
-};
+use mbus_api::{message_bus::v0::BusError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()
@@ -112,7 +109,8 @@ async fn delete_child_filtered(
         nexus: nexus.uuid,
         uri: child_uri,
     };
-    MessageBus::remove_nexus_child(destroy).await?;
+
+    client().remove_nexus_child(&destroy, None).await?;
     Ok(())
 }
 
