@@ -88,13 +88,15 @@ impl AddVolumeReplica {
         Self::builder(request, registry)
             .await
             // filter pools according to the following criteria (any order):
-            // 1. if allowed_nodes were specified then only pools from those nodes
+            // 1. exclude nodes that are cordoned
+            // 2. if allowed_nodes were specified then only pools from those nodes
             // can be used.
-            // 2. pools should have enough free space for the
+            // 3. pools should have enough free space for the
             // volume (do we need to take into account metadata?)
-            // 3. ideally use only healthy(online) pools with degraded pools as a
+            // 4. ideally use only healthy(online) pools with degraded pools as a
             // fallback
-            // 4. only one replica per node
+            // 5. only one replica per node
+            .filter(NodeFilters::cordoned)
             .filter(NodeFilters::online)
             .filter(NodeFilters::allowed)
             .filter(NodeFilters::unused)

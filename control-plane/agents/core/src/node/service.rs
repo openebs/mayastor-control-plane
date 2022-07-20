@@ -79,12 +79,14 @@ impl NodeOperations for Service {
         Ok(blockdevices)
     }
 
-    async fn cordon(&self, _id: NodeId, _label: String) -> Result<Node, ReplyError> {
-        todo!()
+    async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let node = self.cordon(id, label).await?;
+        Ok(node)
     }
 
-    async fn uncordon(&self, _id: NodeId, _label: String) -> Result<Node, ReplyError> {
-        todo!()
+    async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let node = self.uncordon(id, label).await?;
+        Ok(node)
     }
 }
 
@@ -303,5 +305,25 @@ impl Service {
             .map(|rpc_bdev| rpc_bdev.to_mbus())
             .collect();
         Ok(BlockDevices(bdevs))
+    }
+
+    async fn cordon(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
+        let spec = self
+            .registry
+            .specs()
+            .cordon_node(&self.registry, &id, label)
+            .await?;
+        let state = self.registry.get_node_state(&id).await.ok();
+        Ok(Node::new(id, Some(spec), state))
+    }
+
+    async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
+        let spec = self
+            .registry
+            .specs()
+            .uncordon_node(&self.registry, &id, label)
+            .await?;
+        let state = self.registry.get_node_state(&id).await.ok();
+        Ok(Node::new(id, Some(spec), state))
     }
 }

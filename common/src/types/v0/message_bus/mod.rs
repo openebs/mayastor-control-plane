@@ -95,6 +95,8 @@ pub enum MessageIdVs {
     /// Node Service
     /// Get all node information
     GetNodes,
+    /// Cordon a node
+    CordonNode,
     /// Pool Service
     ///
     /// Get pools with filter
