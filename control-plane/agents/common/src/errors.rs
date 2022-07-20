@@ -1,5 +1,4 @@
 use common_lib::{
-    mbus_api,
     mbus_api::{BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         message_bus::{Filter, NodeId, PoolId, ReplicaId},
@@ -132,8 +131,6 @@ pub enum SvcError {
     },
     #[snafu(display("Internal error: {}", details))]
     Internal { details: String },
-    #[snafu(display("Message Bus error"))]
-    MBusError { source: mbus_api::Error },
     #[snafu(display("Invalid Arguments"))]
     InvalidArguments {},
     #[snafu(display("Multiple nexuses not supported"))]
@@ -217,12 +214,6 @@ impl From<StoreError> for SvcError {
             StoreError::MissingEntry { key } => SvcError::StoreMissingEntry { key },
             _ => SvcError::Store { source },
         }
-    }
-}
-
-impl From<mbus_api::Error> for SvcError {
-    fn from(source: mbus_api::Error) -> Self {
-        Self::MBusError { source }
     }
 }
 
@@ -511,7 +502,6 @@ impl From<SvcError> for ReplyError {
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::MBusError { source } => source.into(),
             SvcError::MultipleNexuses { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Unknown,

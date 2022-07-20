@@ -119,7 +119,6 @@ async fn server(cli_args: CliArgs) {
             "core-agent",
             env!("CARGO_PKG_VERSION"),
         ))
-        .with_default_liveness()
         .connect_message_bus(cli_args.no_min_timeouts, BusClient::CoreAgent)
         .await
         .with_shared_state(registry.clone())

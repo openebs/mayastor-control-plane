@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use common::ServiceError;
-use futures::{future::join_all, FutureExt};
+use futures::FutureExt;
 use grpc::{
     operations::{
         nexus::server::NexusServer, node::server::NodeServer, pool::server::PoolServer,
@@ -61,34 +61,17 @@ impl Service {
             .add_service(nexus_service.into_grpc_server())
             .add_service(watch_service.into_grpc_server());
 
-        let mut threads = if self.base_service.nats_enabled() {
-            self.base_service.mbus_handles().await
-        } else {
-            vec![]
-        };
-
-        let tonic_thread = tokio::spawn(async move {
-            tonic_router
-                .serve_with_shutdown(
-                    grpc_addr.authority().unwrap().to_string().parse().unwrap(),
-                    Self::shutdown_signal().map(|_| ()),
-                )
-                .await
-                .map_err(|source| ServiceError::GrpcServer { source })
-        });
-
-        threads.push(tonic_thread);
-
-        join_all(threads)
+        let result = tonic_router
+            .serve_with_shutdown(
+                grpc_addr.authority().unwrap().to_string().parse().unwrap(),
+                Self::shutdown_signal().map(|_| ()),
+            )
             .await
-            .iter()
-            .for_each(|result| match result {
-                Err(error) => error!("Failed to wait for thread: {:?}", error),
-                Ok(Err(error)) => {
-                    error!(error=?error, "Error running service thread");
-                }
-                _ => {}
-            });
+            .map_err(|source| ServiceError::GrpcServer { source });
+
+        if let Err(error) = result {
+            error!(error=?error, "Error running service thread");
+        }
     }
 
     /// Get a shutdown_signal as a oneshot channel when the process receives either TERM or INT.

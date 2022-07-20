@@ -311,34 +311,6 @@ fn option_str<F: ToString>(input: Option<F>) -> String {
 /// string Eg, testing the replica share protocol:
 /// test_result(Ok(Nvmf), async move { ... })
 /// test_result(Err(NBD), async move { ... })
-pub async fn test_result<F, O, E, T>(
-    expected: &Result<O, E>,
-    future: F,
-) -> Result<(), anyhow::Error>
-where
-    F: std::future::Future<Output = Result<T, common_lib::mbus_api::Error>>,
-    E: std::fmt::Debug,
-    O: std::fmt::Debug,
-{
-    match future.await {
-        Ok(_) if expected.is_ok() => Ok(()),
-        Err(error) if expected.is_err() => match error {
-            common_lib::mbus_api::Error::ReplyWithError { .. } => Ok(()),
-            _ => {
-                // not the error we were waiting for
-                Err(anyhow::anyhow!("Invalid response: {:?}", error))
-            }
-        },
-        Err(error) => Err(anyhow::anyhow!(
-            "Expected '{:#?}' but failed with '{:?}'!",
-            expected,
-            error
-        )),
-        Ok(_) => Err(anyhow::anyhow!("Expected '{:#?}' but succeeded!", expected)),
-    }
-}
-
-/// Run future and compare result with what's expected, for grpc
 pub async fn test_result_grpc<F, O, E, T>(
     expected: &Result<O, E>,
     future: F,
@@ -351,10 +323,7 @@ where
 {
     match future.await {
         Ok(_) if expected.is_ok() => Ok(()),
-        Err(error) if expected.is_err() => {
-            let ReplyError { .. } = error;
-            Ok(())
-        }
+        Err(_) if expected.is_err() => Ok(()),
         Err(error) => Err(ReplyError::invalid_reply_error(format!(
             "Expected '{:#?}' but failed with '{:?}'!",
             expected, error

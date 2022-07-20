@@ -4,12 +4,13 @@
 //! We could split these out further into categories when they start to grow
 
 mod mbus_nats;
-/// received message traits
-pub mod receive;
 /// send messages traits
 pub mod send;
 /// Version 0 of the messages
 pub mod v0;
+
+pub use mbus_nats::{message_bus_init, message_bus_init_options, NatsMessageBus};
+pub use send::*;
 
 use crate::types::{
     v0::message_bus::{MessageIdVs, VERSION},
@@ -17,97 +18,13 @@ use crate::types::{
 };
 use async_trait::async_trait;
 use dyn_clonable::clonable;
-pub use mbus_nats::{bus, message_bus_init, message_bus_init_options, NatsMessageBus};
 use opentelemetry::propagation::{Extractor, Injector};
-pub use receive::*;
-pub use send::*;
 use serde::{de::StdError, Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
-use std::{
-    collections::HashMap, fmt::Debug, io, marker::PhantomData, num::TryFromIntError, ops::Deref,
-    str::FromStr, time::Duration,
-};
+
+use std::{collections::HashMap, fmt::Debug, num::TryFromIntError, str::FromStr, time::Duration};
 use strum_macros::{AsRefStr, ToString};
 use tokio::task::JoinError;
 use tonic::{Code, Status};
-
-/// Result wrapper for send/receive
-pub type BusResult<T> = Result<T, Error>;
-/// Common error type for send/receive
-#[derive(Debug, Snafu, strum_macros::AsRefStr)]
-#[allow(missing_docs)]
-pub enum Error {
-    #[snafu(display("Message with wrong message id received. Received '{}' but Expected '{}'", received.to_string(), expected.to_string()))]
-    WrongMessageId {
-        received: MessageId,
-        expected: MessageId,
-    },
-    #[snafu(display("Failed to serialize the publish payload on channel '{}'", channel.to_string()))]
-    SerializeSend {
-        source: serde_json::Error,
-        channel: Channel,
-    },
-    #[snafu(display(
-        "Failed to deserialize the publish payload: '{:?}' into type '{}'",
-        payload,
-        receiver
-    ))]
-    DeserializeSend {
-        payload: Result<String, std::string::FromUtf8Error>,
-        receiver: String,
-        source: serde_json::Error,
-    },
-    #[snafu(display("Failed to serialize the reply payload for request message id '{}'", request.to_string()))]
-    SerializeReply {
-        request: MessageId,
-        source: serde_json::Error,
-    },
-    #[snafu(display(
-        "Failed to deserialize the reply payload '{:?}' for message: '{:?}'",
-        reply,
-        request
-    ))]
-    DeserializeReceive {
-        request: Result<String, serde_json::Error>,
-        reply: Result<String, std::string::FromUtf8Error>,
-        source: serde_json::Error,
-    },
-    #[snafu(display(
-        "Failed to send message '{:?}' through the message bus on channel '{}'",
-        payload,
-        channel
-    ))]
-    Publish {
-        channel: String,
-        payload: Result<String, std::string::FromUtf8Error>,
-        source: io::Error,
-    },
-    #[snafu(display(
-        "Timed out waiting for a reply to message '{:?}' on channel '{:?}' with options '{:?}'.",
-        payload,
-        channel,
-        options
-    ))]
-    RequestTimeout {
-        channel: String,
-        payload: Result<String, std::string::FromUtf8Error>,
-        options: TimeoutOptions,
-    },
-    #[snafu(display(
-        "Failed to reply back to message id '{}' through the message bus",
-        request.to_string()
-    ))]
-    Reply {
-        request: MessageId,
-        source: io::Error,
-    },
-    #[snafu(display("Failed to flush the message bus"))]
-    Flush { source: io::Error },
-    #[snafu(display("Failed to subscribe to channel '{}' on the message bus", channel))]
-    Subscribe { channel: String, source: io::Error },
-    #[snafu(display("Reply message came back with an error"))]
-    ReplyWithError { source: ReplyError },
-}
 
 /// Report error chain
 pub trait ErrorChain {
@@ -216,47 +133,10 @@ pub type SenderId = String;
 /// 2 - have a default Channel on which they are sent/received
 #[async_trait]
 pub trait Message {
-    /// type which is sent back in response to a request
-    type Reply;
-
     /// identification of this object according to the `MessageId`
     fn id(&self) -> MessageId;
     /// default channel where this object is sent to
     fn channel(&self) -> Channel;
-
-    /// publish a message with no delivery guarantees
-    async fn publish(&self) -> BusResult<()>;
-    /// publish a message with a request for a `Self::Reply` reply
-    async fn request(&self) -> BusResult<Self::Reply>;
-    /// publish a message on the given channel with a request for a
-    /// `Self::Reply` reply
-    async fn request_on<C: Into<Channel> + Send>(&self, channel: C) -> BusResult<Self::Reply>;
-    /// publish a message with a request for a `Self::Reply` reply
-    /// and non default timeout options
-    async fn request_ext(&self, options: TimeoutOptions) -> BusResult<Self::Reply>;
-    /// publish a message with a request for a `Self::Reply` reply
-    /// and non default timeout options on the given channel
-    async fn request_on_ext<C: Into<Channel> + Send>(
-        &self,
-        channel: C,
-        options: TimeoutOptions,
-    ) -> BusResult<Self::Reply>;
-    /// publish a message with a request for a `Self::Reply` reply
-    /// and non default timeout options on the given channel and bus
-    async fn request_on_bus<C: Into<Channel> + Send>(
-        &self,
-        channel: C,
-        bus: DynBus,
-    ) -> BusResult<Self::Reply>;
-}
-
-/// The preamble is used to peek into messages so allowing for them to be routed
-/// by their identifier
-#[derive(Serialize, Deserialize, Debug)]
-struct Preamble {
-    id: MessageId,
-    sender: SenderId,
-    trace_context: Option<TraceContext>,
 }
 
 /// Opentelemetry trace context
@@ -280,22 +160,6 @@ impl Extractor for TraceContext {
 
     fn keys(&self) -> Vec<&str> {
         self.0.keys().map(|header| header.as_str()).collect()
-    }
-}
-
-/// Unsolicited (send) messages carry the message identifier, the sender
-/// identifier and finally the message payload itself
-#[derive(Serialize, Deserialize)]
-struct SendPayload<T> {
-    #[serde(flatten)]
-    preamble: Preamble,
-    data: T,
-}
-
-impl<T> Deref for SendPayload<T> {
-    type Target = Preamble;
-    fn deref(&self) -> &Self::Target {
-        &self.preamble
     }
 }
 
@@ -534,40 +398,6 @@ impl From<tonic::Code> for ReplyErrorKind {
     }
 }
 
-impl From<Error> for ReplyError {
-    fn from(error: Error) -> Self {
-        #[allow(deprecated)]
-        let source_name = error.description().to_string();
-        match error {
-            Error::RequestTimeout { .. } => Self {
-                kind: ReplyErrorKind::Timeout,
-                resource: ResourceKind::Unknown,
-                source: source_name,
-                extra: error.to_string(),
-            },
-            Error::ReplyWithError { source } => source,
-            _ => Self {
-                kind: ReplyErrorKind::Internal,
-                resource: ResourceKind::Unknown,
-                extra: error.to_string(),
-                source: source_name,
-            },
-        }
-    }
-}
-
-/// Payload returned to the sender
-/// Includes an error as the operations may be fallible
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ReplyPayload<T>(pub Result<T, ReplyError>);
-
-// todo: implement thin wrappers on these
-/// MessageBus raw Message
-pub type BusMessage = nats::asynk::Message;
-/// MessageBus subscription
-pub type BusSubscription = nats::asynk::Subscription;
-/// MessageBus configuration options
-pub type BusOptions = nats::asynk::Options;
 /// Save on typing
 pub type DynBus = Box<dyn Bus>;
 
@@ -613,11 +443,11 @@ impl Default for RequestMinTimeout {
     }
 }
 impl RequestMinTimeout {
-    /// minimum timeout for a replica operation
+    /// minimum timeout for a replica operation.
     pub fn replica(&self) -> Duration {
         self.replica
     }
-    /// minimum timeout for a nexus operation
+    /// minimum timeout for a nexus operation.
     pub fn nexus(&self) -> Duration {
         self.nexus
     }
@@ -644,11 +474,11 @@ impl TimeoutOptions {
     pub(crate) fn default_tcp_read_timeout() -> Duration {
         Duration::from_secs(6)
     }
-    /// Get the tcp read timeout
-    pub(crate) fn tcp_read_timeout(&self) -> Duration {
+    /// Get the tcp read timeout.
+    pub fn tcp_read_timeout(&self) -> Duration {
         self.tcp_read_timeout
     }
-    /// Get the base timeout
+    /// Get the base timeout.
     pub fn base_timeout(&self) -> Duration {
         self.timeout
     }
@@ -743,24 +573,6 @@ impl TimeoutOptions {
 #[async_trait]
 #[clonable]
 pub trait Bus: Clone + Send + Sync {
-    /// publish a message - not guaranteed to be sent or received (fire and
-    /// forget)
-    async fn publish(&self, channel: Channel, message: &[u8]) -> BusResult<()>;
-    /// Send a message and wait for it to be received by the target component
-    async fn send(&self, channel: Channel, message: &[u8]) -> BusResult<()>;
-    /// Send a message and request a reply from the target component
-    async fn request(
-        &self,
-        channel: Channel,
-        message: &[u8],
-        options: Option<TimeoutOptions>,
-    ) -> BusResult<BusMessage>;
-    /// Flush queued messages to the server
-    async fn flush(&self) -> BusResult<()>;
-    /// Create a subscription on the given channel which can be
-    /// polled for messages until it is either explicitly closed or
-    /// when the bus is closed
-    async fn subscribe(&self, channel: Channel) -> BusResult<BusSubscription>;
     /// Get this client's name
     fn client_name(&self) -> &BusClient;
     /// Get the configured timeout options

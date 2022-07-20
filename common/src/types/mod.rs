@@ -50,12 +50,6 @@ impl Default for Channel {
     }
 }
 
-impl From<crate::mbus_api::Error> for RestError<openapi::models::RestJsonError> {
-    fn from(src: crate::mbus_api::Error) -> Self {
-        Self::from(ReplyError::from(src))
-    }
-}
-
 impl From<ReplyError> for RestError<RestJsonError> {
     fn from(src: ReplyError) -> Self {
         let details = src.extra.clone();

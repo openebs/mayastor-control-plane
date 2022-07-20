@@ -3,7 +3,7 @@ use crate::{
     watch::watches::{StoreWatch, WatchCfgId},
 };
 pub use common::errors::SvcError;
-pub use common_lib::mbus_api::{Message, MessageId, ReceivedMessage};
+pub use common_lib::mbus_api::{Message, MessageId};
 use common_lib::{
     mbus_api::{v0::Watches, ReplyError},
     types::v0::message_bus::{CreateWatch, DeleteWatch, GetWatches},

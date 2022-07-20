@@ -1,10 +1,9 @@
 #![allow(clippy::field_reassign_with_default)]
 use super::*;
-use serde_json::value::Value;
 
 use crate::{
-    bus_impl_all, bus_impl_message, bus_impl_message_all, bus_impl_publish, bus_impl_request,
-    bus_impl_vector_request, bus_impl_vector_request_token, types::v0::message_bus::*,
+    bus_impl_message, bus_impl_vector_request, bus_impl_vector_request_token,
+    types::v0::message_bus::*,
 };
 
 // Only V0 should export this macro
@@ -23,80 +22,80 @@ macro_rules! impl_channel_id {
     };
 }
 
-bus_impl_message_all!(Liveness, Liveness, (), Default);
+bus_impl_message!(Liveness, Liveness, (), Default);
 
-bus_impl_message_all!(Register, Register, (), Registry);
+bus_impl_message!(Register, Register, (), Registry);
 
-bus_impl_message_all!(Deregister, Deregister, (), Registry);
+bus_impl_message!(Deregister, Deregister, (), Registry);
 
 bus_impl_vector_request!(Nodes, Node);
-bus_impl_message_all!(GetNodes, GetNodes, Nodes, Node);
+bus_impl_message!(GetNodes, GetNodes, Nodes, Node);
 
-bus_impl_message_all!(CreatePool, CreatePool, Pool, Pool);
+bus_impl_message!(CreatePool, CreatePool, Pool, Pool);
 
-bus_impl_message_all!(DestroyPool, DestroyPool, (), Pool);
+bus_impl_message!(DestroyPool, DestroyPool, (), Pool);
 
 bus_impl_vector_request!(Pools, Pool);
-bus_impl_message_all!(GetPools, GetPools, Pools, Pool);
+bus_impl_message!(GetPools, GetPools, Pools, Pool);
 
 bus_impl_vector_request!(Replicas, Replica);
-bus_impl_message_all!(GetReplicas, GetReplicas, Replicas, Pool);
-bus_impl_message_all!(CreateReplica, CreateReplica, Replica, Pool);
+bus_impl_message!(GetReplicas, GetReplicas, Replicas, Pool);
+bus_impl_message!(CreateReplica, CreateReplica, Replica, Pool);
 
-bus_impl_message_all!(DestroyReplica, DestroyReplica, (), Pool);
+bus_impl_message!(DestroyReplica, DestroyReplica, (), Pool);
 
-bus_impl_message_all!(ShareReplica, ShareReplica, String, Pool);
+bus_impl_message!(ShareReplica, ShareReplica, String, Pool);
 
-bus_impl_message_all!(UnshareReplica, UnshareReplica, (), Pool);
+bus_impl_message!(UnshareReplica, UnshareReplica, (), Pool);
 
 bus_impl_vector_request!(Nexuses, Nexus);
-bus_impl_message_all!(GetNexuses, GetNexuses, Nexuses, Nexus);
+bus_impl_message!(GetNexuses, GetNexuses, Nexuses, Nexus);
 
-bus_impl_message_all!(CreateNexus, CreateNexus, Nexus, Nexus);
+bus_impl_message!(CreateNexus, CreateNexus, Nexus, Nexus);
 
-bus_impl_message_all!(DestroyNexus, DestroyNexus, (), Nexus);
+bus_impl_message!(DestroyNexus, DestroyNexus, (), Nexus);
 
-bus_impl_message_all!(ShareNexus, ShareNexus, String, Nexus);
+bus_impl_message!(ShareNexus, ShareNexus, String, Nexus);
 
-bus_impl_message_all!(UnshareNexus, UnshareNexus, (), Nexus);
+bus_impl_message!(UnshareNexus, UnshareNexus, (), Nexus);
 
-bus_impl_message_all!(RemoveNexusChild, RemoveNexusChild, (), Nexus);
+bus_impl_message!(RemoveNexusChild, RemoveNexusChild, (), Nexus);
 
-bus_impl_message_all!(AddNexusChild, AddNexusChild, Child, Nexus);
+bus_impl_message!(AddNexusChild, AddNexusChild, Child, Nexus);
 
 bus_impl_vector_request_token!(Volumes, Volume);
-bus_impl_message_all!(GetVolumes, GetVolumes, Volumes, Volume);
+bus_impl_message!(GetVolumes, GetVolumes, Volumes, Volume);
 
-bus_impl_message_all!(CreateVolume, CreateVolume, Volume, Volume);
+bus_impl_message!(CreateVolume, CreateVolume, Volume, Volume);
 
-bus_impl_message_all!(ShareVolume, ShareVolume, String, Volume);
+bus_impl_message!(ShareVolume, ShareVolume, String, Volume);
 
-bus_impl_message_all!(UnshareVolume, UnshareVolume, (), Volume);
+bus_impl_message!(UnshareVolume, UnshareVolume, (), Volume);
 
-bus_impl_message_all!(PublishVolume, PublishVolume, Volume, Volume);
+bus_impl_message!(PublishVolume, PublishVolume, Volume, Volume);
 
-bus_impl_message_all!(UnpublishVolume, UnpublishVolume, Volume, Volume);
+bus_impl_message!(UnpublishVolume, UnpublishVolume, Volume, Volume);
 
-bus_impl_message_all!(DestroyVolume, DestroyVolume, (), Volume);
+bus_impl_message!(DestroyVolume, DestroyVolume, (), Volume);
 
-bus_impl_message_all!(AddVolumeNexus, AddVolumeNexus, Nexus, Volume);
-bus_impl_message_all!(RemoveVolumeNexus, RemoveVolumeNexus, (), Volume);
+bus_impl_message!(AddVolumeNexus, AddVolumeNexus, Nexus, Volume);
+bus_impl_message!(RemoveVolumeNexus, RemoveVolumeNexus, (), Volume);
 
-bus_impl_message_all!(SetVolumeReplica, SetVolumeReplica, Volume, Volume);
+bus_impl_message!(SetVolumeReplica, SetVolumeReplica, Volume, Volume);
 
-bus_impl_message_all!(JsonGrpcRequest, JsonGrpc, Value, JsonGrpc);
+bus_impl_message!(JsonGrpcRequest, JsonGrpc, Value, JsonGrpc);
 
 bus_impl_vector_request!(BlockDevices, BlockDevice);
-bus_impl_message_all!(GetBlockDevices, GetBlockDevices, BlockDevices, Node);
+bus_impl_message!(GetBlockDevices, GetBlockDevices, BlockDevices, Node);
 
-bus_impl_message_all!(CreateWatch, CreateWatch, (), Watch);
+bus_impl_message!(CreateWatch, CreateWatch, (), Watch);
 
 bus_impl_vector_request!(Watches, Watch);
 
-bus_impl_message_all!(GetWatches, GetWatches, Watches, Watch);
+bus_impl_message!(GetWatches, GetWatches, Watches, Watch);
 
-bus_impl_message_all!(DeleteWatch, DeleteWatch, (), Watch);
+bus_impl_message!(DeleteWatch, DeleteWatch, (), Watch);
 
-bus_impl_message_all!(GetSpecs, GetSpecs, Specs, Registry);
+bus_impl_message!(GetSpecs, GetSpecs, Specs, Registry);
 
-bus_impl_message_all!(GetStates, GetStates, States, Registry);
+bus_impl_message!(GetStates, GetStates, States, Registry);
