@@ -1,6 +1,9 @@
 use crate::{
-    blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
-    node::get_nodes_request,
+    blockdevice,
+    blockdevice::GetBlockDevicesRequest,
+    context::Context,
+    node,
+    node::{get_nodes_request, NodeCordon},
 };
 use common_lib::{
     mbus_api::{
@@ -30,6 +33,10 @@ pub trait NodeOperations: Send + Sync {
         get_blockdevice: &dyn GetBlockDeviceInfo,
         ctx: Option<Context>,
     ) -> Result<BlockDevices, ReplyError>;
+    /// Cordon the node with the given ID and associate the label with the cordoned node.
+    async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
+    /// Uncordon the node with the given ID by removing the associated label.
+    async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
 }
 
 impl TryFrom<node::Node> for Node {
@@ -40,6 +47,7 @@ impl TryFrom<node::Node> for Node {
                 spec.node_id.into(),
                 spec.endpoint,
                 spec.labels.unwrap_or_default().value,
+                spec.cordon.map(|cordon| cordon.label),
             )
         });
         let node_state = match node_grpc_type.state {
@@ -73,6 +81,9 @@ impl From<Node> for node::Node {
             endpoint: spec.endpoint().to_string(),
             labels: Some(crate::common::StringMapValue {
                 value: spec.labels().clone(),
+            }),
+            cordon: Some(NodeCordon {
+                label: spec.cordon_labels(),
             }),
         });
         let node_state = match node.state() {

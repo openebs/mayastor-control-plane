@@ -313,4 +313,9 @@ impl Registry {
             None => Ok(()),
         }
     }
+
+    /// Returns whether or not the node with the given ID is cordoned.
+    pub fn node_cordoned(&self, node_id: &NodeId) -> Result<bool, SvcError> {
+        Ok(self.specs.get_node(node_id)?.cordoned())
+    }
 }

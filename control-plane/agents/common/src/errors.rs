@@ -22,6 +22,12 @@ pub enum SvcError {
     NodeNotOnline { node: NodeId },
     #[snafu(display("No available online nodes"))]
     NoNodes {},
+    #[snafu(display("Node {} is cordoned", node_id))]
+    CordonedNode { node_id: String },
+    #[snafu(display("Node {} is already cordoned with label '{}'", node_id, label))]
+    CordonLabel { node_id: String, label: String },
+    #[snafu(display("Node {} does not have a cordon label '{}'", node_id, label))]
+    UncordonLabel { node_id: String, label: String },
     #[snafu(display(
         "Timed out after '{:?}' attempting to connect to node '{}' via gRPC endpoint '{}'",
         timeout,
@@ -333,6 +339,27 @@ impl From<SvcError> for ReplyError {
             },
 
             SvcError::NoNodes { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Node,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+
+            SvcError::CordonedNode { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Node,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+
+            SvcError::CordonLabel { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Node,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+
+            SvcError::UncordonLabel { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Node,
                 source: desc.to_string(),

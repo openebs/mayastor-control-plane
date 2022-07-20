@@ -21,6 +21,7 @@ use common_lib::{
     },
 };
 
+use common::errors::SvcError::CordonedNode;
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::sync::Arc;
@@ -165,6 +166,12 @@ impl ResourceSpecsLocked {
         request: &CreateNexus,
         mode: OperationMode,
     ) -> Result<Nexus, SvcError> {
+        if registry.node_cordoned(&request.node)? {
+            return Err(CordonedNode {
+                node_id: request.node.to_string(),
+            });
+        }
+
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let nexus_spec = self.get_or_create_nexus(request);

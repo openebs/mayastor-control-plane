@@ -59,6 +59,15 @@ impl NodeFilters {
         let used_nodes = registry.specs().get_volume_data_nodes(&request.uuid);
         !used_nodes.contains(&item.pool.node)
     }
+    /// Should only attempt to use nodes which are not cordoned.
+    pub(crate) fn cordoned(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        let registry = request.registry();
+        !registry
+            .specs()
+            .get_cordoned_nodes()
+            .into_iter()
+            .any(|node_spec| node_spec.id() == &item.pool.node)
+    }
 }
 
 /// Filter pools used for replica creation

@@ -78,6 +78,16 @@ impl NodeOperations for Service {
         let blockdevices = self.get_block_devices(&req).await?;
         Ok(blockdevices)
     }
+
+    async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let node = self.cordon(id, label).await?;
+        Ok(node)
+    }
+
+    async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let node = self.uncordon(id, label).await?;
+        Ok(node)
+    }
 }
 
 #[tonic::async_trait]
@@ -295,5 +305,25 @@ impl Service {
             .map(|rpc_bdev| rpc_bdev.to_mbus())
             .collect();
         Ok(BlockDevices(bdevs))
+    }
+
+    async fn cordon(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
+        let spec = self
+            .registry
+            .specs()
+            .cordon_node(&self.registry, &id, label)
+            .await?;
+        let state = self.registry.get_node_state(&id).await.ok();
+        Ok(Node::new(id, Some(spec), state))
+    }
+
+    async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
+        let spec = self
+            .registry
+            .specs()
+            .uncordon_node(&self.registry, &id, label)
+            .await?;
+        let state = self.registry.get_node_state(&id).await.ok();
+        Ok(Node::new(id, Some(spec), state))
     }
 }

@@ -30,6 +30,7 @@ impl ResourceSpecsLocked {
                         node.id.clone(),
                         node.grpc_endpoint.clone(),
                         NodeLabels::new(),
+                        None,
                     );
                     specs.nodes.insert(node.clone());
                     (true, node)
@@ -62,7 +63,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get all locked node specs
-    pub(crate) fn get_locked_nodes(&self) -> Vec<Arc<Mutex<NodeSpec>>> {
+    fn get_locked_nodes(&self) -> Vec<Arc<Mutex<NodeSpec>>> {
         self.read().nodes.to_vec()
     }
 
@@ -71,6 +72,72 @@ impl ResourceSpecsLocked {
         self.get_locked_nodes()
             .into_iter()
             .map(|n| n.lock().clone())
+            .collect()
+    }
+
+    /// Cordon the node with the given ID.
+    /// Return the NodeSpec after cordoning.
+    pub(crate) async fn cordon_node(
+        &self,
+        registry: &Registry,
+        node_id: &NodeId,
+        label: String,
+    ) -> Result<NodeSpec, SvcError> {
+        let node = self.get_locked_node(node_id)?;
+        let cordoned_node_spec = {
+            let mut locked_node = node.lock();
+            // Do not allow the same label to be applied more than once.
+            if locked_node.cordon_labels().contains(&label) {
+                return Err(SvcError::CordonLabel {
+                    node_id: node_id.to_string(),
+                    label,
+                });
+            }
+            locked_node.cordon(label);
+            locked_node.clone()
+        };
+        registry.store_obj(&cordoned_node_spec).await?;
+        Ok(cordoned_node_spec.clone())
+    }
+
+    /// Uncordon the node with the given ID.
+    /// Return the NodeSpec after uncordoning.
+    pub(crate) async fn uncordon_node(
+        &self,
+        registry: &Registry,
+        node_id: &NodeId,
+        label: String,
+    ) -> Result<NodeSpec, SvcError> {
+        let node = self.get_locked_node(node_id)?;
+        // Return an error if the uncordon label doesn't exist.
+        if !node.lock().cordon_labels().contains(&label) {
+            return Err(SvcError::UncordonLabel {
+                node_id: node_id.to_string(),
+                label,
+            });
+        }
+        let uncordoned_node_spec = {
+            let mut locked_node = node.lock();
+            locked_node.uncordon(label);
+            locked_node.clone()
+        };
+        registry.store_obj(&uncordoned_node_spec).await?;
+        Ok(uncordoned_node_spec.clone())
+    }
+
+    /// Get all cordoned nodes.
+    pub fn get_cordoned_nodes(&self) -> Vec<NodeSpec> {
+        self.read()
+            .nodes
+            .to_vec()
+            .into_iter()
+            .filter_map(|node_spec| {
+                if node_spec.lock().cordoned() {
+                    Some(node_spec.lock().clone())
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 }

@@ -126,7 +126,7 @@ impl Scale for Volume {
                 }
                 OutputFormat::None => {
                     // In case the output format is not specified, show a success message.
-                    println!("Volume {} Scaled Successfully 🚀", id)
+                    println!("Volume {} scaled successfully 🚀", id)
                 }
             },
             Err(e) => {

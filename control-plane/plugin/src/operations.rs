@@ -1,4 +1,4 @@
-use crate::resources::{utils, GetResources, ScaleResources};
+use crate::resources::{utils, CordonResources, GetResources, ScaleResources};
 use async_trait::async_trait;
 
 /// The types of operations that are supported.
@@ -10,6 +10,12 @@ pub enum Operations {
     /// 'Scale' resources.
     #[clap(subcommand)]
     Scale(ScaleResources),
+    /// 'Cordon' resources.
+    #[clap(subcommand)]
+    Cordon(CordonResources),
+    /// 'Uncordon' resources.
+    #[clap(subcommand)]
+    Uncordon(CordonResources),
 }
 
 /// List trait.
@@ -49,4 +55,14 @@ pub trait ReplicaTopology {
 pub trait GetBlockDevices {
     type ID;
     async fn get_blockdevices(id: &Self::ID, all: &bool, output: &utils::OutputFormat);
+}
+
+/// Cordon trait.
+/// To be implemented by resources which support cordoning.
+#[async_trait(?Send)]
+pub trait Cordoning {
+    type ID;
+    async fn cordon(id: &Self::ID, label: &str, output: &utils::OutputFormat);
+    async fn uncordon(id: &Self::ID, label: &str, output: &utils::OutputFormat);
+    async fn get_labels(id: &Self::ID, output: &utils::OutputFormat);
 }

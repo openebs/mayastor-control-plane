@@ -29,7 +29,7 @@ lazy_static! {
         "STATUS",
         "MANAGED"
     ];
-    pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS",];
+    pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "CORDONED"];
     pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row!["ID", "NODE", "POOL", "STATUS"];
     pub static ref BLOCKDEVICE_HEADERS_ALL: Row = row![
         "DEVNAME",

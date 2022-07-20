@@ -3,7 +3,10 @@ use crate::core::{
     specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     wrapper::ClientOps,
 };
-use common::errors::{SvcError, SvcError::PoolNotFound};
+use common::errors::{
+    SvcError,
+    SvcError::{CordonedNode, PoolNotFound},
+};
 use common_lib::{
     mbus_api::ResourceKind,
     types::v0::{
@@ -194,8 +197,13 @@ impl ResourceSpecsLocked {
         request: &CreatePool,
         mode: OperationMode,
     ) -> Result<Pool, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        if registry.node_cordoned(&request.node)? {
+            return Err(CordonedNode {
+                node_id: request.node.to_string(),
+            });
+        }
 
+        let node = registry.get_node_wrapper(&request.node).await?;
         let pool_spec = self.get_or_create_pool(request);
         let (_, _g) = SpecOperations::start_create(&pool_spec, registry, request, mode).await?;
 
@@ -233,6 +241,12 @@ impl ResourceSpecsLocked {
         request: &CreateReplica,
         mode: OperationMode,
     ) -> Result<Replica, SvcError> {
+        if registry.node_cordoned(&request.node)? {
+            return Err(CordonedNode {
+                node_id: request.node.to_string(),
+            });
+        }
+
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let replica_spec = self.get_or_create_replica(request);

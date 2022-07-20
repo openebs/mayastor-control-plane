@@ -38,10 +38,29 @@ Feature: Cordoning
 
   Scenario: Deleting resources on a cordoned node
     Given a cordoned node with resources
-    When the control plane attempts to delete a resource on a cordoned node
-    Then the resource should be deleted
+    When the control plane attempts to delete resources on a cordoned node
+    Then the resources should be deleted
 
   Scenario: Restarting a cordoned node
     Given a cordoned node with resources
     When the cordoned node is restarted
     Then resources that existed on the cordoned node prior to the restart should be recreated on the same cordoned node
+
+  Scenario: Cordoning a node with an existing label
+    Given a cordoned node
+    When the node is cordoned again with the same label
+    Then cordoning should fail
+    And the cordoned node should remain cordoned
+
+  Scenario: Uncordoning a node with an unknown label
+    Given a cordoned node
+    When the node is uncordoned using an unknown cordon label
+    Then uncordoning should fail
+    And the cordoned node should remain cordoned
+
+  Scenario: Unschedulable replicas due to node cordon
+    Given a published volume with multiple replicas
+    And a cordoned node
+    When the volume becomes degraded
+    And there are insufficient uncordoned nodes to accommodate new replicas
+    Then the volume will remain in a degraded state
