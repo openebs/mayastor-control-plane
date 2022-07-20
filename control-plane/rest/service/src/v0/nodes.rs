@@ -23,6 +23,18 @@ impl apis::actix_server::Nodes for RestApi {
         let nodes = client().get(Filter::None, None).await?;
         Ok(nodes.into_inner().into_vec())
     }
+
+    async fn put_node_cordon(
+        Path((_id, _label)): Path<(String, String)>,
+    ) -> Result<models::Node, RestError<RestJsonError>> {
+        todo!()
+    }
+
+    async fn delete_node_cordon(
+        Path((_id, _label)): Path<(String, String)>,
+    ) -> Result<models::Node, RestError<RestJsonError>> {
+        todo!()
+    }
 }
 
 /// returns node from node option and returns an error on non existence

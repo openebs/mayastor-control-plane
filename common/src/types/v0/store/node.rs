@@ -64,7 +64,7 @@ impl NodeSpec {
 
 impl From<NodeSpec> for models::NodeSpec {
     fn from(src: NodeSpec) -> Self {
-        Self::new(src.endpoint, src.id)
+        Self::new(src.endpoint, src.id, vec![""])
     }
 }
 
