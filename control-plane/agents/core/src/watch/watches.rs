@@ -1,7 +1,7 @@
 use crate::core::registry::Registry;
 use common::errors::{Store as SvcStoreError, SvcError};
 use common_lib::{
-    mbus_api::{message_bus::v0::Watches, ResourceKind},
+    mbus_api::{v0::Watches, ResourceKind},
     types::v0::{
         message_bus::{
             CreateWatch, DeleteWatch, GetWatches, Watch, WatchCallback, WatchResourceId, WatchType,

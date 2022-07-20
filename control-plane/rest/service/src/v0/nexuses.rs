@@ -4,7 +4,7 @@ use common_lib::types::v0::{
     openapi::apis::Uuid,
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use mbus_api::{message_bus::v0::BusError, ReplyErrorKind, ResourceKind};
+use mbus_api::{BusError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()

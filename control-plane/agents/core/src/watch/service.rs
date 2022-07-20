@@ -5,7 +5,7 @@ use crate::{
 pub use common::errors::SvcError;
 pub use common_lib::mbus_api::{Message, MessageId, ReceivedMessage};
 use common_lib::{
-    mbus_api::{message_bus::v0::Watches, ReplyError},
+    mbus_api::{v0::Watches, ReplyError},
     types::v0::message_bus::{CreateWatch, DeleteWatch, GetWatches},
 };
 use grpc::{

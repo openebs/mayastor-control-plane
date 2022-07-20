@@ -1,6 +1,6 @@
 use common_lib::{
     mbus_api,
-    mbus_api::{message_bus::v0::BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
+    mbus_api::{BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         message_bus::{Filter, NodeId, PoolId, ReplicaId},
         store::definitions::StoreError,

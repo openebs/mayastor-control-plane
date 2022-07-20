@@ -4,8 +4,6 @@
 //! We could split these out further into categories when they start to grow
 
 mod mbus_nats;
-/// Message bus client interface
-pub mod message_bus;
 /// received message traits
 pub mod receive;
 /// send messages traits
@@ -347,6 +345,10 @@ pub struct ReplyError {
     /// extra information
     pub extra: String,
 }
+
+/// Error sending/receiving
+/// Common error type for send/receive
+pub type BusError = ReplyError;
 
 impl From<tonic::Status> for ReplyError {
     fn from(status: Status) -> Self {
