@@ -25,15 +25,17 @@ impl apis::actix_server::Nodes for RestApi {
     }
 
     async fn put_node_cordon(
-        Path((_id, _label)): Path<(String, String)>,
+        Path((id, label)): Path<(String, String)>,
     ) -> Result<models::Node, RestError<RestJsonError>> {
-        todo!()
+        let node = client().cordon(id.into(), label).await?;
+        Ok(node.into())
     }
 
     async fn delete_node_cordon(
-        Path((_id, _label)): Path<(String, String)>,
+        Path((id, label)): Path<(String, String)>,
     ) -> Result<models::Node, RestError<RestJsonError>> {
-        todo!()
+        let node = client().uncordon(id.into(), label).await?;
+        Ok(node.into())
     }
 }
 

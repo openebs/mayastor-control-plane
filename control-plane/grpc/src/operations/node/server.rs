@@ -2,9 +2,10 @@ use crate::{
     blockdevice::{get_block_devices_reply, GetBlockDevicesReply, GetBlockDevicesRequest},
     node,
     node::{
-        get_nodes_reply,
+        cordon_node_reply, get_nodes_reply,
         node_grpc_server::{NodeGrpc, NodeGrpcServer},
-        GetNodesReply, GetNodesRequest, ProbeRequest, ProbeResponse,
+        uncordon_node_reply, CordonNodeReply, CordonNodeRequest, GetNodesReply, GetNodesRequest,
+        ProbeRequest, ProbeResponse, UncordonNodeReply, UncordonNodeRequest,
     },
     operations::node::traits::NodeOperations,
 };
@@ -68,6 +69,35 @@ impl NodeGrpc for NodeServer {
             })),
             Err(err) => Ok(Response::new(GetBlockDevicesReply {
                 reply: Some(get_block_devices_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+    async fn cordon_node(
+        &self,
+        request: tonic::Request<CordonNodeRequest>,
+    ) -> Result<tonic::Response<CordonNodeReply>, tonic::Status> {
+        let req: CordonNodeRequest = request.into_inner();
+        match self.service.cordon(req.node_id.into(), req.label).await {
+            Ok(node) => Ok(Response::new(CordonNodeReply {
+                reply: Some(cordon_node_reply::Reply::Node(node.into())),
+            })),
+            Err(err) => Ok(Response::new(CordonNodeReply {
+                reply: Some(cordon_node_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn uncordon_node(
+        &self,
+        request: tonic::Request<UncordonNodeRequest>,
+    ) -> Result<tonic::Response<UncordonNodeReply>, tonic::Status> {
+        let req: UncordonNodeRequest = request.into_inner();
+        match self.service.uncordon(req.node_id.into(), req.label).await {
+            Ok(node) => Ok(Response::new(UncordonNodeReply {
+                reply: Some(uncordon_node_reply::Reply::Node(node.into())),
+            })),
+            Err(err) => Ok(Response::new(UncordonNodeReply {
+                reply: Some(uncordon_node_reply::Reply::Error(err.into())),
             })),
         }
     }

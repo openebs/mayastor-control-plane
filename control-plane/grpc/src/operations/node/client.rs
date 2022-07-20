@@ -3,8 +3,8 @@ use crate::{
     common::NodeFilter,
     context::{Client, Context, TracedChannel},
     node::{
-        get_nodes_reply, get_nodes_request, node_grpc_client::NodeGrpcClient, GetNodesRequest,
-        ProbeRequest,
+        cordon_node_reply, get_nodes_reply, get_nodes_request, node_grpc_client::NodeGrpcClient,
+        uncordon_node_reply, CordonNodeRequest, GetNodesRequest, ProbeRequest, UncordonNodeRequest,
     },
     operations::node::traits::{GetBlockDeviceInfo, NodeOperations},
 };
@@ -13,7 +13,7 @@ use common_lib::{
         v0::{BlockDevices, Nodes},
         ReplyError, ResourceKind, TimeoutOptions,
     },
-    types::v0::message_bus::{Filter, MessageIdVs},
+    types::v0::message_bus::{Filter, MessageIdVs, Node, NodeId},
 };
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
@@ -82,6 +82,38 @@ impl NodeOperations for NodeClient {
                 get_block_devices_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Block)),
+        }
+    }
+
+    #[tracing::instrument(name = "NodeClient::cordon", level = "debug", skip(self), err)]
+    async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let req = CordonNodeRequest {
+            node_id: id.to_string(),
+            label,
+        };
+        let response = self.client().cordon_node(req).await?.into_inner();
+        match response.reply {
+            Some(cordon_node_reply) => match cordon_node_reply {
+                cordon_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
+                cordon_node_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Node)),
+        }
+    }
+
+    #[tracing::instrument(name = "NodeClient::uncordon", level = "debug", skip(self), err)]
+    async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let req = UncordonNodeRequest {
+            node_id: id.to_string(),
+            label,
+        };
+        let response = self.client().uncordon_node(req).await?.into_inner();
+        match response.reply {
+            Some(uncordon_node_reply) => match uncordon_node_reply {
+                uncordon_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
+                uncordon_node_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Node)),
         }
     }
 }

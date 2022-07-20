@@ -34,14 +34,22 @@ pub struct NodeSpec {
     endpoint: String,
     /// Node labels.
     labels: NodeLabels,
+    /// Cordon labels.
+    cordon_labels: Vec<String>,
 }
 impl NodeSpec {
     /// Return a new `Self`
-    pub fn new(id: NodeId, endpoint: String, labels: NodeLabels) -> Self {
+    pub fn new(
+        id: NodeId,
+        endpoint: String,
+        labels: NodeLabels,
+        cordon_label: Option<Vec<String>>,
+    ) -> Self {
         Self {
             id,
             endpoint,
             labels,
+            cordon_labels: cordon_label.unwrap_or_default(),
         }
     }
     /// Node identification
@@ -60,11 +68,29 @@ impl NodeSpec {
     pub fn set_endpoint(&mut self, endpoint: String) {
         self.endpoint = endpoint
     }
+    /// Cordon node by applying the label.
+    pub fn cordon(&mut self, label: String) {
+        self.cordon_labels.push(label);
+    }
+    /// Uncordon node by removing the corresponding label.
+    pub fn uncordon(&mut self, label: String) {
+        if let Some(index) = self.cordon_labels.iter().position(|l| l == &label) {
+            self.cordon_labels.remove(index);
+        }
+    }
+    /// Returns whether or not the node is cordoned.
+    pub fn cordoned(&self) -> bool {
+        !self.cordon_labels.is_empty()
+    }
+    /// Returns the cordon labels
+    pub fn cordon_labels(&self) -> Vec<String> {
+        self.cordon_labels.clone()
+    }
 }
 
 impl From<NodeSpec> for models::NodeSpec {
     fn from(src: NodeSpec) -> Self {
-        Self::new(src.endpoint, src.id, vec![""])
+        Self::new(src.endpoint, src.id, src.cordon_labels)
     }
 }
 

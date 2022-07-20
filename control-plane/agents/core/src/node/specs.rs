@@ -30,6 +30,7 @@ impl ResourceSpecsLocked {
                         node.id.clone(),
                         node.grpc_endpoint.clone(),
                         NodeLabels::new(),
+                        None,
                     );
                     specs.nodes.insert(node.clone());
                     (true, node)

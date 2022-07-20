@@ -78,6 +78,14 @@ impl NodeOperations for Service {
         let blockdevices = self.get_block_devices(&req).await?;
         Ok(blockdevices)
     }
+
+    async fn cordon(&self, _id: NodeId, _label: String) -> Result<Node, ReplyError> {
+        todo!()
+    }
+
+    async fn uncordon(&self, _id: NodeId, _label: String) -> Result<Node, ReplyError> {
+        todo!()
+    }
 }
 
 #[tonic::async_trait]
