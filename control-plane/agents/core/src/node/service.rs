@@ -5,7 +5,7 @@ use crate::core::{
 };
 use common::{
     errors::{GrpcRequestError, SvcError},
-    v0::msg_translation::RpcToMessageBus,
+    v0::msg_translation::IoEngineToAgent,
 };
 use common_lib::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
@@ -37,24 +37,39 @@ pub(crate) struct Service {
 /// the request itself
 #[derive(Debug, Clone)]
 pub(crate) struct NodeCommsTimeout {
-    /// node gRPC connection timeout
-    connect: std::time::Duration,
-    /// gRPC request timeout
-    request: std::time::Duration,
+    /// timeout options
+    opts: TimeoutOptions,
 }
 
 impl NodeCommsTimeout {
     /// return a new `Self` with the connect and request timeouts
-    pub(crate) fn new(connect: std::time::Duration, request: std::time::Duration) -> Self {
-        Self { connect, request }
+    pub(crate) fn new(
+        connect: std::time::Duration,
+        request: std::time::Duration,
+        no_min: bool,
+    ) -> Self {
+        let opts = TimeoutOptions::new()
+            .with_req_timeout(request)
+            .with_connect_timeout(connect)
+            .with_min_req_timeout(if no_min {
+                None
+            } else {
+                TimeoutOptions::default().request_min_timeout().cloned()
+            });
+
+        Self { opts }
     }
     /// timeout to establish connection to the node
     pub fn connect(&self) -> std::time::Duration {
-        self.connect
+        self.opts.connect_timeout()
     }
     /// timeout for the request itself
     pub fn request(&self) -> std::time::Duration {
-        self.request
+        self.opts.base_timeout()
+    }
+    /// timeout opts.
+    pub fn opts(&self) -> &TimeoutOptions {
+        &self.opts
     }
 }
 
@@ -115,11 +130,12 @@ impl Service {
         deadline: std::time::Duration,
         request: std::time::Duration,
         connect: std::time::Duration,
+        no_min: bool,
     ) -> Self {
         let service = Self {
             registry,
             deadline,
-            comms_timeouts: NodeCommsTimeout::new(connect, request),
+            comms_timeouts: NodeCommsTimeout::new(connect, request, no_min),
         };
         // attempt to reload the node state based on the specification
         for node in service.registry.specs().get_nodes() {
@@ -302,7 +318,7 @@ impl Service {
         let bdevs = response
             .devices
             .iter()
-            .map(|rpc_bdev| rpc_bdev.to_mbus())
+            .map(|rpc_bdev| rpc_bdev.to_agent())
             .collect();
         Ok(BlockDevices(bdevs))
     }

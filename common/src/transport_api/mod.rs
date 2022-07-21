@@ -3,28 +3,23 @@
 //! plane services and io-engine
 //! We could split these out further into categories when they start to grow
 
-mod mbus_nats;
 /// send messages traits
-pub mod send;
+pub mod macros;
 /// Version 0 of the messages
 pub mod v0;
 
-pub use mbus_nats::{message_bus_init, message_bus_init_options, NatsMessageBus};
-pub use send::*;
+pub use macros::*;
 
-use crate::types::{
-    v0::transport::{MessageIdVs, VERSION},
-    Channel,
-};
+use crate::types::v0::transport::{MessageIdVs, VERSION};
 use async_trait::async_trait;
 use dyn_clonable::clonable;
-use opentelemetry::propagation::{Extractor, Injector};
+
 use serde::{de::StdError, Deserialize, Serialize};
 
-use std::{collections::HashMap, fmt::Debug, num::TryFromIntError, str::FromStr, time::Duration};
+use std::{fmt::Debug, num::TryFromIntError, str::FromStr, time::Duration};
 use strum_macros::{AsRefStr, ToString};
 use tokio::task::JoinError;
-use tonic::{Code, Status};
+use tonic::Code;
 
 /// Report error chain
 pub trait ErrorChain {
@@ -57,27 +52,6 @@ where
 pub enum MessageId {
     /// Version 0
     v0(MessageIdVs),
-}
-
-/// Exposes specific timeouts for different MessageId's
-pub trait MessageIdTimeout: Send {
-    /// Get the default `TimeoutOptions` for this message
-    fn timeout_opts(&self, opts: TimeoutOptions, bus: &DynBus) -> TimeoutOptions;
-    /// Get the default timeout `Duration` for this message
-    fn timeout(&self, timeout: Duration, bus: &DynBus) -> Duration;
-}
-
-impl MessageIdTimeout for MessageId {
-    fn timeout_opts(&self, opts: TimeoutOptions, bus: &DynBus) -> TimeoutOptions {
-        match self {
-            MessageId::v0(id) => id.timeout_opts(opts, bus),
-        }
-    }
-    fn timeout(&self, timeout: Duration, bus: &DynBus) -> Duration {
-        match self {
-            MessageId::v0(id) => id.timeout(timeout, bus),
-        }
-    }
 }
 
 impl Serialize for MessageId {
@@ -125,42 +99,12 @@ impl ToString for MessageId {
     }
 }
 
-/// Sender identification (eg which io-engine instance sent the message)
-pub type SenderId = String;
-
-/// This trait defines all Bus Messages which must:
-/// 1 - be uniquely identifiable via MessageId
-/// 2 - have a default Channel on which they are sent/received
+/// This trait defines all Transport Messages which must:
+/// 1 - be uniquely identifiable via MessageId.
 #[async_trait]
 pub trait Message {
-    /// identification of this object according to the `MessageId`
+    /// identification of this object according to the `MessageId`.
     fn id(&self) -> MessageId;
-    /// default channel where this object is sent to
-    fn channel(&self) -> Channel;
-}
-
-/// Opentelemetry trace context
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct TraceContext(HashMap<String, String>);
-impl TraceContext {
-    /// Get an empty `Self`
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-}
-impl Injector for TraceContext {
-    fn set(&mut self, key: &str, value: String) {
-        self.0.insert(key.to_string(), value);
-    }
-}
-impl Extractor for TraceContext {
-    fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(key).map(|s| s.as_str())
-    }
-
-    fn keys(&self) -> Vec<&str> {
-        self.0.keys().map(|header| header.as_str()).collect()
-    }
 }
 
 /// All the different variants of Resources
@@ -196,26 +140,21 @@ pub enum ResourceKind {
     State,
 }
 
-/// Error type which is returned over the bus
-/// for any other operation
+/// Error type which is returned over the transport for any operation.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ReplyError {
-    /// error kind
+    /// error kind.
     pub kind: ReplyErrorKind,
-    /// resource kind
+    /// resource kind.
     pub resource: ResourceKind,
-    /// last source of this error
+    /// last source of this error.
     pub source: String,
-    /// extra information
+    /// extra information.
     pub extra: String,
 }
 
-/// Error sending/receiving
-/// Common error type for send/receive
-pub type BusError = ReplyError;
-
 impl From<tonic::Status> for ReplyError {
-    fn from(status: Status) -> Self {
+    fn from(status: tonic::Status) -> Self {
         Self::tonic_reply_error(
             status.code().into(),
             status.message().to_string(),
@@ -251,14 +190,14 @@ impl From<JoinError> for ReplyError {
 
 impl StdError for ReplyError {}
 impl ReplyError {
-    /// extend error with source
+    /// extend error with source.
     /// useful when another error wraps around a `ReplyError` and we want to
-    /// convert back to `ReplyError` so we can send it over the wire
+    /// convert back to `ReplyError` so we can send it over the wire.
     pub fn extend(&mut self, source: &str, extra: &str) {
         self.source = format!("{}::{}", source, self.source);
         self.extra = format!("{}::{}", extra, self.extra);
     }
-    /// useful when the grpc server is dropped due to panic
+    /// useful when the grpc server is dropped due to panic.
     pub fn aborted_error(error: JoinError) -> Self {
         Self {
             kind: ReplyErrorKind::Aborted,
@@ -267,7 +206,7 @@ impl ReplyError {
             extra: "Failed to wait for thread".to_string(),
         }
     }
-    /// useful when the grpc server is dropped due to panic
+    /// useful when the grpc server is dropped due to panic.
     pub fn tonic_reply_error(kind: ReplyErrorKind, source: String, extra: String) -> Self {
         Self {
             kind,
@@ -276,7 +215,7 @@ impl ReplyError {
             extra,
         }
     }
-    /// used only for testing, not used in code
+    /// used only for testing, not used in code.
     pub fn invalid_reply_error(msg: String) -> Self {
         Self {
             kind: ReplyErrorKind::Aborted,
@@ -285,7 +224,7 @@ impl ReplyError {
             extra: msg,
         }
     }
-    /// used when we get an empty response from the grpc server
+    /// used when we get an empty response from the grpc server.
     pub fn invalid_response(resource: ResourceKind) -> Self {
         Self {
             kind: ReplyErrorKind::Aborted,
@@ -294,7 +233,7 @@ impl ReplyError {
             extra: "".to_string(),
         }
     }
-    /// used when we get an invalid argument
+    /// used when we get an invalid argument.
     pub fn invalid_argument(resource: ResourceKind, arg_name: &str, error: String) -> Self {
         Self {
             kind: ReplyErrorKind::InvalidArgument,
@@ -303,7 +242,7 @@ impl ReplyError {
             extra: format!("Invalid {} was provided", arg_name),
         }
     }
-    /// used when we encounter a missing argument
+    /// used when we encounter a missing argument.
     pub fn missing_argument(resource: ResourceKind, arg_name: &str) -> Self {
         Self {
             kind: ReplyErrorKind::InvalidArgument,
@@ -312,7 +251,7 @@ impl ReplyError {
             extra: format!("Argument {} was not provided", arg_name),
         }
     }
-    /// for errors that can occur when serializing or deserializing JSON data
+    /// for errors that can occur when serializing or deserializing JSON data.
     pub fn serde_error(
         resource: ResourceKind,
         error_kind: ReplyErrorKind,
@@ -340,7 +279,7 @@ impl std::fmt::Display for ReplyError {
     }
 }
 
-/// All the different variants of `ReplyError`
+/// All the different variants of `ReplyError`.
 #[derive(Serialize, Deserialize, Debug, Clone, strum_macros::AsRefStr, Eq, PartialEq)]
 #[allow(missing_docs)]
 pub enum ReplyErrorKind {
@@ -398,36 +337,40 @@ impl From<tonic::Code> for ReplyErrorKind {
     }
 }
 
-/// Save on typing
-pub type DynBus = Box<dyn Bus>;
+/// Save on typing.
+pub type DynClient = Box<dyn ClientOpts>;
 
 /// Timeout for receiving a reply to a request message
-/// Max number of retries until it gives up
+/// Max number of retries until it gives up.
 #[derive(Clone, Debug)]
 pub struct TimeoutOptions {
-    /// initial request message timeout
-    pub(crate) timeout: std::time::Duration,
-    /// request message incremental timeout step
+    /// initial request message timeout.
+    pub(crate) request_timeout: std::time::Duration,
+    /// request message incremental timeout step.
     pub(crate) timeout_step: std::time::Duration,
-    /// max number of retries following the initial attempt's timeout
+    /// max number of retries following the initial attempt's timeout.
     pub(crate) max_retries: Option<u32>,
     /// Server tcp read timeout when no messages are received.
     /// Shen this timeout is triggered we attempt to send a Ping to the server. If a Pong is not
     /// received within the same timeout the nats client disconnects from the server.
     tcp_read_timeout: std::time::Duration,
 
-    /// Request specific minimum timeouts
-    request_timeout: Option<RequestMinTimeout>,
+    /// Request specific minimum timeouts.
+    request_min_timeout: Option<RequestMinTimeout>,
+    /// Connect timeout.
+    pub connect_timeout: std::time::Duration,
 
     /// Http2 keep alive interval.
     keep_alive_interval: std::time::Duration,
     /// Http2 keep alive timeout.
     keep_alive_timeout: std::time::Duration,
+
+    client: ClientId,
 }
 
-/// Request specific minimum timeouts
-/// zeroing replicas on create/destroy takes some time (observed up to 7seconds)
-/// nexus creation by itself can take up to 4 seconds... it can take even longer if etcd is not up
+/// Request specific minimum timeouts.
+/// zeroing replicas on create/destroy takes some time (observed up to 7seconds).
+/// nexus creation by itself can take up to 4 seconds... it can take even longer if etcd is not up.
 #[derive(Debug, Clone)]
 pub struct RequestMinTimeout {
     replica: Duration,
@@ -462,12 +405,16 @@ impl TimeoutOptions {
     pub(crate) fn default_timeout_step() -> Duration {
         Duration::from_secs(1)
     }
+    /// Default connect timeout.
+    pub(crate) fn default_connect_timeout() -> Duration {
+        Duration::from_secs(1)
+    }
     /// Default max number of retries until the request is given up on.
     pub(crate) fn default_max_retries() -> u32 {
-        6
+        0
     }
     /// Default `RequestMinTimeout` which specified timeouts for specific operations.
-    pub(crate) fn default_request_timeouts() -> Option<RequestMinTimeout> {
+    pub(crate) fn default_min_request_timeouts() -> Option<RequestMinTimeout> {
         Some(RequestMinTimeout::default())
     }
     /// Default Server tcp read timeout when no messages are received.
@@ -480,7 +427,7 @@ impl TimeoutOptions {
     }
     /// Get the base timeout.
     pub fn base_timeout(&self) -> Duration {
-        self.timeout
+        self.request_timeout
     }
     /// Default http2 Keep Alive interval.
     pub(crate) fn default_keep_alive_interval() -> std::time::Duration {
@@ -495,63 +442,65 @@ impl TimeoutOptions {
 impl Default for TimeoutOptions {
     fn default() -> Self {
         Self {
-            timeout: Self::default_timeout(),
+            request_timeout: Self::default_timeout(),
             timeout_step: Self::default_timeout_step(),
             max_retries: Some(Self::default_max_retries()),
             tcp_read_timeout: Self::default_tcp_read_timeout(),
-            request_timeout: Self::default_request_timeouts(),
+            request_min_timeout: Self::default_min_request_timeouts(),
             keep_alive_timeout: Self::default_keep_alive_timeout(),
             keep_alive_interval: Self::default_keep_alive_interval(),
+            client: ClientId::Unnamed,
+            connect_timeout: Self::default_connect_timeout(),
         }
     }
 }
 
 impl TimeoutOptions {
-    /// New options with default values
+    /// New options with default values.
     #[must_use]
     pub fn new() -> Self {
         Default::default()
     }
 
-    /// New options with default values but with no retries
+    /// New options with default values but with no retries.
     #[must_use]
     pub fn new_no_retries() -> Self {
         Self::new().with_max_retries(0)
     }
 
-    /// Timeout after which we'll either fail the request or start retrying
-    /// if max_retries is greater than 0 or None
+    /// Timeout after which we'll either fail the request or start retrying.
+    /// if max_retries is greater than 0 or None.
     #[must_use]
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
+    pub fn with_req_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = timeout;
         self
     }
 
-    /// Timeout multiplied at each iteration
+    /// Timeout multiplied at each iteration.
     #[must_use]
     pub fn with_timeout_backoff(mut self, timeout: Duration) -> Self {
         self.timeout_step = timeout;
         self
     }
 
-    /// Specify a max number of retries before giving up
-    /// None for unlimited retries
+    /// Specify a max number of retries before giving up.
+    /// None for unlimited retries.
     #[must_use]
     pub fn with_max_retries<M: Into<Option<u32>>>(mut self, max_retries: M) -> Self {
         self.max_retries = max_retries.into();
         self
     }
 
-    /// Minimum timeouts for specific requests
+    /// Minimum timeouts for specific requests.
     #[must_use]
-    pub fn with_req_timeout(mut self, timeout: impl Into<Option<RequestMinTimeout>>) -> Self {
-        self.request_timeout = timeout.into();
+    pub fn with_min_req_timeout(mut self, timeout: impl Into<Option<RequestMinTimeout>>) -> Self {
+        self.request_min_timeout = timeout.into();
         self
     }
 
-    /// Get the minimum request timeouts
-    pub fn request_timeout(&self) -> Option<&RequestMinTimeout> {
-        self.request_timeout.as_ref()
+    /// Get the minimum request timeouts.
+    pub fn request_min_timeout(&self) -> Option<&RequestMinTimeout> {
+        self.request_min_timeout.as_ref()
     }
 
     /// Get the http2 Keep Alive interval.
@@ -563,31 +512,46 @@ impl TimeoutOptions {
         self.keep_alive_timeout
     }
 
-    /// get the max retries
+    /// Get the max retries.
     pub fn max_retries(&self) -> Option<u32> {
         self.max_retries
     }
+
+    /// Get the client.
+    pub fn client(&self) -> &ClientId {
+        &self.client
+    }
+
+    /// Set the connect timeout.
+    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = timeout;
+        self
+    }
+    /// Get the connect timeout.
+    pub fn connect_timeout(&self) -> Duration {
+        self.connect_timeout
+    }
 }
 
-/// Messaging Bus trait with "generic" publish and request/reply semantics
+/// Client Options trait.
 #[async_trait]
 #[clonable]
-pub trait Bus: Clone + Send + Sync {
-    /// Get this client's name
-    fn client_name(&self) -> &BusClient;
-    /// Get the configured timeout options
+pub trait ClientOpts: Clone + Debug + Send + Sync {
+    /// Get this client's identifier.
+    fn client_name(&self) -> &ClientId;
+    /// Get the configured timeout options.
     fn timeout_opts(&self) -> &TimeoutOptions;
 }
 
-/// Identifies which client is using the message bus
+/// Identifies which client it is.
 #[derive(Debug, Clone)]
-pub enum BusClient {
-    /// The Rest Server
+pub enum ClientId {
+    /// The Rest Server.
     RestServer,
-    /// The Core Agent
+    /// The Core Agent.
     CoreAgent,
-    /// The JsonGrpc Agent
+    /// The JsonGrpc Agent.
     JsonGrpcAgent,
-    /// Not Specified
+    /// Not Specified.
     Unnamed,
 }

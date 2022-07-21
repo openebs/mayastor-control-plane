@@ -24,9 +24,6 @@ pub(crate) struct CliArgs {
     /// The bind address for the REST interface (with HTTP)
     #[structopt(long)]
     http: Option<String>,
-    /// The Nats Server URL or address to connect to
-    #[structopt(long, short)]
-    nats: Option<String>,
 
     /// The CORE gRPC Server URL or address to connect to the services.
     #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
@@ -78,22 +75,19 @@ impl CliArgs {
 }
 
 /// default timeout options for every bus request
-fn bus_timeout_opts() -> TimeoutOptions {
+fn timeout_opts() -> TimeoutOptions {
     let timeout_opts =
-        TimeoutOptions::new_no_retries().with_timeout(CliArgs::args().request_timeout.into());
+        TimeoutOptions::new_no_retries().with_req_timeout(CliArgs::args().request_timeout.into());
 
     if CliArgs::args().no_min_timeouts {
-        timeout_opts.with_req_timeout(None)
+        timeout_opts.with_min_req_timeout(None)
     } else {
-        timeout_opts.with_req_timeout(RequestMinTimeout::default())
+        timeout_opts.with_min_req_timeout(RequestMinTimeout::default())
     }
 }
 
 use actix_web_opentelemetry::RequestTracing;
-use common_lib::{
-    transport_api,
-    transport_api::{BusClient, RequestMinTimeout, TimeoutOptions},
-};
+use common_lib::transport_api::{RequestMinTimeout, TimeoutOptions};
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use http::Uri;
 use opentelemetry::{global, KeyValue};
@@ -196,21 +190,16 @@ async fn main() -> anyhow::Result<()> {
             .configure_api(&v0::configure_api)
     };
 
-    if let Some(addr) = CliArgs::args().nats {
-        transport_api::message_bus_init_options(BusClient::RestServer, addr, bus_timeout_opts())
-            .await;
-    }
-
     // Initialise the core client to be used in rest
     CORE_CLIENT
-        .set(CoreClient::new(CliArgs::args().core_grpc, None).await)
+        .set(CoreClient::new(CliArgs::args().core_grpc, timeout_opts()).await)
         .ok()
         .expect("Expect to be initialised only once");
 
     // Initialise the json grpc client to be used in rest
     if CliArgs::args().json_grpc.is_some() {
         JSON_GRPC_CLIENT
-            .set(JsonGrpcClient::new(CliArgs::args().json_grpc.unwrap(), None).await)
+            .set(JsonGrpcClient::new(CliArgs::args().json_grpc.unwrap(), timeout_opts()).await)
             .ok()
             .expect("Expect to be initialised only once");
     }

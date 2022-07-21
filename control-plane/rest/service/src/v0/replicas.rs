@@ -1,6 +1,6 @@
 use super::*;
 use crate::v0::pools::pool;
-use common_lib::{transport_api::BusError, types::v0::openapi::apis::Uuid};
+use common_lib::{transport_api::ReplyError, types::v0::openapi::apis::Uuid};
 use grpc::operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations};
 use transport_api::{ReplyErrorKind, ResourceKind};
 
@@ -28,7 +28,7 @@ async fn put_replica(
             body.bus_request(node_id, pool_id, replica_id)
         }
         _ => {
-            return Err(RestError::from(BusError {
+            return Err(RestError::from(ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Replica,
                 source: "put_replica".to_string(),
@@ -64,7 +64,7 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
             }
         }
         _ => {
-            return Err(RestError::from(BusError {
+            return Err(RestError::from(ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Replica,
                 source: "destroy_replica".to_string(),
@@ -103,7 +103,7 @@ async fn share_replica(
             }
         }
         _ => {
-            return Err(RestError::from(BusError {
+            return Err(RestError::from(ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Replica,
                 source: "share_replica".to_string(),
@@ -137,7 +137,7 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
             }
         }
         _ => {
-            return Err(RestError::from(BusError {
+            return Err(RestError::from(ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Replica,
                 source: "unshare_replica".to_string(),

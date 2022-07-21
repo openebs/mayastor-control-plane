@@ -5,20 +5,13 @@
 //! It's meant to facilitate the creation of agents with a helper builder to
 //! subscribe handlers for different message identifiers.
 
-use std::{convert::Into, sync::Arc};
-
+use crate::errors::SvcError;
+use common_lib::transport_api::DynClient;
 use futures::Future;
-
 use snafu::Snafu;
 use state::Container;
+use std::sync::Arc;
 use tracing::error;
-
-use crate::errors::SvcError;
-use common_lib::{
-    transport_api,
-    transport_api::{BusClient, DynBus, TimeoutOptions},
-    types::Channel,
-};
 
 /// Agent level errors
 pub mod errors;
@@ -28,8 +21,6 @@ pub mod v0;
 #[derive(Debug, Snafu)]
 #[allow(missing_docs)]
 pub enum ServiceError {
-    #[snafu(display("Channel '{}' has been closed.", channel.to_string()))]
-    GetMessage { channel: Channel },
     #[snafu(display("GrpcServer error"))]
     GrpcServer { source: tonic::transport::Error },
 }
@@ -37,21 +28,13 @@ pub enum ServiceError {
 /// Runnable service with N subscriptions which listen on a given
 /// message bus channel on a specific ID
 pub struct Service {
-    server: Option<String>,
-    server_connected: bool,
-    no_min_timeouts: bool,
-    channel: Channel,
     shared_state: std::sync::Arc<Container![Send + Sync]>,
 }
 
 impl Default for Service {
     fn default() -> Self {
         Self {
-            server: None,
-            server_connected: false,
-            channel: Default::default(),
             shared_state: std::sync::Arc::new(<Container![Send + Sync]>::new()),
-            no_min_timeouts: !utils::ENABLE_MIN_TIMEOUTS,
         }
     }
 }
@@ -60,21 +43,21 @@ impl Default for Service {
 /// the message bus which triggered the service callback
 #[derive(Clone)]
 pub struct Context {
-    bus: Arc<DynBus>,
+    client: Arc<DynClient>,
     state: Arc<Container![Send + Sync]>,
 }
 
 impl Context {
     /// create a new context
-    pub fn new(bus: Arc<DynBus>, state: Arc<Container![Send + Sync]>) -> Self {
-        Self { bus, state }
+    pub fn new(client: Arc<DynClient>, state: Arc<Container![Send + Sync]>) -> Self {
+        Self { client, state }
     }
-    /// get the message bus from the context
-    pub fn get_bus_as_ref(&self) -> &DynBus {
-        &self.bus
+    /// get the client opts from the context.
+    pub fn client_opts(&self) -> &DynClient {
+        &self.client
     }
     /// get the shared state of type `T` from the context
-    pub fn get_state<T: Send + Sync + 'static>(&self) -> Result<&T, SvcError> {
+    pub fn state<T: Send + Sync + 'static>(&self) -> Result<&T, SvcError> {
         match self.state.try_get() {
             Some(state) => Ok(state),
             None => {
@@ -92,52 +75,10 @@ impl Context {
 
 impl Service {
     /// Setup default service connecting to `server` on subject `channel`
-    pub fn builder(server: Option<String>, channel: impl Into<Channel>) -> Self {
+    pub fn builder() -> Self {
         Self {
-            server,
-            server_connected: false,
-            channel: channel.into(),
             ..Default::default()
         }
-    }
-
-    /// Connect to the provided message bus server immediately
-    /// Useful for when dealing with async shared data which might required the
-    /// message bus before the builder is complete
-    pub async fn connect_message_bus(
-        mut self,
-        no_min_timeouts: bool,
-        client: impl Into<Option<BusClient>>,
-    ) -> Self {
-        self.message_bus_init(no_min_timeouts, client).await;
-        self
-    }
-
-    async fn message_bus_init(
-        &mut self,
-        no_min_timeouts: bool,
-        client: impl Into<Option<BusClient>>,
-    ) {
-        if !self.server_connected {
-            let timeout_opts = if no_min_timeouts {
-                TimeoutOptions::new_no_retries().with_req_timeout(None)
-            } else {
-                TimeoutOptions::new_no_retries()
-            };
-            // todo: parse connection options when nats has better support
-            if let Some(server) = self.server.clone() {
-                transport_api::message_bus_init_options(client, server, timeout_opts).await;
-                self.server_connected = true;
-            }
-            self.no_min_timeouts = no_min_timeouts;
-        }
-    }
-
-    /// Setup default `channel` where `with_subscription` will listen on
-    #[must_use]
-    pub fn with_channel(mut self, channel: impl Into<Channel>) -> Self {
-        self.channel = channel.into();
-        self
     }
 
     /// Add a new service-wide shared state which can be retried in the handlers
@@ -146,16 +87,14 @@ impl Service {
     ///
     /// Example:
     /// # async fn main() {
-    /// Service::builder(cli_args.url, Channel::Registry)
+    /// Service::builder()
     ///         .with_shared_state(NodeStore::default())
     ///         .with_shared_state(More {})
-    ///         .with_subscription(ServiceHandler::<Register>::default())
+    ///         .configure(configure)
     ///         .run().await;
     ///
-    /// # async fn handler(&self, args: Arguments<'_>) -> Result<(), SvcError> {
-    ///    let store: &NodeStore = args.context.get_state()?;
-    ///    let more: &More = args.context.get_state()?;
-    /// # Ok(())
+    /// # async fn configure(builder: Service) -> Service {
+    /// #  builder
     /// # }
     #[must_use]
     pub fn with_shared_state<T: Send + Sync + 'static>(self, state: T) -> Self {
@@ -170,7 +109,7 @@ impl Service {
         self
     }
     /// Get the shared state of type `T` added with `with_shared_state`
-    pub fn get_shared_state<T: Send + Sync + 'static>(&self) -> &T {
+    pub fn shared_state<T: Send + Sync + 'static>(&self) -> &T {
         match self.shared_state.try_get() {
             Some(state) => state,
             None => {

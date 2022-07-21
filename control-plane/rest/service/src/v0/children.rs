@@ -5,7 +5,7 @@ use common_lib::types::v0::{
     transport::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use transport_api::{BusError, ReplyErrorKind, ResourceKind};
+use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()
@@ -43,11 +43,11 @@ async fn get_child_response(
     Ok(child.into())
 }
 
-fn find_nexus_child(nexus: &Nexus, child_uri: &ChildUri) -> Result<Child, BusError> {
+fn find_nexus_child(nexus: &Nexus, child_uri: &ChildUri) -> Result<Child, ReplyError> {
     if let Some(child) = nexus.children.iter().find(|&c| &c.uri == child_uri) {
         Ok(child.clone())
     } else {
-        Err(BusError {
+        Err(ReplyError {
             kind: ReplyErrorKind::NotFound,
             resource: ResourceKind::Child,
             source: "find_nexus_child".to_string(),

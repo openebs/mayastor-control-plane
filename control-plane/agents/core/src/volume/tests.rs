@@ -886,7 +886,7 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
 
     let timeout_opts = TimeoutOptions::default()
         .with_max_retries(10)
-        .with_timeout(Duration::from_millis(200))
+        .with_req_timeout(Duration::from_millis(200))
         .with_timeout_backoff(Duration::from_millis(50));
 
     cluster
@@ -1027,7 +1027,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
 
     let timeout_opts = TimeoutOptions::default()
         .with_max_retries(10)
-        .with_timeout(Duration::from_millis(500))
+        .with_req_timeout(Duration::from_millis(500))
         .with_timeout_backoff(Duration::from_millis(50));
     let mut store = Etcd::new("0.0.0.0:2379")
         .await

@@ -1,5 +1,5 @@
 use common_lib::{
-    transport_api::{BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
+    transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         store::definitions::StoreError,
         transport::{Filter, NodeId, PoolId, ReplicaId},
@@ -14,9 +14,9 @@ use tonic::Code;
 #[allow(missing_docs)]
 pub enum SvcError {
     #[snafu(display("Failed to get node '{}' from the node agent", node))]
-    BusGetNode { node: String, source: BusError },
+    GetNode { node: String, source: ReplyError },
     #[snafu(display("Failed to get nodes from the node agent"))]
-    BusGetNodes { source: BusError },
+    GetNodes { source: ReplyError },
     #[snafu(display("Node '{}' is not online", node))]
     NodeNotOnline { node: NodeId },
     #[snafu(display("No available online nodes"))]
@@ -303,8 +303,8 @@ impl From<SvcError> for ReplyError {
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::BusGetNode { source, .. } => source,
-            SvcError::BusGetNodes { source } => source,
+            SvcError::GetNode { source, .. } => source,
+            SvcError::GetNodes { source } => source,
             SvcError::GrpcRequestError {
                 source,
                 request,

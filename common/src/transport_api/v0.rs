@@ -2,100 +2,71 @@
 use super::*;
 
 use crate::{
-    bus_impl_message, bus_impl_vector_request, bus_impl_vector_request_token,
-    types::v0::transport::*,
+    impl_message, impl_vector_request, impl_vector_request_token, types::v0::transport::*,
 };
 
 // Only V0 should export this macro
 // This allows the example code to use the v0 default
 // Otherwise they have to impl whatever version they require
 #[macro_export]
-/// Use version 0 of the Message and Channel
+/// Use version 0 of the Message
 macro_rules! impl_channel_id {
-    ($I:ident, $C:ident) => {
+    ($I:ident) => {
         fn id(&self) -> MessageId {
             MessageId::v0(MessageIdVs::$I)
-        }
-        fn channel(&self) -> Channel {
-            Channel::v0(ChannelVs::$C)
         }
     };
 }
 
-bus_impl_message!(Liveness, Liveness, (), Default);
+impl_message!(Liveness);
+impl_message!(Register);
+impl_message!(Deregister);
 
-bus_impl_message!(Register, Register, (), Registry);
+impl_vector_request!(Nodes, Node);
+impl_message!(GetNodes);
 
-bus_impl_message!(Deregister, Deregister, (), Registry);
+impl_message!(CreatePool);
+impl_message!(DestroyPool);
+impl_vector_request!(Pools, Pool);
+impl_message!(GetPools);
 
-bus_impl_vector_request!(Nodes, Node);
-bus_impl_message!(GetNodes, GetNodes, Nodes, Node);
+impl_vector_request!(Replicas, Replica);
+impl_message!(GetReplicas);
+impl_message!(CreateReplica);
+impl_message!(DestroyReplica);
+impl_message!(ShareReplica);
+impl_message!(UnshareReplica);
 
-bus_impl_message!(CreatePool, CreatePool, Pool, Pool);
+impl_vector_request!(Nexuses, Nexus);
+impl_message!(GetNexuses);
+impl_message!(CreateNexus);
+impl_message!(DestroyNexus);
+impl_message!(ShareNexus);
+impl_message!(UnshareNexus);
+impl_message!(RemoveNexusChild);
+impl_message!(AddNexusChild);
 
-bus_impl_message!(DestroyPool, DestroyPool, (), Pool);
+impl_vector_request_token!(Volumes, Volume);
+impl_message!(GetVolumes);
+impl_message!(CreateVolume);
+impl_message!(ShareVolume);
+impl_message!(UnshareVolume);
+impl_message!(PublishVolume);
+impl_message!(UnpublishVolume);
+impl_message!(DestroyVolume);
+impl_message!(AddVolumeNexus);
+impl_message!(RemoveVolumeNexus);
+impl_message!(SetVolumeReplica);
 
-bus_impl_vector_request!(Pools, Pool);
-bus_impl_message!(GetPools, GetPools, Pools, Pool);
+impl_message!(JsonGrpcRequest, JsonGrpc);
 
-bus_impl_vector_request!(Replicas, Replica);
-bus_impl_message!(GetReplicas, GetReplicas, Replicas, Pool);
-bus_impl_message!(CreateReplica, CreateReplica, Replica, Pool);
+impl_vector_request!(BlockDevices, BlockDevice);
+impl_message!(GetBlockDevices);
 
-bus_impl_message!(DestroyReplica, DestroyReplica, (), Pool);
+impl_vector_request!(Watches, Watch);
+impl_message!(CreateWatch);
+impl_message!(GetWatches);
+impl_message!(DeleteWatch);
 
-bus_impl_message!(ShareReplica, ShareReplica, String, Pool);
-
-bus_impl_message!(UnshareReplica, UnshareReplica, (), Pool);
-
-bus_impl_vector_request!(Nexuses, Nexus);
-bus_impl_message!(GetNexuses, GetNexuses, Nexuses, Nexus);
-
-bus_impl_message!(CreateNexus, CreateNexus, Nexus, Nexus);
-
-bus_impl_message!(DestroyNexus, DestroyNexus, (), Nexus);
-
-bus_impl_message!(ShareNexus, ShareNexus, String, Nexus);
-
-bus_impl_message!(UnshareNexus, UnshareNexus, (), Nexus);
-
-bus_impl_message!(RemoveNexusChild, RemoveNexusChild, (), Nexus);
-
-bus_impl_message!(AddNexusChild, AddNexusChild, Child, Nexus);
-
-bus_impl_vector_request_token!(Volumes, Volume);
-bus_impl_message!(GetVolumes, GetVolumes, Volumes, Volume);
-
-bus_impl_message!(CreateVolume, CreateVolume, Volume, Volume);
-
-bus_impl_message!(ShareVolume, ShareVolume, String, Volume);
-
-bus_impl_message!(UnshareVolume, UnshareVolume, (), Volume);
-
-bus_impl_message!(PublishVolume, PublishVolume, Volume, Volume);
-
-bus_impl_message!(UnpublishVolume, UnpublishVolume, Volume, Volume);
-
-bus_impl_message!(DestroyVolume, DestroyVolume, (), Volume);
-
-bus_impl_message!(AddVolumeNexus, AddVolumeNexus, Nexus, Volume);
-bus_impl_message!(RemoveVolumeNexus, RemoveVolumeNexus, (), Volume);
-
-bus_impl_message!(SetVolumeReplica, SetVolumeReplica, Volume, Volume);
-
-bus_impl_message!(JsonGrpcRequest, JsonGrpc, Value, JsonGrpc);
-
-bus_impl_vector_request!(BlockDevices, BlockDevice);
-bus_impl_message!(GetBlockDevices, GetBlockDevices, BlockDevices, Node);
-
-bus_impl_message!(CreateWatch, CreateWatch, (), Watch);
-
-bus_impl_vector_request!(Watches, Watch);
-
-bus_impl_message!(GetWatches, GetWatches, Watches, Watch);
-
-bus_impl_message!(DeleteWatch, DeleteWatch, (), Watch);
-
-bus_impl_message!(GetSpecs, GetSpecs, Specs, Registry);
-
-bus_impl_message!(GetStates, GetStates, States, Registry);
+impl_message!(GetSpecs);
+impl_message!(GetStates);

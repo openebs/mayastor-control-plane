@@ -31,8 +31,8 @@ impl ComponentAction for JsonGrpc {
     async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         let ip = cfg.container_ip("jsongrpc");
         let uri = tonic::transport::Uri::from_str(&format!("https://{}:50052", ip)).unwrap();
-        let timeout =
-            grpc::context::TimeoutOptions::new().with_timeout(std::time::Duration::from_millis(5));
+        let timeout = grpc::context::TimeoutOptions::new()
+            .with_req_timeout(std::time::Duration::from_millis(5));
         let json_grpc = JsonGrpcClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;
         json_grpc.wait_ready(None).await.map_err(|_| {
             let error = "Failed to wait for jsongrpc service to get ready";

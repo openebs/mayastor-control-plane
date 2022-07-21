@@ -24,57 +24,17 @@ pub use state::*;
 pub use volume::*;
 pub use watch::*;
 
-use crate::types::Channel;
-
 use crate::types::v0::openapi::*;
 use std::fmt::Debug;
 use strum_macros::{EnumString, ToString};
 
-use crate::transport_api::{BusClient, DynBus, MessageIdTimeout, TimeoutOptions};
+use crate::transport_api::MessageId;
 pub use crate::{
     bus_impl_string_id, bus_impl_string_id_inner, bus_impl_string_id_percent_decoding,
     bus_impl_string_uuid, bus_impl_string_uuid_inner,
 };
-use std::time::Duration;
 
 pub const VERSION: &str = "v0";
-
-/// Versioned Channels
-#[derive(Clone, Debug, EnumString, ToString, PartialEq)]
-#[strum(serialize_all = "camelCase")]
-pub enum ChannelVs {
-    /// Default
-    Default,
-    /// Registration of io-engine instances with the control plane
-    Registry,
-    /// Node Service which exposes the registered io-engine instances
-    Node,
-    /// Pool Service which manages io-engine pools and replicas
-    Pool,
-    /// Volume Service which manages io-engine volumes
-    Volume,
-    /// Nexus Service which manages io-engine nexuses
-    Nexus,
-    /// Keep it In Sync Service
-    Kiiss,
-    /// Json gRPC Agent
-    JsonGrpc,
-    /// Core Agent combines Node, Pool and Volume services
-    Core,
-    /// Watch Agent
-    Watch,
-}
-impl Default for ChannelVs {
-    fn default() -> Self {
-        ChannelVs::Default
-    }
-}
-
-impl From<ChannelVs> for Channel {
-    fn from(channel: ChannelVs) -> Self {
-        Channel::v0(channel)
-    }
-}
 
 /// Versioned Message Id's
 #[derive(Debug, PartialEq, Clone, ToString, EnumString)]
@@ -167,39 +127,8 @@ pub enum MessageIdVs {
     GetStates,
 }
 
-impl MessageIdTimeout for MessageIdVs {
-    fn timeout_opts(&self, opts: TimeoutOptions, bus: &DynBus) -> TimeoutOptions {
-        let timeout = self.timeout(opts.timeout, bus);
-        opts.with_timeout(timeout)
-    }
-    fn timeout(&self, timeout: Duration, bus: &DynBus) -> Duration {
-        if let Some(min_timeouts) = bus.timeout_opts().request_timeout() {
-            let timeout = Duration::max(
-                timeout,
-                match self {
-                    MessageIdVs::CreateVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
-                    MessageIdVs::DestroyVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
-                    MessageIdVs::PublishVolume => min_timeouts.nexus(),
-                    MessageIdVs::UnpublishVolume => min_timeouts.nexus(),
-
-                    MessageIdVs::CreateNexus => min_timeouts.nexus(),
-                    MessageIdVs::DestroyNexus => min_timeouts.nexus(),
-
-                    MessageIdVs::CreateReplica => min_timeouts.replica(),
-                    MessageIdVs::DestroyReplica => min_timeouts.replica(),
-                    _ => timeout,
-                },
-            )
-            .min(Duration::from_secs(59));
-            match bus.client_name() {
-                // the rest server should have some slack to allow for the CoreAgent to timeout
-                // first
-                BusClient::RestServer => timeout + Duration::from_secs(1),
-                BusClient::CoreAgent => timeout,
-                _ => timeout,
-            }
-        } else {
-            timeout
-        }
+impl From<MessageIdVs> for MessageId {
+    fn from(id: MessageIdVs) -> Self {
+        MessageId::v0(id)
     }
 }

@@ -187,7 +187,7 @@ async fn pool() {
 fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_max_retries(0)
-        .with_timeout(Duration::from_millis(250))
+        .with_req_timeout(Duration::from_millis(250))
 }
 
 /// Get the replica spec
@@ -656,8 +656,8 @@ async fn reconciler_deleting_dirty_pool() {
     let reconcile_period = Duration::from_millis(250);
     let grpc_timeout = TimeoutOptions::default()
         .with_max_retries(0)
-        .with_timeout(Duration::from_millis(250))
-        .with_req_timeout(None);
+        .with_req_timeout(Duration::from_millis(250))
+        .with_min_req_timeout(None);
     let req_timeout = grpc_timeout.base_timeout() * 2;
     let store_timeout = Duration::from_millis(300);
     let cluster = ClusterBuilder::builder()

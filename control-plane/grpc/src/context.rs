@@ -1,12 +1,16 @@
 use crate::tracing::OpenTelClient;
 pub use common_lib::transport_api::TimeoutOptions;
-use common_lib::types::v0::transport::MessageIdVs;
+use common_lib::{
+    transport_api::{ClientId, MessageId},
+    types::v0::transport::MessageIdVs,
+};
 use opentelemetry::trace::FutureExt;
 use std::time::Duration;
 use tonic::{
     transport::{Channel, Uri},
     IntoRequest,
 };
+
 use utils::DEFAULT_REQ_TIMEOUT;
 
 /// Request specific minimum timeouts
@@ -39,22 +43,34 @@ impl RequestMinTimeout {
 
 /// get the default timeout for each type of request if a timeout is not specified.
 /// timeouts vary with different types of requests
-pub fn timeout_grpc(op_id: MessageIdVs, min_timeout: Duration) -> Duration {
-    let base_timeout = RequestMinTimeout::default();
-    let timeout = match op_id {
-        MessageIdVs::CreateVolume => base_timeout.replica() * 3 + base_timeout.nexus(),
-        MessageIdVs::DestroyVolume => base_timeout.replica() * 3 + base_timeout.nexus(),
-        MessageIdVs::PublishVolume => base_timeout.nexus(),
-        MessageIdVs::UnpublishVolume => base_timeout.nexus(),
+pub fn timeout_grpc(op_id: MessageId, timeout_opts: TimeoutOptions) -> Duration {
+    let base = timeout_opts.base_timeout();
+    if let Some(min_timeouts) = timeout_opts.request_min_timeout() {
+        let op_timeout = match op_id {
+            MessageId::v0(op_id) => match op_id {
+                MessageIdVs::CreateVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
+                MessageIdVs::DestroyVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
+                MessageIdVs::PublishVolume => min_timeouts.nexus(),
+                MessageIdVs::UnpublishVolume => min_timeouts.nexus(),
 
-        MessageIdVs::CreateNexus => base_timeout.nexus(),
-        MessageIdVs::DestroyNexus => base_timeout.nexus(),
+                MessageIdVs::CreateNexus => min_timeouts.nexus(),
+                MessageIdVs::DestroyNexus => min_timeouts.nexus(),
 
-        MessageIdVs::CreateReplica => base_timeout.replica(),
-        MessageIdVs::DestroyReplica => base_timeout.replica(),
-        _ => min_timeout,
-    };
-    timeout.max(min_timeout).min(Duration::from_secs(59))
+                MessageIdVs::CreateReplica => min_timeouts.replica(),
+                MessageIdVs::DestroyReplica => min_timeouts.replica(),
+                _ => base,
+            },
+        };
+        let timeout = Duration::max(base, op_timeout).min(Duration::from_secs(59));
+        match timeout_opts.client() {
+            // the rest server should have some slack to allow for the CoreAgent to timeout first.
+            ClientId::RestServer => timeout + Duration::from_secs(1),
+            ClientId::CoreAgent => timeout,
+            _ => timeout,
+        }
+    } else {
+        base
+    }
 }
 
 /// context to be sent along with each request encapsulating the extra add ons that changes the
@@ -157,15 +173,16 @@ impl<C: Clone> Client<C> {
     /// Prepares a new `tonic::Request<T>` for the given request `R: Into<T>`.
     /// If `context` is specified the timeout of the request will be set to the base_timeout of
     /// context. Otherwise, `op_id` will be used to select an appropriate timeout.
-    pub(crate) fn request<T, R: Into<T>>(
+    pub(crate) fn request<T, R: Into<T>, M: Into<MessageId>>(
         &self,
         request: R,
         context: Option<Context>,
-        op_id: MessageIdVs,
+        op_id: M,
     ) -> tonic::Request<T> {
+        let timeout_opts = self.context.timeout_opts.clone().unwrap_or_default();
         let timeout = context
             .map(|c| c.base_timeout())
-            .unwrap_or_else(|| timeout_grpc(op_id, self.context.base_timeout()));
+            .unwrap_or_else(|| timeout_grpc(op_id.into(), timeout_opts));
         let mut request = request.into().into_request();
         request.set_timeout(timeout);
         request

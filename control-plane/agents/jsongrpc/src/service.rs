@@ -43,7 +43,7 @@ impl JsonGrpcSvc {
         {
             Ok(response) => response,
             Err(err) => {
-                return Err(SvcError::BusGetNode {
+                return Err(SvcError::GetNode {
                     node: request.node.to_string(),
                     source: err,
                 })

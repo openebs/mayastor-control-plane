@@ -67,7 +67,7 @@ impl ComponentAction for Core {
         let ip = cfg.container_ip("core");
         let uri = tonic::transport::Uri::from_str(&format!("https://{}:50051", ip)).unwrap();
         let timeout = grpc::context::TimeoutOptions::new()
-            .with_timeout(std::time::Duration::from_millis(100));
+            .with_req_timeout(std::time::Duration::from_millis(100));
         let core =
             grpc::client::CoreClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;
         core.wait_ready(None).await.map_err(|_| {

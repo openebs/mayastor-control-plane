@@ -30,24 +30,18 @@ impl Service {
 
     /// launch each of the services and the grpc server
     pub async fn run(self) {
-        let grpc_addr = self.base_service.get_shared_state::<Uri>().clone();
-        let pool_service = self.base_service.get_shared_state::<PoolServer>().clone();
-        let replica_service = self
-            .base_service
-            .get_shared_state::<ReplicaServer>()
-            .clone();
-        let volume_service = self.base_service.get_shared_state::<VolumeServer>().clone();
-        let node_service = self.base_service.get_shared_state::<NodeServer>().clone();
+        let grpc_addr = self.base_service.shared_state::<Uri>().clone();
+        let pool_service = self.base_service.shared_state::<PoolServer>().clone();
+        let replica_service = self.base_service.shared_state::<ReplicaServer>().clone();
+        let volume_service = self.base_service.shared_state::<VolumeServer>().clone();
+        let node_service = self.base_service.shared_state::<NodeServer>().clone();
         let registration_service = self
             .base_service
-            .get_shared_state::<RegistrationServer>()
+            .shared_state::<RegistrationServer>()
             .clone();
-        let registry_service = self
-            .base_service
-            .get_shared_state::<RegistryServer>()
-            .clone();
-        let nexus_service = self.base_service.get_shared_state::<NexusServer>().clone();
-        let watch_service = self.base_service.get_shared_state::<WatchServer>().clone();
+        let registry_service = self.base_service.shared_state::<RegistryServer>().clone();
+        let nexus_service = self.base_service.shared_state::<NexusServer>().clone();
+        let watch_service = self.base_service.shared_state::<WatchServer>().clone();
 
         let tonic_router = self
             .tonic_grpc_server

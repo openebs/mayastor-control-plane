@@ -13,25 +13,25 @@ use common_lib::{
 use rpc::io_engine as rpc;
 use std::convert::TryFrom;
 
-/// Trait for converting rpc messages to message bus messages.
-pub trait TryRpcToMessageBus {
+/// Trait for converting io-engine messages to agent messages, fallibly.
+pub trait TryIoEngineToAgent {
     /// Message bus message type.
-    type BusMessage;
-    /// Conversion of rpc message to message bus message.
-    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError>;
+    type AgentMessage;
+    /// Conversion of io-engine message to agent message.
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError>;
 }
-/// Trait for converting rpc messages to message bus messages.
-pub trait RpcToMessageBus {
+/// Trait for converting io-engine messages to agent messages.
+pub trait IoEngineToAgent {
     /// Message bus message type.
-    type BusMessage;
-    /// Conversion of rpc message to message bus message.
-    fn to_mbus(&self) -> Self::BusMessage;
+    type AgentMessage;
+    /// Conversion of io-engine message to agent message.
+    fn to_agent(&self) -> Self::AgentMessage;
 }
 
-impl RpcToMessageBus for rpc::block_device::Partition {
-    type BusMessage = transport::Partition;
-    fn to_mbus(&self) -> Self::BusMessage {
-        Self::BusMessage {
+impl IoEngineToAgent for rpc::block_device::Partition {
+    type AgentMessage = transport::Partition;
+    fn to_agent(&self) -> Self::AgentMessage {
+        Self::AgentMessage {
             parent: self.parent.clone(),
             number: self.number,
             name: self.name.clone(),
@@ -42,10 +42,10 @@ impl RpcToMessageBus for rpc::block_device::Partition {
     }
 }
 
-impl RpcToMessageBus for rpc::block_device::Filesystem {
-    type BusMessage = transport::Filesystem;
-    fn to_mbus(&self) -> Self::BusMessage {
-        Self::BusMessage {
+impl IoEngineToAgent for rpc::block_device::Filesystem {
+    type AgentMessage = transport::Filesystem;
+    fn to_agent(&self) -> Self::AgentMessage {
+        Self::AgentMessage {
             fstype: self.fstype.clone(),
             label: self.label.clone(),
             uuid: self.uuid.clone(),
@@ -56,10 +56,10 @@ impl RpcToMessageBus for rpc::block_device::Filesystem {
 
 /// Node Agent Conversions
 
-impl RpcToMessageBus for rpc::BlockDevice {
-    type BusMessage = transport::BlockDevice;
-    fn to_mbus(&self) -> Self::BusMessage {
-        Self::BusMessage {
+impl IoEngineToAgent for rpc::BlockDevice {
+    type AgentMessage = transport::BlockDevice;
+    fn to_agent(&self) -> Self::AgentMessage {
+        Self::AgentMessage {
             devname: self.devname.clone(),
             devtype: self.devtype.clone(),
             devmajor: self.devmajor,
@@ -69,13 +69,13 @@ impl RpcToMessageBus for rpc::BlockDevice {
             devlinks: self.devlinks.clone(),
             size: self.size,
             partition: match &self.partition {
-                Some(partition) => partition.to_mbus(),
+                Some(partition) => partition.to_agent(),
                 None => transport::Partition {
                     ..Default::default()
                 },
             },
             filesystem: match &self.filesystem {
-                Some(filesystem) => filesystem.to_mbus(),
+                Some(filesystem) => filesystem.to_agent(),
                 None => transport::Filesystem {
                     ..Default::default()
                 },
@@ -87,10 +87,10 @@ impl RpcToMessageBus for rpc::BlockDevice {
 
 ///  Pool Agent conversions
 
-impl RpcToMessageBus for rpc::Pool {
-    type BusMessage = transport::PoolState;
-    fn to_mbus(&self) -> Self::BusMessage {
-        Self::BusMessage {
+impl IoEngineToAgent for rpc::Pool {
+    type AgentMessage = transport::PoolState;
+    fn to_agent(&self) -> Self::AgentMessage {
+        Self::AgentMessage {
             node: Default::default(),
             id: self.name.clone().into(),
             disks: self.disks.clone().into_vec(),
@@ -101,10 +101,10 @@ impl RpcToMessageBus for rpc::Pool {
     }
 }
 
-impl TryRpcToMessageBus for rpc::ReplicaV2 {
-    type BusMessage = transport::Replica;
-    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
-        Ok(Self::BusMessage {
+impl TryIoEngineToAgent for rpc::ReplicaV2 {
+    type AgentMessage = transport::Replica;
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        Ok(Self::AgentMessage {
             node: Default::default(),
             name: self.name.clone().into(),
             uuid: ReplicaId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
@@ -123,11 +123,11 @@ impl TryRpcToMessageBus for rpc::ReplicaV2 {
 
 /// Volume Agent conversions
 
-impl TryRpcToMessageBus for rpc::NexusV2 {
-    type BusMessage = transport::Nexus;
+impl TryIoEngineToAgent for rpc::NexusV2 {
+    type AgentMessage = transport::Nexus;
 
-    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
-        Ok(Self::BusMessage {
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        Ok(Self::AgentMessage {
             node: Default::default(),
             name: self.name.clone(),
             uuid: NexusId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
@@ -136,7 +136,7 @@ impl TryRpcToMessageBus for rpc::NexusV2 {
             })?,
             size: self.size,
             status: NexusStatus::from(self.state),
-            children: self.children.iter().map(|c| c.to_mbus()).collect(),
+            children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
@@ -144,11 +144,11 @@ impl TryRpcToMessageBus for rpc::NexusV2 {
         })
     }
 }
-impl TryRpcToMessageBus for rpc::Nexus {
-    type BusMessage = transport::Nexus;
+impl TryIoEngineToAgent for rpc::Nexus {
+    type AgentMessage = transport::Nexus;
 
-    fn try_to_mbus(&self) -> Result<Self::BusMessage, SvcError> {
-        Ok(Self::BusMessage {
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        Ok(Self::AgentMessage {
             node: Default::default(),
             // todo: fix CAS-1107
             // CreateNexusV2 returns NexusV1... patch it up after this call...
@@ -156,7 +156,7 @@ impl TryRpcToMessageBus for rpc::Nexus {
             uuid: Default::default(),
             size: self.size,
             status: NexusStatus::from(self.state),
-            children: self.children.iter().map(|c| c.to_mbus()).collect(),
+            children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
@@ -165,11 +165,11 @@ impl TryRpcToMessageBus for rpc::Nexus {
     }
 }
 
-impl RpcToMessageBus for rpc::Child {
-    type BusMessage = transport::Child;
+impl IoEngineToAgent for rpc::Child {
+    type AgentMessage = transport::Child;
 
-    fn to_mbus(&self) -> Self::BusMessage {
-        Self::BusMessage {
+    fn to_agent(&self) -> Self::AgentMessage {
+        Self::AgentMessage {
             uri: self.uri.clone().into(),
             state: ChildState::from(self.state),
             rebuild_progress: u8::try_from(self.rebuild_progress).ok(),
@@ -177,20 +177,20 @@ impl RpcToMessageBus for rpc::Child {
     }
 }
 
-/// Trait for converting message bus messages to rpc messages.
-pub trait MessageBusToRpc {
-    /// RPC message type.
-    type RpcMessage;
-    /// Conversion of message bus message to rpc message.
-    fn to_rpc(&self) -> Self::RpcMessage;
+/// Trait for converting agent messages to io-engine messages.
+pub trait AgentToIoEngine {
+    /// RpcIoEngine message type.
+    type IoEngineMessage;
+    /// Conversion of agent message to io-engine message.
+    fn to_rpc(&self) -> Self::IoEngineMessage;
 }
 
 /// Pool Agent Conversions
 
-impl MessageBusToRpc for transport::CreateReplica {
-    type RpcMessage = rpc::CreateReplicaRequestV2;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::CreateReplica {
+    type IoEngineMessage = rpc::CreateReplicaRequestV2;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             uuid: self.uuid.clone().into(),
             pool: self.pool.clone().into(),
@@ -201,10 +201,10 @@ impl MessageBusToRpc for transport::CreateReplica {
     }
 }
 
-impl MessageBusToRpc for transport::ShareReplica {
-    type RpcMessage = rpc::ShareReplicaRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::ShareReplica {
+    type IoEngineMessage = rpc::ShareReplicaRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             // todo: CAS-1107
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             share: self.protocol as i32,
@@ -212,39 +212,39 @@ impl MessageBusToRpc for transport::ShareReplica {
     }
 }
 
-impl MessageBusToRpc for transport::UnshareReplica {
-    type RpcMessage = rpc::ShareReplicaRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::UnshareReplica {
+    type IoEngineMessage = rpc::ShareReplicaRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             share: Protocol::None as i32,
         }
     }
 }
 
-impl MessageBusToRpc for transport::CreatePool {
-    type RpcMessage = rpc::CreatePoolRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::CreatePool {
+    type IoEngineMessage = rpc::CreatePoolRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             name: self.id.clone().into(),
             disks: self.disks.iter().map(|d| d.to_string()).collect(),
         }
     }
 }
 
-impl MessageBusToRpc for transport::DestroyReplica {
-    type RpcMessage = rpc::DestroyReplicaRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::DestroyReplica {
+    type IoEngineMessage = rpc::DestroyReplicaRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
         }
     }
 }
 
-impl MessageBusToRpc for transport::DestroyPool {
-    type RpcMessage = rpc::DestroyPoolRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::DestroyPool {
+    type IoEngineMessage = rpc::DestroyPoolRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             name: self.id.clone().into(),
         }
     }
@@ -252,11 +252,11 @@ impl MessageBusToRpc for transport::DestroyPool {
 
 /// Volume Agent Conversions
 
-impl MessageBusToRpc for transport::CreateNexus {
-    type RpcMessage = rpc::CreateNexusV2Request;
-    fn to_rpc(&self) -> Self::RpcMessage {
+impl AgentToIoEngine for transport::CreateNexus {
+    type IoEngineMessage = rpc::CreateNexusV2Request;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
         let nexus_config = self.config.clone().unwrap_or_default();
-        Self::RpcMessage {
+        Self::IoEngineMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
             size: self.size,
@@ -270,10 +270,10 @@ impl MessageBusToRpc for transport::CreateNexus {
     }
 }
 
-impl MessageBusToRpc for transport::ShareNexus {
-    type RpcMessage = rpc::PublishNexusRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::ShareNexus {
+    type IoEngineMessage = rpc::PublishNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
             key: self.key.clone().unwrap_or_default(),
             share: self.protocol as i32,
@@ -281,28 +281,28 @@ impl MessageBusToRpc for transport::ShareNexus {
     }
 }
 
-impl MessageBusToRpc for transport::UnshareNexus {
-    type RpcMessage = rpc::UnpublishNexusRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::UnshareNexus {
+    type IoEngineMessage = rpc::UnpublishNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
         }
     }
 }
 
-impl MessageBusToRpc for transport::DestroyNexus {
-    type RpcMessage = rpc::DestroyNexusRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::DestroyNexus {
+    type IoEngineMessage = rpc::DestroyNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
         }
     }
 }
 
-impl MessageBusToRpc for transport::AddNexusChild {
-    type RpcMessage = rpc::AddChildNexusRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::AddNexusChild {
+    type IoEngineMessage = rpc::AddChildNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             uuid: self.nexus.clone().into(),
             uri: self.uri.clone().into(),
             norebuild: !self.auto_rebuild,
@@ -310,10 +310,10 @@ impl MessageBusToRpc for transport::AddNexusChild {
     }
 }
 
-impl MessageBusToRpc for transport::RemoveNexusChild {
-    type RpcMessage = rpc::RemoveChildNexusRequest;
-    fn to_rpc(&self) -> Self::RpcMessage {
-        Self::RpcMessage {
+impl AgentToIoEngine for transport::RemoveNexusChild {
+    type IoEngineMessage = rpc::RemoveChildNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
             uuid: self.nexus.clone().into(),
             uri: self.uri.clone().into(),
         }

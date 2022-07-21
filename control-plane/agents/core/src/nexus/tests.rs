@@ -123,8 +123,8 @@ async fn nexus() {
 fn bus_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_max_retries(0)
-        .with_timeout(Duration::from_millis(250))
-        .with_req_timeout(None)
+        .with_req_timeout(Duration::from_millis(250))
+        .with_min_req_timeout(None)
 }
 
 /// Get the nexus spec

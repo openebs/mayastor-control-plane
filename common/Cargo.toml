@@ -7,8 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# Nats with the tcp stream timeout fix: CAS-1192
-nats = { git = "https://github.com/openebs/nats.rs", branch="main_fixes" }
 url = "2.2.2"
 uuid = { version = "0.8.2", features = ["v4"] }
 strum = "0.21.0"
@@ -22,7 +20,6 @@ serde = { version = "1.0.130", features = ["derive"] }
 log = "0.4.14"
 async-trait = "0.1.51"
 dyn-clonable = "0.9.0"
-once_cell = "1.8.0"
 openapi = { path = "../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
 parking_lot = "0.11.2"
 rand = "0.8.4"

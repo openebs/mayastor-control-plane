@@ -24,12 +24,13 @@ pub(crate) async fn configure(builder: Service) -> Service {
 }
 
 async fn create_node_service(builder: &Service) -> service::Service {
-    let registry = builder.get_shared_state::<Registry>().clone();
+    let registry = builder.shared_state::<Registry>().clone();
     let deadline = CliArgs::args().deadline.into();
     let request = CliArgs::args().request_timeout.into();
     let connect = CliArgs::args().connect_timeout.into();
+    let no_min = CliArgs::args().no_min_timeouts;
 
-    service::Service::new(registry.clone(), deadline, request, connect).await
+    service::Service::new(registry.clone(), deadline, request, connect, no_min).await
 }
 
 #[cfg(test)]
@@ -67,7 +68,7 @@ mod tests {
             .await
             .unwrap();
         let bus_timeout = TimeoutOptions::default()
-            .with_timeout(Duration::from_secs(1))
+            .with_req_timeout(Duration::from_secs(1))
             .with_timeout_backoff(Duration::from_millis(100));
 
         let maya_name = cluster.node(0);

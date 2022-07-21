@@ -8,11 +8,10 @@ pub mod registry;
 pub mod volume;
 pub mod watch;
 
-use common_lib::types::v0::transport::ChannelVs;
 use http::Uri;
 
 use crate::core::registry::NumRebuilds;
-use common_lib::transport_api::BusClient;
+
 use opentelemetry::{global, KeyValue};
 use structopt::StructOpt;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
@@ -20,11 +19,6 @@ use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 #[derive(Debug, StructOpt)]
 #[structopt(name = utils::package_description!(), version = version_info_str!())]
 pub(crate) struct CliArgs {
-    /// The Nats Server URL to connect to
-    /// (supports the nats schema)
-    #[structopt(long, short)]
-    pub(crate) nats: Option<String>,
-
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
     #[structopt(long, short, default_value = utils::CACHE_POLL_PERIOD)]
@@ -114,13 +108,11 @@ async fn server(cli_args: CliArgs) {
     )
     .await;
 
-    let base_service = common::Service::builder(cli_args.nats.clone(), ChannelVs::Core)
+    let base_service = common::Service::builder()
         .with_shared_state(global::tracer_with_version(
             "core-agent",
             env!("CARGO_PKG_VERSION"),
         ))
-        .connect_message_bus(cli_args.no_min_timeouts, BusClient::CoreAgent)
-        .await
         .with_shared_state(registry.clone())
         .with_shared_state(cli_args.grpc_server_addr.clone())
         .configure_async(node::configure)

@@ -53,11 +53,11 @@ mod test {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         *channel.lock().unwrap() = Some(sender);
 
-        let timeout_opts = TimeoutOptions::new().with_timeout(Duration::from_secs(10));
+        let timeout_opts = TimeoutOptions::new().with_req_timeout(Duration::from_secs(10));
         let client = PoolClient::new(uri, timeout_opts).await;
 
         let req_timeout = Duration::from_secs(1);
-        let ctx = Context::new(TimeoutOptions::new().with_timeout(req_timeout));
+        let ctx = Context::new(TimeoutOptions::new().with_req_timeout(req_timeout));
         let before = std::time::Instant::now();
         let result = client.get(Filter::None, Some(ctx)).await;
         let (complete, timestamp) = receiver.await.unwrap();

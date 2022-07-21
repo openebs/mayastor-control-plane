@@ -4,7 +4,7 @@ use common_lib::types::v0::{
     transport::{DestroyNexus, Filter, ShareNexus, UnshareNexus},
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use transport_api::{BusError, ReplyErrorKind, ResourceKind};
+use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()
@@ -27,7 +27,7 @@ async fn destroy_nexus(filter: Filter) -> Result<(), RestError<RestJsonError>> {
             }
         }
         _ => {
-            return Err(RestError::from(BusError {
+            return Err(RestError::from(ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Nexus,
                 source: "destroy_nexus".to_string(),
