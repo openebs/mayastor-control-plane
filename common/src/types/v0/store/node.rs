@@ -35,6 +35,7 @@ pub struct NodeSpec {
     /// Node labels.
     labels: NodeLabels,
     /// Cordon labels.
+    #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     cordon_labels: Vec<String>,
 }
 impl NodeSpec {
