@@ -3,12 +3,12 @@ use crate::core::{
     wrapper::{NodeWrapper, PoolWrapper},
 };
 use common_lib::types::v0::{
-    message_bus::{Child, ChildUri, Replica},
     store::{
         nexus_child::NexusChild,
         nexus_persistence::{ChildInfo, NexusInfo},
         replica::ReplicaSpec,
     },
+    transport::{Child, ChildUri, Replica},
 };
 
 #[derive(Debug, Clone)]

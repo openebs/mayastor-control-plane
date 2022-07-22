@@ -1,19 +1,19 @@
 #![cfg(test)]
 
 use common_lib::{
-    mbus_api::{message_bus::v0::Replicas, ReplyError, ReplyErrorKind, ResourceKind},
     store::etcd::Etcd,
+    transport_api::{v0::Replicas, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
-        message_bus::{
-            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, Filter, GetNexuses,
-            GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume,
-            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol, VolumeState,
-            VolumeStatus,
-        },
         openapi::apis::{StatusCode, Uuid},
         store::{
             definitions::Store,
             nexus_persistence::{NexusInfo, NexusInfoKey},
+        },
+        transport::{
+            Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, Filter, GetNexuses,
+            GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume,
+            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol, VolumeState,
+            VolumeStatus,
         },
     },
 };
@@ -22,14 +22,14 @@ use deployer_cluster::{Cluster, ClusterBuilder};
 use rpc::io_engine::FaultNexusChildRequest;
 
 use common_lib::{
-    mbus_api::TimeoutOptions,
+    transport_api::TimeoutOptions,
     types::v0::{
-        message_bus::{
+        openapi::{models, models::NodeStatus, tower::client::Error},
+        store::{definitions::StorableObject, volume::VolumeSpec},
+        transport::{
             ChildUri, CreateNexus, DestroyReplica, GetSpecs, NexusId, ReplicaId, ReplicaOwners,
             VolumeId,
         },
-        openapi::{models, models::NodeStatus, tower::client::Error},
-        store::{definitions::StorableObject, volume::VolumeSpec},
     },
 };
 use grpc::operations::{
@@ -886,7 +886,7 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
 
     let timeout_opts = TimeoutOptions::default()
         .with_max_retries(10)
-        .with_timeout(Duration::from_millis(200))
+        .with_req_timeout(Duration::from_millis(200))
         .with_timeout_backoff(Duration::from_millis(50));
 
     cluster
@@ -1027,7 +1027,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
 
     let timeout_opts = TimeoutOptions::default()
         .with_max_retries(10)
-        .with_timeout(Duration::from_millis(500))
+        .with_req_timeout(Duration::from_millis(500))
         .with_timeout_backoff(Duration::from_millis(50));
     let mut store = Etcd::new("0.0.0.0:2379")
         .await

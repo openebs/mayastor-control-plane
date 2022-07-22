@@ -1,6 +1,6 @@
 use crate::types::v0::{
-    message_bus::{NexusId, ReplicaId, VolumeId},
     store::definitions::{key_prefix, ObjectKey, StorableObject, StorableObjectType},
+    transport::{NexusId, ReplicaId, VolumeId},
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;

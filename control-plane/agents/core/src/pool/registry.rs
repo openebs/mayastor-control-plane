@@ -3,7 +3,7 @@ use crate::core::{
     wrapper::{GetterOps, *},
 };
 use common::errors::{self, SvcError, SvcError::PoolNotFound};
-use common_lib::types::v0::message_bus::{NodeId, Pool, PoolId, PoolState, Replica, ReplicaId};
+use common_lib::types::v0::transport::{NodeId, Pool, PoolId, PoolState, Replica, ReplicaId};
 use snafu::OptionExt;
 
 /// Pool helpers

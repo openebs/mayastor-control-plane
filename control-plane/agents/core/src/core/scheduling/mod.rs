@@ -7,7 +7,7 @@ use crate::core::scheduling::{
     resources::{ChildItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
-use common_lib::types::v0::message_bus::{PoolStatus, PoolTopology};
+use common_lib::types::v0::transport::{PoolStatus, PoolTopology};
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 
 #[async_trait::async_trait(?Send)]

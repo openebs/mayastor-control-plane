@@ -31,10 +31,10 @@ pub use common_lib::{
 };
 use futures::future::Ready;
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
-use mbus_api::{ReplyError, ReplyErrorKind, ResourceKind};
 use once_cell::sync::OnceCell;
 use rest_client::versions::v0::*;
 use serde::Deserialize;
+use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 /// Once cell static variable to store the grpc client and initialise once at startup
 pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();

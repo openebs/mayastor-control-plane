@@ -9,7 +9,7 @@ use common::Service;
 use grpc::operations::{pool::server::PoolServer, replica::server::ReplicaServer};
 
 pub(crate) fn configure(builder: Service) -> Service {
-    let registry = builder.get_shared_state::<Registry>().clone();
+    let registry = builder.shared_state::<Registry>().clone();
     let new_service = Arc::new(service::Service::new(registry));
     let pool_service = PoolServer::new(new_service.clone());
     let replica_service = ReplicaServer::new(new_service);

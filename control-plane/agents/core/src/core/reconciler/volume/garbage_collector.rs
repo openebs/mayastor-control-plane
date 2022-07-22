@@ -9,8 +9,8 @@ use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode, TraceSpan,
 use crate::core::specs::SpecOperations;
 use common::errors::SvcError;
 use common_lib::types::v0::{
-    message_bus::{DestroyVolume, VolumeStatus},
     store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},
+    transport::{DestroyVolume, VolumeStatus},
 };
 use parking_lot::Mutex;
 use std::sync::Arc;

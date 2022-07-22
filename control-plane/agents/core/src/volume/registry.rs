@@ -1,6 +1,6 @@
 use crate::core::registry::Registry;
 use common::errors::SvcError;
-use common_lib::types::v0::message_bus::{
+use common_lib::types::v0::transport::{
     NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 

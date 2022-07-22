@@ -1,10 +1,10 @@
 use super::*;
 use common_lib::types::v0::{
-    message_bus::{
+    openapi::{apis::Uuid, models::VolumeShareProtocol},
+    transport::{
         DestroyVolume, Filter, PublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume,
         UnshareVolume, Volume,
     },
-    openapi::{apis::Uuid, models::VolumeShareProtocol},
 };
 use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
 

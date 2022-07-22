@@ -1,30 +1,23 @@
 pub mod core;
-/// Services to launch the grpc server
-pub mod lib;
 pub mod nexus;
 pub mod node;
 pub mod pool;
 pub mod registry;
+mod service;
 pub mod volume;
 pub mod watch;
 
-use common_lib::types::v0::message_bus::ChannelVs;
 use http::Uri;
 
 use crate::core::registry::NumRebuilds;
-use common_lib::mbus_api::BusClient;
-use opentelemetry::{global, KeyValue};
+
+use opentelemetry::KeyValue;
 use structopt::StructOpt;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = utils::package_description!(), version = version_info_str!())]
 pub(crate) struct CliArgs {
-    /// The Nats Server URL to connect to
-    /// (supports the nats schema)
-    #[structopt(long, short)]
-    pub(crate) nats: Option<String>,
-
     /// The period at which the registry updates its cache of all
     /// resources from all nodes
     #[structopt(long, short, default_value = utils::CACHE_POLL_PERIOD)]
@@ -114,14 +107,11 @@ async fn server(cli_args: CliArgs) {
     )
     .await;
 
-    let base_service = common::Service::builder(cli_args.nats.clone(), ChannelVs::Core)
-        .with_shared_state(global::tracer_with_version(
+    let base_service = common::Service::builder()
+        .with_shared_state(opentelemetry::global::tracer_with_version(
             "core-agent",
             env!("CARGO_PKG_VERSION"),
         ))
-        .with_default_liveness()
-        .connect_message_bus(cli_args.no_min_timeouts, BusClient::CoreAgent)
-        .await
         .with_shared_state(registry.clone())
         .with_shared_state(cli_args.grpc_server_addr.clone())
         .configure_async(node::configure)
@@ -132,142 +122,9 @@ async fn server(cli_args: CliArgs) {
         .configure(watch::configure)
         .configure(registry::configure);
 
-    let service = lib::Service::new(base_service);
+    let service = service::Service::new(base_service);
     registry.start().await;
     service.run().await;
     registry.stop().await;
     opentelemetry::global::shutdown_tracer_provider();
-}
-
-/// Constructs a service handler for `RequestType` which gets redirected to a
-/// Service Handler named `ServiceFnName`
-#[macro_export]
-macro_rules! impl_request_handler {
-    ($RequestType:ident, $ServiceFnName:ident) => {
-        /// Needed so we can implement the ServiceSubscriber trait for
-        /// the message types external to the crate
-        #[derive(Clone, Default)]
-        struct ServiceHandler<T> {
-            data: PhantomData<T>,
-        }
-        #[async_trait]
-        impl common::ServiceSubscriber for ServiceHandler<$RequestType> {
-            async fn handler(&self, args: common::Arguments<'_>) -> Result<(), SvcError> {
-                #[tracing::instrument(skip(args), fields(result, error, request.service = true))]
-                async fn $ServiceFnName(
-                    args: common::Arguments<'_>,
-                ) -> Result<<$RequestType as Message>::Reply, SvcError> {
-                    let request: ReceivedMessage<$RequestType> = args.request.try_into()?;
-                    let service: &service::Service = args.context.get_state()?;
-                    match service.$ServiceFnName(&request.inner()).await {
-                        Ok(reply) => {
-                            if let Ok(result_str) = serde_json::to_string(&reply) {
-                                if result_str.len() < 2048 {
-                                    tracing::Span::current().record("result", &result_str.as_str());
-                                }
-                            }
-                            tracing::Span::current().record("error", &false);
-                            Ok(reply)
-                        }
-                        Err(error) => {
-                            tracing::Span::current()
-                                .record("result", &format!("{:?}", error).as_str());
-                            tracing::Span::current().record("error", &true);
-                            Err(error)
-                        }
-                    }
-                }
-                use opentelemetry::trace::FutureExt;
-                match $ServiceFnName(args.clone())
-                    .with_context(args.request.context())
-                    .await
-                {
-                    Ok(reply) => Ok(args.request.respond(reply).await?),
-                    Err(error) => Err(error),
-                }
-            }
-            fn filter(&self) -> Vec<MessageId> {
-                vec![$RequestType::default().id()]
-            }
-        }
-    };
-}
-
-/// Constructs a service handler for `PublishType` which gets redirected to a
-/// Service Handler named `ServiceFnName`
-#[macro_export]
-macro_rules! impl_publish_handler {
-    ($PublishType:ident, $ServiceFnName:ident) => {
-        /// Needed so we can implement the ServiceSubscriber trait for
-        /// the message types external to the crate
-        #[derive(Clone, Default)]
-        struct ServiceHandler<T> {
-            data: PhantomData<T>,
-        }
-        #[async_trait]
-        impl common::ServiceSubscriber for ServiceHandler<$PublishType> {
-            async fn handler(&self, args: common::Arguments<'_>) -> Result<(), SvcError> {
-                let request: ReceivedMessage<$PublishType> = args.request.try_into()?;
-
-                let service: &service::Service = args.context.get_state()?;
-                service.$ServiceFnName(&request.inner()).await;
-                Ok(())
-            }
-            fn filter(&self) -> Vec<MessageId> {
-                vec![$PublishType::default().id()]
-            }
-        }
-    };
-}
-
-/// Constructs and calls out to a service handler for `RequestType` which gets
-/// redirected to a Service Handler where its name is either:
-/// `RequestType` as a snake lowercase (default) or
-/// `ServiceFn` parameter (if provided)
-#[macro_export]
-macro_rules! handler {
-    ($RequestType:ident) => {{
-        paste::paste! {
-            impl_request_handler!(
-                $RequestType,
-                [<$RequestType:snake:lower>]
-            );
-        }
-        ServiceHandler::<$RequestType>::default()
-    }};
-    ($RequestType:ident, $ServiceFn:ident) => {{
-        paste::paste! {
-            impl_request_handler!(
-                $RequestType,
-                $ServiceFn
-            );
-        }
-        ServiceHandler::<$RequestType>::default()
-    }};
-}
-
-/// Constructs and calls out to a service handler for `RequestType` which gets
-/// redirected to a Service Handler where its name is either:
-/// `RequestType` as a snake lowercase (default) or
-/// `ServiceFn` parameter (if provided)
-#[macro_export]
-macro_rules! handler_publish {
-    ($RequestType:ident) => {{
-        paste::paste! {
-            impl_publish_handler!(
-                $RequestType,
-                [<$RequestType:snake:lower>]
-            );
-        }
-        ServiceHandler::<$RequestType>::default()
-    }};
-    ($RequestType:ident, $ServiceFn:ident) => {{
-        paste::paste! {
-            impl_publish_handler!(
-                $RequestType,
-                $ServiceFn
-            );
-        }
-        ServiceHandler::<$RequestType>::default()
-    }};
 }

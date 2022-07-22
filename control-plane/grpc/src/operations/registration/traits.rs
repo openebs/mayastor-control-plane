@@ -1,6 +1,6 @@
 use common_lib::{
-    mbus_api::ReplyError,
-    types::v0::message_bus::{Deregister, NodeId, Register},
+    transport_api::ReplyError,
+    types::v0::transport::{Deregister, NodeId, Register},
 };
 use rpc::registration::{DeregisterRequest, RegisterRequest};
 

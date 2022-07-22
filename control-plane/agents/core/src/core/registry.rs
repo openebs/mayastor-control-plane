@@ -23,11 +23,11 @@ use common::errors::SvcError;
 use common_lib::{
     store::etcd::Etcd,
     types::v0::{
-        message_bus::NodeId,
         store::{
             definitions::{StorableObject, Store, StoreError, StoreKey},
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
         },
+        transport::NodeId,
     },
 };
 use std::{

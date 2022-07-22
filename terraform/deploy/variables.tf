@@ -150,7 +150,7 @@ variable "csi_controller_image" {
 
 variable "control_request_timeout" {
   type        = string
-  description = "default request timeout for any NATS or GRPC request"
+  description = "default request timeout for any GRPC request"
   default     = "5s"
 }
 

@@ -4,8 +4,8 @@ use crate::{
     watch::{get_watches_reply, watch_grpc_client::WatchGrpcClient},
 };
 use common_lib::{
-    mbus_api::{v0::Watches, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::MessageIdVs,
+    transport_api::{v0::Watches, ReplyError, ResourceKind, TimeoutOptions},
+    types::v0::transport::MessageIdVs,
 };
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;

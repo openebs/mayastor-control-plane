@@ -1,8 +1,8 @@
 use crate::{core, core::specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
-    mbus_api::ReplyError,
-    types::v0::message_bus::{GetSpecs, GetStates, Specs, States},
+    transport_api::ReplyError,
+    types::v0::transport::{GetSpecs, GetStates, Specs, States},
 };
 use grpc::{
     context::Context,

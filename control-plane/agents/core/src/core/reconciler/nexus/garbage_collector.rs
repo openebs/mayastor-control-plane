@@ -4,8 +4,8 @@ use crate::core::{
     task_poller::{PollEvent, PollResult, PollTimer, PollerState},
 };
 use common_lib::types::v0::{
-    message_bus::DestroyNexus,
     store::{nexus::NexusSpec, OperationMode, TraceSpan},
+    transport::DestroyNexus,
 };
 
 use crate::core::task_poller::PollTriggerEvent;

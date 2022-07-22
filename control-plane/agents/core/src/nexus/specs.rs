@@ -5,18 +5,18 @@ use crate::core::{
 };
 use common::errors::{NexusNotFound, SvcError};
 use common_lib::{
-    mbus_api::{ErrorChain, ResourceKind},
+    transport_api::{ErrorChain, ResourceKind},
     types::v0::{
-        message_bus::{
-            AddNexusChild, AddNexusReplica, Child, ChildUri, CreateNexus, DestroyNexus, Nexus,
-            NexusId, NexusStatus, RemoveNexusChild, RemoveNexusReplica, ReplicaOwners, ShareNexus,
-            UnshareNexus,
-        },
         store::{
             nexus::{NexusOperation, NexusSpec},
             nexus_child::NexusChild,
             replica::ReplicaSpec,
             OperationMode, SpecStatus, SpecTransaction, TraceSpan,
+        },
+        transport::{
+            AddNexusChild, AddNexusReplica, Child, ChildUri, CreateNexus, DestroyNexus, Nexus,
+            NexusId, NexusStatus, RemoveNexusChild, RemoveNexusReplica, ReplicaOwners, ShareNexus,
+            UnshareNexus,
         },
     },
 };

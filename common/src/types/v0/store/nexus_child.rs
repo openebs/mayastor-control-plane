@@ -1,6 +1,6 @@
 use crate::types::v0::{
-    message_bus::{Child, ChildUri},
     store::nexus::ReplicaUri,
+    transport::{Child, ChildUri},
 };
 
 use serde::{Deserialize, Serialize};

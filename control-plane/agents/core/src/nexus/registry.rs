@@ -1,8 +1,8 @@
 use crate::core::{registry::Registry, wrapper::*};
 use common::errors::{NexusNotFound, SvcError};
 use common_lib::types::v0::{
-    message_bus::{Nexus, NexusId, NodeId, VolumeId},
     store::nexus_persistence::{NexusInfo, NexusInfoKey},
+    transport::{Nexus, NexusId, NodeId, VolumeId},
 };
 use snafu::OptionExt;
 

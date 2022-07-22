@@ -1,13 +1,13 @@
 use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
-    mbus_api::{message_bus::v0::Volumes, ReplyError},
+    transport_api::{v0::Volumes, ReplyError},
     types::v0::{
-        message_bus::{
+        store::OperationMode,
+        transport::{
             CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
             ShareVolume, UnpublishVolume, UnshareVolume, Volume,
         },
-        store::OperationMode,
     },
 };
 use grpc::{

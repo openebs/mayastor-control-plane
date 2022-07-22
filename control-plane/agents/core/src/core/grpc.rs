@@ -1,6 +1,7 @@
 use crate::node::service::NodeCommsTimeout;
 use common::errors::{GrpcConnect, GrpcConnectUri, SvcError};
-use common_lib::{mbus_api::MessageIdTimeout, types::v0::message_bus::NodeId};
+use common_lib::{transport_api::MessageId, types::v0::transport::NodeId};
+use grpc::context::timeout_grpc;
 use rpc::io_engine::IoEngineClient;
 use snafu::ResultExt;
 use std::{
@@ -25,12 +26,12 @@ pub(crate) struct GrpcContext {
 }
 
 impl GrpcContext {
-    pub(crate) fn new<T: MessageIdTimeout>(
+    pub(crate) fn new(
         lock: Arc<tokio::sync::Mutex<()>>,
         node: &NodeId,
         endpoint: &str,
         comms_timeouts: &NodeCommsTimeout,
-        _request: Option<T>,
+        request: Option<MessageId>,
     ) -> Result<Self, SvcError> {
         let uri = format!("http://{}", endpoint);
         let uri = http::uri::Uri::from_str(&uri).context(GrpcConnectUri {
@@ -38,13 +39,13 @@ impl GrpcContext {
             uri: uri.clone(),
         })?;
 
-        // let timeout = request
-        //     .map(|r| r.timeout(comms_timeouts.request(), &bus()))
-        //     .unwrap_or_else(|| comms_timeouts.request());
+        let timeout = request
+            .map(|r| timeout_grpc(r, comms_timeouts.opts().clone()))
+            .unwrap_or_else(|| comms_timeouts.request());
 
         let endpoint = tonic::transport::Endpoint::from(uri)
             .connect_timeout(comms_timeouts.connect() + Duration::from_millis(500))
-            .timeout(comms_timeouts.request());
+            .timeout(timeout);
 
         Ok(Self {
             node: node.clone(),
@@ -54,7 +55,7 @@ impl GrpcContext {
         })
     }
     /// Override the timeout config in the context for the given request
-    fn override_timeout<R: MessageIdTimeout>(&mut self, _request: Option<R>) {
+    fn override_timeout(&mut self, _request: Option<MessageId>) {
         // let timeout = request
         //     .map(|r| r.timeout(self.comms_timeouts.request(), &bus()))
         //     .unwrap_or_else(|| self.comms_timeouts.request());
@@ -142,7 +143,7 @@ impl GrpcClientLocked {
     /// This is useful when we want to issue the next gRPC using a different timeout
     /// todo: tower should allow us to handle this better by keeping the same "backend" client
     /// but modifying the timeout layer?
-    pub(crate) async fn reconnect<R: MessageIdTimeout>(self, request: R) -> Result<Self, SvcError> {
+    pub(crate) async fn reconnect(self, request: MessageId) -> Result<Self, SvcError> {
         let mut context = self.context.clone();
         context.override_timeout(Some(request));
 

@@ -4,8 +4,8 @@ use crate::{
     operations::jsongrpc::traits::{JsonGrpcOperations, JsonGrpcRequestInfo},
 };
 use common_lib::{
-    mbus_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::MessageIdVs,
+    transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
+    types::v0::transport::MessageIdVs,
 };
 use serde_json::Value;
 use std::{ops::Deref, time::Duration};
@@ -28,7 +28,7 @@ impl JsonGrpcClient {
         let timeout_opts = match timeout_opts {
             Some(opts) => opts,
             None => TimeoutOptions::new()
-                .with_timeout(Duration::from_millis(250))
+                .with_req_timeout(Duration::from_millis(250))
                 .with_max_retries(10),
         };
         for attempt in 1 ..= timeout_opts.max_retries().unwrap_or_default() {

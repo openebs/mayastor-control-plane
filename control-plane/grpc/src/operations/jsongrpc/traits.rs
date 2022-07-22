@@ -1,7 +1,7 @@
 use crate::{context::Context, jsongrpc};
 use common_lib::{
-    mbus_api::ReplyError,
-    types::v0::message_bus::{JsonGrpcMethod, JsonGrpcParams, JsonGrpcRequest, NodeId},
+    transport_api::ReplyError,
+    types::v0::transport::{JsonGrpcMethod, JsonGrpcParams, JsonGrpcRequest, NodeId},
 };
 
 /// All jsongrpc operations to be a part of the JsonGrpcOperations trait

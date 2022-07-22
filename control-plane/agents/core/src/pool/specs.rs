@@ -8,17 +8,17 @@ use common::errors::{
     SvcError::{CordonedNode, PoolNotFound},
 };
 use common_lib::{
-    mbus_api::ResourceKind,
+    transport_api::ResourceKind,
     types::v0::{
-        message_bus::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
-            PoolStatus, Replica, ReplicaId, ReplicaOwners, ReplicaStatus, ShareReplica,
-            UnshareReplica,
-        },
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
             OperationMode, SpecStatus, SpecTransaction,
+        },
+        transport::{
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
+            PoolStatus, Replica, ReplicaId, ReplicaOwners, ReplicaStatus, ShareReplica,
+            UnshareReplica,
         },
     },
 };

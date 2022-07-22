@@ -10,24 +10,24 @@ use crate::{
 
 use common::{
     errors::{GrpcRequestError, SvcError},
-    v0::msg_translation::{MessageBusToRpc, RpcToMessageBus, TryRpcToMessageBus},
+    v0::msg_translation::{AgentToIoEngine, IoEngineToAgent, TryIoEngineToAgent},
 };
 use common_lib::{
-    mbus_api::{Message, MessageId, MessageIdTimeout, ResourceKind},
+    transport_api::{Message, MessageId, ResourceKind},
     types::v0::{
-        message_bus::{
+        store,
+        store::{nexus::NexusState, replica::ReplicaState},
+        transport::{
             AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
             DestroyPool, DestroyReplica, MessageIdVs, Nexus, NexusId, NodeId, NodeState,
             NodeStatus, PoolId, PoolState, PoolStatus, Protocol, RemoveNexusChild, Replica,
             ReplicaId, ShareNexus, ShareReplica, UnshareNexus, UnshareReplica,
         },
-        store,
-        store::{nexus::NexusState, replica::ReplicaState},
     },
 };
 
 use async_trait::async_trait;
-use common_lib::types::v0::{message_bus, store::ResourceUuid};
+use common_lib::types::v0::{store::ResourceUuid, transport};
 use parking_lot::RwLock;
 use rpc::io_engine::Null;
 use snafu::ResultExt;
@@ -39,12 +39,12 @@ use std::{
 
 type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
 /// Default timeout for GET* gRPC requests (ex: GetPools, GetNexuses, etc..)
-const GETS_TIMEOUT: MessageIdVs = MessageIdVs::Default;
+const GETS_TIMEOUT: MessageId = MessageId::v0(MessageIdVs::Default);
 
 enum ResourceType {
-    All(Vec<message_bus::PoolState>, Vec<Replica>, Vec<Nexus>),
+    All(Vec<transport::PoolState>, Vec<Replica>, Vec<Nexus>),
     Nexus(Vec<Nexus>),
-    Pool(Vec<message_bus::PoolState>),
+    Pool(Vec<transport::PoolState>),
     Replica(Vec<Replica>),
 }
 
@@ -104,10 +104,7 @@ impl NodeWrapper {
 
     /// Get `GrpcContext` for this node
     /// It will be used to execute the `request` operation
-    pub(crate) fn grpc_context_ext(
-        &self,
-        request: impl MessageIdTimeout,
-    ) -> Result<GrpcContext, SvcError> {
+    pub(crate) fn grpc_context_ext(&self, request: MessageId) -> Result<GrpcContext, SvcError> {
         GrpcContext::new(
             self.lock.clone(),
             self.id(),
@@ -127,7 +124,7 @@ impl NodeWrapper {
             self.id(),
             &self.endpoint_str(),
             &timeout,
-            None::<MessageId>,
+            None,
         )
     }
 
@@ -138,7 +135,7 @@ impl NodeWrapper {
             self.id(),
             &self.endpoint_str(),
             &self.comms_timeouts,
-            None::<MessageId>,
+            None,
         )
     }
 
@@ -197,8 +194,11 @@ impl NodeWrapper {
     /// Probe the node for liveness
     pub(crate) async fn liveness_probe(&mut self) -> Result<(), SvcError> {
         // use the connect timeout for liveness
-        let timeouts =
-            NodeCommsTimeout::new(self.comms_timeouts.connect(), self.comms_timeouts.connect());
+        let timeouts = NodeCommsTimeout::new(
+            self.comms_timeouts.connect(),
+            self.comms_timeouts.connect(),
+            true,
+        );
 
         let mut ctx = self.grpc_client_timeout(timeouts).await?;
         let _ = ctx
@@ -567,7 +567,7 @@ impl NodeStateFetcher {
         let rpc_replicas = &rpc_replicas.get_ref().replicas;
         let pools = rpc_replicas
             .iter()
-            .filter_map(|p| match rpc_replica_to_bus(p, self.id()) {
+            .filter_map(|p| match rpc_replica_to_agent(p, self.id()) {
                 Ok(r) => Some(r),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc replica");
@@ -593,7 +593,7 @@ impl NodeStateFetcher {
         let rpc_pools = &rpc_pools.get_ref().pools;
         let pools = rpc_pools
             .iter()
-            .map(|p| rpc_pool_to_bus(p, self.id()))
+            .map(|p| rpc_pool_to_agent(p, self.id()))
             .collect();
         Ok(pools)
     }
@@ -614,7 +614,7 @@ impl NodeStateFetcher {
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
-            .filter_map(|n| match rpc_nexus_v2_to_bus(n, self.id()) {
+            .filter_map(|n| match rpc_nexus_v2_to_agent(n, self.id()) {
                 Ok(n) => Some(n),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
@@ -632,10 +632,7 @@ impl NodeStateFetcher {
 pub(crate) trait ClientOps {
     /// Get the grpc lock and client pair to execute the provided `request`
     /// NOTE: Only available when the node status is online
-    async fn grpc_client_locked<T: MessageIdTimeout>(
-        &self,
-        request: T,
-    ) -> Result<GrpcClientLocked, SvcError>;
+    async fn grpc_client_locked(&self, request: MessageId) -> Result<GrpcClientLocked, SvcError>;
     /// Create a pool on the node via gRPC
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError>;
     /// Destroy a pool on the node via gRPC
@@ -786,10 +783,7 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
 #[async_trait]
 impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
-    async fn grpc_client_locked<T: MessageIdTimeout>(
-        &self,
-        request: T,
-    ) -> Result<GrpcClientLocked, SvcError> {
+    async fn grpc_client_locked(&self, request: MessageId) -> Result<GrpcClientLocked, SvcError> {
         if !self.read().await.is_online() {
             return Err(SvcError::NodeNotOnline {
                 node: self.read().await.id().clone(),
@@ -809,7 +803,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                     resource: ResourceKind::Pool,
                     request: "create_pool",
                 })?;
-        let pool = rpc_pool_to_bus(&rpc_pool.into_inner(), &request.node);
+        let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
         let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
         self.update_pool_states(ctx.deref_mut()).await?;
         self.update_replica_states(ctx.deref_mut()).await?;
@@ -849,7 +843,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 request: "create_replica",
             })?;
 
-        let replica = rpc_replica_to_bus(&rpc_replica.into_inner(), &request.node)?;
+        let replica = rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
         let mut ctx = ctx.reconnect(GETS_TIMEOUT).await?;
         self.update_replica_states(ctx.deref_mut()).await?;
         self.update_pool_states(ctx.deref_mut()).await?;
@@ -934,7 +928,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 resource: ResourceKind::Nexus,
                 request: "create_nexus",
             })?;
-        let mut nexus = rpc_nexus_to_bus(&rpc_nexus.into_inner(), &request.node)?;
+        let mut nexus = rpc_nexus_to_agent(&rpc_nexus.into_inner(), &request.node)?;
         // CAS-1107 - create_nexus_v2 returns NexusV1...
         nexus.name = request.name();
         nexus.uuid = request.uuid.clone();
@@ -1020,7 +1014,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             resource: ResourceKind::Child,
             request: "add_child_nexus",
         })?;
-        let child = rpc_child.into_inner().to_mbus();
+        let child = rpc_child.into_inner().to_agent();
         Ok(child)
     }
 
@@ -1055,32 +1049,32 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 }
 
 /// convert rpc pool to a message bus pool
-fn rpc_pool_to_bus(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) -> PoolState {
-    let mut pool = rpc_pool.to_mbus();
+fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) -> PoolState {
+    let mut pool = rpc_pool.to_agent();
     pool.node = id.clone();
     pool
 }
 
 /// convert rpc replica to a message bus replica
-fn rpc_replica_to_bus(
+fn rpc_replica_to_agent(
     rpc_replica: &rpc::io_engine::ReplicaV2,
     id: &NodeId,
 ) -> Result<Replica, SvcError> {
-    let mut replica = rpc_replica.try_to_mbus()?;
+    let mut replica = rpc_replica.try_to_agent()?;
     replica.node = id.clone();
     Ok(replica)
 }
 
-fn rpc_nexus_v2_to_bus(
+fn rpc_nexus_v2_to_agent(
     rpc_nexus: &rpc::io_engine::NexusV2,
     id: &NodeId,
 ) -> Result<Nexus, SvcError> {
-    let mut nexus = rpc_nexus.try_to_mbus()?;
+    let mut nexus = rpc_nexus.try_to_agent()?;
     nexus.node = id.clone();
     Ok(nexus)
 }
-fn rpc_nexus_to_bus(rpc_nexus: &rpc::io_engine::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
-    let mut nexus = rpc_nexus.try_to_mbus()?;
+fn rpc_nexus_to_agent(rpc_nexus: &rpc::io_engine::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
+    let mut nexus = rpc_nexus.try_to_agent()?;
     nexus.node = id.clone();
     Ok(nexus)
 }

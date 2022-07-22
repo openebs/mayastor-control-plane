@@ -1,9 +1,8 @@
 use crate::core::{registry::Registry, resource_map::ResourceMap};
 use common::errors::SvcError;
 use common_lib::{
-    mbus_api::ResourceKind,
+    transport_api::ResourceKind,
     types::v0::{
-        message_bus::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
         openapi::apis::Uuid,
         store::{
             definitions::{
@@ -17,6 +16,7 @@ use common_lib::{
             OperationGuard, OperationMode, OperationSequence, OperationSequencer, SpecStatus,
             SpecTransaction,
         },
+        transport::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
     },
 };
 

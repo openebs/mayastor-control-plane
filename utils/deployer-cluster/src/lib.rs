@@ -8,17 +8,17 @@ use deployer_lib::{
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
-use common_lib::{mbus_api::TimeoutOptions, types::v0::message_bus};
+use common_lib::{transport_api::TimeoutOptions, types::v0::transport};
 use openapi::apis::Uuid;
 
 use common_lib::{
-    mbus_api::ReplyError,
+    transport_api::ReplyError,
     types::v0::{
-        message_bus::CreatePool,
         store::{
             definitions::ObjectKey,
             registry::{ControlPlaneService, StoreLeaseLockKey},
         },
+        transport::CreatePool,
     },
 };
 pub use etcd_client;
@@ -104,7 +104,7 @@ impl Cluster {
         let timeout_opts = match timeout_opts {
             Some(opts) => opts,
             None => TimeoutOptions::new()
-                .with_timeout(Duration::from_millis(500))
+                .with_req_timeout(Duration::from_millis(500))
                 .with_max_retries(10),
         };
         for x in 1 .. timeout_opts.max_retries().unwrap_or_default() {
@@ -135,7 +135,7 @@ impl Cluster {
         let timeout_opts = match timeout_opts {
             Some(opts) => opts,
             None => TimeoutOptions::new()
-                .with_timeout(Duration::from_millis(500))
+                .with_req_timeout(Duration::from_millis(500))
                 .with_max_retries(10),
         };
         for x in 1 .. timeout_opts.max_retries().unwrap_or_default() {
@@ -190,7 +190,7 @@ impl Cluster {
     }
 
     /// node id for `index`
-    pub fn node(&self, index: u32) -> message_bus::NodeId {
+    pub fn node(&self, index: u32) -> transport::NodeId {
         IoEngine::name(index, &self.builder.opts).into()
     }
 
@@ -201,16 +201,16 @@ impl Cluster {
     }
 
     /// pool id for `pool` index on `node` index
-    pub fn pool(&self, node: u32, pool: u32) -> message_bus::PoolId {
+    pub fn pool(&self, node: u32, pool: u32) -> transport::PoolId {
         format!("{}-pool-{}", self.node(node), pool + 1).into()
     }
 
     /// replica id with index for `pool` index and `replica` index
-    pub fn replica(node: u32, pool: usize, replica: u32) -> message_bus::ReplicaId {
+    pub fn replica(node: u32, pool: usize, replica: u32) -> transport::ReplicaId {
         if replica > 254 || pool > 254 || node > 254 {
             panic!("too large");
         }
-        let mut uuid = message_bus::ReplicaId::default().to_string();
+        let mut uuid = transport::ReplicaId::default().to_string();
         // we can't use a uuid with all zeroes, as spdk seems to ignore it and generate new one
         let replica = replica + 1;
         let _ = uuid.drain(24 .. uuid.len());
@@ -232,7 +232,7 @@ impl Cluster {
         trace: bool,
         trace_guard: Arc<DefaultGuard>,
         timeout_rest: std::time::Duration,
-        bus_timeout: TimeoutOptions,
+        grpc_timeout: TimeoutOptions,
         bearer_token: Option<String>,
         components: Components,
         composer: ComposeTest,
@@ -278,7 +278,7 @@ impl Cluster {
             Some(
                 CoreClient::new(
                     Uri::try_from(grpc_addr(composer.container_ip("core"))).unwrap(),
-                    bus_timeout.clone(),
+                    grpc_timeout.clone(),
                 )
                 .await,
             )
@@ -311,34 +311,6 @@ fn option_str<F: ToString>(input: Option<F>) -> String {
 /// string Eg, testing the replica share protocol:
 /// test_result(Ok(Nvmf), async move { ... })
 /// test_result(Err(NBD), async move { ... })
-pub async fn test_result<F, O, E, T>(
-    expected: &Result<O, E>,
-    future: F,
-) -> Result<(), anyhow::Error>
-where
-    F: std::future::Future<Output = Result<T, common_lib::mbus_api::Error>>,
-    E: std::fmt::Debug,
-    O: std::fmt::Debug,
-{
-    match future.await {
-        Ok(_) if expected.is_ok() => Ok(()),
-        Err(error) if expected.is_err() => match error {
-            common_lib::mbus_api::Error::ReplyWithError { .. } => Ok(()),
-            _ => {
-                // not the error we were waiting for
-                Err(anyhow::anyhow!("Invalid response: {:?}", error))
-            }
-        },
-        Err(error) => Err(anyhow::anyhow!(
-            "Expected '{:#?}' but failed with '{:?}'!",
-            expected,
-            error
-        )),
-        Ok(_) => Err(anyhow::anyhow!("Expected '{:#?}' but succeeded!", expected)),
-    }
-}
-
-/// Run future and compare result with what's expected, for grpc
 pub async fn test_result_grpc<F, O, E, T>(
     expected: &Result<O, E>,
     future: F,
@@ -351,10 +323,7 @@ where
 {
     match future.await {
         Ok(_) if expected.is_ok() => Ok(()),
-        Err(error) if expected.is_err() => {
-            let ReplyError { .. } = error;
-            Ok(())
-        }
+        Err(_) if expected.is_err() => Ok(()),
         Err(error) => Err(ReplyError::invalid_reply_error(format!(
             "Expected '{:#?}' but failed with '{:?}'!",
             expected, error
@@ -417,7 +386,7 @@ impl TmpDiskFileInner {
             uri: format!(
                 "aio:///host{}?blk_size=512&uuid={}",
                 path,
-                message_bus::PoolId::new()
+                transport::PoolId::new()
             ),
             path,
         }
@@ -442,20 +411,20 @@ pub struct ClusterBuilder {
     env_filter: Option<EnvFilter>,
     bearer_token: Option<String>,
     rest_timeout: std::time::Duration,
-    bus_timeout: TimeoutOptions,
+    grpc_timeout: TimeoutOptions,
 }
 
 #[derive(Default)]
 struct Replica {
     count: u32,
     size: u64,
-    share: message_bus::Protocol,
+    share: transport::Protocol,
 }
 
-/// default timeout options for every bus request
-fn bus_timeout_opts() -> TimeoutOptions {
+/// default timeout options for every grpc request
+fn grpc_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
-        .with_timeout(Duration::from_secs(5))
+        .with_req_timeout(Duration::from_secs(5))
         .with_timeout_backoff(Duration::from_millis(500))
         .with_max_retries(2)
 }
@@ -472,7 +441,7 @@ impl ClusterBuilder {
             env_filter: None,
             bearer_token: None,
             rest_timeout: std::time::Duration::from_secs(5),
-            bus_timeout: bus_timeout_opts(),
+            grpc_timeout: grpc_timeout_opts(),
         }
         .with_default_tracing()
     }
@@ -575,7 +544,7 @@ impl ClusterBuilder {
     }
     /// Specify `count` replicas to add to each node per pool
     #[must_use]
-    pub fn with_replicas(mut self, count: u32, size: u64, share: message_bus::Protocol) -> Self {
+    pub fn with_replicas(mut self, count: u32, size: u64, share: transport::Protocol) -> Self {
         self.replicas = Replica { count, size, share };
         self
     }
@@ -649,10 +618,10 @@ impl ClusterBuilder {
         self.opts = self.opts.with_req_timeouts(no_min, connect, request);
         self
     }
-    /// Specify the message bus timeout options
+    /// Specify the message grpc timeout options
     #[must_use]
-    pub fn with_bus_timeouts(mut self, timeout: TimeoutOptions) -> Self {
-        self.bus_timeout = timeout;
+    pub fn with_grpc_timeouts(mut self, timeout: TimeoutOptions) -> Self {
+        self.grpc_timeout = timeout;
         self
     }
     /// Specify whether rest is enabled or not
@@ -765,7 +734,7 @@ impl ClusterBuilder {
             self.trace,
             trace_guard,
             self.rest_timeout,
-            self.bus_timeout.clone(),
+            self.grpc_timeout.clone(),
             self.bearer_token.clone(),
             components,
             composer,
@@ -825,7 +794,7 @@ impl ClusterBuilder {
                 };
                 for replica_index in 0 .. self.replicas.count {
                     let rep_id = Cluster::replica(*node, pool_index, replica_index);
-                    pool.replicas.push(message_bus::CreateReplica {
+                    pool.replicas.push(transport::CreateReplica {
                         node: pool.node.clone().into(),
                         name: None,
                         uuid: rep_id,
@@ -848,14 +817,14 @@ struct Pool {
     node: String,
     disk: PoolDisk,
     index: u32,
-    replicas: Vec<message_bus::CreateReplica>,
+    replicas: Vec<transport::CreateReplica>,
 }
 
 impl Pool {
-    fn id(&self) -> message_bus::PoolId {
+    fn id(&self) -> transport::PoolId {
         format!("{}-pool-{}", self.node, self.index).into()
     }
-    fn disk(&self) -> message_bus::PoolDeviceUri {
+    fn disk(&self) -> transport::PoolDeviceUri {
         match &self.disk {
             PoolDisk::Malloc(size) => {
                 let size = size / (1024 * 1024);
@@ -863,7 +832,7 @@ impl Pool {
                     "malloc:///disk{}?size_mb={}&uuid={}",
                     self.index,
                     size,
-                    message_bus::PoolId::new()
+                    transport::PoolId::new()
                 )
                 .into()
             }

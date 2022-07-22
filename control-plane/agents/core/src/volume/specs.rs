@@ -23,15 +23,8 @@ use common::{
     },
 };
 use common_lib::{
-    mbus_api::{ErrorChain, ResourceKind},
+    transport_api::{ErrorChain, ResourceKind},
     types::v0::{
-        message_bus::{
-            AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
-            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, PoolId, Protocol, PublishVolume,
-            RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
-            ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
-            VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
-        },
         store::{
             definitions::ObjectKey,
             nexus::{NexusSpec, ReplicaUri},
@@ -40,6 +33,13 @@ use common_lib::{
             replica::ReplicaSpec,
             volume::{VolumeOperation, VolumeSpec},
             OperationMode, SpecStatus, SpecTransaction, TraceSpan, TraceStrLog,
+        },
+        transport::{
+            AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
+            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, PoolId, Protocol, PublishVolume,
+            RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
+            ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
+            VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
 };

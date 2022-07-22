@@ -10,7 +10,7 @@ use crate::core::{
 use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode};
 
 use crate::core::reconciler::nexus::faulted_nexus_remover;
-use common_lib::types::v0::message_bus::VolumeStatus;
+use common_lib::types::v0::transport::VolumeStatus;
 use parking_lot::Mutex;
 use std::sync::Arc;
 

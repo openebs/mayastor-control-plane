@@ -1,10 +1,10 @@
 #![allow(clippy::crate_in_macro_def)]
 
-pub mod mbus_api;
 /// Platform specific information, such as the cluster uid which is used as part of the pstor(etcd)
 /// key prefix.
 pub mod platform;
 pub mod store;
+pub mod transport_api;
 pub mod types;
 
 /// Helper to convert from Vec<F> into Vec<T>

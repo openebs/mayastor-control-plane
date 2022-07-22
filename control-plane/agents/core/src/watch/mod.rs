@@ -6,7 +6,7 @@ use grpc::operations::watch::server::WatchServer;
 use std::sync::Arc;
 
 pub(crate) fn configure(builder: common::Service) -> common::Service {
-    let registry = builder.get_shared_state::<Registry>().clone();
+    let registry = builder.shared_state::<Registry>().clone();
     let new_service = Arc::new(service::Service::new(registry));
     let watch_service = WatchServer::new(new_service);
     builder.with_shared_state(watch_service)
@@ -17,9 +17,9 @@ mod tests {
     use common_lib::{
         store::etcd::Etcd,
         types::v0::{
-            message_bus::{CreateVolume, Volume, VolumeId, WatchResourceId},
             openapi::models,
             store::definitions::{ObjectKey, Store},
+            transport::{CreateVolume, Volume, VolumeId, WatchResourceId},
         },
     };
     use deployer_cluster::*;

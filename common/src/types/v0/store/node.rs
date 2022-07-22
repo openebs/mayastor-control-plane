@@ -1,12 +1,12 @@
 //! Definition of node types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{self, NodeId},
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         ResourceUuid,
     },
+    transport::{self, NodeId},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -16,14 +16,14 @@ pub type NodeLabels = HashMap<String, String>;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Node {
     /// Node information.
-    node: message_bus::NodeState,
+    node: transport::NodeState,
     /// Node labels.
     labels: NodeLabels,
 }
 
 pub struct NodeState {
     /// Node information
-    pub node: message_bus::NodeState,
+    pub node: transport::NodeState,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]

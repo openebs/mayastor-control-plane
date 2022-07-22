@@ -2,7 +2,7 @@
 //! These methods are typically used to control SPDK directly.
 
 use super::*;
-use common_lib::types::v0::message_bus::JsonGrpcRequest;
+use common_lib::types::v0::transport::JsonGrpcRequest;
 use grpc::operations::jsongrpc::traits::JsonGrpcOperations;
 use serde_json::Value;
 

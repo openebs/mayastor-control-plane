@@ -1,14 +1,11 @@
 use super::*;
 use crate::v0::nexuses::nexus;
 use common_lib::types::v0::{
-    message_bus::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
     openapi::apis::Uuid,
+    transport::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
 };
 use grpc::operations::nexus::traits::NexusOperations;
-use mbus_api::{
-    message_bus::v0::{BusError, MessageBus, MessageBusTrait},
-    ReplyErrorKind, ResourceKind,
-};
+use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {
     core_grpc().nexus()
@@ -46,11 +43,11 @@ async fn get_child_response(
     Ok(child.into())
 }
 
-fn find_nexus_child(nexus: &Nexus, child_uri: &ChildUri) -> Result<Child, BusError> {
+fn find_nexus_child(nexus: &Nexus, child_uri: &ChildUri) -> Result<Child, ReplyError> {
     if let Some(child) = nexus.children.iter().find(|&c| &c.uri == child_uri) {
         Ok(child.clone())
     } else {
-        Err(BusError {
+        Err(ReplyError {
             kind: ReplyErrorKind::NotFound,
             resource: ResourceKind::Child,
             source: "find_nexus_child".to_string(),
@@ -112,7 +109,8 @@ async fn delete_child_filtered(
         nexus: nexus.uuid,
         uri: child_uri,
     };
-    MessageBus::remove_nexus_child(destroy).await?;
+
+    client().remove_nexus_child(&destroy, None).await?;
     Ok(())
 }
 

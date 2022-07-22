@@ -1,12 +1,12 @@
 //! Definition of pool types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         OperationSequence, OperationSequencer, ResourceUuid, SpecStatus, SpecTransaction,
     },
+    transport::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
 };
 
 // PoolLabel is the type for the labels
@@ -28,11 +28,11 @@ pub struct Pool {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]
 pub struct PoolState {
     /// Pool information returned by the Io-Engine.
-    pub pool: message_bus::PoolState,
+    pub pool: transport::PoolState,
 }
 
-impl From<message_bus::PoolState> for PoolState {
-    fn from(pool: message_bus::PoolState) -> Self {
+impl From<transport::PoolState> for PoolState {
+    fn from(pool: transport::PoolState) -> Self {
         Self { pool }
     }
 }
@@ -45,7 +45,7 @@ impl ResourceUuid for PoolState {
 }
 
 /// Status of the Pool Spec
-pub type PoolSpecStatus = SpecStatus<message_bus::PoolStatus>;
+pub type PoolSpecStatus = SpecStatus<transport::PoolStatus>;
 
 impl From<&CreatePool> for PoolSpec {
     fn from(request: &CreatePool) -> Self {
@@ -147,7 +147,7 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                     self.status = SpecStatus::Deleted;
                 }
                 PoolOperation::Create => {
-                    self.status = SpecStatus::Created(message_bus::PoolStatus::Online);
+                    self.status = SpecStatus::Created(transport::PoolStatus::Online);
                 }
             }
         }
@@ -179,8 +179,8 @@ pub enum PoolOperation {
     Destroy,
 }
 
-impl PartialEq<message_bus::PoolState> for PoolSpec {
-    fn eq(&self, other: &message_bus::PoolState) -> bool {
+impl PartialEq<transport::PoolState> for PoolSpec {
+    fn eq(&self, other: &transport::PoolState) -> bool {
         self.node == other.node
     }
 }
@@ -212,13 +212,13 @@ impl StorableObject for PoolSpec {
     }
 }
 
-impl From<&PoolSpec> for message_bus::PoolState {
+impl From<&PoolSpec> for transport::PoolState {
     fn from(pool: &PoolSpec) -> Self {
         Self {
             node: pool.node.clone(),
             id: pool.id.clone(),
             disks: pool.disks.clone(),
-            status: message_bus::PoolStatus::Unknown,
+            status: transport::PoolStatus::Unknown,
             capacity: 0,
             used: 0,
         }

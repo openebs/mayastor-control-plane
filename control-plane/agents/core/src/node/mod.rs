@@ -7,8 +7,8 @@ pub(crate) mod watchdog;
 use super::{core::registry::Registry, CliArgs};
 use common::Service;
 use common_lib::{
-    mbus_api::{v0::*, *},
-    types::v0::message_bus::{GetBlockDevices, GetNodes},
+    transport_api::{v0::*, *},
+    types::v0::transport::{GetBlockDevices, GetNodes},
 };
 use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
 use std::sync::Arc;
@@ -24,20 +24,21 @@ pub(crate) async fn configure(builder: Service) -> Service {
 }
 
 async fn create_node_service(builder: &Service) -> service::Service {
-    let registry = builder.get_shared_state::<Registry>().clone();
+    let registry = builder.shared_state::<Registry>().clone();
     let deadline = CliArgs::args().deadline.into();
     let request = CliArgs::args().request_timeout.into();
     let connect = CliArgs::args().connect_timeout.into();
+    let no_min = CliArgs::args().no_min_timeouts;
 
-    service::Service::new(registry.clone(), deadline, request, connect).await
+    service::Service::new(registry.clone(), deadline, request, connect, no_min).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use common_lib::types::v0::{
-        message_bus::{Filter, Node, NodeId, NodeState, NodeStatus},
         store::node::{NodeLabels, NodeSpec},
+        transport::{Filter, Node, NodeId, NodeState, NodeStatus},
     };
     use deployer_cluster::ClusterBuilder;
     use grpc::operations::node::traits::NodeOperations;
@@ -67,8 +68,9 @@ mod tests {
             .await
             .unwrap();
         let bus_timeout = TimeoutOptions::default()
-            .with_timeout(Duration::from_secs(1))
-            .with_timeout_backoff(Duration::from_millis(100));
+            .with_req_timeout(Duration::from_secs(1))
+            .with_timeout_backoff(Duration::from_millis(100))
+            .with_max_retries(6);
 
         let maya_name = cluster.node(0);
         let grpc = format!("{}:10124", cluster.node_ip(0));

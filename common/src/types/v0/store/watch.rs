@@ -1,6 +1,6 @@
 use crate::types::v0::{
-    message_bus::WatchResourceId,
     store::definitions::{ObjectKey, StorableObjectType},
+    transport::WatchResourceId,
 };
 
 impl ObjectKey for WatchResourceId {

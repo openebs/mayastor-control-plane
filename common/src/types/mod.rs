@@ -1,60 +1,13 @@
 use crate::{
-    mbus_api::{ReplyError, ReplyErrorKind},
-    types::v0::{
-        message_bus::ChannelVs,
-        openapi::{
-            actix::server::RestError,
-            apis::StatusCode,
-            models::{rest_json_error::Kind, RestJsonError},
-        },
+    transport_api::{ReplyError, ReplyErrorKind},
+    types::v0::openapi::{
+        actix::server::RestError,
+        apis::StatusCode,
+        models::{rest_json_error::Kind, RestJsonError},
     },
 };
 
-use std::{fmt::Debug, str::FromStr};
-
 pub mod v0;
-
-/// Available Message Bus channels
-#[derive(Clone, Debug, PartialEq)]
-#[allow(non_camel_case_types)]
-pub enum Channel {
-    /// Version 0 of the Channels
-    v0(ChannelVs),
-}
-
-impl FromStr for Channel {
-    type Err = strum::ParseError;
-
-    fn from_str(source: &str) -> Result<Self, Self::Err> {
-        match source.split('/').next() {
-            Some(version) => {
-                let c: ChannelVs = source[version.len() + 1 ..].parse()?;
-                Ok(Self::v0(c))
-            }
-            _ => Err(strum::ParseError::VariantNotFound),
-        }
-    }
-}
-
-impl ToString for Channel {
-    fn to_string(&self) -> String {
-        match self {
-            Self::v0(channel) => format!("v0/{}", channel.to_string()),
-        }
-    }
-}
-
-impl Default for Channel {
-    fn default() -> Self {
-        Channel::v0(ChannelVs::Default)
-    }
-}
-
-impl From<crate::mbus_api::Error> for RestError<openapi::models::RestJsonError> {
-    fn from(src: crate::mbus_api::Error) -> Self {
-        Self::from(ReplyError::from(src))
-    }
-}
 
 impl From<ReplyError> for RestError<RestJsonError> {
     fn from(src: ReplyError) -> Self {

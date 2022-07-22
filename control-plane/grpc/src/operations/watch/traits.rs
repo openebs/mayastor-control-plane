@@ -5,8 +5,8 @@ use crate::{
     watch::watch_resource_id,
 };
 use common_lib::{
-    mbus_api::{v0::Watches, ReplyError, ResourceKind},
-    types::v0::message_bus::{
+    transport_api::{v0::Watches, ReplyError, ResourceKind},
+    types::v0::transport::{
         CreateWatch, DeleteWatch, GetWatches, NexusId, ReplicaId, VolumeId, Watch, WatchCallback,
         WatchResourceId, WatchType,
     },

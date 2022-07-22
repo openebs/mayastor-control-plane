@@ -1,7 +1,7 @@
 use super::*;
-use common_lib::types::v0::message_bus::{DestroyPool, Filter};
+use common_lib::types::v0::transport::{DestroyPool, Filter};
 use grpc::operations::pool::traits::PoolOperations;
-use mbus_api::{message_bus::v0::BusError, ReplyErrorKind, ResourceKind};
+use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl PoolOperations {
     core_grpc().pool()
@@ -24,7 +24,7 @@ async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
             }
         }
         _ => {
-            return Err(RestError::from(BusError {
+            return Err(RestError::from(ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Pool,
                 source: "destroy_pool".to_string(),

@@ -461,8 +461,8 @@ pub struct ShareVolume {
     pub protocol: VolumeShareProtocol,
 }
 impl ShareVolume {
-    /// Create a new `ShareVolume` request
-    pub(crate) fn new(uuid: VolumeId, protocol: VolumeShareProtocol) -> Self {
+    /// Create a new `ShareVolume` request.
+    pub fn new(uuid: VolumeId, protocol: VolumeShareProtocol) -> Self {
         Self { uuid, protocol }
     }
 }
@@ -476,7 +476,7 @@ pub struct UnshareVolume {
 }
 impl UnshareVolume {
     /// Create a new `UnshareVolume` request
-    pub(crate) fn new(uuid: VolumeId) -> Self {
+    pub fn new(uuid: VolumeId) -> Self {
         Self { uuid }
     }
 }

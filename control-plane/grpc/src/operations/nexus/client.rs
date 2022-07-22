@@ -11,8 +11,8 @@ use crate::{
     },
 };
 use common_lib::{
-    mbus_api::{v0::Nexuses, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::message_bus::{Child, Filter, MessageIdVs, Nexus},
+    transport_api::{v0::Nexuses, ReplyError, ResourceKind, TimeoutOptions},
+    types::v0::transport::{Child, Filter, MessageIdVs, Nexus},
 };
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;

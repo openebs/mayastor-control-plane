@@ -1,18 +1,18 @@
 //! Definition of volume types that can be saved to the persistent store.
 
 use crate::types::v0::{
-    message_bus::{self, CreateVolume, NexusId, NodeId, VolumeId, VolumeShareProtocol},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         SpecStatus, SpecTransaction,
     },
+    transport::{self, CreateVolume, NexusId, NodeId, VolumeId, VolumeShareProtocol},
 };
 
 use crate::{
     types::v0::{
-        message_bus::{ReplicaId, Topology, VolumeLabels, VolumePolicy, VolumeStatus},
         openapi::models,
         store::{OperationSequence, OperationSequencer, ResourceUuid},
+        transport::{ReplicaId, Topology, VolumeLabels, VolumePolicy, VolumeStatus},
     },
     IntoOption,
 };
@@ -202,7 +202,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.status = SpecStatus::Deleted;
                 }
                 VolumeOperation::Create => {
-                    self.status = SpecStatus::Created(message_bus::VolumeStatus::Online);
+                    self.status = SpecStatus::Created(transport::VolumeStatus::Online);
                 }
                 VolumeOperation::Share(share) => {
                     if let Some(target) = &mut self.target {
@@ -304,7 +304,7 @@ impl StorableObject for VolumeSpec {
 }
 
 /// State of the Volume Spec
-pub type VolumeSpecStatus = SpecStatus<message_bus::VolumeStatus>;
+pub type VolumeSpecStatus = SpecStatus<transport::VolumeStatus>;
 
 impl From<&CreateVolume> for VolumeSpec {
     fn from(request: &CreateVolume) -> Self {
@@ -331,19 +331,19 @@ impl PartialEq<CreateVolume> for VolumeSpec {
         &other == self
     }
 }
-impl From<&VolumeSpec> for message_bus::VolumeState {
+impl From<&VolumeSpec> for transport::VolumeState {
     fn from(spec: &VolumeSpec) -> Self {
         Self {
             uuid: spec.uuid.clone(),
             size: spec.size,
-            status: message_bus::VolumeStatus::Unknown,
+            status: transport::VolumeStatus::Unknown,
             target: None,
             replica_topology: HashMap::new(),
         }
     }
 }
-impl PartialEq<message_bus::VolumeState> for VolumeSpec {
-    fn eq(&self, other: &message_bus::VolumeState) -> bool {
+impl PartialEq<transport::VolumeState> for VolumeSpec {
+    fn eq(&self, other: &transport::VolumeState) -> bool {
         match &self.target {
             None => other.target_node().flatten().is_none(),
             Some(target) => {

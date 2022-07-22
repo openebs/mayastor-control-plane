@@ -4,8 +4,8 @@ use crate::core::{
     wrapper::ClientOps,
 };
 use common_lib::types::v0::{
-    message_bus::{CreatePool, DestroyPool, NodeStatus},
     store::{pool::PoolSpec, OperationMode, TraceSpan},
+    transport::{CreatePool, DestroyPool, NodeStatus},
 };
 use parking_lot::Mutex;
 use std::sync::Arc;

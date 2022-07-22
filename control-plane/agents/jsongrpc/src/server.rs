@@ -1,7 +1,7 @@
 mod service;
 
 use crate::service::JsonGrpcSvc;
-use common::ServiceError;
+use common::{Service, ServiceError};
 use futures::FutureExt;
 use grpc::{client::CoreClient, operations::jsongrpc::server::JsonGrpcServer};
 use http::Uri;
@@ -51,7 +51,7 @@ async fn server(cli_args: CliArgs) {
         tonic_router
             .serve_with_shutdown(
                 grpc_addr.authority().unwrap().to_string().parse().unwrap(),
-                JsonGrpcSvc::shutdown_signal().map(|_| ()),
+                Service::shutdown_signal().map(|_| ()),
             )
             .await
             .map_err(|source| ServiceError::GrpcServer { source })

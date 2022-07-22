@@ -4,12 +4,12 @@ use crate::{
     registry::{GetSpecsRequest, GetStatesRequest},
 };
 use common_lib::{
-    mbus_api::ReplyError,
+    transport_api::ReplyError,
     types::v0::{
-        message_bus,
-        message_bus::{GetSpecs, GetStates, Specs},
         store,
         store::{nexus::NexusSpec, pool::PoolSpec, replica::ReplicaSpec, volume::VolumeSpec},
+        transport,
+        transport::{GetSpecs, GetStates, Specs},
     },
 };
 use std::convert::TryFrom;
@@ -22,13 +22,13 @@ pub trait RegistryOperations: Send + Sync {
         &self,
         get_spec: &dyn GetSpecsInfo,
         ctx: Option<Context>,
-    ) -> Result<message_bus::Specs, ReplyError>;
+    ) -> Result<transport::Specs, ReplyError>;
     /// Get the state information of all resources
     async fn get_states(
         &self,
         get_spec: &dyn GetStatesInfo,
         ctx: Option<Context>,
-    ) -> Result<message_bus::States, ReplyError>;
+    ) -> Result<transport::States, ReplyError>;
 }
 
 /// GetSpecsInfo trait for the get_specs operation
@@ -69,7 +69,7 @@ impl From<&dyn GetStatesInfo> for GetStates {
     }
 }
 
-impl TryFrom<registry::Specs> for message_bus::Specs {
+impl TryFrom<registry::Specs> for transport::Specs {
     type Error = ReplyError;
 
     fn try_from(value: registry::Specs) -> Result<Self, Self::Error> {
@@ -106,7 +106,7 @@ impl TryFrom<registry::Specs> for message_bus::Specs {
     }
 }
 
-impl From<message_bus::Specs> for registry::Specs {
+impl From<transport::Specs> for registry::Specs {
     fn from(value: Specs) -> Self {
         Self {
             volumes: value
@@ -133,7 +133,7 @@ impl From<message_bus::Specs> for registry::Specs {
     }
 }
 
-impl TryFrom<registry::States> for message_bus::States {
+impl TryFrom<registry::States> for transport::States {
     type Error = ReplyError;
 
     fn try_from(value: registry::States) -> Result<Self, Self::Error> {
@@ -142,7 +142,7 @@ impl TryFrom<registry::States> for message_bus::States {
                 let mut nexus_states: Vec<store::nexus::NexusState> = vec![];
                 for nexus_state in value.nexuses {
                     nexus_states.push(store::nexus::NexusState {
-                        nexus: message_bus::Nexus::try_from(nexus_state)?,
+                        nexus: transport::Nexus::try_from(nexus_state)?,
                     });
                 }
 
@@ -152,7 +152,7 @@ impl TryFrom<registry::States> for message_bus::States {
                 let mut pool_states: Vec<store::pool::PoolState> = vec![];
                 for pool_state in value.pools {
                     pool_states.push(store::pool::PoolState {
-                        pool: message_bus::PoolState::try_from(pool_state)?,
+                        pool: transport::PoolState::try_from(pool_state)?,
                     });
                 }
                 pool_states
@@ -161,7 +161,7 @@ impl TryFrom<registry::States> for message_bus::States {
                 let mut replica_states: Vec<store::replica::ReplicaState> = vec![];
                 for replica_state in value.replicas {
                     replica_states.push(store::replica::ReplicaState {
-                        replica: message_bus::Replica::try_from(replica_state)?,
+                        replica: transport::Replica::try_from(replica_state)?,
                     });
                 }
                 replica_states
@@ -170,8 +170,8 @@ impl TryFrom<registry::States> for message_bus::States {
     }
 }
 
-impl From<message_bus::States> for registry::States {
-    fn from(value: message_bus::States) -> Self {
+impl From<transport::States> for registry::States {
+    fn from(value: transport::States) -> Self {
         Self {
             pools: value
                 .pools

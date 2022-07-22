@@ -1,16 +1,16 @@
 use common_lib::types::v0::{
-    message_bus::WatchResourceId,
     openapi::{apis, models},
+    transport::WatchResourceId,
 };
 
 use rest_client::RestClient;
 
 use common_lib::types::v0::{
-    message_bus::{NexusId, NodeId, ReplicaId, VolumeId},
     openapi::{
         client::direct::ApiClient,
         clients::tower::{Error, ResponseError},
     },
+    transport::{NexusId, NodeId, ReplicaId, VolumeId},
 };
 use deployer_cluster::{Cluster, ClusterBuilder};
 use std::{

@@ -206,7 +206,7 @@ pub struct StartOptions {
     #[structopt(long)]
     pub node_deadline: Option<humantime::Duration>,
 
-    /// Override the base request timeout for NATS and GRPC requests
+    /// Override the base request timeout for GRPC requests
     #[structopt(long)]
     pub request_timeout: Option<humantime::Duration>,
 
@@ -245,7 +245,7 @@ pub struct StartOptions {
 
     /// Don't stop/remove existing containers on the same cluster
     /// Allows us to start "different" stacks independently, eg:
-    /// > deployer start -ejk -s -a "" --no-nats --no-rest --no-etcd -m 0
+    /// > deployer start -ejk -s -a "" --no-rest --no-etcd -m 0
     /// > deployer start -s -m 2
     #[structopt(short, long)]
     pub reuse_cluster: bool,

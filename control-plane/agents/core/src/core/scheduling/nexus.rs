@@ -6,8 +6,8 @@ use crate::core::{
 };
 use common::errors::SvcError;
 use common_lib::types::v0::{
-    message_bus::{ChildUri, NexusId, NodeId, VolumeId},
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
+    transport::{ChildUri, NexusId, NodeId, VolumeId},
 };
 use itertools::Itertools;
 use std::collections::HashMap;

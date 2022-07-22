@@ -6,16 +6,16 @@ use crate::core::{
 
 use common::errors::NexusNotFound;
 use common_lib::{
-    mbus_api::ErrorChain,
+    transport_api::ErrorChain,
     types::v0::{
-        message_bus::{VolumeState, VolumeStatus},
         store::{nexus::NexusSpec, volume::VolumeSpec, OperationMode},
+        transport::{VolumeState, VolumeStatus},
     },
 };
 
 use common_lib::types::v0::{
-    message_bus::Nexus,
     store::{TraceSpan, TraceStrLog},
+    transport::Nexus,
 };
 use parking_lot::Mutex;
 use snafu::OptionExt;

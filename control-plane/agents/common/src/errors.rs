@@ -1,9 +1,8 @@
 use common_lib::{
-    mbus_api,
-    mbus_api::{message_bus::v0::BusError, ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
+    transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
-        message_bus::{Filter, NodeId, PoolId, ReplicaId},
         store::definitions::StoreError,
+        transport::{Filter, NodeId, PoolId, ReplicaId},
     },
 };
 use snafu::{Error, Snafu};
@@ -15,9 +14,9 @@ use tonic::Code;
 #[allow(missing_docs)]
 pub enum SvcError {
     #[snafu(display("Failed to get node '{}' from the node agent", node))]
-    BusGetNode { node: String, source: BusError },
+    GetNode { node: String, source: ReplyError },
     #[snafu(display("Failed to get nodes from the node agent"))]
-    BusGetNodes { source: BusError },
+    GetNodes { source: ReplyError },
     #[snafu(display("Node '{}' is not online", node))]
     NodeNotOnline { node: NodeId },
     #[snafu(display("No available online nodes"))]
@@ -132,8 +131,6 @@ pub enum SvcError {
     },
     #[snafu(display("Internal error: {}", details))]
     Internal { details: String },
-    #[snafu(display("Message Bus error"))]
-    MBusError { source: mbus_api::Error },
     #[snafu(display("Invalid Arguments"))]
     InvalidArguments {},
     #[snafu(display("Multiple nexuses not supported"))]
@@ -217,12 +214,6 @@ impl From<StoreError> for SvcError {
             StoreError::MissingEntry { key } => SvcError::StoreMissingEntry { key },
             _ => SvcError::Store { source },
         }
-    }
-}
-
-impl From<mbus_api::Error> for SvcError {
-    fn from(source: mbus_api::Error) -> Self {
-        Self::MBusError { source }
     }
 }
 
@@ -312,8 +303,8 @@ impl From<SvcError> for ReplyError {
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::BusGetNode { source, .. } => source,
-            SvcError::BusGetNodes { source } => source,
+            SvcError::GetNode { source, .. } => source,
+            SvcError::GetNodes { source } => source,
             SvcError::GrpcRequestError {
                 source,
                 request,
@@ -511,7 +502,6 @@ impl From<SvcError> for ReplyError {
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::MBusError { source } => source.into(),
             SvcError::MultipleNexuses { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Unknown,

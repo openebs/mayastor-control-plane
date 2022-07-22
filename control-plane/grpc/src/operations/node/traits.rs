@@ -6,16 +6,16 @@ use crate::{
     node::{get_nodes_request, NodeCordon},
 };
 use common_lib::{
-    mbus_api::{
+    transport_api::{
         v0::{BlockDevices, Nodes},
         ReplyError, ResourceKind,
     },
     types::v0::{
-        message_bus::{
+        store::node::NodeSpec,
+        transport::{
             BlockDevice, Filesystem, Filter, GetBlockDevices, Node, NodeId, NodeState, NodeStatus,
             Partition,
         },
-        store::node::NodeSpec,
     },
 };
 use std::convert::TryFrom;
