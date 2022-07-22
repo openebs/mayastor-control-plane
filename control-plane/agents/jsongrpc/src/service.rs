@@ -72,26 +72,6 @@ impl JsonGrpcSvc {
 
         serde_json::from_str(&response.result).context(JsonRpcDeserialise)
     }
-
-    /// Get a shutdown_signal as a oneshot channel when the process receives either TERM or INT.
-    /// When received the opentel traces are also immediately flushed.
-    pub(super) fn shutdown_signal() -> tokio::sync::oneshot::Receiver<()> {
-        let mut signal_term =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
-        let mut signal_int =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).unwrap();
-        let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel();
-        tokio::spawn(async move {
-            tokio::select! {
-                _term = signal_term.recv() => {tracing::info!("SIGTERM received")},
-                _int = signal_int.recv() => {tracing::info!("SIGINT received")},
-            }
-            if stop_sender.send(()).is_err() {
-                tracing::warn!("Failed to stop the tonic server");
-            }
-        });
-        stop_receiver
-    }
 }
 
 #[tonic::async_trait]

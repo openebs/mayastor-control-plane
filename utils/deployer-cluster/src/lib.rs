@@ -232,7 +232,7 @@ impl Cluster {
         trace: bool,
         trace_guard: Arc<DefaultGuard>,
         timeout_rest: std::time::Duration,
-        bus_timeout: TimeoutOptions,
+        grpc_timeout: TimeoutOptions,
         bearer_token: Option<String>,
         components: Components,
         composer: ComposeTest,
@@ -278,7 +278,7 @@ impl Cluster {
             Some(
                 CoreClient::new(
                     Uri::try_from(grpc_addr(composer.container_ip("core"))).unwrap(),
-                    bus_timeout.clone(),
+                    grpc_timeout.clone(),
                 )
                 .await,
             )
@@ -411,7 +411,7 @@ pub struct ClusterBuilder {
     env_filter: Option<EnvFilter>,
     bearer_token: Option<String>,
     rest_timeout: std::time::Duration,
-    bus_timeout: TimeoutOptions,
+    grpc_timeout: TimeoutOptions,
 }
 
 #[derive(Default)]
@@ -421,8 +421,8 @@ struct Replica {
     share: transport::Protocol,
 }
 
-/// default timeout options for every bus request
-fn bus_timeout_opts() -> TimeoutOptions {
+/// default timeout options for every grpc request
+fn grpc_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_req_timeout(Duration::from_secs(5))
         .with_timeout_backoff(Duration::from_millis(500))
@@ -441,7 +441,7 @@ impl ClusterBuilder {
             env_filter: None,
             bearer_token: None,
             rest_timeout: std::time::Duration::from_secs(5),
-            bus_timeout: bus_timeout_opts(),
+            grpc_timeout: grpc_timeout_opts(),
         }
         .with_default_tracing()
     }
@@ -618,10 +618,10 @@ impl ClusterBuilder {
         self.opts = self.opts.with_req_timeouts(no_min, connect, request);
         self
     }
-    /// Specify the message bus timeout options
+    /// Specify the message grpc timeout options
     #[must_use]
-    pub fn with_bus_timeouts(mut self, timeout: TimeoutOptions) -> Self {
-        self.bus_timeout = timeout;
+    pub fn with_grpc_timeouts(mut self, timeout: TimeoutOptions) -> Self {
+        self.grpc_timeout = timeout;
         self
     }
     /// Specify whether rest is enabled or not
@@ -734,7 +734,7 @@ impl ClusterBuilder {
             self.trace,
             trace_guard,
             self.rest_timeout,
-            self.bus_timeout.clone(),
+            self.grpc_timeout.clone(),
             self.bearer_token.clone(),
             components,
             composer,

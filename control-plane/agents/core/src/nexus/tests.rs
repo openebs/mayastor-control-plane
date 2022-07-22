@@ -120,7 +120,7 @@ async fn nexus() {
 /// This is required because as of now, we don't have a good mocking strategy
 
 /// default timeout options for every bus request
-fn bus_timeout_opts() -> TimeoutOptions {
+fn grpc_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_max_retries(0)
         .with_req_timeout(Duration::from_millis(250))
@@ -141,7 +141,7 @@ async fn nexus_share_transaction() {
         .with_pools(1)
         .with_agents(vec!["core"])
         .with_req_timeouts(Duration::from_millis(350), Duration::from_millis(350))
-        .with_bus_timeouts(bus_timeout_opts())
+        .with_grpc_timeouts(grpc_timeout_opts())
         .build()
         .await
         .unwrap();
@@ -352,7 +352,7 @@ async fn nexus_share_transaction_store() {
         .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
-        .with_bus_timeouts(bus_timeout_opts())
+        .with_grpc_timeouts(grpc_timeout_opts())
         .build()
         .await
         .unwrap();
@@ -409,7 +409,7 @@ async fn nexus_child_transaction() {
         .with_pools(1)
         .with_agents(vec!["core"])
         .with_req_timeouts(grpc_timeout, grpc_timeout)
-        .with_bus_timeouts(bus_timeout_opts())
+        .with_grpc_timeouts(grpc_timeout_opts())
         .build()
         .await
         .unwrap();
@@ -538,7 +538,7 @@ async fn nexus_child_transaction_store() {
         .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
-        .with_bus_timeouts(bus_timeout_opts())
+        .with_grpc_timeouts(grpc_timeout_opts())
         .build()
         .await
         .unwrap();

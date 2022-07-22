@@ -5,13 +5,10 @@
 //! It's meant to facilitate the creation of agents with a helper builder to
 //! subscribe handlers for different message identifiers.
 
-use crate::errors::SvcError;
-use common_lib::transport_api::DynClient;
 use futures::Future;
 use snafu::Snafu;
 use state::Container;
 use std::sync::Arc;
-use tracing::error;
 
 /// Agent level errors
 pub mod errors;
@@ -28,47 +25,15 @@ pub enum ServiceError {
 /// Runnable service with N subscriptions which listen on a given
 /// message bus channel on a specific ID
 pub struct Service {
-    shared_state: std::sync::Arc<Container![Send + Sync]>,
+    shared_state: Arc<Container![Send + Sync]>,
+    tonic_server: tonic::transport::Server,
 }
 
 impl Default for Service {
     fn default() -> Self {
         Self {
-            shared_state: std::sync::Arc::new(<Container![Send + Sync]>::new()),
-        }
-    }
-}
-
-/// Service handling context
-/// the message bus which triggered the service callback
-#[derive(Clone)]
-pub struct Context {
-    client: Arc<DynClient>,
-    state: Arc<Container![Send + Sync]>,
-}
-
-impl Context {
-    /// create a new context
-    pub fn new(client: Arc<DynClient>, state: Arc<Container![Send + Sync]>) -> Self {
-        Self { client, state }
-    }
-    /// get the client opts from the context.
-    pub fn client_opts(&self) -> &DynClient {
-        &self.client
-    }
-    /// get the shared state of type `T` from the context
-    pub fn state<T: Send + Sync + 'static>(&self) -> Result<&T, SvcError> {
-        match self.state.try_get() {
-            Some(state) => Ok(state),
-            None => {
-                let type_name = std::any::type_name::<T>();
-                let error_msg = format!(
-                    "Requested data type '{}' not shared via with_shared_data",
-                    type_name
-                );
-                error!("{}", error_msg);
-                Err(SvcError::Internal { details: error_msg })
-            }
+            shared_state: Arc::new(<Container![Send + Sync]>::new()),
+            tonic_server: tonic::transport::Server::builder(),
         }
     }
 }
@@ -139,5 +104,32 @@ impl Service {
         Fut: Future<Output = Service>,
     {
         configure(self).await
+    }
+
+    /// Get the configured tonic Server.
+    pub fn tonic_server(self) -> tonic::transport::Server {
+        self.tonic_server
+    }
+
+    /// Get a shutdown_signal as a oneshot channel when the process receives either TERM or INT.
+    /// When received the opentel traces are also immediately flushed.
+    pub fn shutdown_signal() -> tokio::sync::oneshot::Receiver<()> {
+        let mut signal_term =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
+        let mut signal_int =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).unwrap();
+        let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            tokio::select! {
+                _term = signal_term.recv() => {tracing::info!("SIGTERM received")},
+                _int = signal_int.recv() => {tracing::info!("SIGINT received")},
+            }
+            opentelemetry::global::force_flush_tracer_provider();
+            if stop_sender.send(()).is_err() {
+                // should we panic here?
+                tracing::warn!("Failed to stop the tonic server");
+            }
+        });
+        stop_receiver
     }
 }

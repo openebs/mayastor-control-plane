@@ -69,7 +69,8 @@ mod tests {
             .unwrap();
         let bus_timeout = TimeoutOptions::default()
             .with_req_timeout(Duration::from_secs(1))
-            .with_timeout_backoff(Duration::from_millis(100));
+            .with_timeout_backoff(Duration::from_millis(100))
+            .with_max_retries(6);
 
         let maya_name = cluster.node(0);
         let grpc = format!("{}:10124", cluster.node_ip(0));

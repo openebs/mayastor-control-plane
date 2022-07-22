@@ -16,19 +16,16 @@ use tracing::error;
 /// the gprc service that encapsulates the base_service and the server for rpc
 pub struct Service {
     base_service: common::Service,
-    tonic_grpc_server: tonic::transport::Server,
 }
 
 impl Service {
-    /// creates a new Service with the base_service and tonic server builder
+    /// Creates a new Service with the base_service.
     pub fn new(base_service: common::Service) -> Self {
-        Self {
-            base_service,
-            tonic_grpc_server: tonic::transport::Server::builder(),
-        }
+        Self { base_service }
     }
 
-    /// launch each of the services and the grpc server
+    /// Launch the tonic server with the required services.
+    /// todo: allow the base server to handle this through the configure calls.
     pub async fn run(self) {
         let grpc_addr = self.base_service.shared_state::<Uri>().clone();
         let pool_service = self.base_service.shared_state::<PoolServer>().clone();
@@ -44,7 +41,8 @@ impl Service {
         let watch_service = self.base_service.shared_state::<WatchServer>().clone();
 
         let tonic_router = self
-            .tonic_grpc_server
+            .base_service
+            .tonic_server()
             .layer(OpenTelServer::new())
             .add_service(pool_service.into_grpc_server())
             .add_service(replica_service.into_grpc_server())
@@ -58,7 +56,7 @@ impl Service {
         let result = tonic_router
             .serve_with_shutdown(
                 grpc_addr.authority().unwrap().to_string().parse().unwrap(),
-                Self::shutdown_signal().map(|_| ()),
+                common::Service::shutdown_signal().map(|_| ()),
             )
             .await
             .map_err(|source| ServiceError::GrpcServer { source });
@@ -66,27 +64,5 @@ impl Service {
         if let Err(error) = result {
             error!(error=?error, "Error running service thread");
         }
-    }
-
-    /// Get a shutdown_signal as a oneshot channel when the process receives either TERM or INT.
-    /// When received the opentel traces are also immediately flushed.
-    fn shutdown_signal() -> tokio::sync::oneshot::Receiver<()> {
-        let mut signal_term =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
-        let mut signal_int =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).unwrap();
-        let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel();
-        tokio::spawn(async move {
-            tokio::select! {
-                _term = signal_term.recv() => {tracing::info!("SIGTERM received")},
-                _int = signal_int.recv() => {tracing::info!("SIGINT received")},
-            }
-            opentelemetry::global::force_flush_tracer_provider();
-            if stop_sender.send(()).is_err() {
-                // should we panic here?
-                tracing::warn!("Failed to stop the tonic server");
-            }
-        });
-        stop_receiver
     }
 }

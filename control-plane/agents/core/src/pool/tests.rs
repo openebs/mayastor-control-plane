@@ -184,7 +184,7 @@ async fn pool() {
 /// This is required because as of now, we don't have a good mocking strategy
 
 /// default timeout options for every bus request
-fn bus_timeout_opts() -> TimeoutOptions {
+fn grpc_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_max_retries(0)
         .with_req_timeout(Duration::from_millis(250))
@@ -210,7 +210,7 @@ async fn replica_transaction() {
         .with_pools(1)
         .with_agents(vec!["core"])
         .with_req_timeouts(Duration::from_millis(250), Duration::from_millis(500))
-        .with_bus_timeouts(bus_timeout_opts())
+        .with_grpc_timeouts(grpc_timeout_opts())
         .build()
         .await
         .unwrap();
@@ -273,7 +273,7 @@ async fn replica_transaction() {
     let _ = rep_client
         .share(
             &ShareReplica::from(&replica),
-            Some(Context::new(bus_timeout_opts())),
+            Some(Context::new(grpc_timeout_opts())),
         )
         .await
         .expect_err("io_engine down");
@@ -295,7 +295,7 @@ async fn replica_transaction() {
     let _ = rep_client
         .unshare(
             &UnshareReplica::from(&replica),
-            Some(Context::new(bus_timeout_opts())),
+            Some(Context::new(grpc_timeout_opts())),
         )
         .await
         .expect_err("io_engine down");
@@ -404,7 +404,7 @@ async fn replica_transaction_store() {
         .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
-        .with_bus_timeouts(bus_timeout_opts())
+        .with_grpc_timeouts(grpc_timeout_opts())
         .build()
         .await
         .unwrap();
@@ -667,7 +667,7 @@ async fn reconciler_deleting_dirty_pool() {
         .with_req_timeouts(req_timeout, req_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
-        .with_bus_timeouts(grpc_timeout.clone())
+        .with_grpc_timeouts(grpc_timeout.clone())
         .build()
         .await
         .unwrap();
