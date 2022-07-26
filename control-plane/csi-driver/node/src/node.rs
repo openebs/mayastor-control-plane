@@ -20,9 +20,20 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Node {
-    pub node_name: String,
-    pub filesystems: Vec<String>,
+/// Node structure
+pub(crate) struct Node {
+    node_name: String,
+    filesystems: Vec<String>,
+}
+
+impl Node {
+    /// create new node
+    pub(crate) fn new(node_name: String, filesystems: Vec<String>) -> Node {
+        Self {
+            node_name,
+            filesystems,
+        }
+    }
 }
 
 const ATTACH_TIMEOUT_INTERVAL: Duration = Duration::from_millis(100);
@@ -111,7 +122,6 @@ async fn detach(uuid: &Uuid, errheader: String) -> Result<(), Status> {
     Ok(())
 }
 
-impl Node {}
 #[tonic::async_trait]
 impl node_server::Node for Node {
     async fn node_get_info(

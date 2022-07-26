@@ -3,14 +3,13 @@ use common_lib::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
     models::{
-        CreateVolumeBody, ExplicitNodeTopology, LabelledTopology, Node, NodeTopology, Pool,
-        PoolTopology, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol, Volumes,
+        CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology, RestJsonError, Topology, Volume,
+        VolumePolicy, VolumeShareProtocol, Volumes,
     },
 };
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
-use std::collections::HashMap;
 use tracing::{debug, info, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -35,21 +34,15 @@ pub enum ApiClientError {
 /// Placeholder for volume topology for volume creation operation.
 #[derive(Debug)]
 pub struct CreateVolumeTopology {
-    inclusive_label_topology: HashMap<String, String>,
-    allowed_nodes: Vec<String>,
-    preferred_nodes: Vec<String>,
+    node_topology: Option<NodeTopology>,
+    pool_topology: Option<PoolTopology>,
 }
 
 impl CreateVolumeTopology {
-    pub fn new(
-        allowed_nodes: Vec<String>,
-        preferred_nodes: Vec<String>,
-        inclusive_label_topology: HashMap<String, String>,
-    ) -> Self {
+    pub fn new(node_topology: Option<NodeTopology>, pool_topology: Option<PoolTopology>) -> Self {
         Self {
-            allowed_nodes,
-            preferred_nodes,
-            inclusive_label_topology,
+            node_topology,
+            pool_topology,
         }
     }
 }
@@ -97,7 +90,7 @@ pub struct IoEngineApiClient {
 impl IoEngineApiClient {
     /// Initialize API client instance. Must be called prior to
     /// obtaining the client instance.
-    pub fn initialize() -> Result<()> {
+    pub(crate) fn initialize() -> Result<()> {
         if REST_CLIENT.get().is_some() {
             return Err(anyhow!("API client already initialized"));
         }
@@ -129,26 +122,26 @@ impl IoEngineApiClient {
 
     /// Obtain client instance. Panics if called before the client
     /// has been initialized.
-    pub fn get_client() -> &'static IoEngineApiClient {
+    pub(crate) fn get_client() -> &'static IoEngineApiClient {
         REST_CLIENT.get().expect("Rest client is not initialized")
     }
 }
 
 impl IoEngineApiClient {
     /// List all nodes available in IoEngine cluster.
-    pub async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
+    pub(crate) async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
         let response = self.rest_client.nodes_api().get_nodes().await?;
         Ok(response.into_body())
     }
 
     /// List all pools available in IoEngine cluster.
-    pub async fn list_pools(&self) -> Result<Vec<Pool>, ApiClientError> {
+    pub(crate) async fn list_pools(&self) -> Result<Vec<Pool>, ApiClientError> {
         let response = self.rest_client.pools_api().get_pools().await?;
         Ok(response.into_body())
     }
 
     /// List all volumes available in IoEngine cluster.
-    pub async fn list_volumes(
+    pub(crate) async fn list_volumes(
         &self,
         max_entries: i32,
         starting_token: String,
@@ -173,7 +166,7 @@ impl IoEngineApiClient {
     }
 
     /// List pools available on target IoEngine node.
-    pub async fn get_node_pools(&self, node: &str) -> Result<Vec<Pool>, ApiClientError> {
+    pub(crate) async fn get_node_pools(&self, node: &str) -> Result<Vec<Pool>, ApiClientError> {
         let pools = self.rest_client.pools_api().get_node_pools(node).await?;
         Ok(pools.into_body())
     }
@@ -182,7 +175,7 @@ impl IoEngineApiClient {
     /// This operation is not idempotent, so the caller is responsible for taking
     /// all actions with regards to idempotency.
     #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
-    pub async fn create_volume(
+    pub(crate) async fn create_volume(
         &self,
         volume_id: &uuid::Uuid,
         replicas: u8,
@@ -191,16 +184,8 @@ impl IoEngineApiClient {
         _pinned_volume: bool,
         thin: bool,
     ) -> Result<Volume, ApiClientError> {
-        let topology = Topology::new_all(
-            Some(NodeTopology::explicit(ExplicitNodeTopology::new(
-                volume_topology.allowed_nodes,
-                volume_topology.preferred_nodes,
-            ))),
-            Some(PoolTopology::labelled(LabelledTopology::new(
-                HashMap::new(),
-                volume_topology.inclusive_label_topology,
-            ))),
-        );
+        let topology =
+            Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
 
         let req = CreateVolumeBody {
             replicas,
@@ -223,7 +208,7 @@ impl IoEngineApiClient {
     /// This operation is idempotent, so the caller does not see errors indicating
     /// absence of the resource.
     #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
-    pub async fn delete_volume(&self, volume_id: &uuid::Uuid) -> Result<(), ApiClientError> {
+    pub(crate) async fn delete_volume(&self, volume_id: &uuid::Uuid) -> Result<(), ApiClientError> {
         Self::delete_idempotent(
             self.rest_client.volumes_api().del_volume(volume_id).await,
             true,
@@ -233,7 +218,7 @@ impl IoEngineApiClient {
     }
 
     /// Check HTTP status code, handle DELETE idempotency transparently.
-    pub fn delete_idempotent<T>(
+    pub(crate) fn delete_idempotent<T>(
         result: Result<clients::tower::ResponseContent<T>, clients::tower::Error<RestJsonError>>,
         idempotent: bool,
     ) -> Result<(), ApiClientError> {
@@ -260,14 +245,17 @@ impl IoEngineApiClient {
 
     /// Get specific volume.
     #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
-    pub async fn get_volume(&self, volume_id: &uuid::Uuid) -> Result<Volume, ApiClientError> {
+    pub(crate) async fn get_volume(
+        &self,
+        volume_id: &uuid::Uuid,
+    ) -> Result<Volume, ApiClientError> {
         let volume = self.rest_client.volumes_api().get_volume(volume_id).await?;
         Ok(volume.into_body())
     }
 
     /// Unpublish volume (i.e. destroy a target which exposes the volume).
     #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
-    pub async fn unpublish_volume(
+    pub(crate) async fn unpublish_volume(
         &self,
         volume_id: &uuid::Uuid,
         force: bool,
@@ -285,7 +273,7 @@ impl IoEngineApiClient {
 
     /// Publish volume (i.e. make it accessible via specified protocol by creating a target).
     #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
-    pub async fn publish_volume(
+    pub(crate) async fn publish_volume(
         &self,
         volume_id: &uuid::Uuid,
         node: &str,

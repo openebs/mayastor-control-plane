@@ -3,15 +3,27 @@ use serde_json::Value;
 use std::{collections::HashMap, process::Command, string::String, vec::Vec};
 
 // Keys of interest we expect to find in the JSON output generated
-/// by findmnt.
+// by findmnt.
 const TARGET_KEY: &str = "target";
 const SOURCE_KEY: &str = "source";
 const FSTYPE_KEY: &str = "fstype";
 
 #[derive(Debug)]
-pub struct DeviceMount {
-    pub mount_path: String,
-    pub fstype: String,
+pub(crate) struct DeviceMount {
+    #[allow(dead_code)]
+    mount_path: String,
+    fstype: String,
+}
+
+impl DeviceMount {
+    /// create new DeviceMount
+    pub(crate) fn new(mount_path: String, fstype: String) -> DeviceMount {
+        Self { mount_path, fstype }
+    }
+    /// File system type
+    pub(crate) fn fstype(&self) -> String {
+        self.fstype.clone()
+    }
 }
 
 #[derive(Debug)]
@@ -180,16 +192,13 @@ pub(crate) fn get_mountpaths(device_path: &str) -> Result<Vec<DeviceMount>, Devi
             for entry in results {
                 if let Some(mountpath) = entry.get(TARGET_KEY) {
                     if let Some(fstype) = entry.get(FSTYPE_KEY) {
-                        mountpaths.push(DeviceMount {
-                            mount_path: mountpath.to_string(),
-                            fstype: fstype.to_string(),
-                        })
+                        mountpaths.push(DeviceMount::new(mountpath.to_string(), fstype.to_string()))
                     } else {
                         error!("Missing fstype for {}", mountpath);
-                        mountpaths.push(DeviceMount {
-                            mount_path: mountpath.to_string(),
-                            fstype: "unspecified".to_string(),
-                        })
+                        mountpaths.push(DeviceMount::new(
+                            mountpath.to_string(),
+                            "unspecified".to_string(),
+                        ))
                     }
                 } else {
                     warn!("missing target field {:?}", entry);

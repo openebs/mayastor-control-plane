@@ -1,13 +1,13 @@
 use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 use regex::Regex;
 use rpc::csi::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use tonic::{Response, Status};
 use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
 
 use common_lib::types::v0::openapi::models::{
-    Pool, PoolStatus, SpecStatus, Volume, VolumeShareProtocol,
+    LabelledTopology, Pool, PoolStatus, PoolTopology, SpecStatus, Volume, VolumeShareProtocol,
 };
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
@@ -18,30 +18,14 @@ const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 const SUPPORTED_FS_TYPES: [&str; 2] = ["ext4", "xfs"];
 
+const IO_TIMEOUT: &str = "ioTimeout";
+
 #[derive(Debug, Default)]
-pub struct CsiControllerSvc {}
-
-// TODO: Implement VolumeOpts
-mod volume_opts {
-    pub const IO_TIMEOUT: &str = "ioTimeout";
-    pub const LOCAL_VOLUME: &str = "local";
-
-    const YAML_TRUE_VALUE: [&str; 11] = [
-        "y", "Y", "yes", "Yes", "YES", "true", "True", "TRUE", "on", "On", "ON",
-    ];
-
-    // Decode 'local' volume attribute into a boolean flag.
-    pub fn decode_local_volume_flag(encoded: Option<&String>) -> bool {
-        match encoded {
-            Some(v) => YAML_TRUE_VALUE.iter().any(|p| p == v),
-            None => true,
-        }
-    }
-}
+pub(crate) struct CsiControllerSvc {}
 
 /// Check whether the passed fs type is supported or not,
 /// if not provided we call it valid as fsType is an optional parameter
-pub fn valid_fs_type(fs_type: Option<&String>) -> bool {
+fn valid_fs_type(fs_type: Option<&String>) -> bool {
     match fs_type {
         Some(fs) => SUPPORTED_FS_TYPES.iter().any(|p| p == fs),
         None => true,
@@ -153,23 +137,10 @@ impl VolumeTopologyMapper {
     /// must be placed on the same node, which in fact means running workloads only on IO Engine
     /// daemonset nodes.
     /// For non-pinned volumes, workload can be put on any node in the cluster.
-    pub fn volume_accessible_topology(&self, pinned_volume: bool) -> Vec<CsiTopology> {
-        if pinned_volume {
-            vec![rpc::csi::Topology {
-                segments: CsiControllerConfig::get_config().io_engine_selector(),
-            }]
-        } else {
-            Vec::new()
-        }
-    }
-
-    /// Determines whether target volume is pinned.
-    pub fn is_volume_pinned(volume: &Volume) -> bool {
-        if let Some(labels) = &volume.spec.labels {
-            volume_opts::decode_local_volume_flag(labels.get(volume_opts::LOCAL_VOLUME))
-        } else {
-            true
-        }
+    fn volume_accessible_topology(&self) -> Vec<CsiTopology> {
+        vec![rpc::csi::Topology {
+            segments: CsiControllerConfig::get_config().io_engine_selector(),
+        }]
     }
 }
 
@@ -231,7 +202,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let protocol = parse_protocol(args.parameters.get("protocol"))?;
 
         // Check I/O timeout.
-        if let Some(io_timeout) = args.parameters.get(volume_opts::IO_TIMEOUT) {
+        if let Some(io_timeout) = args.parameters.get(IO_TIMEOUT) {
             if protocol != VolumeShareProtocol::Nvmf {
                 return Err(Status::invalid_argument(
                     "I/O timeout is valid only for nvmf protocol",
@@ -260,47 +231,9 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         // Currently we only support pinned volumes
         let pinned_volume = true;
 
-        // For explanation of accessibilityRequirements refer to a table at
-        // https://github.com/kubernetes-csi/external-provisioner.
-        // Our case is WaitForFirstConsumer = true, strict-topology = false.
-        //
-        // The first node in preferred array the node that was chosen for running
-        // the app by the k8s scheduler. The rest of the entries are in random
-        // order and perhaps don't even run the csi node plugin.
-        //
-        // The requisite array contains all nodes in the cluster irrespective
-        // of what node was chosen for running the app.
-        let mut allowed_nodes: HashSet<String> = HashSet::new();
-        let mut preferred_nodes: HashSet<String> = HashSet::new();
         let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
-        let supported_keys = vec![OPENEBS_TOPOLOGY_KEY];
 
         inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
-
-        if let Some(reqs) = args.accessibility_requirements {
-            for r in reqs.requisite.iter() {
-                for (k, v) in r.segments.iter() {
-                    // Reject all others than `supported_keys`
-                    if supported_keys.contains(&k.as_str()) {
-                        allowed_nodes.insert(v.to_string());
-                    } else {
-                        return Err(Status::invalid_argument(format!(
-                            "Volume topology key other than {} is not supported",
-                            OPENEBS_TOPOLOGY_KEY
-                        )));
-                    }
-                }
-            }
-
-            for p in reqs.preferred.iter() {
-                for (k, v) in p.segments.iter() {
-                    // Reject all others than `supported_keys`
-                    if supported_keys.contains(&k.as_str()) {
-                        preferred_nodes.insert(v.to_string());
-                    }
-                }
-            }
-        }
 
         let u = Uuid::parse_str(&volume_uuid).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", volume_uuid))
@@ -325,9 +258,11 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             // If the volume doesn't exist, create it.
             Err(ApiClientError::ResourceNotExists(_)) => {
                 let volume_topology = CreateVolumeTopology::new(
-                    allowed_nodes.into_iter().collect::<Vec<String>>(),
-                    preferred_nodes.into_iter().collect::<Vec<String>>(),
-                    inclusive_label_topology,
+                    None,
+                    Some(PoolTopology::labelled(LabelledTopology {
+                        exclusion: Default::default(),
+                        inclusion: inclusive_label_topology,
+                    })),
                 );
 
                 IoEngineApiClient::get_client()
@@ -354,7 +289,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             volume_id: volume_uuid,
             volume_context: args.parameters.clone(),
             content_source: None,
-            accessible_topology: vt_mapper.volume_accessible_topology(pinned_volume),
+            accessible_topology: vt_mapper.volume_accessible_topology(),
         };
 
         debug!("Created volume: {:?}", volume);
@@ -491,8 +426,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let mut publish_context = HashMap::new();
         publish_context.insert("uri".to_string(), uri);
 
-        if let Some(io_timeout) = args.volume_context.get(volume_opts::IO_TIMEOUT) {
-            publish_context.insert(volume_opts::IO_TIMEOUT.to_string(), io_timeout.to_string());
+        if let Some(io_timeout) = args.volume_context.get(IO_TIMEOUT) {
+            publish_context.insert(IO_TIMEOUT.to_string(), io_timeout.to_string());
         }
 
         debug!(
@@ -640,8 +575,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     capacity_bytes: v.spec.size as i64,
                     volume_context: HashMap::new(),
                     content_source: None,
-                    accessible_topology: vt_mapper
-                        .volume_accessible_topology(VolumeTopologyMapper::is_volume_pinned(&v)),
+                    accessible_topology: vt_mapper.volume_accessible_topology(),
                 };
 
                 list_volumes_response::Entry {

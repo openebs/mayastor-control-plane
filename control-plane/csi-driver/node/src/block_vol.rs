@@ -16,7 +16,7 @@ use crate::{
     mount::{self},
 };
 
-pub async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Result<(), Status> {
+pub(crate) async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Result<(), Status> {
     let target_path = &msg.target_path;
     let volume_id = &msg.volume_id;
 
@@ -113,7 +113,7 @@ pub async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Result<(), 
     }
 }
 
-pub fn unpublish_block_volume(msg: &NodeUnpublishVolumeRequest) -> Result<(), Status> {
+pub(crate) fn unpublish_block_volume(msg: &NodeUnpublishVolumeRequest) -> Result<(), Status> {
     let target_path = &msg.target_path;
     let volume_id = &msg.volume_id;
 

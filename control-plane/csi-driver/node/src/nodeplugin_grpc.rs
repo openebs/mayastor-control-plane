@@ -12,14 +12,14 @@ use io_engine_node_plugin::{
 use nodeplugin_svc::{find_volume, freeze_volume, unfreeze_volume, ServiceError, TypeOfMount};
 use tonic::{transport::Server, Code, Request, Response, Status};
 
-pub mod io_engine_node_plugin {
+pub(crate) mod io_engine_node_plugin {
     #![allow(clippy::derive_partial_eq_without_eq)]
     #![allow(clippy::upper_case_acronyms)]
     tonic::include_proto!("ioenginenodeplugin");
 }
 
 #[derive(Debug, Default)]
-pub struct IoEngineNodePluginSvc {}
+pub(crate) struct IoEngineNodePluginSvc {}
 
 impl From<ServiceError> for Status {
     fn from(err: ServiceError) -> Self {
@@ -78,10 +78,10 @@ impl IoEngineNodePlugin for IoEngineNodePluginSvc {
     }
 }
 
-pub struct IoEngineNodePluginGrpcServer {}
+pub(crate) struct IoEngineNodePluginGrpcServer {}
 
 impl IoEngineNodePluginGrpcServer {
-    pub async fn run(endpoint: std::net::SocketAddr) -> Result<(), ()> {
+    pub(crate) async fn run(endpoint: std::net::SocketAddr) -> Result<(), ()> {
         info!(
             "IoEngine node plugin gRPC server configured at address {:?}",
             endpoint

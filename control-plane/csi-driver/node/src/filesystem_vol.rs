@@ -15,7 +15,7 @@ use crate::{
     mount::{self, subset, ReadOnly},
 };
 
-pub async fn stage_fs_volume(
+pub(crate) async fn stage_fs_volume(
     msg: &NodeStageVolumeRequest,
     device_path: String,
     mnt: &MountVolume,
@@ -118,7 +118,7 @@ pub async fn stage_fs_volume(
 }
 
 /// Unstage a filesystem volume
-pub async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<(), Status> {
+pub(crate) async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<(), Status> {
     let volume_id = &msg.volume_id;
     let fs_staging_path = &msg.staging_target_path;
 
@@ -143,7 +143,7 @@ pub async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<(), Sta
 }
 
 /// Publish a filesystem volume
-pub fn publish_fs_volume(
+pub(crate) fn publish_fs_volume(
     msg: &NodePublishVolumeRequest,
     mnt: &MountVolume,
     filesystems: &[String],
@@ -281,7 +281,7 @@ pub fn publish_fs_volume(
     Ok(())
 }
 
-pub fn unpublish_fs_volume(msg: &NodeUnpublishVolumeRequest) -> Result<(), Status> {
+pub(crate) fn unpublish_fs_volume(msg: &NodeUnpublishVolumeRequest) -> Result<(), Status> {
     // filesystem mount
     let target_path = &msg.target_path;
     let volume_id = &msg.volume_id;

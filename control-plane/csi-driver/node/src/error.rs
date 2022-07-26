@@ -2,12 +2,12 @@
 use nvmeadm::nvmf_discovery;
 use std::string::FromUtf8Error;
 
-pub struct DeviceError {
-    pub message: String,
+pub(crate) struct DeviceError {
+    pub(crate) message: String,
 }
 
 impl DeviceError {
-    pub fn new(message: &str) -> DeviceError {
+    pub(crate) fn new(message: &str) -> DeviceError {
         DeviceError {
             message: String::from(message),
         }

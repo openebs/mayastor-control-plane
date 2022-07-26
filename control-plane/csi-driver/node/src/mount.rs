@@ -25,7 +25,7 @@ impl ReadOnly for &str {
 }
 
 /// Return mountinfo matching source and/or destination.
-pub fn find_mount(source: Option<&str>, target: Option<&str>) -> Option<MountInfo> {
+pub(crate) fn find_mount(source: Option<&str>, target: Option<&str>) -> Option<MountInfo> {
     let mut found: Option<MountInfo> = None;
 
     for mount in MountIter::new().unwrap().flatten() {
@@ -70,7 +70,7 @@ pub(super) fn subset(first: &[String], second: &[String]) -> bool {
 }
 
 /// Return supported filesystems.
-pub fn probe_filesystems() -> Vec<String> {
+pub(crate) fn probe_filesystems() -> Vec<String> {
     vec![String::from("xfs"), String::from("ext4")]
 }
 
@@ -122,7 +122,7 @@ fn show(options: &[String]) -> String {
 }
 
 /// Mount a device to a directory (mountpoint)
-pub fn filesystem_mount(
+pub(crate) fn filesystem_mount(
     device: &str,
     target: &str,
     fstype: &str,
@@ -157,7 +157,7 @@ pub fn filesystem_mount(
 
 /// Unmount a device from a directory (mountpoint)
 /// Should not be used for removing bind mounts.
-pub fn filesystem_unmount(target: &str) -> Result<(), Error> {
+pub(crate) fn filesystem_unmount(target: &str) -> Result<(), Error> {
     let mut flags = UnmountFlags::empty();
 
     flags.insert(UnmountFlags::DETACH);
@@ -171,7 +171,7 @@ pub fn filesystem_unmount(target: &str) -> Result<(), Error> {
 
 /// Bind mount a source path to a target path.
 /// Supports both directories and files.
-pub fn bind_mount(source: &str, target: &str, file: bool) -> Result<Mount, Error> {
+pub(crate) fn bind_mount(source: &str, target: &str, file: bool) -> Result<Mount, Error> {
     let mut flags = MountFlags::empty();
 
     flags.insert(MountFlags::BIND);
@@ -189,7 +189,7 @@ pub fn bind_mount(source: &str, target: &str, file: bool) -> Result<Mount, Error
 
 /// Bind remount a path to modify mount options.
 /// Assumes that target has already been bind mounted.
-pub fn bind_remount(target: &str, options: &[String]) -> Result<Mount, Error> {
+pub(crate) fn bind_remount(target: &str, options: &[String]) -> Result<Mount, Error> {
     let mut flags = MountFlags::empty();
 
     let (readonly, value) = parse(options);
@@ -221,7 +221,7 @@ pub fn bind_remount(target: &str, options: &[String]) -> Result<Mount, Error> {
 
 /// Unmounts a path that has previously been bind mounted.
 /// Should not be used for unmounting devices.
-pub fn bind_unmount(target: &str) -> Result<(), Error> {
+pub(crate) fn bind_unmount(target: &str) -> Result<(), Error> {
     let flags = UnmountFlags::empty();
 
     unmount(target, flags)?;
@@ -232,7 +232,11 @@ pub fn bind_unmount(target: &str) -> Result<(), Error> {
 }
 
 /// Mount a block device
-pub fn blockdevice_mount(source: &str, target: &str, readonly: bool) -> Result<Mount, Error> {
+pub(crate) fn blockdevice_mount(
+    source: &str,
+    target: &str,
+    readonly: bool,
+) -> Result<Mount, Error> {
     debug!("Mounting {} ...", source);
 
     let mut flags = MountFlags::empty();
@@ -254,7 +258,7 @@ pub fn blockdevice_mount(source: &str, target: &str, readonly: bool) -> Result<M
 }
 
 /// Unmount a block device.
-pub fn blockdevice_unmount(target: &str) -> Result<(), Error> {
+pub(crate) fn blockdevice_unmount(target: &str) -> Result<(), Error> {
     let flags = UnmountFlags::empty();
 
     debug!("Unmounting block device {} (flags={:?}) ...", target, flags);
