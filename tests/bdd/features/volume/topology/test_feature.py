@@ -160,6 +160,7 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
+        False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -178,6 +179,7 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
+        False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -197,6 +199,7 @@ def a_request_for_a_volume_without_pool_topology(create_request):
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
+        False,
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -210,6 +213,7 @@ def an_existing_published_volume_without_pool_topology():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
+            False,
         ),
     )
     # Publish volume so that there is a nexus to add a replica to.
@@ -235,6 +239,7 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
+            False,
             topology=Topology(
                 pool_topology=PoolTopology(
                     labelled=LabelledTopology(
@@ -260,6 +265,7 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
+            False,
             topology=Topology(
                 pool_topology=PoolTopology(
                     labelled=LabelledTopology(
@@ -463,6 +469,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
         SpecStatus("Created"),
         VOLUME_UUID,
         VolumePolicy(False),
+        False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -488,11 +495,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
 ):
     """volume creation should succeed with a returned volume object without pool topology."""
     expected_spec = VolumeSpec(
-        1,
-        VOLUME_SIZE,
-        SpecStatus("Created"),
-        VOLUME_UUID,
-        VolumePolicy(False),
+        1, VOLUME_SIZE, SpecStatus("Created"), VOLUME_UUID, VolumePolicy(False), False
     )
 
     # Check the volume object returned is as expected

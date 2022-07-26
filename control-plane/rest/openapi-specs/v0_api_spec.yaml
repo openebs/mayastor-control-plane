@@ -1961,6 +1961,7 @@ components:
           self_heal: true
         replicas: 1
         size: 10485761
+        thin: false
         topology: null
       description: Create Volume Body JSON
       type: object
@@ -1978,6 +1979,9 @@ components:
           type: integer
           format: int64
           minimum: 0
+        thin:
+          description: flag indicating whether or not the volume is thin provisioned
+          type: boolean
         topology:
           $ref: '#/components/schemas/Topology'
         labels:
@@ -1989,6 +1993,7 @@ components:
         - policy
         - replicas
         - size
+        - thin
     JsonGeneric:
       description: 'Generic JSON value eg: { "size": 1024 }'
       type: object
@@ -2507,6 +2512,7 @@ components:
         state: Created
         target_node: io-engine-1
         uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
+        thin: false
       description: User specification of a volume.
       type: object
       properties:
@@ -2562,6 +2568,9 @@ components:
           $ref: '#/components/schemas/Topology'
         policy:
           $ref: '#/components/schemas/VolumePolicy'
+        thin:
+          description: Thin provisioning flag
+          type: boolean
       required:
         - num_paths
         - num_replicas
@@ -2570,6 +2579,7 @@ components:
         - status
         - uuid
         - policy
+        - thin
     VolumeTarget:
       example:
         node: io-engine-1

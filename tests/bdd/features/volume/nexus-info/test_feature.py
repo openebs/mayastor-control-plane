@@ -143,7 +143,7 @@ def the_old_nexus_info_structure_should_not_be_present_in_the_persistent_store(
 @pytest.fixture
 def an_existing_volume():
     volume = ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
     )
     yield
     try:

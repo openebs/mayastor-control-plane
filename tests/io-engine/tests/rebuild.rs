@@ -39,6 +39,7 @@ async fn concurrent_rebuilds() {
                     models::VolumePolicy::new(true),
                     replica_count,
                     1 * gig,
+                    false,
                 ),
             )
             .await

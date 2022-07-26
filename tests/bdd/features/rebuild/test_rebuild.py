@@ -82,7 +82,9 @@ def a_user_defined_maximum_number_of_rebuilds():
 @given("an existing published volume")
 def an_existing_published_volume():
     """an existing published volume."""
-    request = CreateVolumeBody(VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE)
+    request = CreateVolumeBody(
+        VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
+    )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID, NODE_1_NAME, Protocol("nvmf")

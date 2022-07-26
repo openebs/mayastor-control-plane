@@ -226,7 +226,7 @@ def a_pool_with_no_replicas(pool):
 @pytest.fixture
 def a_pool_with_replicas(pool):
     volume = ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
     )
     print(volume)
     yield

@@ -75,7 +75,7 @@ def block_volume_capability():
 @pytest.fixture
 def staging_a_volume(staging_target_path, csi_instance, block_volume_capability):
     volume = ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, 10241024)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, 10241024, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid, NODE1, Protocol("nvmf")

@@ -482,7 +482,7 @@ async fn reconciler_missing_pool_state() {
 
     // create volume to fill up some of the pool space
     for _ in 0 .. 10 {
-        let body = CreateVolumeBody::new(VolumePolicy::default(), 1, 8388608u64);
+        let body = CreateVolumeBody::new(VolumePolicy::default(), 1, 8388608u64, false);
         let volume = VolumeId::new();
         volumes_api.put_volume(&volume, body).await.unwrap();
     }

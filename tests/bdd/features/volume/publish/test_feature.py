@@ -102,7 +102,7 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
 @pytest.fixture
 def an_existing_volume():
     volume = ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
     )
     assert volume.spec.uuid == VOLUME_UUID
     yield

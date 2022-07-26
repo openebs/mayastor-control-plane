@@ -35,6 +35,7 @@ impl ResourceMgr for VolMgr {
                         models::VolumePolicy::new(false),
                         self.n_replicas,
                         self.size_bytes,
+                        false,
                     ),
                 )
                 .await?;

@@ -288,7 +288,12 @@ mod tests {
         let volume = volumes_api
             .put_volume(
                 &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
-                models::CreateVolumeBody::new(models::VolumePolicy::default(), 1, 5242880u64),
+                models::CreateVolumeBody::new(
+                    models::VolumePolicy::default(),
+                    1,
+                    5242880u64,
+                    false,
+                ),
             )
             .await
             .unwrap();
