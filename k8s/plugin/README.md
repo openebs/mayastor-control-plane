@@ -57,16 +57,16 @@ The plugin needs to be able to connect to the REST server in order to make the a
 5. Get Nodes
 ```
 ❯ kubectl mayastor get nodes
- ID          GRPC ENDPOINT   STATUS
- mayastor-2  10.1.0.7:10124  Online
- mayastor-1  10.1.0.6:10124  Online
- mayastor-3  10.1.0.8:10124  Online
+ ID          GRPC ENDPOINT   STATUS   CORDONED
+ mayastor-2  10.1.0.7:10124  Online   false
+ mayastor-1  10.1.0.6:10124  Online   false
+ mayastor-3  10.1.0.8:10124  Online   false
 ```
 6. Get Node by ID
 ```
 ❯ kubectl mayastor get node mayastor-2
- ID          GRPC ENDPOINT   STATUS
- mayastor-2  10.1.0.7:10124  Online
+ ID          GRPC ENDPOINT   STATUS  CORDONED
+ mayastor-2  10.1.0.7:10124  Online  false
 ```
 
 7. Get Volume(s)/Pool(s)/Node(s) to a specific Output Format
@@ -129,6 +129,25 @@ The plugin needs to be able to connect to the REST server in order to make the a
  /dev/nvme4n1  disk     20971520  yes        Amazon Elastic Block Store  /devices/pci0000:00/0000:00:1d.0/nvme/nvme4/nvme4n1  259    12     "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol06eb486c9593587a9", "/dev/disk/by-id/nvme-nvme.1d0f-766f6c3036656234383663393539333538376139-416d617a6f6e20456c617374696320426c6f636b2053746f7265-00000001", "/dev/disk/by-path/pci-0000:00:1d.0-nvme-1"
 ```
 **NOTE: The above command lists usable blockdevices if `--all` flag is not used, but currently since there isn't a way to identify whether the `disk` has a blobstore pool, `disks` not used by `pools` created by `control-plane` are shown as usable if they lack any filesystem uuid.**
+
+10. Node Cordoning
+```
+❯ kubectl mayastor cordon node io-engine-1 my-label
+Node io-engine-1 cordoned successfully
+```
+
+11. Node Uncordoning
+```
+❯ kubectl mayastor uncordon node io-engine-1 my-label
+Node io-engine-1 successfully uncordoned
+```
+
+12. Listing Cordon Labels
+```
+❯ kubectl mayastor get node io-engine-1 --show-cordon-labels
+ ID           GRPC ENDPOINT   STATUS  CORDONED  CORDON LABELS
+ io-engine-1  10.1.0.5:10124  Online  true      my-label
+```
 
 </details>
 
