@@ -9,7 +9,7 @@ const PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
 const PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Clone, Debug)]
-pub struct Identity {}
+pub(crate) struct Identity {}
 
 impl Identity {}
 #[tonic::async_trait]

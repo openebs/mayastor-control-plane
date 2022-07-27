@@ -33,7 +33,7 @@ use tracing::info;
 #[allow(clippy::redundant_closure)]
 #[allow(clippy::enum_variant_names)]
 #[allow(clippy::upper_case_acronyms)]
-pub mod csi {
+pub(crate) mod csi {
     #![allow(clippy::derive_partial_eq_without_eq)]
     tonic::include_proto!("csi.v1");
 }
@@ -237,10 +237,10 @@ impl CsiServer {
         };
 
         if let Err(e) = Server::builder()
-            .add_service(NodeServer::new(Node {
-                node_name: node_name.into(),
-                filesystems: probe_filesystems(),
-            }))
+            .add_service(NodeServer::new(Node::new(
+                node_name.into(),
+                probe_filesystems(),
+            )))
             .add_service(IdentityServer::new(Identity {}))
             .serve_with_incoming_shutdown(incoming, Shutdown::wait())
             .await

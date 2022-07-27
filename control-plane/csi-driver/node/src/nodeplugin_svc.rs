@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility = "pub(crate)")]
-pub enum ServiceError {
+pub(crate) enum ServiceError {
     #[snafu(display("Cannot find volume: volume ID: {}", volid))]
     VolumeNotFound { volid: String },
     #[snafu(display("Invalid volume ID: {}, {}", volid, source))]
@@ -31,7 +31,7 @@ pub enum ServiceError {
     BlockDeviceMount { volid: String },
 }
 
-pub enum TypeOfMount {
+pub(crate) enum TypeOfMount {
     FileSystem,
     RawBlock,
 }
@@ -102,15 +102,15 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
     })
 }
 
-pub async fn freeze_volume(volume_id: &str) -> Result<(), ServiceError> {
+pub(crate) async fn freeze_volume(volume_id: &str) -> Result<(), ServiceError> {
     fsfreeze(volume_id, "--freeze").await
 }
 
-pub async fn unfreeze_volume(volume_id: &str) -> Result<(), ServiceError> {
+pub(crate) async fn unfreeze_volume(volume_id: &str) -> Result<(), ServiceError> {
     fsfreeze(volume_id, "--unfreeze").await
 }
 
-pub async fn find_volume(volume_id: &str) -> Result<TypeOfMount, ServiceError> {
+pub(crate) async fn find_volume(volume_id: &str) -> Result<TypeOfMount, ServiceError> {
     let uuid = Uuid::parse_str(volume_id).context(InvalidVolumeId {
         volid: volume_id.to_string(),
     })?;
@@ -124,12 +124,14 @@ pub async fn find_volume(volume_id: &str) -> Result<TypeOfMount, ServiceError> {
         })?;
         debug!("mountpaths for volume_id :{} : {:?}", volume_id, mountpaths);
         if !mountpaths.is_empty() {
-            let fstype = mountpaths[0].fstype.clone();
+            let fstype = mountpaths[0].fstype();
             for devmount in mountpaths {
-                if fstype != devmount.fstype {
+                if fstype != devmount.fstype() {
                     debug!(
                         "Find volume_id :{} : failed, multiple fstypes {}, {}",
-                        volume_id, fstype, devmount.fstype
+                        volume_id,
+                        fstype,
+                        devmount.fstype()
                     );
                     // This failure is very unlikely but include for
                     // completeness

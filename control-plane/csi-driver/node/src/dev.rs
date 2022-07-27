@@ -41,13 +41,13 @@ mod util;
 
 const NVME_NQN_PREFIX: &str = "nqn.2019-05.io.openebs";
 
-pub use crate::error::DeviceError;
+pub(crate) use crate::error::DeviceError;
 use crate::match_dev;
 
-pub type DeviceName = String;
+pub(crate) type DeviceName = String;
 
 #[tonic::async_trait]
-pub trait Attach: Sync + Send {
+pub(crate) trait Attach: Sync + Send {
     async fn parse_parameters(
         &mut self,
         context: &HashMap<String, String>,
@@ -59,17 +59,17 @@ pub trait Attach: Sync + Send {
 }
 
 #[tonic::async_trait]
-pub trait Detach: Sync + Send {
+pub(crate) trait Detach: Sync + Send {
     async fn detach(&self) -> Result<(), DeviceError>;
     fn devname(&self) -> DeviceName;
 }
 
-pub struct Device;
+pub(crate) struct Device;
 
 impl Device {
     /// Main dispatch function for parsing URIs in order
     /// to obtain a device implementing the Attach trait.
-    pub fn parse(uri: &str) -> Result<Box<dyn Attach>, DeviceError> {
+    pub(crate) fn parse(uri: &str) -> Result<Box<dyn Attach>, DeviceError> {
         let url = Url::parse(uri).map_err(|error| error.to_string())?;
         match url.scheme() {
             "file" => Ok(Box::new(nbd::Nbd::try_from(&url)?)),
@@ -85,7 +85,7 @@ impl Device {
 
     /// Lookup an existing device in udev matching the given UUID
     /// to obtain a device implementing the Detach trait.
-    pub async fn lookup(uuid: &Uuid) -> Result<Option<Box<dyn Detach>>, DeviceError> {
+    pub(crate) async fn lookup(uuid: &Uuid) -> Result<Option<Box<dyn Detach>>, DeviceError> {
         let nvmf_key: String = format!("uuid.{}", uuid);
 
         let mut enumerator = Enumerator::new()?;
@@ -122,7 +122,7 @@ impl Device {
 
     /// Wait for a device to show up in udev
     /// once attach() has been called.
-    pub async fn wait_for_device(
+    pub(crate) async fn wait_for_device(
         device: &dyn Attach,
         timeout: Duration,
         retries: u32,

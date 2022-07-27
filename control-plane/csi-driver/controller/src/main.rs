@@ -23,7 +23,7 @@ fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
 }
 
 #[tokio::main(worker_threads = 2)]
-pub async fn main() -> anyhow::Result<()> {
+async fn main() -> anyhow::Result<()> {
     let default_io_selector = CsiControllerConfig::default_io_selector();
     let args = App::new(utils::package_description!())
         .author(clap::crate_authors!())

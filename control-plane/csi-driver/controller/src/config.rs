@@ -6,7 +6,7 @@ use std::{collections::HashMap, time::Duration};
 static CONFIG: OnceCell<CsiControllerConfig> = OnceCell::new();
 
 // Global CSI Controller config.
-pub struct CsiControllerConfig {
+pub(crate) struct CsiControllerConfig {
     /// REST API endpoint URL.
     rest_endpoint: String,
     /// I/O timeout for REST API operations.
@@ -17,7 +17,7 @@ pub struct CsiControllerConfig {
 
 impl CsiControllerConfig {
     /// Initialize global instance of the CSI config. Must be called prior to using the config.
-    pub fn initialize(args: &ArgMatches) -> anyhow::Result<()> {
+    pub(crate) fn initialize(args: &ArgMatches) -> anyhow::Result<()> {
         assert!(
             CONFIG.get().is_none(),
             "CSI Controller config already initialized"
@@ -72,24 +72,24 @@ impl CsiControllerConfig {
     }
 
     /// Get global instance of CSI controller config.
-    pub fn get_config() -> &'static CsiControllerConfig {
+    pub(crate) fn get_config() -> &'static CsiControllerConfig {
         CONFIG
             .get()
             .expect("CSI Controller config is not initialized")
     }
 
     /// Get REST API endpoint.
-    pub fn rest_endpoint(&self) -> &str {
+    pub(crate) fn rest_endpoint(&self) -> &str {
         &self.rest_endpoint
     }
 
     /// Get I/O timeout for REST API operations.
-    pub fn io_timeout(&self) -> Duration {
+    pub(crate) fn io_timeout(&self) -> Duration {
         self.io_timeout
     }
 
     /// IO-Engine DaemonSet selector labels.
-    pub fn io_engine_selector(&self) -> HashMap<String, String> {
+    pub(crate) fn io_engine_selector(&self) -> HashMap<String, String> {
         self.io_engine_selector.clone()
     }
 }

@@ -20,7 +20,7 @@ use rpc::csi::{controller_server::ControllerServer, identity_server::IdentitySer
 use crate::{controller::CsiControllerSvc, identity::CsiIdentitySvc};
 
 #[derive(Debug)]
-struct UnixStream(pub tokio::net::UnixStream);
+struct UnixStream(tokio::net::UnixStream);
 
 impl Connected for UnixStream {
     type ConnectInfo = UdsConnectInfo;

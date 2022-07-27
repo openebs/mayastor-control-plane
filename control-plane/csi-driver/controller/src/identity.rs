@@ -5,7 +5,7 @@ use tonic::{Request, Response, Status};
 use tracing::{debug, error, instrument};
 
 #[derive(Debug, Default)]
-pub struct CsiIdentitySvc {}
+pub(crate) struct CsiIdentitySvc {}
 
 const CSI_PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
 const CSI_PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");

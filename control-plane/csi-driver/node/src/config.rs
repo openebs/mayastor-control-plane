@@ -68,7 +68,7 @@ impl TryFrom<NvmeArgValues> for NvmeConfig {
     }
 }
 /// Nvme Arguments taken from the CSI volume calls (storage class parameters)
-pub type NvmeParseParams<'a> = &'a HashMap<String, String>;
+pub(crate) type NvmeParseParams<'a> = &'a HashMap<String, String>;
 impl TryFrom<NvmeParseParams<'_>> for NvmeArgValues {
     type Error = String;
     fn try_from(_value: NvmeParseParams) -> Result<Self, Self::Error> {
