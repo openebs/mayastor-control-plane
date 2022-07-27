@@ -37,41 +37,67 @@ pub fn set_jaeger_env() {
     }
 }
 
-fn rust_log_add_quiet_defaults(
+/// Mix the `RUST_LOG` `EnvFilter` with `RUST_LOG_QUIET`.
+/// This is useful when we want to bulk-silence certain crates by default.
+pub fn rust_log_add_quiet_defaults(
     current: tracing_subscriber::EnvFilter,
 ) -> tracing_subscriber::EnvFilter {
-    let main = match current.to_string().as_str() {
-        "debug" => "debug",
-        "trace" => "trace",
-        _ => return current,
+    let rust_log_quiets = std::env::var("RUST_LOG_QUIETS");
+    let quiets = match &rust_log_quiets {
+        Ok(quiets) => quiets.as_str(),
+        Err(_) => super::constants::RUST_LOG_QUIET_DEFAULTS,
     };
-    let logs = format!("{},{}", main, super::constants::RUST_LOG_QUIET_DEFAULTS);
-    tracing_subscriber::EnvFilter::try_new(logs).unwrap()
+
+    tracing_subscriber::EnvFilter::try_new(match quiets.is_empty() {
+        true => current.to_string(),
+        false => format!("{},{}", current, quiets),
+    })
+    .unwrap()
 }
 
 /// Initialise tracing and optionally opentelemetry.
 /// Tracing will have a stdout subscriber with pretty formatting.
 pub fn init_tracing(service_name: &str, tracing_tags: Vec<KeyValue>, jaeger: Option<String>) {
-    init_tracing_level(service_name, tracing_tags, jaeger, None);
+    init_tracing_ext(service_name, tracing_tags, jaeger, FmtLayer::Stdout);
+}
+
+/// Fmt Layer for console output.
+pub enum FmtLayer {
+    /// Output traces to stdout.
+    Stdout,
+    /// Output traces to stderr.
+    Stderr,
+    /// Don't output traces to console.
+    None,
 }
 
 /// Initialise tracing and optionally opentelemetry.
 /// Tracing will have a stdout subscriber with pretty formatting.
-pub fn init_tracing_level(
+pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
     service_name: &str,
     mut tracing_tags: Vec<KeyValue>,
-    jaeger: Option<String>,
-    level: Option<&str>,
+    jaeger: Option<T>,
+    fmt_layer: FmtLayer,
 ) {
-    let level = level.unwrap_or("info");
     let filter = rust_log_add_quiet_defaults(
         tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(level)),
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
     );
 
-    let subscriber = Registry::default()
-        .with(filter)
-        .with(tracing_subscriber::fmt::layer().pretty());
+    let (stdout, stderr) = match fmt_layer {
+        FmtLayer::Stdout => (Some(tracing_subscriber::fmt::layer().pretty()), None),
+        FmtLayer::Stderr => (
+            None,
+            Some(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stderr)
+                    .pretty(),
+            ),
+        ),
+        FmtLayer::None => (None, None),
+    };
+
+    let subscriber = Registry::default().with(filter).with(stdout).with(stderr);
 
     match jaeger {
         Some(jaeger) => {
@@ -79,9 +105,15 @@ pub fn init_tracing_level(
                 super::raw_version_str(),
                 env!("CARGO_PKG_VERSION"),
             ));
-            tracing_tags.dedup();
-            println!("Using the following tracing tags: {:?}", tracing_tags);
-
+            let tracing_tags =
+                tracing_tags
+                    .into_iter()
+                    .fold(Vec::<KeyValue>::new(), |mut acc, kv| {
+                        if !acc.iter().any(|acc| acc.key == kv.key) {
+                            acc.push(kv);
+                        }
+                        acc
+                    });
             set_jaeger_env();
 
             global::set_text_map_propagator(TraceContextPropagator::new());

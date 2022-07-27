@@ -50,7 +50,7 @@ impl CliArgs {
 
 #[tokio::main]
 async fn main() {
-    plugin::init_tracing(&CliArgs::args().jaeger);
+    plugin::init_tracing(CliArgs::args().jaeger.as_ref());
 
     execute(CliArgs::args()).await;
 
