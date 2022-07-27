@@ -102,6 +102,7 @@ fn check_existing_volume(
     replica_count: u8,
     size: u64,
     _pinned_volume: bool,
+    thin: bool,
 ) -> Result<(), Status> {
     // Check if the existing volume is compatible, which means
     //  - number of replicas is equal or greater
@@ -127,6 +128,13 @@ fn check_existing_volume(
         return Err(Status::already_exists(format!(
             "Existing volume {} has insufficient size: {} bytes ({} requested)",
             spec.uuid, spec.size, size
+        )));
+    }
+
+    if spec.thin != thin {
+        return Err(Status::already_exists(format!(
+            "Existing volume {} has thin provisioning set to {} ({} requested)",
+            spec.uuid, spec.thin, thin
         )));
     }
 
@@ -300,10 +308,15 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
+        let thin = match args.parameters.get("thin") {
+            Some(value) => value == "true",
+            None => false,
+        };
+
         // First check if the volume already exists.
         match IoEngineApiClient::get_client().get_volume(&u).await {
             Ok(volume) => {
-                check_existing_volume(&volume, replica_count, size, pinned_volume)?;
+                check_existing_volume(&volume, replica_count, size, pinned_volume, thin)?;
                 debug!(
                     "Volume {} already exists and is compatible with requested config",
                     volume_uuid
@@ -318,7 +331,14 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 );
 
                 IoEngineApiClient::get_client()
-                    .create_volume(&u, replica_count, size, volume_topology, pinned_volume)
+                    .create_volume(
+                        &u,
+                        replica_count,
+                        size,
+                        volume_topology,
+                        pinned_volume,
+                        thin,
+                    )
                     .await?;
 
                 debug!(

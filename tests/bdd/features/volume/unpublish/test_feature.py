@@ -34,7 +34,7 @@ def init():
         NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
     )
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
     )
     yield
     Deployer.stop()

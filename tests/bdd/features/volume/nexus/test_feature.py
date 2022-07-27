@@ -38,6 +38,7 @@ def a_published_selfhealing_volume():
         VolumePolicy(True),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
+        False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(exclusion={}, inclusion={"node": IO_ENGINE_2})

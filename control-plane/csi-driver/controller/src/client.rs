@@ -189,6 +189,7 @@ impl IoEngineApiClient {
         size: u64,
         volume_topology: CreateVolumeTopology,
         _pinned_volume: bool,
+        thin: bool,
     ) -> Result<Volume, ApiClientError> {
         let topology = Topology::new_all(
             Some(NodeTopology::explicit(ExplicitNodeTopology::new(
@@ -204,6 +205,7 @@ impl IoEngineApiClient {
         let req = CreateVolumeBody {
             replicas,
             size,
+            thin,
             topology: Some(topology),
             policy: VolumePolicy::new_all(true),
             labels: None,

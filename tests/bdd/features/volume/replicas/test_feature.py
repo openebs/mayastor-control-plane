@@ -64,7 +64,7 @@ def init_resources():
     )
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
-        CreateVolumeBody(VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE),
+        CreateVolumeBody(VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False),
     )
     ApiClient.pools_api().put_node_pool(
         NODE_3_NAME, POOL_3_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])

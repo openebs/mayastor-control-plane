@@ -162,6 +162,8 @@ pub struct CreateVolumeBody {
     pub topology: Option<Topology>,
     /// Volume labels, used ot store custom volume information
     pub labels: Option<VolumeLabels>,
+    /// Flag indicating whether the volume should be thin provisioned
+    pub thin: bool,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -171,6 +173,7 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             policy: src.policy.into(),
             topology: src.topology.into_opt(),
             labels: src.labels,
+            thin: src.thin,
         }
     }
 }
@@ -182,6 +185,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             policy: create.policy,
             topology: create.topology,
             labels: create.labels,
+            thin: create.thin,
         }
     }
 }
@@ -195,6 +199,7 @@ impl CreateVolumeBody {
             policy: self.policy.clone(),
             topology: self.topology.clone(),
             labels: self.labels.clone(),
+            thin: self.thin,
         }
     }
 }

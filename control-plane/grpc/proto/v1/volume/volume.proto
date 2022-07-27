@@ -51,6 +51,8 @@ message VolumeSpec {
   optional Topology topology = 7;
   // Id of the last Nexus used by the volume
   google.protobuf.StringValue last_nexus_id = 8;
+  // Flag indicating thin provisioning.
+  bool thin = 9;
 }
 
 message Metadata {
@@ -153,6 +155,8 @@ message CreateVolumeRequest {
   VolumePolicy policy = 6;
   // replica placement topology for the volume creation only
   optional Topology topology = 7;
+  // flag indicating thin provisioning
+  bool thin = 8;
 }
 
 // Publish a volume on a node

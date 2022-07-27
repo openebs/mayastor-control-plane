@@ -34,6 +34,7 @@ async fn setup() {
                 size: 5242880,
                 topology: None,
                 labels: None,
+                thin: false,
             },
         )
         .await
@@ -102,6 +103,7 @@ async fn get_volumes_paginated() {
                     policy: Default::default(),
                     replicas: 1,
                     size: 5242880,
+                    thin: false,
                     topology: None,
                     labels: None,
                 },

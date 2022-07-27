@@ -229,7 +229,7 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
     let volume = volumes_api
         .put_volume(
             &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
-            models::CreateVolumeBody::new(models::VolumePolicy::default(), 2, 5242880u64),
+            models::CreateVolumeBody::new(models::VolumePolicy::default(), 2, 5242880u64, false),
         )
         .await
         .unwrap();
@@ -309,7 +309,7 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume(
             &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
-            models::CreateVolumeBody::new(models::VolumePolicy::default(), 2, 5242880u64),
+            models::CreateVolumeBody::new(models::VolumePolicy::default(), 2, 5242880u64, false),
         )
         .await
         .unwrap();
@@ -360,7 +360,7 @@ async fn unused_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume(
             &"22054b1f-cf32-46dc-90ff-d6a5c61429c2".parse().unwrap(),
-            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 2, 5242880u64),
+            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 2, 5242880u64, false),
         )
         .await
         .unwrap();

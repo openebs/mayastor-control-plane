@@ -102,6 +102,8 @@ pub struct VolumeSpec {
     pub last_nexus_id: Option<NexusId>,
     /// Record of the operation in progress
     pub operation: Option<VolumeOperationState>,
+    /// Flag indicating whether the volume should be thin provisioned
+    pub thin: bool,
 }
 
 macro_rules! volume_log {
@@ -320,6 +322,7 @@ impl From<&CreateVolume> for VolumeSpec {
             sequencer: OperationSequence::new(request.uuid.clone()),
             last_nexus_id: None,
             operation: None,
+            thin: request.thin,
         }
     }
 }
@@ -367,6 +370,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.uuid,
             src.topology.into_opt(),
             src.policy,
+            src.thin,
         )
     }
 }

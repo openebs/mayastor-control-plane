@@ -96,6 +96,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 policy: Some(volume_spec.policy.into()),
                 topology: volume_spec.topology.map(|topology| topology.into()),
                 last_nexus_id: volume_spec.last_nexus_id.map(|id| id.to_string()),
+                thin: volume_spec.thin,
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -213,6 +214,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 None => None,
             },
             operation: None,
+            thin: volume_spec.thin,
         };
         Ok(volume_spec)
     }
@@ -611,6 +613,8 @@ pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     fn topology(&self) -> Option<Topology>;
     /// Labels to be added to the volumes for topology based scheduling
     fn labels(&self) -> Option<VolumeLabels>;
+    /// Flag indicating whether the volume should be thin provisioned
+    fn thin(&self) -> bool;
 }
 
 impl CreateVolumeInfo for CreateVolume {
@@ -636,6 +640,10 @@ impl CreateVolumeInfo for CreateVolume {
 
     fn labels(&self) -> Option<VolumeLabels> {
         self.labels.clone()
+    }
+
+    fn thin(&self) -> bool {
+        self.thin
     }
 }
 
@@ -677,6 +685,10 @@ impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
             Some(labels) => Some(labels.value),
         }
     }
+
+    fn thin(&self) -> bool {
+        self.inner.thin
+    }
 }
 
 impl ValidateRequestTypes for CreateVolumeRequest {
@@ -711,6 +723,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolume {
             policy: data.policy(),
             topology: data.topology(),
             labels: data.labels(),
+            thin: data.thin(),
         }
     }
 }
@@ -726,6 +739,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
             labels: data
                 .labels()
                 .map(|labels| crate::common::StringMapValue { value: labels }),
+            thin: data.thin(),
         }
     }
 }
