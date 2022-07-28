@@ -8,7 +8,8 @@ from dataclasses import dataclass
 class StartOptions:
     io_engines: int = 1
     wait: str = "10s"
-    csi: bool = False
+    csi_controller: bool = False
+    csi_node: bool = False
     reconcile_period: str = ""
     cache_period: str = ""
     io_engine_env: str = ""
@@ -27,8 +28,10 @@ class StartOptions:
             "--wait-timeout",
             self.wait,
         ]
-        if self.csi:
-            args.append("--csi")
+        if self.csi_controller:
+            args.append("--csi-controller")
+        if self.csi_node:
+            args.append("--csi-node")
         if self.jaeger:
             args.append("--jaeger")
         if len(self.reconcile_period) > 0:
@@ -59,7 +62,8 @@ class Deployer(object):
     def start(
         io_engines=2,
         wait="10s",
-        csi=False,
+        csi_controller=False,
+        csi_node=False,
         reconcile_period="",
         cache_period="",
         io_engine_env="",
@@ -72,11 +76,13 @@ class Deployer(object):
         options = StartOptions(
             io_engines,
             wait,
-            csi=csi,
+            csi_controller=csi_controller,
+            csi_node=csi_node,
             reconcile_period=reconcile_period,
             cache_period=cache_period,
             io_engine_env=io_engine_env,
             agents_env=agents_env,
+            rest_env=rest_env,
             node_deadline=node_deadline,
             jaeger=jaeger,
             max_rebuilds=max_rebuilds,

@@ -28,13 +28,13 @@ def setup():
         result["status"] = proc.returncode
 
     try:
-        subprocess.run(["sudo", "rm", "/var/tmp/csi.sock"], check=True)
+        subprocess.run(["sudo", "rm", "/var/tmp/csi-node.sock"], check=True)
     except:
         pass
     proc = subprocess.Popen(
         args=[
             os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
-            "--csi-socket=/var/tmp/csi.sock",
+            "--csi-socket=/var/tmp/csi-node.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",
             "--nvme-nr-io-queues=1",
@@ -67,7 +67,7 @@ def test_plugin_capabilities():
 
 
 def csi_rpc_handle():
-    return CsiHandle("unix:///var/tmp/csi.sock")
+    return CsiHandle("unix:///var/tmp/csi-node.sock")
 
 
 @given("a running CSI node plugin", target_fixture="csi_instance")

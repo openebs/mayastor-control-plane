@@ -18,8 +18,10 @@ from common.apiclient import ApiClient
 
 @pytest.fixture(scope="module")
 def setup():
-    Deployer.start(1, csi=True)
-    subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
+    Deployer.start(1, csi_controller=True)
+    subprocess.run(
+        ["sudo", "chmod", "go+rw", "/var/tmp/csi-controller.sock"], check=True
+    )
     yield
     Deployer.stop()
 
@@ -51,7 +53,7 @@ def test_probe_rest_not_accessible(setup):
 
 
 def csi_rpc_handle():
-    return CsiHandle("unix:///var/tmp/csi.sock")
+    return CsiHandle("unix:///var/tmp/csi-controller.sock")
 
 
 @given("a running CSI controller plugin", target_fixture="csi_instance")

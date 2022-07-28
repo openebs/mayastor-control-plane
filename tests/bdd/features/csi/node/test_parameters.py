@@ -129,7 +129,7 @@ def start_csi_plugin(setup, io_queues, staging_target_path):
         args=[
             "sudo",
             os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
-            "--csi-socket=/var/tmp/csi.sock",
+            "--csi-socket=/var/tmp/csi-node.sock",
             "--grpc-endpoint=0.0.0.0",
             "--node-name=msn-test",
             f"--nvme-nr-io-queues={io_queues}",
@@ -169,10 +169,10 @@ def setup():
 
 @pytest.fixture
 def fix_socket_permissions(start_csi_plugin):
-    subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
+    subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi-node.sock"], check=True)
     yield
 
 
 @pytest.fixture
 def csi_instance(start_csi_plugin, fix_socket_permissions):
-    yield CsiHandle("unix:///var/tmp/csi.sock")
+    yield CsiHandle("unix:///var/tmp/csi-node.sock")
