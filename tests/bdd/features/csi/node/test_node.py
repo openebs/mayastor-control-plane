@@ -3,8 +3,6 @@ from pytest_bdd import given, scenario, then, when, parsers
 
 import os
 import subprocess
-import threading
-import time
 
 import grpc
 import csi_pb2 as pb
@@ -91,47 +89,8 @@ def get_volume_capability(volume, read_only):
 
 
 @pytest.fixture(scope="module")
-def start_csi_plugin(setup):
-    def monitor(proc, result):
-        stdout, stderr = proc.communicate()
-        result["stdout"] = stdout.decode()
-        result["stderr"] = stderr.decode()
-        result["status"] = proc.returncode
-
-    try:
-        subprocess.run(["sudo", "rm", "/var/tmp/csi-node.sock"], check=True)
-    except:
-        pass
-
-    proc = subprocess.Popen(
-        args=[
-            "sudo",
-            os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
-            "--csi-socket=/var/tmp/csi-node.sock",
-            "--grpc-endpoint=0.0.0.0",
-            "--node-name=msn-test",
-            "--nvme-nr-io-queues=1",
-            "-v",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    result = {}
-    handler = threading.Thread(target=monitor, args=[proc, result])
-    handler.start()
-    time.sleep(1)
-    yield
-    subprocess.run(["sudo", "pkill", "csi-node"], check=True)
-    handler.join()
-    print("[CSI] exit status: %d" % (result["status"]))
-    print(result["stdout"])
-    print(result["stderr"])
-
-
-@pytest.fixture(scope="module")
 def setup():
-    Deployer.start(1, jaeger=True)
+    Deployer.start(1, csi_node=True)
 
     # Create 2 pools.
     pool_labels = {"openebs.io/created-by": "operator-diskpool"}
@@ -147,28 +106,30 @@ def setup():
 
 
 @pytest.fixture(scope="module")
-def fix_socket_permissions(start_csi_plugin):
-    subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi-node.sock"], check=True)
+def fix_socket_permissions(setup):
+    subprocess.run(
+        ["sudo", "chmod", "go+rw", "/var/tmp/csi-app-node-1.sock"], check=True
+    )
     yield
 
 
 @pytest.fixture(scope="module")
-def csi_instance(start_csi_plugin, fix_socket_permissions):
-    yield CsiHandle("unix:///var/tmp/csi-node.sock")
+def csi_instance(setup, fix_socket_permissions):
+    yield CsiHandle("unix:///var/tmp/csi-app-node-1.sock")
 
 
 @pytest.fixture
 def staging_target_path():
-    yield "/tmp/staging/mount"
+    yield "/var/tmp/staging/mount"
 
 
 @pytest.fixture
 def target_path():
     try:
-        os.mkdir("/tmp/publish")
+        os.mkdir("/var/tmp/publish")
     except FileExistsError:
         pass
-    yield "/tmp/publish/mount"
+    yield "/var/tmp/publish/mount"
 
 
 @pytest.fixture(scope="module")
