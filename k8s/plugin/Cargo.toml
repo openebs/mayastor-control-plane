@@ -19,13 +19,13 @@ tls = [ "openapi/tower-client-tls", "rest-plugin/rls" ]
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-trace" ] }
 utils = { path = "../../utils/utils-lib" }
 rest-plugin = { path = "../../control-plane/plugin", default-features = false }
-kube = { version = "0.60.0", features = [ "derive" ] }
+kube = { version = "0.74.0", features = [ "derive" ] }
 supportability = { path = "../supportability" }
-tokio = { version = "1.12.0" }
+tokio = { version = "1.20.1" }
 anyhow = "1.0.44"
 clap = { version = "3.1.5", features = ["color", "derive"] }
 humantime = "2.1.0"
 
 # Tracing
-tracing = "0.1.28"
-opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
+tracing = "0.1.35"
+opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }

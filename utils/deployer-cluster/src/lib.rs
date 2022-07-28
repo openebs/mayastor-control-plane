@@ -718,7 +718,10 @@ impl ClusterBuilder {
                 global::set_text_map_propagator(TraceContextPropagator::new());
                 let tracer = opentelemetry_jaeger::new_pipeline()
                     .with_service_name("cluster-client")
-                    .with_tags(tracing_tags)
+                    .with_trace_config(
+                        opentelemetry::sdk::trace::Config::default()
+                            .with_resource(opentelemetry::sdk::Resource::new(tracing_tags)),
+                    )
                     .install_simple()
                     .expect("Should be able to initialise the exporter");
                 let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);

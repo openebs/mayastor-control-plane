@@ -9,17 +9,14 @@ use chrono::Utc;
 use clap::{App, Arg, ArgMatches};
 use crd::{DiskPool, DiskPoolStatus, PoolState};
 use futures::StreamExt;
-use k8s_openapi::{
-    api::core::v1::{Event as k8Event, ObjectReference},
-    apimachinery::pkg::apis::meta::v1::MicroTime,
-};
+use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
 use kube::{
     api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams},
-    Client, CustomResourceExt, ResourceExt,
-};
-use kube_runtime::{
-    controller::{Context, Controller, ReconcilerAction},
-    finalizer::{finalizer, Event},
+    runtime::{
+        controller::{Action, Controller},
+        finalizer,
+    },
+    Client, CustomResourceExt, Resource, ResourceExt,
 };
 use openapi::{
     clients::{self, tower::Url},
@@ -85,7 +82,7 @@ impl From<clients::tower::Error<RestJsonError>> for Error {
 #[derive(Clone)]
 pub(crate) struct ResourceContext {
     /// The latest CRD known to us
-    inner: DiskPool,
+    inner: Arc<DiskPool>,
     /// Counter that keeps track of how many times the reconcile loop has run
     /// within the current state
     num_retries: u32,
@@ -121,7 +118,11 @@ impl OperatorContext {
     /// Upsert the potential new CRD into the operator context. If an existing
     /// resource with the same name is present, the old resource is
     /// returned.
-    pub(crate) async fn upsert(&self, ctx: Arc<OperatorContext>, dsp: DiskPool) -> ResourceContext {
+    pub(crate) async fn upsert(
+        &self,
+        ctx: Arc<OperatorContext>,
+        dsp: Arc<DiskPool>,
+    ) -> ResourceContext {
         let resource = ResourceContext {
             inner: dsp,
             num_retries: 0,
@@ -131,7 +132,7 @@ impl OperatorContext {
         let mut i = self.inventory.write().await;
         debug!(count = ?i.keys().count(), "current number of CRDS");
 
-        match i.get_mut(&resource.name()) {
+        match i.get_mut(&resource.name_any()) {
             Some(p) => {
                 if p.resource_version() == resource.resource_version() {
                     if matches!(
@@ -155,14 +156,14 @@ impl OperatorContext {
                 // Its a new resource version which means we will swap it out
                 // to reset the counter.
                 let p = i
-                    .insert(resource.name(), resource.clone())
+                    .insert(resource.name_any(), resource.clone())
                     .expect("existing resource should be present");
-                info!(name = ?p.name(), "new resource_version inserted");
+                info!(name = ?p.name_any(), "new resource_version inserted");
                 resource
             }
 
             None => {
-                let p = i.insert(resource.name(), resource.clone());
+                let p = i.insert(resource.name_any(), resource.clone());
                 assert!(p.is_none());
                 resource
             }
@@ -173,7 +174,7 @@ impl OperatorContext {
         let mut i = self.inventory.write().await;
         let removed = i.remove(&name);
         if let Some(removed) = removed {
-            info!(name =? removed.name(), "removed from inventory");
+            info!(name =? removed.name_any(), "removed from inventory");
             return Some(removed);
         }
         None
@@ -182,28 +183,22 @@ impl OperatorContext {
 
 impl ResourceContext {
     /// Called when putting our finalizer on top of the resource.
-    #[tracing::instrument(fields(name = ?dsp.name()))]
-    pub(crate) async fn put_finalizer(dsp: DiskPool) -> Result<ReconcilerAction, Error> {
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+    #[tracing::instrument(fields(name = ?dsp.name_any()))]
+    pub(crate) async fn put_finalizer(dsp: Arc<DiskPool>) -> Result<Action, Error> {
+        Ok(Action::await_change())
     }
 
     /// Our notification that we should remove the pool and then the finalizer
-    #[tracing::instrument(fields(name = ?resource.name()) skip(resource))]
-    pub(crate) async fn delete_finalizer(
-        resource: ResourceContext,
-    ) -> Result<ReconcilerAction, Error> {
+    #[tracing::instrument(fields(name = ?resource.name_any()) skip(resource))]
+    pub(crate) async fn delete_finalizer(resource: ResourceContext) -> Result<Action, Error> {
         let ctx = resource.ctx.clone();
         resource.delete_pool().await?;
-        ctx.remove(resource.name()).await;
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+        ctx.remove(resource.name_any()).await;
+        Ok(Action::await_change())
     }
 
     /// Clone the inner value of this resource
-    fn inner(&self) -> DiskPool {
+    fn inner(&self) -> Arc<DiskPool> {
         self.inner.clone()
     }
 
@@ -231,11 +226,11 @@ impl ResourceContext {
 
         let o = self
             .api()
-            .patch_status(&self.name(), &ps, &Patch::Merge(&status))
+            .patch_status(&self.name_any(), &ps, &Patch::Merge(&status))
             .await
             .map_err(|source| Error::Kube { source })?;
 
-        debug!(name = ?o.name(), old = ?self.status, new =?o.status, "status changed");
+        debug!(name = ?o.name_any(), old = ?self.status, new =?o.status, "status changed");
 
         Ok(o)
     }
@@ -244,41 +239,33 @@ impl ResourceContext {
     /// this resource it implies that it does not exist yet and so we create
     /// it. We set the state of the of the object to Creating, such that we
     /// can track the its progress
-    async fn start(&self) -> Result<ReconcilerAction, Error> {
+    async fn start(&self) -> Result<Action, Error> {
         let _ = self.patch_status(DiskPoolStatus::default()).await?;
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+        Ok(Action::await_change())
     }
 
     /// Mark the resource as errored which is its final state. A pool in the
     /// error state will not be deleted.
-    async fn mark_error(&self) -> Result<ReconcilerAction, Error> {
+    async fn mark_error(&self) -> Result<Action, Error> {
         let _ = self.patch_status(DiskPoolStatus::error()).await?;
 
-        error!(name = ?self.name(),"status set to error");
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+        error!(name = ?self.name_any(),"status set to error");
+        Ok(Action::await_change())
     }
 
     /// patch the resource state to creating.
-    async fn is_missing(&self) -> Result<ReconcilerAction, Error> {
+    async fn is_missing(&self) -> Result<Action, Error> {
         self.patch_status(DiskPoolStatus::default()).await?;
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+        Ok(Action::await_change())
     }
     /// patch the resource state to unknown
-    async fn mark_unknown(&self) -> Result<ReconcilerAction, Error> {
+    async fn mark_unknown(&self) -> Result<Action, Error> {
         self.patch_status(DiskPoolStatus::unknown()).await?;
-        Ok(ReconcilerAction {
-            requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
-        })
+        Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
     }
 
     /// Stop reconciliation immediately and notify k8s engine.
-    async fn stop_reconciliation(self) -> Result<ReconcilerAction, Error> {
+    async fn stop_reconciliation(self) -> Result<Action, Error> {
         self.k8s_notify(
             "Failing pool creation",
             "Creating",
@@ -289,13 +276,15 @@ impl ResourceContext {
                 // reestablish a connection
         self.mark_error().await?;
         // we updated the resource as an error stop reconciliation
-        Err(Error::ReconcileError { name: self.name() })
+        Err(Error::ReconcileError {
+            name: self.name_any(),
+        })
     }
 
     /// Create or import the pool, on failure try again. When we reach max error
     /// count we fail the whole thing.
-    #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
-    pub(crate) async fn create_or_import(self) -> Result<ReconcilerAction, Error> {
+    #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
+    pub(crate) async fn create_or_import(self) -> Result<Action, Error> {
         if self.num_retries >= self.ctx.retries {
             return self.stop_reconciliation().await;
         }
@@ -331,7 +320,7 @@ impl ResourceContext {
                 }
                 // We would land here if some error occurred ex, precondition failed, i.e. node
                 // down, in that case we check for pool existence before setting a status.
-                Err(_) => match self.pools_api().get_pool(&self.name()).await {
+                Err(_) => match self.pools_api().get_pool(&self.name_any()).await {
                     Ok(response) => {
                         let pool = response.into_body();
                         // As pool exists, set the status based on the presence of pool state.
@@ -365,7 +354,7 @@ impl ResourceContext {
         let body = CreatePoolBody::new_all(self.spec.disks(), labels);
         match self
             .pools_api()
-            .put_node_pool(&self.spec.node(), &self.name(), body)
+            .put_node_pool(&self.spec.node(), &self.name_any(), body)
             .await
         {
             Ok(_) => {}
@@ -394,14 +383,12 @@ impl ResourceContext {
         // We are done creating the pool, we patched to created which triggers a
         // new loop. Any error in the loop will call our error handler where we
         // decide what to do
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+        Ok(Action::await_change())
     }
 
     /// Delete the pool from the io-engine instance
-    #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
-    async fn delete_pool(&self) -> Result<ReconcilerAction, Error> {
+    #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
+    async fn delete_pool(&self) -> Result<Action, Error> {
         // Do not delete pools which are in the error state. We have no way of
         // knowing whats wrong with the physical pool. Simply discard the CRD.
         if matches!(
@@ -411,14 +398,12 @@ impl ResourceContext {
                 ..
             })
         ) {
-            return Ok(ReconcilerAction {
-                requeue_after: None,
-            });
+            return Ok(Action::await_change());
         }
 
         let res = self
             .pools_api()
-            .del_node_pool(&self.spec.node(), &self.name())
+            .del_node_pool(&self.spec.node(), &self.name_any())
             .await?;
 
         if res.status().is_success() {
@@ -431,19 +416,17 @@ impl ResourceContext {
             .await;
         }
 
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+        Ok(Action::await_change())
     }
 
     /// Online the pool which is no-op from the data plane point of view. However
     /// it does provide us feedback from the k8s side of things which is
     /// useful when trouble shooting.
-    #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
-    async fn online_pool(self) -> Result<ReconcilerAction, Error> {
+    #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
+    async fn online_pool(self) -> Result<Action, Error> {
         let pool = self
             .pools_api()
-            .get_node_pool(&self.spec.node(), &self.name())
+            .get_node_pool(&self.spec.node(), &self.name_any())
             .await?
             .into_body();
 
@@ -458,14 +441,10 @@ impl ResourceContext {
             )
             .await;
 
-            Ok(ReconcilerAction {
-                requeue_after: None,
-            })
+            Ok(Action::await_change())
         } else {
             // the pool does not have a status yet reschedule the operation
-            Ok(ReconcilerAction {
-                requeue_after: Some(Duration::from_secs(3)),
-            })
+            Ok(Action::requeue(Duration::from_secs(3)))
         }
     }
 
@@ -475,23 +454,21 @@ impl ResourceContext {
     /// accordingly. If the control plane returns a pool state, set the CRD to 'Online'. If the
     /// control plane does not return a pool state (occurs when a node is missing), set the CRD to
     /// 'Unknown' and let the reconciler retry later.
-    #[tracing::instrument(fields(name = ?self.name(), status = ?self.status) skip(self))]
-    async fn pool_check(&self) -> Result<ReconcilerAction, Error> {
+    #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
+    async fn pool_check(&self) -> Result<Action, Error> {
         let pool = match self
             .pools_api()
-            .get_node_pool(&self.spec.node(), &self.name())
+            .get_node_pool(&self.spec.node(), &self.name_any())
             .await
         {
             Ok(response) => response,
             Err(clients::tower::Error::Response(response)) => {
                 return if response.status() == clients::tower::StatusCode::NOT_FOUND {
                     if self.metadata.deletion_timestamp.is_some() {
-                        tracing::debug!(name = ?self.name(), "deleted stopping checker");
-                        Ok(ReconcilerAction {
-                            requeue_after: None,
-                        })
+                        tracing::debug!(name = ?self.name_any(), "deleted stopping checker");
+                        Ok(Action::await_change())
                     } else {
-                        tracing::warn!(pool = ?self.name(), "deleted by external event NOT recreating");
+                        tracing::warn!(pool = ?self.name_any(), "deleted by external event NOT recreating");
                         self.k8s_notify(
                             "Offline",
                             "Check",
@@ -529,7 +506,7 @@ impl ResourceContext {
 
     /// If the pool, has a state we set that status to the CR and if it does not have a state
     /// we set the status as unknown so that we can try again later.
-    async fn set_status_or_unknown(&self, pool: Pool) -> Result<ReconcilerAction, Error> {
+    async fn set_status_or_unknown(&self, pool: Pool) -> Result<Action, Error> {
         if pool.state.is_some() {
             if let Some(status) = &self.status {
                 let new_status = DiskPoolStatus::from(pool);
@@ -558,9 +535,7 @@ impl ResourceContext {
         }
 
         // always reschedule though
-        Ok(ReconcilerAction {
-            requeue_after: Some(std::time::Duration::from_secs(self.ctx.interval)),
-        })
+        Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
     }
 
     /// Post an event, typically these events are used to indicate that
@@ -581,13 +556,13 @@ impl ResourceContext {
     async fn k8s_notify(&self, action: &str, reason: &str, message: &str, type_: &str) {
         let client = self.ctx.k8s.clone();
         let ns = self.namespace().expect("must be namespaced");
-        let e: Api<k8Event> = Api::namespaced(client, &ns);
+        let e: Api<Event> = Api::namespaced(client.clone(), &ns);
         let pp = PostParams::default();
         let time = Utc::now();
 
         let metadata = ObjectMeta {
             // the name must be unique for all events we post
-            generate_name: Some(format!("{}.{:x}", self.name(), time.timestamp())),
+            generate_name: Some(format!("{}.{:x}", self.name_any(), time.timestamp())),
             namespace: Some(ns),
             ..Default::default()
         };
@@ -595,18 +570,9 @@ impl ResourceContext {
         let _ = e
             .create(
                 &pp,
-                &k8Event {
-                    //last_timestamp: Some(time2),
+                &Event {
                     event_time: Some(MicroTime(time)),
-                    involved_object: ObjectReference {
-                        api_version: Some(self.api_version.clone()),
-                        field_path: None,
-                        kind: Some(self.kind.clone()),
-                        name: Some(self.name()),
-                        namespace: self.namespace(),
-                        resource_version: self.resource_version(),
-                        uid: self.uid(),
-                    },
+                    involved_object: self.object_ref(&()),
                     action: Some(action.into()),
                     reason: Some(reason.into()),
                     type_: Some(type_.into()),
@@ -626,24 +592,22 @@ impl ResourceContext {
     }
 
     /// Callback hooks for the finalizers
-    async fn finalizer(&self) -> Result<ReconcilerAction, Error> {
+    async fn finalizer(&self) -> Result<Action, Error> {
         let _ = finalizer(
             &self.api(),
             "openebs.io/diskpool-protection",
             self.inner(),
             |event| async move {
                 match event {
-                    Event::Apply(dsp) => Self::put_finalizer(dsp).await,
-                    Event::Cleanup(_dsp) => Self::delete_finalizer(self.clone()).await,
+                    finalizer::Event::Apply(dsp) => Self::put_finalizer(dsp).await,
+                    finalizer::Event::Cleanup(_dsp) => Self::delete_finalizer(self.clone()).await,
                 }
             },
         )
         .await
         .map_err(|e| error!(?e));
 
-        Ok(ReconcilerAction {
-            requeue_after: None,
-        })
+        Ok(Action::await_change())
     }
 }
 
@@ -670,7 +634,7 @@ async fn ensure_crd(k8s: Client) {
         let pp = PostParams::default();
         match dsp.create(&pp, &crd).await {
             Ok(o) => {
-                info!(crd = ?o.name(), "created");
+                info!(crd = ?o.name_any(), "created");
                 // let the CRD settle this purely to avoid errors messages in the console
                 // that are harmless but can cause some confusion maybe.
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -689,14 +653,12 @@ async fn ensure_crd(k8s: Client) {
 
 /// Determine what we want to do when dealing with errors from the
 /// reconciliation loop
-fn error_policy(error: &Error, _ctx: Context<OperatorContext>) -> ReconcilerAction {
+fn error_policy(error: &Error, _ctx: Arc<OperatorContext>) -> Action {
     let duration = Duration::from_secs(match error {
         Error::Duplicate { timeout } | Error::SpecError { timeout, .. } => (*timeout).into(),
 
         Error::ReconcileError { .. } => {
-            return ReconcilerAction {
-                requeue_after: None,
-            };
+            return Action::await_change();
         }
         _ => 5,
     });
@@ -710,18 +672,12 @@ fn error_policy(error: &Error, _ctx: Context<OperatorContext>) -> ReconcilerActi
         when.to_rfc2822(),
         duration.as_secs()
     );
-    ReconcilerAction {
-        requeue_after: Some(duration),
-    }
+    Action::requeue(duration)
 }
 
 /// The main work horse
 #[tracing::instrument(fields(name = %dsp.spec.node(), status = ?dsp.status) skip(dsp, ctx))]
-async fn reconcile(
-    dsp: DiskPool,
-    ctx: Context<OperatorContext>,
-) -> Result<ReconcilerAction, Error> {
-    let ctx = ctx.into_inner();
+async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Action, Error> {
     let dsp = ctx.upsert(ctx.clone(), dsp).await;
 
     let _ = dsp.finalizer().await;
@@ -750,8 +706,10 @@ async fn reconcile(
             state: PoolState::Error,
             ..
         }) => {
-            error!(pool = ?dsp.name(), "entered error as final state");
-            Err(Error::ReconcileError { name: dsp.name() })
+            error!(pool = ?dsp.name_any(), "entered error as final state");
+            Err(Error::ReconcileError {
+                name: dsp.name_any(),
+            })
         }
 
         // We use this state to indicate its a new CRD however, we could (and
@@ -784,7 +742,7 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
             )
         })?;
 
-    let context = Context::new(OperatorContext {
+    let context = OperatorContext {
         k8s,
         inventory: tokio::sync::RwLock::new(HashMap::new()),
         http: clients::tower::ApiClient::new(cfg),
@@ -800,7 +758,7 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
             .parse::<u32>()
             .expect("retries value is invalid"),
         disable_device_validation: args.is_present("disable_device_validation"),
-    });
+    };
 
     info!(
         "Starting DiskPool Operator (dsp) in namespace {}",
@@ -808,7 +766,7 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
     );
 
     Controller::new(dsp, lp)
-        .run(reconcile, error_policy, context)
+        .run(reconcile, error_policy, Arc::new(context))
         .for_each(|res| async move {
             match res {
                 Ok(o) => {

@@ -11,7 +11,7 @@ use http::Uri;
 
 use crate::core::registry::NumRebuilds;
 
-use opentelemetry::KeyValue;
+use opentelemetry::{trace::TracerProvider, KeyValue};
 use structopt::StructOpt;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
@@ -108,9 +108,10 @@ async fn server(cli_args: CliArgs) {
     .await;
 
     let base_service = common::Service::builder()
-        .with_shared_state(opentelemetry::global::tracer_with_version(
+        .with_shared_state(opentelemetry::global::tracer_provider().versioned_tracer(
             "core-agent",
-            env!("CARGO_PKG_VERSION"),
+            Some(env!("CARGO_PKG_VERSION")),
+            None,
         ))
         .with_shared_state(registry.clone())
         .with_shared_state(cli_args.grpc_server_addr.clone())

@@ -1,6 +1,6 @@
 use opentelemetry::{
     global,
-    trace::{FutureExt, SpanKind, TraceContextExt, Tracer},
+    trace::{FutureExt, SpanKind, TraceContextExt, Tracer, TracerProvider},
     KeyValue,
 };
 use opentelemetry_http::HeaderInjector;
@@ -68,8 +68,7 @@ impl tower::Service<TonicClientRequest> for OpenTelClientService<Channel> {
                 KeyValue::new("rpc.grpc.uri", request.uri().to_string()),
                 KeyValue::new("rpc.grpc.version", format!("{:?}", request.version())),
             ])
-            .with_parent_context(context.clone())
-            .start(&tracer);
+            .start_with_context(&tracer, &context);
 
         let context = context.with_span(span);
         global::get_text_map_propagator(|propagator| {
@@ -127,17 +126,20 @@ where
     }
 
     fn call(&mut self, request: TonicServerRequest) -> Self::Future {
-        let tracer = global::tracer_with_version("grpc-server", env!("CARGO_PKG_VERSION"));
+        let tracer = global::tracer_provider().versioned_tracer(
+            "grpc-server",
+            Some(env!("CARGO_PKG_VERSION")),
+            None,
+        );
         let extractor = opentelemetry_http::HeaderExtractor(request.headers());
 
         let parent_context =
             global::get_text_map_propagator(|propagator| propagator.extract(&extractor));
 
         let mut builder = tracer.span_builder(request.uri().to_string());
-        builder.parent_context = parent_context.clone();
         builder.span_kind = Some(SpanKind::Server);
 
-        let span = tracer.build(builder);
+        let span = tracer.build_with_context(builder, &parent_context);
         let context = parent_context.with_span(span);
 
         trace_http_service_call(&mut self.service, request, context)

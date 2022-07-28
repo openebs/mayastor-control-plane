@@ -69,7 +69,12 @@ impl JsonWebKey {
     /// Validate a bearer token
     pub(crate) fn validate(&self, token: &str, uri: &str) -> Result<(), AuthError> {
         let (message, signature) = split_token(token)?;
-        match crypto::verify(&signature, &message, &self.decoding_key(), self.algorithm()) {
+        match crypto::verify(
+            &signature,
+            message.as_bytes(),
+            &self.decoding_key()?,
+            self.algorithm(),
+        ) {
             Ok(true) => Ok(()),
             Ok(false) => Err(AuthError::Unauthorized {
                 token: token.to_string(),
@@ -100,8 +105,9 @@ impl JsonWebKey {
     }
 
     // Return the decoding key
-    fn decoding_key(&self) -> DecodingKey {
+    fn decoding_key(&self) -> Result<DecodingKey, AuthError> {
         DecodingKey::from_rsa_components(self.modulus(), self.exponent())
+            .map_err(|e| AuthError::Verification { source: e })
     }
 }
 

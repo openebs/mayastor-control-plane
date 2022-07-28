@@ -2,7 +2,7 @@ use actix_web::{dev::Handler, web, Error, HttpResponse};
 use futures::future::{ok as fut_ok, Ready};
 use tinytemplate::TinyTemplate;
 
-fn get_v0_spec() -> HttpResponse {
+async fn get_v0_spec() -> HttpResponse {
     let spec_str = include_str!("../../../openapi-specs/v0_api_spec.yaml");
     match serde_yaml::from_str::<serde_json::Value>(spec_str) {
         Ok(value) => HttpResponse::Ok().json(value),

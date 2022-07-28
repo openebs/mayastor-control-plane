@@ -4,7 +4,8 @@ use k8s_openapi::api::{
     core::v1::{Event, Node, Pod, Service},
 };
 use k8s_operators::diskpool::crd::DiskPool;
-use kube::{api::ListParams, error::ConfigError, Api, Client, Resource};
+use kube::{api::ListParams, Api, Client, Resource};
+
 use std::{
     collections::HashMap,
     convert::TryFrom,
@@ -16,15 +17,22 @@ use std::{
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 pub(crate) enum K8sResourceError {
-    ClientConfigError(ConfigError),
+    ClientConfigError(kube::config::KubeconfigError),
+    InferConfigError(kube::config::InferConfigError),
     ClientError(kube::Error),
     ResourceError(Box<dyn std::error::Error>),
     CustomError(String),
 }
 
-impl From<ConfigError> for K8sResourceError {
-    fn from(e: ConfigError) -> K8sResourceError {
+impl From<kube::config::KubeconfigError> for K8sResourceError {
+    fn from(e: kube::config::KubeconfigError) -> K8sResourceError {
         K8sResourceError::ClientConfigError(e)
+    }
+}
+
+impl From<kube::config::InferConfigError> for K8sResourceError {
+    fn from(e: kube::config::InferConfigError) -> K8sResourceError {
+        K8sResourceError::InferConfigError(e)
     }
 }
 

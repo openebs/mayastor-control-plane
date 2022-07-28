@@ -169,16 +169,11 @@ async fn main() -> Result<(), String> {
         .value_of("csi-socket")
         .unwrap_or("/var/tmp/csi.sock");
 
-    let level = match matches.occurrences_of("v") as usize {
-        0 => "info",
-        1 => "debug",
-        _ => "trace",
-    };
     let tags = utils::tracing_telemetry::default_tracing_tags(
         utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
-    utils::tracing_telemetry::init_tracing_level("csi-node", tags, None, Some(level));
+    utils::tracing_telemetry::init_tracing("csi-node", tags, None);
 
     if let Some(nvme_io_timeout_secs) = matches.value_of("nvme_core io_timeout") {
         let io_timeout_secs: u32 = nvme_io_timeout_secs.parse().expect(
