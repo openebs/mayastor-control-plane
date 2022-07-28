@@ -40,14 +40,6 @@ impl From<std::io::Error> for DeviceError {
     }
 }
 
-impl From<failure::Error> for DeviceError {
-    fn from(error: failure::Error) -> DeviceError {
-        DeviceError {
-            message: format!("{}", error),
-        }
-    }
-}
-
 impl From<std::num::ParseIntError> for DeviceError {
     fn from(error: std::num::ParseIntError) -> DeviceError {
         DeviceError {

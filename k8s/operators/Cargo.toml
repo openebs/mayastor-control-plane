@@ -26,20 +26,20 @@ utils = { path = "../../utils/utils-lib" }
 anyhow = "1.0.44"
 chrono = "0.4.19"
 clap =  { version = "2.33.3", features = ["color"] }
-futures = "0.3.17"
+futures = "0.3.21"
 k8s-openapi = { version = "0.15.0", features = ["v1_20"] }
 kube = { version = "0.74.0", features = ["derive", "runtime"] }
-schemars = "0.8.5"
-serde = "1.0.130"
-serde_json = "1.0.68"
-serde_yaml = "0.8.21"
+schemars = "0.8.10"
+serde = "1.0.140"
+serde_json = "1.0.82"
+serde_yaml = "0.8.26"
 snafu = "0.6.10"
-tokio = { version = "1.12.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 humantime = "2.1.0"
 
 # Tracing
-tracing = "0.1.28"
-tracing-subscriber = "0.2.24"
-opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }
-tracing-opentelemetry = "0.15.0"
-opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
+tracing = "0.1.35"
+tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }
+opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
+tracing-opentelemetry = "0.17.4"
+opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }

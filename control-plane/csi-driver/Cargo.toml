@@ -21,35 +21,34 @@ prost-build = "0.8.0"
 [dependencies]
 anyhow = "1.0.44"
 async-stream = "0.3.2"
-futures = { version = "0.3.17", default-features = false }
+futures = { version = "0.3.21", default-features = false }
 humantime = "2.1.0"
 once_cell = "1.8.0"
-regex = "1.5.4"
+regex = "1.6.0"
 rpc = { path = "../../rpc" }
-tokio = { version = "1.12.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = { version = "0.1.7", features = ["net"] }
 tonic = "0.5.2"
 clap = "2.33.3"
 
 # Tracing
-tracing = "0.1.28"
-tracing-subscriber = "0.2.24"
-opentelemetry-jaeger = { version = "0.15.0", features = ["rt-tokio-current-thread"] }
-tracing-opentelemetry = "0.15.0"
-opentelemetry = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
+tracing = "0.1.35"
+tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }
+opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
+tracing-opentelemetry = "0.17.4"
+opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
 
 async-trait = "0.1.51"
 chrono = "0.4.19"
-failure = "0.1.8"
 glob = "0.3.0"
 lazy_static = "1.4.0"
 prost = "0.8.0"
 prost-derive = "0.8.0"
 prost-types = "0.8.0"
-serde_json = "1.0.68"
+serde_json = "1.0.82"
 snafu = "0.6.10"
 sys-mount = "1.3.0"
-tower = { version = "0.4.8", features = [ "timeout", "util" ] }
+tower = { version = "0.4.13", features = [ "timeout", "util" ] }
 udev = "0.6.2"
 url = "2.2.2"
 uuid = { version = "0.8.2", features = ["v4"] }
@@ -65,4 +64,4 @@ shutdown = { path = "../../utils/shutdown" }
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.130"
+version = "1.0.140"
