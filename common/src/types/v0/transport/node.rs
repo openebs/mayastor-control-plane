@@ -1,7 +1,7 @@
 use super::*;
 
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{fmt::Debug, str::FromStr};
 
 use crate::types::v0::store::node::NodeSpec;
 use strum_macros::{EnumString, ToString};
@@ -16,6 +16,8 @@ pub struct Register {
     pub id: NodeId,
     /// grpc endpoint of the io-engine instance
     pub grpc_endpoint: String,
+    /// api versions registered by the dataplane
+    pub api_versions: Option<Vec<APIVersion>>,
 }
 
 /// Deregister message payload
@@ -32,6 +34,7 @@ pub struct Deregister {
 pub struct GetNodes {
     filter: Filter,
 }
+
 impl GetNodes {
     /// New get nodes request
     pub fn new(filter: Filter) -> Self {
@@ -61,6 +64,7 @@ pub struct Node {
     /// Runtime state of the node.
     state: Option<NodeState>,
 }
+
 impl Node {
     /// Get new `Self` from the given parameters
     pub fn new(id: NodeId, spec: Option<NodeSpec>, state: Option<NodeState>) -> Self {
@@ -115,14 +119,23 @@ pub struct NodeState {
     pub grpc_endpoint: String,
     /// deemed status of the node
     pub status: NodeStatus,
+    /// api versions supported by the dataplane
+    pub api_versions: Option<Vec<APIVersion>>,
 }
+
 impl NodeState {
     /// Return a new `Self`
-    pub fn new(id: NodeId, grpc_endpoint: String, status: NodeStatus) -> Self {
+    pub fn new(
+        id: NodeId,
+        grpc_endpoint: String,
+        status: NodeStatus,
+        api_versions: Option<Vec<APIVersion>>,
+    ) -> Self {
         Self {
             id,
             grpc_endpoint,
             status,
+            api_versions,
         }
     }
     /// Get the node identification
@@ -146,6 +159,7 @@ impl From<NodeState> for models::NodeState {
         Self::new(src.grpc_endpoint, src.id, src.status)
     }
 }
+
 impl From<&NodeState> for models::NodeState {
     fn from(src: &NodeState) -> Self {
         let src = src.clone();
@@ -160,5 +174,30 @@ impl From<NodeStatus> for models::NodeStatus {
             NodeStatus::Online => Self::Online,
             NodeStatus::Offline => Self::Offline,
         }
+    }
+}
+
+/// api versions known by control plane
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub enum APIVersion {
+    V0,
+    V1,
+}
+
+impl FromStr for APIVersion {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "v0" => Ok(Self::V0),
+            "v1" => Ok(Self::V1),
+            _ => Err(format!("The api version: {} is not supported", s)),
+        }
+    }
+}
+
+impl Default for APIVersion {
+    fn default() -> Self {
+        Self::V0
     }
 }

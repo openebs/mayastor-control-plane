@@ -27,9 +27,13 @@ fn main() {
 
     tonic_build::configure()
         .build_server(true)
+        .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .compile(
-            &["api/protobuf/v1/registration.proto"],
+            &[
+                "api/protobuf/v1/host.proto",
+                "api/protobuf/v1/registration.proto",
+            ],
             &["api/protobuf/v1"],
         )
-        .unwrap_or_else(|e| panic!("Registration protobuf compilation failed: {}", e));
+        .unwrap_or_else(|e| panic!("mayastor v1 protobuf compilation failed: {}", e));
 }

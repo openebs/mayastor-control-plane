@@ -38,6 +38,7 @@ pub struct NodeSpec {
     #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     cordon_labels: Vec<String>,
 }
+
 impl NodeSpec {
     /// Return a new `Self`
     pub fn new(

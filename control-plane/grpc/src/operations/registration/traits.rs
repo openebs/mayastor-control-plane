@@ -1,8 +1,11 @@
 use common_lib::{
     transport_api::ReplyError,
-    types::v0::transport::{Deregister, NodeId, Register},
+    types::v0::transport::{APIVersion, Deregister, NodeId, Register},
 };
-use rpc::registration::{DeregisterRequest, RegisterRequest};
+use rpc::v1::registration::{DeregisterRequest, RegisterRequest};
+
+/// new type to wrap grpc ApiVersion type
+pub struct ApiVersion(pub rpc::v1::registration::ApiVersion);
 
 /// Operations to be supportes by the Registration Service
 #[tonic::async_trait]
@@ -19,6 +22,8 @@ pub trait RegisterInfo: Send + Sync {
     fn node_id(&self) -> NodeId;
     /// Grpc endpoint of the IoEngine instance
     fn grpc_endpoint(&self) -> String;
+    /// api-version supported by the dataplane
+    fn api_version(&self) -> Option<Vec<APIVersion>>;
 }
 
 /// Trait to be implemented for Register operation
@@ -35,6 +40,10 @@ impl RegisterInfo for Register {
     fn grpc_endpoint(&self) -> String {
         self.grpc_endpoint.clone()
     }
+
+    fn api_version(&self) -> Option<Vec<APIVersion>> {
+        self.api_versions.clone()
+    }
 }
 
 impl RegisterInfo for RegisterRequest {
@@ -44,6 +53,19 @@ impl RegisterInfo for RegisterRequest {
 
     fn grpc_endpoint(&self) -> String {
         self.grpc_endpoint.clone()
+    }
+
+    fn api_version(&self) -> Option<Vec<APIVersion>> {
+        Some(
+            self.api_version
+                .clone()
+                .into_iter()
+                .map(|v| {
+                    ApiVersion(rpc::v1::registration::ApiVersion::from_i32(v).unwrap_or_default())
+                        .into()
+                })
+                .collect(),
+        )
     }
 }
 
@@ -64,6 +86,7 @@ impl From<&dyn RegisterInfo> for Register {
         Self {
             id: register.node_id(),
             grpc_endpoint: register.grpc_endpoint(),
+            api_versions: register.api_version(),
         }
     }
 }
@@ -72,6 +95,24 @@ impl From<&dyn DeregisterInfo> for Deregister {
     fn from(register: &dyn DeregisterInfo) -> Self {
         Self {
             id: register.node_id(),
+        }
+    }
+}
+
+impl From<APIVersion> for ApiVersion {
+    fn from(v: APIVersion) -> Self {
+        match v {
+            APIVersion::V0 => ApiVersion(rpc::v1::registration::ApiVersion::V0),
+            APIVersion::V1 => ApiVersion(rpc::v1::registration::ApiVersion::V1),
+        }
+    }
+}
+
+impl From<ApiVersion> for APIVersion {
+    fn from(v: ApiVersion) -> Self {
+        match v {
+            ApiVersion(rpc::v1::registration::ApiVersion::V0) => Self::V0,
+            ApiVersion(rpc::v1::registration::ApiVersion::V1) => Self::V1,
         }
     }
 }

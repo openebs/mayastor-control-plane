@@ -2,7 +2,7 @@ use common_lib::{
     transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         store::definitions::StoreError,
-        transport::{Filter, NodeId, PoolId, ReplicaId},
+        transport::{APIVersion, Filter, NodeId, PoolId, ReplicaId},
     },
 };
 use snafu::{Error, Snafu};
@@ -206,6 +206,8 @@ pub enum SvcError {
         max_rebuilds
     ))]
     MaxRebuilds { max_rebuilds: u32 },
+    #[snafu(display("The api version: {:?} is not valid", api_version))]
+    InvalidApiVersion { api_version: Option<APIVersion> },
 }
 
 impl From<StoreError> for SvcError {
@@ -571,6 +573,12 @@ impl From<SvcError> for ReplyError {
             SvcError::MaxRebuilds { .. } => ReplyError {
                 kind: ReplyErrorKind::ResourceExhausted,
                 resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::InvalidApiVersion { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
