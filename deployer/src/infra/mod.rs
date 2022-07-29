@@ -1,5 +1,6 @@
 mod core;
-mod csi;
+mod csi_controller;
+mod csi_node;
 pub mod dns;
 mod elastic;
 mod empty;
@@ -403,17 +404,18 @@ impl Drop for TraceFn {
 // Component Name and bootstrap ordering
 // from lower to high
 impl_component! {
-    Empty,      0,
-    Jaeger,     0,
-    Dns,        1,
-    Etcd,       1,
-    Elastic,    1,
-    Kibana,     1,
-    Core,       3,
-    JsonGrpc,   3,
-    Rest,       3,
-    IoEngine,   4,
-    Csi,        5,
+    Empty,         0,
+    Jaeger,        0,
+    Dns,           1,
+    Etcd,          1,
+    Elastic,       1,
+    Kibana,        1,
+    Core,          3,
+    JsonGrpc,      3,
+    Rest,          3,
+    IoEngine,      4,
+    CsiNode,       5,
+    CsiController, 5,
 }
 
 // Message Bus Control Plane Agents

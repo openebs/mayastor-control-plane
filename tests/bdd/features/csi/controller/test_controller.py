@@ -47,8 +47,10 @@ IO_ENGINE_SELECTOR_VALUE = "io-engine"
 
 @pytest.fixture(scope="module")
 def setup():
-    Deployer.start(2, csi=True)
-    subprocess.run(["sudo", "chmod", "go+rw", "/var/tmp/csi.sock"], check=True)
+    Deployer.start(2, csi_controller=True)
+    subprocess.run(
+        ["sudo", "chmod", "go+rw", "/var/tmp/csi-controller.sock"], check=True
+    )
 
     # Create 2 pools.
     pool_labels = {"openebs.io/created-by": "operator-diskpool"}
@@ -73,7 +75,7 @@ def setup():
 
 
 def csi_rpc_handle():
-    return CsiHandle("unix:///var/tmp/csi.sock")
+    return CsiHandle("unix:///var/tmp/csi-controller.sock")
 
 
 @scenario("controller.feature", "get controller capabilities")

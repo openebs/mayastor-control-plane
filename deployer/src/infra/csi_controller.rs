@@ -8,17 +8,17 @@ use tower::service_fn;
 
 use rpc::csi::{identity_client::IdentityClient, GetPluginInfoRequest};
 
-const CSI_SOCKET: &str = "/var/tmp/csi.sock";
+const CSI_SOCKET: &str = "/var/tmp/csi-controller.sock";
 
 #[async_trait]
-impl ComponentAction for Csi {
+impl ComponentAction for CsiController {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
-        Ok(if !options.csi {
+        Ok(if !options.csi_controller {
             cfg
         } else {
             if options.build {
                 std::process::Command::new("cargo")
-                    .args(&["build", "-p", "csi-controller", "--bin", "csi-controller"])
+                    .args(&["build", "-p", "csi-driver", "--bin", "csi-controller"])
                     .status()?;
             }
 
@@ -45,14 +45,14 @@ impl ComponentAction for Csi {
         })
     }
     async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
-        if options.csi {
+        if options.csi_controller {
             cfg.start("csi-controller").await?;
         }
         Ok(())
     }
 
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
-        if !options.csi {
+        if !options.csi_controller {
             return Ok(());
         }
 

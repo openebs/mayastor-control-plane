@@ -135,7 +135,8 @@ async fn main() -> Result<(), String> {
                 .long("grpc-endpoint")
                 .value_name("NAME")
                 .help("ip address where this instance runs, and optionally the gRPC port")
-                .required(true)
+                .default_value("0.0.0.0")
+                .required(false)
                 .takes_value(true),
         )
         .arg(

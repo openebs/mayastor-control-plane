@@ -74,8 +74,8 @@ pub fn default_agents() -> &'static str {
 pub struct StartOptions {
     /// Use the following Control Plane Agents
     /// Specify one agent at a time or as a list.
-    /// ( "" for no agents )
-    /// todo: specify start arguments, eg: Node="-v"
+    /// ( "" for no agents ).
+    /// todo: specify start arguments, eg: Node="-v".
     #[structopt(
         short,
         long,
@@ -85,43 +85,55 @@ pub struct StartOptions {
     )]
     pub agents: Vec<ControlPlaneAgent>,
 
-    /// Kubernetes Config file if using operators
+    /// Kubernetes Config file if using operators.
     /// [default: "~/.kube/config"]
     #[structopt(long)]
     pub kube_config: Option<String>,
 
-    /// Use a base image for the binary components (eg: alpine:latest)
+    /// Use a base image for the binary components (eg: alpine:latest).
     #[structopt(long)]
     pub base_image: Option<String>,
 
-    /// Use the jaegertracing service
+    /// Use the jaegertracing service.
     #[structopt(short, long)]
     pub jaeger: bool,
 
-    /// Use an external jaegertracing collector
+    /// Use an external jaegertracing collector.
     #[structopt(long, env = "EXTERNAL_JAEGER")]
     pub external_jaeger: Option<String>,
 
-    /// Use the elasticsearch service
+    /// Use the elasticsearch service.
     #[structopt(short, long)]
     pub elastic: bool,
 
     /// Use the kibana service.
-    /// Note: the index pattern is only created when used in conjunction with `wait_timeout`
+    /// Note: the index pattern is only created when used in conjunction with `wait_timeout`.
     #[structopt(short, long)]
     pub kibana: bool,
 
-    /// Disable the REST Server
+    /// Disable the REST Server.
     #[structopt(long)]
     pub no_rest: bool,
 
-    /// Enable the CSI Controller
+    /// Enable the CSI Controller plugin.
     #[structopt(long)]
-    pub csi: bool,
+    pub csi_controller: bool,
+
+    /// Enable the CSI Node plugin.
+    #[structopt(long)]
+    pub csi_node: bool,
+
+    /// Use `N` csi-node instances
+    #[structopt(long, requires = "csi-node")]
+    pub app_nodes: Option<u32>,
+
+    /// Run csi-node instances on io-engine nodes.
+    #[structopt(short, long, requires = "csi-node")]
+    pub local_nodes: bool,
 
     /// Rest Path to JSON Web KEY file used for authenticating REST requests.
     /// Otherwise, no authentication is used
-    #[structopt(long, conflicts_with = "no_rest")]
+    #[structopt(long, conflicts_with = "no-rest")]
     pub rest_jwk: Option<String>,
 
     /// Use `N` io_engine instances
@@ -130,7 +142,7 @@ pub struct StartOptions {
     #[structopt(short, long, default_value = "1")]
     pub io_engines: u32,
 
-    /// Use the following docker image for the io_engine instances
+    /// Use the following docker image for the io_engine instances.
     #[structopt(long, env = "IO_ENGINE_IMAGE", default_value = utils::IO_ENGINE_IMAGE)]
     pub io_engine_image: String,
 
@@ -138,8 +150,8 @@ pub struct StartOptions {
     #[structopt(long, default_value = "ifnotpresent")]
     pub image_pull_policy: composer::ImagePullPolicy,
 
-    /// Use the following runnable binary for the io_engine instances
-    #[structopt(long, env = "IO_ENGINE_BIN", conflicts_with = "io_engine_image")]
+    /// Use the following runnable binary for the io_engine instances.
+    #[structopt(long, env = "IO_ENGINE_BIN", conflicts_with = "io-engine-image")]
     pub io_engine_bin: Option<String>,
 
     /// Add host block devices to the io_engine containers as a docker bind mount
@@ -153,38 +165,38 @@ pub struct StartOptions {
     #[structopt(long)]
     pub io_engine_isolate: bool,
 
-    /// Add the following environment variables to the io_engine containers
+    /// Add the following environment variables to the io_engine containers.
     #[structopt(long, env = "IO_ENGINE_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub io_engine_env: Option<Vec<KeyValue>>,
 
-    /// Add the following environment variables to the agent containers
+    /// Add the following environment variables to the agent containers.
     #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub agents_env: Option<Vec<KeyValue>>,
 
-    /// Add the following environment variables to the rest container
+    /// Add the following environment variables to the rest container.
     #[structopt(long, env = "REST_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub rest_env: Option<Vec<KeyValue>>,
 
-    /// Cargo Build each component before deploying
+    /// Cargo Build each component before deploying.
     #[structopt(short, long)]
     pub build: bool,
 
-    /// Cargo Build the workspace before deploying
+    /// Cargo Build the workspace before deploying.
     #[structopt(long)]
     pub build_all: bool,
 
-    /// Use a dns resolver for the cluster: defreitas/dns-proxy-server
-    /// Note this messes with your /etc/resolv.conf so use at your own risk
+    /// Use a dns resolver for the cluster: defreitas/dns-proxy-server.
+    /// Note this messes with your /etc/resolv.conf so use at your own risk.
     #[structopt(long)]
     pub dns: bool,
 
-    /// Show information from the cluster after creation
+    /// Show information from the cluster after creation.
     #[structopt(short, long)]
     pub show_info: bool,
 
     /// Name of the cluster - currently only one allowed at a time.
     /// Note: Does not quite work as intended, as we haven't figured out how to bridge between
-    /// different networks
+    /// different networks.
     #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
     pub cluster_label: ClusterLabel,
 
@@ -193,49 +205,49 @@ pub struct StartOptions {
     #[structopt(long)]
     pub cluster_uid: Option<ClusterUid>,
 
-    /// Disable the etcd service
+    /// Disable the etcd service.
     #[structopt(long)]
     pub no_etcd: bool,
 
     /// The period at which the registry updates its cache of all
-    /// resources from all nodes
+    /// resources from all nodes.
     #[structopt(long)]
     pub cache_period: Option<humantime::Duration>,
 
-    /// Override the node's deadline for the Core Agent
+    /// Override the node's deadline for the Core Agent.
     #[structopt(long)]
     pub node_deadline: Option<humantime::Duration>,
 
-    /// Override the base request timeout for GRPC requests
+    /// Override the base request timeout for GRPC requests.
     #[structopt(long)]
     pub request_timeout: Option<humantime::Duration>,
 
-    /// Override the node's connection timeout
+    /// Override the node's connection timeout.
     #[structopt(long)]
     pub node_conn_timeout: Option<humantime::Duration>,
 
-    /// Don't use minimum timeouts for specific requests
+    /// Don't use minimum timeouts for specific requests.
     #[structopt(long)]
     no_min_timeouts: bool,
 
-    /// Override the core agent's store operation timeout
+    /// Override the core agent's store operation timeout.
     #[structopt(long)]
     pub store_timeout: Option<humantime::Duration>,
 
     /// Override the core agent's lease lock ttl for the persistent store after which it'll loose
-    /// the exclusive access to the store
+    /// the exclusive access to the store.
     #[structopt(long)]
     pub store_lease_ttl: Option<humantime::Duration>,
 
-    /// Override the core agent's reconcile period
+    /// Override the core agent's reconcile period.
     #[structopt(long)]
     pub reconcile_period: Option<humantime::Duration>,
 
-    /// Override the core agent's reconcile idle period
+    /// Override the core agent's reconcile idle period.
     #[structopt(long)]
     pub reconcile_idle_period: Option<humantime::Duration>,
 
-    /// Override the core agent's reconcile idle period
+    /// Override the core agent's reconcile idle period.
     #[structopt(long, env = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE")]
     pub otel_max_batch_size: Option<String>,
 
@@ -250,11 +262,11 @@ pub struct StartOptions {
     #[structopt(short, long)]
     pub reuse_cluster: bool,
 
-    /// Set the developer delayed env flag of the io_engine reactor
+    /// Set the developer delayed env flag of the io_engine reactor.
     #[structopt(short, long)]
     pub developer_delayed: bool,
 
-    /// Add process service tags to the traces
+    /// Add process service tags to the traces.
     #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     tracing_tags: Vec<KeyValue>,
 
@@ -349,7 +361,7 @@ impl StartOptions {
     }
     #[must_use]
     pub fn with_csi(mut self, enabled: bool) -> Self {
-        self.csi = enabled;
+        self.csi_controller = enabled;
         self
     }
     #[must_use]
@@ -420,6 +432,13 @@ impl StartOptions {
     pub fn with_max_rebuilds(mut self, max: Option<u32>) -> Self {
         self.max_rebuilds = max;
         self
+    }
+    pub(crate) fn app_nodes(&self) -> u32 {
+        if self.csi_node {
+            self.app_nodes.unwrap_or(1)
+        } else {
+            0
+        }
     }
 }
 
@@ -512,7 +531,9 @@ impl ListOptions {
             .build()
             .await?;
 
-        for component in cfg.list_cluster_containers().await? {
+        let containers = cfg.list_cluster_containers().await?;
+        let mut components = Vec::with_capacity(containers.len());
+        for component in containers {
             let ip = match component.network_settings.clone() {
                 None => None,
                 Some(networks) => match networks.networks {
@@ -523,16 +544,19 @@ impl ListOptions {
                     },
                 },
             };
-            println!(
-                "[{}] [{}] {}",
-                component
-                    .names
-                    .unwrap_or_default()
-                    .first()
-                    .unwrap_or(&"?".to_string()),
-                ip.unwrap_or_default(),
-                option_str(component.command),
-            );
+            let name = component
+                .names
+                .unwrap_or_default()
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "?".to_string());
+            let ip = ip.unwrap_or_default();
+            let command = option_str(component.command);
+            components.push((name, ip, command));
+        }
+        components.sort_by_key(|a| a.0.clone());
+        for (name, ip, command) in components {
+            println!("[{}] [{}] {}", name, ip, command,);
         }
         Ok(())
     }

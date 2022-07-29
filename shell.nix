@@ -41,6 +41,7 @@ mkShell {
     tini
     utillinux
     which
+    e2fsprogs
   ] ++ pkgs.lib.optional (!norust) rust_chan.${rust-profile};
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
