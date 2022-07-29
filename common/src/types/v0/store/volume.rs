@@ -103,6 +103,7 @@ pub struct VolumeSpec {
     /// Record of the operation in progress
     pub operation: Option<VolumeOperationState>,
     /// Flag indicating whether the volume should be thin provisioned
+    #[serde(default)]
     pub thin: bool,
 }
 
