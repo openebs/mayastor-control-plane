@@ -46,7 +46,7 @@ use tracing::dispatcher::DefaultGuard;
 use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
 use utils::tracing_telemetry::default_tracing_tags;
 
-const RUST_LOG_QUIET_DEFAULTS: &str =
+const RUST_LOG_SILENCE_DEFAULTS: &str =
     "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info,bollard=info,composer=info";
 
 #[tokio::test]
@@ -482,7 +482,7 @@ impl ClusterBuilder {
             "trace" => "trace",
             _ => return current,
         };
-        let logs = format!("{},{}", main, RUST_LOG_QUIET_DEFAULTS);
+        let logs = format!("{},{}", main, RUST_LOG_SILENCE_DEFAULTS);
         tracing_subscriber::EnvFilter::new(logs)
     }
     /// Enable/Disable jaeger tracing.

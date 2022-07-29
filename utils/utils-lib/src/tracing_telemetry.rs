@@ -40,20 +40,20 @@ pub fn set_jaeger_env() {
     }
 }
 
-/// Mix the `RUST_LOG` `EnvFilter` with `RUST_LOG_QUIET`.
+/// Mix the `RUST_LOG` `EnvFilter` with `RUST_LOG_SILENCE`.
 /// This is useful when we want to bulk-silence certain crates by default.
 pub fn rust_log_add_quiet_defaults(
     current: tracing_subscriber::EnvFilter,
 ) -> tracing_subscriber::EnvFilter {
-    let rust_log_quiets = std::env::var("RUST_LOG_QUIETS");
-    let quiets = match &rust_log_quiets {
+    let rust_log_silence = std::env::var("RUST_LOG_SILENCE");
+    let silence = match &rust_log_silence {
         Ok(quiets) => quiets.as_str(),
-        Err(_) => super::constants::RUST_LOG_QUIET_DEFAULTS,
+        Err(_) => super::constants::RUST_LOG_SILENCE_DEFAULTS,
     };
 
-    tracing_subscriber::EnvFilter::try_new(match quiets.is_empty() {
+    tracing_subscriber::EnvFilter::try_new(match silence.is_empty() {
         true => current.to_string(),
-        false => format!("{},{}", current, quiets),
+        false => format!("{},{}", current, silence),
     })
     .unwrap()
 }
