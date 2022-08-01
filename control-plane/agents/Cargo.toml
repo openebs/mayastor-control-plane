@@ -17,6 +17,10 @@ path = "jsongrpc/src/server.rs"
 name = "common"
 path = "common/src/lib.rs"
 
+[[bin]]
+ name = "agent-ha-node"
+ path = "ha-node/src/main.rs"
+
 [dependencies]
 rpc =  { path = "../../rpc"}
 common-lib = { path = "../../common" }

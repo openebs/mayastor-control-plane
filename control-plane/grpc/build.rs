@@ -14,6 +14,7 @@ fn main() {
                 "proto/v1/registry/registry.proto",
                 "proto/v1/jsongrpc/jsongrpc.proto",
                 "proto/v1/watch/watch.proto",
+                "proto/v1/ha/cluster_agent.proto",
             ],
             &["proto/"],
         )

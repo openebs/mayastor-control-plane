@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package v1.ha_cluster_agent;
+
+// Service for managing cluster-agent rpc calls
+service HaRpc {
+  rpc RegisterNodeAgent (HaNodeInfo) returns (google.protobuf.Empty) {}
+}
+
+// Node information
+message HaNodeInfo {
+    string nodename = 1;
+    string endpoint = 2;
+}
+

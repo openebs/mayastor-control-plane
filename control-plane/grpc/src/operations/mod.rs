@@ -27,6 +27,9 @@ pub mod jsongrpc;
 /// module for all corresponding client, server, traits for watch transport
 pub mod watch;
 
+/// module for all corresponding client, server, traits for HA node-agent transport
+pub mod ha_node;
+
 /// The type of max entries.
 pub type MaxEntries = u64;
 
