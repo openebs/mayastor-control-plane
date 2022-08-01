@@ -433,6 +433,7 @@ impl StartOptions {
         self.max_rebuilds = max;
         self
     }
+
     pub(crate) fn app_nodes(&self) -> u32 {
         if self.csi_node {
             self.app_nodes.unwrap_or(1)

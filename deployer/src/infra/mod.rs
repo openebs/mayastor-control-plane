@@ -5,6 +5,7 @@ pub mod dns;
 mod elastic;
 mod empty;
 mod etcd;
+mod hanodeagent;
 mod io_engine;
 mod jaeger;
 mod jsongrpc;
@@ -416,7 +417,8 @@ impl_component! {
     IoEngine,      4,
     CsiNode,       5,
     CsiController, 5,
+    HANodeAgent,   5,
 }
 
 // Message Bus Control Plane Agents
-impl_ctrlp_agents!(Core, JsonGrpc);
+impl_ctrlp_agents!(Core, JsonGrpc, HANodeAgent);
