@@ -2,7 +2,7 @@
 
 let
   src = fetchFromGitHub (lib.importJSON ./source.json);
-  version = "5.2.1-${src.rev}";
+  version = "6.1.0-${src.rev}";
 
   # perform fake build to make a fixed-output derivation out of the files downloaded from maven central
   deps = stdenv.mkDerivation {
@@ -24,7 +24,7 @@ let
       "find $out/.m2 -type f -regex '.+\\(\\.lastUpdated\\|resolver-status\\.properties\\|_remote\\.repositories\\)' -delete";
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = "0f30vfvqrwa4gdgid9c94kvv83yfrgpx6ii1npjxspdawqr3whrj";
+    outputHash = "sha256-MieSA5Y8u35H1xdP27A+YDekyyQ6CThNXOjQ82ArM7U=";
   };
 
 in
