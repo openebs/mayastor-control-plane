@@ -126,6 +126,7 @@ impl CsiServer {
         };
 
         // Try to detect REST API endpoint to debug the accessibility status.
+
         ping_rest_api().await;
 
         Server::builder()
@@ -136,7 +137,6 @@ impl CsiServer {
             })
             .await
             .map_err(|_| "Failed to start gRPC server")?;
-
         Ok(())
     }
 }

@@ -2,15 +2,15 @@ use tracing::info;
 
 use clap::{App, Arg, ArgMatches};
 use opentelemetry::global;
-
 mod client;
 mod config;
 mod controller;
 mod identity;
+mod pvwatcher;
+mod server;
+
 use client::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
 use config::CsiControllerConfig;
-
-mod server;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 
@@ -94,6 +94,12 @@ async fn main() -> anyhow::Result<()> {
         "Starting IoEngine CSI Controller, REST endpoint = {}",
         CsiControllerConfig::get_config().rest_endpoint()
     );
+
+    // Starts PV Garbage Collector if platform type is k8s
+    if common_lib::platform::current_plaform_type() == common_lib::platform::PlatformType::K8s {
+        let gc_instance = pvwatcher::PvGarbageCollector::new().await?;
+        tokio::spawn(async move { gc_instance.run_watcher().await });
+    }
 
     let result = server::CsiServer::run(
         args.value_of("socket")

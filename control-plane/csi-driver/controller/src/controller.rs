@@ -304,11 +304,9 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<DeleteVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
         tracing::trace!(volume.uuid = %args.volume_id, request = ?args);
-
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
-
         IoEngineApiClient::get_client()
             .delete_volume(&volume_uuid)
             .await
