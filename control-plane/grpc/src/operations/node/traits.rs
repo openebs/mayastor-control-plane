@@ -1,9 +1,6 @@
 use crate::{
-    blockdevice,
-    blockdevice::GetBlockDevicesRequest,
-    context::Context,
-    node,
-    node::{get_nodes_request, NodeCordon, NodeDrain},
+    blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
+    node::get_nodes_request,
 };
 use common_lib::{
     transport_api::{
@@ -49,8 +46,8 @@ impl TryFrom<node::Node> for Node {
                 spec.node_id.into(),
                 spec.endpoint,
                 spec.labels.unwrap_or_default().value,
-                spec.cordon.map(|cordon| cordon.label),
-                spec.drain.map(|drain| drain.label),
+                Some(spec.cordon_labels),
+                Some(spec.drain_labels),
             )
         });
         let node_state = match node_grpc_type.state {
@@ -101,12 +98,8 @@ impl From<Node> for node::Node {
             labels: Some(crate::common::StringMapValue {
                 value: spec.labels().clone(),
             }),
-            cordon: Some(NodeCordon {
-                label: spec.cordon_labels(),
-            }),
-            drain: Some(NodeDrain {
-                label: spec.drain_labels(),
-            }),
+            cordon_labels: spec.cordon_labels(),
+            drain_labels: spec.drain_labels(),
         });
         let node_state = match node.state() {
             None => None,

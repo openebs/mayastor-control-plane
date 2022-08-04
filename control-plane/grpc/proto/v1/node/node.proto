@@ -17,18 +17,6 @@ message Node {
   optional NodeState state = 3;
 }
 
-// Node cordon information
-message NodeCordon {
-  // Node cordon label.
-  repeated string label = 2;
-}
-
-// Node drain information
-message NodeDrain {
-  // Node drain label.
-  repeated string label = 2;
-}
-
 message NodeSpec {
   // Node identification
   string node_id = 1;
@@ -37,9 +25,9 @@ message NodeSpec {
   // Node labels.
   common.StringMapValue labels = 3;
   // Cordon information.
-  NodeCordon cordon = 4;
+  repeated string cordon_labels = 4;
   // Drain information.
-  NodeDrain drain = 5;
+  repeated string drain_labels = 5;
 }
 
 message NodeState {
