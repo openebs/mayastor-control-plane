@@ -17,14 +17,17 @@ impl PersistentStoreReconciler {
 impl TaskPoller for PersistentStoreReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let specs = context.specs();
-        let dirty_replicas = specs.reconcile_dirty_replicas(context.registry()).await;
-        let dirty_nexuses = specs.reconcile_dirty_nexuses(context.registry()).await;
-        let dirty_volumes = specs.reconcile_dirty_volumes(context.registry()).await;
+        if context.registry().store_online().await {
+            let dirty_pools = specs.reconcile_dirty_pools(context.registry()).await;
+            let dirty_replicas = specs.reconcile_dirty_replicas(context.registry()).await;
+            let dirty_nexuses = specs.reconcile_dirty_nexuses(context.registry()).await;
+            let dirty_volumes = specs.reconcile_dirty_volumes(context.registry()).await;
 
-        if dirty_nexuses || dirty_replicas || dirty_volumes {
-            PollResult::Ok(PollerState::Busy)
-        } else {
-            PollResult::Ok(PollerState::Idle)
+            if dirty_nexuses || dirty_replicas || dirty_volumes || dirty_pools {
+                return PollResult::Ok(PollerState::Busy);
+            }
         }
+
+        PollResult::Ok(PollerState::Idle)
     }
 }

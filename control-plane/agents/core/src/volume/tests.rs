@@ -1166,7 +1166,7 @@ async fn publishing_test(cluster: &Cluster) {
     let volume = PublishVolume {
         uuid: volume_state.uuid.clone(),
         target_node: Some(cluster.node(0)),
-        share: Some(VolumeShareProtocol::Iscsi),
+        share: Some(VolumeShareProtocol::Nvmf),
     }
     .request()
     .await
@@ -1186,7 +1186,7 @@ async fn publishing_test(cluster: &Cluster) {
     let first_volume_state = volumes.0.first().unwrap().state();
     assert_eq!(
         first_volume_state.target_protocol(),
-        Some(VolumeShareProtocol::Iscsi)
+        Some(VolumeShareProtocol::Nvmf)
     );
     assert_eq!(
         first_volume_state.target_node(),

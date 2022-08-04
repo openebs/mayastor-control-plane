@@ -86,8 +86,12 @@ impl Service {
     /// Callback to be called when a node's watchdog times out
     pub(super) async fn on_timeout(service: &Service, id: &NodeId) {
         let registry = service.registry.clone();
-        let state = registry.nodes().read().await;
-        if let Some(node) = state.get(id) {
+        let node = {
+            let state = registry.nodes().read().await;
+            state.get(id).cloned()
+        };
+
+        if let Some(node) = node {
             let mut node = node.write().await;
             if node.is_online() {
                 node.update_liveness().await;

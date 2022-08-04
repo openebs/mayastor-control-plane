@@ -9,6 +9,7 @@ use crate::core::registry;
 use common::Service;
 use common_lib::types::v0::message_bus::ChannelVs;
 
+use crate::registry::NumRebuilds;
 use common_lib::{mbus_api::BusClient, opentelemetry::default_tracing_tags};
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator, KeyValue};
 use structopt::StructOpt;
@@ -73,6 +74,11 @@ pub(crate) struct CliArgs {
     /// Trace rest requests to the Jaeger endpoint agent
     #[structopt(long, short)]
     jaeger: Option<String>,
+
+    /// The maximum number of system-wide rebuilds permitted at any given time.
+    /// If `None` do not limit the number of rebuilds.
+    #[structopt(long)]
+    max_rebuilds: Option<NumRebuilds>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -148,6 +154,7 @@ async fn server(cli_args: CliArgs) {
         cli_args.store_lease_ttl.into(),
         cli_args.reconcile_period.into(),
         cli_args.reconcile_idle_period.into(),
+        cli_args.max_rebuilds,
     )
     .await;
 

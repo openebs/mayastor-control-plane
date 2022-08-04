@@ -5,6 +5,7 @@ use crate::{
         states::{ResourceStates, ResourceStatesLocked},
     },
     node::service::NodeCommsTimeout,
+    NumRebuilds,
 };
 
 use common::{
@@ -26,6 +27,8 @@ use common_lib::{
 };
 
 use async_trait::async_trait;
+use common_lib::types::v0::{message_bus, store::ResourceUuid};
+use parking_lot::RwLock;
 use rpc::mayastor::Null;
 use snafu::ResultExt;
 use std::{
@@ -37,6 +40,13 @@ use std::{
 type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
 /// Default timeout for GET* gRPC requests (ex: GetPools, GetNexuses, etc..)
 const GETS_TIMEOUT: MessageIdVs = MessageIdVs::Default;
+
+enum ResourceType {
+    All(Vec<message_bus::PoolState>, Vec<Replica>, Vec<Nexus>),
+    Nexus(Vec<Nexus>),
+    Pool(Vec<message_bus::PoolState>),
+    Replica(Vec<Replica>),
+}
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
 /// all pools and replicas from the node
@@ -59,6 +69,8 @@ pub(crate) struct NodeWrapper {
     comms_timeouts: NodeCommsTimeout,
     /// runtime state information
     states: ResourceStatesLocked,
+    /// number of rebuilds in progress on the node
+    num_rebuilds: Arc<RwLock<NumRebuilds>>,
 }
 
 impl NodeWrapper {
@@ -76,6 +88,7 @@ impl NodeWrapper {
             lock: Default::default(),
             comms_timeouts,
             states: ResourceStatesLocked::new(),
+            num_rebuilds: Arc::new(RwLock::new(0)),
         }
     }
 
@@ -127,6 +140,11 @@ impl NodeWrapper {
             &self.comms_timeouts,
             None::<MessageId>,
         )
+    }
+
+    /// Get the `NodeStateFetcher` to fetch information from the data-plane.
+    pub(crate) fn fetcher(&self) -> NodeStateFetcher {
+        NodeStateFetcher::new(self.node_state.clone())
     }
 
     /// Whether the watchdog deadline has expired
@@ -267,29 +285,34 @@ impl NodeWrapper {
     pub(crate) fn pools(&self) -> Vec<PoolState> {
         self.resources()
             .get_pool_states()
-            .iter()
-            .map(|p| p.pool.clone())
+            .map(|p| p.lock().pool.clone())
             .collect()
     }
     /// Get all pool wrappers
     pub(crate) fn pool_wrappers(&self) -> Vec<PoolWrapper> {
-        let pools = self.resources().get_pool_states();
-        let replicas = self.resources().get_replica_states();
+        let pools = self.resources().get_cloned_pool_states();
+        let resources = self.resources();
         pools
             .into_iter()
-            .map(|p| {
-                let replicas = replicas
-                    .iter()
-                    .filter(|r| r.replica.pool == p.pool.id)
-                    .map(|r| r.replica.clone())
+            .map(|pool_state| {
+                let replicas = resources
+                    .get_replica_states()
+                    .filter_map(|replica_state| {
+                        let replica_state = replica_state.lock();
+                        if replica_state.replica.pool == pool_state.uuid() {
+                            Some(replica_state.replica.clone())
+                        } else {
+                            None
+                        }
+                    })
                     .collect::<Vec<Replica>>();
-                PoolWrapper::new(&p.pool, &replicas)
+                PoolWrapper::new(pool_state.pool, replicas)
             })
             .collect()
     }
     /// Get all pool states
     pub(crate) fn pool_states(&self) -> Vec<store::pool::PoolState> {
-        self.resources().get_pool_states()
+        self.resources().get_cloned_pool_states()
     }
     /// Get pool from `pool_id` or None
     pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
@@ -297,15 +320,21 @@ impl NodeWrapper {
     }
     /// Get a PoolWrapper for the pool ID.
     pub(crate) fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
-        let r = self.resources();
-        match r.get_pool_states().iter().find(|p| &p.pool.id == pool_id) {
+        match self.resources().get_pool_state(pool_id) {
             Some(pool_state) => {
-                let replicas: Vec<Replica> = self
-                    .replicas()
-                    .into_iter()
-                    .filter(|r| &r.pool == pool_id)
+                let resources = self.resources();
+                let replicas = resources
+                    .get_replica_states()
+                    .filter_map(|r| {
+                        let replica = r.lock();
+                        if replica.replica.pool == pool_state.uuid() {
+                            Some(replica.replica.clone())
+                        } else {
+                            None
+                        }
+                    })
                     .collect();
-                Some(PoolWrapper::new(&pool_state.pool, &replicas))
+                Some(PoolWrapper::new(pool_state.pool, replicas))
             }
             None => None,
         }
@@ -314,25 +343,23 @@ impl NodeWrapper {
     pub(crate) fn replicas(&self) -> Vec<Replica> {
         self.resources()
             .get_replica_states()
-            .iter()
-            .map(|r| r.replica.clone())
+            .map(|r| r.lock().replica.clone())
             .collect()
     }
     /// Get all replica states
     pub(crate) fn replica_states(&self) -> Vec<ReplicaState> {
-        self.resources().get_replica_states()
+        self.resources().get_cloned_replica_states()
     }
     /// Get all nexuses
     fn nexuses(&self) -> Vec<Nexus> {
         self.resources()
             .get_nexus_states()
-            .iter()
-            .map(|nexus_state| nexus_state.nexus.clone())
+            .map(|nexus_state| nexus_state.lock().nexus.clone())
             .collect()
     }
     /// Get all nexus states
     pub(crate) fn nexus_states(&self) -> Vec<NexusState> {
-        self.resources().get_nexus_states()
+        self.resources().get_cloned_nexus_states()
     }
     /// Get nexus
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
@@ -342,7 +369,7 @@ impl NodeWrapper {
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
         self.resources()
             .get_replica_state(replica_id)
-            .map(|r| r.replica)
+            .map(|r| r.lock().replica.clone())
     }
     /// Is the node online
     pub(crate) fn is_online(&self) -> bool {
@@ -358,7 +385,7 @@ impl NodeWrapper {
         );
 
         let mut client = self.grpc_client().await?;
-        match self.fetch_resources(&mut client).await {
+        match self.fetcher().fetch_resources(&mut client).await {
             Ok((replicas, pools, nexuses)) => {
                 let mut states = self.resources_mut();
                 states.update(pools, replicas, nexuses);
@@ -392,7 +419,7 @@ impl NodeWrapper {
 
             match fetch_result {
                 Ok((replicas, pools, nexuses)) => {
-                    self.resources_mut().update(pools, replicas, nexuses);
+                    self.update_resources(ResourceType::All(pools, replicas, nexuses));
                     if setting_online {
                         // we only set it as online after we've updated the resource states
                         // so an online node should be "up-to-date"
@@ -420,6 +447,97 @@ impl NodeWrapper {
         }
     }
 
+    /// Update all the nexus states.
+    async fn update_nexus_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let nexuses = node.read().await.fetcher().fetch_nexuses(client).await?;
+        node.write()
+            .await
+            .update_resources(ResourceType::Nexus(nexuses));
+        Ok(())
+    }
+
+    /// Update all the pool states.
+    async fn update_pool_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let pools = node.read().await.fetcher().fetch_pools(client).await?;
+        node.write()
+            .await
+            .update_resources(ResourceType::Pool(pools));
+        Ok(())
+    }
+
+    /// Update all the replica states.
+    async fn update_replica_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let replicas = node.read().await.fetcher().fetch_replicas(client).await?;
+        node.write()
+            .await
+            .update_resources(ResourceType::Replica(replicas));
+        Ok(())
+    }
+
+    /// Update the states of the specified resource type.
+    /// Whenever the nexus states are updated the number of rebuilds must be updated.
+    fn update_resources(&self, resource_type: ResourceType) {
+        match resource_type {
+            ResourceType::All(pools, replicas, nexuses) => {
+                self.resources_mut().update(pools, replicas, nexuses);
+                self.update_num_rebuilds();
+            }
+            ResourceType::Nexus(nexuses) => {
+                self.resources_mut().update_nexuses(nexuses);
+                self.update_num_rebuilds();
+            }
+            ResourceType::Pool(pools) => {
+                self.resources_mut().update_pools(pools);
+            }
+            ResourceType::Replica(replicas) => {
+                self.resources_mut().update_replicas(replicas);
+            }
+        }
+    }
+
+    /// Update the number of rebuilds in progress on this node.
+    fn update_num_rebuilds(&self) {
+        // Note: Each nexus returns the total number of rebuilds on the node **NOT** the number of
+        // rebuilds per nexus. Therefore retrieve the number of rebuilds from one nexus only.
+        // If there are no nexuses, the number of rebuilds is reset.
+        let num_rebuilds = self
+            .nexus_states()
+            .first()
+            .map(|nexus_state| nexus_state.nexus.rebuilds)
+            .unwrap_or(0);
+        let mut rebuilds = self.num_rebuilds.write();
+        *rebuilds = num_rebuilds;
+    }
+
+    /// Return the number of rebuilds in progress on this node.
+    pub(crate) fn num_rebuilds(&self) -> NumRebuilds {
+        *self.num_rebuilds.read()
+    }
+}
+
+/// Fetches node state from the dataplane.
+#[derive(Debug, Clone)]
+pub(crate) struct NodeStateFetcher {
+    /// inner Node state
+    node_state: NodeState,
+}
+impl NodeStateFetcher {
+    /// Get new `Self` from the `NodeState`.
+    fn new(node_state: NodeState) -> Self {
+        Self { node_state }
+    }
+    fn id(&self) -> &NodeId {
+        self.node_state.id()
+    }
     /// Fetch the various resources from Mayastor.
     async fn fetch_resources(
         &self,
@@ -505,27 +623,6 @@ impl NodeWrapper {
             })
             .collect();
         Ok(nexuses)
-    }
-
-    /// Update all the nexus states.
-    async fn update_nexus_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
-        let nexuses = self.fetch_nexuses(client).await?;
-        self.resources_mut().update_nexuses(nexuses);
-        Ok(())
-    }
-
-    /// Update all the pool states.
-    async fn update_pool_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
-        let pools = self.fetch_pools(client).await?;
-        self.resources_mut().update_pools(pools);
-        Ok(())
-    }
-
-    /// Update all the replica states.
-    async fn update_replica_states(&self, client: &mut GrpcClient) -> Result<(), SvcError> {
-        let replicas = self.fetch_replicas(client).await?;
-        self.resources_mut().update_replicas(replicas);
-        Ok(())
     }
 }
 
@@ -644,23 +741,23 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     }
 
     async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
-        self.read().await.update_nexus_states(ctx.deref_mut()).await
+        NodeWrapper::update_nexus_states(self, ctx.deref_mut()).await
     }
 
     async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
-        self.read().await.update_pool_states(ctx.deref_mut()).await
+        NodeWrapper::update_pool_states(self, ctx.deref_mut()).await
     }
 
     async fn update_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
-        let node = self.read().await;
-        node.update_replica_states(ctx.deref_mut()).await
+        NodeWrapper::update_replica_states(self, ctx.deref_mut()).await
     }
 
     async fn update_all(&self, setting_online: bool) -> Result<(), SvcError> {
         let ctx = self.read().await.grpc_context_ext(GETS_TIMEOUT)?;
         match ctx.connect_locked().await {
             Ok(mut lock) => {
-                let results = self.read().await.fetch_resources(lock.deref_mut()).await;
+                let node_fetcher = self.read().await.fetcher();
+                let results = node_fetcher.fetch_resources(lock.deref_mut()).await;
 
                 let mut node = self.write().await;
                 node.update(setting_online, results)
@@ -1002,10 +1099,10 @@ impl Deref for PoolWrapper {
 
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas
-    pub fn new(pool: &PoolState, replicas: &[Replica]) -> Self {
+    pub fn new(pool: PoolState, replicas: Vec<Replica>) -> Self {
         Self {
-            state: pool.clone(),
-            replicas: replicas.into(),
+            state: pool,
+            replicas,
         }
     }
 
