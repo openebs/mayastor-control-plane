@@ -18,6 +18,8 @@ futures = "0.3.21"
 anyhow = "1.0.44"
 tracing = "0.1.28"
 shutdown = { path = "../../utils/shutdown" }
+serde_json = "1.0.82"
+hyper = { version = "0.14.20", features = [ "client", "http1", "http2", "tcp", "stream" ] }
 
 [dev-dependencies]
 tracing-subscriber = "0.3.15"

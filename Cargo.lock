@@ -1988,8 +1988,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures",
+ "hyper",
  "k8s-openapi",
  "kube",
+ "serde_json",
  "shutdown",
  "tokio",
  "tokio-stream",

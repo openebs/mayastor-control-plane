@@ -4,9 +4,12 @@
 //! The different proxies can be used to communicate with in-cluster pods/services using the
 //! kubernetes api-server.
 
+mod http_forward;
 mod pod_selection;
 mod port_forward;
 
+/// Layer 7 proxies.
+pub use http_forward::{HttpForward, HttpProxy};
 /// Layer 4 proxies.
 pub use port_forward::PortForward;
 
@@ -78,6 +81,13 @@ impl Port {
         match self {
             Port::Number(number) => Some(*number),
             Port::Name(_) => None,
+        }
+    }
+    /// Returns the port as a string.
+    pub(crate) fn any(&self) -> String {
+        match self {
+            Port::Number(number) => number.to_string(),
+            Port::Name(name) => name.clone(),
         }
     }
 }
