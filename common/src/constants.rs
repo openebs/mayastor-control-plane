@@ -29,3 +29,6 @@ pub const OPENEBS_CREATED_BY_KEY: &str = "openebs.io/created-by";
 
 /// The value to mark the creation source of a pool to be msp-operator in labels
 pub const MSP_OPERATOR: &str = "msp-operator";
+
+/// The default worker threads cap for the api-rest service.
+pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
