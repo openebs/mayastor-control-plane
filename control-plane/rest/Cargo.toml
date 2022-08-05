@@ -44,6 +44,7 @@ utils = { path = "../../utils/utils-lib" }
 humantime = "2.1.0"
 git-version = "0.3.5"
 grpc = { path = "../grpc" }
+num_cpus = "1.13.1"
 
 [dev-dependencies]
 tokio = { version = "1.20.1", features = ["full"] }
