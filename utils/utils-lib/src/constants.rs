@@ -59,3 +59,6 @@ pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "https://ha-cluster-agent:11
 
 /// The default value to be assigned as node-agent GRPC server addr if not overridden
 pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "https://0.0.0.0:11600";
+
+/// The default worker threads cap for the api-rest service.
+pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
