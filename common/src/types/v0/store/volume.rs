@@ -11,7 +11,7 @@ use crate::types::v0::{
 use crate::{
     types::v0::{
         openapi::models,
-        store::{OperationSequence, OperationSequencer, ResourceUuid},
+        store::{AsOperationSequencer, OperationSequence, ResourceUuid},
         transport::{ReplicaId, Topology, VolumeLabels, VolumePolicy, VolumeStatus},
     },
     IntoOption,
@@ -137,7 +137,7 @@ macro_rules! volume_span {
 }
 crate::impl_trace_span!(volume_span, VolumeSpec);
 
-impl OperationSequencer for VolumeSpec {
+impl AsOperationSequencer for VolumeSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
     }

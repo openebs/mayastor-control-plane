@@ -4,7 +4,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        OperationSequence, OperationSequencer, ResourceUuid, SpecStatus, SpecTransaction,
+        AsOperationSequencer, OperationSequence, ResourceUuid, SpecStatus, SpecTransaction,
     },
     transport::{
         self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
@@ -92,7 +92,7 @@ pub struct ReplicaSpec {
     pub operation: Option<ReplicaOperationState>,
 }
 
-impl OperationSequencer for ReplicaSpec {
+impl AsOperationSequencer for ReplicaSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
     }

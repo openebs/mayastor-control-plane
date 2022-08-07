@@ -115,41 +115,70 @@ impl Default for OperationSequenceState {
 }
 
 /// Operations are locked
-pub trait OperationSequencer {
+pub trait AsOperationSequencer {
     fn as_ref(&self) -> &OperationSequence;
     fn as_mut(&mut self) -> &mut OperationSequence;
 }
 
-/// Guard for Spec Operations
-/// It unlock the sequence lock on drop
+pub trait OperationSequencer: std::fmt::Debug + Clone {
+    /// Check if the transition is valid.
+    fn valid(&self, next: OperationSequenceState) -> bool;
+    /// Try to transition from current to next state.
+    fn transition(&self, next: OperationSequenceState) -> Option<OperationSequenceState>;
+    /// Sequence an operation using the provided `OperationMode`.
+    /// It returns the state which must be used to revert this operation.
+    fn sequence(&self, mode: OperationMode) -> Option<OperationSequenceState>;
+    /// Complete the operation sequenced using the provided `OperationMode`.
+    fn complete(&self, revert: OperationSequenceState);
+}
+
+impl<T: AsOperationSequencer + std::fmt::Debug> OperationSequencer for Arc<Mutex<T>> {
+    fn valid(&self, next: OperationSequenceState) -> bool {
+        self.lock().as_mut().valid(next)
+    }
+    fn transition(&self, next: OperationSequenceState) -> Option<OperationSequenceState> {
+        self.lock().as_mut().transition(next)
+    }
+    fn sequence(&self, mode: OperationMode) -> Option<OperationSequenceState> {
+        self.lock().as_mut().sequence(mode)
+    }
+    fn complete(&self, revert: OperationSequenceState) {
+        self.lock().as_mut().complete(revert);
+    }
+}
+
+/// Operation Guard for a Arc<Mutex<T>> type.
+pub type OperationGuardArc<T> = OperationGuard<Arc<Mutex<T>>>;
+
+/// Guard for Spec Operations.
+/// It unlocks the sequence lock on drop.
 #[derive(Debug)]
 pub struct OperationGuard<T: OperationSequencer> {
-    locked: Option<(OperationSequenceState, Arc<Mutex<T>>)>,
+    locked: Option<(OperationSequenceState, T)>,
 }
-impl<T: OperationSequencer> OperationGuard<T> {
+impl<T: OperationSequencer + Sized> OperationGuard<T> {
     fn unlock(&mut self) {
         if let Some((revert, resource)) = self.locked.take() {
-            resource.lock().as_mut().complete(revert);
+            resource.complete(revert);
         }
     }
     /// Create operation Guard for the resource with the operation mode
-    pub fn try_sequence(resource: &Arc<Mutex<T>>, mode: OperationMode) -> Result<Self, String> {
+    pub fn try_sequence(resource: &T, mode: OperationMode) -> Result<Self, String> {
         // use result variable to make sure the mutex's temporary guard is dropped
-        let result = resource.lock().as_mut().sequence(mode);
-        match result {
+        match resource.sequence(mode) {
             Some(revert) => Ok(Self {
                 locked: Some((revert, resource.clone())),
             }),
             None => Err(format!(
                 "Cannot transition from '{:?}' to '{:?}'",
-                resource.lock().as_ref(),
+                resource,
                 mode.apply()
             )),
         }
     }
 }
 
-impl<T: OperationSequencer> Drop for OperationGuard<T> {
+impl<T: OperationSequencer + Sized> Drop for OperationGuard<T> {
     fn drop(&mut self) {
         self.unlock();
     }
@@ -181,7 +210,7 @@ impl OperationMode {
 
 impl OperationSequence {
     /// Check if the transition is valid
-    fn valid(&mut self, next: OperationSequenceState) -> bool {
+    fn valid(&self, next: OperationSequenceState) -> bool {
         match self.state {
             OperationSequenceState::Idle => {
                 matches!(

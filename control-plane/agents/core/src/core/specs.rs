@@ -13,7 +13,7 @@ use common_lib::{
             pool::PoolSpec,
             replica::ReplicaSpec,
             volume::VolumeSpec,
-            OperationGuard, OperationMode, OperationSequence, OperationSequencer, SpecStatus,
+            AsOperationSequencer, OperationGuardArc, OperationMode, OperationSequence, SpecStatus,
             SpecTransaction,
         },
         transport::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
@@ -45,7 +45,7 @@ enum SpecError {
 /// This trait is used to encapsulate common behaviour for all different types of resources,
 /// including validation rules and error handling.
 #[async_trait]
-pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequencer {
+pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSequencer {
     type Create: Debug + PartialEq + Sync + Send;
     type Owners: Default + Sync + Send;
     type Status: PartialEq + Sync + Send;
@@ -59,7 +59,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         registry: &Registry,
         request: &Self::Create,
         mode: OperationMode,
-    ) -> Result<(Self, OperationGuard<Self>), SvcError>
+    ) -> Result<(Self, OperationGuardArc<Self>), SvcError>
     where
         Self: PartialEq<Self::Create>,
         Self: SpecTransaction<O>,
@@ -227,7 +227,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         registry: &Registry,
         del_owned: bool,
         mode: OperationMode,
-    ) -> Result<OperationGuard<Self>, SvcError>
+    ) -> Result<OperationGuardArc<Self>, SvcError>
     where
         Self: SpecTransaction<O>,
         Self: StorableObject,
@@ -253,7 +253,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         owners: &Self::Owners,
         ignore_owners: bool,
         mode: OperationMode,
-    ) -> Result<OperationGuard<Self>, SvcError>
+    ) -> Result<OperationGuardArc<Self>, SvcError>
     where
         Self: SpecTransaction<O>,
         Self: StorableObject,
@@ -360,7 +360,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
         state: &Self::State,
         update_operation: Self::UpdateOp,
         mode: OperationMode,
-    ) -> Result<(Self, OperationGuard<Self>), SvcError>
+    ) -> Result<(Self, OperationGuardArc<Self>), SvcError>
     where
         Self: PartialEq<Self::State>,
         Self: SpecTransaction<Self::UpdateOp>,
@@ -653,21 +653,21 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + OperationSequ
 
 /// Operations are locked
 #[async_trait::async_trait]
-pub trait OperationSequenceGuard<T: OperationSequencer + SpecOperations> {
+pub trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperations> {
     /// Attempt to obtain a guard for the specified operation mode
-    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuard<T>, SvcError>;
+    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError>;
     /// Attempt to obtain a guard for the specified operation mode
     /// A few attempts are made with an async sleep in case something else is already running
     async fn operation_guard_wait(
         &self,
         mode: OperationMode,
-    ) -> Result<OperationGuard<T>, SvcError>;
+    ) -> Result<OperationGuardArc<T>, SvcError>;
 }
 
 #[async_trait::async_trait]
-impl<T: OperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc<Mutex<T>> {
-    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuard<T>, SvcError> {
-        match OperationGuard::try_sequence(self, mode) {
+impl<T: AsOperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc<Mutex<T>> {
+    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
+        match OperationGuardArc::try_sequence(self, mode) {
             Ok(guard) => Ok(guard),
             Err(error) => {
                 tracing::trace!("Resource '{}' is busy: {}", self.lock().uuid(), error);
@@ -678,7 +678,7 @@ impl<T: OperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc<M
     async fn operation_guard_wait(
         &self,
         mode: OperationMode,
-    ) -> Result<OperationGuard<T>, SvcError> {
+    ) -> Result<OperationGuardArc<T>, SvcError> {
         let mut tries = 10;
         loop {
             match self.operation_guard(mode) {

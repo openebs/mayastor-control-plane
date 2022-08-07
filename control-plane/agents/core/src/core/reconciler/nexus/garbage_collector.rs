@@ -8,7 +8,7 @@ use common_lib::types::v0::{
     transport::DestroyNexus,
 };
 
-use crate::core::task_poller::PollTriggerEvent;
+use crate::core::{reconciler::GarbageCollect, task_poller::PollTriggerEvent};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tracing::Instrument;
@@ -32,7 +32,7 @@ impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let nexuses = context.specs().get_nexuses();
         for nexus in nexuses {
-            let _ = nexus_garbage_collector(&nexus, context).await;
+            let _ = nexus.garbage_collect(context).await;
         }
         PollResult::Ok(PollerState::Idle)
     }
@@ -49,16 +49,31 @@ impl TaskPoller for GarbageCollector {
     }
 }
 
-async fn nexus_garbage_collector(
-    nexus_spec: &Arc<Mutex<NexusSpec>>,
-    context: &PollContext,
-) -> PollResult {
-    let results = vec![
-        destroy_orphaned_nexus(nexus_spec, context).await,
-        destroy_deleting_nexus(nexus_spec, context).await,
-        destroy_disowned_nexus(nexus_spec, context).await,
-    ];
-    GarbageCollector::squash_results(results)
+#[async_trait::async_trait]
+impl GarbageCollect for Arc<Mutex<NexusSpec>> {
+    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+        GarbageCollector::squash_results(vec![
+            self.disown_orphaned(context).await,
+            self.destroy_deleting(context).await,
+            self.destroy_orphaned(context).await,
+        ])
+    }
+
+    async fn destroy_deleting(&self, context: &PollContext) -> PollResult {
+        destroy_deleting_nexus(self, context).await
+    }
+
+    async fn destroy_orphaned(&self, context: &PollContext) -> PollResult {
+        destroy_disowned_nexus(self, context).await
+    }
+
+    async fn disown_unused(&self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
+
+    async fn disown_orphaned(&self, context: &PollContext) -> PollResult {
+        destroy_orphaned_nexus(self, context).await
+    }
 }
 
 /// Given a control plane managed nexus
