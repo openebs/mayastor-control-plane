@@ -178,7 +178,7 @@ async fn destroy_nexus(
         let request = DestroyNexus::from(&nexus_clone);
         match context
             .specs()
-            .destroy_nexus(context.registry(), &request, true, mode)
+            .destroy_nexus(Some(nexus_spec), context.registry(), &request, true, mode)
             .await
         {
             Ok(_) => {

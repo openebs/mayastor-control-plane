@@ -217,6 +217,7 @@ impl ResourceSpecsLocked {
 
     pub(crate) async fn destroy_pool(
         &self,
+        pool_spec: Option<&Arc<Mutex<PoolSpec>>>,
         registry: &Registry,
         request: &DestroyPool,
         mode: OperationMode,
@@ -225,7 +226,6 @@ impl ResourceSpecsLocked {
         // do we need a way to forcefully "delete" things?
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        let pool_spec = self.get_locked_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
             let guard = SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
 
@@ -272,7 +272,9 @@ impl ResourceSpecsLocked {
                 details: "Failed to find the node where a replica lives".to_string(),
             }),
             Some(node) => {
+                let replica_spec = self.get_replica(&replica.uuid);
                 self.destroy_replica(
+                    replica_spec.as_ref(),
                     registry,
                     &Self::destroy_replica_request(replica.clone(), destroy_by, &node),
                     delete_owned,
@@ -285,6 +287,7 @@ impl ResourceSpecsLocked {
 
     pub(crate) async fn destroy_replica(
         &self,
+        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
         registry: &Registry,
         request: &DestroyReplica,
         delete_owned: bool,
@@ -292,8 +295,7 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        let replica = self.get_replica(&request.uuid);
-        if let Some(replica) = &replica {
+        if let Some(replica) = replica {
             let guard = SpecOperations::start_destroy_by(
                 replica,
                 registry,
@@ -311,17 +313,18 @@ impl ResourceSpecsLocked {
     }
     pub(crate) async fn share_replica(
         &self,
+        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
         registry: &Registry,
         request: &ShareReplica,
         mode: OperationMode,
     ) -> Result<String, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(replica_spec) = self.get_replica(&request.uuid) {
+        if let Some(replica_spec) = replica {
             let status = registry.get_replica(&request.uuid).await?;
             let (spec_clone, guard) = SpecOperations::start_update(
                 registry,
-                &replica_spec,
+                replica_spec,
                 &status,
                 ReplicaOperation::Share(request.protocol),
                 mode,
@@ -336,17 +339,18 @@ impl ResourceSpecsLocked {
     }
     pub(crate) async fn unshare_replica(
         &self,
+        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
         registry: &Registry,
         request: &UnshareReplica,
         mode: OperationMode,
     ) -> Result<String, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(replica_spec) = self.get_replica(&request.uuid) {
+        if let Some(replica_spec) = replica {
             let status = registry.get_replica(&request.uuid).await?;
             let (spec_clone, guard) = SpecOperations::start_update(
                 registry,
-                &replica_spec,
+                replica_spec,
                 &status,
                 ReplicaOperation::Unshare,
                 mode,

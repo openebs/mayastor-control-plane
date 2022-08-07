@@ -195,6 +195,7 @@ async fn destroy_replica(
         match context
             .specs()
             .destroy_replica(
+                Some(replica_spec),
                 context.registry(),
                 &ResourceSpecsLocked::destroy_replica_request(
                     replica_clone,

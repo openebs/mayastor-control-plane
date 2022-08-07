@@ -1,12 +1,12 @@
 use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
-use common::errors::SvcError;
+use common::{errors, errors::SvcError};
 use common_lib::{
     transport_api::{v0::Volumes, ReplyError},
     types::v0::{
-        store::OperationMode,
+        store::{volume::VolumeSpec, OperationMode},
         transport::{
             CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
-            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            ShareVolume, UnpublishVolume, UnshareVolume, Volume, VolumeId,
         },
     },
 };
@@ -20,6 +20,9 @@ use grpc::{
         Pagination,
     },
 };
+use parking_lot::Mutex;
+use snafu::OptionExt;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -176,6 +179,15 @@ impl Service {
         })
     }
 
+    /// Get the protected VolumeSpec for the given volume `id`, if any exists
+    pub(crate) fn get_volume(&self, volume: &VolumeId) -> Result<Arc<Mutex<VolumeSpec>>, SvcError> {
+        self.specs()
+            .get_locked_volume(volume)
+            .context(errors::VolumeNotFound {
+                vol_id: volume.to_string(),
+            })
+    }
+
     /// Create volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
@@ -187,32 +199,36 @@ impl Service {
     /// Destroy volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
+        let volume = self.get_volume(&request.uuid)?;
         self.specs()
-            .destroy_volume(&self.registry, request, OperationMode::Exclusive)
+            .destroy_volume(&volume, &self.registry, request, OperationMode::Exclusive)
             .await
     }
 
     /// Share volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
+        let volume = self.get_volume(&request.uuid)?;
         self.specs()
-            .share_volume(&self.registry, request, OperationMode::Exclusive)
+            .share_volume(&volume, &self.registry, request, OperationMode::Exclusive)
             .await
     }
 
     /// Unshare volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
+        let volume = self.get_volume(&request.uuid)?;
         self.specs()
-            .unshare_volume(&self.registry, request, OperationMode::Exclusive)
+            .unshare_volume(&volume, &self.registry, request, OperationMode::Exclusive)
             .await
     }
 
     /// Publish volume
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
+        let volume = self.get_volume(&request.uuid)?;
         self.specs()
-            .publish_volume(&self.registry, request, OperationMode::Exclusive)
+            .publish_volume(&volume, &self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -222,8 +238,9 @@ impl Service {
         &self,
         request: &UnpublishVolume,
     ) -> Result<Volume, SvcError> {
+        let volume = self.get_volume(&request.uuid)?;
         self.specs()
-            .unpublish_volume(&self.registry, request, OperationMode::Exclusive)
+            .unpublish_volume(&volume, &self.registry, request, OperationMode::Exclusive)
             .await
     }
 
@@ -233,8 +250,9 @@ impl Service {
         &self,
         request: &SetVolumeReplica,
     ) -> Result<Volume, SvcError> {
+        let volume = self.get_volume(&request.uuid)?;
         self.specs()
-            .set_volume_replica(&self.registry, request, OperationMode::Exclusive)
+            .set_volume_replica(&volume, &self.registry, request, OperationMode::Exclusive)
             .await
     }
 }

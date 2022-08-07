@@ -402,7 +402,12 @@ pub(super) async fn fixup_nexus_protocol(
             if (nexus_state.share.shared() && nexus.share.shared()) || !nexus.share.shared() {
                 context
                     .specs()
-                    .unshare_nexus(context.registry(), &UnshareNexus::from(&nexus_state), mode)
+                    .unshare_nexus(
+                        Some(nexus_spec),
+                        context.registry(),
+                        &UnshareNexus::from(&nexus_state),
+                        mode,
+                    )
                     .await?;
             }
             if nexus.share.shared() {
@@ -411,6 +416,7 @@ pub(super) async fn fixup_nexus_protocol(
                         context
                             .specs()
                             .share_nexus(
+                                Some(nexus_spec),
                                 context.registry(),
                                 &ShareNexus::from((&nexus_state, None, protocol)),
                                 mode,

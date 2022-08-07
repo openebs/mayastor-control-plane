@@ -106,7 +106,12 @@ async fn destroy_volume(
     let uuid = volume_spec.lock().uuid.clone();
     match context
         .specs()
-        .destroy_volume(context.registry(), &DestroyVolume::new(&uuid), mode)
+        .destroy_volume(
+            volume_spec,
+            context.registry(),
+            &DestroyVolume::new(&uuid),
+            mode,
+        )
         .await
     {
         Ok(_) => {

@@ -187,7 +187,7 @@ async fn deleting_pool_spec_reconciler(
         };
         match context
             .specs()
-            .destroy_pool(context.registry(), &request, OperationMode::ReconcileStep)
+            .destroy_pool(Some(pool_spec), context.registry(), &request, OperationMode::ReconcileStep)
             .await
         {
             Ok(_) => {
