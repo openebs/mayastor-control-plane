@@ -154,12 +154,17 @@ pub type OperationGuardArc<T> = OperationGuard<Arc<Mutex<T>>>;
 /// It unlocks the sequence lock on drop.
 #[derive(Debug)]
 pub struct OperationGuard<T: OperationSequencer> {
-    locked: Option<(OperationSequenceState, T)>,
+    inner: T,
+    locked: Option<OperationSequenceState>,
 }
 impl<T: OperationSequencer + Sized> OperationGuard<T> {
+    /// Get a reference to the inner resource spec.
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
     fn unlock(&mut self) {
-        if let Some((revert, resource)) = self.locked.take() {
-            resource.complete(revert);
+        if let Some(revert) = self.locked.take() {
+            self.inner.complete(revert);
         }
     }
     /// Create operation Guard for the resource with the operation mode
@@ -167,7 +172,8 @@ impl<T: OperationSequencer + Sized> OperationGuard<T> {
         // use result variable to make sure the mutex's temporary guard is dropped
         match resource.sequence(mode) {
             Some(revert) => Ok(Self {
-                locked: Some((revert, resource.clone())),
+                inner: resource.clone(),
+                locked: Some(revert),
             }),
             None => Err(format!(
                 "Cannot transition from '{:?}' to '{:?}'",

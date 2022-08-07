@@ -65,7 +65,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
-        let guard = locked_spec.operation_guard(mode)?;
+        let guard = locked_spec.operation_guard_wait(mode).await?;
         let spec_clone = {
             let mut spec = locked_spec.lock();
             match spec.start_create_inner(request) {
@@ -79,7 +79,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             }?;
             spec.clone()
         };
-        match Self::store_operation_log(registry, locked_spec, &spec_clone).await {
+        match Self::store_operation_log(registry, &guard, &spec_clone).await {
             Ok(_) => Ok((spec_clone, guard)),
             Err(e) => {
                 Self::delete_spec(registry, locked_spec).await.ok();
@@ -132,7 +132,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// Deleted or let the reconciler clean it up.
     async fn complete_create<O, R: Send>(
         result: Result<R, SvcError>,
-        locked_spec: &Arc<Mutex<Self>>,
+        guard: OperationGuardArc<Self>,
         registry: &Registry,
     ) -> Result<R, SvcError>
     where
@@ -140,10 +140,10 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     {
         match result {
             Ok(val) => {
-                let mut spec_clone = locked_spec.lock().clone();
+                let mut spec_clone = guard.inner().lock().clone();
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock();
+                let mut spec = guard.inner().lock();
                 match stored {
                     Ok(_) => {
                         spec.commit_op();
@@ -157,7 +157,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             }
             Err(error) => {
                 // The create failed so delete the spec.
-                Self::delete_spec(registry, locked_spec).await.ok();
+                Self::delete_spec(registry, guard.inner()).await.ok();
                 Err(error)
             }
         }
@@ -169,7 +169,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     async fn validate_create_step<R: Send, O>(
         registry: &Registry,
         result: Result<R, SvcError>,
-        locked_spec: &Arc<Mutex<Self>>,
+        guard: &OperationGuardArc<Self>,
     ) -> Result<R, SvcError>
     where
         Self: SpecTransaction<O>,
@@ -178,7 +178,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
         match result {
             Ok(val) => Ok(val),
             Err(error) => {
-                Self::delete_spec(registry, locked_spec).await.ok();
+                Self::delete_spec(registry, guard.inner()).await.ok();
                 Err(error)
             }
         }
@@ -297,7 +297,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             spec.clone()
         };
 
-        Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
+        Self::store_operation_log(registry, &guard, &spec_clone).await?;
         Ok(guard)
     }
 
@@ -306,38 +306,38 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn complete_destroy<O, R: Send>(
         result: Result<R, SvcError>,
-        locked_spec: &Arc<Mutex<Self>>,
+        guard: OperationGuardArc<Self>,
         registry: &Registry,
     ) -> Result<R, SvcError>
     where
         Self: SpecTransaction<O>,
         Self: StorableObject,
     {
-        let key = locked_spec.lock().key();
+        let key = guard.inner().lock().key();
         match result {
             Ok(val) => {
-                let mut spec_clone = locked_spec.lock().clone();
+                let mut spec_clone = guard.inner().lock().clone();
                 spec_clone.commit_op();
                 let deleted = registry.delete_kv(&key.key()).await;
                 match deleted {
                     Ok(_) => {
-                        Self::remove_spec(locked_spec, registry);
-                        let mut spec = locked_spec.lock();
+                        Self::remove_spec(guard.inner(), registry);
+                        let mut spec = guard.inner().lock();
                         spec.commit_op();
                         Ok(val)
                     }
                     Err(error) => {
-                        let mut spec = locked_spec.lock();
+                        let mut spec = guard.inner().lock();
                         spec.set_op_result(true);
                         Err(error)
                     }
                 }
             }
             Err(error) => {
-                let mut spec_clone = locked_spec.lock().clone();
+                let mut spec_clone = guard.inner().lock().clone();
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock();
+                let mut spec = guard.inner().lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -375,7 +375,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             spec
         };
 
-        Self::store_operation_log(registry, locked_spec, &spec_clone).await?;
+        Self::store_operation_log(registry, &guard, &spec_clone).await?;
         Ok((spec_clone, guard))
     }
 
@@ -415,7 +415,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     async fn complete_update<R: Send, O>(
         registry: &Registry,
         result: Result<R, SvcError>,
-        locked_spec: Arc<Mutex<Self>>,
+        guard: OperationGuardArc<Self>,
         mut spec_clone: Self,
     ) -> Result<R, SvcError>
     where
@@ -426,7 +426,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             Ok(val) => {
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock();
+                let mut spec = guard.inner().lock();
                 match stored {
                     Ok(_) => {
                         spec.commit_op();
@@ -441,7 +441,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             Err(error) => {
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock();
+                let mut spec = guard.inner().lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -463,7 +463,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     async fn validate_update_step<R: Send, O>(
         registry: &Registry,
         result: Result<R, SvcError>,
-        locked_spec: &Arc<Mutex<Self>>,
+        guard: &OperationGuardArc<Self>,
         spec_clone: &Self,
     ) -> Result<R, SvcError>
     where
@@ -476,7 +476,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
                 let mut spec_clone = spec_clone.clone();
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = locked_spec.lock();
+                let mut spec = guard.inner().lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -579,7 +579,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// In case of failure the operation cannot proceed so clear it and return an error
     async fn store_operation_log<O>(
         registry: &Registry,
-        locked_spec: &Arc<Mutex<Self>>,
+        locked_spec: &OperationGuardArc<Self>,
         spec_clone: &Self,
     ) -> Result<(), SvcError>
     where
@@ -587,7 +587,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
         Self: StorableObject,
     {
         if let Err(error) = registry.store_obj(spec_clone).await {
-            let mut spec = locked_spec.lock();
+            let mut spec = locked_spec.inner().lock();
             spec.clear_op();
             Err(error)
         } else {
@@ -670,7 +670,7 @@ impl<T: AsOperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc
         match OperationGuardArc::try_sequence(self, mode) {
             Ok(guard) => Ok(guard),
             Err(error) => {
-                tracing::trace!("Resource '{}' is busy: {}", self.lock().uuid(), error);
+                tracing::debug!("Resource '{}' is busy: {}", self.lock().uuid(), error);
                 Err(SvcError::Conflict {})
             }
         }
@@ -679,17 +679,18 @@ impl<T: AsOperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc
         &self,
         mode: OperationMode,
     ) -> Result<OperationGuardArc<T>, SvcError> {
-        let mut tries = 10;
+        let mut tries = 5;
         loop {
+            tries -= 1;
             match self.operation_guard(mode) {
                 Ok(guard) => return Ok(guard),
                 Err(error) if tries == 0 => {
                     return Err(error);
                 }
-                Err(_) => tries -= 1,
+                Err(_) => {}
             };
 
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
     }
 }

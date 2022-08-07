@@ -205,13 +205,14 @@ impl ResourceSpecsLocked {
 
         let node = registry.get_node_wrapper(&request.node).await?;
         let pool_spec = self.get_or_create_pool(request);
-        let (_, _g) = SpecOperations::start_create(&pool_spec, registry, request, mode).await?;
+        let (_spec, guard) =
+            SpecOperations::start_create(&pool_spec, registry, request, mode).await?;
 
         let result = node.create_pool(request).await;
 
-        let pool_state = SpecOperations::complete_create(result, &pool_spec, registry).await?;
-        let pool_spec = pool_spec.lock().clone();
-        Ok(Pool::new(pool_spec, pool_state))
+        let pool_state = SpecOperations::complete_create(result, guard, registry).await?;
+        let spec = pool_spec.lock().clone();
+        Ok(Pool::new(spec, pool_state))
     }
 
     pub(crate) async fn destroy_pool(
@@ -226,10 +227,10 @@ impl ResourceSpecsLocked {
 
         let pool_spec = self.get_locked_pool(&request.id);
         if let Some(pool_spec) = &pool_spec {
-            let _guard = SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
+            let guard = SpecOperations::start_destroy(pool_spec, registry, false, mode).await?;
 
             let result = node.destroy_pool(request).await;
-            SpecOperations::complete_destroy(result, pool_spec, registry).await
+            SpecOperations::complete_destroy(result, guard, registry).await
         } else {
             node.destroy_pool(request).await
         }
@@ -250,11 +251,11 @@ impl ResourceSpecsLocked {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let replica_spec = self.get_or_create_replica(request);
-        let (_, _guard) =
+        let (_, guard) =
             SpecOperations::start_create(&replica_spec, registry, request, mode).await?;
 
         let result = node.create_replica(request).await;
-        SpecOperations::complete_create(result, &replica_spec, registry).await
+        SpecOperations::complete_create(result, guard, registry).await
     }
 
     pub(crate) async fn destroy_replica_spec(
@@ -293,7 +294,7 @@ impl ResourceSpecsLocked {
 
         let replica = self.get_replica(&request.uuid);
         if let Some(replica) = &replica {
-            SpecOperations::start_destroy_by(
+            let guard = SpecOperations::start_destroy_by(
                 replica,
                 registry,
                 &request.disowners,
@@ -303,7 +304,7 @@ impl ResourceSpecsLocked {
             .await?;
 
             let result = node.destroy_replica(request).await;
-            SpecOperations::complete_destroy(result, replica, registry).await
+            SpecOperations::complete_destroy(result, guard, registry).await
         } else {
             node.destroy_replica(request).await
         }
@@ -318,7 +319,7 @@ impl ResourceSpecsLocked {
 
         if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
+            let (spec_clone, guard) = SpecOperations::start_update(
                 registry,
                 &replica_spec,
                 &status,
@@ -328,7 +329,7 @@ impl ResourceSpecsLocked {
             .await?;
 
             let result = node.share_replica(request).await;
-            SpecOperations::complete_update(registry, result, replica_spec, spec_clone).await
+            SpecOperations::complete_update(registry, result, guard, spec_clone).await
         } else {
             node.share_replica(request).await
         }
@@ -343,7 +344,7 @@ impl ResourceSpecsLocked {
 
         if let Some(replica_spec) = self.get_replica(&request.uuid) {
             let status = registry.get_replica(&request.uuid).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
+            let (spec_clone, guard) = SpecOperations::start_update(
                 registry,
                 &replica_spec,
                 &status,
@@ -353,7 +354,7 @@ impl ResourceSpecsLocked {
             .await?;
 
             let result = node.unshare_replica(request).await;
-            SpecOperations::complete_update(registry, result, replica_spec, spec_clone).await
+            SpecOperations::complete_update(registry, result, guard, spec_clone).await
         } else {
             node.unshare_replica(request).await
         }
