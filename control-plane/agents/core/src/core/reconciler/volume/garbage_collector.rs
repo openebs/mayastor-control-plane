@@ -6,7 +6,7 @@ use crate::core::{
 
 use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode, TraceSpan, TraceStrLog};
 
-use crate::core::specs::SpecOperations;
+use crate::core::{reconciler::GarbageCollect, specs::SpecOperations};
 use common::errors::SvcError;
 use common_lib::types::v0::{
     store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},
@@ -35,9 +35,7 @@ impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         for volume in context.specs().get_locked_volumes() {
-            results.push(destroy_deleting_volume(&volume, context).await);
-            results.push(disown_unused_nexuses(&volume, context).await);
-            results.push(disown_unused_replicas(&volume, context).await);
+            results.push(volume.garbage_collect(context).await);
         }
         Self::squash_results(results)
     }
@@ -56,16 +54,40 @@ impl TaskPoller for GarbageCollector {
     }
 }
 
+#[async_trait::async_trait]
+impl GarbageCollect for Arc<Mutex<VolumeSpec>> {
+    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+        GarbageCollector::squash_results(vec![
+            self.destroy_deleting(context).await,
+            self.disown_unused(context).await,
+        ])
+    }
+
+    async fn destroy_deleting(&self, context: &PollContext) -> PollResult {
+        destroy_deleting_volume(self, context).await
+    }
+
+    async fn destroy_orphaned(&self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
+
+    async fn disown_unused(&self, context: &PollContext) -> PollResult {
+        GarbageCollector::squash_results(vec![
+            disown_unused_nexuses(self, context).await,
+            disown_unused_replicas(self, context).await,
+        ])
+    }
+
+    async fn disown_orphaned(&self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
+}
+
 #[tracing::instrument(level = "trace", skip(volume_spec, context), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
 async fn destroy_deleting_volume(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    let _guard = match volume_spec.operation_guard(OperationMode::ReconcileStart) {
-        Ok(guard) => guard,
-        Err(_) => return PollResult::Ok(PollerState::Busy),
-    };
-
     let deleting = volume_spec.lock().status().deleting();
     if deleting {
         destroy_volume(volume_spec, context, OperationMode::ReconcileStep)
@@ -84,7 +106,12 @@ async fn destroy_volume(
     let uuid = volume_spec.lock().uuid.clone();
     match context
         .specs()
-        .destroy_volume(context.registry(), &DestroyVolume::new(&uuid), mode)
+        .destroy_volume(
+            volume_spec,
+            context.registry(),
+            &DestroyVolume::new(&uuid),
+            mode,
+        )
         .await
     {
         Ok(_) => {
@@ -253,7 +280,7 @@ async fn is_replica_healthy(
     };
     if info.no_healthy_replicas() {
         Err(SvcError::NoHealthyReplicas {
-            id: volume_spec.uuid(),
+            id: volume_spec.uuid_str(),
         })
     } else {
         Ok(info.is_replica_healthy(&replica_spec.uuid))

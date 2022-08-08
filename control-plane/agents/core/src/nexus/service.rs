@@ -138,32 +138,57 @@ impl Service {
     /// Destroy nexus
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
+        let nexus = self.specs().get_nexus(&request.uuid);
         self.specs()
-            .destroy_nexus(&self.registry, request, true, OperationMode::Exclusive)
+            .destroy_nexus(
+                nexus.as_ref(),
+                &self.registry,
+                request,
+                true,
+                OperationMode::Exclusive,
+            )
             .await
     }
 
     /// Share nexus
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
+        let nexus = self.specs().get_nexus(&request.uuid);
         self.specs()
-            .share_nexus(&self.registry, request, OperationMode::Exclusive)
+            .share_nexus(
+                nexus.as_ref(),
+                &self.registry,
+                request,
+                OperationMode::Exclusive,
+            )
             .await
     }
 
     /// Unshare nexus
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
+        let nexus = self.specs().get_nexus(&request.uuid);
         self.specs()
-            .unshare_nexus(&self.registry, request, OperationMode::Exclusive)
+            .unshare_nexus(
+                nexus.as_ref(),
+                &self.registry,
+                request,
+                OperationMode::Exclusive,
+            )
             .await
     }
 
     /// Add nexus child
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
     pub(super) async fn add_nexus_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
+        let nexus = self.specs().get_nexus(&request.nexus);
         self.specs()
-            .add_nexus_child(&self.registry, request, OperationMode::Exclusive)
+            .add_nexus_child(
+                nexus.as_ref(),
+                &self.registry,
+                request,
+                OperationMode::Exclusive,
+            )
             .await
     }
 
@@ -173,8 +198,14 @@ impl Service {
         &self,
         request: &RemoveNexusChild,
     ) -> Result<(), SvcError> {
+        let nexus = self.specs().get_nexus(&request.nexus);
         self.specs()
-            .remove_nexus_child(&self.registry, request, OperationMode::Exclusive)
+            .remove_nexus_child(
+                nexus.as_ref(),
+                &self.registry,
+                request,
+                OperationMode::Exclusive,
+            )
             .await
     }
 }

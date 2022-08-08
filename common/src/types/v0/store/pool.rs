@@ -4,7 +4,7 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        OperationSequence, OperationSequencer, ResourceUuid, SpecStatus, SpecTransaction,
+        AsOperationSequencer, OperationSequence, ResourceUuid, SpecStatus, SpecTransaction,
     },
     transport::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
 };
@@ -14,6 +14,7 @@ pub type PoolLabel = ::std::collections::HashMap<String, String>;
 
 use serde::{Deserialize, Serialize};
 use std::{convert::From, fmt::Debug};
+
 /// Pool data structure used by the persistent store.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Pool {
@@ -104,7 +105,7 @@ macro_rules! pool_span {
 }
 crate::impl_trace_span!(pool_span, PoolSpec);
 
-impl OperationSequencer for PoolSpec {
+impl AsOperationSequencer for PoolSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
     }

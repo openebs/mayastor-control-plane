@@ -13,7 +13,7 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::store::{OperationSequence, OperationSequencer};
+use crate::types::v0::store::{AsOperationSequencer, OperationSequence};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -175,7 +175,7 @@ impl From<&NexusSpec> for CreateNexus {
     }
 }
 
-impl OperationSequencer for NexusSpec {
+impl AsOperationSequencer for NexusSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
     }

@@ -1,4 +1,5 @@
 use crate::core::{
+    reconciler::{GarbageCollect, ReCreate},
     specs::{OperationSequenceGuard, SpecOperations},
     task_poller::{PollContext, PollPeriods, PollResult, PollTimer, PollerState, TaskPoller},
     wrapper::ClientOps,
@@ -34,21 +35,53 @@ impl PoolReconciler {
 impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let pools = context.specs().get_locked_pools();
-        let mut results = Vec::with_capacity(pools.len() * 2);
+        let mut results = Vec::with_capacity(pools.len());
         for pool in pools {
             let _guard = match pool.operation_guard(OperationMode::ReconcileStart) {
                 Ok(guard) => guard,
                 Err(_) => continue,
             };
 
-            results.push(missing_pool_state_reconciler(&pool, context).await);
-            results.push(deleting_pool_spec_reconciler(&pool, context).await);
+            results.push(Self::squash_results(vec![
+                pool.garbage_collect(context).await,
+                pool.recreate_state(context).await,
+            ]))
         }
         Self::squash_results(results)
     }
 
     async fn poll_timer(&mut self, _context: &PollContext) -> bool {
         self.counter.poll()
+    }
+}
+
+#[async_trait::async_trait]
+impl GarbageCollect for Arc<Mutex<PoolSpec>> {
+    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+        self.destroy_deleting(context).await
+    }
+
+    async fn destroy_deleting(&self, context: &PollContext) -> PollResult {
+        deleting_pool_spec_reconciler(self, context).await
+    }
+
+    async fn destroy_orphaned(&self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
+
+    async fn disown_unused(&self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
+
+    async fn disown_orphaned(&self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
+}
+
+#[async_trait::async_trait]
+impl ReCreate for Arc<Mutex<PoolSpec>> {
+    async fn recreate_state(&self, context: &PollContext) -> PollResult {
+        missing_pool_state_reconciler(self, context).await
     }
 }
 
@@ -154,7 +187,7 @@ async fn deleting_pool_spec_reconciler(
         };
         match context
             .specs()
-            .destroy_pool(context.registry(), &request, OperationMode::ReconcileStep)
+            .destroy_pool(Some(pool_spec), context.registry(), &request, OperationMode::ReconcileStep)
             .await
         {
             Ok(_) => {

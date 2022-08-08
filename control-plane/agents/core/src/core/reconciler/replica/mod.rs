@@ -2,6 +2,7 @@
 mod tests;
 
 use crate::core::{
+    reconciler::{GarbageCollect, ReCreate},
     specs::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperations},
     task_poller::{
         PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
@@ -30,12 +31,10 @@ impl ReplicaReconciler {
 impl TaskPoller for ReplicaReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let replicas = context.specs().get_replicas();
-        let mut results = Vec::with_capacity(replicas.len() * 3);
+        let mut results = Vec::with_capacity(replicas.len());
 
         for replica in replicas {
-            results.push(remove_missing_owners(&replica, context).await);
-            results.push(destroy_orphaned_replica(&replica, context).await);
-            results.push(destroy_deleting_replica(&replica, context).await);
+            results.push(replica.garbage_collect(context).await);
         }
 
         Self::squash_results(results)
@@ -50,6 +49,41 @@ impl TaskPoller for ReplicaReconciler {
             PollEvent::TimedRun | PollEvent::Triggered(PollTriggerEvent::Start) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl ReCreate for Arc<Mutex<ReplicaSpec>> {
+    async fn recreate_state(&self, _context: &PollContext) -> PollResult {
+        // We get this automatically when recreating pools
+        PollResult::Ok(PollerState::Idle)
+    }
+}
+
+#[async_trait::async_trait]
+impl GarbageCollect for Arc<Mutex<ReplicaSpec>> {
+    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+        ReplicaReconciler::squash_results(vec![
+            self.disown_orphaned(context).await,
+            self.destroy_deleting(context).await,
+            self.destroy_orphaned(context).await,
+        ])
+    }
+
+    async fn destroy_deleting(&self, context: &PollContext) -> PollResult {
+        destroy_deleting_replica(self, context).await
+    }
+
+    async fn destroy_orphaned(&self, context: &PollContext) -> PollResult {
+        destroy_orphaned_replica(self, context).await
+    }
+
+    async fn disown_unused(&self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
+
+    async fn disown_orphaned(&self, context: &PollContext) -> PollResult {
+        remove_missing_owners(self, context).await
     }
 }
 
@@ -161,6 +195,7 @@ async fn destroy_replica(
         match context
             .specs()
             .destroy_replica(
+                Some(replica_spec),
                 context.registry(),
                 &ResourceSpecsLocked::destroy_replica_request(
                     replica_clone,

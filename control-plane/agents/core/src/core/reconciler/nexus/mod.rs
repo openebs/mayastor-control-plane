@@ -25,7 +25,10 @@ use common_lib::{
 };
 use garbage_collector::GarbageCollector;
 
-use crate::core::wrapper::NodeWrapper;
+use crate::core::{
+    reconciler::{ReCreate, Reconciler},
+    wrapper::NodeWrapper,
+};
 use common_lib::types::v0::transport::NexusStatus;
 use parking_lot::Mutex;
 use std::{convert::TryFrom, sync::Arc};
@@ -60,7 +63,7 @@ impl TaskPoller for NexusReconciler {
             if !nexus.lock().managed {
                 continue;
             }
-            // at the moment, nexus owned by a volume are only reconciled by the volume
+            // at the moment, nexuses owned by a volume are only reconciled by the volume
             if nexus.lock().owned() {
                 continue;
             }
@@ -81,6 +84,20 @@ impl TaskPoller for NexusReconciler {
     }
 }
 
+#[async_trait::async_trait]
+impl Reconciler for Arc<Mutex<NexusSpec>> {
+    async fn reconcile(&self, context: &PollContext) -> PollResult {
+        nexus_reconciler(self, context, OperationMode::ReconcileStart).await
+    }
+}
+
+#[async_trait::async_trait]
+impl ReCreate for Arc<Mutex<NexusSpec>> {
+    async fn recreate_state(&self, context: &PollContext) -> PollResult {
+        missing_nexus_recreate(self, context, OperationMode::ReconcileStart).await
+    }
+}
+
 async fn nexus_reconciler(
     nexus_spec: &Arc<Mutex<NexusSpec>>,
     context: &PollContext,
@@ -91,12 +108,11 @@ async fn nexus_reconciler(
         nexus_spec.status().created()
     };
 
-    let mut results = Vec::with_capacity(5);
+    let mut results = Vec::with_capacity(4);
     if created {
         results.push(faulted_children_remover(nexus_spec, context, mode).await);
         results.push(unknown_children_remover(nexus_spec, context, mode).await);
         results.push(missing_children_remover(nexus_spec, context, mode).await);
-        results.push(missing_nexus_recreate(nexus_spec, context, mode).await);
         results.push(fixup_nexus_protocol(nexus_spec, context, mode).await);
     }
 
@@ -386,7 +402,12 @@ pub(super) async fn fixup_nexus_protocol(
             if (nexus_state.share.shared() && nexus.share.shared()) || !nexus.share.shared() {
                 context
                     .specs()
-                    .unshare_nexus(context.registry(), &UnshareNexus::from(&nexus_state), mode)
+                    .unshare_nexus(
+                        Some(nexus_spec),
+                        context.registry(),
+                        &UnshareNexus::from(&nexus_state),
+                        mode,
+                    )
                     .await?;
             }
             if nexus.share.shared() {
@@ -395,6 +416,7 @@ pub(super) async fn fixup_nexus_protocol(
                         context
                             .specs()
                             .share_nexus(
+                                Some(nexus_spec),
                                 context.registry(),
                                 &ShareNexus::from((&nexus_state, None, protocol)),
                                 mode,

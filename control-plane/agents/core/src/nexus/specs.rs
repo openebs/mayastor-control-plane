@@ -1,6 +1,6 @@
 use crate::core::{
     registry::Registry,
-    specs::{ResourceSpecs, ResourceSpecsLocked, SpecOperations},
+    specs::{GuardedSpecOperations, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     wrapper::ClientOps,
 };
 use common::errors::{NexusNotFound, SvcError};
@@ -21,10 +21,27 @@ use common_lib::{
     },
 };
 
+use crate::core::specs::OperationSequenceGuard;
 use common::errors::SvcError::CordonedNode;
+use common_lib::types::v0::store::OperationGuardArc;
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::sync::Arc;
+
+#[async_trait::async_trait]
+impl GuardedSpecOperations for OperationGuardArc<NexusSpec> {
+    type Create = CreateNexus;
+    type Owners = ();
+    type Status = NexusStatus;
+    type State = Nexus;
+    type UpdateOp = NexusOperation;
+    type Inner = NexusSpec;
+
+    fn remove_spec(&self, registry: &Registry) {
+        let uuid = self.lock().uuid.clone();
+        registry.specs().remove_nexus(&uuid);
+    }
+}
 
 #[async_trait::async_trait]
 impl SpecOperations for NexusSpec {
@@ -43,18 +60,18 @@ impl SpecOperations for NexusSpec {
         match &op {
             NexusOperation::Share(_) if state.share.shared() => Err(SvcError::AlreadyShared {
                 kind: ResourceKind::Nexus,
-                id: self.uuid(),
+                id: self.uuid_str(),
                 share: state.share.to_string(),
             }),
             NexusOperation::Share(_) => Ok(()),
             NexusOperation::Unshare if !state.share.shared() => Err(SvcError::NotShared {
                 kind: ResourceKind::Nexus,
-                id: self.uuid(),
+                id: self.uuid_str(),
             }),
             NexusOperation::Unshare => Ok(()),
             NexusOperation::AddChild(child) if self.children.contains(child) => {
                 Err(SvcError::ChildAlreadyExists {
-                    nexus: self.uuid(),
+                    nexus: self.uuid_str(),
                     child: child.to_string(),
                 })
             }
@@ -63,7 +80,7 @@ impl SpecOperations for NexusSpec {
                 if !self.children.contains(child) && !state.contains_child(&child.uri()) =>
             {
                 Err(SvcError::ChildNotFound {
-                    nexus: self.uuid(),
+                    nexus: self.uuid_str(),
                     child: child.to_string(),
                 })
             }
@@ -79,10 +96,6 @@ impl SpecOperations for NexusSpec {
     fn start_destroy_op(&mut self) {
         self.start_op(NexusOperation::Destroy);
     }
-    fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) {
-        let uuid = locked_spec.lock().uuid.clone();
-        registry.specs().remove_nexus(&uuid);
-    }
 
     fn dirty(&self) -> bool {
         self.pending_op()
@@ -90,7 +103,7 @@ impl SpecOperations for NexusSpec {
     fn kind(&self) -> ResourceKind {
         ResourceKind::Nexus
     }
-    fn uuid(&self) -> String {
+    fn uuid_str(&self) -> String {
         self.uuid.to_string()
     }
     fn status(&self) -> SpecStatus<NexusStatus> {
@@ -175,13 +188,13 @@ impl ResourceSpecsLocked {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let nexus_spec = self.get_or_create_nexus(request);
-        let (_, _guard) =
-            SpecOperations::start_create(&nexus_spec, registry, request, mode).await?;
+        let guard = nexus_spec.operation_guard_wait(mode).await?;
+        let _ = guard.start_create(registry, request).await?;
 
         let result = node.create_nexus(request).await;
         self.on_create_set_owners(request, &nexus_spec, &result);
 
-        SpecOperations::complete_create(result, &nexus_spec, registry).await
+        guard.complete_create(result, registry).await
     }
 
     fn on_create_set_owners(
@@ -211,6 +224,7 @@ impl ResourceSpecsLocked {
 
     pub async fn destroy_nexus(
         &self,
+        nexus: Option<&Arc<Mutex<NexusSpec>>>,
         registry: &Registry,
         request: &DestroyNexus,
         delete_owned: bool,
@@ -218,13 +232,13 @@ impl ResourceSpecsLocked {
     ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(nexus) = self.get_nexus(&request.uuid) {
-            let _guard =
-                SpecOperations::start_destroy(&nexus, registry, delete_owned, mode).await?;
+        if let Some(nexus) = nexus {
+            let guard = nexus.operation_guard_wait(mode).await?;
+            guard.start_destroy(registry, delete_owned).await?;
 
             let result = node.destroy_nexus(request).await;
-            self.on_delete_disown_replicas(&nexus);
-            SpecOperations::complete_destroy(result, &nexus, registry).await
+            self.on_delete_disown_replicas(nexus);
+            guard.complete_destroy(result, registry).await
         } else {
             node.destroy_nexus(request).await
         }
@@ -244,25 +258,22 @@ impl ResourceSpecsLocked {
 
     pub async fn share_nexus(
         &self,
+        nexus: Option<&Arc<Mutex<NexusSpec>>>,
         registry: &Registry,
         request: &ShareNexus,
         mode: OperationMode,
     ) -> Result<String, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.uuid) {
+        if let Some(nexus_spec) = nexus {
             let status = registry.get_nexus(&request.uuid).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
-                registry,
-                &nexus_spec,
-                &status,
-                NexusOperation::Share(request.protocol),
-                mode,
-            )
-            .await?;
+            let guard = nexus_spec.operation_guard_wait(mode).await?;
+            let spec_clone = guard
+                .start_update(registry, &status, NexusOperation::Share(request.protocol))
+                .await?;
 
             let result = node.share_nexus(request).await;
-            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+            guard.complete_update(registry, result, spec_clone).await
         } else {
             node.share_nexus(request).await
         }
@@ -270,25 +281,22 @@ impl ResourceSpecsLocked {
 
     pub async fn unshare_nexus(
         &self,
+        nexus: Option<&Arc<Mutex<NexusSpec>>>,
         registry: &Registry,
         request: &UnshareNexus,
         mode: OperationMode,
     ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.uuid) {
+        if let Some(nexus_spec) = nexus {
             let status = registry.get_nexus(&request.uuid).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
-                registry,
-                &nexus_spec,
-                &status,
-                NexusOperation::Unshare,
-                mode,
-            )
-            .await?;
+            let guard = nexus_spec.operation_guard_wait(mode).await?;
+            let spec_clone = guard
+                .start_update(registry, &status, NexusOperation::Unshare)
+                .await?;
 
             let result = node.unshare_nexus(request).await;
-            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+            guard.complete_update(registry, result, spec_clone).await
         } else {
             node.unshare_nexus(request).await
         }
@@ -296,25 +304,26 @@ impl ResourceSpecsLocked {
 
     pub async fn add_nexus_child(
         &self,
+        nexus: Option<&Arc<Mutex<NexusSpec>>>,
         registry: &Registry,
         request: &AddNexusChild,
         mode: OperationMode,
     ) -> Result<Child, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
+        if let Some(nexus_spec) = nexus {
             let status = registry.get_nexus(&request.nexus).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
-                registry,
-                &nexus_spec,
-                &status,
-                NexusOperation::AddChild(NexusChild::from(&request.uri)),
-                mode,
-            )
-            .await?;
+            let guard = nexus_spec.operation_guard_wait(mode).await?;
+            let spec_clone = guard
+                .start_update(
+                    registry,
+                    &status,
+                    NexusOperation::AddChild(NexusChild::from(&request.uri)),
+                )
+                .await?;
 
             let result = node.add_child(request).await;
-            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+            guard.complete_update(registry, result, spec_clone).await
         } else {
             node.add_child(request).await
         }
@@ -322,26 +331,27 @@ impl ResourceSpecsLocked {
 
     pub async fn add_nexus_replica(
         &self,
+        nexus: Option<&Arc<Mutex<NexusSpec>>>,
         registry: &Registry,
         request: &AddNexusReplica,
         mode: OperationMode,
     ) -> Result<Child, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
+        if let Some(nexus_spec) = nexus {
             let status = registry.get_nexus(&request.nexus).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
-                registry,
-                &nexus_spec,
-                &status,
-                NexusOperation::AddChild(NexusChild::from(&request.replica)),
-                mode,
-            )
-            .await?;
+            let guard = nexus_spec.operation_guard_wait(mode).await?;
+            let spec_clone = guard
+                .start_update(
+                    registry,
+                    &status,
+                    NexusOperation::AddChild(NexusChild::from(&request.replica)),
+                )
+                .await?;
 
             let result = node.add_child(&request.into()).await;
             self.on_add_own_replica(request, &result);
-            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+            guard.complete_update(registry, result, spec_clone).await
         } else {
             Err(SvcError::NexusNotFound {
                 nexus_id: request.nexus.to_string(),
@@ -361,25 +371,26 @@ impl ResourceSpecsLocked {
     #[tracing::instrument(level = "debug", err)]
     pub async fn remove_nexus_child(
         &self,
+        nexus: Option<&Arc<Mutex<NexusSpec>>>,
         registry: &Registry,
         request: &RemoveNexusChild,
         mode: OperationMode,
     ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
+        if let Some(nexus_spec) = nexus {
             let status = registry.get_nexus(&request.nexus).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
-                registry,
-                &nexus_spec,
-                &status,
-                NexusOperation::RemoveChild(NexusChild::from(&request.uri)),
-                mode,
-            )
-            .await?;
+            let guard = nexus_spec.operation_guard_wait(mode).await?;
+            let spec_clone = guard
+                .start_update(
+                    registry,
+                    &status,
+                    NexusOperation::RemoveChild(NexusChild::from(&request.uri)),
+                )
+                .await?;
 
             let result = node.remove_child(request).await;
-            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+            guard.complete_update(registry, result, spec_clone).await
         } else {
             node.remove_child(request).await
         }
@@ -387,27 +398,28 @@ impl ResourceSpecsLocked {
 
     pub async fn remove_nexus_replica(
         &self,
+        nexus: Option<&Arc<Mutex<NexusSpec>>>,
         registry: &Registry,
         request: &RemoveNexusReplica,
         mode: OperationMode,
     ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(nexus_spec) = self.get_nexus(&request.nexus) {
+        if let Some(nexus_spec) = nexus {
             let status = registry.get_nexus(&request.nexus).await?;
-            let (spec_clone, _guard) = SpecOperations::start_update(
-                registry,
-                &nexus_spec,
-                &status,
-                NexusOperation::RemoveChild(NexusChild::from(&request.replica)),
-                mode,
-            )
-            .await?;
+            let guard = nexus_spec.operation_guard_wait(mode).await?;
+            let spec_clone = guard
+                .start_update(
+                    registry,
+                    &status,
+                    NexusOperation::RemoveChild(NexusChild::from(&request.replica)),
+                )
+                .await?;
 
             let result = node.remove_child(&request.into()).await;
             self.on_remove_disown_replica(request, &result);
 
-            SpecOperations::complete_update(registry, result, nexus_spec, spec_clone).await
+            guard.complete_update(registry, result, spec_clone).await
         } else {
             Err(SvcError::NexusNotFound {
                 nexus_id: request.nexus.to_string(),
@@ -433,7 +445,10 @@ impl ResourceSpecsLocked {
         match nexus_children.into_iter().find(|c| &c.uri() == uri) {
             Some(NexusChild::Replica(replica)) => {
                 let request = RemoveNexusReplica::new(&nexus.node, &nexus.uuid, &replica);
-                match self.remove_nexus_replica(registry, &request, mode).await {
+                match self
+                    .remove_nexus_replica(Some(&nexus_spec), registry, &request, mode)
+                    .await
+                {
                     Ok(_) if destroy_replica => {
                         let replica_spec =
                             self.get_replica(replica.uuid())
@@ -478,11 +493,13 @@ impl ResourceSpecsLocked {
             }
             Some(NexusChild::Uri(uri)) => {
                 let request = RemoveNexusChild::new(&nexus.node, &nexus.uuid, &uri);
-                self.remove_nexus_child(registry, &request, mode).await
+                self.remove_nexus_child(Some(&nexus_spec), registry, &request, mode)
+                    .await
             }
             None => {
                 let request = RemoveNexusChild::new(&nexus.node, &nexus.uuid, uri);
-                self.remove_nexus_child(registry, &request, mode).await
+                self.remove_nexus_child(Some(&nexus_spec), registry, &request, mode)
+                    .await
             }
         }
     }
@@ -528,9 +545,11 @@ impl ResourceSpecsLocked {
         let mut pending_ops = false;
         let nexuses = self.get_nexuses();
         for nexus in nexuses {
-            if !SpecOperations::handle_incomplete_ops(&nexus, registry).await {
-                // Not all pending operations could be handled.
-                pending_ops = true;
+            if let Ok(guard) = nexus.operation_guard(OperationMode::ReconcileStart) {
+                if !guard.handle_incomplete_ops(registry).await {
+                    // Not all pending operations could be handled.
+                    pending_ops = true;
+                }
             }
         }
         pending_ops
