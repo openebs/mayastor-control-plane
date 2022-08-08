@@ -280,7 +280,7 @@ async fn is_replica_healthy(
     };
     if info.no_healthy_replicas() {
         Err(SvcError::NoHealthyReplicas {
-            id: volume_spec.uuid(),
+            id: volume_spec.uuid_str(),
         })
     } else {
         Ok(info.is_replica_healthy(&replica_spec.uuid))

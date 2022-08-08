@@ -21,6 +21,7 @@ use common_lib::{
 };
 
 use async_trait::async_trait;
+use common_lib::types::v0::store::ResourceUuid;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
@@ -45,33 +46,40 @@ enum SpecError {
 /// This trait is used to encapsulate common behaviour for all different types of resources,
 /// including validation rules and error handling.
 #[async_trait]
-pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSequencer {
+pub trait GuardedSpecOperations:
+    Debug + Sync + Send + Sized + Deref<Target = Arc<Mutex<Self::Inner>>>
+{
     type Create: Debug + PartialEq + Sync + Send;
     type Owners: Default + Sync + Send;
     type Status: PartialEq + Sync + Send;
     type State: PartialEq + Sync + Send;
     type UpdateOp: Sync + Send;
+    type Inner: SpecOperations<
+        Create = Self::Create,
+        Owners = Self::Owners,
+        Status = Self::Status,
+        State = Self::State,
+        UpdateOp = Self::UpdateOp,
+    >;
 
     /// Start a create operation and attempt to log the transaction to the store.
     /// In case of error, the log is undone and an error is returned.
     async fn start_create<O>(
-        locked_spec: &Arc<Mutex<Self>>,
+        &self,
         registry: &Registry,
         request: &Self::Create,
-        mode: OperationMode,
-    ) -> Result<(Self, OperationGuardArc<Self>), SvcError>
+    ) -> Result<Self::Inner, SvcError>
     where
-        Self: PartialEq<Self::Create>,
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: PartialEq<Self::Create>,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
-        let guard = locked_spec.operation_guard_wait(mode).await?;
         let spec_clone = {
-            let mut spec = locked_spec.lock();
+            let mut spec = self.lock();
             match spec.start_create_inner(request) {
                 Err(SvcError::InvalidUuid { uuid, kind }) => {
                     drop(spec);
-                    Self::remove_spec(locked_spec, registry);
+                    self.remove_spec(registry);
                     return Err(SvcError::InvalidUuid { uuid, kind });
                 }
                 Err(error) => Err(error),
@@ -79,49 +87,12 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             }?;
             spec.clone()
         };
-        match Self::store_operation_log(registry, &guard, &spec_clone).await {
-            Ok(_) => Ok((spec_clone, guard)),
+        match self.store_operation_log(registry, &spec_clone).await {
+            Ok(_) => Ok(spec_clone),
             Err(e) => {
-                Self::delete_spec(registry, locked_spec).await.ok();
+                self.delete_spec(registry).await.ok();
                 Err(e)
             }
-        }
-    }
-
-    /// When a create request is issued we need to validate by verifying that:
-    /// 1. a previous create operation is no longer in progress
-    /// 2. if it's a retry then it must have the same parameters as the original request
-    fn start_create_inner(&mut self, request: &Self::Create) -> Result<(), SvcError>
-    where
-        Self: PartialEq<Self::Create>,
-    {
-        // we're busy with another request, try again later
-        self.busy()?;
-        if self.uuid() == Uuid::default().to_string() {
-            return Err(SvcError::InvalidUuid {
-                uuid: self.uuid(),
-                kind: self.kind(),
-            });
-        }
-        if self.status().creating() {
-            if self != request {
-                Err(SvcError::ReCreateMismatch {
-                    id: self.uuid(),
-                    kind: self.kind(),
-                    resource: format!("{:?}", self),
-                    request: format!("{:?}", request),
-                })
-            } else {
-                self.start_create_op();
-                Ok(())
-            }
-        } else if self.status().created() {
-            Err(SvcError::AlreadyExists {
-                kind: self.kind(),
-                id: self.uuid(),
-            })
-        } else {
-            Err(SvcError::Deleting {})
         }
     }
 
@@ -131,19 +102,19 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// todo: The state of the object is left as Creating for now. Determine whether to set it to
     /// Deleted or let the reconciler clean it up.
     async fn complete_create<O, R: Send>(
+        self,
         result: Result<R, SvcError>,
-        guard: OperationGuardArc<Self>,
         registry: &Registry,
     ) -> Result<R, SvcError>
     where
-        Self: SpecTransaction<O>,
+        Self::Inner: SpecTransaction<O>,
     {
         match result {
             Ok(val) => {
-                let mut spec_clone = guard.inner().lock().clone();
+                let mut spec_clone = self.lock().clone();
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = guard.inner().lock();
+                let mut spec = self.lock();
                 match stored {
                     Ok(_) => {
                         spec.commit_op();
@@ -157,7 +128,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             }
             Err(error) => {
                 // The create failed so delete the spec.
-                Self::delete_spec(registry, guard.inner()).await.ok();
+                self.delete_spec(registry).await.ok();
                 Err(error)
             }
         }
@@ -167,18 +138,18 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// In case of an error, an attempt is made to delete the spec in the persistent store and
     /// registry.
     async fn validate_create_step<R: Send, O>(
+        &self,
         registry: &Registry,
         result: Result<R, SvcError>,
-        guard: &OperationGuardArc<Self>,
     ) -> Result<R, SvcError>
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
         match result {
             Ok(val) => Ok(val),
             Err(error) => {
-                Self::delete_spec(registry, guard.inner()).await.ok();
+                self.delete_spec(registry).await.ok();
                 Err(error)
             }
         }
@@ -187,20 +158,18 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     // Attempt to delete the spec from the persistent store and the registry.
     // If the persistent store is unavailable the spec is marked as dirty and the dirty spec
     // reconciler will attempt to update the store when the store is back online.
-    async fn delete_spec<O>(
-        registry: &Registry,
-        locked_spec: &Arc<Mutex<Self>>,
-    ) -> Result<(), SvcError>
+    async fn delete_spec<O>(&self, registry: &Registry) -> Result<(), SvcError>
     where
-        Self: SpecTransaction<O>,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
-        let spec_clone = locked_spec.lock().clone();
+        let spec_clone = self.lock().clone();
 
         // Attempt to delete the spec from the persistent store.
         match registry.delete_kv(&spec_clone.key().key()).await {
             Ok(_) => {
                 // Delete the spec from the registry.
-                Self::remove_spec(locked_spec, registry);
+                self.remove_spec(registry);
                 Ok(())
             }
             Err(e) => {
@@ -212,7 +181,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
                 // The spec failed to be deleted from the store, so don't delete it from the
                 // registry. Instead, mark the result of the operation as failed so that the garbage
                 // collector can tidy it up.
-                locked_spec.lock().set_op_result(false);
+                self.lock().set_op_result(false);
                 Err(e)
             }
         }
@@ -222,24 +191,13 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// In case of error, the log is undone and an error is returned.
     /// If the del_owned flag is set, then we skip the check for owners.
     /// Otherwise, if the spec is still owned then we cannot proceed with deletion.
-    async fn start_destroy<O>(
-        locked_spec: &Arc<Mutex<Self>>,
-        registry: &Registry,
-        del_owned: bool,
-        mode: OperationMode,
-    ) -> Result<OperationGuardArc<Self>, SvcError>
+    async fn start_destroy<O>(&self, registry: &Registry, del_owned: bool) -> Result<(), SvcError>
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
-        Self::start_destroy_by(
-            locked_spec,
-            registry,
-            &Self::Owners::default(),
-            del_owned,
-            mode,
-        )
-        .await
+        self.start_destroy_by(registry, &Self::Owners::default(), del_owned)
+            .await
     }
 
     /// Start a destroy operation by spec owners and attempt to log the transaction to the store.
@@ -248,46 +206,44 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// The del_by parameter specifies who is trying to delete the resource. If the resource has any
     /// other owners then we cannot proceed with deletion but we disown the resource from del_by.
     async fn start_destroy_by<O>(
-        locked_spec: &Arc<Mutex<Self>>,
+        &self,
         registry: &Registry,
         owners: &Self::Owners,
         ignore_owners: bool,
-        mode: OperationMode,
-    ) -> Result<OperationGuardArc<Self>, SvcError>
+    ) -> Result<(), SvcError>
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
-        let guard = locked_spec.operation_guard_wait(mode).await?;
         {
-            let mut spec = locked_spec.lock();
+            let mut spec = self.lock();
             let _ = spec.busy()?;
             if spec.status().deleted() {
-                return Ok(guard);
+                return Ok(());
             } else if !ignore_owners {
                 spec.disown(owners);
                 if spec.owned() {
                     tracing::error!(
                         "{:?} id '{:?}' cannot be deleted because it's owned by: '{:?}'",
                         spec.kind(),
-                        spec.uuid(),
+                        spec.uuid_str(),
                         spec.owners()
                     );
                     return Err(SvcError::InUse {
                         kind: spec.kind(),
-                        id: spec.uuid(),
+                        id: spec.uuid_str(),
                     });
                 }
             }
         }
 
         // resource specific validation rules
-        if let Err(error) = Self::validate_destroy(locked_spec, registry) {
+        if let Err(error) = Self::validate_destroy(self, registry) {
             return Err(error);
         }
 
         let spec_clone = {
-            let mut spec = locked_spec.lock();
+            let mut spec = self.lock();
 
             // once we've started, there's no going back, so disown completely
             spec.set_status(SpecStatus::Deleting);
@@ -297,47 +253,47 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             spec.clone()
         };
 
-        Self::store_operation_log(registry, &guard, &spec_clone).await?;
-        Ok(guard)
+        self.store_operation_log(registry, &spec_clone).await?;
+        Ok(())
     }
 
     /// Completes a destroy operation by trying to delete the spec from the persistent store.
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn complete_destroy<O, R: Send>(
+        self,
         result: Result<R, SvcError>,
-        guard: OperationGuardArc<Self>,
         registry: &Registry,
     ) -> Result<R, SvcError>
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
-        let key = guard.inner().lock().key();
+        let key = self.lock().key();
         match result {
             Ok(val) => {
-                let mut spec_clone = guard.inner().lock().clone();
+                let mut spec_clone = self.lock().clone();
                 spec_clone.commit_op();
                 let deleted = registry.delete_kv(&key.key()).await;
                 match deleted {
                     Ok(_) => {
-                        Self::remove_spec(guard.inner(), registry);
-                        let mut spec = guard.inner().lock();
+                        self.remove_spec(registry);
+                        let mut spec = self.lock();
                         spec.commit_op();
                         Ok(val)
                     }
                     Err(error) => {
-                        let mut spec = guard.inner().lock();
+                        let mut spec = self.lock();
                         spec.set_op_result(true);
                         Err(error)
                     }
                 }
             }
             Err(error) => {
-                let mut spec_clone = guard.inner().lock().clone();
+                let mut spec_clone = self.lock().clone();
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = guard.inner().lock();
+                let mut spec = self.lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -355,78 +311,46 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// Start an update operation and attempt to log the transaction to the store.
     /// In case of error, the log is undone and an error is returned.
     async fn start_update(
+        &self,
         registry: &Registry,
-        locked_spec: &Arc<Mutex<Self>>,
         state: &Self::State,
         update_operation: Self::UpdateOp,
-        mode: OperationMode,
-    ) -> Result<(Self, OperationGuardArc<Self>), SvcError>
+    ) -> Result<Self::Inner, SvcError>
     where
-        Self: PartialEq<Self::State>,
-        Self: SpecTransaction<Self::UpdateOp>,
-        Self: StorableObject,
+        Self::Inner: PartialEq<Self::State>,
+        Self::Inner: SpecTransaction<Self::UpdateOp>,
+        Self::Inner: StorableObject,
     {
-        let guard = locked_spec.operation_guard_wait(mode).await?;
         let spec_clone = {
-            let mut spec = locked_spec.lock().clone();
+            let mut spec = self.lock().clone();
             spec.start_update_inner(registry, state, update_operation)
                 .await?;
-            *locked_spec.lock() = spec.clone();
+            *self.lock() = spec.clone();
             spec
         };
 
-        Self::store_operation_log(registry, &guard, &spec_clone).await?;
-        Ok((spec_clone, guard))
-    }
-
-    /// Checks that the object ready to accept a new update operation
-    async fn start_update_inner(
-        &mut self,
-        registry: &Registry,
-        state: &Self::State,
-        operation: Self::UpdateOp,
-    ) -> Result<(), SvcError>
-    where
-        Self: PartialEq<Self::State>,
-    {
-        // we're busy right now, try again later
-        let _ = self.busy()?;
-
-        match self.status() {
-            SpecStatus::Creating => Err(SvcError::PendingCreation {
-                id: self.uuid(),
-                kind: self.kind(),
-            }),
-            SpecStatus::Deleted | SpecStatus::Deleting => Err(SvcError::PendingDeletion {
-                id: self.uuid(),
-                kind: self.kind(),
-            }),
-            SpecStatus::Created(_) => {
-                // start the requested operation (which also checks if it's a valid transition)
-                self.start_update_op(registry, state, operation).await?;
-                Ok(())
-            }
-        }
+        self.store_operation_log(registry, &spec_clone).await?;
+        Ok(spec_clone)
     }
 
     /// Completes an update operation by trying to update the spec in the persistent store.
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn complete_update<R: Send, O>(
+        self,
         registry: &Registry,
         result: Result<R, SvcError>,
-        guard: OperationGuardArc<Self>,
-        mut spec_clone: Self,
+        mut spec_clone: Self::Inner,
     ) -> Result<R, SvcError>
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
         match result {
             Ok(val) => {
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = guard.inner().lock();
+                let mut spec = self.lock();
                 match stored {
                     Ok(_) => {
                         spec.commit_op();
@@ -441,7 +365,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
             Err(error) => {
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = guard.inner().lock();
+                let mut spec = self.lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -461,14 +385,14 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// If the persistent store is unavailable the spec is marked as dirty and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn validate_update_step<R: Send, O>(
+        &self,
         registry: &Registry,
         result: Result<R, SvcError>,
-        guard: &OperationGuardArc<Self>,
-        spec_clone: &Self,
+        spec_clone: &Self::Inner,
     ) -> Result<R, SvcError>
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
         match result {
             Ok(val) => Ok(val),
@@ -476,7 +400,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
                 let mut spec_clone = spec_clone.clone();
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = guard.inner().lock();
+                let mut spec = self.lock();
                 match stored {
                     Ok(_) => {
                         spec.clear_op();
@@ -493,47 +417,38 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     /// Operations that have started but were not able to complete because access to the
     /// persistent store was lost.
     /// Returns whether the incomplete operation has now been handled.
-    async fn handle_incomplete_ops<O>(locked_spec: &Arc<Mutex<Self>>, registry: &Registry) -> bool
+    async fn handle_incomplete_ops<O>(&self, registry: &Registry) -> bool
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
-        if let Ok(_guard) = locked_spec.operation_guard(OperationMode::ReconcileStart) {
-            let spec_status = locked_spec.lock().status();
-            match spec_status {
-                SpecStatus::Creating | SpecStatus::Deleted => {
-                    SpecOperations::delete_spec(registry, locked_spec)
-                        .await
-                        .ok();
-                    true
-                }
-                SpecStatus::Created(_) | SpecStatus::Deleting => {
-                    // A spec that was being updated is in the `Created` state.
-                    // Deleting is also a "temporary" update to the spec.
-                    Self::handle_incomplete_updates(locked_spec, registry).await
-                }
+        let spec_status = self.lock().status();
+        match spec_status {
+            SpecStatus::Creating | SpecStatus::Deleted => {
+                self.delete_spec(registry).await.ok();
+                true
             }
-        } else {
-            true
+            SpecStatus::Created(_) | SpecStatus::Deleting => {
+                // A spec that was being updated is in the `Created` state.
+                // Deleting is also a "temporary" update to the spec.
+                self.handle_incomplete_updates(registry).await
+            }
         }
     }
     /// Updates that have started but were not able to complete because access to the
     /// persistent store was lost.
-    async fn handle_incomplete_updates<O>(
-        locked_spec: &Arc<Mutex<Self>>,
-        registry: &Registry,
-    ) -> bool
+    async fn handle_incomplete_updates<O>(&self, registry: &Registry) -> bool
     where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
     {
-        let mut spec_clone = locked_spec.lock().clone();
+        let mut spec_clone = self.lock().clone();
         match spec_clone.operation_result() {
             Some(Some(true)) => {
                 spec_clone.commit_op();
                 let result = registry.store_obj(&spec_clone).await;
                 if result.is_ok() {
-                    locked_spec.lock().commit_op();
+                    self.lock().commit_op();
                 }
                 result.is_ok()
             }
@@ -541,7 +456,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
                 spec_clone.clear_op();
                 let result = registry.store_obj(&spec_clone).await;
                 if result.is_ok() {
-                    locked_spec.lock().clear_op();
+                    self.lock().clear_op();
                 }
                 result.is_ok()
             }
@@ -551,11 +466,117 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
                 spec_clone.clear_op();
                 let result = registry.store_obj(&spec_clone).await;
                 if result.is_ok() {
-                    locked_spec.lock().clear_op();
+                    self.lock().clear_op();
                 }
                 result.is_ok()
             }
             None => true,
+        }
+    }
+
+    /// Attempt to store a spec object with a logged SpecOperation to the persistent store
+    /// In case of failure the operation cannot proceed so clear it and return an error
+    async fn store_operation_log<O>(
+        &self,
+        registry: &Registry,
+        spec_clone: &Self::Inner,
+    ) -> Result<(), SvcError>
+    where
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
+    {
+        if let Err(error) = registry.store_obj(spec_clone).await {
+            let mut spec = self.lock();
+            spec.clear_op();
+            Err(error)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Used for resource specific validation rules
+    fn validate_destroy(&self, _registry: &Registry) -> Result<(), SvcError> {
+        Ok(())
+    }
+
+    /// Remove the object from the global Spec List
+    fn remove_spec(&self, registry: &Registry);
+}
+
+#[async_trait::async_trait]
+pub trait SpecOperations:
+    Clone + Debug + StorableObject + AsOperationSequencer + ResourceUuid + PartialEq<Self::Create>
+{
+    type Create: Debug + PartialEq + Sync + Send;
+    type Status: PartialEq + Sync + Send;
+    type State: PartialEq + Sync + Send;
+    type Owners: Default + Sync + Send;
+    type UpdateOp: Sync + Send;
+
+    /// When a create request is issued we need to validate by verifying that:
+    /// 1. a previous create operation is no longer in progress
+    /// 2. if it's a retry then it must have the same parameters as the original request
+    fn start_create_inner(&mut self, request: &Self::Create) -> Result<(), SvcError>
+    where
+        Self: PartialEq<Self::Create>,
+    {
+        // we're busy with another request, try again later
+        self.busy()?;
+        if self.uuid_str() == Uuid::default().to_string() {
+            return Err(SvcError::InvalidUuid {
+                uuid: self.uuid_str(),
+                kind: self.kind(),
+            });
+        }
+        if self.status().creating() {
+            if self != request {
+                Err(SvcError::ReCreateMismatch {
+                    id: self.uuid_str(),
+                    kind: self.kind(),
+                    resource: format!("{:?}", self),
+                    request: format!("{:?}", request),
+                })
+            } else {
+                self.start_create_op();
+                Ok(())
+            }
+        } else if self.status().created() {
+            Err(SvcError::AlreadyExists {
+                kind: self.kind(),
+                id: self.uuid_str(),
+            })
+        } else {
+            Err(SvcError::Deleting {})
+        }
+    }
+
+    /// Checks that the object ready to accept a new update operation
+    async fn start_update_inner(
+        &mut self,
+        registry: &Registry,
+        state: &Self::State,
+        operation: Self::UpdateOp,
+    ) -> Result<(), SvcError>
+    where
+        Self: PartialEq<Self::State>,
+    {
+        // we're busy right now, try again later
+        let _ = self.busy()?;
+
+        match self.status() {
+            SpecStatus::Creating => Err(SvcError::PendingCreation {
+                id: self.uuid_str(),
+                kind: self.kind(),
+            }),
+            SpecStatus::Deleted | SpecStatus::Deleting => Err(SvcError::PendingDeletion {
+                id: self.uuid_str(),
+                kind: self.kind(),
+            }),
+            SpecStatus::Created(_) => {
+                // start the requested operation (which also checks if it's a valid transition)
+                self.start_update_op(registry, state, operation).await?;
+                Ok(())
+            }
         }
     }
 
@@ -564,7 +585,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
         if self.dirty() {
             return Err(SvcError::StoreSave {
                 kind: self.kind(),
-                id: self.uuid(),
+                id: self.uuid_str(),
             });
         }
         Ok(())
@@ -575,42 +596,7 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     fn operation_lock_mut(&mut self) -> &mut OperationSequence {
         self.as_mut()
     }
-    /// Attempt to store a spec object with a logged SpecOperation to the persistent store
-    /// In case of failure the operation cannot proceed so clear it and return an error
-    async fn store_operation_log<O>(
-        registry: &Registry,
-        locked_spec: &OperationGuardArc<Self>,
-        spec_clone: &Self,
-    ) -> Result<(), SvcError>
-    where
-        Self: SpecTransaction<O>,
-        Self: StorableObject,
-    {
-        if let Err(error) = registry.store_obj(spec_clone).await {
-            let mut spec = locked_spec.inner().lock();
-            spec.clear_op();
-            Err(error)
-        } else {
-            Ok(())
-        }
-    }
 
-    /// Start an update operation (not all resources support this currently)
-    async fn start_update_op(
-        &mut self,
-        _registry: &Registry,
-        _state: &Self::State,
-        _operation: Self::UpdateOp,
-    ) -> Result<(), SvcError> {
-        unimplemented!();
-    }
-    /// Used for resource specific validation rules
-    fn validate_destroy(
-        _locked_spec: &Arc<Mutex<Self>>,
-        _registry: &Registry,
-    ) -> Result<(), SvcError> {
-        Ok(())
-    }
     /// Check if the state is in sync with the spec
     fn state_synced(&self, state: &Self::State) -> bool
     where
@@ -623,14 +609,12 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     fn start_create_op(&mut self);
     /// Start a destroy transaction
     fn start_destroy_op(&mut self);
-    /// Remove the object from the global Spec List
-    fn remove_spec(locked_spec: &Arc<Mutex<Self>>, registry: &Registry);
     /// Check if the object is dirty -> needs to be flushed to the persistent store
     fn dirty(&self) -> bool;
     /// Get the kind (for log messages)
     fn kind(&self) -> ResourceKind;
     /// Get the UUID as a string (for log messages)
-    fn uuid(&self) -> String;
+    fn uuid_str(&self) -> String;
     /// Get the state of the object
     fn status(&self) -> SpecStatus<Self::Status>;
     /// Set the state of the object
@@ -649,6 +633,16 @@ pub trait SpecOperations: Clone + Debug + Sized + StorableObject + AsOperationSe
     fn disown_all(&mut self) {}
     /// Return the result of the pending operation, if any.
     fn operation_result(&self) -> Option<Option<bool>>;
+
+    /// Start an update operation (not all resources support this currently)
+    async fn start_update_op(
+        &mut self,
+        _registry: &Registry,
+        _state: &Self::State,
+        _operation: Self::UpdateOp,
+    ) -> Result<(), SvcError> {
+        unimplemented!();
+    }
 }
 
 /// Operations are locked
@@ -670,7 +664,7 @@ impl<T: AsOperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc
         match OperationGuardArc::try_sequence(self, mode) {
             Ok(guard) => Ok(guard),
             Err(error) => {
-                tracing::debug!("Resource '{}' is busy: {}", self.lock().uuid(), error);
+                tracing::debug!("Resource '{}' is busy: {}", self.lock().uuid_str(), error);
                 Err(SvcError::Conflict {})
             }
         }

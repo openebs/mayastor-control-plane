@@ -13,7 +13,7 @@ pub mod watch;
 use crate::types::v0::openapi::models;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 use strum_macros::ToString;
 
 /// Enum defining the various states that a resource spec can be in.
@@ -150,17 +150,24 @@ impl<T: AsOperationSequencer + std::fmt::Debug> OperationSequencer for Arc<Mutex
 /// Operation Guard for a Arc<Mutex<T>> type.
 pub type OperationGuardArc<T> = OperationGuard<Arc<Mutex<T>>>;
 
-/// Guard for Spec Operations.
+impl<T: OperationSequencer> Deref for OperationGuard<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 /// It unlocks the sequence lock on drop.
 #[derive(Debug)]
 pub struct OperationGuard<T: OperationSequencer> {
     inner: T,
+    mode: OperationMode,
     locked: Option<OperationSequenceState>,
 }
 impl<T: OperationSequencer + Sized> OperationGuard<T> {
-    /// Get a reference to the inner resource spec.
-    pub fn inner(&self) -> &T {
-        &self.inner
+    /// Get a copy of the `OperationMode` constrained by this Guard.
+    pub fn mode(&self) -> OperationMode {
+        self.mode
     }
     fn unlock(&mut self) {
         if let Some(revert) = self.locked.take() {
@@ -173,6 +180,7 @@ impl<T: OperationSequencer + Sized> OperationGuard<T> {
         match resource.sequence(mode) {
             Some(revert) => Ok(Self {
                 inner: resource.clone(),
+                mode,
                 locked: Some(revert),
             }),
             None => Err(format!(
