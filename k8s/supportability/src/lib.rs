@@ -12,7 +12,7 @@ use collect::{
         node::NodeClientWrapper, pool::PoolClientWrapper, traits::Topologer,
         volume::VolumeClientWrapper, Resourcer,
     },
-    rest_wrapper::rest_wrapper_client,
+    rest_wrapper,
 };
 use operations::{Operations, Resource};
 
@@ -78,10 +78,13 @@ impl SupportArgs {
         operation: Operations,
     ) -> anyhow::Result<()> {
         // Initialise the REST client.
-        let rest_client = rest_wrapper_client::RestClient::new(std::time::Duration::from_secs(
-            self.timeout.as_secs(),
-        ))
-        .map_err(|e| anyhow::anyhow!("Failed to initialise REST client {:?}", e))?;
+        let config = kube_proxy::ConfigBuilder::default()
+            .with_kube_config(kube_config_path.clone())
+            .with_timeout(*self.timeout)
+            .build()
+            .await?;
+
+        let rest_client = rest_wrapper::RestClient::new_with_config(config);
 
         // TODO: Move code inside options to some generic function
         // Perform the operations based on user chosen subcommands
@@ -95,14 +98,14 @@ impl SupportArgs {
 
     async fn execute_resource_dump(
         self,
-        rest_client: &'static rest_wrapper_client::RestClient,
+        rest_client: rest_wrapper::RestClient,
         kube_config_path: Option<PathBuf>,
         resource: Resource,
     ) -> Result<(), Error> {
         let cli_args = self;
         let topologer: Box<dyn Topologer>;
         let mut config = DumpConfig {
-            rest_client,
+            rest_client: rest_client.clone(),
             output_directory: cli_args.output_directory_path,
             namespace: cli_args.namespace,
             loki_uri: cli_args.loki_endpoint,

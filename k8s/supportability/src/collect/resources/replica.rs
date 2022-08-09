@@ -6,7 +6,7 @@ use crate::collect::{
         traits::Topologer,
         Resourcer,
     },
-    rest_wrapper::rest_wrapper_client::RestClient,
+    rest_wrapper::RestClient,
 };
 use openapi::models::Replica;
 use resources::ResourceError;
@@ -65,15 +65,15 @@ impl ReplicaTopology {
 // Wrapper around mayastor REST client
 #[derive(Debug)]
 pub struct ReplicaClientWrapper {
-    rest_client: &'static RestClient,
+    rest_client: RestClient,
     pool_client: PoolClientWrapper,
 }
 
 impl ReplicaClientWrapper {
     /// Creates new instance of ReplicaClientWrapper
-    pub fn new(client: &'static RestClient) -> Self {
+    pub fn new(client: RestClient) -> Self {
         ReplicaClientWrapper {
-            rest_client: client,
+            rest_client: client.clone(),
             pool_client: PoolClientWrapper::new(client),
         }
     }
