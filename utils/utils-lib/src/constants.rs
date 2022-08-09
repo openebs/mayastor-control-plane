@@ -35,6 +35,9 @@ pub const CREATED_BY_KEY: &str = "openebs.io/created-by";
 /// The value to mark the creation source of a pool to be disk pool operator in labels
 pub const DSP_OPERATOR: &str = "operator-diskpool";
 
+/// The service label for api-rest service.
+pub const API_REST_LABEL: &str = "app=api-rest";
+
 /// The default value to be assigned as GRPC server addr if not overridden
 pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";
 
@@ -62,3 +65,6 @@ pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "https://0.0.0.0:11600";
 
 /// The default worker threads cap for the api-rest service.
 pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
+
+/// The default kubernetes namespace for this project.
+pub const DEFAULT_NAMESPACE: &str = "mayastor";

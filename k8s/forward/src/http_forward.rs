@@ -2,7 +2,7 @@ use crate::{
     pod_selection::{AnyReady, PodSelection},
     vx::{Pod, Service},
 };
-use hyper::{body, Response};
+use hyper::{body, http::uri::Scheme, Response};
 use kube::{
     api::{Api, ListParams},
     ResourceExt,
@@ -13,9 +13,9 @@ use std::{future::Future, pin::Pin};
 /// This uri may then be used with `HttpProxy` which is a `tower::Service`.
 /// # Example
 /// ```ignore
-/// let selector = k8s_proxy::TargetSelector::svc_label("app", "api-rest");
-/// let target = k8s_proxy::Target::new(selector, "http", "mayastor");
-/// let hf = k8s_proxy::HttpForward::new(target).await?;
+/// let selector = kube_forward::TargetSelector::svc_label("app", "api-rest");
+/// let target = kube_forward::Target::new(selector, "http", "mayastor");
+/// let hf = kube_forward::HttpForward::new(target, None).await?;
 ///
 /// let uri = hf.uri().await?;
 /// tracing::info!(%uri, "generated kube-api");
@@ -25,13 +25,17 @@ pub struct HttpForward {
     target: crate::Target,
     pod_api: Api<Pod>,
     svc_api: Api<Service>,
+    scheme: Scheme,
 }
 
 impl HttpForward {
     /// Return a new `Self`.
     /// # Arguments
     /// * `target` - the target we'll forward to
-    pub async fn new(target: crate::Target) -> anyhow::Result<Self> {
+    pub async fn new<SO: Into<Option<Scheme>>>(
+        target: crate::Target,
+        scheme: SO,
+    ) -> anyhow::Result<Self> {
         let client = kube::Client::try_default().await?;
         let namespace = target.namespace.name_any();
 
@@ -39,13 +43,14 @@ impl HttpForward {
             target,
             pod_api: Api::namespaced(client.clone(), &namespace),
             svc_api: Api::namespaced(client, &namespace),
+            scheme: scheme.into().unwrap_or(Scheme::HTTP),
         })
     }
 
     /// Returns the `hyper::Uri` that can be used to proxy with the kubeapi server.
     pub async fn uri(self) -> anyhow::Result<hyper::Uri> {
         let target = self.finder().find(&self.target).await?;
-        let uri = hyper::Uri::try_from(target)?;
+        let uri = hyper::Uri::try_from(target.with_scheme(self.scheme))?;
         tracing::info!(%uri, "generated kube-api");
         Ok(uri)
     }
@@ -63,14 +68,14 @@ impl HttpForward {
 /// generated using `HttpForward::uri`.
 /// # Example
 /// ```ignore
-/// let selector = k8s_proxy::TargetSelector::svc_label("app", "api-rest");
-/// let target = k8s_proxy::Target::new(selector, "http", "mayastor");
-/// let pf = k8s_proxy::HttpForward::new(target).await?;
+/// let selector = kube_forward::TargetSelector::svc_label("app", "api-rest");
+/// let target = kube_forward::Target::new(selector, "http", "mayastor");
+/// let pf = kube_forward::HttpForward::new(target, None).await?;
 ///
 /// let uri = pf.uri().await?;
 /// tracing::info!(%uri, "generated kube-api");
 ///
-/// let proxy = k8s_proxy::HttpProxy::try_default().await?;
+/// let proxy = kube_forward::HttpProxy::try_default().await?;
 /// let mut svc = hyper::service::service_fn(|request: hyper::Request<hyper::body::Body>| {
 ///     let mut proxy = proxy.clone();
 ///     async move { proxy.call(request).await }
@@ -212,6 +217,7 @@ struct HttpTarget {
     name: TargetName,
     port: crate::Port,
     namespace: crate::NameSpace,
+    scheme: Scheme,
 }
 impl HttpTarget {
     fn new(name: TargetName, port: crate::Port, namespace: crate::NameSpace) -> Self {
@@ -219,7 +225,12 @@ impl HttpTarget {
             name,
             port,
             namespace,
+            scheme: Scheme::HTTP,
         }
+    }
+    fn with_scheme(mut self, scheme: Scheme) -> Self {
+        self.scheme = scheme;
+        self
     }
 }
 
@@ -233,10 +244,11 @@ impl TryFrom<HttpTarget> for hyper::Uri {
         };
         let port = value.port.any();
         let namespace = value.namespace.name_any();
+        let scheme = value.scheme;
 
         hyper::Uri::try_from(format!(
-            "/api/v1/namespaces/{}/{}/{}:{}/proxy",
-            namespace, resource, name, port
+            "/api/v1/namespaces/{}/{}/{}:{}:{}/proxy",
+            namespace, resource, scheme, name, port
         ))
     }
 }

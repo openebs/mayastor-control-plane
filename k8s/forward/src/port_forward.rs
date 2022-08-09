@@ -16,11 +16,11 @@ use kube::{
 /// Used to "proxy" connections to a pod by use of port forwarding.
 /// # Example
 /// ```ignore
-/// let selector = k8s_proxy::TargetSelector::pod_label("app", "etcd");
-/// let target = k8s_proxy::Target::new(selector, "client", "mayastor");
-/// let pf = k8s_proxy::PortForward::new(target, 35003).await?;
+/// let selector = kube_forward::TargetSelector::pod_label("app", "etcd");
+/// let target = kube_forward::Target::new(selector, "client", "mayastor");
+/// let pf = kube_forward::PortForward::new(target, 35003).await?;
 ///
-/// let handle = pf.port_forward().await?;
+/// let (_port, handle) = pf.port_forward().await?;
 /// handle.await?;
 /// ```
 #[derive(Clone)]
@@ -58,7 +58,7 @@ impl PortForward {
     }
 
     /// Runs the port forwarding proxy until a SIGINT signal is received.
-    pub async fn port_forward(self) -> anyhow::Result<tokio::task::JoinHandle<()>> {
+    pub async fn port_forward(self) -> anyhow::Result<(u16, tokio::task::JoinHandle<()>)> {
         let addr = SocketAddr::from(([127, 0, 0, 1], self.local_port()));
 
         let bind = TcpListener::bind(addr).await?;
@@ -90,11 +90,14 @@ impl PortForward {
                 }
             });
 
-        Ok(tokio::spawn(async {
-            if let Err(e) = server.await {
-                tracing::error!(error = &e as &dyn std::error::Error, "server error");
-            }
-        }))
+        Ok((
+            port,
+            tokio::spawn(async {
+                if let Err(e) = server.await {
+                    tracing::error!(error = &e as &dyn std::error::Error, "server error");
+                }
+            }),
+        ))
     }
     async fn forward_connection(
         self,

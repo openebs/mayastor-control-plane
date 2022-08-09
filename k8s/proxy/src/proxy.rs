@@ -1,0 +1,150 @@
+use anyhow::anyhow;
+use openapi::{apis::Url, clients::tower::Configuration, tower::client::hyper};
+use std::{convert::TryFrom, path::PathBuf};
+
+/// A builder type for the openapi `Configuration`.
+/// The configuration is tailored for a kubernetes proxy using the `kube_forward::HttpProxy`.
+/// # Example:
+/// ```ignore
+/// let config = kube_proxy::ConfigBuilder::default()
+///     .with_kube_config(kube_config_path.clone())
+///     .with_timeout(timeout)
+///     .with_target_mod(|t| t.with_namespace(&args.namespace))
+///     .with_forwarding(ForwardingProxy::HTTP)
+///     .build()
+///     .await?;
+/// ```
+pub struct ConfigBuilder {
+    kube_config: Option<PathBuf>,
+    target: kube_forward::Target,
+    timeout: Option<std::time::Duration>,
+    jwt: Option<String>,
+    method: ForwardingProxy,
+    scheme: Scheme,
+}
+
+/// The scheme component of the URI.
+pub enum Scheme {
+    /// HTTP.
+    HTTP,
+    /// HTTPS with/without Certificate.
+    /// todo: What should the certificate format be here?
+    HTTPS(Option<String>),
+}
+impl Scheme {
+    fn parts(&self) -> (String, Option<&[u8]>) {
+        match self {
+            Self::HTTP => ("http".to_string(), None),
+            Self::HTTPS(certificate) => (
+                "https".to_string(),
+                certificate.as_ref().map(|i| i.as_bytes()),
+            ),
+        }
+    }
+}
+impl From<Scheme> for hyper::http::uri::Scheme {
+    fn from(value: Scheme) -> Self {
+        match value {
+            Scheme::HTTP => hyper::http::uri::Scheme::HTTP,
+            Scheme::HTTPS(_) => hyper::http::uri::Scheme::HTTPS,
+        }
+    }
+}
+
+/// Type of forwarding proxy to use.
+pub enum ForwardingProxy {
+    /// HTTP via the kube-api proxy.
+    HTTP,
+    /// TCP via the kube-api port forwarding.
+    TCP,
+}
+
+impl Default for ConfigBuilder {
+    fn default() -> Self {
+        Self {
+            kube_config: None,
+            target: kube_forward::Target::new(
+                kube_forward::TargetSelector::ServiceLabel(utils::API_REST_LABEL.to_string()),
+                "http",
+                utils::DEFAULT_NAMESPACE,
+            ),
+            timeout: Some(std::time::Duration::from_secs(5)),
+            jwt: None,
+            method: ForwardingProxy::HTTP,
+            scheme: Scheme::HTTP,
+        }
+    }
+}
+
+impl ConfigBuilder {
+    /// Move self with the following kube_config_path.
+    pub fn with_kube_config(mut self, kube_config_path: Option<PathBuf>) -> Self {
+        self.kube_config = kube_config_path;
+        self
+    }
+    /// Move self with the following target.
+    pub fn with_target(mut self, target: kube_forward::Target) -> Self {
+        self.target = target;
+        self
+    }
+    /// Move self with the following timeout.
+    pub fn with_timeout<T: Into<Option<std::time::Duration>>>(mut self, timeout: T) -> Self {
+        self.timeout = timeout.into();
+        self
+    }
+    /// Move self with the following target closure.
+    pub fn with_target_mod(
+        mut self,
+        modify: impl FnOnce(kube_forward::Target) -> kube_forward::Target,
+    ) -> Self {
+        self.target = modify(self.target);
+        self
+    }
+    /// Move self with the following forwarding method.
+    pub fn with_forwarding(mut self, method: ForwardingProxy) -> Self {
+        self.method = method;
+        self
+    }
+    /// Move self with the following connection scheme.
+    pub fn with_scheme(mut self, scheme: Scheme) -> Self {
+        self.scheme = scheme;
+        self
+    }
+    /// Tries to build a `Configuration` from the current self.
+    pub async fn build(self) -> anyhow::Result<Configuration> {
+        match self.method {
+            ForwardingProxy::HTTP => self.build_http().await,
+            ForwardingProxy::TCP => self.build_tcp().await,
+        }
+    }
+    /// Tries to build an HTTP `Configuration` from the current self.
+    async fn build_http(self) -> anyhow::Result<Configuration> {
+        let uri = kube_forward::HttpForward::new(self.target, Some(self.scheme.into()))
+            .await?
+            .uri()
+            .await?;
+        let config = super::config_from_kubeconfig(self.kube_config).await?;
+        let client = kube::Client::try_from(config)?;
+        let proxy = kube_forward::HttpProxy::new(client);
+
+        let config = Configuration::new_with_client(uri, proxy, self.timeout, self.jwt, true)
+            .map_err(|e| anyhow!("Failed to Create OpenApi config: {:?}", e))?;
+        Ok(config)
+    }
+    /// Tries to build a TCP `Configuration` from the current self.
+    async fn build_tcp(self) -> anyhow::Result<Configuration> {
+        let pf = kube_forward::PortForward::new(self.target, None).await?;
+
+        let (port, _handle) = pf.port_forward().await?;
+
+        let timeout = self
+            .timeout
+            .unwrap_or_else(|| std::time::Duration::from_secs(5));
+        let (scheme, certificate) = self.scheme.parts();
+        let url = Url::parse(&format!("{}://localhost:{}", scheme, port))?;
+
+        let config = Configuration::new(url, timeout, self.jwt, certificate, true)
+            .map_err(|e| anyhow!("Failed to Create OpenApi config: {:?}", e))?;
+        Ok(config)
+    }
+}

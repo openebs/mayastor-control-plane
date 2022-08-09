@@ -1983,23 +1983,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "k8s-proxy"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "hyper",
- "k8s-openapi",
- "kube",
- "serde_json",
- "shutdown",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "kube"
 version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2081,6 +2064,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "kube-forward"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "hyper",
+ "k8s-openapi",
+ "kube",
+ "serde_json",
+ "shutdown",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kube-proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "kube",
+ "kube-forward",
+ "openapi",
+ "rest-plugin",
+ "utils",
+]
+
+[[package]]
 name = "kube-runtime"
 version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2112,6 +2124,7 @@ dependencies = [
  "clap 3.2.15",
  "humantime",
  "kube",
+ "kube-proxy",
  "openapi",
  "opentelemetry",
  "rest-plugin",
@@ -3601,12 +3614,12 @@ dependencies = [
  "k8s-openapi",
  "k8s-operators",
  "kube",
+ "kube-proxy",
  "lazy_static",
  "once_cell",
  "openapi",
  "prettytable-rs",
  "reqwest",
- "rest-plugin",
  "schemars",
  "serde",
  "serde_json",
