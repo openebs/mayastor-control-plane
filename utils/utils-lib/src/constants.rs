@@ -35,8 +35,11 @@ pub const CREATED_BY_KEY: &str = "openebs.io/created-by";
 /// The value to mark the creation source of a pool to be disk pool operator in labels
 pub const DSP_OPERATOR: &str = "operator-diskpool";
 
-/// The service label for api-rest service.
+/// The service label for the api-rest service.
 pub const API_REST_LABEL: &str = "app=api-rest";
+
+/// The pod label for the etcd pods.
+pub const ETCD_LABEL: &str = "app=etcd";
 
 /// The default value to be assigned as GRPC server addr if not overridden
 pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";

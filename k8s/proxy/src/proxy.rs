@@ -1,12 +1,16 @@
 use anyhow::anyhow;
-use openapi::{apis::Url, clients::tower::Configuration, tower::client::hyper};
+use openapi::{
+    apis::Url,
+    clients::tower::{Configuration, Uri},
+    tower::client::hyper,
+};
 use std::{convert::TryFrom, path::PathBuf};
 
 /// A builder type for the openapi `Configuration`.
 /// The configuration is tailored for a kubernetes proxy using the `kube_forward::HttpProxy`.
 /// # Example:
 /// ```ignore
-/// let config = kube_proxy::ConfigBuilder::default()
+/// let config = kube_proxy::ConfigBuilder::default_api_rest()
 ///     .with_kube_config(kube_config_path.clone())
 ///     .with_timeout(timeout)
 ///     .with_target_mod(|t| t.with_namespace(&args.namespace))
@@ -14,14 +18,18 @@ use std::{convert::TryFrom, path::PathBuf};
 ///     .build()
 ///     .await?;
 /// ```
-pub struct ConfigBuilder {
+pub struct ConfigBuilder<T> {
     kube_config: Option<PathBuf>,
     target: kube_forward::Target,
     timeout: Option<std::time::Duration>,
     jwt: Option<String>,
     method: ForwardingProxy,
     scheme: Scheme,
+    builder_target: std::marker::PhantomData<T>,
 }
+
+pub struct ApiRest {}
+pub struct Etcd {}
 
 /// The scheme component of the URI.
 pub enum Scheme {
@@ -59,7 +67,7 @@ pub enum ForwardingProxy {
     TCP,
 }
 
-impl Default for ConfigBuilder {
+impl Default for ConfigBuilder<ApiRest> {
     fn default() -> Self {
         Self {
             kube_config: None,
@@ -72,11 +80,42 @@ impl Default for ConfigBuilder {
             jwt: None,
             method: ForwardingProxy::HTTP,
             scheme: Scheme::HTTP,
+            builder_target: Default::default(),
+        }
+    }
+}
+impl Default for ConfigBuilder<Etcd> {
+    fn default() -> Self {
+        Self {
+            kube_config: None,
+            target: kube_forward::Target::new(
+                kube_forward::TargetSelector::PodLabel(utils::ETCD_LABEL.to_string()),
+                "client",
+                utils::DEFAULT_NAMESPACE,
+            ),
+            timeout: Some(std::time::Duration::from_secs(5)),
+            jwt: None,
+            method: ForwardingProxy::TCP,
+            scheme: Scheme::HTTP,
+            builder_target: Default::default(),
         }
     }
 }
 
-impl ConfigBuilder {
+impl ConfigBuilder<ApiRest> {
+    /// Returns a `Self` with sane defaults for the api-rest.
+    pub fn default_api_rest() -> ConfigBuilder<ApiRest> {
+        ConfigBuilder::<ApiRest>::default()
+    }
+}
+impl ConfigBuilder<Etcd> {
+    /// Returns a `Self` with sane defaults for the etcd.
+    pub fn default_etcd() -> ConfigBuilder<Etcd> {
+        ConfigBuilder::<Etcd>::default()
+    }
+}
+
+impl<T> ConfigBuilder<T> {
     /// Move self with the following kube_config_path.
     pub fn with_kube_config(mut self, kube_config_path: Option<PathBuf>) -> Self {
         self.kube_config = kube_config_path;
@@ -87,17 +126,20 @@ impl ConfigBuilder {
         self.target = target;
         self
     }
-    /// Move self with the following timeout.
-    pub fn with_timeout<T: Into<Option<std::time::Duration>>>(mut self, timeout: T) -> Self {
-        self.timeout = timeout.into();
-        self
-    }
     /// Move self with the following target closure.
     pub fn with_target_mod(
         mut self,
         modify: impl FnOnce(kube_forward::Target) -> kube_forward::Target,
     ) -> Self {
         self.target = modify(self.target);
+        self
+    }
+}
+
+impl ConfigBuilder<ApiRest> {
+    /// Move self with the following timeout.
+    pub fn with_timeout<TO: Into<Option<std::time::Duration>>>(mut self, timeout: TO) -> Self {
+        self.timeout = timeout.into();
         self
     }
     /// Move self with the following forwarding method.
@@ -110,6 +152,7 @@ impl ConfigBuilder {
         self.scheme = scheme;
         self
     }
+
     /// Tries to build a `Configuration` from the current self.
     pub async fn build(self) -> anyhow::Result<Configuration> {
         match self.method {
@@ -146,5 +189,19 @@ impl ConfigBuilder {
         let config = Configuration::new(url, timeout, self.jwt, certificate, true)
             .map_err(|e| anyhow!("Failed to Create OpenApi config: {:?}", e))?;
         Ok(config)
+    }
+}
+
+impl ConfigBuilder<Etcd> {
+    /// Tries to build a TCP `Configuration` from the current self.
+    pub async fn build(self) -> anyhow::Result<Uri> {
+        let pf = kube_forward::PortForward::new(self.target, None).await?;
+
+        let (port, _handle) = pf.port_forward().await?;
+
+        let (scheme, _certificate) = self.scheme.parts();
+        let uri = Uri::try_from(&format!("{}://localhost:{}", scheme, port))?;
+
+        Ok(uri)
     }
 }

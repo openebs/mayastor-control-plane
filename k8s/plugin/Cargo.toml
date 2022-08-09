@@ -26,6 +26,7 @@ tokio = { version = "1.20.1" }
 anyhow = "1.0.44"
 clap = { version = "3.1.5", features = ["color", "derive"] }
 humantime = "2.1.0"
+shutdown = { path = "../../utils/shutdown" }
 
 # Tracing
 tracing = "0.1.35"

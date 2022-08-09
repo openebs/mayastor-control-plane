@@ -6,11 +6,11 @@ use crate::{
         error::Error,
         k8s_resources::k8s_resource_dump::K8sResourceDumperClient,
         logs::{LogCollection, LogResource, Logger},
-        persistent_store::etcd::EtcdStore,
+        persistent_store::{etcd::EtcdStore, EtcdError},
         resources::traits::Topologer,
         utils::{flush_tool_log_file, init_tool_log_file, write_to_log_file},
     },
-    log,
+    log, OutputFormat,
 };
 use futures::future;
 use std::{path::PathBuf, process};
@@ -25,6 +25,7 @@ pub(crate) struct ResourceDumper {
     logger: Box<dyn Logger>,
     k8s_resource_dumper: K8sResourceDumperClient,
     etcd_dumper: Option<EtcdStore>,
+    output_format: OutputFormat,
 }
 
 impl ResourceDumper {
@@ -34,26 +35,34 @@ impl ResourceDumper {
     /// 1.2 Instantiate all required objects to interact with various other modules
     pub(crate) async fn get_or_panic_resource_dumper(config: DumpConfig) -> Self {
         // creates a temporary directory inside given directory
-        let new_dir = match common::create_and_get_tmp_directory(config.output_directory.clone()) {
-            Ok(val) => val,
-            Err(e) => {
-                println!(
-                    "Failed to create temporary directory to dump information, error: {:?}",
-                    e
-                );
-                process::exit(1);
+        let (new_dir, output_directory) = match config.output_format {
+            OutputFormat::Tar => {
+                let new_dir =
+                    match common::create_and_get_tmp_directory(config.output_directory.clone()) {
+                        Ok(val) => val,
+                        Err(e) => {
+                            println!(
+                            "Failed to create temporary directory to dump information, error: {:?}",
+                            e
+                        );
+                            process::exit(1);
+                        }
+                    };
+
+                // Create and initialise the support tool log file
+                if let Err(e) =
+                    init_tool_log_file(PathBuf::from(format!("{}/support_tool_logs.log", new_dir)))
+                {
+                    println!("Encountered error while creating log file: {} ", e);
+                    process::exit(1);
+                }
+
+                (new_dir, Some(config.output_directory))
             }
+            OutputFormat::Stdout => ("".into(), None),
         };
 
-        // Create and initialise the support tool log file
-        if let Err(e) =
-            init_tool_log_file(PathBuf::from(format!("{}/support_tool_logs.log", new_dir)))
-        {
-            println!("Encountered error while creating log file: {} ", e);
-            process::exit(1);
-        }
-
-        let archive = match archive::Archive::new(config.output_directory) {
+        let archive = match archive::Archive::new(output_directory) {
             Ok(val) => val,
             Err(err) => {
                 log(format!("Failed to create archive, {:?}", err));
@@ -120,6 +129,7 @@ impl ResourceDumper {
             logger,
             k8s_resource_dumper,
             etcd_dumper,
+            output_format: config.output_format,
         }
     }
 
@@ -196,7 +206,7 @@ impl ResourceDumper {
         let _ = future::try_join_all(
             self.etcd_dumper
                 .as_mut()
-                .map(|etcd_store| etcd_store.dump(path)),
+                .map(|etcd_store| etcd_store.dump(path, false)),
         )
         .await
         .map_err(|e| {
@@ -230,6 +240,45 @@ impl ResourceDumper {
             return Err(Error::MultipleErrors(errors));
         }
 
+        Ok(())
+    }
+
+    /// Dumps information associated to given resource(s)
+    pub(crate) async fn dump_etcd(&mut self) -> Result<(), Error> {
+        let mut path: PathBuf = std::path::PathBuf::new();
+        path.push(&self.dir_path.clone());
+
+        self.etcd_dumper
+            .as_mut()
+            .ok_or_else(|| EtcdError::Custom("etcd not configured".into()))?
+            .dump(path, matches!(self.output_format, OutputFormat::Stdout))
+            .await
+            .map_err(|e| {
+                log(format!(
+                    "Failed to collect etcd dump information, error: {:?}",
+                    e
+                ));
+                e
+            })?;
+
+        if matches!(self.output_format, OutputFormat::Tar) {
+            self.archive
+                .copy_to_archive(self.dir_path.clone(), ".".to_string())
+                .map_err(|e| {
+                    log(format!(
+                        "Failed to move content into archive file, error: {}",
+                        e
+                    ));
+                    e
+                })?;
+
+            let _ = self.delete_temporary_directory().map_err(|e| {
+                log(format!(
+                    "Failed to delete temporary directory, error: {:?}",
+                    e
+                ));
+            });
+        }
         Ok(())
     }
 

@@ -22,6 +22,16 @@ pub(crate) struct DumpConfig {
     pub(crate) timeout: humantime::Duration,
     /// Topologer implements functionality to build topological infotmation of system
     pub(crate) topologer: Option<Box<dyn Topologer>>,
+    pub(crate) output_format: OutputFormat,
+}
+
+/// The output format.
+#[derive(Debug)]
+pub(crate) enum OutputFormat {
+    /// A tar file.
+    Tar,
+    /// The STDOUT.
+    Stdout,
 }
 
 /// Defines prefix name of temporary directory to create dump files

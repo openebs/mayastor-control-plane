@@ -46,4 +46,11 @@ pub(crate) enum Resource {
     /// Collects information about particular node matching to given node ID
     #[clap(name = "node")]
     Node { id: NodeID },
+
+    /// Collects information from etcd
+    Etcd {
+        /// Output etcd dump to stdout instead of a tar file.
+        #[clap(long)]
+        stdout: bool,
+    },
 }

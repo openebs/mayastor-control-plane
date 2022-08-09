@@ -25,6 +25,9 @@ pub(crate) const CSI_NODE_SERVICE: &str = "csi-node";
 /// Defines the name of the etcd service
 pub(crate) const ETCD_SERVICE: &str = "etcd";
 
+/// Defines the name of the etcd service
+pub(crate) const ETCD_PAGED_LIMIT: i64 = 1000;
+
 /// Defines the name of mayastor service
 pub(crate) const MAYASTOR_SERVICE: &str = "io-engine";
 
@@ -68,9 +71,3 @@ lazy_static! {
 
 /// Defines the label selector to fetch Loki related services
 pub(crate) const LOKI_SERVICE_LABEL_SELECTOR: &str = "app=loki";
-
-/// Node port identifier to access etcd service running in cluster
-pub(crate) const ETCD_SERVICE_PORT_NAME: &str = "client";
-
-/// Defines the label selector to fetch etcd related services
-pub(crate) const ETCD_SERVICE_LABEL_SELECTOR: &str = "app.kubernetes.io/name=etcd";

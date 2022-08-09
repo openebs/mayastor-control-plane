@@ -16,7 +16,7 @@ use collect::{
 };
 use operations::{Operations, Resource};
 
-use crate::collect::utils::log;
+use crate::collect::{common::OutputFormat, utils::log};
 use std::path::PathBuf;
 
 /// Collects state & log information of mayastor services running in the system and dump them.
@@ -78,7 +78,7 @@ impl SupportArgs {
         operation: Operations,
     ) -> anyhow::Result<()> {
         // Initialise the REST client.
-        let config = kube_proxy::ConfigBuilder::default()
+        let config = kube_proxy::ConfigBuilder::default_api_rest()
             .with_kube_config(kube_config_path.clone())
             .with_timeout(*self.timeout)
             .build()
@@ -114,6 +114,7 @@ impl SupportArgs {
             kube_config_path,
             timeout: cli_args.timeout,
             topologer: None,
+            output_format: OutputFormat::Tar,
         };
         let mut errors = Vec::new();
         match resource {
@@ -223,6 +224,18 @@ impl SupportArgs {
                 }
                 if let Err(e) = dumper.fill_archive_and_delete_tmp() {
                     log(format!("Failed to copy content to archive, error: {:?}", e));
+                    errors.push(e);
+                }
+            }
+            Resource::Etcd { stdout } => {
+                config.output_format = if stdout {
+                    OutputFormat::Stdout
+                } else {
+                    OutputFormat::Tar
+                };
+                let mut dumper = ResourceDumper::get_or_panic_resource_dumper(config).await;
+                if let Err(e) = dumper.dump_etcd().await {
+                    log(format!("Failed to dump etcd information, Error: {:?}", e));
                     errors.push(e);
                 }
             }

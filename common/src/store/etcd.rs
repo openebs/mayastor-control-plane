@@ -11,7 +11,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use etcd_client::{
-    Client, Compare, CompareOp, EventType, GetOptions, KeyValue, Txn, TxnOp, WatchStream, Watcher,
+    Client, Compare, CompareOp, EventType, GetOptions, KeyValue, SortOrder, SortTarget, Txn, TxnOp,
+    WatchStream, Watcher,
 };
 use serde_json::Value;
 use snafu::ResultExt;
@@ -262,6 +263,46 @@ impl Store for Etcd {
             .map(|kv| {
                 (
                     kv.key_str().unwrap().to_string(),
+                    // unwrap_or_default is used since when using to dump data, the lease entry
+                    // does not have a value, which can cause panic
+                    serde_json::from_slice(kv.value()).unwrap_or_default(),
+                )
+            })
+            .collect();
+        Ok(result)
+    }
+
+    /// Returns a vector of tuples. Each tuple represents a key-value pair.
+    async fn get_values_paged(
+        &mut self,
+        key_prefix: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, Value)>, StoreError> {
+        if limit <= 2 {
+            return Err(StoreError::PagedMinimum);
+        }
+
+        let resp = self
+            .client
+            .get(
+                key_prefix,
+                Some(
+                    GetOptions::new()
+                        .with_prefix()
+                        .with_from_key()
+                        .with_sort(SortTarget::Key, SortOrder::Ascend)
+                        .with_limit(limit),
+                ),
+            )
+            .await
+            .context(GetPrefix { prefix: key_prefix })?;
+
+        let result = resp
+            .kvs()
+            .iter()
+            .map(|kv| {
+                (
+                    kv.key_str().unwrap_or_default().to_string(),
                     // unwrap_or_default is used since when using to dump data, the lease entry
                     // does not have a value, which can cause panic
                     serde_json::from_slice(kv.value()).unwrap_or_default(),

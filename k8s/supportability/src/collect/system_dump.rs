@@ -55,7 +55,7 @@ impl SystemDumper {
 
         // Creates an arcive file to dump mayastor resource information. If creation
         // of archive is failed then we can't continue process
-        let archive = match archive::Archive::new(config.output_directory) {
+        let archive = match archive::Archive::new(Some(config.output_directory)) {
             Ok(val) => val,
             Err(err) => {
                 log(format!(
@@ -239,7 +239,7 @@ impl SystemDumper {
 
         let _ = future::try_join_all(self.etcd_dumper.as_mut().map(|etcd_store| {
             log("Collecting mayastor specific information from Etcd...".to_string());
-            etcd_store.dump(path)
+            etcd_store.dump(path, false)
         }))
         .await
         .map_err(|e| {

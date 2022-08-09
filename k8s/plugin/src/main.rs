@@ -66,58 +66,65 @@ async fn execute(cli_args: CliArgs) {
     }
 
     // Perform the operations based on the subcommand, with proper output format.
-    match cli_args.operations {
-        Operations::Get(resource) => match resource {
-            GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
-            GetResources::Volume { id } => volume::Volume::get(&id, &cli_args.output).await,
-            GetResources::VolumeReplicaTopology { id } => {
-                volume::Volume::topology(&id, &cli_args.output).await
-            }
-            GetResources::Pools => pool::Pools::list(&cli_args.output).await,
-            GetResources::Pool { id } => pool::Pool::get(&id, &cli_args.output).await,
-            GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
-            GetResources::Node(args) => {
-                if args.show_cordon_labels() {
-                    node::Node::get_labels(&args.node_id(), &cli_args.output).await
-                } else {
-                    node::Node::get(&args.node_id(), &cli_args.output).await
+    let fut = async move {
+        match cli_args.operations {
+            Operations::Get(resource) => match resource {
+                GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
+                GetResources::Volume { id } => volume::Volume::get(&id, &cli_args.output).await,
+                GetResources::VolumeReplicaTopology { id } => {
+                    volume::Volume::topology(&id, &cli_args.output).await
                 }
+                GetResources::Pools => pool::Pools::list(&cli_args.output).await,
+                GetResources::Pool { id } => pool::Pool::get(&id, &cli_args.output).await,
+                GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
+                GetResources::Node(args) => {
+                    if args.show_cordon_labels() {
+                        node::Node::get_labels(&args.node_id(), &cli_args.output).await
+                    } else {
+                        node::Node::get(&args.node_id(), &cli_args.output).await
+                    }
+                }
+                GetResources::BlockDevices(bdargs) => {
+                    blockdevice::BlockDevice::get_blockdevices(
+                        &bdargs.node_id(),
+                        &bdargs.all(),
+                        &cli_args.output,
+                    )
+                    .await
+                }
+            },
+            Operations::Scale(resource) => match resource {
+                ScaleResources::Volume { id, replica_count } => {
+                    volume::Volume::scale(&id, replica_count, &cli_args.output).await
+                }
+            },
+            Operations::Cordon(resource) => match resource {
+                CordonResources::Node { id, label } => {
+                    node::Node::cordon(&id, &label, &cli_args.output).await
+                }
+            },
+            Operations::Uncordon(resource) => match resource {
+                CordonResources::Node { id, label } => {
+                    node::Node::uncordon(&id, &label, &cli_args.output).await
+                }
+            },
+            Operations::Dump(resources) => {
+                let _ignore = resources
+                    .dump(cli_args.kube_config_path)
+                    .await
+                    .map_err(|_e| {
+                        println!("Partially collected dump information !!");
+                        std::process::exit(1);
+                    });
+                println!("Completed collection of dump !!");
             }
-            GetResources::BlockDevices(bdargs) => {
-                blockdevice::BlockDevice::get_blockdevices(
-                    &bdargs.node_id(),
-                    &bdargs.all(),
-                    &cli_args.output,
-                )
-                .await
-            }
-        },
-        Operations::Scale(resource) => match resource {
-            ScaleResources::Volume { id, replica_count } => {
-                volume::Volume::scale(&id, replica_count, &cli_args.output).await
-            }
-        },
-        Operations::Cordon(resource) => match resource {
-            CordonResources::Node { id, label } => {
-                node::Node::cordon(&id, &label, &cli_args.output).await
-            }
-        },
-        Operations::Uncordon(resource) => match resource {
-            CordonResources::Node { id, label } => {
-                node::Node::uncordon(&id, &label, &cli_args.output).await
-            }
-        },
-        Operations::Dump(resources) => {
-            let _ignore = resources
-                .dump(cli_args.kube_config_path)
-                .await
-                .map_err(|_e| {
-                    println!("Partially collected dump information !!");
-                    std::process::exit(1);
-                });
-            println!("Completed collection of dump !!");
-        }
+        };
     };
+
+    tokio::select! {
+        _shutdown = shutdown::Shutdown::wait() => {},
+        _done = fut => {}
+    }
 }
 
 /// Initialise the REST client.
@@ -126,7 +133,7 @@ async fn init_rest(args: &CliArgs) -> Result<()> {
     match args.rest.clone() {
         Some(url) => RestClient::init(url, *args.timeout),
         None => {
-            let config = kube_proxy::ConfigBuilder::default()
+            let config = kube_proxy::ConfigBuilder::default_api_rest()
                 .with_kube_config(args.kube_config_path.clone())
                 .with_timeout(*args.timeout)
                 .with_target_mod(|t| t.with_namespace(&args.namespace))
