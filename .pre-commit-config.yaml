@@ -29,7 +29,7 @@ repos:
         description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
         entry: nix-shell --pure --run 'cargo fmt --all -- --check'
         exclude: openapi/
-        pass_filenames: true
+        pass_filenames: false
         types: [file, rust]
         language: system
     -   id: commit-lint
