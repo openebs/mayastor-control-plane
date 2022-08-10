@@ -24,13 +24,14 @@ mkShell {
     clang
     cowsay
     docker
+    e2fsprogs
     etcd
     fio
     git
     jq
-    udev
     libxfs
     llvmPackages.libclang
+    nodejs
     nvme-cli
     openapi-generator
     openssl
@@ -39,9 +40,9 @@ mkShell {
     pytest_inputs
     python3
     tini
+    udev
     utillinux
     which
-    e2fsprogs
   ] ++ pkgs.lib.optional (!norust) rust_chan.${rust-profile};
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
