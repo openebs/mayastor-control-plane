@@ -3,10 +3,7 @@ use crate::core::{
     reconciler::PollTriggerEvent, registry::Registry, specs::ResourceSpecsLocked,
     wrapper::NodeWrapper,
 };
-use common::{
-    errors::{GrpcRequestError, SvcError},
-    v0::msg_translation::IoEngineToAgent,
-};
+use common::errors::SvcError;
 use common_lib::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
@@ -19,8 +16,6 @@ use grpc::{
         registration::traits::{DeregisterInfo, RegisterInfo, RegistrationOperations},
     },
 };
-use rpc::io_engine::ListBlockDevicesRequest;
-use snafu::ResultExt;
 use std::{collections::HashMap, sync::Arc};
 
 /// Node's Service
@@ -144,6 +139,7 @@ impl Service {
                     &Register {
                         id: node.id().clone(),
                         grpc_endpoint: node.endpoint().to_string(),
+                        api_versions: None,
                     },
                     true,
                 )
@@ -185,6 +181,7 @@ impl Service {
             id: registration.id.clone(),
             grpc_endpoint: registration.grpc_endpoint.clone(),
             status: NodeStatus::Online,
+            api_versions: registration.api_versions.clone(),
         };
 
         let nodes = self.registry.nodes();
@@ -194,14 +191,27 @@ impl Service {
                 let mut node =
                     NodeWrapper::new(&node_state, self.deadline, self.comms_timeouts.clone());
 
-                let mut result = node.liveness_probe().await;
-                if result.is_ok() {
-                    result = node.load().await;
-                }
+                // On startup api version is not known, thus probe all apiversions
+                let result = match startup {
+                    true => node.liveness_probe_all().await,
+                    false => node.liveness_probe().await,
+                };
+
+                let result = match result {
+                    Ok(result) => node.load().await.map(|_| result),
+                    Err(e) => Err(e),
+                };
                 match result {
-                    Ok(_) => {
+                    Ok(data) => {
                         let mut nodes = self.registry.nodes().write().await;
                         if nodes.get_mut(&node_state.id).is_none() {
+                            // Update the api version of the node when changed
+                            node.set_state_on_version_change(NodeState {
+                                id: data.id.clone(),
+                                grpc_endpoint: data.grpc_endpoint.clone(),
+                                status: NodeStatus::Online,
+                                api_versions: data.api_versions,
+                            });
                             node.watchdog_mut().arm(self.clone());
                             let node = Arc::new(tokio::sync::RwLock::new(node));
                             nodes.insert(node_state.id().clone(), node);
@@ -220,7 +230,7 @@ impl Service {
                     }
                 }
             }
-            Some(node) => matches!(node.on_register().await, Ok(true)),
+            Some(node) => matches!(node.on_register(node_state).await, Ok(true)),
         };
 
         // don't send these events on startup as the reconciler will start working afterwards anyway
@@ -301,26 +311,8 @@ impl Service {
         let node = self.registry.get_node_wrapper(&request.node).await?;
 
         let grpc = node.read().await.grpc_context()?;
-        let mut client = grpc.connect().await?;
-
-        let result = client
-            .io_engine
-            .list_block_devices(ListBlockDevicesRequest { all: request.all })
-            .await;
-
-        let response = result
-            .context(GrpcRequestError {
-                resource: ResourceKind::Block,
-                request: "list_block_devices",
-            })?
-            .into_inner();
-
-        let bdevs = response
-            .devices
-            .iter()
-            .map(|rpc_bdev| rpc_bdev.to_agent())
-            .collect();
-        Ok(BlockDevices(bdevs))
+        let client = grpc.connect().await?;
+        client.list_blockdevices(request).await
     }
 
     async fn cordon(&self, id: NodeId, label: String) -> Result<Node, SvcError> {

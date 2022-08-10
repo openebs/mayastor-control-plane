@@ -273,6 +273,10 @@ pub struct StartOptions {
     /// Maximum number of concurrent rebuilds across the cluster.
     #[structopt(long)]
     max_rebuilds: Option<u32>,
+
+    /// api versions to be passed to the io-engine
+    #[structopt(long, env = "IO_ENGINE_API_VERSIONS", default_value = "V0")]
+    io_engine_api_versions: String,
 }
 
 /// List of KeyValues

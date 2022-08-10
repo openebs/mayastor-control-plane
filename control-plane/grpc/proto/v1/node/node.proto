@@ -32,7 +32,6 @@ message NodeSpec {
   common.StringMapValue labels = 3;
   // Cordon information.
   NodeCordon cordon = 4;
-
 }
 
 message NodeState {

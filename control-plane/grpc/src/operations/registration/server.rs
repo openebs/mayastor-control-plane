@@ -1,6 +1,6 @@
 use crate::operations::registration::traits::RegistrationOperations;
 
-use rpc::registration::{
+use rpc::v1::registration::{
     registration_server, registration_server::Registration, DeregisterRequest, RegisterRequest,
 };
 use std::sync::Arc;

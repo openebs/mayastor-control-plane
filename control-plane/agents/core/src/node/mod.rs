@@ -38,14 +38,19 @@ mod tests {
     use super::*;
     use common_lib::types::v0::{
         store::node::{NodeLabels, NodeSpec},
-        transport::{Filter, Node, NodeId, NodeState, NodeStatus},
+        transport::{APIVersion, Filter, Node, NodeId, NodeState, NodeStatus},
     };
     use deployer_cluster::ClusterBuilder;
     use grpc::operations::node::traits::NodeOperations;
     use std::time::Duration;
 
     /// Get new `Node` from the given parameters
-    fn new_node(id: NodeId, endpoint: String, status: NodeStatus) -> Node {
+    fn new_node(
+        id: NodeId,
+        endpoint: String,
+        status: NodeStatus,
+        api_versions: Option<Vec<APIVersion>>,
+    ) -> Node {
         Node::new(
             id.clone(),
             Some(NodeSpec::new(
@@ -54,7 +59,7 @@ mod tests {
                 NodeLabels::new(),
                 None,
             )),
-            Some(NodeState::new(id, endpoint, status)),
+            Some(NodeState::new(id, endpoint, status, api_versions)),
         )
     }
 
@@ -80,7 +85,7 @@ mod tests {
         assert_eq!(nodes.0.len(), 1);
         assert_eq!(
             nodes.0.first().unwrap(),
-            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online)
+            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online, None)
         );
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         let nodes = node_client.get(Filter::None, None).await.unwrap();
@@ -89,7 +94,7 @@ mod tests {
         // still Online because the node is reachable via gRPC!
         assert_eq!(
             nodes.0.first().unwrap(),
-            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online)
+            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online, None)
         );
 
         cluster.composer().kill(maya_name.as_str()).await.unwrap();
@@ -99,7 +104,7 @@ mod tests {
         assert_eq!(nodes.0.len(), 1);
         assert_eq!(
             nodes.0.first().unwrap(),
-            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Offline)
+            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Offline, None)
         );
         cluster.composer().start(maya_name.as_str()).await.unwrap();
 
@@ -115,7 +120,7 @@ mod tests {
         assert_eq!(nodes.0.len(), 1);
         assert_eq!(
             nodes.0.first().unwrap(),
-            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online)
+            &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online, None)
         );
 
         cluster.composer().stop(maya_name.as_str()).await.unwrap();

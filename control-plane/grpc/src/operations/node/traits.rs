@@ -62,7 +62,13 @@ impl TryFrom<node::Node> for Node {
                         ))
                     }
                 };
-                Some(NodeState::new(state.node_id.into(), state.endpoint, status))
+                // todo: pass proper apiversion on the upper layer once openapi has the changes
+                Some(NodeState::new(
+                    state.node_id.into(),
+                    state.endpoint,
+                    status,
+                    None,
+                ))
             }
             None => None,
         };

@@ -24,6 +24,7 @@ impl ComponentAction for IoEngine {
             .with_args(vec!["-N", &name])
             .with_args(vec!["-g", &io_engine_socket])
             .with_args(vec!["-R", DEFAULT_GRPC_CLIENT_ADDR])
+            .with_args(vec!["--api-versions", &options.io_engine_api_versions])
             .with_bind("/tmp", "/host/tmp");
 
             if options.io_engine_isolate {
