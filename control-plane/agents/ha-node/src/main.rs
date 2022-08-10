@@ -1,9 +1,10 @@
+use common_lib::types::v0::transport::cluster_agent::NodeAgentInfo;
 use grpc::operations::ha_node::{client::ClusterAgentClient, traits::ClusterAgentOperations};
 use http::Uri;
 use once_cell::sync::OnceCell;
 use structopt::StructOpt;
 use utils::{
-    package_description, version_info_str, DEFAULT_CLUSTER_AGENT_SERVER_ADDR,
+    package_description, version_info_str, DEFAULT_CLUSTER_AGENT_CLIENT_ADDR,
     DEFAULT_NODE_AGENT_SERVER_ADDR,
 };
 
@@ -11,7 +12,7 @@ use utils::{
 #[structopt(name = package_description!(), version = version_info_str!())]
 struct Cli {
     /// HA Cluster Agent URL or address to connect to the services.
-    #[structopt(long, short, default_value = DEFAULT_CLUSTER_AGENT_SERVER_ADDR)]
+    #[structopt(long, short, default_value = DEFAULT_CLUSTER_AGENT_CLIENT_ADDR)]
     cluster_agent: Uri,
 
     /// Node name(spec.nodeName). This must be the same as provided in csi-node
@@ -47,7 +48,15 @@ async fn main() {
         .expect("Expect to be initialized only once");
 
     cluster_agent_client()
-        .register(cli.node_name.clone(), cli.grpc_endpoint)
+        .register(&NodeAgentInfo::new(
+            cli.node_name.clone(),
+            cli.grpc_endpoint
+                .authority()
+                .unwrap()
+                .to_string()
+                .parse()
+                .unwrap(),
+        ))
         .await
         .unwrap();
 }

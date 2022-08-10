@@ -1,5 +1,6 @@
 pub mod blockdevice;
 pub mod child;
+pub mod cluster_agent;
 pub mod jsongrpc;
 pub mod misc;
 pub mod nexus;

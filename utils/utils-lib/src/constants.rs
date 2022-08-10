@@ -70,7 +70,10 @@ pub const RUST_LOG_SILENCE_DEFAULTS: &str =
     "actix_web=info,actix_server=info,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,tokio_tungstenite=info,tungstenite=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
 
 /// The default value to be assigned as cluster agent GRPC server addr if not overridden
-pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "https://ha-cluster-agent:11500";
+pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "https://0.0.0.0:11500";
+
+/// The default value to be assigned as cluster agent GRPC client addr if not overridden
+pub const DEFAULT_CLUSTER_AGENT_CLIENT_ADDR: &str = "https://ha-cluster-agent:11500";
 
 /// The default value to be assigned as node-agent GRPC server addr if not overridden
 pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "https://0.0.0.0:11600";
