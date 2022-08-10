@@ -37,9 +37,18 @@ pub const DSP_OPERATOR: &str = "operator-diskpool";
 
 /// The service label for the api-rest service.
 pub const API_REST_LABEL: &str = "app=api-rest";
+/// The service port for the api-rest label for the etcd pods.
+pub const API_REST_HTTP_PORT: &str = "http";
 
 /// The pod label for the etcd pods.
 pub const ETCD_LABEL: &str = "app=etcd";
+/// The port for the etcd pods.
+pub const ETCD_PORT: &str = "client";
+
+/// The service label for the loki service.
+pub const LOKI_LABEL: &str = "app=loki";
+/// The service port for the loki.
+pub const LOKI_PORT: &str = "http-metrics";
 
 /// The default value to be assigned as GRPC server addr if not overridden
 pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";

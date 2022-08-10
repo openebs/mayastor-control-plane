@@ -5,6 +5,7 @@ use openapi::{
     tower::client::hyper,
 };
 use std::{convert::TryFrom, path::PathBuf};
+use tower::util::BoxService;
 
 /// A builder type for the openapi `Configuration`.
 /// The configuration is tailored for a kubernetes proxy using the `kube_forward::HttpProxy`.
@@ -28,8 +29,12 @@ pub struct ConfigBuilder<T> {
     builder_target: std::marker::PhantomData<T>,
 }
 
+/// Internal for type-state.
 pub struct ApiRest {}
+/// Internal for type-state.
 pub struct Etcd {}
+/// Internal for type-state.
+pub struct Loki {}
 
 /// The scheme component of the URI.
 pub enum Scheme {
@@ -73,7 +78,7 @@ impl Default for ConfigBuilder<ApiRest> {
             kube_config: None,
             target: kube_forward::Target::new(
                 kube_forward::TargetSelector::ServiceLabel(utils::API_REST_LABEL.to_string()),
-                "http",
+                utils::API_REST_HTTP_PORT,
                 utils::DEFAULT_NAMESPACE,
             ),
             timeout: Some(std::time::Duration::from_secs(5)),
@@ -90,12 +95,29 @@ impl Default for ConfigBuilder<Etcd> {
             kube_config: None,
             target: kube_forward::Target::new(
                 kube_forward::TargetSelector::PodLabel(utils::ETCD_LABEL.to_string()),
-                "client",
+                utils::ETCD_PORT,
                 utils::DEFAULT_NAMESPACE,
             ),
             timeout: Some(std::time::Duration::from_secs(5)),
             jwt: None,
             method: ForwardingProxy::TCP,
+            scheme: Scheme::HTTP,
+            builder_target: Default::default(),
+        }
+    }
+}
+impl Default for ConfigBuilder<Loki> {
+    fn default() -> Self {
+        Self {
+            kube_config: None,
+            target: kube_forward::Target::new(
+                kube_forward::TargetSelector::ServiceLabel(utils::LOKI_LABEL.to_string()),
+                utils::LOKI_PORT,
+                utils::DEFAULT_NAMESPACE,
+            ),
+            timeout: Some(std::time::Duration::from_secs(5)),
+            jwt: None,
+            method: ForwardingProxy::HTTP,
             scheme: Scheme::HTTP,
             builder_target: Default::default(),
         }
@@ -112,6 +134,12 @@ impl ConfigBuilder<Etcd> {
     /// Returns a `Self` with sane defaults for the etcd.
     pub fn default_etcd() -> ConfigBuilder<Etcd> {
         ConfigBuilder::<Etcd>::default()
+    }
+}
+impl ConfigBuilder<Loki> {
+    /// Returns a `Self` with sane defaults for the etcd.
+    pub fn default_loki() -> ConfigBuilder<Loki> {
+        ConfigBuilder::<Loki>::default()
     }
 }
 
@@ -201,7 +229,86 @@ impl ConfigBuilder<Etcd> {
 
         let (scheme, _certificate) = self.scheme.parts();
         let uri = Uri::try_from(&format!("{}://localhost:{}", scheme, port))?;
-
         Ok(uri)
+    }
+}
+
+use hyper::body;
+
+/// A loki client which is essentially a boxed `tower::Service`.
+pub type LokiClient =
+    BoxService<hyper::Request<body::Body>, hyper::Response<body::Body>, tower::BoxError>;
+
+impl ConfigBuilder<Loki> {
+    /// Move self with the following timeout.
+    pub fn with_timeout<TO: Into<Option<std::time::Duration>>>(mut self, timeout: TO) -> Self {
+        self.timeout = timeout.into();
+        self
+    }
+    /// Move self with the following forwarding method.
+    pub fn with_forwarding(mut self, method: ForwardingProxy) -> Self {
+        self.method = method;
+        self
+    }
+    /// Move self with the following connection scheme.
+    pub fn with_scheme(mut self, scheme: Scheme) -> Self {
+        self.scheme = scheme;
+        self
+    }
+
+    /// Tries to build a `LokiClient` from the current self.
+    /// This is simply a boxed `tower::Service` so can be used for any HTTP requests.
+    pub async fn build(self) -> anyhow::Result<(Uri, LokiClient)> {
+        match self.method {
+            ForwardingProxy::HTTP => self.build_http().await,
+            ForwardingProxy::TCP => self.build_tcp().await,
+        }
+    }
+    /// Tries to build an HTTP `Configuration` from the current self.
+    async fn build_http(self) -> anyhow::Result<(Uri, LokiClient)> {
+        let uri = kube_forward::HttpForward::new(self.target, Some(self.scheme.into()))
+            .await?
+            .uri()
+            .await?;
+        let config = super::config_from_kubeconfig(self.kube_config).await?;
+        let client = kube::Client::try_from(config)?;
+        let proxy = kube_forward::HttpProxy::new(client);
+
+        let service = tower::ServiceBuilder::new()
+            .option_layer(self.timeout.map(tower::timeout::TimeoutLayer::new))
+            .service(proxy);
+        Ok((uri, LokiClient::new(service)))
+    }
+    /// Tries to build a TCP `Configuration` from the current self.
+    async fn build_tcp(self) -> anyhow::Result<(Uri, LokiClient)> {
+        let pf = kube_forward::PortForward::new(self.target, None).await?;
+
+        let (port, _handle) = pf.port_forward().await?;
+
+        let keep_alive_timeout = self
+            .timeout
+            .unwrap_or_else(|| std::time::Duration::from_secs(5));
+
+        let (scheme, _certificate) = self.scheme.parts();
+        let uri = Uri::try_from(&format!("{}://localhost:{}", scheme, port))?;
+
+        let service = match self.scheme {
+            Scheme::HTTP => {
+                let mut connector = hyper::client::HttpConnector::new();
+                connector.set_connect_timeout(self.timeout);
+                let client = hyper::Client::builder()
+                    .http2_keep_alive_timeout(keep_alive_timeout)
+                    .http2_keep_alive_interval(keep_alive_timeout / 2)
+                    .build(connector);
+                tower::ServiceBuilder::new()
+                    .option_layer(self.timeout.map(tower::timeout::TimeoutLayer::new))
+                    .service(client)
+            }
+            Scheme::HTTPS(_) => {
+                unimplemented!()
+            }
+        };
+
+        Ok((uri, BoxService::new(service)))
     }
 }

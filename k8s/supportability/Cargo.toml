@@ -43,3 +43,5 @@ downcast-rs = "1.2.0"
 schemars = "0.8.10"
 k8s-operators = { path = "../operators" }
 http = "0.2.6"
+hyper = { version = "0.14.20", features = [ "client", "http1", "http2", "tcp", "stream" ] }
+tower = { version = "0.4.13", features = [ "timeout", "util" ] }

@@ -18,3 +18,4 @@ rest-plugin = { path = "../../control-plane/plugin", default-features = false }
 kube = { version = "0.74.0", features = [ "derive" ] }
 anyhow = "1.0.44"
 kube-forward = { path = "../forward" }
+tower = { version = "0.4.13", features = [ "timeout", "util" ] }

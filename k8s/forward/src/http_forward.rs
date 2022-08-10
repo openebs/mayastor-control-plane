@@ -124,19 +124,23 @@ impl hyper::service::Service<hyper::Request<body::Body>> for HttpProxy {
         Box::pin(async move {
             let (parts, body) = request.into_parts();
 
-            let body_bytes = body::to_bytes(body).await.unwrap();
-            let bytes = body_bytes.to_vec();
+            let body_bytes = body::to_bytes(body).await;
+            let bytes = body_bytes.map_err(kube::Error::HyperError)?.to_vec();
+
             let request = hyper::Request::from_parts(parts, bytes);
             match client.request_text(request).await {
                 Ok(r) => Ok(Response::new(body::Body::from(r))),
                 Err(error) => match error {
+                    // without https://github.com/kube-rs/kube-rs/pull/972 all errors get translated
+                    // to a kube-api error type `ErrorResponse` so it's not possible to distinguish
+                    // where the error came from, i.e. kubeapi proxy or the target service.
                     kube::Error::Api(response) => {
-                        // undo the debug print which created response.message
-                        let message = serde_json::from_str::<serde_json::Value>(&response.message)
-                            .map_err(kube::Error::SerdeError)?
-                            .as_str()
-                            .unwrap_or("")
-                            .to_string();
+                        let message =
+                            match serde_json::from_str::<serde_json::Value>(&response.message) {
+                                // undo the debug print which created response.message
+                                Ok(message) => message.as_str().unwrap_or("").to_string(),
+                                Err(_) => response.message,
+                            };
 
                         Response::builder()
                             .status(response.code)

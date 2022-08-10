@@ -37,9 +37,6 @@ pub(crate) const DATA_PLANE_CONTAINER_NAME: &str = "io-engine";
 /// Defines the logging label(key-value pair) on mayastor services
 pub(crate) const LOGGING_LABEL_SELECTOR: &str = "openebs.io/logging=true";
 
-/// Defines LOKI PORT NAME which exposes logs
-pub(crate) const LOKI_METRICS_PORT_NAME: &str = "http-metrics";
-
 lazy_static! {
     /// List of resources fall under control plane services
     pub(crate) static ref CONTROL_PLANE_SERVICES: HashMap<&'static str, bool> =
@@ -68,6 +65,3 @@ lazy_static! {
             (CSI_NODE_SERVICE, true),
         ]);
 }
-
-/// Defines the label selector to fetch Loki related services
-pub(crate) const LOKI_SERVICE_LABEL_SELECTOR: &str = "app=loki";

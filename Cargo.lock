@@ -2089,6 +2089,7 @@ dependencies = [
  "kube-forward",
  "openapi",
  "rest-plugin",
+ "tower",
  "utils",
 ]
 
@@ -3612,6 +3613,7 @@ dependencies = [
  "futures",
  "http",
  "humantime",
+ "hyper",
  "k8s-openapi",
  "k8s-operators",
  "kube",
@@ -3627,6 +3629,7 @@ dependencies = [
  "serde_yaml",
  "tar",
  "tokio",
+ "tower",
  "urlencoding",
  "uuid",
  "yaml-rust",

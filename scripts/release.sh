@@ -44,7 +44,7 @@ Options:
   --image                    Specify what image to build.
   --alias-tag                Explicit alias for short commit hash tag.
   --incremental              Builds components in two stages allowing for faster rebuilds during development.
-  --build-binaries           Builds all the static binaries.
+  --build-bins               Builds all the static binaries.
   --build-bin                Specify which binary to build.
   --build-binary-out <path>  Specify the outlink path for the binaries (otherwise it's the current directory).
 
