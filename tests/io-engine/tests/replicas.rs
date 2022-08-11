@@ -16,7 +16,7 @@ async fn create_replica() {
 
     let replica = v0::CreateReplica {
         node: cluster.node(0),
-        uuid: Default::default(),
+        uuid: v0::ReplicaId::new(),
         pool: cluster.pool(0, 0),
         size: 5 * 1024 * 1024,
         thin: true,
