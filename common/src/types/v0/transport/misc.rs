@@ -19,16 +19,16 @@ pub enum Filter {
     Node(NodeId),
     /// Pool filters
     ///
-    /// Filter by Pool id
-    Pool(PoolId),
-    /// Filter by Node and Pool id
-    NodePool(NodeId, PoolId),
+    /// Filter by Pool Reference
+    Pool(PoolRef),
+    /// Filter by Node and Pool Reference
+    NodePool(NodeId, PoolRef),
     /// Filter by Node and Replica id
     NodeReplica(NodeId, ReplicaId),
     /// Filter by Node, Pool and Replica id
-    NodePoolReplica(NodeId, PoolId, ReplicaId),
+    NodePoolReplica(NodeId, PoolRef, ReplicaId),
     /// Filter by Pool and Replica id
-    PoolReplica(PoolId, ReplicaId),
+    PoolReplica(PoolRef, ReplicaId),
     /// Filter by Replica id
     Replica(ReplicaId),
     /// Volume filters
@@ -303,14 +303,38 @@ impl From<i32> for Protocol {
 /// Convert a device URI to a share Protocol
 /// Uses the URI scheme to determine the protocol
 /// Temporary WA until the share is added to the io-engine RPC
-impl TryFrom<&str> for Protocol {
+// impl TryFrom<&str> for Protocol {
+//     type Error = String;
+//
+//     fn try_from(value: &str) -> Result<Self, Self::Error> {
+//         Ok(
+//             if value.is_empty() {
+//             Protocol::None
+//         } else {
+//             match url::Url::from_str(value) {
+//                 Ok(url) => match url.scheme() {
+//                     "nvmf" => Self::Nvmf,
+//                     "iscsi" => Self::Iscsi,
+//                     "nbd" => Self::Nbd,
+//                     other => return Err(format!("Invalid nexus protocol: {}", other)),
+//                 },
+//                 Err(error) => {
+//                     tracing::error!("error parsing uri's ({}) protocol: {}", value, error);
+//                     return Err(error.to_string());
+//                 }
+//             }
+//         })
+//     }
+// }
+
+impl TryFrom<String> for Protocol {
     type Error = String;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn try_from(value: String) -> Result<Self, Self::Error> {
         Ok(if value.is_empty() {
             Protocol::None
         } else {
-            match url::Url::from_str(value) {
+            match url::Url::from_str(value.as_str()) {
                 Ok(url) => match url.scheme() {
                     "nvmf" => Self::Nvmf,
                     "iscsi" => Self::Iscsi,
@@ -322,6 +346,20 @@ impl TryFrom<&str> for Protocol {
                     return Err(error.to_string());
                 }
             }
+        })
+    }
+}
+
+impl TryFrom<&str> for Protocol {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "Nvmf" => Self::Nvmf,
+            "Iscsi" => Self::Iscsi,
+            "Nbd" => Self::Nbd,
+            "None" => Self::None,
+            _ => return Err(format!("Invalid Protocol: {}", value)),
         })
     }
 }

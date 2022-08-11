@@ -201,6 +201,11 @@ pub enum SvcError {
     StoreMissingEntry { key: String },
     #[snafu(display("The uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
     InvalidUuid { uuid: String, kind: ResourceKind },
+    #[snafu(display("The pool uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
+    InvalidPoolUuid { uuid: String, kind: ResourceKind },
+    // #[snafu(display("The argument '{}' for kind '{}' is not valid. Error: {}", arg,
+    // kind.to_string(), err))] InvalidArgument { arg: String, kind: ResourceKind, err:
+    // String},
     #[snafu(display(
         "Unable to start rebuild. Maximum number of rebuilds permitted is {}",
         max_rebuilds
@@ -565,6 +570,12 @@ impl From<SvcError> for ReplyError {
                 extra: error.full_string(),
             },
             SvcError::InvalidUuid { ref kind, .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: kind.clone(),
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::InvalidPoolUuid { ref kind, .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: kind.clone(),
                 source: desc.to_string(),

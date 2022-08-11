@@ -39,10 +39,10 @@ use common_lib::{
         },
         transport::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyNexus,
-            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, PoolId, Protocol, PublishVolume,
-            RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners, SetVolumeReplica,
-            ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
-            VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
+            DestroyReplica, DestroyVolume, Nexus, NexusId, NodeId, PoolId, PoolRef, Protocol,
+            PublishVolume, RemoveNexusReplica, Replica, ReplicaId, ReplicaName, ReplicaOwners,
+            SetVolumeReplica, ShareNexus, ShareVolume, UnpublishVolume, UnshareNexus,
+            UnshareVolume, Volume, VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
 };
@@ -160,7 +160,9 @@ pub(crate) async fn get_volume_replica_candidates(
                 node: p.node.clone(),
                 name: Some(ReplicaName::new(&replica_uuid, Some(&request.uuid))),
                 uuid: replica_uuid,
-                pool: p.id.clone(),
+                //pool: p.id.clone(),
+                pool: Default::default(),
+                pool_ref: PoolRef::PoolName(p.id.clone()),
                 size: request.size,
                 thin: false,
                 share: Protocol::None,
@@ -396,6 +398,7 @@ impl ResourceSpecsLocked {
         DestroyReplica {
             node: node.clone(),
             pool: spec.pool,
+            pool_ref: spec.pool_ref,
             uuid: spec.uuid,
             name: spec.name.into(),
             disowners: by,

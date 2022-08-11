@@ -9,18 +9,33 @@ fn client() -> impl PoolOperations {
 
 async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
     let destroy = match filter.clone() {
-        Filter::NodePool(node_id, pool_id) => DestroyPool {
+        Filter::NodePool(node_id, pool_ref) => DestroyPool {
             node: node_id,
-            id: pool_id,
+            //id: pool_id,
+            id: match pool_ref {
+                PoolRef::PoolName(pool_name) => pool_name,
+                PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+            },
         },
-        Filter::Pool(pool_id) => {
+        Filter::Pool(pool_ref) => {
             let node_id = match client().get(filter, None).await {
-                Ok(pools) => pool(pool_id.to_string(), pools.into_inner().get(0))?.node(),
+                Ok(pools) => pool(
+                    match pool_ref.clone() {
+                        PoolRef::PoolName(pool_name) => pool_name.into(),
+                        PoolRef::PoolUuid(pool_uuid) => pool_uuid.into(),
+                    },
+                    pools.into_inner().get(0),
+                )?
+                .node(),
                 Err(error) => return Err(RestError::from(error)),
             };
             DestroyPool {
                 node: node_id,
-                id: pool_id,
+                //id: pool_id,
+                id: match pool_ref.clone() {
+                    PoolRef::PoolName(pool_name) => pool_name,
+                    PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+                },
             }
         }
         _ => {
@@ -41,11 +56,15 @@ impl apis::actix_server::Pools for RestApi {
     async fn del_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
     ) -> Result<(), RestError<RestJsonError>> {
-        destroy_pool(Filter::NodePool(node_id.into(), pool_id.into())).await
+        destroy_pool(Filter::NodePool(
+            node_id.into(),
+            PoolRef::PoolName(pool_id.into()),
+        ))
+        .await
     }
 
     async fn del_pool(Path(pool_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
-        destroy_pool(Filter::Pool(pool_id.into())).await
+        destroy_pool(Filter::Pool(PoolRef::PoolName(pool_id.into()))).await
     }
 
     async fn get_node_pool(
@@ -54,7 +73,10 @@ impl apis::actix_server::Pools for RestApi {
         let pool = pool(
             pool_id.clone(),
             client()
-                .get(Filter::NodePool(node_id.into(), pool_id.into()), None)
+                .get(
+                    Filter::NodePool(node_id.into(), PoolRef::PoolName(pool_id.into())),
+                    None,
+                )
                 .await?
                 .into_inner()
                 .get(0),
@@ -75,7 +97,10 @@ impl apis::actix_server::Pools for RestApi {
         let pool = pool(
             pool_id.clone(),
             client()
-                .get(Filter::Pool(pool_id.clone().into()), None)
+                .get(
+                    Filter::Pool(PoolRef::PoolName(pool_id.clone().into())),
+                    None,
+                )
                 .await?
                 .into_inner()
                 .get(0),

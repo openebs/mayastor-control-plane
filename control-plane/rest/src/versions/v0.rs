@@ -10,7 +10,7 @@ pub use common_lib::{
             AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
             CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
             GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri,
-            PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol,
+            PoolId, PoolRef, Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol,
             ShareNexus, ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica, VolumeId,
             VolumeLabels, VolumePolicy, Watch, WatchCallback, WatchResourceId,
         },
@@ -92,12 +92,18 @@ impl From<CreateReplica> for CreateReplicaBody {
 }
 impl CreateReplicaBody {
     /// convert into message bus type
-    pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId, uuid: ReplicaId) -> CreateReplica {
+    pub fn bus_request(
+        &self,
+        node_id: NodeId,
+        pool_ref: PoolRef,
+        uuid: ReplicaId,
+    ) -> CreateReplica {
         CreateReplica {
             node: node_id,
             name: None,
             uuid,
-            pool: pool_id,
+            pool: Default::default(),
+            pool_ref,
             size: self.size,
             thin: self.thin,
             share: self.share,

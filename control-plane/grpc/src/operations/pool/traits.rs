@@ -194,18 +194,40 @@ impl From<Pools> for pool::Pools {
     }
 }
 
-impl From<get_pools_request::Filter> for Filter {
-    fn from(filter: get_pools_request::Filter) -> Self {
+impl TryFrom<get_pools_request::Filter> for Filter {
+    type Error = ReplyError;
+    fn try_from(filter: get_pools_request::Filter) -> Result<Self, Self::Error> {
+        //fn from(filter: get_pools_request::Filter) -> Self {
         match filter {
             get_pools_request::Filter::Node(node_filter) => {
-                Filter::Node(node_filter.node_id.into())
+                Ok(Filter::Node(node_filter.node_id.into()))
             }
-            get_pools_request::Filter::NodePool(node_pool_filter) => Filter::NodePool(
+            get_pools_request::Filter::NodePool(node_pool_filter) => Ok(Filter::NodePool(
                 node_pool_filter.node_id.into(),
-                node_pool_filter.pool_id.into(),
-            ),
+                //node_pool_filter.pool_id.into(),
+                match node_pool_filter.pool_ref {
+                    Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "replica.pool_ref",
+                            "".to_string(),
+                        ));
+                    }
+                },
+            )),
             get_pools_request::Filter::Pool(pool_filter) => {
-                Filter::Pool(pool_filter.pool_id.into())
+                // Filter::Pool(pool_filter.pool_id.into())
+                Ok(Filter::Pool(match pool_filter.pool_ref {
+                    Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "replica.pool_ref",
+                            "".to_string(),
+                        ));
+                    }
+                }))
             }
         }
     }

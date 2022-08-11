@@ -87,6 +87,7 @@ impl From<PoolState> for models::PoolState {
 }
 
 bus_impl_string_id!(PoolId, "ID of a pool");
+bus_impl_string_uuid!(PoolUuid, "UUID of a pool");
 
 // online > degraded > unknown/faulted
 impl PartialOrd for PoolStatus {

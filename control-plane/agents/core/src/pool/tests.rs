@@ -11,8 +11,8 @@ use common_lib::{
         store::replica::ReplicaSpec,
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NodeId,
-            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
-            ShareReplica, UnshareReplica, VolumeId,
+            PoolRef, Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol,
+            ReplicaStatus, ShareReplica, UnshareReplica, VolumeId,
         },
     },
 };
@@ -67,6 +67,7 @@ async fn pool() {
                 node: io_engine.clone(),
                 uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
                 pool: "pooloop".into(),
+                pool_ref: PoolRef::PoolName("pooloop".into()),
                 size: 12582912, /* actual size will be a multiple of 4MB so just
                                  * create it like so */
                 thin: true,
@@ -91,6 +92,7 @@ async fn pool() {
             name: ReplicaName::from("cf36a440-74c6-4042-b16c-4f7eddfc24da"),
             uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
             pool: "pooloop".into(),
+            pool_ref: PoolRef::PoolName("pooloop".into()),
             thin: true,
             size: 12582912,
             share: Protocol::None,
@@ -105,6 +107,7 @@ async fn pool() {
                 node: io_engine.clone(),
                 uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
                 pool: "pooloop".into(),
+                pool_ref: PoolRef::PoolName("pooloop".into()),
                 protocol: ReplicaShareProtocol::Nvmf,
                 name: None,
             },
@@ -145,6 +148,7 @@ async fn pool() {
                 node: io_engine.clone(),
                 uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
                 pool: "pooloop".into(),
+                pool_ref: PoolRef::PoolName("pooloop".into()),
                 name: None,
                 ..Default::default()
             },
@@ -233,6 +237,7 @@ async fn replica_transaction() {
                 node: io_engine.clone(),
                 uuid: ReplicaId::new(),
                 pool: cluster.pool(0, 0),
+                pool_ref: PoolRef::PoolName(cluster.pool(0, 0)),
                 size: 12582912,
                 thin: false,
                 share: Protocol::None,
@@ -417,6 +422,7 @@ async fn replica_transaction_store() {
                 node: io_engine.clone(),
                 uuid: ReplicaId::new(),
                 pool: cluster.pool(0, 0),
+                pool_ref: PoolRef::PoolName(cluster.pool(0, 0)),
                 size: 12582912,
                 thin: false,
                 share: Protocol::None,

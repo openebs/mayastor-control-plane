@@ -14,8 +14,8 @@ use common_lib::{
         store::replica::{ReplicaOperation, ReplicaOperationState, ReplicaSpec, ReplicaSpecStatus},
         transport,
         transport::{
-            CreateReplica, DestroyReplica, Filter, NexusId, NodeId, PoolId, Replica, ReplicaId,
-            ReplicaName, ReplicaOwners, ShareReplica, UnshareReplica, VolumeId,
+            CreateReplica, DestroyReplica, Filter, NexusId, NodeId, PoolId, PoolUuid, Replica,
+            ReplicaId, ReplicaName, ReplicaOwners, ShareReplica, UnshareReplica, VolumeId,
         },
     },
 };
@@ -61,6 +61,7 @@ impl From<Replica> for replica::Replica {
             name: replica.name.into(),
             replica_id: Some(replica.uuid.into()),
             pool_id: replica.pool.into(),
+            pool_ref: Some(replica.pool_ref.into()),
             thin: replica.thin,
             size: replica.size,
             share: share as i32,
@@ -78,6 +79,16 @@ impl TryFrom<replica::Replica> for Replica {
             name: replica.name.into(),
             uuid: ReplicaId::try_from(StringValue(replica.replica_id))?,
             pool: replica.pool_id.into(),
+            pool_ref: match replica.pool_ref {
+                Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "replica.pool_ref",
+                        "".to_string(),
+                    ));
+                }
+            },
             thin: replica.thin,
             size: replica.size,
             share: match common::Protocol::from_i32(replica.share) {
@@ -87,7 +98,7 @@ impl TryFrom<replica::Replica> for Replica {
                         ResourceKind::Replica,
                         "replica.share",
                         "".to_string(),
-                    ))
+                    ));
                 }
             },
             uri: replica.uri,
@@ -98,7 +109,7 @@ impl TryFrom<replica::Replica> for Replica {
                         ResourceKind::Replica,
                         "replica.status",
                         "".to_string(),
-                    ))
+                    ));
                 }
             },
         })
@@ -114,15 +125,42 @@ impl TryFrom<get_replicas_request::Filter> for Filter {
             }
             get_replicas_request::Filter::NodePool(node_pool_filter) => Ok(Filter::NodePool(
                 node_pool_filter.node_id.into(),
-                node_pool_filter.pool_id.into(),
+                match node_pool_filter.pool_ref {
+                    Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Pool,
+                            "node_pool_filter.pool_ref",
+                            "".to_string(),
+                        ));
+                    }
+                },
             )),
             get_replicas_request::Filter::Pool(pool_filter) => {
-                Ok(Filter::Pool(pool_filter.pool_id.into()))
+                Ok(Filter::Pool(match pool_filter.pool_ref {
+                    Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Pool,
+                            "pool_filter.pool_ref",
+                            "".to_string(),
+                        ));
+                    }
+                }))
             }
             get_replicas_request::Filter::NodePoolReplica(node_pool_replica_filter) => {
                 Ok(Filter::NodePoolReplica(
                     node_pool_replica_filter.node_id.into(),
-                    node_pool_replica_filter.pool_id.into(),
+                    match node_pool_replica_filter.pool_ref {
+                        Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                        None => {
+                            return Err(ReplyError::invalid_argument(
+                                ResourceKind::Pool,
+                                "node_pool_replica_filter.pool_ref",
+                                "".to_string(),
+                            ));
+                        }
+                    },
                     ReplicaId::try_from(StringValue(Some(node_pool_replica_filter.replica_id)))?,
                 ))
             }
@@ -136,14 +174,23 @@ impl TryFrom<get_replicas_request::Filter> for Filter {
                                 ResourceKind::Replica,
                                 "replica_filter::node_replica.replica_id",
                                 err.to_string(),
-                            ))
+                            ));
                         }
                     },
                 ))
             }
             get_replicas_request::Filter::PoolReplica(pool_replica_filter) => {
                 Ok(Filter::PoolReplica(
-                    pool_replica_filter.pool_id.into(),
+                    match pool_replica_filter.pool_ref {
+                        Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                        None => {
+                            return Err(ReplyError::invalid_argument(
+                                ResourceKind::Pool,
+                                "pool_replica_filter.pool_ref",
+                                "".to_string(),
+                            ));
+                        }
+                    },
                     match ReplicaId::try_from(pool_replica_filter.replica_id) {
                         Ok(replica_id) => replica_id,
                         Err(err) => {
@@ -151,7 +198,7 @@ impl TryFrom<get_replicas_request::Filter> for Filter {
                                 ResourceKind::Replica,
                                 "replica_filter::pool_replica.replica_id",
                                 err.to_string(),
-                            ))
+                            ));
                         }
                     },
                 ))
@@ -164,7 +211,7 @@ impl TryFrom<get_replicas_request::Filter> for Filter {
                             ResourceKind::Replica,
                             "replica_filter::replica.replica_id",
                             err.to_string(),
-                        ))
+                        ));
                     }
                 },
             )),
@@ -176,7 +223,7 @@ impl TryFrom<get_replicas_request::Filter> for Filter {
                             ResourceKind::Replica,
                             "replica_filter::volume.volume_id",
                             err.to_string(),
-                        ))
+                        ));
                     }
                 },
             )),
@@ -218,6 +265,8 @@ pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
     fn uuid(&self) -> ReplicaId;
     /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// reference of the pool
+    fn pool_ref(&self) -> transport::PoolRef;
     /// Size of the replica in bytes
     fn size(&self) -> u64;
     /// Thin provisioning
@@ -245,6 +294,10 @@ impl CreateReplicaInfo for CreateReplica {
 
     fn pool(&self) -> PoolId {
         self.pool.clone()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn size(&self) -> u64 {
@@ -275,6 +328,7 @@ pub struct ValidatedCreateReplicaRequest {
     uuid: ReplicaId,
     share: transport::Protocol,
     owners: ReplicaOwners,
+    pool_ref: transport::PoolRef,
 }
 
 impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
@@ -292,6 +346,10 @@ impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
 
     fn pool(&self) -> PoolId {
         self.inner.pool_id.clone().into()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn size(&self) -> u64 {
@@ -327,7 +385,7 @@ impl ValidateRequestTypes for CreateReplicaRequest {
                         ResourceKind::Replica,
                         "create_replica_request.share",
                         "".to_string(),
-                    ))
+                    ));
                 }
             },
             owners: match self.owners.clone() {
@@ -336,7 +394,17 @@ impl ValidateRequestTypes for CreateReplicaRequest {
                     return Err(ReplyError::missing_argument(
                         ResourceKind::ReplicaSpec,
                         "replica_spec.owners",
-                    ))
+                    ));
+                }
+            },
+            pool_ref: match self.pool_ref.clone() {
+                Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "create_replica_request.pool_ref",
+                        "".to_string(),
+                    ));
                 }
             },
             inner: self,
@@ -351,6 +419,8 @@ pub trait DestroyReplicaInfo: Send + Sync + std::fmt::Debug {
     fn node(&self) -> NodeId;
     /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// reference of the pool
+    fn pool_ref(&self) -> transport::PoolRef;
     /// Name of the replica
     fn name(&self) -> Option<ReplicaName>;
     /// Uuid of the replica
@@ -366,6 +436,10 @@ impl DestroyReplicaInfo for DestroyReplica {
 
     fn pool(&self) -> PoolId {
         self.pool.clone()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn name(&self) -> Option<ReplicaName> {
@@ -387,6 +461,7 @@ pub struct ValidatedDestroyReplicaRequest {
     inner: DestroyReplicaRequest,
     uuid: ReplicaId,
     disowners: ReplicaOwners,
+    pool_ref: transport::PoolRef,
 }
 
 impl DestroyReplicaInfo for ValidatedDestroyReplicaRequest {
@@ -396,6 +471,10 @@ impl DestroyReplicaInfo for ValidatedDestroyReplicaRequest {
 
     fn pool(&self) -> PoolId {
         self.inner.pool_id.clone().into()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn name(&self) -> Option<ReplicaName> {
@@ -422,7 +501,17 @@ impl ValidateRequestTypes for DestroyReplicaRequest {
                     return Err(ReplyError::missing_argument(
                         ResourceKind::Replica,
                         "replica_spec.disowners",
-                    ))
+                    ));
+                }
+            },
+            pool_ref: match self.pool_ref.clone() {
+                Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "create_replica_request.pool_ref",
+                        "".to_string(),
+                    ));
                 }
             },
             inner: self,
@@ -437,6 +526,8 @@ pub trait ShareReplicaInfo: Send + Sync + std::fmt::Debug {
     fn node(&self) -> NodeId;
     /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// reference of the pool
+    fn pool_ref(&self) -> transport::PoolRef;
     /// Name of the replica,
     fn name(&self) -> Option<ReplicaName>;
     /// Uuid of the replica
@@ -452,6 +543,10 @@ impl ShareReplicaInfo for ShareReplica {
 
     fn pool(&self) -> PoolId {
         self.pool.clone()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn name(&self) -> Option<ReplicaName> {
@@ -473,6 +568,7 @@ pub struct ValidatedShareReplicaRequest {
     inner: ShareReplicaRequest,
     uuid: ReplicaId,
     protocol: transport::ReplicaShareProtocol,
+    pool_ref: transport::PoolRef,
 }
 
 impl ShareReplicaInfo for ValidatedShareReplicaRequest {
@@ -482,6 +578,10 @@ impl ShareReplicaInfo for ValidatedShareReplicaRequest {
 
     fn pool(&self) -> PoolId {
         self.inner.pool_id.clone().into()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn name(&self) -> Option<ReplicaName> {
@@ -509,7 +609,17 @@ impl ValidateRequestTypes for ShareReplicaRequest {
                         ResourceKind::Replica,
                         "share_replica_request.protocol",
                         "".to_string(),
-                    ))
+                    ));
+                }
+            },
+            pool_ref: match self.pool_ref.clone() {
+                Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "create_replica_request.pool_ref",
+                        "".to_string(),
+                    ));
                 }
             },
             inner: self,
@@ -524,6 +634,8 @@ pub trait UnshareReplicaInfo: Send + Sync + std::fmt::Debug {
     fn node(&self) -> NodeId;
     /// Id of the pool
     fn pool(&self) -> PoolId;
+    /// reference of the pool
+    fn pool_ref(&self) -> transport::PoolRef;
     /// Name of the replica
     fn name(&self) -> Option<ReplicaName>;
     /// Uuid of the replica
@@ -537,6 +649,10 @@ impl UnshareReplicaInfo for UnshareReplica {
 
     fn pool(&self) -> PoolId {
         self.pool.clone()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn name(&self) -> Option<ReplicaName> {
@@ -553,6 +669,7 @@ impl UnshareReplicaInfo for UnshareReplica {
 pub struct ValidatedUnshareReplicaRequest {
     inner: UnshareReplicaRequest,
     uuid: ReplicaId,
+    pool_ref: transport::PoolRef,
 }
 
 impl UnshareReplicaInfo for ValidatedUnshareReplicaRequest {
@@ -562,6 +679,10 @@ impl UnshareReplicaInfo for ValidatedUnshareReplicaRequest {
 
     fn pool(&self) -> PoolId {
         self.inner.pool_id.clone().into()
+    }
+
+    fn pool_ref(&self) -> transport::PoolRef {
+        self.pool_ref.clone()
     }
 
     fn name(&self) -> Option<ReplicaName> {
@@ -578,6 +699,16 @@ impl ValidateRequestTypes for UnshareReplicaRequest {
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedUnshareReplicaRequest {
             uuid: ReplicaId::try_from(StringValue(self.replica_id.clone()))?,
+            pool_ref: match self.pool_ref.clone() {
+                Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "create_replica_request.pool_ref",
+                        "".to_string(),
+                    ));
+                }
+            },
             inner: self,
         })
     }
@@ -589,6 +720,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool().to_string(),
+            pool_ref: Some(data.pool_ref().into()),
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
             thin: data.thin(),
@@ -607,6 +739,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplica {
             name: data.name(),
             uuid: data.uuid(),
             pool: data.pool(),
+            pool_ref: data.pool_ref(),
             size: data.size(),
             thin: data.thin(),
             share: data.share(),
@@ -621,6 +754,7 @@ impl From<&dyn DestroyReplicaInfo> for DestroyReplicaRequest {
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool().to_string(),
+            pool_ref: Some(data.pool_ref().into()),
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
             disowners: Some(data.disowners().into()),
@@ -633,6 +767,7 @@ impl From<&dyn DestroyReplicaInfo> for DestroyReplica {
         Self {
             node: data.node(),
             pool: data.pool(),
+            pool_ref: data.pool_ref(),
             uuid: data.uuid(),
             name: data.name(),
             disowners: data.disowners(),
@@ -646,6 +781,7 @@ impl From<&dyn ShareReplicaInfo> for ShareReplicaRequest {
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool().to_string(),
+            pool_ref: Some(data.pool_ref().into()),
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
             protocol: protocol as i32,
@@ -658,6 +794,7 @@ impl From<&dyn ShareReplicaInfo> for ShareReplica {
         Self {
             node: data.node(),
             pool: data.pool(),
+            pool_ref: data.pool_ref(),
             uuid: data.uuid(),
             name: data.name(),
             protocol: data.protocol(),
@@ -670,6 +807,7 @@ impl From<&dyn UnshareReplicaInfo> for UnshareReplicaRequest {
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool().to_string(),
+            pool_ref: Some(data.pool_ref().into()),
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
         }
@@ -681,6 +819,7 @@ impl From<&dyn UnshareReplicaInfo> for UnshareReplica {
         Self {
             node: data.node(),
             pool: data.pool(),
+            pool_ref: data.pool_ref(),
             uuid: data.uuid(),
             name: data.name(),
         }
@@ -705,6 +844,45 @@ impl From<transport::Protocol> for common::Protocol {
             transport::Protocol::Nvmf => Self::Nvmf,
             transport::Protocol::Iscsi => Self::Iscsi,
             transport::Protocol::Nbd => Self::Nbd,
+        }
+    }
+}
+
+impl TryFrom<common::PoolRef> for transport::PoolRef {
+    type Error = ReplyError;
+
+    fn try_from(value: common::PoolRef) -> Result<Self, Self::Error> {
+        Ok(match value.pool_ref {
+            Some(pool_ref) => match pool_ref {
+                common::pool_ref::PoolRef::PoolName(pool_name) => {
+                    transport::PoolRef::PoolName(pool_name.into())
+                }
+                common::pool_ref::PoolRef::PoolUuid(pool_uuid) => {
+                    transport::PoolRef::PoolUuid(PoolUuid::try_from(StringValue(Some(pool_uuid)))?)
+                }
+            },
+            None => {
+                return Err(ReplyError::invalid_argument(
+                    ResourceKind::ReplicaSpec,
+                    "replica_spec.pool_ref",
+                    "".to_string(),
+                ))
+            }
+        })
+    }
+}
+
+impl From<transport::PoolRef> for common::PoolRef {
+    fn from(value: transport::PoolRef) -> Self {
+        Self {
+            pool_ref: match value {
+                transport::PoolRef::PoolName(pool_name) => {
+                    Some(common::pool_ref::PoolRef::PoolName(pool_name.into()))
+                }
+                transport::PoolRef::PoolUuid(pool_uuid) => {
+                    Some(common::pool_ref::PoolRef::PoolUuid(pool_uuid.into()))
+                }
+            },
         }
     }
 }
@@ -782,7 +960,7 @@ impl TryFrom<replica::ReplicaOwners> for ReplicaOwners {
                             ResourceKind::ReplicaSpec,
                             "replica_spec.owners.volume",
                             err.to_string(),
-                        ))
+                        ));
                     }
                 },
                 None => None,
@@ -819,7 +997,7 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                     ResourceKind::ReplicaSpec,
                     "replica_spec.status",
                     "".to_string(),
-                ))
+                ));
             }
         };
         Ok(Self {
@@ -827,6 +1005,16 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
             uuid: ReplicaId::try_from(StringValue(value.replica_id))?,
             size: value.size,
             pool: value.pool_id.into(),
+            pool_ref: match value.pool_ref {
+                Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "replica.pool_ref",
+                        "".to_string(),
+                    ));
+                }
+            },
             share: match common::Protocol::from_i32(value.share) {
                 Some(share) => share.into(),
                 None => {
@@ -834,7 +1022,7 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                         ResourceKind::ReplicaSpec,
                         "replica_spec.share",
                         "".to_string(),
-                    ))
+                    ));
                 }
             },
             thin: value.thin,
@@ -846,7 +1034,7 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                     return Err(ReplyError::missing_argument(
                         ResourceKind::ReplicaSpec,
                         "replica_spec.owners",
-                    ))
+                    ));
                 }
             },
             sequencer: Default::default(),
@@ -867,6 +1055,7 @@ impl From<ReplicaSpec> for replica::ReplicaSpec {
             replica_id: Some(value.uuid.to_string()),
             size: value.size,
             pool_id: value.pool.to_string(),
+            pool_ref: Some(value.pool_ref.into()),
             share: share as i32,
             thin: value.thin,
             spec_status: spec_status as i32,
@@ -895,6 +1084,27 @@ impl TryFrom<StringValue> for ReplicaId {
             None => Err(ReplyError::missing_argument(
                 ResourceKind::Replica,
                 "replica.uuid",
+            )),
+        }
+    }
+}
+
+impl TryFrom<StringValue> for PoolUuid {
+    type Error = ReplyError;
+
+    fn try_from(value: StringValue) -> Result<Self, Self::Error> {
+        match value.0 {
+            Some(uuid) => match PoolUuid::try_from(uuid) {
+                Ok(pooluuid) => Ok(pooluuid),
+                Err(err) => Err(ReplyError::invalid_argument(
+                    ResourceKind::Replica,
+                    "pool.uuid",
+                    err.to_string(),
+                )),
+            },
+            None => Err(ReplyError::missing_argument(
+                ResourceKind::Replica,
+                "pool.uuid",
             )),
         }
     }

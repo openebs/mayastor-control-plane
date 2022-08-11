@@ -1,6 +1,9 @@
 use super::*;
 use crate::v0::pools::pool;
-use common_lib::{transport_api::ReplyError, types::v0::openapi::apis::Uuid};
+use common_lib::{
+    transport_api::ReplyError,
+    types::v0::{openapi::apis::Uuid, transport::PoolRef},
+};
 use grpc::operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations};
 use transport_api::{ReplyErrorKind, ResourceKind};
 
@@ -17,15 +20,25 @@ async fn put_replica(
     body: CreateReplicaBody,
 ) -> Result<models::Replica, RestError<RestJsonError>> {
     let create = match filter.clone() {
-        Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
-            body.bus_request(node_id, pool_id, replica_id)
+        Filter::NodePoolReplica(node_id, pool_ref, replica_id) => {
+            body.bus_request(node_id, pool_ref, replica_id)
         }
-        Filter::PoolReplica(pool_id, replica_id) => {
-            let node_id = match pool_client().get(Filter::Pool(pool_id.clone()), None).await {
-                Ok(pools) => pool(pool_id.to_string(), pools.into_inner().get(0))?.node(),
+        Filter::PoolReplica(pool_ref, replica_id) => {
+            let node_id = match pool_client()
+                .get(Filter::Pool(pool_ref.clone()), None)
+                .await
+            {
+                Ok(pools) => pool(
+                    match pool_ref.clone() {
+                        PoolRef::PoolName(pool_name) => pool_name.into(),
+                        PoolRef::PoolUuid(pool_uuid) => pool_uuid.into(),
+                    },
+                    pools.into_inner().get(0),
+                )?
+                .node(),
                 Err(error) => return Err(RestError::from(error)),
             };
-            body.bus_request(node_id, pool_id, replica_id)
+            body.bus_request(node_id, pool_ref, replica_id)
         }
         _ => {
             return Err(RestError::from(ReplyError {
@@ -42,14 +55,15 @@ async fn put_replica(
 
 async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>> {
     let destroy = match filter.clone() {
-        Filter::NodePoolReplica(node_id, pool_id, replica_id) => DestroyReplica {
+        Filter::NodePoolReplica(node_id, pool_ref, replica_id) => DestroyReplica {
             node: node_id,
-            pool: pool_id,
+            pool: Default::default(),
+            pool_ref,
             name: None,
             uuid: replica_id,
             ..Default::default()
         },
-        Filter::PoolReplica(pool_id, replica_id) => {
+        Filter::PoolReplica(pool_ref, replica_id) => {
             let node_id = match replica_client().get(filter, None).await {
                 Ok(replicas) => replica(replica_id.to_string(), replicas.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
@@ -57,7 +71,8 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
 
             DestroyReplica {
                 node: node_id,
-                pool: pool_id,
+                pool: Default::default(),
+                pool_ref,
                 name: None,
                 uuid: replica_id,
                 ..Default::default()
@@ -81,14 +96,15 @@ async fn share_replica(
     protocol: ReplicaShareProtocol,
 ) -> Result<String, RestError<RestJsonError>> {
     let share = match filter.clone() {
-        Filter::NodePoolReplica(node_id, pool_id, replica_id) => ShareReplica {
+        Filter::NodePoolReplica(node_id, pool_ref, replica_id) => ShareReplica {
             node: node_id,
-            pool: pool_id,
+            pool: Default::default(),
+            pool_ref,
             name: None,
             uuid: replica_id,
             protocol,
         },
-        Filter::PoolReplica(pool_id, replica_id) => {
+        Filter::PoolReplica(pool_ref, replica_id) => {
             let node_id = match replica_client().get(filter, None).await {
                 Ok(replicas) => replica(replica_id.to_string(), replicas.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
@@ -96,7 +112,8 @@ async fn share_replica(
 
             ShareReplica {
                 node: node_id,
-                pool: pool_id,
+                pool: Default::default(),
+                pool_ref,
                 name: None,
                 uuid: replica_id,
                 protocol,
@@ -117,13 +134,14 @@ async fn share_replica(
 
 async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>> {
     let unshare = match filter.clone() {
-        Filter::NodePoolReplica(node_id, pool_id, replica_id) => UnshareReplica {
+        Filter::NodePoolReplica(node_id, pool_ref, replica_id) => UnshareReplica {
             node: node_id,
-            pool: pool_id,
+            pool: Default::default(),
+            pool_ref,
             name: None,
             uuid: replica_id,
         },
-        Filter::PoolReplica(pool_id, replica_id) => {
+        Filter::PoolReplica(pool_ref, replica_id) => {
             let node_id = match replica_client().get(filter, None).await {
                 Ok(replicas) => replica(replica_id.to_string(), replicas.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
@@ -131,7 +149,8 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
 
             UnshareReplica {
                 node: node_id,
-                pool: pool_id,
+                pool: Default::default(),
+                pool_ref,
                 name: None,
                 uuid: replica_id,
             }
@@ -156,7 +175,7 @@ impl apis::actix_server::Replicas for RestApi {
     ) -> Result<(), RestError<RestJsonError>> {
         destroy_replica(Filter::NodePoolReplica(
             node_id.into(),
-            pool_id.into(),
+            PoolRef::PoolName(pool_id.into()),
             replica_id.into(),
         ))
         .await
@@ -167,7 +186,7 @@ impl apis::actix_server::Replicas for RestApi {
     ) -> Result<(), RestError<RestJsonError>> {
         unshare_replica(Filter::NodePoolReplica(
             node_id.into(),
-            pool_id.into(),
+            PoolRef::PoolName(pool_id.into()),
             replica_id.into(),
         ))
         .await
@@ -176,13 +195,21 @@ impl apis::actix_server::Replicas for RestApi {
     async fn del_pool_replica(
         Path((pool_id, replica_id)): Path<(String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
-        destroy_replica(Filter::PoolReplica(pool_id.into(), replica_id.into())).await
+        destroy_replica(Filter::PoolReplica(
+            PoolRef::PoolName(pool_id.into()),
+            replica_id.into(),
+        ))
+        .await
     }
 
     async fn del_pool_replica_share(
         Path((pool_id, replica_id)): Path<(String, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
-        unshare_replica(Filter::PoolReplica(pool_id.into(), replica_id.into())).await
+        unshare_replica(Filter::PoolReplica(
+            PoolRef::PoolName(pool_id.into()),
+            replica_id.into(),
+        ))
+        .await
     }
 
     async fn get_node_pool_replica(
@@ -192,7 +219,11 @@ impl apis::actix_server::Replicas for RestApi {
             replica_id.to_string(),
             replica_client()
                 .get(
-                    Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
+                    Filter::NodePoolReplica(
+                        node_id.into(),
+                        PoolRef::PoolName(pool_id.into()),
+                        replica_id.into(),
+                    ),
                     None,
                 )
                 .await?
@@ -206,7 +237,10 @@ impl apis::actix_server::Replicas for RestApi {
         Path((node_id, pool_id)): Path<(String, String)>,
     ) -> Result<Vec<models::Replica>, RestError<RestJsonError>> {
         let replicas = replica_client()
-            .get(Filter::NodePool(node_id.into(), pool_id.into()), None)
+            .get(
+                Filter::NodePool(node_id.into(), PoolRef::PoolName(pool_id.into())),
+                None,
+            )
             .await?;
         Ok(replicas.into_inner().into_iter().map(From::from).collect())
     }
@@ -242,7 +276,11 @@ impl apis::actix_server::Replicas for RestApi {
         Body(create_replica_body): Body<models::CreateReplicaBody>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         put_replica(
-            Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
+            Filter::NodePoolReplica(
+                node_id.into(),
+                PoolRef::PoolName(pool_id.into()),
+                replica_id.into(),
+            ),
             CreateReplicaBody::from(create_replica_body),
         )
         .await
@@ -252,7 +290,11 @@ impl apis::actix_server::Replicas for RestApi {
         Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
-            Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
+            Filter::NodePoolReplica(
+                node_id.into(),
+                PoolRef::PoolName(pool_id.into()),
+                replica_id.into(),
+            ),
             ReplicaShareProtocol::Nvmf,
         )
         .await
@@ -263,7 +305,7 @@ impl apis::actix_server::Replicas for RestApi {
         Body(create_replica_body): Body<models::CreateReplicaBody>,
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         put_replica(
-            Filter::PoolReplica(pool_id.into(), replica_id.into()),
+            Filter::PoolReplica(PoolRef::PoolName(pool_id.into()), replica_id.into()),
             CreateReplicaBody::from(create_replica_body),
         )
         .await
@@ -273,7 +315,7 @@ impl apis::actix_server::Replicas for RestApi {
         Path((pool_id, replica_id)): Path<(String, Uuid)>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
-            Filter::PoolReplica(pool_id.into(), replica_id.into()),
+            Filter::PoolReplica(PoolRef::PoolName(pool_id.into()), replica_id.into()),
             ReplicaShareProtocol::Nvmf,
         )
         .await

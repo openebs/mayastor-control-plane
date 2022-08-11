@@ -11,9 +11,9 @@ use common_lib::{
         },
         transport::{
             Child, ChildState, CreateReplica, CreateVolume, DestroyVolume, Filter, GetNexuses,
-            GetReplicas, GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume,
-            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol, VolumeState,
-            VolumeStatus,
+            GetReplicas, GetVolumes, Nexus, NodeId, PoolRef, PublishVolume, SetVolumeReplica,
+            ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume, VolumeShareProtocol,
+            VolumeState, VolumeStatus,
         },
     },
 };
@@ -979,6 +979,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
                 name: Default::default(),
                 uuid: ReplicaId::new(),
                 pool: cluster.pool(1, 0),
+                pool_ref: PoolRef::PoolName(cluster.pool(1, 0)),
                 size: volume.spec().size / 1024 / 1024 + 5,
                 thin: false,
                 share: Default::default(),

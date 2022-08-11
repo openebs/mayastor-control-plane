@@ -9,7 +9,7 @@ use common_lib::{
         store::{pool::PoolSpec, replica::ReplicaSpec, OperationMode},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-            NodeId, Pool, PoolId, Replica, ReplicaId, ShareReplica, UnshareReplica,
+            NodeId, Pool, PoolId, PoolRef, Replica, ReplicaId, ShareReplica, UnshareReplica,
         },
     },
 };
@@ -133,11 +133,19 @@ impl Service {
         match filter {
             Filter::None => self.node_pools(None, None).await,
             Filter::Node(node_id) => self.node_pools(Some(node_id), None).await,
-            Filter::NodePool(node_id, pool_id) => {
+            Filter::NodePool(node_id, pool_ref) => {
+                let pool_id: PoolId = match pool_ref.clone() {
+                    PoolRef::PoolName(pool_name) => pool_name,
+                    PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+                };
                 tracing::Span::current().record("pool.uuid", &pool_id.as_str());
                 self.node_pools(Some(node_id), Some(pool_id)).await
             }
-            Filter::Pool(pool_id) => {
+            Filter::Pool(pool_ref) => {
+                let pool_id: PoolId = match pool_ref.clone() {
+                    PoolRef::PoolName(pool_name) => pool_name,
+                    PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+                };
                 tracing::Span::current().record("pool.uuid", &pool_id.as_str());
                 self.node_pools(None, Some(pool_id)).await
             }
@@ -175,20 +183,34 @@ impl Service {
         match filter {
             Filter::None => Ok(self.registry.get_replicas().await),
             Filter::Node(node_id) => self.registry.get_node_replicas(&node_id).await,
-            Filter::NodePool(node_id, pool_id) => {
+            Filter::NodePool(node_id, pool_ref) => {
                 let node = self.registry.get_node_wrapper(&node_id).await?;
+                let pool_id = match pool_ref.clone() {
+                    PoolRef::PoolName(pool_name) => pool_name,
+                    PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+                };
                 let pool_wrapper = node
                     .pool_wrapper(&pool_id)
                     .await
                     .context(PoolNotFound { pool_id })?;
                 Ok(pool_wrapper.replicas())
             }
-            Filter::Pool(pool_id) => {
-                let pool_wrapper = self.registry.get_node_pool_wrapper(pool_id).await?;
+            Filter::Pool(pool_ref) => {
+                let pool_wrapper = self
+                    .registry
+                    .get_node_pool_wrapper(match pool_ref.clone() {
+                        PoolRef::PoolName(pool_name) => pool_name,
+                        PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+                    })
+                    .await?;
                 Ok(pool_wrapper.replicas())
             }
-            Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
+            Filter::NodePoolReplica(node_id, pool_ref, replica_id) => {
                 let node = self.registry.get_node_wrapper(&node_id).await?;
+                let pool_id = match pool_ref.clone() {
+                    PoolRef::PoolName(pool_name) => pool_name,
+                    PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+                };
                 let pool_wrapper = node
                     .pool_wrapper(&pool_id)
                     .await
@@ -206,8 +228,14 @@ impl Service {
                     .context(ReplicaNotFound { replica_id })?;
                 Ok(vec![replica])
             }
-            Filter::PoolReplica(pool_id, replica_id) => {
-                let pool_wrapper = self.registry.get_node_pool_wrapper(pool_id).await?;
+            Filter::PoolReplica(pool_ref, replica_id) => {
+                let pool_wrapper = self
+                    .registry
+                    .get_node_pool_wrapper(match pool_ref.clone() {
+                        PoolRef::PoolName(pool_name) => pool_name,
+                        PoolRef::PoolUuid(pool_uuid) => pool_uuid.to_string().into(),
+                    })
+                    .await?;
                 let replica = pool_wrapper
                     .replica(&replica_id)
                     .context(ReplicaNotFound { replica_id })?;

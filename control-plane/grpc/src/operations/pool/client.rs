@@ -77,15 +77,15 @@ impl PoolOperations for PoolClient {
                     node_id: id.into(),
                 })),
             },
-            Filter::Pool(id) => GetPoolsRequest {
+            Filter::Pool(pool_ref) => GetPoolsRequest {
                 filter: Some(get_pools_request::Filter::Pool(PoolFilter {
-                    pool_id: id.into(),
+                    pool_ref: Some(pool_ref.into()),
                 })),
             },
-            Filter::NodePool(node_id, pool_id) => GetPoolsRequest {
+            Filter::NodePool(node_id, pool_ref) => GetPoolsRequest {
                 filter: Some(get_pools_request::Filter::NodePool(NodePoolFilter {
                     node_id: node_id.into(),
-                    pool_id: pool_id.into(),
+                    pool_ref: Some(pool_ref.into()),
                 })),
             },
             _ => GetPoolsRequest { filter: None },

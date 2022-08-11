@@ -21,6 +21,22 @@ impl GetReplicas {
     }
 }
 
+/// Pool Reference
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum PoolRef {
+    /// name of the pool
+    PoolName(PoolId),
+    /// uuid of the pool
+    PoolUuid(PoolUuid),
+}
+
+impl Default for PoolRef {
+    fn default() -> Self {
+        Self::PoolName("".into())
+    }
+}
+
 /// Replica information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +49,8 @@ pub struct Replica {
     pub uuid: ReplicaId,
     /// id of the pool
     pub pool: PoolId,
+    /// ref of the pool
+    pub pool_ref: PoolRef,
     /// thin provisioning
     pub thin: bool,
     /// size of the replica in bytes
@@ -127,6 +145,7 @@ impl From<Replica> for DestroyReplica {
         Self {
             node: replica.node,
             pool: replica.pool,
+            pool_ref: replica.pool_ref,
             uuid: replica.uuid,
             name: replica.name.into(),
             disowners: Default::default(),
@@ -146,6 +165,8 @@ pub struct CreateReplica {
     pub uuid: ReplicaId,
     /// id of the pool
     pub pool: PoolId,
+    /// ref of the pool
+    pub pool_ref: PoolRef,
     /// size of the replica in bytes
     pub size: u64,
     /// thin provisioning
@@ -255,6 +276,8 @@ pub struct DestroyReplica {
     pub node: NodeId,
     /// id of the pool
     pub pool: PoolId,
+    /// ref of the pool
+    pub pool_ref: PoolRef,
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// name of the replica
@@ -266,14 +289,18 @@ impl DestroyReplica {
     /// Return a new `Self` from the provided arguments
     pub fn new(
         node: &NodeId,
-        pool: &PoolId,
+        // pool_id: &PoolId,
+        // pool_uuid: Option<&PoolUuid>,
+        pool_ref: &PoolRef,
         name: &ReplicaName,
         uuid: &ReplicaId,
         disowners: &ReplicaOwners,
     ) -> Self {
         Self {
             node: node.clone(),
-            pool: pool.clone(),
+            //pool: pool.clone(),
+            pool: Default::default(),
+            pool_ref: pool_ref.clone(),
             uuid: uuid.clone(),
             name: name.clone().into(),
             disowners: disowners.clone(),
@@ -289,6 +316,8 @@ pub struct ShareReplica {
     pub node: NodeId,
     /// id of the pool
     pub pool: PoolId,
+    /// ref of the pool
+    pub pool_ref: PoolRef,
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// name of the replica,
@@ -297,11 +326,24 @@ pub struct ShareReplica {
     pub protocol: ReplicaShareProtocol,
 }
 
+/// List Replicas Request
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ListReplicas {
+    /// id of the io-engine instance
+    pub node: NodeId,
+    /// id of the pool
+    pub poolname: Option<PoolId>,
+    /// name of the replica
+    pub name: Option<ReplicaName>,
+}
+
 impl From<ShareReplica> for UnshareReplica {
     fn from(share: ShareReplica) -> Self {
         Self {
             node: share.node,
             pool: share.pool,
+            pool_ref: share.pool_ref,
             uuid: share.uuid,
             name: share.name,
         }
@@ -312,6 +354,7 @@ impl From<&Replica> for ShareReplica {
         Self {
             node: from.node.clone(),
             pool: from.pool.clone(),
+            pool_ref: from.pool_ref.clone(),
             uuid: from.uuid.clone(),
             name: from.name.clone().into(),
             protocol: ReplicaShareProtocol::Nvmf,
@@ -324,6 +367,7 @@ impl From<&Replica> for UnshareReplica {
         Self {
             node: from.node,
             pool: from.pool,
+            pool_ref: from.pool_ref,
             uuid: from.uuid,
             name: from.name.into(),
         }
@@ -334,6 +378,7 @@ impl From<UnshareReplica> for ShareReplica {
         Self {
             node: share.node,
             pool: share.pool,
+            pool_ref: share.pool_ref,
             uuid: share.uuid,
             name: share.name,
             protocol: ReplicaShareProtocol::Nvmf,
@@ -349,6 +394,8 @@ pub struct UnshareReplica {
     pub node: NodeId,
     /// id of the pool
     pub pool: PoolId,
+    /// ref of the pool
+    pub pool_ref: PoolRef,
     /// uuid of the replica
     pub uuid: ReplicaId,
     /// name of the replica

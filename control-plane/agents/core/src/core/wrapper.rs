@@ -10,7 +10,10 @@ use crate::{
 
 use common::{
     errors::{GrpcRequest as GrpcRequestError, SvcError},
-    msg_translation::{v0::AgentToIoEngine as v0_conversion, IoEngineToAgent, TryIoEngineToAgent},
+    msg_translation::{
+        v0::AgentToIoEngine as v0_conversion, v1::AgentToIoEngine as v1_conversion,
+        IoEngineToAgent, TryIoEngineToAgent,
+    },
 };
 use common_lib::{
     transport_api::{Message, MessageId, ResourceKind},
@@ -1030,17 +1033,27 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let rpc_replica = self
                     .client_v0()?
-                    .create_replica_v2(request.to_rpc())
+                    .create_replica_v2(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Replica,
                         request: "create_replica",
                     })?;
-                let replica = rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
+                let replica = v0_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
                 Ok(replica)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_replica = self
+                    .client_v1()?
+                    .replica
+                    .create_replica(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Replica,
+                        request: "create_replica",
+                    })?;
+                let replica = v1_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
+                Ok(replica)
             }
         }
     }
@@ -1049,7 +1062,7 @@ impl ClientOps for GrpcClientLocked {
         match self.api_version() {
             APIVersion::V0 => Ok(self
                 .client_v0()?
-                .share_replica(request.to_rpc())
+                .share_replica(v0_conversion::to_rpc(request))
                 .await
                 .context(GrpcRequestError {
                     resource: ResourceKind::Replica,
@@ -1057,9 +1070,17 @@ impl ClientOps for GrpcClientLocked {
                 })?
                 .into_inner()
                 .uri),
-            APIVersion::V1 => {
-                unimplemented!()
-            }
+            APIVersion::V1 => Ok(self
+                .client_v1()?
+                .replica
+                .share_replica(v1_conversion::to_rpc(request))
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Replica,
+                    request: "share_replica",
+                })?
+                .into_inner()
+                .uri),
         }
     }
 
@@ -1067,7 +1088,7 @@ impl ClientOps for GrpcClientLocked {
         match self.api_version() {
             APIVersion::V0 => Ok(self
                 .client_v0()?
-                .share_replica(request.to_rpc())
+                .share_replica(v0_conversion::to_rpc(request))
                 .await
                 .context(GrpcRequestError {
                     resource: ResourceKind::Replica,
@@ -1075,9 +1096,17 @@ impl ClientOps for GrpcClientLocked {
                 })?
                 .into_inner()
                 .uri),
-            APIVersion::V1 => {
-                unimplemented!()
-            }
+            APIVersion::V1 => Ok(self
+                .client_v1()?
+                .replica
+                .unshare_replica(v1_conversion::to_rpc(request))
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Replica,
+                    request: "unshare_replica",
+                })?
+                .into_inner()
+                .uri),
         }
     }
 
@@ -1086,7 +1115,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let _ = self
                     .client_v0()?
-                    .destroy_replica(request.to_rpc())
+                    .destroy_replica(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Replica,
@@ -1095,7 +1124,16 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let _ = self
+                    .client_v1()?
+                    .replica
+                    .destroy_replica(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Replica,
+                        request: "destroy_replica",
+                    })?;
+                Ok(())
             }
         }
     }
@@ -1225,8 +1263,18 @@ pub(crate) fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) ->
 }
 
 /// convert rpc replica to a agent replica
-pub(crate) fn rpc_replica_to_agent(
+pub(crate) fn v0_rpc_replica_to_agent(
     rpc_replica: &rpc::io_engine::ReplicaV2,
+    id: &NodeId,
+) -> Result<Replica, SvcError> {
+    let mut replica = rpc_replica.try_to_agent()?;
+    replica.node = id.clone();
+    Ok(replica)
+}
+
+/// convert rpc replica to a agent replica
+pub(crate) fn v1_rpc_replica_to_agent(
+    rpc_replica: &rpc::v1::replica::Replica,
     id: &NodeId,
 ) -> Result<Replica, SvcError> {
     let mut replica = rpc_replica.try_to_agent()?;

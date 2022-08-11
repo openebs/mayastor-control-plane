@@ -6,7 +6,8 @@ use common_lib::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, NexusId, NexusStatus, Protocol, ReplicaId, ReplicaName, ReplicaStatus,
+            self, ChildState, NexusId, NexusStatus, PoolRef, Protocol, ReplicaId, ReplicaName,
+            ReplicaStatus,
         },
     },
 };
@@ -107,6 +108,7 @@ impl TryIoEngineToAgent for v0_rpc::ReplicaV2 {
                 kind: ResourceKind::Replica,
             })?,
             pool: self.pool.clone().into(),
+            pool_ref: PoolRef::PoolName(self.pool.clone().into()),
             thin: self.thin,
             size: self.size,
             share: self.share.into(),
@@ -135,7 +137,7 @@ impl TryIoEngineToAgent for v0_rpc::NexusV2 {
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
-            share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::None),
+            share: Protocol::try_from(self.device_uri.clone()).unwrap_or(Protocol::None),
         })
     }
 }
@@ -155,7 +157,7 @@ impl TryIoEngineToAgent for v0_rpc::Nexus {
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
-            share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::None),
+            share: Protocol::try_from(self.device_uri.clone()).unwrap_or(Protocol::None),
         })
     }
 }
@@ -179,7 +181,11 @@ impl AgentToIoEngine for transport::CreateReplica {
         Self::IoEngineMessage {
             name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             uuid: self.uuid.clone().into(),
-            pool: self.pool.clone().into(),
+            // pool: self.pool.clone().into(),
+            pool: match self.pool_ref.clone() {
+                PoolRef::PoolName(pool_name) => pool_name.into(),
+                PoolRef::PoolUuid(pool_uuid) => pool_uuid.into(),
+            },
             thin: self.thin,
             size: self.size,
             share: self.share as i32,

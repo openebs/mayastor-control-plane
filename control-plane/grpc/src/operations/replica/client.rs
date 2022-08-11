@@ -68,22 +68,22 @@ impl ReplicaOperations for ReplicaClient {
                     node_id: id.into(),
                 })),
             },
-            Filter::Pool(id) => GetReplicasRequest {
+            Filter::Pool(pool_ref) => GetReplicasRequest {
                 filter: Some(get_replicas_request::Filter::Pool(PoolFilter {
-                    pool_id: id.into(),
+                    pool_ref: Some(pool_ref.into()),
                 })),
             },
-            Filter::NodePool(node_id, pool_id) => GetReplicasRequest {
+            Filter::NodePool(node_id, pool_ref) => GetReplicasRequest {
                 filter: Some(get_replicas_request::Filter::NodePool(NodePoolFilter {
                     node_id: node_id.into(),
-                    pool_id: pool_id.into(),
+                    pool_ref: Some(pool_ref.into()),
                 })),
             },
-            Filter::NodePoolReplica(node_id, pool_id, replica_id) => GetReplicasRequest {
+            Filter::NodePoolReplica(node_id, pool_ref, replica_id) => GetReplicasRequest {
                 filter: Some(get_replicas_request::Filter::NodePoolReplica(
                     NodePoolReplicaFilter {
                         node_id: node_id.into(),
-                        pool_id: pool_id.into(),
+                        pool_ref: Some(pool_ref.into()),
                         replica_id: replica_id.to_string(),
                     },
                 )),
@@ -96,10 +96,10 @@ impl ReplicaOperations for ReplicaClient {
                     },
                 )),
             },
-            Filter::PoolReplica(pool_id, replica_id) => GetReplicasRequest {
+            Filter::PoolReplica(pool_ref, replica_id) => GetReplicasRequest {
                 filter: Some(get_replicas_request::Filter::PoolReplica(
                     PoolReplicaFilter {
-                        pool_id: pool_id.into(),
+                        pool_ref: Some(pool_ref.into()),
                         replica_id: replica_id.to_string(),
                     },
                 )),

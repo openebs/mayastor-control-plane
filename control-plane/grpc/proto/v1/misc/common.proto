@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "google/protobuf/wrappers.proto";
+
 package v1.common;
 
 // Enum defining the various statuses that a resource spec can be in.
@@ -33,6 +35,16 @@ enum Protocol {
   Iscsi = 2;
   // shared as NBD
   Nbd = 3;
+}
+
+// Storage Pool reference
+message PoolRef {
+  oneof pool_ref {
+    // name of the pool
+    string pool_name = 1;
+    // uuid of the pool
+    google.protobuf.StringValue pool_uuid = 2;
+  }
 }
 
 // ReplyErrorKind for the kind of the occurred error
@@ -110,13 +122,13 @@ message NodeReplicaFilter{
 // Filter by Node and Replica id
 message NodePoolReplicaFilter{
   string node_id = 1;
-  string pool_id = 2;
+  PoolRef pool_ref = 2;
   string replica_id = 3;
 }
 
 // Filter by Node and Replica id
 message PoolReplicaFilter{
-  string pool_id = 1;
+  PoolRef pool_ref = 1;
   string replica_id = 2;
 }
 
@@ -137,13 +149,13 @@ message NodeFilter{
 
 // Filter by Pool id
 message PoolFilter{
-  string pool_id = 1;
+  PoolRef pool_ref = 1;
 }
 
 // Filter by Node and Pool id
 message NodePoolFilter{
   string node_id = 1;
-  string pool_id = 2;
+  PoolRef pool_ref = 2;
 }
 
 // Filter by Nexus Id

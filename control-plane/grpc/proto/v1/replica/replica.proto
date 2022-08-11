@@ -15,16 +15,18 @@ message Replica{
   google.protobuf.StringValue replica_id = 3;
   // id of the pool
   string pool_id = 4;
+  // pool reference
+  common.PoolRef pool_ref = 5;
   // thin provisioning
-  bool thin = 5;
+  bool thin = 7;
   // size of the replica in bytes
-  uint64 size = 6;
+  uint64 size = 8;
   // protocol used for exposing the replica
-  common.Protocol share = 7;
+  common.Protocol share = 9;
   // uri usable by nexus to access it
-  string uri = 8;
+  string uri = 10;
   // status of the replica
-  ReplicaStatus status = 9;
+  ReplicaStatus status = 11;
 }
 
 // Multiple replicas
@@ -64,6 +66,8 @@ message CreateReplicaRequest{
   bool managed = 8;
   // Owners of the resource
   ReplicaOwners owners = 9;
+  // pool reference
+  common.PoolRef pool_ref = 10;
 }
 
 // Replica owners which is a volume or none and a list of nexuses
@@ -84,6 +88,8 @@ message DestroyReplicaRequest{
   string pool_id = 4;
   // delete by owners
   ReplicaOwners disowners = 5;
+  // pool reference
+  common.PoolRef pool_ref = 6;
 }
 
 message ShareReplicaRequest {
@@ -97,6 +103,8 @@ message ShareReplicaRequest {
   string pool_id = 4;
   // protocol used for exposing the replica
   ReplicaShareProtocol protocol = 5;
+  // pool reference
+  common.PoolRef pool_ref = 6;
 }
 
 // The protocol used to share the replica.
@@ -113,6 +121,8 @@ message UnshareReplicaRequest {
   google.protobuf.StringValue replica_id = 3;
   // id of the pool
   string pool_id = 4;
+  // pool reference
+  common.PoolRef pool_ref = 5;
 }
 
 // Reply type for a CreateReplica request
@@ -187,6 +197,8 @@ message ReplicaSpec{
   ReplicaOwners owners = 9;
   // Record of the operation in progress
   optional common.SpecOperation operation = 10;
+  // pool reference
+  common.PoolRef pool_ref = 11;
 }
 
 // Service for managing replicas
