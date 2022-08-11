@@ -76,7 +76,7 @@ let
         '';
         inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
         cargoBuildOptions = attrs: attrs ++ [ "-p" "kubectl-plugin" ];
-        nativeBuildInputs = with pkgs.pkgsCross.musl64; [ pkgconfig clang openapi-generator which git pkgsStatic.openssl.dev ];
+        nativeBuildInputs = with pkgs; [ pkgconfig clang openapi-generator which git pkgsStatic.openssl.dev ];
         doCheck = false;
         usePureFromTOML = true;
 

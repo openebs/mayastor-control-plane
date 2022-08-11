@@ -1,13 +1,11 @@
-use crate::collect::{
-    error::Error, resources::traits::Topologer, rest_wrapper::rest_wrapper_client::RestClient,
-};
+use crate::collect::{error::Error, resources::traits::Topologer, rest_wrapper::RestClient};
 use chrono::Local;
 
 /// DumpConfig helps to create new instance of Dumper
 #[derive(Debug)]
 pub(crate) struct DumpConfig {
     /// Client to interact with REST service
-    pub(crate) rest_client: &'static RestClient,
+    pub(crate) rest_client: RestClient,
     /// directory path to create archive files
     pub(crate) output_directory: String,
     /// namespace of mayastor system
@@ -24,6 +22,16 @@ pub(crate) struct DumpConfig {
     pub(crate) timeout: humantime::Duration,
     /// Topologer implements functionality to build topological infotmation of system
     pub(crate) topologer: Option<Box<dyn Topologer>>,
+    pub(crate) output_format: OutputFormat,
+}
+
+/// The output format.
+#[derive(Debug)]
+pub(crate) enum OutputFormat {
+    /// A tar file.
+    Tar,
+    /// The STDOUT.
+    Stdout,
 }
 
 /// Defines prefix name of temporary directory to create dump files

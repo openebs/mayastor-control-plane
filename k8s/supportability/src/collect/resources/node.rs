@@ -3,7 +3,7 @@ use crate::{
         logs::create_directory_if_not_exist,
         resources,
         resources::{traits, utils},
-        rest_wrapper::rest_wrapper_client::RestClient,
+        rest_wrapper::RestClient,
     },
     log,
 };
@@ -153,12 +153,12 @@ impl traits::TablePrinter for Node {
 // Wrapper around mayastor REST client
 #[derive(Debug)]
 pub(crate) struct NodeClientWrapper {
-    pub rest_client: &'static RestClient,
+    pub rest_client: RestClient,
 }
 
 impl NodeClientWrapper {
     /// Creates new instance of NodeClientWrapper
-    pub(crate) fn new(rest_client: &'static RestClient) -> Self {
+    pub(crate) fn new(rest_client: RestClient) -> Self {
         NodeClientWrapper { rest_client }
     }
 

@@ -35,6 +35,21 @@ pub const CREATED_BY_KEY: &str = "openebs.io/created-by";
 /// The value to mark the creation source of a pool to be disk pool operator in labels
 pub const DSP_OPERATOR: &str = "operator-diskpool";
 
+/// The service label for the api-rest service.
+pub const API_REST_LABEL: &str = "app=api-rest";
+/// The service port for the api-rest label for the etcd pods.
+pub const API_REST_HTTP_PORT: &str = "http";
+
+/// The pod label for the etcd pods.
+pub const ETCD_LABEL: &str = "app=etcd";
+/// The port for the etcd pods.
+pub const ETCD_PORT: &str = "client";
+
+/// The service label for the loki service.
+pub const LOKI_LABEL: &str = "app=loki";
+/// The service port for the loki.
+pub const LOKI_PORT: &str = "http-metrics";
+
 /// The default value to be assigned as GRPC server addr if not overridden
 pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";
 
@@ -52,7 +67,7 @@ pub const DEFAULT_GRPC_CLIENT_CONCURRENCY: usize = 25;
 
 /// The default quiet filters in addition to `RUST_LOG`.
 pub const RUST_LOG_SILENCE_DEFAULTS: &str =
-    "actix_web=info,actix_server=info,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
+    "actix_web=info,actix_server=info,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,tokio_tungstenite=info,tungstenite=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
 
 /// The default value to be assigned as cluster agent GRPC server addr if not overridden
 pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "https://ha-cluster-agent:11500";
@@ -62,3 +77,6 @@ pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "https://0.0.0.0:11600";
 
 /// The default worker threads cap for the api-rest service.
 pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
+
+/// The default kubernetes namespace for this project.
+pub const DEFAULT_NAMESPACE: &str = "mayastor";

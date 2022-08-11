@@ -3,7 +3,7 @@ use crate::{
         logs::create_directory_if_not_exist,
         resources,
         resources::{traits, utils},
-        rest_wrapper::rest_wrapper_client::RestClient,
+        rest_wrapper::RestClient,
     },
     log,
 };
@@ -151,12 +151,12 @@ impl traits::TablePrinter for Pool {
 /// Wrapper around mayastor REST client which interns used to interact with REST client
 #[derive(Debug)]
 pub struct PoolClientWrapper {
-    rest_client: &'static RestClient,
+    rest_client: RestClient,
 }
 
 impl PoolClientWrapper {
     /// Creates new instance of PoolClientWrapper
-    pub fn new(client: &'static RestClient) -> Self {
+    pub fn new(client: RestClient) -> Self {
         PoolClientWrapper {
             rest_client: client,
         }

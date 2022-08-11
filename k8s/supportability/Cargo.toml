@@ -15,7 +15,7 @@ rls = [ "openapi/tower-client-rls" ]
 tls = [ "openapi/tower-client-tls" ]
 
 [dependencies]
-rest-plugin = { path = "../../control-plane/plugin", default-features = false }
+kube-proxy = { path = "../proxy" }
 futures = "0.3"
 tokio = { version = "1.20.1", features = ["full"] }
 k8s-openapi = { version = "0.15.0", features = ["v1_20"] }
@@ -43,3 +43,5 @@ downcast-rs = "1.2.0"
 schemars = "0.8.10"
 k8s-operators = { path = "../operators" }
 http = "0.2.6"
+hyper = { version = "0.14.20", features = [ "client", "http1", "http2", "tcp", "stream" ] }
+tower = { version = "0.4.13", features = [ "timeout", "util" ] }

@@ -1,12 +1,12 @@
 use anyhow::Result;
 use once_cell::sync::OnceCell;
-use openapi::tower::client::{ApiClient, Configuration, Url};
+use openapi::tower::client::{ApiClient, Configuration, Uri, Url};
 
 static REST_SERVER: OnceCell<RestClient> = OnceCell::new();
 
 /// REST client
 pub struct RestClient {
-    url: Url,
+    uri: Uri,
     client: ApiClient,
 }
 
@@ -17,23 +17,34 @@ impl RestClient {
         Ok(())
     }
 
+    /// Initialise the URL of the REST server.
+    pub fn init_with_config(config: Configuration) -> Result<()> {
+        REST_SERVER.get_or_init(|| RestClient::new_with_config(config));
+        Ok(())
+    }
+
     /// Create new Rest Client.
-    pub fn new(mut url: Url, timeout: std::time::Duration) -> Result<RestClient> {
+    pub fn new(url: Url, timeout: std::time::Duration) -> Result<RestClient> {
         // TODO: Support HTTPS Certificates
-        if url.port().is_none() {
-            url.set_port(Some(30011))
-                .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;
-        }
-        let cfg = Configuration::new(url.clone(), timeout, None, None, true).map_err(|error| {
+        let uri = url.as_str().parse()?;
+        let cfg = Configuration::new(url, timeout, None, None, true).map_err(|error| {
             anyhow::anyhow!(
                 "Failed to create openapi configuration, Error: '{:?}'",
                 error
             )
         })?;
         Ok(Self {
-            url,
+            uri,
             client: ApiClient::new(cfg),
         })
+    }
+
+    /// Create new Rest Client from the given `Configuration`.
+    pub fn new_with_config(config: Configuration) -> RestClient {
+        Self {
+            uri: config.base_path.clone(),
+            client: ApiClient::new(config),
+        }
     }
 
     /// Get a global `Self` or panic
@@ -47,7 +58,7 @@ impl RestClient {
     }
 
     /// Get the Rest Base Url.
-    pub fn url(&self) -> &Url {
-        &self.url
+    pub fn uri(&self) -> &Uri {
+        &self.uri
     }
 }

@@ -6,7 +6,7 @@ use crate::{
             replica::{ReplicaClientWrapper, ReplicaTopology},
             traits, utils,
         },
-        rest_wrapper::rest_wrapper_client::RestClient,
+        rest_wrapper::RestClient,
     },
     log,
 };
@@ -112,15 +112,15 @@ impl traits::TablePrinter for openapi::models::Volume {
 // Wrapper around mayastor REST client
 #[derive(Debug)]
 pub(crate) struct VolumeClientWrapper {
-    rest_client: &'static RestClient,
+    rest_client: RestClient,
     replica_client: ReplicaClientWrapper,
 }
 
 impl VolumeClientWrapper {
     /// Builds new instantance of VolumeClientWrapper
-    pub(crate) fn new(client: &'static RestClient) -> Self {
+    pub(crate) fn new(client: RestClient) -> Self {
         VolumeClientWrapper {
-            rest_client: client,
+            rest_client: client.clone(),
             replica_client: ReplicaClientWrapper::new(client),
         }
     }

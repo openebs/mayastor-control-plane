@@ -4,7 +4,7 @@ mod loki;
 use crate::collect::{
     constants::{
         CONTROL_PLANE_SERVICES, DATA_PLANE_SERVICES, HOST_NAME_REQUIRED_SERVICES,
-        LOGGING_LABEL_SELECTOR, LOKI_METRICS_PORT_NAME, LOKI_SERVICE_LABEL_SELECTOR,
+        LOGGING_LABEL_SELECTOR,
     },
     k8s_resources::{
         client::{ClientSet, K8sResourceError},
@@ -75,7 +75,6 @@ pub(crate) struct LogResource {
 }
 
 /// LogCollection is a wrapper around internal service of log collection
-#[derive(Clone)]
 pub(crate) struct LogCollection {
     loki_client: Option<loki::LokiClient>,
     k8s_logger_client: K8sLoggerClient,
@@ -95,25 +94,16 @@ impl LogCollection {
         since: humantime::Duration,
         timeout: humantime::Duration,
     ) -> Result<Box<dyn Logger>, LogError> {
-        let client_set = ClientSet::new(kube_config_path, namespace).await?;
-        // If Loki URI is not provided then read endpoint from K8s service object
-        let loki_endpoint = match loki_uri {
-            Some(uri) => Some(uri),
-            None => {
-                match client_set
-                    .get_service_endpoint(LOKI_SERVICE_LABEL_SELECTOR, LOKI_METRICS_PORT_NAME)
-                    .await
-                {
-                    Ok(endpoint) => Some(format!("http://{}", endpoint)),
-                    Err(_) => {
-                        log("Failed to get Loki endpoint. Continuing...".to_string());
-                        None
-                    }
-                }
-            }
-        };
+        let client_set = ClientSet::new(kube_config_path.clone(), namespace.clone()).await?;
         Ok(Box::new(Self {
-            loki_client: loki_endpoint.map(|uri| loki::LokiClient::new(uri, since, timeout)),
+            loki_client: loki::LokiClient::new(
+                loki_uri,
+                kube_config_path,
+                namespace,
+                since,
+                timeout,
+            )
+            .await,
             k8s_logger_client: K8sLoggerClient::new(client_set),
         }))
     }
@@ -217,7 +207,7 @@ impl LogCollection {
 impl Logger for LogCollection {
     // Fetch logs of requested resource and dump into files
     async fn fetch_and_dump_logs(
-        &self,
+        &mut self,
         resources: HashSet<LogResource>,
         working_dir: String,
     ) -> Result<(), LogError> {
@@ -232,7 +222,7 @@ impl Logger for LogCollection {
                 .join(resource.service_type.clone());
 
             create_directory_if_not_exist(service_dir.clone())?;
-            if let Some(loki_client) = self.loki_client.clone() {
+            if let Some(loki_client) = &mut self.loki_client {
                 if loki_client
                     .fetch_and_dump_logs(
                         resource.label_selector.clone(),
@@ -340,7 +330,7 @@ pub(crate) fn create_directory_if_not_exist(dir_path: PathBuf) -> Result<(), std
 #[async_trait(?Send)]
 pub(crate) trait Logger {
     async fn fetch_and_dump_logs(
-        &self,
+        &mut self,
         resources: HashSet<LogResource>,
         working_dir: String,
     ) -> Result<(), LogError>;

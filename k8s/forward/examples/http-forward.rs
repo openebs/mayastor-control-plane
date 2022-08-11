@@ -2,13 +2,20 @@ use hyper::service::Service;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
 
-    let selector = k8s_proxy::TargetSelector::svc_label("app", "api-rest");
-    let target = k8s_proxy::Target::new(selector, "http", "mayastor");
-    let uri = k8s_proxy::HttpForward::new(target).await?.uri().await?;
+    let selector = kube_forward::TargetSelector::svc_label("app", "api-rest");
+    let target = kube_forward::Target::new(selector, "http", "mayastor");
+    let uri = kube_forward::HttpForward::new(target, None)
+        .await?
+        .uri()
+        .await?;
 
-    let proxy = k8s_proxy::HttpProxy::try_default().await?;
+    let proxy = kube_forward::HttpProxy::try_default().await?;
     let mut svc = hyper::service::service_fn(|request: hyper::Request<hyper::body::Body>| {
         let mut proxy = proxy.clone();
         async move { proxy.call(request).await }

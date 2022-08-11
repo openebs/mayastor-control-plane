@@ -36,7 +36,7 @@ repos:
         name: Commit Lint
         description: Runs commitlint against the commit message.
         language: system
-        entry: bash -c 'nix-shell --pure --run "npm install @commitlint/config-conventional @commitlint/cli; cat $1 | npx commitlint"'
+        entry: bash -c 'nix-shell --pure --run "cat $1 | commitlint"'
         args: [$1]
         stages: [commit-msg]
     -   id: python-check

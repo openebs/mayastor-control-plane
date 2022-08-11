@@ -1,16 +1,12 @@
 use crate::collect::k8s_resources::common::KUBERNETES_HOST_LABEL_KEY;
 use k8s_openapi::api::{
     apps::v1::{DaemonSet, Deployment, StatefulSet},
-    core::v1::{Event, Node, Pod, Service},
+    core::v1::{Event, Node, Pod},
 };
 use k8s_operators::diskpool::crd::DiskPool;
 use kube::{api::ListParams, Api, Client, Resource};
 
-use std::{
-    collections::HashMap,
-    convert::TryFrom,
-    net::{SocketAddr, ToSocketAddrs},
-};
+use std::{collections::HashMap, convert::TryFrom};
 
 /// K8sResourceError holds errors that can obtain while fetching
 /// information of Kubernetes Objects
@@ -64,7 +60,6 @@ impl K8sResourceError {
 /// ClientSet is wrapper Kubernetes clientset and namespace of mayastor service
 #[derive(Clone)]
 pub(crate) struct ClientSet {
-    kube_config: kube::Config,
     client: kube::Client,
     namespace: String,
 }
@@ -83,12 +78,8 @@ impl ClientSet {
             }
             None => kube::Config::infer().await?,
         };
-        let client = Client::try_from(config.clone())?;
-        Ok(Self {
-            client,
-            kube_config: config,
-            namespace,
-        })
+        let client = Client::try_from(config)?;
+        Ok(Self { client, namespace })
     }
 
     /// Get a clone of the inner `kube::Client`.
@@ -297,66 +288,5 @@ impl ClientSet {
                 host_name
             )))
         }
-    }
-
-    /// Fetch list of services associated with the given label selector
-    pub(crate) async fn get_svcs(
-        &self,
-        label_selector: &str,
-    ) -> Result<Vec<Service>, K8sResourceError> {
-        let list_params = ListParams::default().labels(label_selector);
-
-        let svc_api: Api<Service> = Api::namespaced(self.client.clone(), &self.namespace);
-        let svcs = svc_api.list(&list_params).await?;
-        Ok(svcs.items)
-    }
-
-    /// Returns the cluster URL by reading from kubeconfig/incluster_config
-    fn get_cluster_url(&self) -> http::Uri {
-        self.kube_config.cluster_url.clone()
-    }
-
-    /// Fetch list of service matching to selector and return address matching to port name
-    pub(crate) async fn get_service_endpoint(
-        &self,
-        label_selector: &str,
-        port_name_const: &str,
-    ) -> Result<SocketAddr, K8sResourceError> {
-        let svcs = self.get_svcs(label_selector).await?;
-
-        for svc in svcs {
-            match svc.spec {
-                Some(spec) if spec.type_ == Some("NodePort".to_string()) => {
-                    let cluster_url = self.get_cluster_url();
-                    if let Some(ip_address) = cluster_url.host() {
-                        let parts: Vec<&str> = ip_address.split(':').collect();
-                        let mut ports = spec.ports.unwrap_or_default().into_iter();
-                        if let Some(node_port) = ports
-                            .find(|port| port.name == Some(port_name_const.to_string()))
-                            .map(|service_port| service_port.node_port.unwrap_or_default())
-                        {
-                            let address = format!("{}:{}", parts[0], node_port);
-                            return match address.to_socket_addrs() {
-                                Ok(mut a) => a.next().ok_or_else(|| {
-                                    K8sResourceError::CustomError(String::from(
-                                        "could not find socket address",
-                                    ))
-                                }),
-                                Err(e) => Err(K8sResourceError::CustomError(format!(
-                                    "cannot resolve endpoint for etcd: {}",
-                                    e
-                                ))),
-                            };
-                        }
-                    }
-                }
-                // NOTE: Handle ClusterIP type value only if there is any mechanisms
-                // to reach application from outside Kubernetes cluster
-                _ => continue,
-            }
-        }
-        Err(K8sResourceError::CustomError(
-            "unable able to find service endpoint".to_string(),
-        ))
     }
 }

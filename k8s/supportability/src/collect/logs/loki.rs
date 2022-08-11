@@ -1,7 +1,9 @@
 use crate::{collect::utils::write_to_log_file, log};
 use chrono::Utc;
+use hyper::body::Buf;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, path::PathBuf};
+use tower::{util::BoxService, Service, ServiceExt};
 
 /// Loki endpoint to query for logs
 const ENDPOINT: &str = "/loki/api/v1/query_range";
@@ -11,16 +13,34 @@ const SERVICE_NAME: &str = "loki";
 /// Possible errors can occur while interacting with Loki service
 #[derive(Debug)]
 pub(crate) enum LokiError {
-    ReqError(reqwest::Error),
+    Request(http::Error),
+    Response(String),
+    Tower(tower::BoxError),
+    Serde(serde_json::Error),
+    Hyper(hyper::Error),
     IOError(std::io::Error),
 }
 
-impl From<reqwest::Error> for LokiError {
-    fn from(e: reqwest::Error) -> LokiError {
-        LokiError::ReqError(e)
+impl From<http::Error> for LokiError {
+    fn from(e: http::Error) -> LokiError {
+        LokiError::Request(e)
     }
 }
-
+impl From<tower::BoxError> for LokiError {
+    fn from(e: tower::BoxError) -> LokiError {
+        LokiError::Tower(e)
+    }
+}
+impl From<serde_json::Error> for LokiError {
+    fn from(e: serde_json::Error) -> LokiError {
+        LokiError::Serde(e)
+    }
+}
+impl From<hyper::Error> for LokiError {
+    fn from(e: hyper::Error) -> LokiError {
+        LokiError::Hyper(e)
+    }
+}
 impl From<std::io::Error> for LokiError {
     fn from(e: std::io::Error) -> LokiError {
         LokiError::IOError(e)
@@ -94,38 +114,73 @@ impl LogDirection {
 
 /// Http client to interact with Loki (a log management system)
 /// to fetch historical log information
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct LokiClient {
-    // Address of Loki service
+    /// Address of Loki service
     uri: String,
-    // Endpoint of Loki logs service
+    /// Loki client
+    inner_client: kube_proxy::LokiClient,
+    /// Endpoint of Loki logs service
     logs_endpoint: String,
-    // Defines period from which logs needs to collect
+    /// Defines period from which logs needs to collect
     since: SinceTime,
-    // Determines the sort order of logs. Supported values are "forward" or "backward".
-    // Defaults to forward
+    /// Determines the sort order of logs. Supported values are "forward" or "backward".
+    /// Defaults to forward
     direction: LogDirection,
-    // maximum number of entries to return on one http call
+    /// maximum number of entries to return on one http call
     limit: u64,
-    // specifies the timeout value to interact with Loki service
-    timeout: humantime::Duration,
 }
 
 impl LokiClient {
     /// Instantiate new instance of Http Loki client
-    pub(crate) fn new(
-        uri: String,
+    pub(crate) async fn new(
+        uri: Option<String>,
+        kube_config_path: Option<std::path::PathBuf>,
+        namespace: String,
         since: humantime::Duration,
         timeout: humantime::Duration,
-    ) -> Self {
-        LokiClient {
+    ) -> Option<Self> {
+        let (uri, client) = match uri {
+            None => {
+                let (uri, svc) = match kube_proxy::ConfigBuilder::default_loki()
+                    .with_kube_config(kube_config_path)
+                    .with_target_mod(|t| t.with_namespace(namespace))
+                    .build()
+                    .await
+                {
+                    Ok(result) => result,
+                    Err(error) => {
+                        log(format!(
+                            "Failed to create loki client ({:?}). Continuing...",
+                            error
+                        ));
+                        return None;
+                    }
+                };
+                (uri.to_string(), svc)
+            }
+            Some(uri) => {
+                let mut connector = hyper::client::HttpConnector::new();
+                connector.set_connect_timeout(Some(*timeout));
+                let client = hyper::Client::builder()
+                    .http2_keep_alive_timeout(*timeout)
+                    .http2_keep_alive_interval(*timeout / 2)
+                    .build(connector);
+                let service = tower::ServiceBuilder::new()
+                    .timeout(*timeout)
+                    .service(client);
+                (uri, BoxService::new(service))
+            }
+        };
+
+        Some(LokiClient {
             uri,
+            inner_client: client,
             since: get_epoch_unix_time(since),
             logs_endpoint: ENDPOINT.to_string(),
             direction: LogDirection::Forward,
             limit: 3000,
-            timeout,
-        }
+        })
     }
 
     /// fetch_and_dump_logs will do the following steps:
@@ -134,7 +189,7 @@ impl LokiClient {
     ///     1.2. Write fetched logs into file
     ///     Continue above steps till extraction all logs
     pub(crate) async fn fetch_and_dump_logs(
-        &self,
+        &mut self,
         label_selector: String,
         container_name: String,
         host_name: Option<String>,
@@ -186,7 +241,7 @@ impl LokiClient {
             since: self.since,
             query_params,
             next_start_epoch_timestamp: 0,
-            timeout: self.timeout,
+            client: self,
         };
         let mut is_written = false;
         let file_path = service_dir.join(file_name.clone());
@@ -226,16 +281,16 @@ fn get_epoch_unix_time(since: humantime::Duration) -> SinceTime {
     Utc::now().timestamp_nanos() as SinceTime - since.as_nanos()
 }
 
-struct LokiPoll {
+struct LokiPoll<'a> {
+    client: &'a mut LokiClient,
     uri: String,
     endpoint: String,
     since: SinceTime,
-    timeout: humantime::Duration,
     query_params: String,
     next_start_epoch_timestamp: SinceTime,
 }
 
-impl LokiPoll {
+impl<'a> LokiPoll<'a> {
     // poll_next will extract response from Loki service and perform following actions:
     // 1. Get last log epoch timestamp
     // 2. Extract logs from response
@@ -249,12 +304,22 @@ impl LokiPoll {
             self.uri, self.endpoint, self.query_params, start_time
         );
 
-        // Build client & make a request to Loki
         // TODO: Test timeouts when Loki service is dropped unexpectedly
-        let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(self.timeout.as_secs()))
-            .build()?;
-        let loki_response: LokiResponse = client.get(request_str).send().await?.json().await?;
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(&request_str)
+            .body(hyper::body::Body::empty())?;
+
+        let response = self.client().ready().await?.call(request).await?;
+        if !response.status().is_success() {
+            let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
+            let text = String::from_utf8(body_bytes.to_vec()).unwrap_or_default();
+            return Err(LokiError::Response(text));
+        }
+
+        let body = hyper::body::aggregate(response.into_body()).await?;
+        let loki_response: LokiResponse = serde_json::from_reader(body.reader())?;
+
         if loki_response.status == "success" && loki_response.data.result.is_empty() {
             return Ok(None);
         }
@@ -279,5 +344,8 @@ impl LokiPoll {
             })
             .collect::<Vec<String>>();
         Ok(Some(logs))
+    }
+    fn client(&mut self) -> &mut kube_proxy::LokiClient {
+        &mut self.client.inner_client
     }
 }

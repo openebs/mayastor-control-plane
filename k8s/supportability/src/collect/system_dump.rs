@@ -11,7 +11,7 @@ use crate::{
             node::NodeClientWrapper, pool::PoolClientWrapper, volume::VolumeClientWrapper,
             Resourcer,
         },
-        rest_wrapper::rest_wrapper_client::RestClient,
+        rest_wrapper::RestClient,
         utils::{flush_tool_log_file, init_tool_log_file, write_to_log_file},
     },
     log,
@@ -22,7 +22,7 @@ use std::{path::PathBuf, process};
 /// SystemDumper interacts with various services to collect information like mayastor resource(s),
 /// logs of mayastor service and state of mayastor artifacts in etcd
 pub(crate) struct SystemDumper {
-    rest_client: &'static RestClient,
+    rest_client: RestClient,
     archive: archive::Archive,
     dir_path: String,
     logger: Box<dyn Logger>,
@@ -55,7 +55,7 @@ impl SystemDumper {
 
         // Creates an arcive file to dump mayastor resource information. If creation
         // of archive is failed then we can't continue process
-        let archive = match archive::Archive::new(config.output_directory) {
+        let archive = match archive::Archive::new(Some(config.output_directory)) {
             Ok(val) => val,
             Err(err) => {
                 log(format!(
@@ -119,7 +119,7 @@ impl SystemDumper {
         };
 
         SystemDumper {
-            rest_client: config.rest_client,
+            rest_client: config.rest_client.clone(),
             archive,
             dir_path: new_dir,
             logger,
@@ -134,7 +134,7 @@ impl SystemDumper {
 
         log("Collecting topology information...".to_string());
         // Dump information of all volume topologies exist in the system
-        match VolumeClientWrapper::new(self.rest_client)
+        match VolumeClientWrapper::new(self.rest_client.clone())
             .get_topologer(None)
             .await
         {
@@ -151,7 +151,7 @@ impl SystemDumper {
         };
 
         // Dump information of all pools topologies exist in the system
-        match PoolClientWrapper::new(self.rest_client)
+        match PoolClientWrapper::new(self.rest_client.clone())
             .get_topologer(None)
             .await
         {
@@ -167,7 +167,7 @@ impl SystemDumper {
             Err(e) => errors.push(Error::ResourceError(e)),
         };
 
-        let node_topologer = match NodeClientWrapper::new(self.rest_client)
+        let node_topologer = match NodeClientWrapper::new(self.rest_client.clone())
             .get_topologer(None)
             .await
         {
@@ -239,7 +239,7 @@ impl SystemDumper {
 
         let _ = future::try_join_all(self.etcd_dumper.as_mut().map(|etcd_store| {
             log("Collecting mayastor specific information from Etcd...".to_string());
-            etcd_store.dump(path)
+            etcd_store.dump(path, false)
         }))
         .await
         .map_err(|e| {

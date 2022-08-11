@@ -62,6 +62,8 @@ pub enum StoreError {
     FailedLock { reason: String },
     #[snafu(display("Etcd is not ready, reason: '{}'", reason))]
     NotReady { reason: String },
+    #[snafu(display("Minimum paged value is 2"))]
+    PagedMinimum,
 }
 
 /// Representation of a watch event.
@@ -108,6 +110,13 @@ pub trait Store: Sync + Send + Clone {
     async fn get_values_prefix(
         &mut self,
         key_prefix: &str,
+    ) -> Result<Vec<(String, Value)>, StoreError>;
+
+    /// Returns a vector of tuples. Each tuple represents a key-value pair.
+    async fn get_values_paged(
+        &mut self,
+        key_prefix: &str,
+        limit: i64,
     ) -> Result<Vec<(String, Value)>, StoreError>;
 
     async fn watch_obj<K: ObjectKey>(&mut self, key: &K) -> Result<StoreWatchReceiver, StoreError>;
