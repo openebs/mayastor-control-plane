@@ -22,6 +22,7 @@ mkShell {
     cargo-expand
     cargo-udeps
     clang
+    commitlint
     cowsay
     docker
     e2fsprogs
@@ -31,7 +32,6 @@ mkShell {
     jq
     libxfs
     llvmPackages.libclang
-    nodejs
     nvme-cli
     openapi-generator
     openssl
