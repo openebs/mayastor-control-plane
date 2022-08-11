@@ -17,8 +17,9 @@ pub trait PlatformInfo: Send + Sync {
     fn uid(&self) -> PlatformUid;
 }
 
-/// The various types of platforms.
-enum PlatformType {
+#[derive(Eq, PartialEq)]
+/// The various types of platforms.  
+pub enum PlatformType {
     /// As it says in the tin.
     K8s,
     /// We don't have others, other than running the binary directly or on deployer "clusters".
@@ -26,7 +27,7 @@ enum PlatformType {
 }
 
 /// Get the current `PlatformType`.
-fn current_plaform_type() -> PlatformType {
+pub fn current_plaform_type() -> PlatformType {
     if std::env::var("KUBERNETES_SERVICE_HOST").is_ok() {
         PlatformType::K8s
     } else {

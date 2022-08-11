@@ -1,4 +1,5 @@
 use crate::{ApiClientError, IoEngineApiClient};
+use csi_driver::CSI_PLUGIN_NAME;
 use rpc::csi::*;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
@@ -7,7 +8,6 @@ use tracing::{debug, error, instrument};
 #[derive(Debug, Default)]
 pub(crate) struct CsiIdentitySvc {}
 
-const CSI_PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
 const CSI_PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tonic::async_trait]
