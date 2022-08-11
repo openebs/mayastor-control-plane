@@ -91,7 +91,7 @@ async fn pool() {
             name: ReplicaName::from("cf36a440-74c6-4042-b16c-4f7eddfc24da"),
             uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
             pool: "pooloop".into(),
-            thin: false,
+            thin: true,
             size: 12582912,
             share: Protocol::None,
             uri,

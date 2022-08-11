@@ -3,9 +3,7 @@ use grpc::operations::replica::traits::ReplicaOperations;
 
 use deployer_cluster::{result_either, test_result_grpc, ClusterBuilder};
 
-// FIXME: CAS-721
 #[tokio::test]
-#[should_panic]
 async fn create_replica() {
     let cluster = ClusterBuilder::builder()
         .with_pools(1)
@@ -31,8 +29,8 @@ async fn create_replica() {
     assert_eq!(created_replica.pool, replica.pool);
 
     // todo: why is this not the same?
+    // because replica size is multiple of pool chunks, maybe we should expose the chunk size..
     // assert_eq!(created_replica.size, replica.size);
-    // fixme: replicas are always created without thin provisioning
     assert_eq!(created_replica.thin, replica.thin);
     assert_eq!(created_replica.share, replica.share);
 }
