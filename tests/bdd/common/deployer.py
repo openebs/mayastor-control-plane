@@ -20,6 +20,8 @@ class StartOptions:
     extra_args: [str] = ()
     rest_env: str = ""
     max_rebuilds: str = ""
+    ha_node_agent: bool = False
+    ha_cluster_agent: bool = False
 
     def args(self):
         args = [
@@ -53,6 +55,14 @@ class StartOptions:
             args.append(self.extra_args)
         if len(self.max_rebuilds) > 0:
             args.append(f"--max-rebuilds={self.max_rebuilds}")
+
+        agent_arg = "--agents=Core"
+        if self.ha_node_agent:
+            agent_arg += ",HaNodeAgent"
+        if self.ha_cluster_agent:
+            agent_arg += ",ClusterAgent"
+        args.append(agent_arg)
+
         return args
 
 
@@ -72,6 +82,8 @@ class Deployer(object):
         node_deadline="",
         jaeger=True,
         max_rebuilds="",
+        cluster_agent=False,
+        node_agent=False,
     ):
         options = StartOptions(
             io_engines,
@@ -86,6 +98,8 @@ class Deployer(object):
             node_deadline=node_deadline,
             jaeger=jaeger,
             max_rebuilds=max_rebuilds,
+            ha_node_agent=node_agent,
+            ha_cluster_agent=cluster_agent,
         )
         Deployer.start_with_opts(options)
 

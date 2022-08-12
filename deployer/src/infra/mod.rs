@@ -1,3 +1,4 @@
+mod cluster_agent;
 mod core;
 mod csi_controller;
 mod csi_node;
@@ -414,6 +415,7 @@ impl_component! {
     Core,          3,
     JsonGrpc,      3,
     Rest,          3,
+    ClusterAgent,  3,
     IoEngine,      4,
     CsiNode,       5,
     CsiController, 5,
@@ -421,4 +423,4 @@ impl_component! {
 }
 
 // Message Bus Control Plane Agents
-impl_ctrlp_agents!(Core, JsonGrpc, HANodeAgent);
+impl_ctrlp_agents!(Core, JsonGrpc, HANodeAgent, ClusterAgent);

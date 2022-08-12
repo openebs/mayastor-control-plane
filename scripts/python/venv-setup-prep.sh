@@ -13,6 +13,8 @@ VENV_DIR=
 VENV_PTH=
 BUILD_RS_BINS=
 BUILD_PY_OPENAPI=
+HA_PROTO=
+HA_OUT=
 
 missing_arg() {
   echo "Missing argument: $1"
@@ -25,14 +27,17 @@ help() {
 Usage: $0 [OPTIONS]
 
 Common options:
-  -h/--help                      Display the help message and exit.
-  --csi <proto-dir> <out-dir>    Generate the csi proto bindings
+  -h/--help                         Display the help message and exit.
+  --csi <proto-dir> <out-dir>       Generate the csi proto bindings
           <proto-dir>  directory where the csi.proto file is located.
           <out-dir>    directory to store the generated grpc python files.
-  --venv-pth <venv-dir> <paths>  Add path configuration files to the specified venv (similar to extending PYTHONPATH)
-                                   hint: <paths> is a ':' separated string list.
-  --build-bins                   Builds all the cargo binaries from the workspace.
-  --build-openapi                Generate the openapi python client.
+  --venv-pth <venv-dir> <paths>     Add path configuration files to the specified venv (similar to extending PYTHONPATH)
+                                     hint: <paths> is a ':' separated string list.
+  --ha <ha-proto-dir> <ha-out-dir>  Generate the HA proto bindings
+          <ha-proto-dir>  directory where the HA proto file is located.
+          <ha-out-dir>    directory to store the generated grpc python files
+  --build-bins                      Builds all the cargo binaries from the workspace.
+  --build-openapi                   Generate the openapi python client.
 
 
 EOF
@@ -59,6 +64,12 @@ while [ "$#" -gt 0 ]; do
     --build-openapi)
       BUILD_PY_OPENAPI="yes"
       shift
+      ;;
+    --ha)
+      HA_PROTO="$2"
+      shift || missing_arg "<ha-proto-dir>"
+      HA_OUT="$2"
+      shift 2 || missing_arg "<ha-out-dir>"
       ;;
     --help)
       help
@@ -92,6 +103,17 @@ if [ -n "$CSI_PROTO" ]; then
   fi
   mkdir -p "$CSI_OUT"
   python -m grpc_tools.protoc --proto_path="$CSI_PROTO" --grpc_python_out="$CSI_OUT" --python_out="$CSI_OUT" csi.proto
+fi
+
+# generate the ha python client
+if [ -n "$HA_PROTO" ]; then
+  if [ -z "$HA_OUT" ]; then
+    echo "--ha <ha-out-dir> is empty"
+    help
+    exit 1
+  fi
+  mkdir -p "$HA_OUT"
+  python -m grpc_tools.protoc --proto_path="$HA_PROTO" --grpc_python_out="$HA_OUT" --python_out="$HA_OUT" cluster_agent.proto
 fi
 
 # Setup the python config files (similar to extending the PYTHONPATH env, but within venv)
