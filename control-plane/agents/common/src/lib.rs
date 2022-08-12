@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 /// Agent level errors
 pub mod errors;
-/// Version 0 of the message bus types
-pub mod v0;
+/// message translation to agent types from rpc v0,v1 types
+pub mod msg_translation;
 
 #[derive(Debug, Snafu)]
 #[allow(missing_docs)]

@@ -4,7 +4,7 @@ use crate::{
 };
 use common::{
     errors::{GrpcConnect, GrpcConnectUri, GrpcRequestError, SvcError},
-    v0::msg_translation::IoEngineToAgent,
+    msg_translation::IoEngineToAgent,
 };
 use common_lib::{
     transport_api::{v0::BlockDevices, MessageId, ResourceKind},
@@ -13,7 +13,10 @@ use common_lib::{
     },
 };
 use grpc::{context::timeout_grpc, operations::registration::traits::ApiVersion};
-use rpc::io_engine::{IoEngineClient, ListBlockDevicesRequest, Null};
+use rpc::{
+    io_engine::{IoEngineClient, ListBlockDevicesRequest as V0ListBlockDevicesRequest, Null},
+    v1::host::ListBlockDevicesRequest as V1ListBlockDevicesRequest,
+};
 use snafu::ResultExt;
 use std::{
     ops::{Deref, DerefMut},
@@ -193,7 +196,7 @@ impl GrpcClient {
             APIVersion::V0 => {
                 let result = self
                     .client_v0()?
-                    .list_block_devices(ListBlockDevicesRequest { all: request.all })
+                    .list_block_devices(V0ListBlockDevicesRequest { all: request.all })
                     .await;
 
                 let response = result
@@ -211,7 +214,25 @@ impl GrpcClient {
                 Ok(BlockDevices(bdevs))
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let result = self
+                    .client_v1()?
+                    .host
+                    .list_block_devices(V1ListBlockDevicesRequest { all: request.all })
+                    .await;
+
+                let response = result
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Block,
+                        request: "list_block_devices",
+                    })?
+                    .into_inner();
+
+                let bdevs = response
+                    .devices
+                    .iter()
+                    .map(|rpc_bdev| rpc_bdev.to_agent())
+                    .collect();
+                Ok(BlockDevices(bdevs))
             }
         }
     }
