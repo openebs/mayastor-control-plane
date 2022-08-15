@@ -3,7 +3,7 @@ use tonic::{Response, Status};
 use crate::{
     ha_cluster_agent::{
         ha_rpc_server::{HaRpc, HaRpcServer},
-        HaNodeInfo,
+        HaNodeInfo, ReportFailedNvmePathsRequest,
     },
     operations::ha_node::traits::ClusterAgentOperations,
 };
@@ -40,5 +40,13 @@ impl HaRpc for ClusterAgentServer {
                 err
             ))),
         }
+    }
+    async fn report_failed_nvme_paths(
+        &self,
+        _request: tonic::Request<ReportFailedNvmePathsRequest>,
+    ) -> Result<tonic::Response<()>, tonic::Status> {
+        Err(Status::unimplemented(
+            "NVMe path reporting is not yet implemented",
+        ))
     }
 }
