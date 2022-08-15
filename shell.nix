@@ -57,6 +57,8 @@ mkShell {
   # copy the rust-src to a writable directory, see: https://github.com/rust-lang/cargo/issues/10096
   RUST_SRC_CLONE = "/tmp/rust-src";
 
+  NODE_PATH = "${nodePackages."@commitlint/config-conventional"}/lib/node_modules";
+
   shellHook = ''
     ./scripts/nix/git-submodule-init.sh
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
