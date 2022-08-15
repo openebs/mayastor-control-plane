@@ -7,6 +7,7 @@ package v1.ha_cluster_agent;
 // Service for managing cluster-agent rpc calls
 service HaRpc {
   rpc RegisterNodeAgent (HaNodeInfo) returns (google.protobuf.Empty) {}
+  rpc ReportFailedNvmePaths (ReportFailedNvmePathsRequest) returns (google.protobuf.Empty) {}
 }
 
 // Node information
@@ -15,3 +16,17 @@ message HaNodeInfo {
     string endpoint = 2;
 }
 
+// Failed NVMe path.
+message FailedNvmePath {
+  // NQN of the NVMe target to which this path is connected.
+  string target_nqn = 1;
+}
+
+// Failed paths message.
+message ReportFailedNvmePathsRequest {
+  // Node which reports failed paths.
+  string nodename = 1;
+
+  // List of failed
+  repeated FailedNvmePath failed_paths = 4;
+}

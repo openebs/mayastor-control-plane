@@ -26,3 +26,42 @@ impl NodeAgentInfo {
         self.endpoint
     }
 }
+
+/// Failed NVMe path.
+#[derive(Debug, Clone)]
+pub struct FailedPath {
+    target_nqn: String,
+}
+
+impl FailedPath {
+    /// Create a new instance of FailedPath for a given NVMe target NQN.
+    pub fn new(target_nqn: String) -> Self {
+        Self { target_nqn }
+    }
+
+    /// Get target NQN.
+    pub fn target_nqn(&self) -> &str {
+        &self.target_nqn
+    }
+}
+
+/// Report failed NVMe paths.
+#[derive(Debug)]
+pub struct ReportFailedPaths {
+    node: String,
+    failed_paths: Vec<FailedPath>,
+}
+
+impl ReportFailedPaths {
+    pub fn new(node: String, failed_paths: Vec<FailedPath>) -> Self {
+        Self { node, failed_paths }
+    }
+
+    pub fn node_name(&self) -> &str {
+        &self.node
+    }
+
+    pub fn failed_paths(&self) -> &Vec<FailedPath> {
+        &self.failed_paths
+    }
+}

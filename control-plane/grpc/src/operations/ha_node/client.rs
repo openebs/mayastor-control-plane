@@ -1,9 +1,12 @@
 use crate::{
     context::{Client, TracedChannel},
     ha_cluster_agent::{ha_rpc_client::HaRpcClient, HaNodeInfo},
-    operations::ha_node::traits::{ClusterAgentOperations, NodeInfo},
+    operations::ha_node::traits::{ClusterAgentOperations, NodeInfo, ReportFailedPathsInfo},
 };
-use common_lib::transport_api::{ReplyError, TimeoutOptions};
+use common_lib::{
+    transport_api::{ReplyError, TimeoutOptions},
+    types::v0::transport::MessageIdVs,
+};
 use std::ops::Deref;
 use tonic::transport::Uri;
 
@@ -30,7 +33,7 @@ impl Deref for ClusterAgentClient {
 #[tonic::async_trait]
 impl ClusterAgentOperations for ClusterAgentClient {
     #[tracing::instrument(
-        name = "ClusterAgentClient::register_node_agent",
+        name = "ClusterAgentClient::register",
         level = "debug",
         skip(self),
         err
@@ -45,5 +48,23 @@ impl ClusterAgentOperations for ClusterAgentClient {
             .await?;
         tracing::trace!("node agent successfully registered");
         Ok(())
+    }
+
+    #[tracing::instrument(
+        name = "ClusterAgentClient::report_failed_nvme_paths",
+        level = "debug",
+        skip(self),
+        err
+    )]
+    /// Report failed NVMe paths.
+    async fn report_failed_nvme_paths(
+        &self,
+        request: &dyn ReportFailedPathsInfo,
+    ) -> Result<(), ReplyError> {
+        let req = self.request(request, None, MessageIdVs::ReportFailedPaths);
+        match self.client().report_failed_nvme_paths(req).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 }

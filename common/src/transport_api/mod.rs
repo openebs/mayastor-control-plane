@@ -264,6 +264,15 @@ impl ReplyError {
             extra: "".to_string(),
         }
     }
+    /// for errors that represent unimplemented functionality.
+    pub fn unimplemented(msg: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::Unimplemented,
+            resource: ResourceKind::Unknown,
+            source: "Test Library".to_string(),
+            extra: msg,
+        }
+    }
 }
 
 impl std::fmt::Display for ReplyError {
