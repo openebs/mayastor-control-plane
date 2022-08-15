@@ -10,25 +10,12 @@ use common_lib::{
         },
     },
 };
-use rpc::io_engine as rpc;
+
+use crate::msg_translation::{AgentToIoEngine, IoEngineToAgent, TryIoEngineToAgent};
+use rpc::io_engine as v0_rpc;
 use std::convert::TryFrom;
 
-/// Trait for converting io-engine messages to agent messages, fallibly.
-pub trait TryIoEngineToAgent {
-    /// Message bus message type.
-    type AgentMessage;
-    /// Conversion of io-engine message to agent message.
-    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError>;
-}
-/// Trait for converting io-engine messages to agent messages.
-pub trait IoEngineToAgent {
-    /// Message bus message type.
-    type AgentMessage;
-    /// Conversion of io-engine message to agent message.
-    fn to_agent(&self) -> Self::AgentMessage;
-}
-
-impl IoEngineToAgent for rpc::block_device::Partition {
+impl IoEngineToAgent for v0_rpc::block_device::Partition {
     type AgentMessage = transport::Partition;
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
@@ -42,7 +29,7 @@ impl IoEngineToAgent for rpc::block_device::Partition {
     }
 }
 
-impl IoEngineToAgent for rpc::block_device::Filesystem {
+impl IoEngineToAgent for v0_rpc::block_device::Filesystem {
     type AgentMessage = transport::Filesystem;
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
@@ -56,7 +43,7 @@ impl IoEngineToAgent for rpc::block_device::Filesystem {
 
 /// Node Agent Conversions
 
-impl IoEngineToAgent for rpc::BlockDevice {
+impl IoEngineToAgent for v0_rpc::BlockDevice {
     type AgentMessage = transport::BlockDevice;
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
@@ -87,7 +74,7 @@ impl IoEngineToAgent for rpc::BlockDevice {
 
 ///  Pool Agent conversions
 
-impl IoEngineToAgent for rpc::Pool {
+impl IoEngineToAgent for v0_rpc::Pool {
     type AgentMessage = transport::PoolState;
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
@@ -101,7 +88,7 @@ impl IoEngineToAgent for rpc::Pool {
     }
 }
 
-impl TryIoEngineToAgent for rpc::ReplicaV2 {
+impl TryIoEngineToAgent for v0_rpc::ReplicaV2 {
     type AgentMessage = transport::Replica;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         Ok(Self::AgentMessage {
@@ -123,7 +110,7 @@ impl TryIoEngineToAgent for rpc::ReplicaV2 {
 
 /// Volume Agent conversions
 
-impl TryIoEngineToAgent for rpc::NexusV2 {
+impl TryIoEngineToAgent for v0_rpc::NexusV2 {
     type AgentMessage = transport::Nexus;
 
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
@@ -144,7 +131,7 @@ impl TryIoEngineToAgent for rpc::NexusV2 {
         })
     }
 }
-impl TryIoEngineToAgent for rpc::Nexus {
+impl TryIoEngineToAgent for v0_rpc::Nexus {
     type AgentMessage = transport::Nexus;
 
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
@@ -165,7 +152,7 @@ impl TryIoEngineToAgent for rpc::Nexus {
     }
 }
 
-impl IoEngineToAgent for rpc::Child {
+impl IoEngineToAgent for v0_rpc::Child {
     type AgentMessage = transport::Child;
 
     fn to_agent(&self) -> Self::AgentMessage {
@@ -177,18 +164,9 @@ impl IoEngineToAgent for rpc::Child {
     }
 }
 
-/// Trait for converting agent messages to io-engine messages.
-pub trait AgentToIoEngine {
-    /// RpcIoEngine message type.
-    type IoEngineMessage;
-    /// Conversion of agent message to io-engine message.
-    fn to_rpc(&self) -> Self::IoEngineMessage;
-}
-
 /// Pool Agent Conversions
-
 impl AgentToIoEngine for transport::CreateReplica {
-    type IoEngineMessage = rpc::CreateReplicaRequestV2;
+    type IoEngineMessage = v0_rpc::CreateReplicaRequestV2;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
@@ -202,7 +180,7 @@ impl AgentToIoEngine for transport::CreateReplica {
 }
 
 impl AgentToIoEngine for transport::ShareReplica {
-    type IoEngineMessage = rpc::ShareReplicaRequest;
+    type IoEngineMessage = v0_rpc::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             // todo: CAS-1107
@@ -213,7 +191,7 @@ impl AgentToIoEngine for transport::ShareReplica {
 }
 
 impl AgentToIoEngine for transport::UnshareReplica {
-    type IoEngineMessage = rpc::ShareReplicaRequest;
+    type IoEngineMessage = v0_rpc::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
@@ -223,7 +201,7 @@ impl AgentToIoEngine for transport::UnshareReplica {
 }
 
 impl AgentToIoEngine for transport::CreatePool {
-    type IoEngineMessage = rpc::CreatePoolRequest;
+    type IoEngineMessage = v0_rpc::CreatePoolRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             name: self.id.clone().into(),
@@ -233,7 +211,7 @@ impl AgentToIoEngine for transport::CreatePool {
 }
 
 impl AgentToIoEngine for transport::DestroyReplica {
-    type IoEngineMessage = rpc::DestroyReplicaRequest;
+    type IoEngineMessage = v0_rpc::DestroyReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
@@ -242,7 +220,7 @@ impl AgentToIoEngine for transport::DestroyReplica {
 }
 
 impl AgentToIoEngine for transport::DestroyPool {
-    type IoEngineMessage = rpc::DestroyPoolRequest;
+    type IoEngineMessage = v0_rpc::DestroyPoolRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             name: self.id.clone().into(),
@@ -253,7 +231,7 @@ impl AgentToIoEngine for transport::DestroyPool {
 /// Volume Agent Conversions
 
 impl AgentToIoEngine for transport::CreateNexus {
-    type IoEngineMessage = rpc::CreateNexusV2Request;
+    type IoEngineMessage = v0_rpc::CreateNexusV2Request;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         let nexus_config = self.config.clone().unwrap_or_default();
         Self::IoEngineMessage {
@@ -271,7 +249,7 @@ impl AgentToIoEngine for transport::CreateNexus {
 }
 
 impl AgentToIoEngine for transport::ShareNexus {
-    type IoEngineMessage = rpc::PublishNexusRequest;
+    type IoEngineMessage = v0_rpc::PublishNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
@@ -282,7 +260,7 @@ impl AgentToIoEngine for transport::ShareNexus {
 }
 
 impl AgentToIoEngine for transport::UnshareNexus {
-    type IoEngineMessage = rpc::UnpublishNexusRequest;
+    type IoEngineMessage = v0_rpc::UnpublishNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
@@ -291,7 +269,7 @@ impl AgentToIoEngine for transport::UnshareNexus {
 }
 
 impl AgentToIoEngine for transport::DestroyNexus {
-    type IoEngineMessage = rpc::DestroyNexusRequest;
+    type IoEngineMessage = v0_rpc::DestroyNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
@@ -300,7 +278,7 @@ impl AgentToIoEngine for transport::DestroyNexus {
 }
 
 impl AgentToIoEngine for transport::AddNexusChild {
-    type IoEngineMessage = rpc::AddChildNexusRequest;
+    type IoEngineMessage = v0_rpc::AddChildNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.nexus.clone().into(),
@@ -311,7 +289,7 @@ impl AgentToIoEngine for transport::AddNexusChild {
 }
 
 impl AgentToIoEngine for transport::RemoveNexusChild {
-    type IoEngineMessage = rpc::RemoveChildNexusRequest;
+    type IoEngineMessage = v0_rpc::RemoveChildNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.nexus.clone().into(),
