@@ -20,7 +20,7 @@ structopt = "0.3.23"
 backtrace = "0.3.61"
 etcd-client = "0.10.1"
 grpc = { path = "../../control-plane/grpc" }
-tonic = "0.5.2"
+tonic = "0.8.0"
 # Tracing
 tracing = "0.1.35"
 tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }
