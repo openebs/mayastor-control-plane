@@ -10,7 +10,7 @@ use tonic::Code;
 
 /// Common error type for send/receive
 #[derive(Debug, Snafu)]
-#[snafu(visibility = "pub")]
+#[snafu(visibility(pub), context(suffix(false)))]
 #[allow(missing_docs)]
 pub enum SvcError {
     #[snafu(display("Failed to get node '{}' from the node agent", node))]

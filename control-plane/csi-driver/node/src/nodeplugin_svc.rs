@@ -10,7 +10,7 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 #[derive(Debug, Snafu)]
-#[snafu(visibility = "pub(crate)")]
+#[snafu(visibility(pub(crate)), context(suffix(false)))]
 pub(crate) enum ServiceError {
     #[snafu(display("Cannot find volume: volume ID: {}", volid))]
     VolumeNotFound { volid: String },
@@ -54,7 +54,7 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
                 .args(&args)
                 .output()
                 .await
-                .context(IoError {
+                .context(Io {
                     volid: volume_id.to_string(),
                 })?;
             return if output.status.success() {

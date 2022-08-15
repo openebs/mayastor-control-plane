@@ -161,7 +161,7 @@ impl<C: Clone> Client<C> {
     {
         let context = Context::new(options);
         let endpoint = context.endpoint(uri);
-        let channel = endpoint.connect_lazy().unwrap();
+        let channel = endpoint.connect_lazy();
 
         let channel = tower::ServiceBuilder::new()
             .layer(OpenTelClient::new())

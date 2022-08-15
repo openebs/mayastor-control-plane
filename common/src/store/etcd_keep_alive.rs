@@ -82,6 +82,7 @@ impl LeaseLockInfoInner {
 
 /// State of the `EtcdLeaseLockKeeper`
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum LeaseKeeperState {
     /// The lease has expired, we might need to reconnect or even grab a new lease
     LeaseExpired(LeaseExpired),
@@ -213,19 +214,20 @@ impl EtcdSingletonLock {
             self.next().await;
         }
     }
-    async fn unset_lease(&self) {
+    async fn unset_lease(&mut self) {
         self.lease_info.set_lease(None);
     }
-    async fn set_lease(&self) {
+    async fn set_lease(&mut self) {
         self.lease_info.set_lease(Some(self.lease_id));
     }
 
     /// Run 1 cycle of the state machine...
     async fn next(&mut self) {
         let state = self.state.take().expect("state to be present");
+        let name = state.name();
 
         let (previous_state_name, new_state) = (
-            state.name(),
+            name,
             match state {
                 LeaseKeeperState::LeaseGrant(state) => self.clock(state).await,
                 LeaseKeeperState::Locking(state) => self.clock(state).await,
@@ -381,15 +383,14 @@ impl LeaseLockKeeperClocking<Reconnect> for EtcdSingletonLock {
 impl LeaseLockKeeperClocking<LeaseGrant> for EtcdSingletonLock {
     #[tracing::instrument(skip(self, _state), err)]
     async fn clock(&mut self, _state: LeaseGrant) -> LockStatesResult {
-        match self.client.lease_time_to_live(self.lease_id(), None).await {
+        let lease_id = self.lease_id();
+        match self.client.lease_time_to_live(lease_id, None).await {
             Ok(resp) if resp.ttl() >= 0 => Ok(LeaseKeeperState::Locking(Locking(self.lease_id))),
             _ => {
+                let lease_ttl = *self.lease_ttl();
                 match self
                     .client
-                    .lease_grant(
-                        *self.lease_ttl(),
-                        Some(LeaseGrantOptions::new().with_id(self.lease_id())),
-                    )
+                    .lease_grant(lease_ttl, Some(LeaseGrantOptions::new().with_id(lease_id)))
                     .await
                 {
                     Ok(resp) => {

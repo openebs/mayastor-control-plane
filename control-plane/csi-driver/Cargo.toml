@@ -16,10 +16,15 @@ path = "node/src/main.rs"
 
 
 [build-dependencies]
-tonic-build = "0.5.2"
-prost-build = "0.8.0"
+tonic-build = "0.8.0"
+prost-build = "0.11.1"
 
 [dependencies]
+prost = "0.11.0"
+prost-derive = "0.11.0"
+prost-types = "0.11.1"
+tonic = "0.8.0"
+
 anyhow = "1.0.44"
 async-stream = "0.3.2"
 futures = { version = "0.3.21", default-features = false }
@@ -29,7 +34,6 @@ regex = "1.6.0"
 rpc = { path = "../../rpc" }
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = { version = "0.1.7", features = ["net"] }
-tonic = "0.5.2"
 clap = "2.33.3"
 
 # Tracing
@@ -43,11 +47,8 @@ async-trait = "0.1.51"
 chrono = "0.4.19"
 glob = "0.3.0"
 lazy_static = "1.4.0"
-prost = "0.8.0"
-prost-derive = "0.8.0"
-prost-types = "0.8.0"
 serde_json = "1.0.82"
-snafu = "0.6.10"
+snafu = "0.7.1"
 sys-mount = "1.3.0"
 tower = { version = "0.4.13", features = [ "timeout", "util" ] }
 udev = "0.6.2"

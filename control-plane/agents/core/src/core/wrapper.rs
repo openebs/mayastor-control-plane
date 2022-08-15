@@ -9,7 +9,7 @@ use crate::{
 };
 
 use common::{
-    errors::{GrpcRequestError, SvcError},
+    errors::{GrpcRequest as GrpcRequestError, SvcError},
     msg_translation::{AgentToIoEngine, IoEngineToAgent, TryIoEngineToAgent},
 };
 use common_lib::{

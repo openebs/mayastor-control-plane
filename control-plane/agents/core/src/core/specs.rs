@@ -28,6 +28,7 @@ use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 #[derive(Debug, Snafu)]
+#[snafu(context(suffix(false)))]
 enum SpecError {
     /// Failed to get entries from the persistent store.
     #[snafu(display("Failed to get entries from store. Error {}", source))]

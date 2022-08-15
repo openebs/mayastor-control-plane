@@ -40,8 +40,7 @@ impl<S> OpenTelClientService<S> {
     }
 }
 
-type TonicClientRequest =
-    Request<http_body::combinators::BoxBody<prost::bytes::Bytes, tonic::Status>>;
+type TonicClientRequest = Request<tonic::body::BoxBody>;
 type BoxedFuture<Resp, Err> = Pin<Box<dyn Future<Output = Result<Resp, Err>> + Send>>;
 
 impl tower::Service<TonicClientRequest> for OpenTelClientService<Channel> {
