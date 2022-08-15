@@ -14,5 +14,5 @@ edition = "2018"
 ignore = [
     "openapi",
     "utils/dependencies",
-    "license"
+    "rpc/api"
 ]
