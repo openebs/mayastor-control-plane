@@ -8,6 +8,7 @@ use snafu::{ResultExt, Snafu};
 
 /// Authorization Errors
 #[derive(Debug, Snafu)]
+#[snafu(context(suffix(false)))]
 pub enum AuthError {
     #[snafu(display("Internal error: {}", details))]
     InternalError { details: String },

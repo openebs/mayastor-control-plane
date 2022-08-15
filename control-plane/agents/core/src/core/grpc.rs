@@ -3,7 +3,7 @@ use crate::{
     node::service::NodeCommsTimeout,
 };
 use common::{
-    errors::{GrpcConnect, GrpcConnectUri, GrpcRequestError, SvcError},
+    errors::{GrpcConnect, GrpcConnectUri, GrpcRequest as GrpcRequestError, SvcError},
     msg_translation::IoEngineToAgent,
 };
 use common_lib::{

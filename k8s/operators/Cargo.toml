@@ -33,7 +33,7 @@ schemars = "0.8.10"
 serde = "1.0.140"
 serde_json = "1.0.82"
 serde_yaml = "0.8.26"
-snafu = "0.6.10"
+snafu = "0.7.1"
 tokio = { version = "1.20.1", features = ["full"] }
 humantime = "2.1.0"
 

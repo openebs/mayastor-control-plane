@@ -14,7 +14,7 @@ strum_macros = "0.21.1"
 serde_json = "1.0.82"
 percent-encoding = "2.1.0"
 tokio = { version = "1.20.1", features = [ "full" ] }
-snafu = "0.6.10"
+snafu = "0.7.1"
 etcd-client = "0.10.1"
 serde = { version = "1.0.140", features = ["derive"] }
 async-trait = "0.1.51"

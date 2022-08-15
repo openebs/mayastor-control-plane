@@ -8,7 +8,7 @@ use tokio::sync::mpsc::Receiver;
 
 /// Definition of errors that can be returned from the key-value store.
 #[derive(Debug, Snafu)]
-#[snafu(visibility = "pub")]
+#[snafu(visibility(pub), context(suffix(false)))]
 pub enum StoreError {
     /// Failed to connect to the key-value store.
     #[snafu(display("Failed to connect to store. Error {}", source))]

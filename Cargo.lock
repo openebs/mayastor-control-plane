@@ -263,7 +263,7 @@ dependencies = [
  "rpc",
  "serde",
  "serde_json",
- "snafu 0.6.10",
+ "snafu",
  "state",
  "structopt",
  "tokio",
@@ -776,7 +776,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "snafu 0.6.10",
+ "snafu",
  "strum",
  "strum_macros",
  "tokio",
@@ -917,7 +917,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shutdown",
- "snafu 0.6.10",
+ "snafu",
  "sys-mount",
  "sysfs",
  "tokio",
@@ -1181,7 +1181,7 @@ name = "devinfo"
 version = "1.0.0"
 dependencies = [
  "bindgen",
- "snafu 0.7.1",
+ "snafu",
  "udev",
  "url",
  "uuid",
@@ -2040,7 +2040,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "snafu 0.6.10",
+ "snafu",
  "tokio",
  "tracing",
  "tracing-opentelemetry",
@@ -2511,7 +2511,7 @@ dependencies = [
  "nix",
  "num-traits",
  "once_cell",
- "snafu 0.7.1",
+ "snafu",
  "url",
  "uuid",
 ]
@@ -3176,7 +3176,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "snafu 0.6.10",
+ "snafu",
  "structopt",
  "tinytemplate",
  "tokio",
@@ -3646,33 +3646,12 @@ dependencies = [
 
 [[package]]
 name = "snafu"
-version = "0.6.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab12d3c261b2308b0d80c26fffb58d17eba81a4be97890101f416b478c79ca7"
-dependencies = [
- "doc-comment",
- "snafu-derive 0.6.10",
-]
-
-[[package]]
-name = "snafu"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5177903bf45656592d9eb5c0e22f408fc023aae51dbe2088889b71633ba451f2"
 dependencies = [
  "doc-comment",
- "snafu-derive 0.7.1",
-]
-
-[[package]]
-name = "snafu-derive"
-version = "0.6.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1508efa03c362e23817f96cde18abed596a25219a8b2c66e8db33c03543d315b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "snafu-derive",
 ]
 
 [[package]]
