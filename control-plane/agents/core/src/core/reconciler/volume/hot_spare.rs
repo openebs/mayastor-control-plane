@@ -4,21 +4,19 @@ use crate::core::{
     task_poller::{squash_results, PollResult, PollerState},
 };
 
-use common::errors::NexusNotFound;
 use common_lib::{
     transport_api::ErrorChain,
     types::v0::{
-        store::{nexus::NexusSpec, volume::VolumeSpec, OperationMode},
+        store::{nexus::NexusSpec, volume::VolumeSpec},
         transport::{VolumeState, VolumeStatus},
     },
 };
 
 use common_lib::types::v0::{
-    store::{TraceSpan, TraceStrLog},
+    store::{OperationGuardArc, TraceSpan, TraceStrLog},
     transport::Nexus,
 };
 use parking_lot::Mutex;
-use snafu::OptionExt;
 use std::{cmp::Ordering, sync::Arc};
 
 /// Volume HotSpare reconciler
@@ -50,71 +48,61 @@ async fn hot_spare_reconcile(
 ) -> PollResult {
     let uuid = volume_spec.lock().uuid.clone();
     let volume_state = context.registry().get_volume_state(&uuid).await?;
-    let _guard = match volume_spec.operation_guard(OperationMode::ReconcileStart) {
+    let volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
-    let mode = OperationMode::ReconcileStep;
 
-    if !volume_spec.lock().policy.self_heal {
+    if !volume.lock().policy.self_heal {
         return PollResult::Ok(PollerState::Idle);
     }
-    if !volume_spec.lock().status.created() {
+    if !volume.lock().status.created() {
         return PollResult::Ok(PollerState::Idle);
     }
 
     match volume_state.status {
-        VolumeStatus::Online => volume_replica_count_reconciler(volume_spec, context, mode).await,
+        VolumeStatus::Online => volume_replica_count_reconciler(&volume, context).await,
         VolumeStatus::Unknown | VolumeStatus::Degraded => {
-            hot_spare_nexus_reconcile(volume_spec, &volume_state, context).await
+            hot_spare_nexus_reconcile(&volume, &volume_state, context).await
         }
         VolumeStatus::Faulted => PollResult::Ok(PollerState::Idle),
     }
 }
 
 async fn hot_spare_nexus_reconcile(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
     volume_state: &VolumeState,
     context: &PollContext,
 ) -> PollResult {
-    let mode = OperationMode::ReconcileStep;
     let mut results = vec![];
 
     if let Some(nexus) = &volume_state.target {
-        let nexus_spec = context.specs().get_nexus(&nexus.uuid);
-        let nexus_spec = nexus_spec.context(NexusNotFound {
-            nexus_id: nexus.uuid.to_string(),
-        })?;
-        let _guard = match nexus_spec.operation_guard(OperationMode::ReconcileStart) {
-            Ok(guard) => guard,
-            Err(_) => return PollResult::Ok(PollerState::Busy),
-        };
+        let nexus = context.specs().nexus(&nexus.uuid).await?;
 
         // generic nexus reconciliation (does not matter that it belongs to a volume)
-        results.push(generic_nexus_reconciler(&nexus_spec, context, mode).await);
+        results.push(generic_nexus_reconciler(&nexus, context).await);
 
         // fixup the volume replica count: creates new replicas when we're behind
         // removes extra replicas but only if they're UNUSED (by a nexus)
-        results.push(volume_replica_count_reconciler(volume_spec, context, mode).await);
+        results.push(volume_replica_count_reconciler(volume, context).await);
         // fixup the nexus replica count to match the volume's replica count
-        results.push(nexus_replica_count_reconciler(volume_spec, &nexus_spec, context, mode).await);
+        results.push(nexus_replica_count_reconciler(volume, &nexus, context).await);
     } else {
-        results.push(volume_replica_count_reconciler(volume_spec, context, mode).await);
+        results.push(volume_replica_count_reconciler(volume, context).await);
     }
 
     squash_results(results)
 }
 
-#[tracing::instrument(skip(context, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 async fn generic_nexus_reconciler(
-    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    nexus: &OperationGuardArc<NexusSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
     let mut results = vec![];
-    results.push(faulted_children_remover(nexus_spec, context, mode).await);
-    results.push(unknown_children_remover(nexus_spec, context, mode).await);
-    results.push(missing_children_remover(nexus_spec, context, mode).await);
+    results.push(faulted_children_remover(nexus, context).await);
+    results.push(unknown_children_remover(nexus, context).await);
+    results.push(missing_children_remover(nexus, context).await);
     squash_results(results)
 }
 
@@ -123,11 +111,10 @@ async fn generic_nexus_reconciler(
 /// Then they should eventually be removed from the state and spec
 /// And the replicas should eventually be destroyed
 async fn faulted_children_remover(
-    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    nexus: &OperationGuardArc<NexusSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    nexus::faulted_children_remover(nexus_spec, context, mode).await
+    nexus::faulted_children_remover(nexus, context).await
 }
 
 /// Given a degraded volume
@@ -135,11 +122,10 @@ async fn faulted_children_remover(
 /// Then the children should eventually be removed from the state
 /// And the uri's should not be destroyed
 async fn unknown_children_remover(
-    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    nexus: &OperationGuardArc<NexusSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    nexus::unknown_children_remover(nexus_spec, context, mode).await
+    nexus::unknown_children_remover(nexus, context).await
 }
 
 /// Given a degraded volume
@@ -147,27 +133,25 @@ async fn unknown_children_remover(
 /// Then the children should eventually be removed from the spec
 /// And the replicas should eventually be destroyed
 async fn missing_children_remover(
-    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    nexus: &OperationGuardArc<NexusSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    nexus::missing_children_remover(nexus_spec, context, mode).await
+    nexus::missing_children_remover(nexus, context).await
 }
 
 /// Given a degraded volume
 /// When the nexus spec has a different number of children to the number of volume replicas
 /// Then the nexus spec should eventually have as many children as the number of volume replicas
 async fn nexus_replica_count_reconciler(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
-    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
+    nexus: &OperationGuardArc<NexusSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    let nexus_uuid = nexus_spec.lock().uuid.clone();
+    let nexus_uuid = nexus.lock().uuid.clone();
     let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
 
-    let vol_spec_clone = volume_spec.lock().clone();
-    let nexus_spec_clone = nexus_spec.lock().clone();
+    let vol_spec_clone = volume.lock().clone();
+    let nexus_spec_clone = nexus.lock().clone();
     let volume_replicas = vol_spec_clone.num_replicas as usize;
     let nexus_replica_children =
         nexus_spec_clone
@@ -186,29 +170,27 @@ async fn nexus_replica_count_reconciler(
     match nexus_replica_children.cmp(&volume_replicas) {
         Ordering::Less | Ordering::Greater => {
             nexus_replica_count_reconciler_traced(
-                volume_spec,
-                nexus_spec,
+                volume,
+                nexus,
                 nexus_state,
                 nexus_replica_children,
                 context,
-                mode,
             )
             .await
         }
         Ordering::Equal => PollResult::Ok(PollerState::Idle),
     }
 }
-#[tracing::instrument(skip(context, volume_spec, nexus_spec, mode), fields(nexus.uuid = %nexus_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(context, volume, nexus), fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 async fn nexus_replica_count_reconciler_traced(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
-    nexus_spec: &Arc<Mutex<NexusSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
+    nexus: &OperationGuardArc<NexusSpec>,
     nexus_state: Nexus,
     nexus_replica_children: usize,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    let vol_spec_clone = volume_spec.lock().clone();
-    let nexus_spec_clone = nexus_spec.lock().clone();
+    let vol_spec_clone = volume.lock().clone();
+    let nexus_spec_clone = nexus.lock().clone();
     let volume_replicas = vol_spec_clone.num_replicas as usize;
 
     match nexus_replica_children.cmp(&volume_replicas) {
@@ -222,13 +204,7 @@ async fn nexus_replica_count_reconciler_traced(
             });
             context
                 .specs()
-                .attach_replicas_to_nexus(
-                    context.registry(),
-                    volume_spec,
-                    nexus_spec,
-                    &nexus_state,
-                    mode,
-                )
+                .attach_replicas_to_nexus(context.registry(), volume, nexus, &nexus_state)
                 .await?;
         }
         Ordering::Greater => {
@@ -241,19 +217,13 @@ async fn nexus_replica_count_reconciler_traced(
             });
             context
                 .specs()
-                .remove_excess_replicas_from_nexus(
-                    context.registry(),
-                    volume_spec,
-                    nexus_spec,
-                    &nexus_state,
-                    mode,
-                )
+                .remove_excess_replicas_from_nexus(context.registry(), volume, nexus, &nexus_state)
                 .await?;
         }
         Ordering::Equal => {}
     }
 
-    PollResult::Ok(if nexus_spec.lock().children.len() == volume_replicas {
+    PollResult::Ok(if nexus.lock().children.len() == volume_replicas {
         PollerState::Idle
     } else {
         PollerState::Busy
@@ -265,11 +235,10 @@ async fn nexus_replica_count_reconciler_traced(
 /// Then the number of created volume replicas should eventually match the required number of
 /// replicas
 async fn volume_replica_count_reconciler(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    let volume_spec_clone = volume_spec.lock().clone();
+    let volume_spec_clone = volume.lock().clone();
     let volume_uuid = volume_spec_clone.uuid.clone();
     let required_replica_count = volume_spec_clone.num_replicas as usize;
 
@@ -278,19 +247,18 @@ async fn volume_replica_count_reconciler(
 
     match current_replica_count.cmp(&required_replica_count) {
         Ordering::Less | Ordering::Greater => {
-            volume_replica_count_reconciler_traced(volume_spec, context, mode).await
+            volume_replica_count_reconciler_traced(volume, context).await
         }
         Ordering::Equal => PollResult::Ok(PollerState::Idle),
     }
 }
 
-#[tracing::instrument(skip(context, volume_spec, mode), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
 async fn volume_replica_count_reconciler_traced(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    let volume_spec_clone = volume_spec.lock().clone();
+    let volume_spec_clone = volume.lock().clone();
     let volume_uuid = volume_spec_clone.uuid.clone();
     let required_replica_count = volume_spec_clone.num_replicas as usize;
 
@@ -310,7 +278,7 @@ async fn volume_replica_count_reconciler_traced(
             let diff = required_replica_count - current_replica_count;
             match context
                 .specs()
-                .create_volume_replicas(context.registry(), &volume_spec_clone, diff, mode)
+                .create_volume_replicas(context.registry(), &volume_spec_clone, diff)
                 .await?
             {
                 result if !result.is_empty() => {
@@ -348,7 +316,7 @@ async fn volume_replica_count_reconciler_traced(
             let diff = current_replica_count - required_replica_count;
             match context
                 .specs()
-                .remove_unused_volume_replicas(context.registry(), volume_spec, diff, mode)
+                .remove_unused_volume_replicas(context.registry(), volume, diff)
                 .await
             {
                 Ok(_) => {

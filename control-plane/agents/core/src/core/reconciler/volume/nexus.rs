@@ -7,7 +7,7 @@ use crate::core::{
     task_poller::{PollResult, PollerState},
 };
 
-use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode};
+use common_lib::types::v0::store::volume::VolumeSpec;
 
 use crate::core::reconciler::nexus::faulted_nexus_remover;
 use common_lib::types::v0::transport::VolumeStatus;
@@ -43,36 +43,37 @@ async fn volume_nexus_reconcile(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    let _guard = match volume_spec.operation_guard(OperationMode::ReconcileStart) {
+    let volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
-    let volume = {
-        let volume = volume_spec.lock();
-        if !volume.policy.self_heal || !volume.status.created() {
+    let volume_spec = {
+        let volume_spec = volume.lock();
+        if !volume_spec.policy.self_heal || !volume_spec.status.created() {
             return PollResult::Ok(PollerState::Idle);
         }
-        volume.clone()
+        volume_spec.clone()
     };
-    match context.specs().get_volume_target_nexus(&volume) {
-        Some(nexus_spec) => {
-            let _guard = match nexus_spec.operation_guard(OperationMode::ReconcileStart) {
-                Ok(guard) => guard,
-                Err(_) => return PollResult::Ok(PollerState::Busy),
-            };
-            let mode = OperationMode::ReconcileStep;
-
-            if !nexus_spec.lock().spec_status.created() {
+    match context
+        .specs()
+        .get_volume_target_nexus_guard(&volume_spec)
+        .await?
+    {
+        Some(nexus) => {
+            if !nexus.lock().spec_status.created() {
                 return PollResult::Ok(PollerState::Idle);
             }
 
-            let volume_state = context.registry().get_volume_state(&volume.uuid).await?;
+            let volume_state = context
+                .registry()
+                .get_volume_state(&volume_spec.uuid)
+                .await?;
 
             if volume_state.status != VolumeStatus::Online {
-                faulted_nexus_remover(&nexus_spec, context, mode).await?;
-                missing_nexus_recreate(&nexus_spec, context, mode).await?;
+                faulted_nexus_remover(&nexus, context).await?;
+                missing_nexus_recreate(&nexus, context).await?;
             }
-            fixup_nexus_protocol(&nexus_spec, context, mode).await
+            fixup_nexus_protocol(&nexus, context).await
         }
         None => PollResult::Ok(PollerState::Idle),
     }

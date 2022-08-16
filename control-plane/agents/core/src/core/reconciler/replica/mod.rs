@@ -8,9 +8,7 @@ use crate::core::{
         PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
     },
 };
-use common_lib::types::v0::store::{replica::ReplicaSpec, OperationMode};
-use parking_lot::Mutex;
-use std::sync::Arc;
+use common_lib::types::v0::store::{replica::ReplicaSpec, OperationGuardArc};
 
 /// Replica reconciler
 #[derive(Debug)]
@@ -34,6 +32,10 @@ impl TaskPoller for ReplicaReconciler {
         let mut results = Vec::with_capacity(replicas.len());
 
         for replica in replicas {
+            let replica = match replica.operation_guard() {
+                Ok(guard) => guard,
+                Err(_) => continue,
+            };
             results.push(replica.garbage_collect(context).await);
         }
 
@@ -53,7 +55,7 @@ impl TaskPoller for ReplicaReconciler {
 }
 
 #[async_trait::async_trait]
-impl ReCreate for Arc<Mutex<ReplicaSpec>> {
+impl ReCreate for OperationGuardArc<ReplicaSpec> {
     async fn recreate_state(&self, _context: &PollContext) -> PollResult {
         // We get this automatically when recreating pools
         PollResult::Ok(PollerState::Idle)
@@ -61,7 +63,7 @@ impl ReCreate for Arc<Mutex<ReplicaSpec>> {
 }
 
 #[async_trait::async_trait]
-impl GarbageCollect for Arc<Mutex<ReplicaSpec>> {
+impl GarbageCollect for OperationGuardArc<ReplicaSpec> {
     async fn garbage_collect(&self, context: &PollContext) -> PollResult {
         ReplicaReconciler::squash_results(vec![
             self.disown_orphaned(context).await,
@@ -91,49 +93,46 @@ impl GarbageCollect for Arc<Mutex<ReplicaSpec>> {
 /// In the event that the replicas become orphaned (have no owners) they will be destroyed by the
 /// 'destroy_orphaned_replicas' reconcile loop.
 async fn remove_missing_owners(
-    replica: &Arc<Mutex<ReplicaSpec>>,
+    replica: &OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
     let specs = context.specs();
 
-    if let Ok(_guard) = replica.operation_guard(OperationMode::ReconcileStart) {
-        let owned = {
-            let replica_spec = replica.lock();
-            replica_spec.managed && replica_spec.owned()
+    let owned = {
+        let replica_spec = replica.lock();
+        replica_spec.managed && replica_spec.owned()
+    };
+
+    if owned {
+        let replica_spec = replica.lock().clone();
+        let mut owner_removed = false;
+        let owners = &replica_spec.owners;
+
+        if let Some(volume) = owners.volume() {
+            if specs.get_volume(volume).is_err() {
+                // The volume no longer exists. Remove it as an owner.
+                replica.lock().owners.disowned_by_volume();
+                owner_removed = true;
+                tracing::info!(replica.uuid=%replica_spec.uuid, volume.uuid=%volume, "Removed volume as replica owner");
+            }
         };
 
-        if owned {
-            let replica_spec = replica.lock().clone();
-            let mut owner_removed = false;
-            let owners = &replica_spec.owners;
+        owners.nexuses().iter().for_each(|nexus| {
+            if specs.get_nexus(nexus).is_none() {
+                // The nexus no longer exists. Remove it as an owner.
+                replica.lock().owners.disowned_by_nexus(nexus);
+                owner_removed = true;
+                tracing::info!(replica.uuid=%replica_spec.uuid, nexus.uuid=%nexus, "Removed nexus as replica owner");
+            }
+        });
 
-            if let Some(volume) = owners.volume() {
-                if specs.get_volume(volume).is_err() {
-                    // The volume no longer exists. Remove it as an owner.
-                    replica.lock().owners.disowned_by_volume();
-                    owner_removed = true;
-                    tracing::info!(replica.uuid=%replica_spec.uuid, volume.uuid=%volume, "Removed volume as replica owner");
-                }
-            };
-
-            owners.nexuses().iter().for_each(|nexus| {
-                if specs.get_nexus(nexus).is_none() {
-                    // The nexus no longer exists. Remove it as an owner.
-                    replica.lock().owners.disowned_by_nexus(nexus);
-                    owner_removed = true;
-                    tracing::info!(replica.uuid=%replica_spec.uuid, nexus.uuid=%nexus, "Removed nexus as replica owner");
-                }
-            });
-
-            if owner_removed {
-                let replica_clone = replica.lock().clone();
-                if let Err(error) = context.registry().store_obj(&replica_clone).await {
-                    // Log the fact that we couldn't persist the changes.
-                    // If we reload the stale info from the persistent store (on a restart) we
-                    // will run this reconcile loop again and tidy it up, so no need to retry
-                    // here.
-                    tracing::error!(replica.uuid=%replica_clone.uuid, error=%error, "Failed to persist disowned replica")
-                }
+        if owner_removed {
+            let replica_clone = replica.lock().clone();
+            if let Err(error) = context.registry().store_obj(&replica_clone).await {
+                // Log the fact that we couldn't persist the changes.
+                // If we reload the stale info from the persistent store (on a restart) we
+                // will run this reconcile loop again and tidy it up, so no need to retry here.
+                tracing::error!(replica.uuid=%replica_clone.uuid, error=%error, "Failed to persist disowned replica")
             }
         }
     }
@@ -144,14 +143,9 @@ async fn remove_missing_owners(
 /// Destroy orphaned replicas.
 /// Orphaned replicas are those that are managed but which don't have any owners.
 async fn destroy_orphaned_replica(
-    replica: &Arc<Mutex<ReplicaSpec>>,
+    replica: &OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let _guard = match replica.operation_guard(OperationMode::ReconcileStart) {
-        Ok(guard) => guard,
-        Err(_) => return PollResult::Ok(PollerState::Busy),
-    };
-
     let destroy_owned = {
         let replica = replica.lock();
         replica.managed && !replica.owned()
@@ -168,51 +162,45 @@ async fn destroy_orphaned_replica(
 /// When its destruction fails
 /// Then it should eventually be destroyed
 async fn destroy_deleting_replica(
-    replica_spec: &Arc<Mutex<ReplicaSpec>>,
+    replica: &OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let _guard = match replica_spec.operation_guard(OperationMode::ReconcileStart) {
-        Ok(guard) => guard,
-        Err(_) => return PollResult::Ok(PollerState::Busy),
-    };
-
-    let deleting = replica_spec.lock().status().deleting();
+    let deleting = replica.lock().status().deleting();
     if deleting {
-        destroy_replica(replica_spec, context).await
+        destroy_replica(replica, context).await
     } else {
         PollResult::Ok(PollerState::Idle)
     }
 }
 
-#[tracing::instrument(level = "debug", skip(replica_spec, context), fields(replica.uuid = %replica_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.lock().uuid, request.reconcile = true))]
 async fn destroy_replica(
-    replica_spec: &Arc<Mutex<ReplicaSpec>>,
+    replica: &OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let pool_id = replica_spec.lock().pool.clone();
+    let pool_id = replica.lock().pool.clone();
     if let Some(node) = ResourceSpecsLocked::get_pool_node(context.registry(), pool_id).await {
-        let replica_clone = replica_spec.lock().clone();
+        let replica_spec = replica.lock().clone();
         match context
             .specs()
             .destroy_replica(
-                Some(replica_spec),
+                Some(replica),
                 context.registry(),
                 &ResourceSpecsLocked::destroy_replica_request(
-                    replica_clone,
+                    replica_spec.clone(),
                     Default::default(),
                     &node,
                 ),
                 true,
-                OperationMode::ReconcileStep,
             )
             .await
         {
             Ok(_) => {
-                tracing::info!(replica.uuid=%replica_spec.lock().uuid, "Successfully destroyed replica");
+                tracing::info!(replica.uuid=%replica_spec.uuid, "Successfully destroyed replica");
                 PollResult::Ok(PollerState::Idle)
             }
             Err(e) => {
-                tracing::trace!(replica.uuid=%replica_spec.lock().uuid, error=%e, "Failed to destroy replica");
+                tracing::trace!(replica.uuid=%replica_spec.uuid, error=%e, "Failed to destroy replica");
                 PollResult::Err(e)
             }
         }

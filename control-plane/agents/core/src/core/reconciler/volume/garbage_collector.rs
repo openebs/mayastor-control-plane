@@ -4,7 +4,7 @@ use crate::core::{
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 
-use common_lib::types::v0::store::{volume::VolumeSpec, OperationMode, TraceSpan, TraceStrLog};
+use common_lib::types::v0::store::{volume::VolumeSpec, OperationGuardArc, TraceSpan, TraceStrLog};
 
 use crate::core::{reconciler::GarbageCollect, specs::SpecOperations};
 use common::errors::SvcError;
@@ -12,8 +12,6 @@ use common_lib::types::v0::{
     store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},
     transport::{DestroyVolume, VolumeStatus},
 };
-use parking_lot::Mutex;
-use std::sync::Arc;
 use tracing::Instrument;
 
 /// Volume Garbage Collector reconciler
@@ -35,6 +33,10 @@ impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         for volume in context.specs().get_locked_volumes() {
+            let volume = match volume.operation_guard() {
+                Ok(guard) => guard,
+                Err(_) => continue,
+            };
             results.push(volume.garbage_collect(context).await);
         }
         Self::squash_results(results)
@@ -55,7 +57,7 @@ impl TaskPoller for GarbageCollector {
 }
 
 #[async_trait::async_trait]
-impl GarbageCollect for Arc<Mutex<VolumeSpec>> {
+impl GarbageCollect for OperationGuardArc<VolumeSpec> {
     async fn garbage_collect(&self, context: &PollContext) -> PollResult {
         GarbageCollector::squash_results(vec![
             self.destroy_deleting(context).await,
@@ -83,15 +85,15 @@ impl GarbageCollect for Arc<Mutex<VolumeSpec>> {
     }
 }
 
-#[tracing::instrument(level = "trace", skip(volume_spec, context), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "trace", skip(volume, context), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
 async fn destroy_deleting_volume(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let deleting = volume_spec.lock().status().deleting();
+    let deleting = volume.lock().status().deleting();
     if deleting {
-        destroy_volume(volume_spec, context, OperationMode::ReconcileStep)
-            .instrument(tracing::info_span!("destroy_deleting_volume", volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))
+        destroy_volume(volume, context)
+            .instrument(tracing::info_span!("destroy_deleting_volume", volume.uuid = %volume.lock().uuid, request.reconcile = true))
             .await
     } else {
         PollResult::Ok(PollerState::Idle)
@@ -99,29 +101,23 @@ async fn destroy_deleting_volume(
 }
 
 async fn destroy_volume(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
     context: &PollContext,
-    mode: OperationMode,
 ) -> PollResult {
-    let uuid = volume_spec.lock().uuid.clone();
+    let uuid = volume.lock().uuid.clone();
     match context
         .specs()
-        .destroy_volume(
-            volume_spec,
-            context.registry(),
-            &DestroyVolume::new(&uuid),
-            mode,
-        )
+        .destroy_volume(volume, context.registry(), &DestroyVolume::new(&uuid))
         .await
     {
         Ok(_) => {
-            volume_spec
+            volume
                 .lock()
                 .info_span(|| tracing::info!("Successfully destroyed volume"));
             Ok(PollerState::Idle)
         }
         Err(error) => {
-            volume_spec
+            volume
                 .lock()
                 .error_span(|| tracing::error!(error = %error, "Failed to destroy volume"));
             Err(error)
@@ -135,13 +131,9 @@ async fn destroy_volume(
 /// And they should eventually be destroyed
 #[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
 async fn disown_unused_nexuses(
-    volume: &Arc<Mutex<VolumeSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let _guard = match volume.operation_guard(OperationMode::ReconcileStart) {
-        Ok(guard) => guard,
-        Err(_) => return PollResult::Ok(PollerState::Busy),
-    };
     let mut results = vec![];
     let volume_clone = volume.lock().clone();
 
@@ -177,13 +169,9 @@ async fn disown_unused_nexuses(
 /// Then they should be disowned
 #[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
 async fn disown_unused_replicas(
-    volume: &Arc<Mutex<VolumeSpec>>,
+    volume: &OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let _guard = match volume.operation_guard(OperationMode::ReconcileStart) {
-        Ok(guard) => guard,
-        Err(_) => return PollResult::Ok(PollerState::Busy),
-    };
     let volume_clone = volume.lock().clone();
     let target = match context.specs().get_volume_target_nexus(&volume_clone) {
         Some(target) => target,
@@ -214,7 +202,7 @@ async fn disown_unused_replicas(
     let mut results = vec![];
 
     for replica in context.specs().get_volume_replicas(&volume_clone.uuid) {
-        let _guard = match replica.operation_guard(OperationMode::ReconcileStart) {
+        let replica = match replica.operation_guard() {
             Ok(guard) => guard,
             Err(_) => continue,
         };

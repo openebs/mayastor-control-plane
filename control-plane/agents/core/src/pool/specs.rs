@@ -16,7 +16,7 @@ use common_lib::{
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
-            OperationGuardArc, OperationMode, SpecStatus, SpecTransaction,
+            OperationGuardArc, SpecStatus, SpecTransaction,
         },
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
@@ -219,7 +219,6 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &CreatePool,
-        mode: OperationMode,
     ) -> Result<Pool, SvcError> {
         if registry.node_cordoned(&request.node)? {
             return Err(CordonedNode {
@@ -229,7 +228,7 @@ impl ResourceSpecsLocked {
 
         let node = registry.get_node_wrapper(&request.node).await?;
         let pool_spec = self.get_or_create_pool(request);
-        let guard = pool_spec.operation_guard_wait(mode).await?;
+        let guard = pool_spec.operation_guard_wait().await?;
         let _ = guard.start_create(registry, request).await?;
 
         let result = node.create_pool(request).await;
@@ -241,23 +240,44 @@ impl ResourceSpecsLocked {
 
     pub(crate) async fn destroy_pool(
         &self,
-        pool_spec: Option<&Arc<Mutex<PoolSpec>>>,
+        pool: Option<&OperationGuardArc<PoolSpec>>,
         registry: &Registry,
         request: &DestroyPool,
-        mode: OperationMode,
     ) -> Result<(), SvcError> {
         // what if the node is never coming back?
         // do we need a way to forcefully "delete" things?
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(pool_spec) = &pool_spec {
-            let guard = pool_spec.operation_guard_wait(mode).await?;
-            guard.start_destroy(registry, false).await?;
+        if let Some(pool) = pool {
+            pool.start_destroy(registry, false).await?;
 
             let result = node.destroy_pool(request).await;
-            guard.complete_destroy(result, registry).await
+            pool.complete_destroy(result, registry).await
         } else {
             node.destroy_pool(request).await
+        }
+    }
+
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    pub(crate) async fn replica_opt(
+        &self,
+        replica: &ReplicaId,
+    ) -> Result<Option<OperationGuardArc<ReplicaSpec>>, SvcError> {
+        Ok(match self.get_replica(replica) {
+            None => None,
+            Some(replica) => Some(replica.operation_guard_wait().await?),
+        })
+    }
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    pub(crate) async fn replica(
+        &self,
+        replica: &ReplicaId,
+    ) -> Result<OperationGuardArc<ReplicaSpec>, SvcError> {
+        match self.get_replica(replica) {
+            None => Err(SvcError::ReplicaNotFound {
+                replica_id: replica.clone(),
+            }),
+            Some(replica) => Ok(replica.operation_guard_wait().await?),
         }
     }
 
@@ -265,7 +285,6 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         request: &CreateReplica,
-        mode: OperationMode,
     ) -> Result<Replica, SvcError> {
         if registry.node_cordoned(&request.node)? {
             return Err(CordonedNode {
@@ -276,34 +295,32 @@ impl ResourceSpecsLocked {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         let replica_spec = self.get_or_create_replica(request);
-        let guard = replica_spec.operation_guard_wait(mode).await?;
-        let _ = guard.start_create(registry, request).await?;
+        let replica = replica_spec.operation_guard_wait().await?;
+        let _ = replica.start_create(registry, request).await?;
 
         let result = node.create_replica(request).await;
-        guard.complete_create(result, registry).await
+        replica.complete_create(result, registry).await
     }
 
     pub(crate) async fn destroy_replica_spec(
         &self,
         registry: &Registry,
-        replica: &ReplicaSpec,
+        replica_spec: &ReplicaSpec,
         destroy_by: ReplicaOwners,
         delete_owned: bool,
-        mode: OperationMode,
     ) -> Result<(), SvcError> {
-        match Self::get_replica_node(registry, replica).await {
+        match Self::get_replica_node(registry, replica_spec).await {
             // Should never happen, but just in case...
             None => Err(SvcError::Internal {
                 details: "Failed to find the node where a replica lives".to_string(),
             }),
             Some(node) => {
-                let replica_spec = self.get_replica(&replica.uuid);
+                let replica = self.replica_opt(&replica_spec.uuid).await?;
                 self.destroy_replica(
-                    replica_spec.as_ref(),
+                    replica.as_ref(),
                     registry,
-                    &Self::destroy_replica_request(replica.clone(), destroy_by, &node),
+                    &Self::destroy_replica_request(replica_spec.clone(), destroy_by, &node),
                     delete_owned,
-                    mode,
                 )
                 .await
             }
@@ -312,66 +329,60 @@ impl ResourceSpecsLocked {
 
     pub(crate) async fn destroy_replica(
         &self,
-        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
+        replica: Option<&OperationGuardArc<ReplicaSpec>>,
         registry: &Registry,
         request: &DestroyReplica,
         delete_owned: bool,
-        mode: OperationMode,
     ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(replica) = replica {
-            let guard = replica.operation_guard_wait(mode).await?;
-            guard
+            replica
                 .start_destroy_by(registry, &request.disowners, delete_owned)
                 .await?;
 
             let result = node.destroy_replica(request).await;
-            guard.complete_destroy(result, registry).await
+            replica.complete_destroy(result, registry).await
         } else {
             node.destroy_replica(request).await
         }
     }
     pub(crate) async fn share_replica(
         &self,
-        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
+        replica: Option<&OperationGuardArc<ReplicaSpec>>,
         registry: &Registry,
         request: &ShareReplica,
-        mode: OperationMode,
     ) -> Result<String, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(replica_spec) = replica {
-            let guard = replica_spec.operation_guard_wait(mode).await?;
+        if let Some(replica) = replica {
             let status = registry.get_replica(&request.uuid).await?;
-            let spec_clone = guard
+            let spec_clone = replica
                 .start_update(registry, &status, ReplicaOperation::Share(request.protocol))
                 .await?;
 
             let result = node.share_replica(request).await;
-            guard.complete_update(registry, result, spec_clone).await
+            replica.complete_update(registry, result, spec_clone).await
         } else {
             node.share_replica(request).await
         }
     }
     pub(crate) async fn unshare_replica(
         &self,
-        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
+        replica: Option<&OperationGuardArc<ReplicaSpec>>,
         registry: &Registry,
         request: &UnshareReplica,
-        mode: OperationMode,
     ) -> Result<String, SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
-        if let Some(replica_spec) = replica {
-            let guard = replica_spec.operation_guard_wait(mode).await?;
+        if let Some(replica) = replica {
             let status = registry.get_replica(&request.uuid).await?;
-            let spec_clone = guard
+            let spec_clone = replica
                 .start_update(registry, &status, ReplicaOperation::Unshare)
                 .await?;
 
             let result = node.unshare_replica(request).await;
-            guard.complete_update(registry, result, spec_clone).await
+            replica.complete_update(registry, result, spec_clone).await
         } else {
             node.unshare_replica(request).await
         }
@@ -468,7 +479,7 @@ impl ResourceSpecsLocked {
 
         let pools = self.get_locked_pools();
         for pool in pools {
-            if let Ok(guard) = pool.operation_guard(OperationMode::ReconcileStart) {
+            if let Ok(guard) = pool.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
                     // Not all pending operations could be handled.
                     pending_ops = true;
@@ -486,7 +497,7 @@ impl ResourceSpecsLocked {
 
         let replicas = self.get_replicas();
         for replica in replicas {
-            if let Ok(guard) = replica.operation_guard(OperationMode::ReconcileStart) {
+            if let Ok(guard) = replica.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
                     // Not all pending operations could be handled.
                     pending_ops = true;

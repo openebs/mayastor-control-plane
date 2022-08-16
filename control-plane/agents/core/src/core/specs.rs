@@ -103,7 +103,7 @@ pub trait GuardedSpecOperations:
     /// todo: The state of the object is left as Creating for now. Determine whether to set it to
     /// Deleted or let the reconciler clean it up.
     async fn complete_create<O, R: Send>(
-        self,
+        &self,
         result: Result<R, SvcError>,
         registry: &Registry,
     ) -> Result<R, SvcError>
@@ -262,7 +262,7 @@ pub trait GuardedSpecOperations:
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn complete_destroy<O, R: Send>(
-        self,
+        &self,
         result: Result<R, SvcError>,
         registry: &Registry,
     ) -> Result<R, SvcError>
@@ -338,7 +338,7 @@ pub trait GuardedSpecOperations:
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn complete_update<R: Send, O>(
-        self,
+        &self,
         registry: &Registry,
         result: Result<R, SvcError>,
         mut spec_clone: Self::Inner,
@@ -650,18 +650,26 @@ pub trait SpecOperations:
 #[async_trait::async_trait]
 pub trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperations> {
     /// Attempt to obtain a guard for the specified operation mode
-    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError>;
+    fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError>;
+    /// Attempt to obtain a guard for the specified operation mode
+    fn operation_guard(&self) -> Result<OperationGuardArc<T>, SvcError> {
+        self.operation_guard_mode(OperationMode::Exclusive)
+    }
     /// Attempt to obtain a guard for the specified operation mode
     /// A few attempts are made with an async sleep in case something else is already running
-    async fn operation_guard_wait(
+    async fn operation_guard_mode_wait(
         &self,
         mode: OperationMode,
     ) -> Result<OperationGuardArc<T>, SvcError>;
+    async fn operation_guard_wait(&self) -> Result<OperationGuardArc<T>, SvcError> {
+        self.operation_guard_mode_wait(OperationMode::Exclusive)
+            .await
+    }
 }
 
 #[async_trait::async_trait]
 impl<T: AsOperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc<Mutex<T>> {
-    fn operation_guard(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
+    fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
         match OperationGuardArc::try_sequence(self, mode) {
             Ok(guard) => Ok(guard),
             Err(error) => {
@@ -670,14 +678,14 @@ impl<T: AsOperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc
             }
         }
     }
-    async fn operation_guard_wait(
+    async fn operation_guard_mode_wait(
         &self,
         mode: OperationMode,
     ) -> Result<OperationGuardArc<T>, SvcError> {
         let mut tries = 5;
         loop {
             tries -= 1;
-            match self.operation_guard(mode) {
+            match self.operation_guard_mode(mode) {
                 Ok(guard) => return Ok(guard),
                 Err(error) if tries == 0 => {
                     return Err(error);
