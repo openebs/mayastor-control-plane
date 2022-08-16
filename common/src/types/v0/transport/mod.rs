@@ -14,6 +14,7 @@ pub mod watch;
 
 pub use blockdevice::*;
 pub use child::*;
+pub use cluster_agent::*;
 pub use jsongrpc::*;
 pub use misc::*;
 pub use nexus::*;
@@ -126,6 +127,8 @@ pub enum MessageIdVs {
     GetSpecs,
     /// Get States
     GetStates,
+    /// Report failed NVMe paths
+    ReportFailedPaths,
 }
 
 impl From<MessageIdVs> for MessageId {

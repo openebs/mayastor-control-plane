@@ -83,3 +83,14 @@ pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
 
 /// The default kubernetes namespace for this project.
 pub const DEFAULT_NAMESPACE: &str = "mayastor";
+/// NQN prefix for NVMe targets created by the product.
+pub const NVME_TARGET_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:";
+
+/// NVMe path check period.
+pub const NVME_PATH_CHECK_PERIOD: &str = "3s";
+
+/// The default retransmission interval for reporting failed paths in case of network issues.
+pub const NVME_PATH_RETRANSMISSION_PERIOD: &str = "10s";
+
+/// Period for aggregating multiple failed paths before reporting them.
+pub const NVME_PATH_AGGREGATION_PERIOD: &str = "1s";

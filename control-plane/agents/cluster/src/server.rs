@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use common_lib::transport_api::{ReplyError, ResourceKind};
 use grpc::operations::ha_node::{
     server::ClusterAgentServer,
-    traits::{ClusterAgentOperations, NodeInfo},
+    traits::{ClusterAgentOperations, NodeInfo, ReportFailedPathsInfo},
 };
 use std::{net::SocketAddr, sync::Arc};
 use tonic::transport::Server;
@@ -47,5 +47,14 @@ impl ClusterAgentOperations for ClusterAgentSvc {
 
         tracing::trace!(agent = request.node(), "node successfully registered");
         Ok(())
+    }
+
+    async fn report_failed_nvme_paths(
+        &self,
+        _request: &dyn ReportFailedPathsInfo,
+    ) -> Result<(), ReplyError> {
+        Err(ReplyError::unimplemented(
+            "NVMe path reporting is not yet implemented".to_string(),
+        ))
     }
 }
