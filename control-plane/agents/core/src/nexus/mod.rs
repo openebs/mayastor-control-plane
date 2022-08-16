@@ -1,4 +1,4 @@
-use super::core::registry::Registry;
+use super::controller::registry::Registry;
 use grpc::operations::nexus::server::NexusServer;
 use std::sync::Arc;
 

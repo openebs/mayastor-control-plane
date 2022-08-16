@@ -1,6 +1,6 @@
 use super::{super::node::watchdog::Watchdog, grpc::GrpcContext};
 use crate::{
-    core::{
+    controller::{
         grpc::{GrpcClient, GrpcClientLocked},
         states::{ResourceStates, ResourceStatesLocked},
     },

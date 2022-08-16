@@ -1,10 +1,10 @@
-use crate::core::registry::Registry;
+use crate::controller::registry::Registry;
 use common::errors::SvcError;
 use common_lib::types::v0::transport::{
     NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 
-use crate::core::reconciler::PollTriggerEvent;
+use crate::controller::reconciler::PollTriggerEvent;
 use common_lib::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec};
 use grpc::operations::{PaginatedResult, Pagination};
 use std::collections::HashMap;

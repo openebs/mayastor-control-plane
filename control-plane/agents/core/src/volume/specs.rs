@@ -1,5 +1,5 @@
 use crate::{
-    core::{
+    controller::{
         reconciler::PollTriggerEvent,
         registry::Registry,
         scheduling::{

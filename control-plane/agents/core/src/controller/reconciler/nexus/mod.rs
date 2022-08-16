@@ -1,7 +1,7 @@
 mod garbage_collector;
 
 use crate::{
-    core::{
+    controller::{
         scheduling::resources::HealthyChildItems,
         specs::{OperationSequenceGuard, SpecOperations},
         task_poller::{
@@ -25,7 +25,7 @@ use common_lib::{
 };
 use garbage_collector::GarbageCollector;
 
-use crate::core::{
+use crate::controller::{
     reconciler::{ReCreate, Reconciler},
     wrapper::NodeWrapper,
 };

@@ -1,4 +1,4 @@
-use crate::core::registry::Registry;
+use crate::controller::registry::Registry;
 use common::errors::{Store as SvcStoreError, SvcError};
 use common_lib::{
     transport_api::{v0::Watches, ResourceKind},

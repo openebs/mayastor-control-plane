@@ -2,9 +2,9 @@ mod garbage_collector;
 mod hot_spare;
 mod nexus;
 
-use crate::core::task_poller::{PollContext, PollPeriods, PollResult, PollTimer, TaskPoller};
+use crate::controller::task_poller::{PollContext, PollPeriods, PollResult, PollTimer, TaskPoller};
 
-use crate::core::reconciler::volume::{
+use crate::controller::reconciler::volume::{
     garbage_collector::GarbageCollector, hot_spare::HotSpareReconciler,
     nexus::VolumeNexusReconciler,
 };

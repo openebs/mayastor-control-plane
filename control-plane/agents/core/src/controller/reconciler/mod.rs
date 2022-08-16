@@ -5,12 +5,14 @@ mod pool;
 mod replica;
 mod volume;
 
-pub(crate) use crate::core::task_poller::PollTriggerEvent;
-use crate::core::task_poller::{squash_results, PollContext, PollEvent, PollResult, TaskPoller};
+pub(crate) use crate::controller::task_poller::PollTriggerEvent;
+use crate::controller::task_poller::{
+    squash_results, PollContext, PollEvent, PollResult, TaskPoller,
+};
 use poller::ReconcilerWorker;
 use std::fmt::Debug;
 
-use crate::core::registry::Registry;
+use crate::controller::registry::Registry;
 
 use parking_lot::Mutex;
 

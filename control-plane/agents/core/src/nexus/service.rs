@@ -1,4 +1,4 @@
-use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
+use crate::controller::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
     transport_api::{v0::Nexuses, ReplyError},

@@ -1,5 +1,5 @@
 use crate::{
-    core::wrapper::{rpc_nexus_v2_to_agent, rpc_pool_to_agent, rpc_replica_to_agent},
+    controller::wrapper::{rpc_nexus_v2_to_agent, rpc_pool_to_agent, rpc_replica_to_agent},
     node::service::NodeCommsTimeout,
 };
 use common::{

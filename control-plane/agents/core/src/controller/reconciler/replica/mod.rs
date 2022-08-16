@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::core::{
+use crate::controller::{
     reconciler::{GarbageCollect, ReCreate},
     specs::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperations},
     task_poller::{

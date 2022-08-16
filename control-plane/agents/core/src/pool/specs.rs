@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::controller::{
     registry::Registry,
     specs::{
         GuardedSpecOperations, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,

@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{
+use crate::controller::{
     reconciler::PollTriggerEvent, registry::Registry, specs::ResourceSpecsLocked,
     wrapper::NodeWrapper,
 };
@@ -8,7 +8,7 @@ use common_lib::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 
-use crate::core::wrapper::InternalOps;
+use crate::controller::wrapper::InternalOps;
 use grpc::{
     context::Context,
     operations::{

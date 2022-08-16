@@ -1,4 +1,4 @@
-use crate::core::task_poller::{PollContext, PollResult, PollerState, TaskPoller};
+use crate::controller::task_poller::{PollContext, PollResult, PollerState, TaskPoller};
 
 /// Reconcile dirty specs in the persistent store.
 /// This happens when we fail to update the persistent store and we have a "live" spec that

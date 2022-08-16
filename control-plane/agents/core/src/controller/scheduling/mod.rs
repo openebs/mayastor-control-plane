@@ -2,7 +2,7 @@ pub(crate) mod nexus;
 pub(crate) mod resources;
 pub(crate) mod volume;
 
-use crate::core::scheduling::{
+use crate::controller::scheduling::{
     nexus::GetPersistedNexusChildrenCtx,
     resources::{ChildItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},

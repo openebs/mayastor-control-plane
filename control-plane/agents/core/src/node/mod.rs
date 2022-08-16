@@ -4,7 +4,7 @@ mod specs;
 /// node watchdog to keep track of a node's liveness
 pub(crate) mod watchdog;
 
-use super::{core::registry::Registry, CliArgs};
+use super::{controller::registry::Registry, CliArgs};
 use common::Service;
 use common_lib::{
     transport_api::{v0::*, *},

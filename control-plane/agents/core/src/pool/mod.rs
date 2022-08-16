@@ -2,7 +2,7 @@ mod registry;
 pub mod service;
 pub mod specs;
 
-use super::core::registry::Registry;
+use super::controller::registry::Registry;
 use std::sync::Arc;
 
 use common::Service;

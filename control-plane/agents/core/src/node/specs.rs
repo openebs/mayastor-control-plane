@@ -1,4 +1,4 @@
-use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
+use crate::controller::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::{NodeNotFound, SvcError};
 use common_lib::types::v0::{
     store::node::{NodeLabels, NodeSpec},

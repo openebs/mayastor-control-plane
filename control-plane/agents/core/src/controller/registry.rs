@@ -14,7 +14,7 @@
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
 use super::{specs::*, wrapper::NodeWrapper};
-use crate::core::{
+use crate::controller::{
     reconciler::ReconcilerControl,
     task_poller::{PollEvent, PollTriggerEvent},
     wrapper::InternalOps,

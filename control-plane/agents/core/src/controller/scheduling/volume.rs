@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::controller::{
     registry::Registry,
     scheduling::{
         resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},

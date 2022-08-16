@@ -1,7 +1,7 @@
 pub mod service;
 mod watches;
 
-use super::core::registry::Registry;
+use super::controller::registry::Registry;
 use grpc::operations::watch::server::WatchServer;
 use std::sync::Arc;
 

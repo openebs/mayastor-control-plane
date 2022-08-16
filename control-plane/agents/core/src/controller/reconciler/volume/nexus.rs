@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::controller::{
     reconciler::{
         nexus::{fixup_nexus_protocol, missing_nexus_recreate},
         PollContext, TaskPoller,
@@ -9,7 +9,7 @@ use crate::core::{
 
 use common_lib::types::v0::store::volume::VolumeSpec;
 
-use crate::core::reconciler::nexus::faulted_nexus_remover;
+use crate::controller::reconciler::nexus::faulted_nexus_remover;
 use common_lib::types::v0::transport::VolumeStatus;
 use parking_lot::Mutex;
 use std::sync::Arc;

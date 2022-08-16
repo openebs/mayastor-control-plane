@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::controller::{
     reconciler::{PollContext, TaskPoller},
     specs::OperationSequenceGuard,
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
@@ -6,7 +6,7 @@ use crate::core::{
 
 use common_lib::types::v0::store::{volume::VolumeSpec, OperationGuardArc, TraceSpan, TraceStrLog};
 
-use crate::core::{reconciler::GarbageCollect, specs::SpecOperations};
+use crate::controller::{reconciler::GarbageCollect, specs::SpecOperations};
 use common::errors::SvcError;
 use common_lib::types::v0::{
     store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},

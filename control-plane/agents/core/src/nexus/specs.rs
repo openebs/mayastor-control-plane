@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::controller::{
     registry::Registry,
     specs::{GuardedSpecOperations, ResourceSpecs, ResourceSpecsLocked, SpecOperations},
     wrapper::ClientOps,
@@ -21,7 +21,7 @@ use common_lib::{
     },
 };
 
-use crate::core::specs::OperationSequenceGuard;
+use crate::controller::specs::OperationSequenceGuard;
 use common::errors::SvcError::CordonedNode;
 use common_lib::types::v0::store::OperationGuardArc;
 use parking_lot::Mutex;

@@ -1,4 +1,4 @@
-use crate::core::{registry::Registry, resource_map::ResourceMap};
+use crate::controller::{registry::Registry, resource_map::ResourceMap};
 use common::errors::SvcError;
 use common_lib::{
     transport_api::ResourceKind,

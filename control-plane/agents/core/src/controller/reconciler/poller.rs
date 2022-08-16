@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::controller::{
     reconciler::{nexus, persistent_store::PersistentStoreReconciler, pool, replica, volume},
     registry::Registry,
     task_poller::{

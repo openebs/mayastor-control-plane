@@ -1,5 +1,5 @@
 use crate::{
-    core::registry::Registry,
+    controller::registry::Registry,
     watch::watches::{StoreWatch, WatchCfgId},
 };
 pub use common::errors::SvcError;
