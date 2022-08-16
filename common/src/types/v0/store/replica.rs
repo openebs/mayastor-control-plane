@@ -184,7 +184,6 @@ impl TryFrom<&Value> for ReplicaOwners {
     fn try_from(owners: &Value) -> Result<Self, Self::Error> {
         match owners.get("volume") {
             Some(volume) => match volume.as_str() {
-                // Some(val) => Ok(ReplicaOwners::new(Some(VolumeId::try_from(val)?), vec![] )),
                 Some(val) => {
                     let volume_id = match VolumeId::try_from(val) {
                         Ok(id) => id,

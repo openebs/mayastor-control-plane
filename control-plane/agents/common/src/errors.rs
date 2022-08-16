@@ -203,9 +203,6 @@ pub enum SvcError {
     InvalidUuid { uuid: String, kind: ResourceKind },
     #[snafu(display("The pool uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
     InvalidPoolUuid { uuid: String, kind: ResourceKind },
-    // #[snafu(display("The argument '{}' for kind '{}' is not valid. Error: {}", arg,
-    // kind.to_string(), err))] InvalidArgument { arg: String, kind: ResourceKind, err:
-    // String},
     #[snafu(display(
         "Unable to start rebuild. Maximum number of rebuilds permitted is {}",
         max_rebuilds

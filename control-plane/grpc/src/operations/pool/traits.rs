@@ -197,14 +197,12 @@ impl From<Pools> for pool::Pools {
 impl TryFrom<get_pools_request::Filter> for Filter {
     type Error = ReplyError;
     fn try_from(filter: get_pools_request::Filter) -> Result<Self, Self::Error> {
-        //fn from(filter: get_pools_request::Filter) -> Self {
         match filter {
             get_pools_request::Filter::Node(node_filter) => {
                 Ok(Filter::Node(node_filter.node_id.into()))
             }
             get_pools_request::Filter::NodePool(node_pool_filter) => Ok(Filter::NodePool(
                 node_pool_filter.node_id.into(),
-                //node_pool_filter.pool_id.into(),
                 match node_pool_filter.pool_ref {
                     Some(pool_ref) => transport::PoolRef::try_from(pool_ref)?,
                     None => {

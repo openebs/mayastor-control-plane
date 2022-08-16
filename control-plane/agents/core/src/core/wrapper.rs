@@ -1262,7 +1262,7 @@ pub(crate) fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) ->
     pool
 }
 
-/// convert rpc replica to a agent replica
+/// convert v0 rpc replica to a agent replica
 pub(crate) fn v0_rpc_replica_to_agent(
     rpc_replica: &rpc::io_engine::ReplicaV2,
     id: &NodeId,
@@ -1272,7 +1272,7 @@ pub(crate) fn v0_rpc_replica_to_agent(
     Ok(replica)
 }
 
-/// convert rpc replica to a agent replica
+/// convert v1 rpc replica to a agent replica
 pub(crate) fn v1_rpc_replica_to_agent(
     rpc_replica: &rpc::v1::replica::Replica,
     id: &NodeId,

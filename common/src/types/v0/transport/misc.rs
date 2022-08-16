@@ -303,30 +303,6 @@ impl From<i32> for Protocol {
 /// Convert a device URI to a share Protocol
 /// Uses the URI scheme to determine the protocol
 /// Temporary WA until the share is added to the io-engine RPC
-// impl TryFrom<&str> for Protocol {
-//     type Error = String;
-//
-//     fn try_from(value: &str) -> Result<Self, Self::Error> {
-//         Ok(
-//             if value.is_empty() {
-//             Protocol::None
-//         } else {
-//             match url::Url::from_str(value) {
-//                 Ok(url) => match url.scheme() {
-//                     "nvmf" => Self::Nvmf,
-//                     "iscsi" => Self::Iscsi,
-//                     "nbd" => Self::Nbd,
-//                     other => return Err(format!("Invalid nexus protocol: {}", other)),
-//                 },
-//                 Err(error) => {
-//                     tracing::error!("error parsing uri's ({}) protocol: {}", value, error);
-//                     return Err(error.to_string());
-//                 }
-//             }
-//         })
-//     }
-// }
-
 impl TryFrom<String> for Protocol {
     type Error = String;
 
