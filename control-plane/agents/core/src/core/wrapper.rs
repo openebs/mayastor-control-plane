@@ -10,7 +10,7 @@ use crate::{
 
 use common::{
     errors::{GrpcRequest as GrpcRequestError, SvcError},
-    msg_translation::{AgentToIoEngine, IoEngineToAgent, TryIoEngineToAgent},
+    msg_translation::{v0::AgentToIoEngine as v0_conversion, IoEngineToAgent, TryIoEngineToAgent},
 };
 use common_lib::{
     transport_api::{Message, MessageId, ResourceKind},

@@ -11,9 +11,17 @@ use common_lib::{
     },
 };
 
-use crate::msg_translation::{AgentToIoEngine, IoEngineToAgent, TryIoEngineToAgent};
+use crate::msg_translation::{IoEngineToAgent, TryIoEngineToAgent};
 use rpc::io_engine as v0_rpc;
 use std::convert::TryFrom;
+
+/// Trait for converting agent messages to io-engine messages.
+pub trait AgentToIoEngine {
+    /// RpcIoEngine message type.
+    type IoEngineMessage;
+    /// Conversion of agent message to io-engine message.
+    fn to_rpc(&self) -> Self::IoEngineMessage;
+}
 
 impl IoEngineToAgent for v0_rpc::block_device::Partition {
     type AgentMessage = transport::Partition;
