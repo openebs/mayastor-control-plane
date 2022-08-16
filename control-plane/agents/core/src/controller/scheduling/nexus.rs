@@ -1,7 +1,9 @@
 use crate::controller::{
     registry::Registry,
     scheduling::{
-        resources::ChildItem, ChildInfoFilters, ChildItemSorters, ReplicaFilters, ResourceFilter,
+        resources::{ChildItem, NodeItem},
+        ChildInfoFilters, ChildItemSorters, NodeFilters, NodeSorters, ReplicaFilters,
+        ResourceFilter,
     },
 };
 use common::errors::SvcError;
@@ -10,7 +12,7 @@ use common_lib::types::v0::{
     transport::{ChildUri, NexusId, NodeId, VolumeId},
 };
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 /// Request to retrieve a list of healthy nexus children which is used for nexus creation
 /// used by `CreateVolumeNexus`
@@ -231,5 +233,119 @@ impl ResourceFilter for CreateVolumeNexus {
         group: F,
     ) -> HashMap<K, V> {
         group(&self.context, &self.list)
+    }
+}
+
+/// `GetSuitableNodes` for nexus failover/publish target node selection.
+#[derive(Clone)]
+pub(crate) struct GetSuitableNodes {
+    spec: VolumeSpec,
+}
+
+impl From<&VolumeSpec> for GetSuitableNodes {
+    fn from(spec: &VolumeSpec) -> Self {
+        Self { spec: spec.clone() }
+    }
+}
+
+/// `GetSuitableNodes` context for filtering and sorting.
+#[derive(Clone)]
+pub(crate) struct GetSuitableNodesContext {
+    #[allow(dead_code)]
+    registry: Registry,
+    spec: VolumeSpec,
+}
+
+impl Deref for GetSuitableNodesContext {
+    type Target = VolumeSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
+    }
+}
+
+impl Deref for GetSuitableNodes {
+    type Target = VolumeSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
+    }
+}
+
+/// `NexusTargetNode` is the builder used to retrieve a list of suitable nodes for the nexus
+/// placement on failover/publish.
+#[derive(Clone)]
+pub(crate) struct NexusTargetNode {
+    context: GetSuitableNodesContext,
+    list: Vec<NodeItem>,
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourceFilter for NexusTargetNode {
+    type Request = GetSuitableNodesContext;
+    type Item = NodeItem;
+
+    fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
+        let request = self.context.clone();
+        self.list = self
+            .list
+            .into_iter()
+            .filter(|v| filter(&request, v))
+            .collect();
+        self
+    }
+
+    fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
+        self.list = self.list.into_iter().sorted_by(sort).collect();
+        self
+    }
+
+    fn collect(self) -> Vec<Self::Item> {
+        self.list
+    }
+}
+
+impl NexusTargetNode {
+    async fn builder(request: impl Into<GetSuitableNodes>, registry: &Registry) -> Self {
+        let request = request.into();
+        Self {
+            context: GetSuitableNodesContext {
+                registry: registry.clone(),
+                spec: request.spec.clone(),
+            },
+            list: {
+                let current_target = request.spec.target;
+                let nodes = registry.get_node_wrappers().await;
+                let mut node_items = Vec::with_capacity(nodes.len());
+                for node in nodes {
+                    let node = node.read().await;
+                    node_items.push(NodeItem::new(node.clone()));
+                }
+                // exclude the current target node from the list of candidates
+                if current_target.is_some() {
+                    node_items = node_items
+                        .into_iter()
+                        .filter(|node| {
+                            node.node_wrapper().id() != current_target.as_ref().unwrap().node()
+                        })
+                        .collect();
+                }
+                node_items
+            },
+        }
+    }
+
+    /// Get `Self` with a default set of filters for nodes following the criteria (any order):
+    /// 1. The target node should be online.
+    /// 2. Give preference to nodes which have lesser number of active nexuses, for
+    /// proper distribution.
+    pub(crate) async fn builder_with_defaults(
+        request: impl Into<GetSuitableNodes>,
+        registry: &Registry,
+    ) -> Self {
+        Self::builder(request, registry)
+            .await
+            .filter(NodeFilters::online)
+            .sort(NodeSorters::number_targets)
     }
 }

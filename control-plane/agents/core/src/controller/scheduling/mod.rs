@@ -3,8 +3,8 @@ pub(crate) mod resources;
 pub(crate) mod volume;
 
 use crate::controller::scheduling::{
-    nexus::GetPersistedNexusChildrenCtx,
-    resources::{ChildItem, PoolItem, ReplicaItem},
+    nexus::{GetPersistedNexusChildrenCtx, GetSuitableNodesContext},
+    resources::{ChildItem, NodeItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
 use common_lib::types::v0::transport::{PoolStatus, PoolTopology};
@@ -45,15 +45,15 @@ pub(crate) trait ResourceFilter: Sized {
 /// Filter nodes used for replica creation
 pub(crate) struct NodeFilters {}
 impl NodeFilters {
-    /// Should only attempt to use online nodes
-    pub(crate) fn online(_request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    /// Should only attempt to use online nodes for pools.
+    pub(crate) fn online_for_pool(_request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.node.is_online()
     }
-    /// Should only attempt to use allowed nodes (by the topology)
+    /// Should only attempt to use allowed nodes (by the topology).
     pub(crate) fn allowed(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         request.allowed_nodes().is_empty() || request.allowed_nodes().contains(&item.pool.node)
     }
-    /// Should only attempt to use nodes not currently used by the volume
+    /// Should only attempt to use nodes not currently used by the volume.
     pub(crate) fn unused(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let registry = request.registry();
         let used_nodes = registry.specs().get_volume_data_nodes(&request.uuid);
@@ -67,6 +67,11 @@ impl NodeFilters {
             .get_cordoned_nodes()
             .into_iter()
             .any(|node_spec| node_spec.id() == &item.pool.node)
+    }
+
+    /// Should only attempt to use online nodes.
+    pub(crate) fn online(_request: &GetSuitableNodesContext, item: &NodeItem) -> bool {
+        item.node_wrapper().is_online()
     }
 }
 
@@ -289,5 +294,18 @@ impl AddReplicaSorters {
                 }
             }
         }
+    }
+}
+
+/// Sort nodes to pick the best choice for nexus target.
+pub(crate) struct NodeSorters {}
+impl NodeSorters {
+    /// Sort nodes by the number of active nexus present per node.
+    /// The lesser the number of active nexus on a node, the more would be its selection priority.
+    pub(crate) fn number_targets(a: &NodeItem, b: &NodeItem) -> std::cmp::Ordering {
+        a.node_wrapper()
+            .nexus_states()
+            .len()
+            .cmp(&b.node_wrapper().nexus_states().len())
     }
 }

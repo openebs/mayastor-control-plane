@@ -1,10 +1,14 @@
 use crate::controller::{
     registry::Registry,
     scheduling::{
-        nexus, nexus::GetPersistedNexusChildren, resources::HealthyChildItems, ResourceFilter,
+        nexus,
+        nexus::{GetPersistedNexusChildren, GetSuitableNodes},
+        resources::HealthyChildItems,
+        ResourceFilter,
     },
+    wrapper::NodeWrapper,
 };
-use common::errors::SvcError;
+use common::errors::{NotEnough, SvcError};
 use common_lib::types::v0::store::{nexus::NexusSpec, TraceStrLog};
 
 /// Return healthy replicas for volume/nexus
@@ -42,4 +46,25 @@ pub(crate) async fn get_healthy_nexus_children(
     nexus_spec.trace(&format!("Healthy nexus replicas: {:?}", children));
 
     Ok(children)
+}
+
+/// Return the suitable node target to publish the volume for nexus placement on
+/// volume publish or nexus failover.
+pub(crate) async fn get_target_node_candidate(
+    request: impl Into<GetSuitableNodes>,
+    registry: &Registry,
+) -> Result<NodeWrapper, SvcError> {
+    let candidates: Vec<NodeWrapper> =
+        nexus::NexusTargetNode::builder_with_defaults(request, registry)
+            .await
+            .collect()
+            .into_iter()
+            .map(|i| i.node_wrapper())
+            .collect();
+    match candidates.first() {
+        None => Err(SvcError::NotEnoughResources {
+            source: NotEnough::OfNodes { have: 0, need: 1 },
+        }),
+        Some(node) => Ok(node.clone()),
+    }
 }

@@ -16,6 +16,7 @@ use crate::{
             SpecOperationsHelper,
         },
     },
+    nexus::scheduling::get_target_node_candidate,
     volume::scheduling,
 };
 use common::{
@@ -49,6 +50,7 @@ use grpc::operations::{PaginatedResult, Pagination};
 use parking_lot::Mutex;
 use snafu::OptionExt;
 use std::{convert::From, sync::Arc};
+use tracing::debug;
 
 /// Select a replica to be removed from the volume
 pub(crate) async fn get_volume_replica_remove_candidate(
@@ -1112,16 +1114,12 @@ pub(crate) async fn get_volume_target_node(
 
     match request.target_node.as_ref() {
         None => {
-            // auto select a node
-            let nodes = registry.get_node_wrappers().await;
-            for locked_node in nodes {
-                let node = locked_node.read().await;
-                // todo: use other metrics in order to make the "best" choice
-                if node.is_online() {
-                    return Ok(node.id().clone());
-                }
-            }
-            Err(SvcError::NoNodes {})
+            // in case there is no target node specified, let the control-plane scheduling logic
+            // determine a suitable node for the same.
+            let volume_spec = registry.specs().get_volume(&status.uuid)?;
+            let candidate = get_target_node_candidate(&volume_spec, registry).await?;
+            debug!(node.id=%candidate.id(), "node selected for volume publish by control-plane");
+            Ok(candidate.id().clone())
         }
         Some(node) => {
             // make sure the requested node is available

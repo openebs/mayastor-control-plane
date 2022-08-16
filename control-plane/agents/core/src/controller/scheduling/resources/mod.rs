@@ -194,3 +194,20 @@ impl ChildItem {
         &self.pool_state
     }
 }
+
+/// Individual Node candidate which is a wrapper over nodewrapper used for filtering.
+#[derive(Clone)]
+pub(crate) struct NodeItem {
+    node_wrapper: NodeWrapper,
+}
+
+impl NodeItem {
+    /// Create a new node item with given `node_wrapper`.
+    pub(crate) fn new(node_wrapper: NodeWrapper) -> Self {
+        Self { node_wrapper }
+    }
+    /// Get the internal `node_wrapper` from `NodeItem`.
+    pub(crate) fn node_wrapper(&self) -> NodeWrapper {
+        self.node_wrapper.clone()
+    }
+}
