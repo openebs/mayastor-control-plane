@@ -21,11 +21,3 @@ pub trait IoEngineToAgent {
     /// Conversion of io-engine message to agent message.
     fn to_agent(&self) -> Self::AgentMessage;
 }
-
-/// Trait for converting agent messages to io-engine messages.
-pub trait AgentToIoEngine {
-    /// RpcIoEngine message type.
-    type IoEngineMessage;
-    /// Conversion of agent message to io-engine message.
-    fn to_rpc(&self) -> Self::IoEngineMessage;
-}

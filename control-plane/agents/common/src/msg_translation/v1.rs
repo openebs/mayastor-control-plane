@@ -2,6 +2,14 @@ use crate::msg_translation::IoEngineToAgent;
 use common_lib::types::v0::transport;
 use rpc::v1 as v1_rpc;
 
+/// Trait for converting agent messages to io-engine messages.
+pub trait AgentToIoEngine {
+    /// RpcIoEngine message type.
+    type IoEngineMessage;
+    /// Conversion of agent message to io-engine message.
+    fn to_rpc(&self) -> Self::IoEngineMessage;
+}
+
 impl IoEngineToAgent for v1_rpc::host::Partition {
     type AgentMessage = transport::Partition;
     fn to_agent(&self) -> Self::AgentMessage {
