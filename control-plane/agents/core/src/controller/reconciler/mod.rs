@@ -1,6 +1,6 @@
 mod nexus;
 mod persistent_store;
-pub mod poller;
+pub(crate) mod poller;
 mod pool;
 mod replica;
 mod volume;

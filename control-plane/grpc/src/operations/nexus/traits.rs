@@ -699,10 +699,7 @@ impl From<&dyn DestroyNexusInfo> for DestroyNexusRequest {
 
 impl From<&dyn DestroyNexusInfo> for DestroyNexus {
     fn from(data: &dyn DestroyNexusInfo) -> Self {
-        Self {
-            node: data.node(),
-            uuid: data.uuid(),
-        }
+        Self::new(data.node(), data.uuid())
     }
 }
 

@@ -1,23 +1,24 @@
 //! Common modules used by the different core services
 
 /// gRPC helpers
-pub mod grpc;
+pub(crate) mod grpc;
+pub(crate) mod operations;
 /// reconciliation logic
-pub mod reconciler;
+pub(crate) mod reconciler;
 /// registry with node and all its resources
-pub mod registry;
+pub(crate) mod registry;
 /// generic resources
 mod resource_map;
 /// helpers for node/pool/replica scheduling
 pub(crate) mod scheduling;
 /// registry with all the resource specs
-pub mod specs;
+pub(crate) mod specs;
 /// registry with all the resource states
-pub mod states;
+pub(crate) mod states;
 /// generic task pollers (eg used by the reconcilers)
 mod task_poller;
 /// helper wrappers over the resources
-pub mod wrapper;
+pub(crate) mod wrapper;
 
 /// Core tests
 #[cfg(test)]

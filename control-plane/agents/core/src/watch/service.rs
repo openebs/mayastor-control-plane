@@ -2,8 +2,8 @@ use crate::{
     controller::registry::Registry,
     watch::watches::{StoreWatch, WatchCfgId},
 };
-pub use common::errors::SvcError;
-pub use common_lib::transport_api::{Message, MessageId};
+pub(crate) use common::errors::SvcError;
+
 use common_lib::{
     transport_api::{v0::Watches, ReplyError},
     types::v0::transport::{CreateWatch, DeleteWatch, GetWatches},
@@ -12,7 +12,7 @@ use grpc::{
     context::Context,
     operations::watch::traits::{GetWatchInfo, WatchInfo, WatchOperations},
 };
-pub use std::convert::TryInto;
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

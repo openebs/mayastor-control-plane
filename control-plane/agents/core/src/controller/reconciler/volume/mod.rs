@@ -13,13 +13,13 @@ use crate::controller::reconciler::volume::{
 /// 1. does the replica replacement
 /// 2. volume garbage collection
 #[derive(Debug)]
-pub struct VolumeReconciler {
+pub(crate) struct VolumeReconciler {
     counter: PollTimer,
     poll_targets: Vec<Box<dyn TaskPoller>>,
 }
 impl VolumeReconciler {
     /// Return new `Self` with the provided period
-    pub fn from(period: PollPeriods) -> Self {
+    pub(crate) fn from(period: PollPeriods) -> Self {
         VolumeReconciler {
             counter: PollTimer::from(period),
             poll_targets: vec![
@@ -30,7 +30,7 @@ impl VolumeReconciler {
         }
     }
     /// Return new `Self` with the default period
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::from(1)
     }
 }

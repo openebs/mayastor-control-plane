@@ -1253,7 +1253,7 @@ fn rpc_nexus_to_agent(rpc_nexus: &rpc::io_engine::Nexus, id: &NodeId) -> Result<
 /// Wrapper over the message bus `Pool` which includes all the replicas
 /// and Ord traits to aid pool selection for volume replicas
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PoolWrapper {
+pub(crate) struct PoolWrapper {
     state: PoolState,
     replicas: Vec<Replica>,
 }
@@ -1267,7 +1267,7 @@ impl Deref for PoolWrapper {
 
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas
-    pub fn new(pool: PoolState, replicas: Vec<Replica>) -> Self {
+    pub(crate) fn new(pool: PoolState, replicas: Vec<Replica>) -> Self {
         Self {
             state: pool,
             replicas,
@@ -1275,20 +1275,20 @@ impl PoolWrapper {
     }
 
     /// Get all the replicas
-    pub fn replicas(&self) -> Vec<Replica> {
+    pub(crate) fn replicas(&self) -> Vec<Replica> {
         self.replicas.clone()
     }
     /// Get the specified replica
-    pub fn replica(&self, replica: &ReplicaId) -> Option<&Replica> {
+    pub(crate) fn replica(&self, replica: &ReplicaId) -> Option<&Replica> {
         self.replicas.iter().find(|r| &r.uuid == replica)
     }
     /// Get the state
-    pub fn state(&self) -> &PoolState {
+    pub(crate) fn state(&self) -> &PoolState {
         &self.state
     }
 
     /// Get the free space
-    pub fn free_space(&self) -> u64 {
+    pub(crate) fn free_space(&self) -> u64 {
         if self.state.capacity >= self.state.used {
             self.state.capacity - self.state.used
         } else {
@@ -1304,20 +1304,24 @@ impl PoolWrapper {
     }
 
     /// Set pool state as unknown
-    pub fn set_unknown(&mut self) {
+    #[allow(dead_code)]
+    pub(crate) fn set_unknown(&mut self) {
         self.state.status = PoolStatus::Unknown;
     }
 
     /// Add replica to list
-    pub fn add_replica(&mut self, replica: &Replica) {
+    #[allow(dead_code)]
+    pub(crate) fn add_replica(&mut self, replica: &Replica) {
         self.replicas.push(replica.clone())
     }
     /// Remove replica from list
-    pub fn remove_replica(&mut self, uuid: &ReplicaId) {
+    #[allow(dead_code)]
+    pub(crate) fn remove_replica(&mut self, uuid: &ReplicaId) {
         self.replicas.retain(|replica| &replica.uuid != uuid)
     }
     /// update replica from list
-    pub fn update_replica(&mut self, uuid: &ReplicaId, share: &Protocol, uri: &str) {
+    #[allow(dead_code)]
+    pub(crate) fn update_replica(&mut self, uuid: &ReplicaId, share: &Protocol, uri: &str) {
         if let Some(replica) = self
             .replicas
             .iter_mut()

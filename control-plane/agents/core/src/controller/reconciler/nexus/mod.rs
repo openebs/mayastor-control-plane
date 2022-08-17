@@ -3,7 +3,7 @@ mod garbage_collector;
 use crate::{
     controller::{
         scheduling::resources::HealthyChildItems,
-        specs::{OperationSequenceGuard, SpecOperations},
+        specs::{OperationSequenceGuard, SpecOperationsHelper},
         task_poller::{
             squash_results, PollContext, PollPeriods, PollResult, PollTimer, PollerState,
             TaskPoller,
@@ -26,6 +26,7 @@ use common_lib::{
 use garbage_collector::GarbageCollector;
 
 use crate::controller::{
+    operations::ResourceSharing,
     reconciler::{ReCreate, Reconciler},
     wrapper::NodeWrapper,
 };
@@ -36,20 +37,20 @@ use tracing::Instrument;
 
 /// Nexus Reconciler loop
 #[derive(Debug)]
-pub struct NexusReconciler {
+pub(crate) struct NexusReconciler {
     counter: PollTimer,
     poll_targets: Vec<Box<dyn TaskPoller>>,
 }
 impl NexusReconciler {
     /// Return new `Self` with the provided period
-    pub fn from(period: PollPeriods) -> Self {
+    pub(crate) fn from(period: PollPeriods) -> Self {
         NexusReconciler {
             counter: PollTimer::from(period),
             poll_targets: vec![Box::new(GarbageCollector::new())],
         }
     }
     /// Return new `Self` with the default period
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::from(1)
     }
 }
@@ -391,22 +392,15 @@ pub(super) async fn fixup_nexus_protocol(
             if (nexus_state.share.shared() && nexus_spec.share.shared())
                 || !nexus_spec.share.shared()
             {
-                context
-                    .specs()
-                    .unshare_nexus(
-                        Some(nexus),
-                        context.registry(),
-                        &UnshareNexus::from(&nexus_state),
-                    )
+                nexus
+                    .unshare(context.registry(), &UnshareNexus::from(&nexus_state))
                     .await?;
             }
             if nexus_spec.share.shared() {
                 match NexusShareProtocol::try_from(nexus_spec.share) {
                     Ok(protocol) => {
-                        context
-                            .specs()
-                            .share_nexus(
-                                Some(nexus),
+                        nexus
+                            .share(
                                 context.registry(),
                                 &ShareNexus::from((&nexus_state, None, protocol)),
                             )

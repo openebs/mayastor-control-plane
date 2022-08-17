@@ -164,11 +164,28 @@ pub struct ReplicaOwners {
     volume: Option<VolumeId>,
     #[serde(skip)]
     nexuses: Vec<NexusId>,
+    disown_all: bool,
 }
 impl ReplicaOwners {
     /// Create new owners from the given volume and nexus id's
     pub fn new(volume: Option<VolumeId>, nexuses: Vec<NexusId>) -> Self {
-        Self { volume, nexuses }
+        Self {
+            volume,
+            nexuses,
+            disown_all: false,
+        }
+    }
+    /// Create a special `Self` that will disown all owners.
+    pub fn new_disown_all() -> Self {
+        Self {
+            disown_all: true,
+            ..Default::default()
+        }
+    }
+    /// Disown all owners.
+    pub fn with_disown_all(mut self) -> Self {
+        self.disown_all = true;
+        self
     }
     /// Return the volume owner, if any
     pub fn volume(&self) -> Option<&VolumeId> {
@@ -199,6 +216,7 @@ impl ReplicaOwners {
         Self {
             volume: Some(volume.clone()),
             nexuses: vec![],
+            disown_all: false,
         }
     }
     /// The replica is no longer part of the volume
@@ -211,6 +229,10 @@ impl ReplicaOwners {
     }
     /// The replica is no longer part of the provided owners
     pub fn disown(&mut self, disowner: &Self) {
+        if disowner.disown_all {
+            self.disown_all();
+            return;
+        }
         if self.volume == disowner.volume {
             self.volume = None;
         }
@@ -278,6 +300,11 @@ impl DestroyReplica {
             name: name.clone().into(),
             disowners: disowners.clone(),
         }
+    }
+    /// Disown all owners.
+    pub fn with_disown_all(mut self) -> Self {
+        self.disowners.disown_all = true;
+        self
     }
 }
 

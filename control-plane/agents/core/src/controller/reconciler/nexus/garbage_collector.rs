@@ -1,6 +1,7 @@
 use crate::controller::{
+    operations::ResourceLifecycle,
     reconciler::{GarbageCollect, PollContext, TaskPoller},
-    specs::{OperationSequenceGuard, SpecOperations},
+    specs::{OperationSequenceGuard, SpecOperationsHelper},
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 use common_lib::types::v0::{
@@ -157,9 +158,8 @@ async fn destroy_nexus(nexus: &OperationGuardArc<NexusSpec>, context: &PollConte
         let nexus_clone = nexus.lock().clone();
         nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy nexus"));
         let request = DestroyNexus::from(&nexus_clone);
-        match context
-            .specs()
-            .destroy_nexus(Some(nexus), context.registry(), &request, true)
+        match nexus
+            .destroy(context.registry(), &request.with_disown_all())
             .await
         {
             Ok(_) => {

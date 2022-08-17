@@ -1,6 +1,7 @@
 use crate::controller::{
+    operations::ResourceLifecycle,
     reconciler::{GarbageCollect, ReCreate},
-    specs::{OperationSequenceGuard, SpecOperations},
+    specs::{OperationSequenceGuard, SpecOperationsHelper},
     task_poller::{PollContext, PollPeriods, PollResult, PollTimer, PollerState, TaskPoller},
     wrapper::ClientOps,
 };
@@ -13,18 +14,18 @@ use tracing::Instrument;
 /// Pool Reconciler loop which:
 /// 1. recreates pools which are not present following an io-engine restart
 #[derive(Debug)]
-pub struct PoolReconciler {
+pub(crate) struct PoolReconciler {
     counter: PollTimer,
 }
 impl PoolReconciler {
     /// Return new `Self` with the provided period
-    pub fn from(period: PollPeriods) -> Self {
+    pub(crate) fn from(period: PollPeriods) -> Self {
         PoolReconciler {
             counter: PollTimer::from(period),
         }
     }
     /// Return new `Self` with the default period
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::from(1)
     }
 }
@@ -183,9 +184,8 @@ async fn deleting_pool_spec_reconciler(
             node: pool_spec.node.clone(),
             id: pool_spec.id.clone(),
         };
-        match context
-            .specs()
-            .destroy_pool(Some(pool), context.registry(), &request)
+        match pool
+            .destroy( context.registry(), &request)
             .await
         {
             Ok(_) => {

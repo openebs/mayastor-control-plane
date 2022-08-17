@@ -7,16 +7,16 @@ use grpc::operations::ha_node::{
 use std::{net::SocketAddr, sync::Arc};
 use tonic::transport::Server;
 
-pub struct ClusterAgent {
+pub(crate) struct ClusterAgent {
     endpoint: SocketAddr,
 }
 
 impl ClusterAgent {
-    pub fn new(endpoint: SocketAddr) -> Self {
+    pub(crate) fn new(endpoint: SocketAddr) -> Self {
         ClusterAgent { endpoint }
     }
 
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub(crate) async fn run(&self) -> anyhow::Result<()> {
         let r = ClusterAgentServer::new(Arc::new(ClusterAgentSvc {}));
         Server::builder()
             .add_service(r.into_grpc_server())

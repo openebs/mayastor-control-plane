@@ -23,7 +23,7 @@ struct CliArgs {
     core_grpc: Uri,
 }
 
-pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
+pub(crate) static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
 
 #[tokio::main]
 async fn main() {

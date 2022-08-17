@@ -6,7 +6,9 @@ use crate::controller::{
 
 use common_lib::types::v0::store::{volume::VolumeSpec, OperationGuardArc, TraceSpan, TraceStrLog};
 
-use crate::controller::{reconciler::GarbageCollect, specs::SpecOperations};
+use crate::controller::{
+    operations::ResourceLifecycle, reconciler::GarbageCollect, specs::SpecOperationsHelper,
+};
 use common::errors::SvcError;
 use common_lib::types::v0::{
     store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},
@@ -105,9 +107,8 @@ async fn destroy_volume(
     context: &PollContext,
 ) -> PollResult {
     let uuid = volume.lock().uuid.clone();
-    match context
-        .specs()
-        .destroy_volume(volume, context.registry(), &DestroyVolume::new(&uuid))
+    match volume
+        .destroy(context.registry(), &DestroyVolume::new(&uuid))
         .await
     {
         Ok(_) => {

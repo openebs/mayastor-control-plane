@@ -12,19 +12,13 @@ fn client() -> impl NexusOperations {
 
 async fn destroy_nexus(filter: Filter) -> Result<(), RestError<RestJsonError>> {
     let destroy = match filter.clone() {
-        Filter::NodeNexus(node_id, nexus_id) => DestroyNexus {
-            node: node_id,
-            uuid: nexus_id,
-        },
+        Filter::NodeNexus(node_id, nexus_id) => DestroyNexus::new(node_id, nexus_id),
         Filter::Nexus(nexus_id) => {
             let node_id = match client().get(filter, None).await {
                 Ok(nexuses) => nexus(Some(nexus_id.to_string()), nexuses.into_inner().get(0))?.node,
                 Err(error) => return Err(RestError::from(error)),
             };
-            DestroyNexus {
-                node: node_id,
-                uuid: nexus_id,
-            }
+            DestroyNexus::new(node_id, nexus_id)
         }
         _ => {
             return Err(RestError::from(ReplyError {

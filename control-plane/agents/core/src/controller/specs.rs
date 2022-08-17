@@ -47,7 +47,7 @@ enum SpecError {
 /// This trait is used to encapsulate common behaviour for all different types of resources,
 /// including validation rules and error handling.
 #[async_trait]
-pub trait GuardedSpecOperations:
+pub(crate) trait GuardedOperationsHelper:
     Debug + Sync + Send + Sized + Deref<Target = Arc<Mutex<Self::Inner>>>
 {
     type Create: Debug + PartialEq + Sync + Send;
@@ -55,7 +55,7 @@ pub trait GuardedSpecOperations:
     type Status: PartialEq + Sync + Send;
     type State: PartialEq + Sync + Send;
     type UpdateOp: Sync + Send;
-    type Inner: SpecOperations<
+    type Inner: SpecOperationsHelper<
         Create = Self::Create,
         Owners = Self::Owners,
         Status = Self::Status,
@@ -192,12 +192,12 @@ pub trait GuardedSpecOperations:
     /// In case of error, the log is undone and an error is returned.
     /// If the del_owned flag is set, then we skip the check for owners.
     /// Otherwise, if the spec is still owned then we cannot proceed with deletion.
-    async fn start_destroy<O>(&self, registry: &Registry, del_owned: bool) -> Result<(), SvcError>
+    async fn start_destroy<O>(&self, registry: &Registry) -> Result<(), SvcError>
     where
         Self::Inner: SpecTransaction<O>,
         Self::Inner: StorableObject,
     {
-        self.start_destroy_by(registry, &Self::Owners::default(), del_owned)
+        self.start_destroy_by(registry, &Self::Owners::default())
             .await
     }
 
@@ -210,7 +210,6 @@ pub trait GuardedSpecOperations:
         &self,
         registry: &Registry,
         owners: &Self::Owners,
-        ignore_owners: bool,
     ) -> Result<(), SvcError>
     where
         Self::Inner: SpecTransaction<O>,
@@ -221,7 +220,7 @@ pub trait GuardedSpecOperations:
             let _ = spec.busy()?;
             if spec.status().deleted() {
                 return Ok(());
-            } else if !ignore_owners {
+            } else {
                 spec.disown(owners);
                 if spec.owned() {
                     tracing::error!(
@@ -505,7 +504,7 @@ pub trait GuardedSpecOperations:
 }
 
 #[async_trait::async_trait]
-pub trait SpecOperations:
+pub(crate) trait SpecOperationsHelper:
     Clone + Debug + StorableObject + AsOperationSequencer + ResourceUuid + PartialEq<Self::Create>
 {
     type Create: Debug + PartialEq + Sync + Send;
@@ -648,7 +647,7 @@ pub trait SpecOperations:
 
 /// Operations are locked
 #[async_trait::async_trait]
-pub trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperations> {
+pub(crate) trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperationsHelper> {
     /// Attempt to obtain a guard for the specified operation mode
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError>;
     /// Attempt to obtain a guard for the specified operation mode
@@ -668,7 +667,7 @@ pub trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperations> {
 }
 
 #[async_trait::async_trait]
-impl<T: AsOperationSequencer + SpecOperations> OperationSequenceGuard<T> for Arc<Mutex<T>> {
+impl<T: AsOperationSequencer + SpecOperationsHelper> OperationSequenceGuard<T> for Arc<Mutex<T>> {
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
         match OperationGuardArc::try_sequence(self, mode) {
             Ok(guard) => Ok(guard),

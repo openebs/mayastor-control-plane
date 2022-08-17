@@ -2,23 +2,27 @@
 mod tests;
 
 use crate::controller::{
+    operations::ResourceLifecycle,
     reconciler::{GarbageCollect, ReCreate},
-    specs::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperations},
+    specs::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperationsHelper},
     task_poller::{
         PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
     },
 };
-use common_lib::types::v0::store::{replica::ReplicaSpec, OperationGuardArc};
+use common_lib::types::v0::{
+    store::{replica::ReplicaSpec, OperationGuardArc},
+    transport::ReplicaOwners,
+};
 
 /// Replica reconciler
 #[derive(Debug)]
-pub struct ReplicaReconciler {
+pub(crate) struct ReplicaReconciler {
     counter: PollTimer,
 }
 
 impl ReplicaReconciler {
     /// Return a new `Self`
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             counter: PollTimer::from(5),
         }
@@ -181,17 +185,14 @@ async fn destroy_replica(
     let pool_id = replica.lock().pool.clone();
     if let Some(node) = ResourceSpecsLocked::get_pool_node(context.registry(), pool_id).await {
         let replica_spec = replica.lock().clone();
-        match context
-            .specs()
-            .destroy_replica(
-                Some(replica),
+        match replica
+            .destroy(
                 context.registry(),
                 &ResourceSpecsLocked::destroy_replica_request(
                     replica_spec.clone(),
-                    Default::default(),
+                    ReplicaOwners::new_disown_all(),
                     &node,
                 ),
-                true,
             )
             .await
         {

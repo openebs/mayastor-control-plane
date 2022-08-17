@@ -93,10 +93,10 @@ async fn nexus() {
 
     nexus_client
         .destroy(
-            &DestroyNexus {
-                node: io_engine.clone(),
-                uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
-            },
+            &DestroyNexus::new(
+                io_engine.clone(),
+                NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+            ),
             None,
         )
         .await

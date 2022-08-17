@@ -329,7 +329,7 @@ impl ReplicaRemovalCandidates {
     }
     /// Get the next removal candidate.
     /// Unhealthy replicas are removed before healthy replicas
-    pub fn next(&mut self) -> Option<ReplicaItem> {
+    pub(crate) fn next(&mut self) -> Option<ReplicaItem> {
         self.next_unhealthy().or_else(|| self.next_healthy())
     }
 

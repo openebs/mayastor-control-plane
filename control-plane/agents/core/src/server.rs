@@ -1,11 +1,11 @@
-pub mod controller;
-pub mod nexus;
-pub mod node;
-pub mod pool;
-pub mod registry;
+pub(crate) mod controller;
+pub(crate) mod nexus;
+pub(crate) mod node;
+pub(crate) mod pool;
+pub(crate) mod registry;
 mod service;
-pub mod volume;
-pub mod watch;
+pub(crate) mod volume;
+pub(crate) mod watch;
 
 use controller::registry::NumRebuilds;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};

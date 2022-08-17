@@ -39,7 +39,7 @@ use tokio::sync::{Mutex, RwLock};
 
 /// Registry containing all io-engine instances (aka nodes)
 #[derive(Clone, Debug)]
-pub struct Registry {
+pub(crate) struct Registry {
     inner: Arc<RegistryInner<Etcd>>,
 }
 
@@ -59,7 +59,7 @@ pub(crate) type NumRebuilds = u32;
 
 /// Generic Registry Inner with a Store trait
 #[derive(Debug)]
-pub struct RegistryInner<S: Store> {
+pub(crate) struct RegistryInner<S: Store> {
     /// the actual state of the nodes
     nodes: NodesMapLocked,
     /// spec (aka desired state) of the various resources
@@ -83,7 +83,7 @@ impl Registry {
     /// Create a new registry with the `cache_period` to reload the cache, the
     /// `store_url` to connect to, a `store_timeout` for store operations
     /// and a `reconcile_period` for reconcile operations
-    pub async fn new(
+    pub(crate) async fn new(
         cache_period: std::time::Duration,
         store_url: String,
         store_timeout: std::time::Duration,
@@ -169,7 +169,7 @@ impl Registry {
     }
 
     /// Serialized write to the persistent store
-    pub async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
+    pub(crate) async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(
             self.store_timeout,
@@ -187,7 +187,7 @@ impl Registry {
     }
 
     /// Serialized read from the persistent store
-    pub async fn load_obj<O: StorableObject>(&self, key: &O::Key) -> Result<O, SvcError> {
+    pub(crate) async fn load_obj<O: StorableObject>(&self, key: &O::Key) -> Result<O, SvcError> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(self.store_timeout, async move { store.get_obj(key).await })
             .await
@@ -202,7 +202,7 @@ impl Registry {
     }
 
     /// Serialized delete to the persistent store
-    pub async fn delete_kv<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
+    pub(crate) async fn delete_kv<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(
             self.store_timeout,
@@ -232,7 +232,7 @@ impl Registry {
     }
 
     /// Check if the persistent store is currently online
-    pub async fn store_online(&self) -> bool {
+    pub(crate) async fn store_online(&self) -> bool {
         let mut store = self.store.lock().await;
         tokio::time::timeout(self.store_timeout, async move { store.online().await })
             .await
@@ -240,7 +240,7 @@ impl Registry {
     }
 
     /// Start the worker thread which updates the registry
-    pub async fn start(&self) {
+    pub(crate) async fn start(&self) {
         let registry = self.clone();
         tokio::spawn(async move {
             registry.poller().await;
@@ -315,7 +315,7 @@ impl Registry {
     }
 
     /// Returns whether or not the node with the given ID is cordoned.
-    pub fn node_cordoned(&self, node_id: &NodeId) -> Result<bool, SvcError> {
+    pub(crate) fn node_cordoned(&self, node_id: &NodeId) -> Result<bool, SvcError> {
         Ok(self.specs.get_node(node_id)?.cordoned())
     }
 }
