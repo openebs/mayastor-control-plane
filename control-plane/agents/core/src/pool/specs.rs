@@ -1,27 +1,23 @@
-use crate::core::{
+use crate::controller::{
+    operations::ResourceLifecycle,
     registry::Registry,
     specs::{
-        GuardedSpecOperations, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
-        SpecOperations,
+        GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
+        SpecOperationsHelper,
     },
-    wrapper::ClientOps,
 };
-use common::errors::{
-    SvcError,
-    SvcError::{CordonedNode, PoolNotFound},
-};
+use common::errors::{SvcError, SvcError::PoolNotFound};
 use common_lib::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
-            OperationGuardArc, OperationMode, SpecStatus, SpecTransaction,
+            OperationGuardArc, SpecStatus, SpecTransaction,
         },
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Pool, PoolId, PoolState,
-            PoolStatus, Replica, ReplicaId, ReplicaOwners, ReplicaStatus, ShareReplica,
-            UnshareReplica,
+            CreatePool, CreateReplica, PoolId, PoolState, PoolStatus, Replica, ReplicaId,
+            ReplicaOwners, ReplicaStatus,
         },
     },
 };
@@ -29,7 +25,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 #[async_trait::async_trait]
-impl GuardedSpecOperations for OperationGuardArc<PoolSpec> {
+impl GuardedOperationsHelper for OperationGuardArc<PoolSpec> {
     type Create = CreatePool;
     type Owners = ();
     type Status = PoolStatus;
@@ -57,7 +53,7 @@ impl GuardedSpecOperations for OperationGuardArc<PoolSpec> {
 }
 
 #[async_trait::async_trait]
-impl SpecOperations for PoolSpec {
+impl SpecOperationsHelper for PoolSpec {
     type Create = CreatePool;
     type Owners = ();
     type Status = PoolStatus;
@@ -94,7 +90,7 @@ impl SpecOperations for PoolSpec {
 }
 
 #[async_trait::async_trait]
-impl GuardedSpecOperations for OperationGuardArc<ReplicaSpec> {
+impl GuardedOperationsHelper for OperationGuardArc<ReplicaSpec> {
     type Create = CreateReplica;
     type Owners = ReplicaOwners;
     type Status = ReplicaStatus;
@@ -109,7 +105,7 @@ impl GuardedSpecOperations for OperationGuardArc<ReplicaSpec> {
 }
 
 #[async_trait::async_trait]
-impl SpecOperations for ReplicaSpec {
+impl SpecOperationsHelper for ReplicaSpec {
     type Create = CreateReplica;
     type Owners = ReplicaOwners;
     type Status = ReplicaStatus;
@@ -215,170 +211,54 @@ impl ResourceSpecs {
 }
 
 impl ResourceSpecsLocked {
-    pub(crate) async fn create_pool(
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    pub(crate) async fn replica_opt(
         &self,
-        registry: &Registry,
-        request: &CreatePool,
-        mode: OperationMode,
-    ) -> Result<Pool, SvcError> {
-        if registry.node_cordoned(&request.node)? {
-            return Err(CordonedNode {
-                node_id: request.node.to_string(),
-            });
-        }
-
-        let node = registry.get_node_wrapper(&request.node).await?;
-        let pool_spec = self.get_or_create_pool(request);
-        let guard = pool_spec.operation_guard_wait(mode).await?;
-        let _ = guard.start_create(registry, request).await?;
-
-        let result = node.create_pool(request).await;
-
-        let pool_state = guard.complete_create(result, registry).await?;
-        let spec = pool_spec.lock().clone();
-        Ok(Pool::new(spec, pool_state))
+        replica: &ReplicaId,
+    ) -> Result<Option<OperationGuardArc<ReplicaSpec>>, SvcError> {
+        Ok(match self.get_replica(replica) {
+            None => None,
+            Some(replica) => Some(replica.operation_guard_wait().await?),
+        })
     }
-
-    pub(crate) async fn destroy_pool(
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    pub(crate) async fn replica(
         &self,
-        pool_spec: Option<&Arc<Mutex<PoolSpec>>>,
-        registry: &Registry,
-        request: &DestroyPool,
-        mode: OperationMode,
-    ) -> Result<(), SvcError> {
-        // what if the node is never coming back?
-        // do we need a way to forcefully "delete" things?
-        let node = registry.get_node_wrapper(&request.node).await?;
-
-        if let Some(pool_spec) = &pool_spec {
-            let guard = pool_spec.operation_guard_wait(mode).await?;
-            guard.start_destroy(registry, false).await?;
-
-            let result = node.destroy_pool(request).await;
-            guard.complete_destroy(result, registry).await
-        } else {
-            node.destroy_pool(request).await
+        replica: &ReplicaId,
+    ) -> Result<OperationGuardArc<ReplicaSpec>, SvcError> {
+        match self.get_replica(replica) {
+            None => Err(SvcError::ReplicaNotFound {
+                replica_id: replica.clone(),
+            }),
+            Some(replica) => Ok(replica.operation_guard_wait().await?),
         }
-    }
-
-    pub(crate) async fn create_replica(
-        &self,
-        registry: &Registry,
-        request: &CreateReplica,
-        mode: OperationMode,
-    ) -> Result<Replica, SvcError> {
-        if registry.node_cordoned(&request.node)? {
-            return Err(CordonedNode {
-                node_id: request.node.to_string(),
-            });
-        }
-
-        let node = registry.get_node_wrapper(&request.node).await?;
-
-        let replica_spec = self.get_or_create_replica(request);
-        let guard = replica_spec.operation_guard_wait(mode).await?;
-        let _ = guard.start_create(registry, request).await?;
-
-        let result = node.create_replica(request).await;
-        guard.complete_create(result, registry).await
     }
 
     pub(crate) async fn destroy_replica_spec(
         &self,
         registry: &Registry,
-        replica: &ReplicaSpec,
+        replica_spec: &ReplicaSpec,
         destroy_by: ReplicaOwners,
-        delete_owned: bool,
-        mode: OperationMode,
     ) -> Result<(), SvcError> {
-        match Self::get_replica_node(registry, replica).await {
+        match Self::get_replica_node(registry, replica_spec).await {
             // Should never happen, but just in case...
             None => Err(SvcError::Internal {
                 details: "Failed to find the node where a replica lives".to_string(),
             }),
             Some(node) => {
-                let replica_spec = self.get_replica(&replica.uuid);
-                self.destroy_replica(
-                    replica_spec.as_ref(),
-                    registry,
-                    &Self::destroy_replica_request(replica.clone(), destroy_by, &node),
-                    delete_owned,
-                    mode,
-                )
-                .await
+                let replica = self.replica(&replica_spec.uuid).await?;
+                replica
+                    .destroy(
+                        registry,
+                        &Self::destroy_replica_request(replica_spec.clone(), destroy_by, &node),
+                    )
+                    .await
             }
         }
     }
 
-    pub(crate) async fn destroy_replica(
-        &self,
-        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
-        registry: &Registry,
-        request: &DestroyReplica,
-        delete_owned: bool,
-        mode: OperationMode,
-    ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
-
-        if let Some(replica) = replica {
-            let guard = replica.operation_guard_wait(mode).await?;
-            guard
-                .start_destroy_by(registry, &request.disowners, delete_owned)
-                .await?;
-
-            let result = node.destroy_replica(request).await;
-            guard.complete_destroy(result, registry).await
-        } else {
-            node.destroy_replica(request).await
-        }
-    }
-    pub(crate) async fn share_replica(
-        &self,
-        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
-        registry: &Registry,
-        request: &ShareReplica,
-        mode: OperationMode,
-    ) -> Result<String, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
-
-        if let Some(replica_spec) = replica {
-            let guard = replica_spec.operation_guard_wait(mode).await?;
-            let status = registry.get_replica(&request.uuid).await?;
-            let spec_clone = guard
-                .start_update(registry, &status, ReplicaOperation::Share(request.protocol))
-                .await?;
-
-            let result = node.share_replica(request).await;
-            guard.complete_update(registry, result, spec_clone).await
-        } else {
-            node.share_replica(request).await
-        }
-    }
-    pub(crate) async fn unshare_replica(
-        &self,
-        replica: Option<&Arc<Mutex<ReplicaSpec>>>,
-        registry: &Registry,
-        request: &UnshareReplica,
-        mode: OperationMode,
-    ) -> Result<String, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
-
-        if let Some(replica_spec) = replica {
-            let guard = replica_spec.operation_guard_wait(mode).await?;
-            let status = registry.get_replica(&request.uuid).await?;
-            let spec_clone = guard
-                .start_update(registry, &status, ReplicaOperation::Unshare)
-                .await?;
-
-            let result = node.unshare_replica(request).await;
-            guard.complete_update(registry, result, spec_clone).await
-        } else {
-            node.unshare_replica(request).await
-        }
-    }
-
     /// Get or Create the protected ReplicaSpec for the given request
-    fn get_or_create_replica(&self, request: &CreateReplica) -> Arc<Mutex<ReplicaSpec>> {
+    pub(crate) fn get_or_create_replica(&self, request: &CreateReplica) -> Arc<Mutex<ReplicaSpec>> {
         let mut specs = self.write();
         if let Some(replica) = specs.replicas.get(&request.uuid) {
             replica.clone()
@@ -393,7 +273,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get or Create the protected PoolSpec for the given request
-    fn get_or_create_pool(&self, request: &CreatePool) -> Arc<Mutex<PoolSpec>> {
+    pub(crate) fn get_or_create_pool(&self, request: &CreatePool) -> Arc<Mutex<PoolSpec>> {
         let mut specs = self.write();
         if let Some(pool) = specs.pools.get(&request.id) {
             pool.clone()
@@ -468,7 +348,7 @@ impl ResourceSpecsLocked {
 
         let pools = self.get_locked_pools();
         for pool in pools {
-            if let Ok(guard) = pool.operation_guard(OperationMode::ReconcileStart) {
+            if let Ok(guard) = pool.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
                     // Not all pending operations could be handled.
                     pending_ops = true;
@@ -486,7 +366,7 @@ impl ResourceSpecsLocked {
 
         let replicas = self.get_replicas();
         for replica in replicas {
-            if let Ok(guard) = replica.operation_guard(OperationMode::ReconcileStart) {
+            if let Ok(guard) = replica.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
                     // Not all pending operations could be handled.
                     pending_ops = true;

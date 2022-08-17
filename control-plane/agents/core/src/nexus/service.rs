@@ -1,9 +1,13 @@
-use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
+use crate::controller::{
+    operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
+    registry::Registry,
+    specs::ResourceSpecsLocked,
+};
 use common::errors::SvcError;
 use common_lib::{
     transport_api::{v0::Nexuses, ReplyError},
     types::v0::{
-        store::OperationMode,
+        store::{nexus::NexusSpec, OperationGuardArc},
         transport::{
             AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
             RemoveNexusChild, ShareNexus, UnshareNexus,
@@ -100,6 +104,7 @@ impl NexusOperations for Service {
     }
 }
 impl Service {
+    /// Return new `Self`.
     pub(super) fn new(registry: Registry) -> Self {
         Self { registry }
     }
@@ -127,85 +132,49 @@ impl Service {
         Ok(Nexuses(nexuses))
     }
 
-    /// Create nexus
+    /// Create nexus using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
-        self.specs()
-            .create_nexus(&self.registry, request, OperationMode::Exclusive)
+        OperationGuardArc::<NexusSpec>::create(&self.registry, request)
             .await
+            .map(|(_, nexus)| nexus)
     }
 
-    /// Destroy nexus
+    /// Destroy a nexus using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
-        let nexus = self.specs().get_nexus(&request.uuid);
-        self.specs()
-            .destroy_nexus(
-                nexus.as_ref(),
-                &self.registry,
-                request,
-                true,
-                OperationMode::Exclusive,
-            )
-            .await
+        let nexus = self.specs().nexus_opt(&request.uuid).await?;
+        nexus.as_ref().destroy(&self.registry, request).await
     }
 
-    /// Share nexus
+    /// Share a nexus using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
-        let nexus = self.specs().get_nexus(&request.uuid);
-        self.specs()
-            .share_nexus(
-                nexus.as_ref(),
-                &self.registry,
-                request,
-                OperationMode::Exclusive,
-            )
-            .await
+        let nexus = self.specs().nexus_opt(&request.uuid).await?;
+        nexus.as_ref().share(&self.registry, request).await
     }
 
-    /// Unshare nexus
+    /// Unshare a nexus using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
-        let nexus = self.specs().get_nexus(&request.uuid);
-        self.specs()
-            .unshare_nexus(
-                nexus.as_ref(),
-                &self.registry,
-                request,
-                OperationMode::Exclusive,
-            )
-            .await
+        let nexus = self.specs().nexus_opt(&request.uuid).await?;
+        nexus.as_ref().unshare(&self.registry, request).await
     }
 
-    /// Add nexus child
+    /// Add a nexus child using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
     pub(super) async fn add_nexus_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
-        let nexus = self.specs().get_nexus(&request.nexus);
-        self.specs()
-            .add_nexus_child(
-                nexus.as_ref(),
-                &self.registry,
-                request,
-                OperationMode::Exclusive,
-            )
-            .await
+        let nexus = self.specs().nexus_opt(&request.nexus).await?;
+        nexus.as_ref().add_child(&self.registry, request).await
     }
 
-    /// Remove nexus child
+    /// Remove a nexus child using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
     pub(super) async fn remove_nexus_child(
         &self,
         request: &RemoveNexusChild,
     ) -> Result<(), SvcError> {
-        let nexus = self.specs().get_nexus(&request.nexus);
-        self.specs()
-            .remove_nexus_child(
-                nexus.as_ref(),
-                &self.registry,
-                request,
-                OperationMode::Exclusive,
-            )
-            .await
+        let nexus = self.specs().nexus_opt(&request.nexus).await?;
+        nexus.as_ref().remove_child(&self.registry, request).await
     }
 }

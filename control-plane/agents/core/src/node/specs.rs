@@ -1,4 +1,4 @@
-use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
+use crate::controller::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::{NodeNotFound, SvcError};
 use common_lib::types::v0::{
     store::node::{NodeLabels, NodeSpec},
@@ -126,7 +126,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get all cordoned nodes.
-    pub fn get_cordoned_nodes(&self) -> Vec<NodeSpec> {
+    pub(crate) fn get_cordoned_nodes(&self) -> Vec<NodeSpec> {
         self.read()
             .nodes
             .to_vec()

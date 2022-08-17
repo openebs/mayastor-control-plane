@@ -1,4 +1,4 @@
-use crate::core::registry::Registry;
+use crate::controller::registry::Registry;
 use common::errors::{Store as SvcStoreError, SvcError};
 use common_lib::{
     transport_api::{v0::Watches, ResourceKind},
@@ -38,8 +38,8 @@ impl ObjectKey for WatchCfgId {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 struct WatchCfg {
-    pub watch_id: WatchCfgId,
-    pub watches: Vec<WatchParamsCfg>,
+    pub(crate) watch_id: WatchCfgId,
+    pub(crate) watches: Vec<WatchParamsCfg>,
 }
 impl StorableObject for WatchCfg {
     type Key = WatchCfgId;
@@ -118,7 +118,7 @@ pub(crate) struct StoreWatch {
 }
 
 impl StoreWatch {
-    pub fn new(registry: Registry) -> Self {
+    pub(crate) fn new(registry: Registry) -> Self {
         Self {
             registry,
             watches: Default::default(),
@@ -389,7 +389,7 @@ async fn backoff(tries: &mut u32, max: Duration) {
 
 impl StoreWatch {
     /// Get all the watches for `watch_id`
-    pub async fn get_watches(&self, watch_id: &WatchCfgId) -> Result<Watches, SvcError> {
+    pub(crate) async fn get_watches(&self, watch_id: &WatchCfgId) -> Result<Watches, SvcError> {
         let watches = match self.get_watch_cfg(watch_id).await {
             Some(db) => {
                 let db = db.lock().await;
@@ -435,7 +435,7 @@ impl StoreWatch {
     }
 
     /// Create a new watch with given parameters
-    pub async fn create_watch(
+    pub(crate) async fn create_watch(
         &mut self,
         watch_id: &WatchCfgId,
         callback: &WatchCallback,
@@ -453,7 +453,7 @@ impl StoreWatch {
     }
 
     /// Delete existing watch with the given parameters
-    pub async fn delete_watch(
+    pub(crate) async fn delete_watch(
         &mut self,
         watch_id: &WatchCfgId,
         callback: &WatchCallback,

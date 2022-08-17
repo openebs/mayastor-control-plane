@@ -62,13 +62,7 @@ async fn create_nexus_sizes() {
 
                 if let Ok(nexus) = &nexus {
                     nexus_client
-                        .destroy(
-                            &v0::DestroyNexus {
-                                node: nexus.node.clone(),
-                                uuid: nexus.uuid.clone(),
-                            },
-                            None,
-                        )
+                        .destroy(&v0::DestroyNexus::from(nexus.clone()), None)
                         .await
                         .unwrap();
                 }
@@ -105,13 +99,7 @@ async fn create_nexus_sizes() {
                     .await;
                 if let Ok(nexus) = &nexus {
                     nexus_client
-                        .destroy(
-                            &v0::DestroyNexus {
-                                node: nexus.node.clone(),
-                                uuid: nexus.uuid.clone(),
-                            },
-                            None,
-                        )
+                        .destroy(&v0::DestroyNexus::from(nexus.clone()), None)
                         .await
                         .unwrap();
                 }

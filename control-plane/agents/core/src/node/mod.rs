@@ -1,10 +1,11 @@
-pub(crate) mod registry;
+mod registry;
+/// Node Service
 pub(super) mod service;
 mod specs;
 /// node watchdog to keep track of a node's liveness
 pub(crate) mod watchdog;
 
-use super::{core::registry::Registry, CliArgs};
+use super::{controller::registry::Registry, CliArgs};
 use common::Service;
 use common_lib::{
     transport_api::{v0::*, *},
@@ -13,6 +14,7 @@ use common_lib::{
 use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
 use std::sync::Arc;
 
+/// Configure the Service and return the builder.
 pub(crate) async fn configure(builder: Service) -> Service {
     let node_service = create_node_service(&builder).await;
     let node_grpc_service = NodeServer::new(Arc::new(node_service.clone()));

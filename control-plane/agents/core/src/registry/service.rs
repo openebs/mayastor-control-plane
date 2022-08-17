@@ -1,4 +1,4 @@
-use crate::{core, core::specs::ResourceSpecsLocked};
+use crate::{controller, controller::specs::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
     transport_api::ReplyError,
@@ -12,7 +12,7 @@ use grpc::{
 /// Registry Service
 #[derive(Debug, Clone)]
 pub(super) struct Service {
-    registry: core::registry::Registry,
+    registry: controller::registry::Registry,
 }
 
 #[tonic::async_trait]
@@ -40,7 +40,7 @@ impl RegistryOperations for Service {
 
 impl Service {
     /// Invoke a new Registry Service
-    pub(super) fn new(registry: core::registry::Registry) -> Self {
+    pub(super) fn new(registry: controller::registry::Registry) -> Self {
         Self { registry }
     }
 

@@ -1,4 +1,4 @@
-use crate::core::{registry::Registry, wrapper::*};
+use crate::controller::{registry::Registry, wrapper::*};
 use common::errors::{NexusNotFound, SvcError};
 use common_lib::types::v0::{
     store::nexus_persistence::{NexusInfo, NexusInfoKey},

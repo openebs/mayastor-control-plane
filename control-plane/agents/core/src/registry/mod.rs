@@ -1,5 +1,5 @@
 mod service;
-use crate::core::registry::Registry;
+use crate::controller::registry::Registry;
 use common::Service;
 use grpc::operations::registry::server::RegistryServer;
 use std::sync::Arc;

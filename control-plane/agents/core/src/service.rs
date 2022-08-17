@@ -14,19 +14,19 @@ use http::Uri;
 use tracing::error;
 
 /// the gprc service that encapsulates the base_service and the server for rpc
-pub struct Service {
+pub(crate) struct Service {
     base_service: common::Service,
 }
 
 impl Service {
     /// Creates a new Service with the base_service.
-    pub fn new(base_service: common::Service) -> Self {
+    pub(crate) fn new(base_service: common::Service) -> Self {
         Self { base_service }
     }
 
     /// Launch the tonic server with the required services.
     /// todo: allow the base server to handle this through the configure calls.
-    pub async fn run(self) {
+    pub(crate) async fn run(self) {
         let grpc_addr = self.base_service.shared_state::<Uri>().clone();
         let pool_service = self.base_service.shared_state::<PoolServer>().clone();
         let replica_service = self.base_service.shared_state::<ReplicaServer>().clone();

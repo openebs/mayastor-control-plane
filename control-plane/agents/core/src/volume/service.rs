@@ -1,12 +1,16 @@
-use crate::core::{registry::Registry, specs::ResourceSpecsLocked};
-use common::{errors, errors::SvcError};
+use crate::controller::{
+    operations::{ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing},
+    registry::Registry,
+    specs::ResourceSpecsLocked,
+};
+use common::errors::SvcError;
 use common_lib::{
     transport_api::{v0::Volumes, ReplyError},
     types::v0::{
-        store::{volume::VolumeSpec, OperationMode},
+        store::{volume::VolumeSpec, OperationGuardArc},
         transport::{
             CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
-            ShareVolume, UnpublishVolume, UnshareVolume, Volume, VolumeId,
+            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
         },
     },
 };
@@ -20,9 +24,6 @@ use grpc::{
         Pagination,
     },
 };
-use parking_lot::Mutex;
-use snafu::OptionExt;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -149,7 +150,7 @@ impl Service {
         // The last result can only ever be false if using pagination.
         let mut last_result = true;
 
-        // The filter criteria is matched against the volume state.
+        // The filter criteria is matched against a volume state.
         let filtered_volumes = match &request.filter {
             Filter::None => match &pagination {
                 Some(p) => {
@@ -179,69 +180,51 @@ impl Service {
         })
     }
 
-    /// Get the protected VolumeSpec for the given volume `id`, if any exists
-    pub(crate) fn get_volume(&self, volume: &VolumeId) -> Result<Arc<Mutex<VolumeSpec>>, SvcError> {
-        self.specs()
-            .get_locked_volume(volume)
-            .context(errors::VolumeNotFound {
-                vol_id: volume.to_string(),
-            })
-    }
-
-    /// Create volume
+    /// Create a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
-        self.specs()
-            .create_volume(&self.registry, request, OperationMode::Exclusive)
-            .await
+        OperationGuardArc::<VolumeSpec>::create(&self.registry, request).await?;
+        self.registry.get_volume(&request.uuid).await
     }
 
-    /// Destroy volume
+    /// Destroy a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
-        let volume = self.get_volume(&request.uuid)?;
-        self.specs()
-            .destroy_volume(&volume, &self.registry, request, OperationMode::Exclusive)
-            .await
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.destroy(&self.registry, request).await?;
+        Ok(())
     }
 
-    /// Share volume
+    /// Share a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
-        let volume = self.get_volume(&request.uuid)?;
-        self.specs()
-            .share_volume(&volume, &self.registry, request, OperationMode::Exclusive)
-            .await
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.share(&self.registry, request).await
     }
 
-    /// Unshare volume
+    /// Unshare a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
-        let volume = self.get_volume(&request.uuid)?;
-        self.specs()
-            .unshare_volume(&volume, &self.registry, request, OperationMode::Exclusive)
-            .await
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.unshare(&self.registry, request).await
     }
 
-    /// Publish volume
+    /// Publish a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
-        let volume = self.get_volume(&request.uuid)?;
-        self.specs()
-            .publish_volume(&volume, &self.registry, request, OperationMode::Exclusive)
-            .await
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.publish(&self.registry, request).await
     }
 
-    /// Unpublish volume
+    /// Unpublish a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unpublish_volume(
         &self,
         request: &UnpublishVolume,
     ) -> Result<Volume, SvcError> {
-        let volume = self.get_volume(&request.uuid)?;
-        self.specs()
-            .unpublish_volume(&volume, &self.registry, request, OperationMode::Exclusive)
-            .await
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.unpublish(&self.registry, request).await?;
+        self.registry.get_volume(&request.uuid).await
     }
 
     /// Set volume replica
@@ -250,9 +233,8 @@ impl Service {
         &self,
         request: &SetVolumeReplica,
     ) -> Result<Volume, SvcError> {
-        let volume = self.get_volume(&request.uuid)?;
-        self.specs()
-            .set_volume_replica(&volume, &self.registry, request, OperationMode::Exclusive)
-            .await
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.set_replica(&self.registry, request).await?;
+        self.registry.get_volume(&request.uuid).await
     }
 }

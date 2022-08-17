@@ -382,17 +382,12 @@ impl From<&NexusSpec> for transport::Nexus {
 
 impl From<NexusSpec> for DestroyNexus {
     fn from(nexus: NexusSpec) -> Self {
-        Self {
-            node: nexus.node,
-            uuid: nexus.uuid,
-        }
+        Self::new(nexus.node, nexus.uuid)
     }
 }
 impl From<&NexusSpec> for DestroyNexus {
     fn from(nexus: &NexusSpec) -> Self {
-        Self {
-            node: nexus.node.clone(),
-            uuid: nexus.uuid.clone(),
-        }
+        let nexus = nexus.clone();
+        Self::new(nexus.node, nexus.uuid)
     }
 }

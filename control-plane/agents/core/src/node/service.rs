@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{
+use crate::controller::{
     reconciler::PollTriggerEvent, registry::Registry, specs::ResourceSpecsLocked,
     wrapper::NodeWrapper,
 };
@@ -8,7 +8,7 @@ use common_lib::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 
-use crate::core::wrapper::InternalOps;
+use crate::controller::wrapper::InternalOps;
 use grpc::{
     context::Context,
     operations::{
@@ -55,15 +55,15 @@ impl NodeCommsTimeout {
         Self { opts }
     }
     /// timeout to establish connection to the node
-    pub fn connect(&self) -> std::time::Duration {
+    pub(crate) fn connect(&self) -> std::time::Duration {
         self.opts.connect_timeout()
     }
     /// timeout for the request itself
-    pub fn request(&self) -> std::time::Duration {
+    pub(crate) fn request(&self) -> std::time::Duration {
         self.opts.base_timeout()
     }
     /// timeout opts.
-    pub fn opts(&self) -> &TimeoutOptions {
+    pub(crate) fn opts(&self) -> &TimeoutOptions {
         &self.opts
     }
 }

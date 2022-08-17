@@ -1,4 +1,9 @@
-use crate::core::{registry::Registry, specs::ResourceSpecsLocked, wrapper::GetterOps};
+use crate::controller::{
+    operations::{ResourceLifecycle, ResourceSharing},
+    registry::Registry,
+    specs::{OperationSequenceGuard, ResourceSpecsLocked},
+    wrapper::GetterOps,
+};
 use common::errors::{PoolNotFound, ReplicaNotFound, SvcError};
 use common_lib::{
     transport_api::{
@@ -6,10 +11,10 @@ use common_lib::{
         ReplyError,
     },
     types::v0::{
-        store::{pool::PoolSpec, replica::ReplicaSpec, OperationMode},
+        store::{pool::PoolSpec, replica::ReplicaSpec, OperationGuardArc},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-            NodeId, Pool, PoolId, Replica, ReplicaId, ShareReplica, UnshareReplica,
+            NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,
         },
     },
 };
@@ -237,85 +242,62 @@ impl Service {
         .map(Replicas)
     }
 
-    /// Get the protected VolumeSpec for the given volume `id`, if any exists
+    /// Get the protected PoolSpec for the given pool `id`, if any exists.
     pub(crate) fn locked_pool(&self, pool: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
         self.specs().get_locked_pool(pool)
     }
-    /// Get the protected VolumeSpec for the given volume `id`, if any exists
-    pub(crate) fn locked_replica(&self, replica: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
-        self.specs().get_replica(replica)
+    /// Get the guarded PoolSpec for the given pool `id`, if any exists.
+    pub(crate) async fn pool_opt(
+        &self,
+        pool: &PoolId,
+    ) -> Result<Option<OperationGuardArc<PoolSpec>>, SvcError> {
+        Ok(match self.locked_pool(pool) {
+            None => None,
+            Some(pool) => Some(pool.operation_guard_wait().await?),
+        })
     }
 
-    /// Create pool
+    /// Create a pool using the given parameters.
     #[tracing::instrument(level = "debug", skip(self), err, fields(pool.uuid = %request.id))]
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
-        self.specs()
-            .create_pool(&self.registry, request, OperationMode::Exclusive)
-            .await
+        OperationGuardArc::<PoolSpec>::create(&self.registry, request).await
     }
 
-    /// Destroy pool
+    /// Destroy a pool using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(pool.uuid = %request.id))]
     pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
-        let pool_spec = self.locked_pool(&request.id);
-        let pool_spec = pool_spec.as_ref();
-        self.specs()
-            .destroy_pool(pool_spec, &self.registry, request, OperationMode::Exclusive)
-            .await
+        let pool = self.pool_opt(&request.id).await?;
+        pool.destroy(&self.registry, request).await
     }
 
-    /// Create replica
+    /// Create a replica using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn create_replica(
         &self,
         request: &CreateReplica,
     ) -> Result<Replica, SvcError> {
-        self.specs()
-            .create_replica(&self.registry, request, OperationMode::Exclusive)
-            .await
+        OperationGuardArc::<ReplicaSpec>::create(&self.registry, request).await
     }
 
-    /// Destroy replica
+    /// Destroy a replica using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
-        let replica = self.locked_replica(&request.uuid);
-        self.specs()
-            .destroy_replica(
-                replica.as_ref(),
-                &self.registry,
-                request,
-                false,
-                OperationMode::Exclusive,
-            )
-            .await
+        let replica = self.specs().replica_opt(&request.uuid).await?;
+        replica.as_ref().destroy(&self.registry, request).await
     }
 
-    /// Share replica
+    /// Share a replica using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
-        let replica = self.locked_replica(&request.uuid);
-        self.specs()
-            .share_replica(
-                replica.as_ref(),
-                &self.registry,
-                request,
-                OperationMode::Exclusive,
-            )
-            .await
+        let replica = self.specs().replica_opt(&request.uuid).await?;
+        replica.as_ref().share(&self.registry, request).await
     }
 
-    /// Unshare replica
+    /// Unshare a replica using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
     pub(super) async fn unshare_replica(&self, request: &UnshareReplica) -> Result<(), SvcError> {
-        let replica = self.locked_replica(&request.uuid);
-        self.specs()
-            .unshare_replica(
-                replica.as_ref(),
-                &self.registry,
-                request,
-                OperationMode::Exclusive,
-            )
-            .await?;
+        let replica = self.specs().replica_opt(&request.uuid).await?;
+        replica.as_ref().unshare(&self.registry, request).await?;
         Ok(())
     }
 }

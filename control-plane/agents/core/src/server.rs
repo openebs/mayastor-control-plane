@@ -1,19 +1,18 @@
-pub mod core;
-pub mod nexus;
-pub mod node;
-pub mod pool;
-pub mod registry;
+pub(crate) mod controller;
+pub(crate) mod nexus;
+pub(crate) mod node;
+pub(crate) mod pool;
+pub(crate) mod registry;
 mod service;
-pub mod volume;
-pub mod watch;
+pub(crate) mod volume;
+pub(crate) mod watch;
+
+use controller::registry::NumRebuilds;
+use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
 use http::Uri;
-
-use crate::core::registry::NumRebuilds;
-
 use opentelemetry::{trace::TracerProvider, KeyValue};
 use structopt::StructOpt;
-use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = utils::package_description!(), version = version_info_str!())]
@@ -96,7 +95,7 @@ async fn main() {
 
 async fn server(cli_args: CliArgs) {
     common_lib::init_cluster_info_or_panic().await;
-    let registry = core::registry::Registry::new(
+    let registry = controller::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),
         cli_args.store_timeout.into(),

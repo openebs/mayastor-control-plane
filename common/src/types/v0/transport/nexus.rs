@@ -338,14 +338,75 @@ impl CreateNexus {
     }
 }
 
-/// Destroy Nexus Request
+/// Destroy Nexus Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DestroyNexus {
-    /// id of the io-engine instance
+    /// The id of the io-engine instance.
     pub node: NodeId,
-    /// uuid of the nexus
+    /// The uuid of the nexus.
     pub uuid: NexusId,
+    /// Nexus disowners.
+    disowners: NexusOwners,
+}
+impl DestroyNexus {
+    /// Create new `Self` from the given node and nexus id's.
+    pub fn new(node: NodeId, uuid: NexusId) -> Self {
+        Self {
+            node,
+            uuid,
+            disowners: NexusOwners::None,
+        }
+    }
+    /// Disown all owners.
+    pub fn with_disown_all(mut self) -> Self {
+        self.disowners = NexusOwners::All;
+        self
+    }
+    /// Disown volume owner.
+    pub fn with_disown(mut self, volume: &VolumeId) -> Self {
+        self.disowners = NexusOwners::Volume(volume.clone());
+        self
+    }
+    /// Return a reference to the disowners.
+    pub fn disowners(&self) -> &NexusOwners {
+        &self.disowners
+    }
+}
+
+/// Nexus owners which is a volume, none or disowned by all.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub enum NexusOwners {
+    #[default]
+    None,
+    Volume(VolumeId),
+    All,
+}
+impl NexusOwners {
+    /// Create a special `Self` that will disown all owners.
+    pub fn new_disown_all() -> Self {
+        Self::All
+    }
+    /// Set to disown all owners.
+    pub fn with_disown_all(self) -> Self {
+        Self::All
+    }
+    /// Disown all owners.
+    pub fn disown_all(&self) -> bool {
+        match self {
+            NexusOwners::None => false,
+            NexusOwners::Volume(_) => false,
+            NexusOwners::All => true,
+        }
+    }
+    /// Return the volume owner, if any
+    pub fn volume(&self) -> Option<&VolumeId> {
+        match self {
+            NexusOwners::None => None,
+            NexusOwners::Volume(volume) => Some(volume),
+            NexusOwners::All => None,
+        }
+    }
 }
 
 impl From<Nexus> for DestroyNexus {
@@ -353,6 +414,7 @@ impl From<Nexus> for DestroyNexus {
         Self {
             node: nexus.node,
             uuid: nexus.uuid,
+            ..Default::default()
         }
     }
 }
