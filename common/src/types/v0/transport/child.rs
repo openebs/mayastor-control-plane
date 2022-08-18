@@ -17,6 +17,12 @@ pub struct Child {
     /// Reason for the child state.
     pub state_reason: ChildStateReason,
 }
+impl Child {
+    /// If if the state reason is lack of space.
+    pub fn enospc(&self) -> bool {
+        self.state_reason == ChildStateReason::NoSpace
+    }
+}
 
 impl From<Child> for models::Child {
     fn from(src: Child) -> Self {

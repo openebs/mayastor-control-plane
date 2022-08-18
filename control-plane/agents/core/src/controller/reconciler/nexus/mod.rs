@@ -107,15 +107,17 @@ async fn nexus_reconciler(
         nexus_spec.status().created()
     };
 
-    let mut results = Vec::with_capacity(4);
     if created {
-        results.push(faulted_children_remover(nexus, context).await);
-        results.push(unknown_children_remover(nexus, context).await);
-        results.push(missing_children_remover(nexus, context).await);
-        results.push(fixup_nexus_protocol(nexus, context).await);
+        squash_results(vec![
+            faulted_children_remover(nexus, context).await,
+            unknown_children_remover(nexus, context).await,
+            missing_children_remover(nexus, context).await,
+            fixup_nexus_protocol(nexus, context).await,
+            enospc_children_finder(nexus, context).await,
+        ])
+    } else {
+        PollResult::Ok(PollerState::Idle)
     }
-
-    squash_results(results)
 }
 
 /// Find and removes faulted children from the given nexus
@@ -465,6 +467,29 @@ pub(super) async fn faulted_nexus_remover(
             if node_online && !healthy_children.candidates().is_empty() {
                 faulted_nexus_remover(nexus, node).await?;
             }
+        }
+    }
+
+    PollResult::Ok(PollerState::Idle)
+}
+
+/// Find thin-provisioned Nexus children which are degraded due to ENOSPC.
+/// fixme: This is just a place-holder for the actual logic.
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
+pub(super) async fn enospc_children_finder(
+    nexus: &OperationGuardArc<NexusSpec>,
+    context: &PollContext,
+) -> PollResult {
+    let nexus_uuid = nexus.lock().uuid.clone();
+    let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
+    let child_count = nexus_state.children.len();
+
+    if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
+        let nexus_spec_clone = nexus.lock().clone();
+        for child in nexus_state.children.iter().filter(|c| c.enospc()) {
+            nexus_spec_clone.info_span(|| {
+                tracing::info!(child.uri = child.uri.as_str(), "Found child with enospc")
+            });
         }
     }
 
