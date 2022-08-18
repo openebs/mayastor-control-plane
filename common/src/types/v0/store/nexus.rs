@@ -13,7 +13,10 @@ use crate::types::v0::{
     },
 };
 
-use crate::types::v0::store::{AsOperationSequencer, OperationSequence};
+use crate::types::v0::{
+    store::{AsOperationSequencer, OperationSequence},
+    transport::ChildStateReason,
+};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -371,6 +374,7 @@ impl From<&NexusSpec> for transport::Nexus {
                     uri: child.uri(),
                     state: ChildState::Unknown,
                     rebuild_progress: None,
+                    state_reason: ChildStateReason::Unknown,
                 })
                 .collect(),
             device_uri: "".to_string(),

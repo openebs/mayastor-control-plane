@@ -12,6 +12,7 @@ use common_lib::{
 };
 
 use crate::msg_translation::{IoEngineToAgent, TryIoEngineToAgent};
+use common_lib::types::v0::transport::ChildStateReason;
 use rpc::io_engine as v0_rpc;
 use std::convert::TryFrom;
 
@@ -160,14 +161,52 @@ impl TryIoEngineToAgent for v0_rpc::Nexus {
     }
 }
 
+/// New-type wrapper for external types.
+/// Allows us to convert from external types which would otherwise not be allowed.
+struct ExternalType<T>(T);
+impl From<ExternalType<v0_rpc::ChildState>> for ChildState {
+    fn from(src: ExternalType<v0_rpc::ChildState>) -> Self {
+        match src.0 {
+            v0_rpc::ChildState::ChildUnknown => ChildState::Unknown,
+            v0_rpc::ChildState::ChildOnline => ChildState::Online,
+            v0_rpc::ChildState::ChildDegraded => ChildState::Degraded,
+            v0_rpc::ChildState::ChildFaulted => ChildState::Faulted,
+        }
+    }
+}
+impl From<ExternalType<v0_rpc::ChildStateReason>> for ChildStateReason {
+    fn from(src: ExternalType<v0_rpc::ChildStateReason>) -> Self {
+        match src.0 {
+            v0_rpc::ChildStateReason::None => Self::Unknown,
+            v0_rpc::ChildStateReason::Init => Self::Init,
+            v0_rpc::ChildStateReason::Closed => Self::Closed,
+            v0_rpc::ChildStateReason::CannotOpen => Self::CantOpen,
+            v0_rpc::ChildStateReason::ConfigInvalid => Self::ConfigInvalid,
+            v0_rpc::ChildStateReason::RebuildFailed => Self::RebuildFailed,
+            v0_rpc::ChildStateReason::IoFailure => Self::IoError,
+            v0_rpc::ChildStateReason::ByClient => Self::ByClient,
+            v0_rpc::ChildStateReason::OutOfSync => Self::OutOfSync,
+            v0_rpc::ChildStateReason::NoSpace => Self::NoSpace,
+            v0_rpc::ChildStateReason::TimedOut => Self::TimedOut,
+            v0_rpc::ChildStateReason::AdminFailed => Self::AdminCommandFailed,
+        }
+    }
+}
+
 impl IoEngineToAgent for v0_rpc::Child {
     type AgentMessage = transport::Child;
 
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
             uri: self.uri.clone().into(),
-            state: ChildState::from(self.state),
+            state: ChildState::from(ExternalType(
+                v0_rpc::ChildState::from_i32(self.state)
+                    .unwrap_or(v0_rpc::ChildState::ChildUnknown),
+            )),
             rebuild_progress: u8::try_from(self.rebuild_progress).ok(),
+            state_reason: v0_rpc::ChildStateReason::from_i32(self.reason)
+                .map(|f| From::from(ExternalType(f)))
+                .unwrap_or(ChildStateReason::Unknown),
         }
     }
 }

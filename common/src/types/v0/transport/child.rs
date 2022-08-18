@@ -8,12 +8,14 @@ use std::{cmp::Ordering, fmt::Debug, str::FromStr};
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Child {
-    /// uri of the child device
+    /// Uri of the child device.
     pub uri: ChildUri,
-    /// state of the child
+    /// State of the child.
     pub state: ChildState,
-    /// current rebuild progress (%)
+    /// Current rebuild progress (%).
     pub rebuild_progress: Option<u8>,
+    /// Reason for the child state.
+    pub state_reason: ChildStateReason,
 }
 
 impl From<Child> for models::Child {
@@ -55,13 +57,13 @@ impl PartialEq<String> for ChildUri {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum ChildState {
     /// Default Unknown state
-    Unknown = 0,
+    Unknown,
     /// healthy and contains the latest bits
-    Online = 1,
+    Online,
     /// rebuild is in progress (or other recoverable error)
-    Degraded = 2,
+    Degraded,
     /// unrecoverable error (control plane must act)
-    Faulted = 3,
+    Faulted,
 }
 impl ChildState {
     /// Check if the child is `Faulted`
@@ -100,19 +102,45 @@ impl PartialOrd for ChildState {
     }
 }
 
+/// Child State Reason information.
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+pub enum ChildStateReason {
+    /// No particular reason for the child to be in this state.
+    /// This is typically the init state.
+    #[default]
+    Unknown,
+    /// Child is being initialized.
+    Init,
+    /// Child is being destroyed or has been closed.
+    Closed,
+    /// Invalid child device configuration (e.g. mismatching size).
+    ConfigInvalid,
+    /// Out of sync: child device is ok, but needs to be rebuilt.
+    OutOfSync,
+    /// Thin-provisioned child failed a write operate because
+    /// the underlying logical volume failed to allocate space.
+    /// This a recoverable state in case when addtional space
+    /// can be freed from the logical volume store.
+    NoSpace,
+    /// The underlying device timed out.
+    /// This a recoverable state in case the device can be expected
+    /// to come back online.
+    TimedOut,
+    /// Cannot open device.
+    CantOpen,
+    /// The child failed to rebuild successfully.
+    RebuildFailed,
+    /// The child has been faulted due to I/O error(s).
+    IoError,
+    /// The child has been explicitly faulted due to an RPC call.
+    ByClient,
+    /// Admin command failure.
+    AdminCommandFailed,
+}
+
 impl Default for ChildState {
     fn default() -> Self {
         Self::Unknown
-    }
-}
-impl From<i32> for ChildState {
-    fn from(src: i32) -> Self {
-        match src {
-            1 => Self::Online,
-            2 => Self::Degraded,
-            3 => Self::Faulted,
-            _ => Self::Unknown,
-        }
     }
 }
 impl From<ChildState> for models::ChildState {

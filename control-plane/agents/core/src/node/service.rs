@@ -198,7 +198,7 @@ impl Service {
                 };
 
                 let result = match result {
-                    Ok(result) => node.load().await.map(|_| result),
+                    Ok(result) => node.load(startup).await.map(|_| result),
                     Err(e) => Err(e),
                 };
                 match result {
