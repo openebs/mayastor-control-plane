@@ -97,7 +97,7 @@ impl AddVolumeReplica {
             // fallback
             // 5. only one replica per node
             .filter(NodeFilters::cordoned)
-            .filter(NodeFilters::online)
+            .filter(NodeFilters::online_for_pool)
             .filter(NodeFilters::allowed)
             .filter(NodeFilters::unused)
             .filter(PoolFilters::usable)
