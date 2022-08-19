@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+die()
+{
+  local _return="${2:-1}"
+  echo "$1" >&2
+  exit "${_return}"
+}
+
 set -e
 
 SCRIPTDIR=$(dirname "$0")
@@ -20,7 +27,8 @@ skip_git_diff="no"
 skip_if_md5_same="no"
 
 while [ "$#" -gt 0 ]; do
-  case "$1" in
+  _arg="$1"
+  case "$_arg" in
       --spec-changes)
           check_spec="yes"
           shift
@@ -46,6 +54,33 @@ while [ "$#" -gt 0 ]; do
           skip_git_diff="yes"
           shift
           ;;
+      --root-dir)
+          test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
+          ROOTDIR="$2"
+          shift
+          ;;
+      --root-dir=*)
+          ROOTDIR="${_arg#*=}"
+          shift
+          ;;
+      --target-dir)
+          test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
+          TARGET="$2"
+          shift
+          ;;
+      --target-dir=*)
+          TARGET="${_arg#*=}"
+          shift
+          ;;
+      --spec-file)
+          test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
+          SPEC="$2"
+          shift
+          ;;
+      --spec-file=*)
+          SPEC="${_arg#*=}"
+          shift
+          ;; 
   esac
 done
 
