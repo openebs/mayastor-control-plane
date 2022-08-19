@@ -5,15 +5,14 @@ use crate::types::v0::{
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         nexus_child::NexusChild,
-        ResourceUuid, SpecStatus, SpecTransaction,
+        AsOperationSequencer, OperationGuardArc, OperationSequence, ResourceMutex, ResourceUuid,
+        SpecStatus, SpecTransaction,
     },
     transport::{
-        self, ChildState, ChildUri, CreateNexus, DestroyNexus, Nexus as MbusNexus, NexusId,
-        NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
+        self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus,
+        Nexus as MbusNexus, NexusId, NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
     },
 };
-
-use crate::types::v0::store::{AsOperationSequencer, OperationSequence};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -114,6 +113,12 @@ impl NexusSpec {
     /// Disown nexus by its volume owner
     pub fn disowned_by_volume(&mut self) {
         let _ = self.owner.take();
+    }
+}
+impl ResourceMutex<NexusSpec> {
+    /// Get the resource uuid.
+    pub fn uuid(&mut self) -> &NexusId {
+        &self.immutable_peek().uuid
     }
 }
 
@@ -371,6 +376,7 @@ impl From<&NexusSpec> for transport::Nexus {
                     uri: child.uri(),
                     state: ChildState::Unknown,
                     rebuild_progress: None,
+                    state_reason: ChildStateReason::Unknown,
                 })
                 .collect(),
             device_uri: "".to_string(),

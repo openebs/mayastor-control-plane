@@ -51,13 +51,17 @@ impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
         Ok((nexus, nexus_state))
     }
 
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError> {
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
         Some(self).destroy(registry, request).await
     }
 }
 
 #[async_trait::async_trait]
-impl ResourceLifecycle for Option<&OperationGuardArc<NexusSpec>> {
+impl ResourceLifecycle for Option<&mut OperationGuardArc<NexusSpec>> {
     type Create = CreateNexus;
     type CreateOutput = Nexus;
     type Destroy = DestroyNexus;
@@ -69,7 +73,11 @@ impl ResourceLifecycle for Option<&OperationGuardArc<NexusSpec>> {
         unimplemented!()
     }
 
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError> {
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self {
@@ -94,7 +102,7 @@ impl ResourceSharing for OperationGuardArc<NexusSpec> {
     type UnshareOutput = ();
 
     async fn share(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Share,
     ) -> Result<Self::ShareOutput, SvcError> {
@@ -102,7 +110,7 @@ impl ResourceSharing for OperationGuardArc<NexusSpec> {
     }
 
     async fn unshare(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {
@@ -111,14 +119,14 @@ impl ResourceSharing for OperationGuardArc<NexusSpec> {
 }
 
 #[async_trait::async_trait]
-impl ResourceSharing for Option<&OperationGuardArc<NexusSpec>> {
+impl ResourceSharing for Option<&mut OperationGuardArc<NexusSpec>> {
     type Share = ShareNexus;
     type ShareOutput = String;
     type Unshare = UnshareNexus;
     type UnshareOutput = ();
 
     async fn share(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Share,
     ) -> Result<Self::ShareOutput, SvcError> {
@@ -138,7 +146,7 @@ impl ResourceSharing for Option<&OperationGuardArc<NexusSpec>> {
     }
 
     async fn unshare(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {
@@ -165,7 +173,7 @@ impl ResourceOffspring for OperationGuardArc<NexusSpec> {
     type Remove = RemoveNexusChild;
 
     async fn add_child(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Add,
     ) -> Result<Self::AddOutput, SvcError> {
@@ -173,7 +181,7 @@ impl ResourceOffspring for OperationGuardArc<NexusSpec> {
     }
 
     async fn remove_child(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Remove,
     ) -> Result<(), SvcError> {
@@ -182,13 +190,13 @@ impl ResourceOffspring for OperationGuardArc<NexusSpec> {
 }
 
 #[async_trait::async_trait]
-impl ResourceOffspring for Option<&OperationGuardArc<NexusSpec>> {
+impl ResourceOffspring for Option<&mut OperationGuardArc<NexusSpec>> {
     type Add = AddNexusChild;
     type AddOutput = Child;
     type Remove = RemoveNexusChild;
 
     async fn add_child(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Add,
     ) -> Result<Self::AddOutput, SvcError> {
@@ -212,7 +220,7 @@ impl ResourceOffspring for Option<&OperationGuardArc<NexusSpec>> {
     }
 
     async fn remove_child(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Remove,
     ) -> Result<(), SvcError> {

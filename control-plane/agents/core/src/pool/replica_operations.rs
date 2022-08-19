@@ -43,13 +43,17 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
         replica.complete_create(result, registry).await
     }
 
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError> {
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
         Some(self).destroy(registry, request).await
     }
 }
 
 #[async_trait::async_trait]
-impl ResourceLifecycle for Option<&OperationGuardArc<ReplicaSpec>> {
+impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
     type Create = CreateReplica;
     type CreateOutput = Replica;
     type Destroy = DestroyReplica;
@@ -61,7 +65,11 @@ impl ResourceLifecycle for Option<&OperationGuardArc<ReplicaSpec>> {
         unimplemented!()
     }
 
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError> {
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
         let node = registry.get_node_wrapper(&request.node).await?;
 
         if let Some(replica) = self {
@@ -85,7 +93,7 @@ impl ResourceSharing for OperationGuardArc<ReplicaSpec> {
     type UnshareOutput = String;
 
     async fn share(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Share,
     ) -> Result<Self::ShareOutput, SvcError> {
@@ -93,7 +101,7 @@ impl ResourceSharing for OperationGuardArc<ReplicaSpec> {
     }
 
     async fn unshare(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {
@@ -102,14 +110,14 @@ impl ResourceSharing for OperationGuardArc<ReplicaSpec> {
 }
 
 #[async_trait::async_trait]
-impl ResourceSharing for Option<&OperationGuardArc<ReplicaSpec>> {
+impl ResourceSharing for Option<&mut OperationGuardArc<ReplicaSpec>> {
     type Share = ShareReplica;
     type ShareOutput = String;
     type Unshare = UnshareReplica;
     type UnshareOutput = String;
 
     async fn share(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Share,
     ) -> Result<Self::ShareOutput, SvcError> {
@@ -129,7 +137,7 @@ impl ResourceSharing for Option<&OperationGuardArc<ReplicaSpec>> {
     }
 
     async fn unshare(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {

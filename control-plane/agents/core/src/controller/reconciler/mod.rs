@@ -63,14 +63,14 @@ impl ReconcilerControl {
 #[async_trait::async_trait]
 trait Reconciler {
     /// Run the reconcile logic for this resource.
-    async fn reconcile(&self, context: &PollContext) -> PollResult;
+    async fn reconcile(&mut self, context: &PollContext) -> PollResult;
 }
 
 #[async_trait::async_trait]
 trait GarbageCollect {
     /// Run the `GarbageCollect` reconciler.
     /// The default implementation calls all garbage collection methods.
-    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+    async fn garbage_collect(&mut self, context: &PollContext) -> PollResult {
         squash_results(vec![
             self.disown_orphaned(context).await,
             self.disown_unused(context).await,
@@ -82,18 +82,18 @@ trait GarbageCollect {
     /// Destroy resources which are in the deleting phase.
     /// A resource goes into the deleting phase when we start to delete it and stay in this
     /// state until we successfully delete it.
-    async fn destroy_deleting(&self, context: &PollContext) -> PollResult;
+    async fn destroy_deleting(&mut self, context: &PollContext) -> PollResult;
 
     /// Destroy resources which have been orphaned.
     /// A resource becomes orphaned when all its owners have disowned it and at that point
     /// it is no longer needed and may be destroyed.
-    async fn destroy_orphaned(&self, context: &PollContext) -> PollResult;
+    async fn destroy_orphaned(&mut self, context: &PollContext) -> PollResult;
 
     /// Disown resources which are no longer needed by their owners.
-    async fn disown_unused(&self, context: &PollContext) -> PollResult;
+    async fn disown_unused(&mut self, context: &PollContext) -> PollResult;
     /// Disown resources whose owners are no longer in existence.
     /// This may happen as a result of a bug or manual edit of the persistent store (etcd).
-    async fn disown_orphaned(&self, context: &PollContext) -> PollResult;
+    async fn disown_orphaned(&mut self, context: &PollContext) -> PollResult;
 }
 
 #[async_trait::async_trait]
@@ -103,5 +103,5 @@ trait ReCreate {
     /// state.
     /// This is because it's the control-plane's job to recreate the state since it has the
     /// overview of the whole system.
-    async fn recreate_state(&self, context: &PollContext) -> PollResult;
+    async fn recreate_state(&mut self, context: &PollContext) -> PollResult;
 }

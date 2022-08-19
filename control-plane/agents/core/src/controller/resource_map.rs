@@ -1,11 +1,13 @@
-use common_lib::{types::v0::store::ResourceUuid, IntoVec};
+use common_lib::{
+    types::v0::store::{ResourceMutex, ResourceUuid},
+    IntoVec,
+};
 use indexmap::{map::Values, IndexMap};
-use parking_lot::Mutex;
-use std::{fmt::Debug, hash::Hash, sync::Arc};
+use std::{fmt::Debug, hash::Hash};
 
 #[derive(Default, Debug)]
-pub(crate) struct ResourceMap<I, S> {
-    map: IndexMap<I, Arc<Mutex<S>>>,
+pub(crate) struct ResourceMap<I, S: Clone> {
+    map: IndexMap<I, ResourceMutex<S>>,
 }
 
 impl<I, S> ResourceMap<I, S>
@@ -14,7 +16,7 @@ where
     S: Clone + ResourceUuid<Id = I> + Debug,
 {
     /// Get the resource with the given key.
-    pub(crate) fn get(&self, key: &I) -> Option<&Arc<Mutex<S>>> {
+    pub(crate) fn get(&self, key: &I) -> Option<&ResourceMutex<S>> {
         self.map.get(key)
     }
 
@@ -24,7 +26,7 @@ where
     }
 
     /// Insert an element or update an existing entry in the map.
-    pub(crate) fn insert(&mut self, value: S) -> Arc<Mutex<S>> {
+    pub(crate) fn insert(&mut self, value: S) -> ResourceMutex<S> {
         let key = value.uuid();
         match self.map.get(&key) {
             Some(entry) => {
@@ -33,9 +35,9 @@ where
                 entry.clone()
             }
             None => {
-                let v = Arc::new(Mutex::new(value));
-                self.map.insert(key, v.clone());
-                v
+                let resource: ResourceMutex<S> = value.into();
+                self.map.insert(key, resource.clone());
+                resource
             }
         }
     }
@@ -51,17 +53,17 @@ where
     pub(crate) fn populate(&mut self, values: impl IntoVec<S>) {
         assert!(self.map.is_empty());
         for value in values.into_vec() {
-            self.map.insert(value.uuid(), Arc::new(Mutex::new(value)));
+            self.map.insert(value.uuid(), value.into());
         }
     }
 
     /// Get all the resources as a vector.
-    pub(crate) fn to_vec(&self) -> Vec<Arc<Mutex<S>>> {
+    pub(crate) fn to_vec(&self) -> Vec<ResourceMutex<S>> {
         self.map.values().cloned().collect()
     }
 
     /// Return the maps values.
-    pub(crate) fn values(&self) -> Values<'_, I, Arc<Mutex<S>>> {
+    pub(crate) fn values(&self) -> Values<'_, I, ResourceMutex<S>> {
         self.map.values()
     }
 

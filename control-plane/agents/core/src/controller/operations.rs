@@ -13,7 +13,11 @@ pub(crate) trait ResourceLifecycle {
         request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError>;
     /// Destroy the resource itself.
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError>;
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError>;
 }
 
 /// Resource Sharing Operations.
@@ -26,13 +30,13 @@ pub(crate) trait ResourceSharing {
 
     /// Share the resource.
     async fn share(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Share,
     ) -> Result<Self::ShareOutput, SvcError>;
     /// Unshare the resource.
     async fn unshare(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError>;
@@ -47,13 +51,13 @@ pub(crate) trait ResourcePublishing {
 
     /// Publish the resource.
     async fn publish(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Publish,
     ) -> Result<Self::PublishOutput, SvcError>;
     /// Unpublish the resource.
     async fn unpublish(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unpublish,
     ) -> Result<(), SvcError>;
@@ -66,7 +70,7 @@ pub(crate) trait ResourceReplicas {
 
     /// Set the resource's replica count.
     async fn set_replica(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Request,
     ) -> Result<(), SvcError>;
@@ -81,13 +85,13 @@ pub(crate) trait ResourceOffspring {
 
     /// Add a child to the resource.
     async fn add_child(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Add,
     ) -> Result<Self::AddOutput, SvcError>;
     /// Remove a child from the resource.
     async fn remove_child(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Remove,
     ) -> Result<(), SvcError>;

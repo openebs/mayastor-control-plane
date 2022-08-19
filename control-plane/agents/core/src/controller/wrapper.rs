@@ -450,11 +450,12 @@ impl NodeWrapper {
     }
 
     /// Load the node by fetching information from io-engine
-    pub(crate) async fn load(&mut self) -> Result<(), SvcError> {
+    pub(crate) async fn load(&mut self, startup: bool) -> Result<(), SvcError> {
         tracing::info!(
-            "Preloading node '{}' on endpoint '{}'",
-            self.id(),
-            self.endpoint_str()
+            node.id = %self.id(),
+            node.endpoint = self.endpoint_str(),
+            startup,
+            "Preloading node"
         );
 
         let mut client = self.grpc_client().await?;

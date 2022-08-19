@@ -16,9 +16,10 @@ use common_lib::{
             nexus_child::NexusChild,
         },
         transport::{
-            AddNexusChild, Child, ChildState, ChildUri, CreateNexus, DestroyNexus, Filter, Nexus,
-            NexusId, NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId,
-            NvmfControllerIdRange, RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
+            AddNexusChild, Child, ChildState, ChildStateReason, ChildUri, CreateNexus,
+            DestroyNexus, Filter, Nexus, NexusId, NexusNvmfConfig, NexusShareProtocol, NexusStatus,
+            NodeId, NvmfControllerIdRange, RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus,
+            VolumeId,
         },
     },
 };
@@ -172,7 +173,6 @@ impl From<nexus::NexusStatus> for NexusStatus {
         }
     }
 }
-
 impl From<NexusStatus> for nexus::NexusStatus {
     fn from(src: NexusStatus) -> Self {
         match src {
@@ -194,7 +194,6 @@ impl From<nexus::ChildState> for ChildState {
         }
     }
 }
-
 impl From<ChildState> for nexus::ChildState {
     fn from(src: ChildState) -> Self {
         match src {
@@ -206,22 +205,62 @@ impl From<ChildState> for nexus::ChildState {
     }
 }
 
+impl From<nexus::ChildStateReason> for ChildStateReason {
+    fn from(src: nexus::ChildStateReason) -> Self {
+        match src {
+            nexus::ChildStateReason::None => Self::Unknown,
+            nexus::ChildStateReason::Init => Self::Init,
+            nexus::ChildStateReason::Closed => Self::Closed,
+            nexus::ChildStateReason::CannotOpen => Self::CantOpen,
+            nexus::ChildStateReason::ConfigInvalid => Self::ConfigInvalid,
+            nexus::ChildStateReason::RebuildFailed => Self::RebuildFailed,
+            nexus::ChildStateReason::IoFailure => Self::IoError,
+            nexus::ChildStateReason::ByClient => Self::ByClient,
+            nexus::ChildStateReason::OutOfSync => Self::OutOfSync,
+            nexus::ChildStateReason::NoSpace => Self::NoSpace,
+            nexus::ChildStateReason::TimedOut => Self::TimedOut,
+            nexus::ChildStateReason::AdminFailed => Self::AdminCommandFailed,
+        }
+    }
+}
+impl From<ChildStateReason> for nexus::ChildStateReason {
+    fn from(src: ChildStateReason) -> Self {
+        match src {
+            ChildStateReason::Unknown => Self::None,
+            ChildStateReason::Init => Self::Init,
+            ChildStateReason::Closed => Self::Closed,
+            ChildStateReason::ConfigInvalid => Self::ConfigInvalid,
+            ChildStateReason::OutOfSync => Self::OutOfSync,
+            ChildStateReason::NoSpace => Self::NoSpace,
+            ChildStateReason::TimedOut => Self::TimedOut,
+            ChildStateReason::CantOpen => Self::CannotOpen,
+            ChildStateReason::RebuildFailed => Self::RebuildFailed,
+            ChildStateReason::IoError => Self::IoFailure,
+            ChildStateReason::ByClient => Self::ByClient,
+            ChildStateReason::AdminCommandFailed => Self::AdminFailed,
+        }
+    }
+}
+
 impl TryFrom<nexus::Child> for Child {
     type Error = ReplyError;
     fn try_from(child_grpc_type: nexus::Child) -> Result<Self, Self::Error> {
         let child = Child {
             uri: child_grpc_type.uri.into(),
-            state: match ChildState::try_from(child_grpc_type.state) {
-                Ok(state) => state,
-                Err(err) => {
+            state: match nexus::ChildState::from_i32(child_grpc_type.state).map(ChildState::from) {
+                Some(state) => state,
+                None => {
                     return Err(ReplyError::invalid_argument(
-                        ResourceKind::Nexus,
-                        "child.state",
-                        err.to_string(),
+                        ResourceKind::Child,
+                        "state",
+                        child_grpc_type.state.to_string(),
                     ))
                 }
             },
             rebuild_progress: child_grpc_type.rebuild_progress.map(|i| i as u8),
+            state_reason: nexus::ChildStateReason::from_i32(child_grpc_type.reason)
+                .map(ChildStateReason::from)
+                .unwrap_or(ChildStateReason::Unknown),
         };
         Ok(child)
     }
@@ -229,11 +268,11 @@ impl TryFrom<nexus::Child> for Child {
 
 impl From<Child> for nexus::Child {
     fn from(child: Child) -> Self {
-        let child_state: nexus::ChildState = child.state.into();
         nexus::Child {
             uri: child.uri.to_string(),
-            state: child_state as i32,
+            state: nexus::ChildState::from(child.state) as i32,
             rebuild_progress: child.rebuild_progress.map(|i| i.into()),
+            reason: nexus::ChildStateReason::from(child.state_reason).into(),
         }
     }
 }

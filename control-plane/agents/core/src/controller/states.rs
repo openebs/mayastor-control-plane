@@ -6,7 +6,8 @@ use indexmap::map::Values;
 use std::{ops::Deref, sync::Arc};
 
 use super::resource_map::ResourceMap;
-use parking_lot::{Mutex, RwLock};
+use common_lib::types::v0::store::ResourceMutex;
+use parking_lot::RwLock;
 
 /// Locked Resource States
 #[derive(Default, Clone, Debug)]
@@ -58,7 +59,7 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of nexus states.
-    pub(crate) fn get_nexus_states(&self) -> Values<NexusId, Arc<Mutex<NexusState>>> {
+    pub(crate) fn get_nexus_states(&self) -> Values<NexusId, ResourceMutex<NexusState>> {
         self.nexuses.values()
     }
 
@@ -79,7 +80,7 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of pool states.
-    pub(crate) fn get_pool_states(&self) -> Values<PoolId, Arc<Mutex<PoolState>>> {
+    pub(crate) fn get_pool_states(&self) -> Values<PoolId, ResourceMutex<PoolState>> {
         self.pools.values()
     }
 
@@ -101,12 +102,12 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of replica states.
-    pub(crate) fn get_replica_states(&self) -> Values<ReplicaId, Arc<Mutex<ReplicaState>>> {
+    pub(crate) fn get_replica_states(&self) -> Values<ReplicaId, ResourceMutex<ReplicaState>> {
         self.replicas.values()
     }
 
     /// Get a replica with the given ID.
-    pub(crate) fn get_replica_state(&self, id: &ReplicaId) -> Option<&Arc<Mutex<ReplicaState>>> {
+    pub(crate) fn get_replica_state(&self, id: &ReplicaId) -> Option<&ResourceMutex<ReplicaState>> {
         self.replicas.get(id)
     }
 
@@ -119,7 +120,7 @@ impl ResourceStates {
 
     /// Takes an iterator of resources protected by an 'Arc' and 'Mutex' and returns a vector of
     /// unprotected resources.
-    fn cloned_inner_states<I, S>(locked_states: Values<I, Arc<Mutex<S>>>) -> Vec<S>
+    fn cloned_inner_states<I, S>(locked_states: Values<I, ResourceMutex<S>>) -> Vec<S>
     where
         S: Clone,
     {

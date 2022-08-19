@@ -35,7 +35,7 @@ impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         for volume in context.specs().get_locked_volumes() {
-            let volume = match volume.operation_guard() {
+            let mut volume = match volume.operation_guard() {
                 Ok(guard) => guard,
                 Err(_) => continue,
             };
@@ -60,42 +60,45 @@ impl TaskPoller for GarbageCollector {
 
 #[async_trait::async_trait]
 impl GarbageCollect for OperationGuardArc<VolumeSpec> {
-    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+    async fn garbage_collect(&mut self, context: &PollContext) -> PollResult {
         GarbageCollector::squash_results(vec![
             self.destroy_deleting(context).await,
             self.disown_unused(context).await,
         ])
     }
 
-    async fn destroy_deleting(&self, context: &PollContext) -> PollResult {
+    async fn destroy_deleting(&mut self, context: &PollContext) -> PollResult {
         destroy_deleting_volume(self, context).await
     }
 
-    async fn destroy_orphaned(&self, _context: &PollContext) -> PollResult {
+    async fn destroy_orphaned(&mut self, _context: &PollContext) -> PollResult {
         unimplemented!()
     }
 
-    async fn disown_unused(&self, context: &PollContext) -> PollResult {
+    async fn disown_unused(&mut self, context: &PollContext) -> PollResult {
         GarbageCollector::squash_results(vec![
             disown_unused_nexuses(self, context).await,
             disown_unused_replicas(self, context).await,
         ])
     }
 
-    async fn disown_orphaned(&self, _context: &PollContext) -> PollResult {
+    async fn disown_orphaned(&mut self, _context: &PollContext) -> PollResult {
         unimplemented!()
     }
 }
 
-#[tracing::instrument(level = "trace", skip(volume, context), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "trace", skip(volume, context), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
 async fn destroy_deleting_volume(
-    volume: &OperationGuardArc<VolumeSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
     let deleting = volume.lock().status().deleting();
     if deleting {
         destroy_volume(volume, context)
-            .instrument(tracing::info_span!("destroy_deleting_volume", volume.uuid = %volume.lock().uuid, request.reconcile = true))
+            .instrument(tracing::info_span!(
+                "destroy_deleting_volume",
+                request.reconcile = true
+            ))
             .await
     } else {
         PollResult::Ok(PollerState::Idle)
@@ -103,7 +106,7 @@ async fn destroy_deleting_volume(
 }
 
 async fn destroy_volume(
-    volume: &OperationGuardArc<VolumeSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
     let uuid = volume.lock().uuid.clone();
@@ -130,9 +133,9 @@ async fn destroy_volume(
 /// When any of its nexuses are no longer used
 /// Then they should be disowned
 /// And they should eventually be destroyed
-#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
 async fn disown_unused_nexuses(
-    volume: &OperationGuardArc<VolumeSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
     let mut results = vec![];
@@ -168,9 +171,9 @@ async fn disown_unused_nexuses(
 /// Given a published volume
 /// When some of its replicas are not healthy, not online and not used by a nexus
 /// Then they should be disowned
-#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
 async fn disown_unused_replicas(
-    volume: &OperationGuardArc<VolumeSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
     let volume_clone = volume.lock().clone();

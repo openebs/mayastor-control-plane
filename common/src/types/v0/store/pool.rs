@@ -4,7 +4,8 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        AsOperationSequencer, OperationSequence, ResourceUuid, SpecStatus, SpecTransaction,
+        AsOperationSequencer, OperationGuardArc, OperationSequence, ResourceUuid, SpecStatus,
+        SpecTransaction,
     },
     transport::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
 };
@@ -12,6 +13,7 @@ use crate::types::v0::{
 // PoolLabel is the type for the labels
 pub type PoolLabel = ::std::collections::HashMap<String, String>;
 
+use crate::types::v0::store::ResourceMutex;
 use serde::{Deserialize, Serialize};
 use std::{convert::From, fmt::Debug};
 
@@ -88,6 +90,13 @@ pub struct PoolSpec {
     pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<PoolOperationState>,
+}
+
+impl ResourceMutex<PoolSpec> {
+    /// Get the resource id.
+    pub fn id(&mut self) -> &PoolId {
+        &self.immutable_peek().id
+    }
 }
 
 macro_rules! pool_span {

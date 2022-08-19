@@ -50,6 +50,8 @@ message Child {
   ChildState state = 2;
   // current rebuild progress (%)
   optional uint32 rebuild_progress = 3;
+  /// child state reason
+  ChildStateReason reason = 4;
 }
 
 enum ChildState {
@@ -61,6 +63,22 @@ enum ChildState {
   ChildDegraded = 2;
   // unrecoverable error (control plane must act)
   ChildFaulted = 3;
+}
+
+// State of the nexus child.
+enum ChildStateReason {
+  CHILD_STATE_REASON_NONE = 0;            // reason for CHILD_REASON_NONE, CHILD_UNKNOWN
+  CHILD_STATE_REASON_INIT = 1;            // child is being initialized
+  CHILD_STATE_REASON_CLOSED = 2;          // child is being destroyed or has been closed
+  CHILD_STATE_REASON_CANNOT_OPEN = 3;     // failed to open child (e.g. cannot access device)
+  CHILD_STATE_REASON_CONFIG_INVALID = 4;  // invalid child device configuration (e.g. mismatching size)
+  CHILD_STATE_REASON_REBUILD_FAILED = 5;  // rebuild operation failed for this child
+  CHILD_STATE_REASON_IO_FAILURE = 6;      // child faulted because of other I/O errors
+  CHILD_STATE_REASON_BY_CLIENT = 7;       // child has been faulted by a client
+  CHILD_STATE_REASON_OUT_OF_SYNC = 8;     // child is being rebuilt
+  CHILD_STATE_REASON_NO_SPACE = 9;        // child faulted because I/O operation failed with ENOSPC
+  CHILD_STATE_REASON_TIMED_OUT = 10;      // child faulted because I/O operation failed with timeout
+  CHILD_STATE_REASON_ADMIN_FAILED = 11;   // child faulted of an admin command failure
 }
 
 message NexusSpec {

@@ -4,7 +4,8 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        AsOperationSequencer, OperationSequence, ResourceUuid, SpecStatus, SpecTransaction,
+        AsOperationSequencer, OperationSequence, ResourceMutex, ResourceUuid, SpecStatus,
+        SpecTransaction,
     },
     transport::{
         self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
@@ -90,6 +91,13 @@ pub struct ReplicaSpec {
     pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<ReplicaOperationState>,
+}
+
+impl ResourceMutex<ReplicaSpec> {
+    /// Get the resource uuid.
+    pub fn uuid(&mut self) -> &ReplicaId {
+        &self.immutable_peek().uuid
+    }
 }
 
 impl AsOperationSequencer for ReplicaSpec {

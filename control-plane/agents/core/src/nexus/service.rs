@@ -143,29 +143,29 @@ impl Service {
     /// Destroy a nexus using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
-        let nexus = self.specs().nexus_opt(&request.uuid).await?;
-        nexus.as_ref().destroy(&self.registry, request).await
+        let mut nexus = self.specs().nexus_opt(&request.uuid).await?;
+        nexus.as_mut().destroy(&self.registry, request).await
     }
 
     /// Share a nexus using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
-        let nexus = self.specs().nexus_opt(&request.uuid).await?;
-        nexus.as_ref().share(&self.registry, request).await
+        let mut nexus = self.specs().nexus_opt(&request.uuid).await?;
+        nexus.as_mut().share(&self.registry, request).await
     }
 
     /// Unshare a nexus using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.uuid))]
     pub(super) async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
-        let nexus = self.specs().nexus_opt(&request.uuid).await?;
-        nexus.as_ref().unshare(&self.registry, request).await
+        let mut nexus = self.specs().nexus_opt(&request.uuid).await?;
+        nexus.as_mut().unshare(&self.registry, request).await
     }
 
     /// Add a nexus child using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
     pub(super) async fn add_nexus_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
-        let nexus = self.specs().nexus_opt(&request.nexus).await?;
-        nexus.as_ref().add_child(&self.registry, request).await
+        let mut nexus = self.specs().nexus_opt(&request.nexus).await?;
+        nexus.as_mut().add_child(&self.registry, request).await
     }
 
     /// Remove a nexus child using the given parameters.
@@ -174,7 +174,7 @@ impl Service {
         &self,
         request: &RemoveNexusChild,
     ) -> Result<(), SvcError> {
-        let nexus = self.specs().nexus_opt(&request.nexus).await?;
-        nexus.as_ref().remove_child(&self.registry, request).await
+        let mut nexus = self.specs().nexus_opt(&request.nexus).await?;
+        nexus.as_mut().remove_child(&self.registry, request).await
     }
 }

@@ -13,7 +13,7 @@ use common_lib::{
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
-            OperationGuardArc, SpecStatus, SpecTransaction,
+            OperationGuardArc, ResourceMutex, SpecStatus, SpecTransaction,
         },
         transport::{
             CreatePool, CreateReplica, PoolId, PoolState, PoolStatus, Replica, ReplicaId,
@@ -21,8 +21,6 @@ use common_lib::{
         },
     },
 };
-use parking_lot::Mutex;
-use std::sync::Arc;
 
 #[async_trait::async_trait]
 impl GuardedOperationsHelper for OperationGuardArc<PoolSpec> {
@@ -181,7 +179,7 @@ impl SpecOperationsHelper for ReplicaSpec {
 /// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
     /// Gets list of protected ReplicaSpec's for a given pool `id`
-    fn get_pool_replicas(&self, id: &PoolId) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+    fn get_pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
         let mut replicas = vec![];
         for replica in self.replicas.to_vec() {
             if id == &replica.lock().pool {
@@ -246,7 +244,7 @@ impl ResourceSpecsLocked {
                 details: "Failed to find the node where a replica lives".to_string(),
             }),
             Some(node) => {
-                let replica = self.replica(&replica_spec.uuid).await?;
+                let mut replica = self.replica(&replica_spec.uuid).await?;
                 replica
                     .destroy(
                         registry,
@@ -258,7 +256,10 @@ impl ResourceSpecsLocked {
     }
 
     /// Get or Create the protected ReplicaSpec for the given request
-    pub(crate) fn get_or_create_replica(&self, request: &CreateReplica) -> Arc<Mutex<ReplicaSpec>> {
+    pub(crate) fn get_or_create_replica(
+        &self,
+        request: &CreateReplica,
+    ) -> ResourceMutex<ReplicaSpec> {
         let mut specs = self.write();
         if let Some(replica) = specs.replicas.get(&request.uuid) {
             replica.clone()
@@ -267,13 +268,13 @@ impl ResourceSpecsLocked {
         }
     }
     /// Get a protected ReplicaSpec for the given replica `id`, if it exists
-    pub(crate) fn get_replica(&self, id: &ReplicaId) -> Option<Arc<Mutex<ReplicaSpec>>> {
+    pub(crate) fn get_replica(&self, id: &ReplicaId) -> Option<ResourceMutex<ReplicaSpec>> {
         let specs = self.read();
         specs.replicas.get(id).cloned()
     }
 
     /// Get or Create the protected PoolSpec for the given request
-    pub(crate) fn get_or_create_pool(&self, request: &CreatePool) -> Arc<Mutex<PoolSpec>> {
+    pub(crate) fn get_or_create_pool(&self, request: &CreatePool) -> ResourceMutex<PoolSpec> {
         let mut specs = self.write();
         if let Some(pool) = specs.pools.get(&request.id) {
             pool.clone()
@@ -282,7 +283,7 @@ impl ResourceSpecsLocked {
         }
     }
     /// Get a protected PoolSpec for the given pool `id`, if it exists
-    pub(crate) fn get_locked_pool(&self, id: &PoolId) -> Option<Arc<Mutex<PoolSpec>>> {
+    pub(crate) fn get_locked_pool(&self, id: &PoolId) -> Option<ResourceMutex<PoolSpec>> {
         let specs = self.read();
         specs.pools.get(id).cloned()
     }
@@ -298,7 +299,7 @@ impl ResourceSpecsLocked {
             })
     }
     /// Get a vector of protected PoolSpec's
-    pub(crate) fn get_locked_pools(&self) -> Vec<Arc<Mutex<PoolSpec>>> {
+    pub(crate) fn get_locked_pools(&self) -> Vec<ResourceMutex<PoolSpec>> {
         let specs = self.read();
         specs.pools.to_vec()
     }
@@ -324,7 +325,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get a vector of protected ReplicaSpec's
-    pub(crate) fn get_replicas(&self) -> Vec<Arc<Mutex<ReplicaSpec>>> {
+    pub(crate) fn get_replicas(&self) -> Vec<ResourceMutex<ReplicaSpec>> {
         let specs = self.read();
         specs.replicas.to_vec()
     }
@@ -348,7 +349,7 @@ impl ResourceSpecsLocked {
 
         let pools = self.get_locked_pools();
         for pool in pools {
-            if let Ok(guard) = pool.operation_guard() {
+            if let Ok(mut guard) = pool.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
                     // Not all pending operations could be handled.
                     pending_ops = true;
@@ -366,7 +367,7 @@ impl ResourceSpecsLocked {
 
         let replicas = self.get_replicas();
         for replica in replicas {
-            if let Ok(guard) = replica.operation_guard() {
+            if let Ok(mut guard) = replica.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
                     // Not all pending operations could be handled.
                     pending_ops = true;
