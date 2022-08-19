@@ -9,6 +9,10 @@ edition = "2018"
 name = "core"
 path = "core/src/server.rs"
 
+[[test]]
+name = "core"
+path = "core/tests/test.rs"
+
 [[bin]]
 name = "jsongrpc"
 path = "jsongrpc/src/server.rs"
@@ -69,8 +73,6 @@ opentelemetry-semantic-conventions = "0.9.0"
 
 [dev-dependencies]
 deployer-cluster = { path = "../../utils/deployer-cluster" }
-actix-rt = "2.7.0"
-actix-web = { version = "4.1.0", features = ["rustls"] }
 url = "2.2.2"
 once_cell = "1.8.0"
 

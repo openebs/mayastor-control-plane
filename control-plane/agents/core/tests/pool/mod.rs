@@ -1,18 +1,21 @@
-#![cfg(test)]
-
 use common_lib::{
+    store::etcd::Etcd,
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         openapi::{
             apis::StatusCode,
             clients::tower::Error,
-            models::{CreateVolumeBody, Pool, PoolState, VolumePolicy},
+            models,
+            models::{CreateReplicaBody, CreateVolumeBody, Pool, PoolState, VolumePolicy},
         },
-        store::replica::ReplicaSpec,
+        store::{
+            definitions::Store,
+            replica::{ReplicaSpec, ReplicaSpecKey},
+        },
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NodeId,
-            Protocol, Replica, ReplicaId, ReplicaName, ReplicaShareProtocol, ReplicaStatus,
-            ShareReplica, UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NexusId,
+            NodeId, Protocol, Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol,
+            ReplicaStatus, ShareReplica, UnshareReplica, VolumeId,
         },
     },
 };
@@ -25,7 +28,7 @@ use grpc::{
     },
 };
 use itertools::Itertools;
-use std::{convert::TryFrom, time::Duration};
+use std::{convert::TryFrom, thread::sleep, time::Duration};
 
 #[tokio::test]
 async fn pool() {
@@ -737,4 +740,136 @@ async fn reconciler_deleting_dirty_pool() {
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
     }
+}
+
+#[tokio::test]
+async fn disown_unused_replicas() {
+    const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+    let reconcile_period = Duration::from_millis(200);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(1)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_cache_period("1s")
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .build()
+        .await
+        .unwrap();
+
+    let rest_api = cluster.rest_v00();
+    let volumes_api = rest_api.volumes_api();
+    let node = cluster.node(0).to_string();
+
+    let volume = volumes_api
+        .put_volume(
+            &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
+            models::CreateVolumeBody::new(models::VolumePolicy::default(), 1, 5242880u64, false),
+        )
+        .await
+        .unwrap();
+
+    let volume = volumes_api
+        .put_volume_target(&volume.spec.uuid, &node, models::VolumeShareProtocol::Nvmf)
+        .await
+        .unwrap();
+
+    cluster.composer().pause(&node).await.unwrap();
+    volumes_api
+        .del_volume_target(&volume.spec.uuid, Some(false))
+        .await
+        .expect_err("io-engine is down");
+    cluster.composer().kill(&node).await.unwrap();
+
+    let volume = volumes_api.get_volume(&volume.spec.uuid).await.unwrap();
+    tracing::info!("Volume: {:?}", volume);
+
+    assert!(volume.spec.target.is_some(), "Unpublish failed");
+
+    let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+    let replica = specs.replicas.first().cloned().unwrap();
+    assert!(replica.owners.volume.is_some());
+    assert!(replica.owners.nexuses.is_empty());
+
+    // allow the reconcile to run - it should not disown the replica
+    tokio::time::sleep(reconcile_period * 12).await;
+
+    let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+    let replica = specs.replicas.first().cloned().unwrap();
+    // we should still be part of the volume
+    assert!(replica.owners.volume.is_some());
+    assert!(replica.owners.nexuses.is_empty());
+}
+
+#[tokio::test]
+async fn test_disown_missing_replica_owners() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(1)
+        .with_pools(1)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .build()
+        .await
+        .unwrap();
+
+    // Create a replica. This will save the replica spec to the persistent store.
+    let replica_id = ReplicaId::new();
+    cluster
+        .rest_v00()
+        .replicas_api()
+        .put_pool_replica(
+            "io-engine-1-pool-1",
+            &replica_id,
+            CreateReplicaBody {
+                share: None,
+                size: 5242880,
+                thin: false,
+            },
+        )
+        .await
+        .expect("Failed to create replica.");
+
+    // Check the replica exists.
+    let num_replicas = cluster
+        .rest_v00()
+        .replicas_api()
+        .get_replicas()
+        .await
+        .expect("Failed to get replicas.")
+        .len();
+    assert_eq!(num_replicas, 1);
+
+    // Modify the replica spec in the store so that the replica has a volume and nexus owner;
+    // neither of which exist.
+    let mut etcd = Etcd::new("0.0.0.0:2379").await.unwrap();
+    let mut replica: ReplicaSpec = etcd
+        .get_obj(&ReplicaSpecKey::from(&replica_id))
+        .await
+        .unwrap();
+    replica.managed = true;
+    replica.owners = ReplicaOwners::new(Some(VolumeId::new()), vec![NexusId::new()]);
+
+    // Persist the modified replica spec to the store
+    etcd.put_obj(&replica)
+        .await
+        .expect("Failed to store modified replica.");
+
+    // Restart the core agent so that it reloads the modified replica spec from the persistent
+    // store.
+    cluster.restart_core().await;
+
+    // Allow time for the core agent to restart.
+    sleep(Duration::from_secs(2));
+
+    // The replica should be removed because none of its parents exist.
+    let num_replicas = cluster
+        .rest_v00()
+        .replicas_api()
+        .get_replicas()
+        .await
+        .expect("Failed to get replicas.")
+        .len();
+    assert_eq!(num_replicas, 0);
 }

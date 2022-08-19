@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod tests;
-
 use crate::controller::{
     operations::ResourceLifecycle,
     reconciler::{GarbageCollect, ReCreate},

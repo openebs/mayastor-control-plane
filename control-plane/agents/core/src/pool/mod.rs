@@ -20,7 +20,3 @@ pub(crate) fn configure(builder: Service) -> Service {
         .with_shared_state(pool_service)
         .with_shared_state(replica_service)
 }
-
-/// Pool Agent's Tests
-#[cfg(test)]
-mod tests;

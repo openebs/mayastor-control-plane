@@ -273,7 +273,7 @@ impl NodeWrapper {
         match client.liveness_probe(self.id()).await {
             Ok(data) => return Ok(data),
             Err(_) => debug!(
-                node.id = self.id().to_string(),
+                node.id = %self.id(),
                 "V1 liveness failed on startup, retrying with V0 liveness"
             ),
         }
@@ -290,15 +290,15 @@ impl NodeWrapper {
         if previous != next {
             if next == NodeStatus::Online {
                 tracing::info!(
-                    "Node '{}' changing from {} to {}",
-                    self.id(),
+                    node.id = %self.id(),
+                    "Node changing from {} to {}",
                     previous.to_string(),
                     next.to_string(),
                 );
             } else {
                 tracing::warn!(
-                    "Node '{}' changing from {} to {}",
-                    self.id(),
+                    node.id = %self.id(),
+                    "Node changing from {} to {}",
                     previous.to_string(),
                     next.to_string(),
                 );

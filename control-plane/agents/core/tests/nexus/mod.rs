@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use common_lib::{
     transport_api::*,
     types::v0::{

@@ -16,7 +16,3 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
     let nexus_service = NexusServer::new(new_service);
     builder.with_shared_state(nexus_service)
 }
-
-/// Nexus Agent's Tests
-#[cfg(test)]
-mod tests;
