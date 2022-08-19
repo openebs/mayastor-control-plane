@@ -13,11 +13,11 @@ use common_lib::{
 };
 
 use common_lib::types::v0::{
-    store::{OperationGuardArc, TraceSpan, TraceStrLog},
+    store::{OperationGuardArc, ResourceMutex, TraceSpan, TraceStrLog},
     transport::Nexus,
 };
-use parking_lot::Mutex;
-use std::{cmp::Ordering, sync::Arc};
+
+use std::cmp::Ordering;
 
 /// Volume HotSpare reconciler
 #[derive(Debug)]
@@ -34,8 +34,8 @@ impl TaskPoller for HotSpareReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         let volumes = context.specs().get_locked_volumes();
-        for volume in volumes {
-            results.push(hot_spare_reconcile(&volume, context).await);
+        for mut volume in volumes {
+            results.push(hot_spare_reconcile(&mut volume, context).await);
         }
         Self::squash_results(results)
     }
@@ -43,12 +43,12 @@ impl TaskPoller for HotSpareReconciler {
 
 #[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
 async fn hot_spare_reconcile(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let uuid = volume_spec.lock().uuid.clone();
-    let volume_state = context.registry().get_volume_state(&uuid).await?;
-    let volume = match volume_spec.operation_guard() {
+    let uuid = volume_spec.uuid();
+    let volume_state = context.registry().get_volume_state(uuid).await?;
+    let mut volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
@@ -61,32 +61,32 @@ async fn hot_spare_reconcile(
     }
 
     match volume_state.status {
-        VolumeStatus::Online => volume_replica_count_reconciler(&volume, context).await,
+        VolumeStatus::Online => volume_replica_count_reconciler(&mut volume, context).await,
         VolumeStatus::Unknown | VolumeStatus::Degraded => {
-            hot_spare_nexus_reconcile(&volume, &volume_state, context).await
+            hot_spare_nexus_reconcile(&mut volume, &volume_state, context).await
         }
         VolumeStatus::Faulted => PollResult::Ok(PollerState::Idle),
     }
 }
 
 async fn hot_spare_nexus_reconcile(
-    volume: &OperationGuardArc<VolumeSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
     volume_state: &VolumeState,
     context: &PollContext,
 ) -> PollResult {
     let mut results = vec![];
 
     if let Some(nexus) = &volume_state.target {
-        let nexus = context.specs().nexus(&nexus.uuid).await?;
+        let mut nexus = context.specs().nexus(&nexus.uuid).await?;
 
         // generic nexus reconciliation (does not matter that it belongs to a volume)
-        results.push(generic_nexus_reconciler(&nexus, context).await);
+        results.push(generic_nexus_reconciler(&mut nexus, context).await);
 
         // fixup the volume replica count: creates new replicas when we're behind
         // removes extra replicas but only if they're UNUSED (by a nexus)
         results.push(volume_replica_count_reconciler(volume, context).await);
         // fixup the nexus replica count to match the volume's replica count
-        results.push(nexus_replica_count_reconciler(volume, &nexus, context).await);
+        results.push(nexus_replica_count_reconciler(volume, &mut nexus, context).await);
     } else {
         results.push(volume_replica_count_reconciler(volume, context).await);
     }
@@ -96,7 +96,7 @@ async fn hot_spare_nexus_reconcile(
 
 #[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 async fn generic_nexus_reconciler(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
     let mut results = vec![];
@@ -111,7 +111,7 @@ async fn generic_nexus_reconciler(
 /// Then they should eventually be removed from the state and spec
 /// And the replicas should eventually be destroyed
 async fn faulted_children_remover(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
     nexus::faulted_children_remover(nexus, context).await
@@ -122,7 +122,7 @@ async fn faulted_children_remover(
 /// Then the children should eventually be removed from the state
 /// And the uri's should not be destroyed
 async fn unknown_children_remover(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
     nexus::unknown_children_remover(nexus, context).await
@@ -133,7 +133,7 @@ async fn unknown_children_remover(
 /// Then the children should eventually be removed from the spec
 /// And the replicas should eventually be destroyed
 async fn missing_children_remover(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
     nexus::missing_children_remover(nexus, context).await
@@ -143,15 +143,15 @@ async fn missing_children_remover(
 /// When the nexus spec has a different number of children to the number of volume replicas
 /// Then the nexus spec should eventually have as many children as the number of volume replicas
 async fn nexus_replica_count_reconciler(
-    volume: &OperationGuardArc<VolumeSpec>,
-    nexus: &OperationGuardArc<NexusSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_uuid = nexus.lock().uuid.clone();
-    let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
+    let nexus_uuid = nexus.uuid();
+    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
 
-    let vol_spec_clone = volume.lock().clone();
-    let nexus_spec_clone = nexus.lock().clone();
+    let vol_spec_clone = volume.peek();
+    let nexus_spec_clone = nexus.peek();
     let volume_replicas = vol_spec_clone.num_replicas as usize;
     let nexus_replica_children =
         nexus_spec_clone
@@ -183,19 +183,18 @@ async fn nexus_replica_count_reconciler(
 }
 #[tracing::instrument(skip(context, volume, nexus), fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 async fn nexus_replica_count_reconciler_traced(
-    volume: &OperationGuardArc<VolumeSpec>,
-    nexus: &OperationGuardArc<NexusSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     nexus_state: Nexus,
     nexus_replica_children: usize,
     context: &PollContext,
 ) -> PollResult {
-    let vol_spec_clone = volume.lock().clone();
-    let nexus_spec_clone = nexus.lock().clone();
+    let vol_spec_clone = volume.peek();
     let volume_replicas = vol_spec_clone.num_replicas as usize;
 
     match nexus_replica_children.cmp(&volume_replicas) {
         Ordering::Less => {
-            nexus_spec_clone.warn_span(|| {
+            nexus.warn_span(|| {
                 tracing::warn!(
                     "The nexus only has '{}' replica(s) but the volume requires '{}' replica(s)",
                     nexus_replica_children,
@@ -208,7 +207,7 @@ async fn nexus_replica_count_reconciler_traced(
                 .await?;
         }
         Ordering::Greater => {
-            nexus_spec_clone.warn_span(|| {
+            nexus.warn_span(|| {
                 tracing::warn!(
                     "The nexus has more replicas(s) ('{}') than the required replica count ('{}')",
                     nexus_replica_children,
@@ -235,14 +234,12 @@ async fn nexus_replica_count_reconciler_traced(
 /// Then the number of created volume replicas should eventually match the required number of
 /// replicas
 async fn volume_replica_count_reconciler(
-    volume: &OperationGuardArc<VolumeSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let volume_spec_clone = volume.lock().clone();
-    let volume_uuid = volume_spec_clone.uuid.clone();
-    let required_replica_count = volume_spec_clone.num_replicas as usize;
+    let required_replica_count = volume.peek().num_replicas as usize;
 
-    let current_replicas = context.specs().get_volume_replicas(&volume_uuid);
+    let current_replicas = context.specs().get_volume_replicas(volume.uuid());
     let current_replica_count = current_replicas.len();
 
     match current_replica_count.cmp(&required_replica_count) {
@@ -253,21 +250,19 @@ async fn volume_replica_count_reconciler(
     }
 }
 
-#[tracing::instrument(skip(context, volume), fields(volume.uuid = %volume.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
 async fn volume_replica_count_reconciler_traced(
-    volume: &OperationGuardArc<VolumeSpec>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let volume_spec_clone = volume.lock().clone();
-    let volume_uuid = volume_spec_clone.uuid.clone();
-    let required_replica_count = volume_spec_clone.num_replicas as usize;
+    let required_replica_count = volume.peek().num_replicas as usize;
 
-    let current_replicas = context.specs().get_volume_replicas(&volume_uuid);
+    let current_replicas = context.specs().get_volume_replicas(volume.uuid());
     let mut current_replica_count = current_replicas.len();
 
     match current_replica_count.cmp(&required_replica_count) {
         Ordering::Less => {
-            volume_spec_clone.warn_span(|| {
+            volume.warn_span(|| {
                 tracing::warn!(
                     "The volume has '{}' replica(s) but it should have '{}'. Creating more...",
                     current_replica_count,
@@ -278,7 +273,7 @@ async fn volume_replica_count_reconciler_traced(
             let diff = required_replica_count - current_replica_count;
             match context
                 .specs()
-                .create_volume_replicas(context.registry(), &volume_spec_clone, diff)
+                .create_volume_replicas(context.registry(), volume.peek(), diff)
                 .await?
             {
                 result if !result.is_empty() => {
@@ -291,7 +286,7 @@ async fn volume_replica_count_reconciler_traced(
                         }
                     });
 
-                    volume_spec_clone.info_span(|| {
+                    volume.info_span(|| {
                         tracing::info!(
                             replicas = %replicas,
                             "Successfully created '{}' new replica(s)",
@@ -300,12 +295,12 @@ async fn volume_replica_count_reconciler_traced(
                     });
                 }
                 _ => {
-                    volume_spec_clone.error("Failed to create replicas");
+                    volume.error("Failed to create replicas");
                 }
             }
         }
         Ordering::Greater => {
-            volume_spec_clone.warn_span(|| {
+            volume.warn_span(|| {
                 tracing::warn!(
                     "The volume has '{}' replica(s) but it should only have '{}'. Removing...",
                     current_replica_count,
@@ -320,10 +315,10 @@ async fn volume_replica_count_reconciler_traced(
                 .await
             {
                 Ok(_) => {
-                    volume_spec_clone.info("Successfully removed unused replicas");
+                    volume.info("Successfully removed unused replicas");
                 }
                 Err(error) => {
-                    volume_spec_clone.warn_span(|| {
+                    volume.warn_span(|| {
                         tracing::warn!(
                             "Failed to remove unused replicas from volume, error: '{}'",
                             error.full_string()

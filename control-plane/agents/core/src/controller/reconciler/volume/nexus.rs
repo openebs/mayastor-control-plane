@@ -10,9 +10,7 @@ use crate::controller::{
 use common_lib::types::v0::store::volume::VolumeSpec;
 
 use crate::controller::reconciler::nexus::faulted_nexus_remover;
-use common_lib::types::v0::transport::VolumeStatus;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use common_lib::types::v0::{store::ResourceMutex, transport::VolumeStatus};
 
 /// Volume nexus reconciler
 /// When io-engine instances restart they come up "empty" and so we need to recreate
@@ -40,7 +38,7 @@ impl TaskPoller for VolumeNexusReconciler {
 
 #[tracing::instrument(level = "trace", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
 async fn volume_nexus_reconcile(
-    volume_spec: &Arc<Mutex<VolumeSpec>>,
+    volume_spec: &ResourceMutex<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
     let volume = match volume_spec.operation_guard() {
@@ -59,7 +57,7 @@ async fn volume_nexus_reconcile(
         .get_volume_target_nexus_guard(&volume_spec)
         .await?
     {
-        Some(nexus) => {
+        Some(mut nexus) => {
             if !nexus.lock().spec_status.created() {
                 return PollResult::Ok(PollerState::Idle);
             }
@@ -70,10 +68,10 @@ async fn volume_nexus_reconcile(
                 .await?;
 
             if volume_state.status != VolumeStatus::Online {
-                faulted_nexus_remover(&nexus, context).await?;
-                missing_nexus_recreate(&nexus, context).await?;
+                faulted_nexus_remover(&mut nexus, context).await?;
+                missing_nexus_recreate(&mut nexus, context).await?;
             }
-            fixup_nexus_protocol(&nexus, context).await
+            fixup_nexus_protocol(&mut nexus, context).await
         }
         None => PollResult::Ok(PollerState::Idle),
     }

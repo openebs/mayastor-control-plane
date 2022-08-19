@@ -1,12 +1,13 @@
 use crate::controller::{registry::Registry, specs::ResourceSpecsLocked};
 use common::errors::{NodeNotFound, SvcError};
 use common_lib::types::v0::{
-    store::node::{NodeLabels, NodeSpec},
+    store::{
+        node::{NodeLabels, NodeSpec},
+        ResourceMutex,
+    },
     transport::{NodeId, Register},
 };
-use parking_lot::Mutex;
 use snafu::OptionExt;
-use std::sync::Arc;
 
 impl ResourceSpecsLocked {
     /// Create a node spec for the register request
@@ -47,7 +48,7 @@ impl ResourceSpecsLocked {
     pub(crate) fn get_locked_node(
         &self,
         node_id: &NodeId,
-    ) -> Result<Arc<Mutex<NodeSpec>>, SvcError> {
+    ) -> Result<ResourceMutex<NodeSpec>, SvcError> {
         self.read()
             .nodes
             .get(node_id)
@@ -63,7 +64,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get all locked node specs
-    fn get_locked_nodes(&self) -> Vec<Arc<Mutex<NodeSpec>>> {
+    fn get_locked_nodes(&self) -> Vec<ResourceMutex<NodeSpec>> {
         self.read().nodes.to_vec()
     }
 

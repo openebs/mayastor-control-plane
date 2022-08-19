@@ -42,7 +42,11 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         Ok(Pool::new(spec, pool_state))
     }
 
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError> {
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
         // what if the node is never coming back?
         // do we need a way to forcefully "delete" things?
         let node = registry.get_node_wrapper(&request.node).await?;
@@ -67,7 +71,11 @@ impl ResourceLifecycle for Option<OperationGuardArc<PoolSpec>> {
         unimplemented!()
     }
 
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError> {
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
         if let Some(pool) = self {
             pool.destroy(registry, request).await
         } else {

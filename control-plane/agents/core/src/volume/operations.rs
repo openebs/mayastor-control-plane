@@ -84,7 +84,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         let result = if replicas.len() < request.replicas as usize {
             for replica_state in replicas {
                 let result = match specs.replica(&replica_state.uuid).await {
-                    Ok(replica) => {
+                    Ok(mut replica) => {
                         let request = DestroyReplica::from(replica_state.clone());
                         replica.destroy(registry, &request.with_disown_all()).await
                     }
@@ -113,7 +113,11 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
     /// Volume destruction will succeed even if the nexus or replicas cannot be destroyed (i.e. due
     /// to an inaccessible node). In this case the resources will be destroyed by the garbage
     /// collector at a later time.
-    async fn destroy(&self, registry: &Registry, request: &Self::Destroy) -> Result<(), SvcError> {
+    async fn destroy(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
         let specs = registry.specs();
         self.start_destroy(registry).await?;
 
@@ -121,7 +125,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         for nexus_arc in nexuses {
             let nexus = nexus_arc.lock().deref().clone();
             match nexus_arc.operation_guard_wait().await {
-                Ok(guard) => {
+                Ok(mut guard) => {
                     let destroy = DestroyNexus::from(&nexus).with_disown(&request.uuid);
                     if let Err(error) = guard.destroy(registry, &destroy).await {
                         nexus.warn_span(|| {
@@ -154,7 +158,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             let spec = replica.lock().deref().clone();
             if let Some(node) = ResourceSpecsLocked::get_replica_node(registry, &spec).await {
                 let result = match specs.replica(&spec.uuid).await {
-                    Ok(replica) => {
+                    Ok(mut replica) => {
                         replica
                             .destroy(
                                 registry,
@@ -195,7 +199,11 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
     type ShareOutput = String;
     type UnshareOutput = ();
 
-    async fn share(&self, registry: &Registry, request: &Self::Share) -> Result<String, SvcError> {
+    async fn share(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Share,
+    ) -> Result<String, SvcError> {
         let specs = registry.specs();
         let state = registry.get_volume_state(&request.uuid).await?;
 
@@ -205,7 +213,7 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
 
         let target = state.target.expect("already validated");
         let result = match specs.nexus(&target.uuid).await {
-            Ok(nexus) => {
+            Ok(mut nexus) => {
                 nexus
                     .share(
                         registry,
@@ -220,7 +228,7 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
     }
 
     async fn unshare(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {
@@ -233,7 +241,7 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
 
         let target = state.target.expect("Already validated");
         let result = match specs.nexus(&target.uuid).await {
-            Ok(nexus) => nexus.unshare(registry, &UnshareNexus::from(&target)).await,
+            Ok(mut nexus) => nexus.unshare(registry, &UnshareNexus::from(&target)).await,
             Err(error) => Err(error),
         };
 
@@ -248,7 +256,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     type Unpublish = UnpublishVolume;
 
     async fn publish(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Publish,
     ) -> Result<Self::PublishOutput, SvcError> {
@@ -266,7 +274,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             .volume_create_nexus(registry, &nexus_node, &nexus_id, &spec_clone)
             .await;
 
-        let (nexus, nexus_state) = self
+        let (mut nexus, nexus_state) = self
             .validate_update_step(registry, result, &spec_clone)
             .await?;
 
@@ -314,7 +322,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     }
 
     async fn unpublish(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Unpublish,
     ) -> Result<(), SvcError> {
@@ -329,7 +337,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let volume_target = spec_clone.target.as_ref().expect("already validated");
         let result = match specs.nexus_opt(volume_target.nexus()).await? {
             None => Ok(()),
-            Some(nexus) => {
+            Some(mut nexus) => {
                 let nexus_clone = nexus.lock().clone();
                 let destroy = DestroyNexus::from(&nexus_clone).with_disown(&request.uuid);
                 // Destroy the Nexus
@@ -366,7 +374,7 @@ impl ResourceReplicas for OperationGuardArc<VolumeSpec> {
     type Request = SetVolumeReplica;
 
     async fn set_replica(
-        &self,
+        &mut self,
         registry: &Registry,
         request: &Self::Request,
     ) -> Result<(), SvcError> {

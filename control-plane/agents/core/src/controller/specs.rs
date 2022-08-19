@@ -21,8 +21,8 @@ use common_lib::{
 };
 
 use async_trait::async_trait;
-use common_lib::types::v0::store::ResourceUuid;
-use parking_lot::{Mutex, RwLock};
+use common_lib::types::v0::store::{ResourceMutex, ResourceUuid, UpdateInnerValue};
+use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
@@ -48,7 +48,7 @@ enum SpecError {
 /// including validation rules and error handling.
 #[async_trait]
 pub(crate) trait GuardedOperationsHelper:
-    Debug + Sync + Send + Sized + Deref<Target = Arc<Mutex<Self::Inner>>>
+    Debug + Sync + Send + Sized + Deref<Target = ResourceMutex<Self::Inner>> + UpdateInnerValue
 {
     type Create: Debug + PartialEq + Sync + Send;
     type Owners: Default + Sync + Send;
@@ -337,7 +337,7 @@ pub(crate) trait GuardedOperationsHelper:
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn complete_update<R: Send, O>(
-        &self,
+        &mut self,
         registry: &Registry,
         result: Result<R, SvcError>,
         mut spec_clone: Self::Inner,
@@ -350,14 +350,13 @@ pub(crate) trait GuardedOperationsHelper:
             Ok(val) => {
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = self.lock();
                 match stored {
                     Ok(_) => {
-                        spec.commit_op();
+                        self.complete_op();
                         Ok(val)
                     }
                     Err(error) => {
-                        spec.set_op_result(true);
+                        self.lock().set_op_result(true);
                         Err(error)
                     }
                 }
@@ -417,7 +416,7 @@ pub(crate) trait GuardedOperationsHelper:
     /// Operations that have started but were not able to complete because access to the
     /// persistent store was lost.
     /// Returns whether the incomplete operation has now been handled.
-    async fn handle_incomplete_ops<O>(&self, registry: &Registry) -> bool
+    async fn handle_incomplete_ops<O>(&mut self, registry: &Registry) -> bool
     where
         Self::Inner: SpecTransaction<O>,
         Self::Inner: StorableObject,
@@ -437,7 +436,7 @@ pub(crate) trait GuardedOperationsHelper:
     }
     /// Updates that have started but were not able to complete because access to the
     /// persistent store was lost.
-    async fn handle_incomplete_updates<O>(&self, registry: &Registry) -> bool
+    async fn handle_incomplete_updates<O>(&mut self, registry: &Registry) -> bool
     where
         Self::Inner: SpecTransaction<O>,
         Self::Inner: StorableObject,
@@ -448,7 +447,7 @@ pub(crate) trait GuardedOperationsHelper:
                 spec_clone.commit_op();
                 let result = registry.store_obj(&spec_clone).await;
                 if result.is_ok() {
-                    self.lock().commit_op();
+                    self.complete_op();
                 }
                 result.is_ok()
             }
@@ -501,6 +500,14 @@ pub(crate) trait GuardedOperationsHelper:
 
     /// Remove the object from the global Spec List
     fn remove_spec(&self, registry: &Registry);
+
+    fn complete_op<O>(&mut self)
+    where
+        Self::Inner: SpecTransaction<O>,
+    {
+        self.lock().commit_op();
+        self.update();
+    }
 }
 
 #[async_trait::async_trait]
@@ -667,9 +674,12 @@ pub(crate) trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperations
 }
 
 #[async_trait::async_trait]
-impl<T: AsOperationSequencer + SpecOperationsHelper> OperationSequenceGuard<T> for Arc<Mutex<T>> {
+impl<T: AsOperationSequencer + SpecOperationsHelper> OperationSequenceGuard<T>
+    for ResourceMutex<T>
+{
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
-        match OperationGuardArc::try_sequence(self, mode) {
+        let get_value = |s: &Self| s.lock().clone();
+        match OperationGuardArc::try_sequence(self, get_value, mode) {
             Ok(guard) => Ok(guard),
             Err(error) => {
                 tracing::debug!("Resource '{}' is busy: {}", self.lock().uuid_str(), error);

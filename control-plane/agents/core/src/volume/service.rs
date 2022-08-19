@@ -190,7 +190,7 @@ impl Service {
     /// Destroy a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
-        let volume = self.specs().volume(&request.uuid).await?;
+        let mut volume = self.specs().volume(&request.uuid).await?;
         volume.destroy(&self.registry, request).await?;
         Ok(())
     }
@@ -198,21 +198,21 @@ impl Service {
     /// Share a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
-        let volume = self.specs().volume(&request.uuid).await?;
+        let mut volume = self.specs().volume(&request.uuid).await?;
         volume.share(&self.registry, request).await
     }
 
     /// Unshare a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
-        let volume = self.specs().volume(&request.uuid).await?;
+        let mut volume = self.specs().volume(&request.uuid).await?;
         volume.unshare(&self.registry, request).await
     }
 
     /// Publish a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
-        let volume = self.specs().volume(&request.uuid).await?;
+        let mut volume = self.specs().volume(&request.uuid).await?;
         volume.publish(&self.registry, request).await
     }
 
@@ -222,7 +222,7 @@ impl Service {
         &self,
         request: &UnpublishVolume,
     ) -> Result<Volume, SvcError> {
-        let volume = self.specs().volume(&request.uuid).await?;
+        let mut volume = self.specs().volume(&request.uuid).await?;
         volume.unpublish(&self.registry, request).await?;
         self.registry.get_volume(&request.uuid).await
     }
@@ -233,7 +233,7 @@ impl Service {
         &self,
         request: &SetVolumeReplica,
     ) -> Result<Volume, SvcError> {
-        let volume = self.specs().volume(&request.uuid).await?;
+        let mut volume = self.specs().volume(&request.uuid).await?;
         volume.set_replica(&self.registry, request).await?;
         self.registry.get_volume(&request.uuid).await
     }

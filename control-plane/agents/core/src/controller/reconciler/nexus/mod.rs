@@ -67,11 +67,11 @@ impl TaskPoller for NexusReconciler {
             if nexus.lock().owned() {
                 continue;
             }
-            let nexus = match nexus.operation_guard() {
+            let mut nexus = match nexus.operation_guard() {
                 Ok(guard) => guard,
                 Err(_) => continue,
             };
-            results.push(nexus_reconciler(&nexus, context).await);
+            results.push(nexus_reconciler(&mut nexus, context).await);
         }
         for target in &mut self.poll_targets {
             results.push(target.try_poll(context).await);
@@ -86,20 +86,20 @@ impl TaskPoller for NexusReconciler {
 
 #[async_trait::async_trait]
 impl Reconciler for OperationGuardArc<NexusSpec> {
-    async fn reconcile(&self, context: &PollContext) -> PollResult {
+    async fn reconcile(&mut self, context: &PollContext) -> PollResult {
         nexus_reconciler(self, context).await
     }
 }
 
 #[async_trait::async_trait]
 impl ReCreate for OperationGuardArc<NexusSpec> {
-    async fn recreate_state(&self, context: &PollContext) -> PollResult {
+    async fn recreate_state(&mut self, context: &PollContext) -> PollResult {
         missing_nexus_recreate(self, context).await
     }
 }
 
 async fn nexus_reconciler(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
     let created = {
@@ -124,43 +124,51 @@ async fn nexus_reconciler(
 /// If the child is a replica it also disowns and destroys it
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 pub(super) async fn faulted_children_remover(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_uuid = nexus.lock().uuid.clone();
-    let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
+    let nexus_uuid = nexus.uuid();
+    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
     let child_count = nexus_state.children.len();
 
     // Remove faulted children only from a degraded nexus with other healthy children left
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
+        let span = tracing::info_span!("faulted_children_remover", nexus.uuid = %nexus_uuid, request.reconcile = true);
         async {
             let nexus_spec_clone = nexus.lock().clone();
             for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
-                nexus_spec_clone
-                    .warn_span(|| tracing::warn!("Attempting to remove faulted child '{}'", child.uri));
+                nexus_spec_clone.warn_span(|| {
+                    tracing::warn!("Attempting to remove faulted child '{}'", child.uri)
+                });
                 if let Err(error) = context
                     .specs()
-                    .remove_nexus_child_by_uri(context.registry(), nexus, &nexus_state, &child.uri, true)
+                    .remove_nexus_child_by_uri(
+                        context.registry(),
+                        nexus,
+                        &nexus_state,
+                        &child.uri,
+                        true,
+                    )
                     .await
                 {
                     nexus_spec_clone.error_span(|| {
                         tracing::error!(
-                        error = %error.full_string().as_str(),
-                        child.uri = %child.uri.as_str(),
-                        "Failed to remove faulted child"
-                    )
+                            error = %error.full_string().as_str(),
+                            child.uri = %child.uri.as_str(),
+                            "Failed to remove faulted child"
+                        )
                     });
                 } else {
                     nexus_spec_clone.info_span(|| {
                         tracing::info!(
-                        child.uri = %child.uri.as_str(),
-                        "Successfully removed faulted child",
-                    )
+                            child.uri = %child.uri.as_str(),
+                            "Successfully removed faulted child",
+                        )
                     });
                 }
             }
         }
-        .instrument(tracing::info_span!("faulted_children_remover", nexus.uuid = %nexus_uuid, request.reconcile = true))
+        .instrument(span)
         .await
     }
 
@@ -171,13 +179,12 @@ pub(super) async fn faulted_children_remover(
 /// If the child is a replica it also disowns and destroys it
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 pub(super) async fn unknown_children_remover(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_spec_clone = nexus.lock().clone();
-    let nexus_state = context.registry().get_nexus(&nexus_spec_clone.uuid).await?;
+    let nexus_state = context.registry().get_nexus(nexus.uuid()).await?;
     let state_children = nexus_state.children.iter();
-    let spec_children = nexus_spec_clone.children.clone();
+    let spec_children = nexus.lock().children.clone();
 
     let unknown_children = state_children
         .filter(|c| !spec_children.iter().any(|spec| spec.uri() == c.uri))
@@ -185,11 +192,12 @@ pub(super) async fn unknown_children_remover(
         .collect::<Vec<_>>();
 
     if !unknown_children.is_empty() {
-        let nexus_uuid = nexus_spec_clone.uuid.clone();
+        let span = tracing::info_span!("unknown_children_remover", nexus.uuid = %nexus.uuid(), request.reconcile = true);
         async move {
             for child in unknown_children {
-                nexus_spec_clone
-                    .warn_span(|| tracing::warn!("Attempting to remove unknown child '{}'", child.uri));
+                nexus.warn_span(|| {
+                    tracing::warn!("Attempting to remove unknown child '{}'", child.uri)
+                });
                 if let Err(error) = context
                     .specs()
                     .remove_nexus_child_by_uri(
@@ -201,20 +209,20 @@ pub(super) async fn unknown_children_remover(
                     )
                     .await
                 {
-                    nexus_spec_clone.error(&format!(
+                    nexus.error(&format!(
                         "Failed to remove unknown child '{}', error: '{}'",
                         child.uri,
                         error.full_string(),
                     ));
                 } else {
-                    nexus_spec_clone.info(&format!(
+                    nexus.info(&format!(
                         "Successfully removed unknown child '{}'",
                         child.uri,
                     ));
                 }
             }
         }
-        .instrument(tracing::info_span!("unknown_children_remover", nexus.uuid = %nexus_uuid, request.reconcile = true))
+        .instrument(span)
         .await
     }
 
@@ -226,19 +234,18 @@ pub(super) async fn unknown_children_remover(
 /// to just disown and destroy them.
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 pub(super) async fn missing_children_remover(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_spec_clone = nexus.lock().clone();
-    let nexus_uuid = nexus_spec_clone.uuid.clone();
-    let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
+    let nexus_uuid = nexus.uuid();
+    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
     let spec_children = nexus.lock().children.clone().into_iter();
 
     let mut result = PollResult::Ok(PollerState::Idle);
     for child in
         spec_children.filter(|spec| !nexus_state.children.iter().any(|c| c.uri == spec.uri()))
     {
-        nexus_spec_clone.warn_span(|| tracing::warn!(
+        nexus.warn_span(|| tracing::warn!(
             "Attempting to remove missing child '{}'. It may have been removed for a reason so it will be replaced with another",
             child.uri(),
         ));
@@ -248,7 +255,7 @@ pub(super) async fn missing_children_remover(
             .remove_nexus_child_by_uri(context.registry(), nexus, &nexus_state, &child.uri(), true)
             .await
         {
-            nexus_spec_clone.error_span(|| {
+            nexus.error_span(|| {
                 tracing::error!(
                     "Failed to remove child '{}' from the nexus spec, error: '{}'",
                     child.uri(),
@@ -257,7 +264,7 @@ pub(super) async fn missing_children_remover(
             });
             result = PollResult::Err(error);
         } else {
-            nexus_spec_clone.info_span(|| {
+            nexus.info_span(|| {
                 tracing::info!(
                     "Successfully removed missing child '{}' from the nexus spec",
                     child.uri(),
@@ -272,12 +279,12 @@ pub(super) async fn missing_children_remover(
 /// Recreate the given nexus on its associated node
 /// Only healthy and online replicas are reused in the nexus recreate request
 pub(super) async fn missing_nexus_recreate(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_uuid = nexus.lock().uuid.clone();
+    let nexus_uuid = nexus.uuid();
 
-    if context.registry().get_nexus(&nexus_uuid).await.is_ok() {
+    if context.registry().get_nexus(nexus_uuid).await.is_ok() {
         return PollResult::Ok(PollerState::Idle);
     }
 
@@ -374,12 +381,12 @@ pub(super) async fn missing_nexus_recreate(
 /// unshare the nexus, and then share it via the correct protocol
 #[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 pub(super) async fn fixup_nexus_protocol(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_uuid = nexus.lock().uuid.clone();
+    let nexus_uuid = nexus.uuid();
 
-    if let Ok(nexus_state) = context.registry().get_nexus(&nexus_uuid).await {
+    if let Ok(nexus_state) = context.registry().get_nexus(nexus_uuid).await {
         let nexus_spec = nexus.lock().clone();
         if nexus_spec.share != nexus_state.share {
             nexus_spec.warn_span(|| {
@@ -428,12 +435,12 @@ pub(super) async fn fixup_nexus_protocol(
 /// And one or more of its healthy replicas are back online
 /// Then the nexus shall be removed from its associated node
 pub(super) async fn faulted_nexus_remover(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_uuid = nexus.lock().uuid.clone();
+    let nexus_uuid = nexus.uuid();
 
-    if let Ok(nexus_state) = context.registry().get_nexus(&nexus_uuid).await {
+    if let Ok(nexus_state) = context.registry().get_nexus(nexus_uuid).await {
         if nexus_state.status == NexusStatus::Faulted {
             let nexus = nexus.lock().clone();
             let healthy_children = get_healthy_nexus_children(&nexus, context.registry()).await?;
@@ -477,17 +484,16 @@ pub(super) async fn faulted_nexus_remover(
 /// fixme: This is just a place-holder for the actual logic.
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
 pub(super) async fn enospc_children_finder(
-    nexus: &OperationGuardArc<NexusSpec>,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_uuid = nexus.lock().uuid.clone();
-    let nexus_state = context.registry().get_nexus(&nexus_uuid).await?;
+    let nexus_uuid = nexus.uuid();
+    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
     let child_count = nexus_state.children.len();
 
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
-        let nexus_spec_clone = nexus.lock().clone();
         for child in nexus_state.children.iter().filter(|c| c.enospc()) {
-            nexus_spec_clone.info_span(|| {
+            nexus.info_span(|| {
                 tracing::info!(child.uri = child.uri.as_str(), "Found child with enospc")
             });
         }

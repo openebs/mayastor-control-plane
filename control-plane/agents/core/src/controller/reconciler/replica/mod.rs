@@ -36,7 +36,7 @@ impl TaskPoller for ReplicaReconciler {
         let mut results = Vec::with_capacity(replicas.len());
 
         for replica in replicas {
-            let replica = match replica.operation_guard() {
+            let mut replica = match replica.operation_guard() {
                 Ok(guard) => guard,
                 Err(_) => continue,
             };
@@ -60,7 +60,7 @@ impl TaskPoller for ReplicaReconciler {
 
 #[async_trait::async_trait]
 impl ReCreate for OperationGuardArc<ReplicaSpec> {
-    async fn recreate_state(&self, _context: &PollContext) -> PollResult {
+    async fn recreate_state(&mut self, _context: &PollContext) -> PollResult {
         // We get this automatically when recreating pools
         PollResult::Ok(PollerState::Idle)
     }
@@ -68,7 +68,7 @@ impl ReCreate for OperationGuardArc<ReplicaSpec> {
 
 #[async_trait::async_trait]
 impl GarbageCollect for OperationGuardArc<ReplicaSpec> {
-    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+    async fn garbage_collect(&mut self, context: &PollContext) -> PollResult {
         ReplicaReconciler::squash_results(vec![
             self.disown_orphaned(context).await,
             self.destroy_deleting(context).await,
@@ -76,19 +76,19 @@ impl GarbageCollect for OperationGuardArc<ReplicaSpec> {
         ])
     }
 
-    async fn destroy_deleting(&self, context: &PollContext) -> PollResult {
+    async fn destroy_deleting(&mut self, context: &PollContext) -> PollResult {
         destroy_deleting_replica(self, context).await
     }
 
-    async fn destroy_orphaned(&self, context: &PollContext) -> PollResult {
+    async fn destroy_orphaned(&mut self, context: &PollContext) -> PollResult {
         destroy_orphaned_replica(self, context).await
     }
 
-    async fn disown_unused(&self, _context: &PollContext) -> PollResult {
+    async fn disown_unused(&mut self, _context: &PollContext) -> PollResult {
         unimplemented!()
     }
 
-    async fn disown_orphaned(&self, context: &PollContext) -> PollResult {
+    async fn disown_orphaned(&mut self, context: &PollContext) -> PollResult {
         remove_missing_owners(self, context).await
     }
 }
@@ -97,7 +97,7 @@ impl GarbageCollect for OperationGuardArc<ReplicaSpec> {
 /// In the event that the replicas become orphaned (have no owners) they will be destroyed by the
 /// 'destroy_orphaned_replicas' reconcile loop.
 async fn remove_missing_owners(
-    replica: &OperationGuardArc<ReplicaSpec>,
+    replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
     let specs = context.specs();
@@ -147,7 +147,7 @@ async fn remove_missing_owners(
 /// Destroy orphaned replicas.
 /// Orphaned replicas are those that are managed but which don't have any owners.
 async fn destroy_orphaned_replica(
-    replica: &OperationGuardArc<ReplicaSpec>,
+    replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
     let destroy_owned = {
@@ -166,7 +166,7 @@ async fn destroy_orphaned_replica(
 /// When its destruction fails
 /// Then it should eventually be destroyed
 async fn destroy_deleting_replica(
-    replica: &OperationGuardArc<ReplicaSpec>,
+    replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
     let deleting = replica.lock().status().deleting();
@@ -179,7 +179,7 @@ async fn destroy_deleting_replica(
 
 #[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.lock().uuid, request.reconcile = true))]
 async fn destroy_replica(
-    replica: &OperationGuardArc<ReplicaSpec>,
+    replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
     let pool_id = replica.lock().pool.clone();

@@ -1,18 +1,17 @@
 //! Definition of volume types that can be saved to the persistent store.
 
-use crate::types::v0::{
-    store::{
-        definitions::{ObjectKey, StorableObject, StorableObjectType},
-        SpecStatus, SpecTransaction,
-    },
-    transport::{self, CreateVolume, NexusId, NodeId, VolumeId, VolumeShareProtocol},
-};
-
 use crate::{
     types::v0::{
         openapi::models,
-        store::{AsOperationSequencer, OperationSequence, ResourceUuid},
-        transport::{ReplicaId, Topology, VolumeLabels, VolumePolicy, VolumeStatus},
+        store::{
+            definitions::{ObjectKey, StorableObject, StorableObjectType},
+            AsOperationSequencer, OperationGuardArc, OperationSequence, ResourceMutex,
+            ResourceUuid, SpecStatus, SpecTransaction,
+        },
+        transport::{
+            self, CreateVolume, NexusId, NodeId, ReplicaId, Topology, VolumeId, VolumeLabels,
+            VolumePolicy, VolumeShareProtocol, VolumeStatus,
+        },
     },
     IntoOption,
 };
@@ -105,6 +104,13 @@ pub struct VolumeSpec {
     /// Flag indicating whether the volume should be thin provisioned
     #[serde(default)]
     pub thin: bool,
+}
+
+impl ResourceMutex<VolumeSpec> {
+    /// Get the resource uuid.
+    pub fn uuid(&mut self) -> &VolumeId {
+        &self.immutable_peek().uuid
+    }
 }
 
 macro_rules! volume_log {

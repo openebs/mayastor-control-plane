@@ -13,7 +13,11 @@ pub mod watch;
 use crate::types::v0::openapi::models;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::{ops::Deref, sync::Arc};
+use std::{
+    fmt::Debug,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 use strum_macros::ToString;
 
 /// Enum defining the various states that a resource spec can be in.
@@ -132,7 +136,7 @@ pub trait OperationSequencer: std::fmt::Debug + Clone {
     fn complete(&self, revert: OperationSequenceState);
 }
 
-impl<T: AsOperationSequencer + std::fmt::Debug> OperationSequencer for Arc<Mutex<T>> {
+impl<T: AsOperationSequencer + std::fmt::Debug + Clone> OperationSequencer for ResourceMutex<T> {
     fn valid(&self, next: OperationSequenceState) -> bool {
         self.lock().as_mut().valid(next)
     }
@@ -147,24 +151,68 @@ impl<T: AsOperationSequencer + std::fmt::Debug> OperationSequencer for Arc<Mutex
     }
 }
 
-/// Operation Guard for a Arc<Mutex<T>> type.
-pub type OperationGuardArc<T> = OperationGuard<Arc<Mutex<T>>>;
+/// Operation Guard for a ResourceMutex<T> type.
+pub type OperationGuardArc<T> = OperationGuard<ResourceMutex<T>, T>;
+/// Ref-counted resource wrapped with a mutex.
+#[derive(Debug, Clone)]
+pub struct ResourceMutex<T> {
+    inner: Arc<ResourceMutexInner<T>>,
+}
+/// Inner Resource which holds the mutex and an immutable value for peeking
+/// into immutable fields such as identification fields.
+#[derive(Debug)]
+pub struct ResourceMutexInner<T> {
+    resource: Mutex<T>,
+    immutable_peek: T,
+}
+impl<T: Clone> From<T> for ResourceMutex<T> {
+    fn from(resource: T) -> Self {
+        let immutable_peek = resource.clone();
+        let resource = Mutex::new(resource);
+        Self {
+            inner: Arc::new(ResourceMutexInner {
+                resource,
+                immutable_peek,
+            }),
+        }
+    }
+}
+impl<T> Deref for ResourceMutex<T> {
+    type Target = Mutex<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner.resource
+    }
+}
+impl<T: Clone> ResourceMutex<T> {
+    /// Peek the initial resource value without locking.
+    /// # Note:
+    /// This is only useful for immutable fields, such as the resource identifier.
+    pub fn immutable_peek(&self) -> &T {
+        &self.inner.immutable_peek
+    }
+}
 
-impl<T: OperationSequencer> Deref for OperationGuard<T> {
+impl<T: OperationSequencer, R> Deref for OperationGuard<T, R> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
+impl<T: OperationSequencer, R> DerefMut for OperationGuard<T, R> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
 
 /// It unlocks the sequence lock on drop.
 #[derive(Debug)]
-pub struct OperationGuard<T: OperationSequencer> {
+pub struct OperationGuard<T: OperationSequencer, R> {
     inner: T,
+    inner_value: R,
     mode: OperationMode,
     locked: Option<OperationSequenceState>,
 }
-impl<T: OperationSequencer + Sized> OperationGuard<T> {
+impl<T: OperationSequencer + Sized, R> OperationGuard<T, R> {
     /// Get a copy of the `OperationMode` constrained by this Guard.
     pub fn mode(&self) -> OperationMode {
         self.mode
@@ -174,12 +222,24 @@ impl<T: OperationSequencer + Sized> OperationGuard<T> {
             self.inner.complete(revert);
         }
     }
+    /// Peek at the resource without locking.
+    /// Note, this value may be outdated *During* an operation, and so must not be used to
+    /// inspect fields which are being mutated.
+    /// To inspect fields being mutated, please use the locked resource itself.
+    pub fn peek(&self) -> &R {
+        &self.inner_value
+    }
     /// Create operation Guard for the resource with the operation mode
-    pub fn try_sequence(resource: &T, mode: OperationMode) -> Result<Self, String> {
+    pub fn try_sequence(
+        resource: &T,
+        value: fn(&T) -> R,
+        mode: OperationMode,
+    ) -> Result<Self, String> {
         // use result variable to make sure the mutex's temporary guard is dropped
         match resource.sequence(mode) {
             Some(revert) => Ok(Self {
                 inner: resource.clone(),
+                inner_value: value(resource),
                 mode,
                 locked: Some(revert),
             }),
@@ -192,7 +252,18 @@ impl<T: OperationSequencer + Sized> OperationGuard<T> {
     }
 }
 
-impl<T: OperationSequencer + Sized> Drop for OperationGuard<T> {
+pub trait UpdateInnerValue {
+    fn update(&mut self);
+}
+impl<R: Clone + Debug + AsOperationSequencer> UpdateInnerValue
+    for OperationGuard<ResourceMutex<R>, R>
+{
+    fn update(&mut self) {
+        self.inner_value = self.inner.lock().clone();
+    }
+}
+
+impl<T: OperationSequencer + Sized, R> Drop for OperationGuard<T, R> {
     fn drop(&mut self) {
         self.unlock();
     }
@@ -323,6 +394,28 @@ macro_rules! impl_trace_str_log {
                 $log_macro!(self, tracing::Level::TRACE, message);
             }
         }
+        impl crate::types::v0::store::TraceStrLog for OperationGuardArc<$type> {
+            fn error(&self, message: &str) {
+                let peek = self.peek();
+                $log_macro!(peek, tracing::Level::ERROR, message);
+            }
+            fn warn(&self, message: &str) {
+                let peek = self.peek();
+                $log_macro!(peek, tracing::Level::WARN, message);
+            }
+            fn info(&self, message: &str) {
+                let peek = self.peek();
+                $log_macro!(peek, tracing::Level::INFO, message);
+            }
+            fn debug(&self, message: &str) {
+                let peek = self.peek();
+                $log_macro!(peek, tracing::Level::DEBUG, message);
+            }
+            fn trace(&self, message: &str) {
+                let peek = self.peek();
+                $log_macro!(peek, tracing::Level::TRACE, message);
+            }
+        }
     };
 }
 
@@ -347,6 +440,28 @@ macro_rules! impl_trace_span {
             }
             fn trace_span<F: FnOnce()>(&self, f: F) {
                 $span_macro!(self, tracing::Level::TRACE, f);
+            }
+        }
+        impl crate::types::v0::store::TraceSpan for OperationGuardArc<$type> {
+            fn error_span<F: FnOnce()>(&self, f: F) {
+                let peek = self.peek();
+                $span_macro!(peek, tracing::Level::ERROR, f);
+            }
+            fn warn_span<F: FnOnce()>(&self, f: F) {
+                let peek = self.peek();
+                $span_macro!(peek, tracing::Level::WARN, f);
+            }
+            fn info_span<F: FnOnce()>(&self, f: F) {
+                let peek = self.peek();
+                $span_macro!(peek, tracing::Level::INFO, f);
+            }
+            fn debug_span<F: FnOnce()>(&self, f: F) {
+                let peek = self.peek();
+                $span_macro!(peek, tracing::Level::DEBUG, f);
+            }
+            fn trace_span<F: FnOnce()>(&self, f: F) {
+                let peek = self.peek();
+                $span_macro!(peek, tracing::Level::TRACE, f);
             }
         }
     };

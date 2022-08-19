@@ -36,7 +36,7 @@ impl TaskPoller for PoolReconciler {
         let pools = context.specs().get_locked_pools();
         let mut results = Vec::with_capacity(pools.len());
         for pool in pools {
-            let pool = match pool.operation_guard() {
+            let mut pool = match pool.operation_guard() {
                 Ok(guard) => guard,
                 Err(_) => continue,
             };
@@ -56,30 +56,30 @@ impl TaskPoller for PoolReconciler {
 
 #[async_trait::async_trait]
 impl GarbageCollect for OperationGuardArc<PoolSpec> {
-    async fn garbage_collect(&self, context: &PollContext) -> PollResult {
+    async fn garbage_collect(&mut self, context: &PollContext) -> PollResult {
         self.destroy_deleting(context).await
     }
 
-    async fn destroy_deleting(&self, context: &PollContext) -> PollResult {
+    async fn destroy_deleting(&mut self, context: &PollContext) -> PollResult {
         deleting_pool_spec_reconciler(self, context).await
     }
 
-    async fn destroy_orphaned(&self, _context: &PollContext) -> PollResult {
+    async fn destroy_orphaned(&mut self, _context: &PollContext) -> PollResult {
         unimplemented!()
     }
 
-    async fn disown_unused(&self, _context: &PollContext) -> PollResult {
+    async fn disown_unused(&mut self, _context: &PollContext) -> PollResult {
         unimplemented!()
     }
 
-    async fn disown_orphaned(&self, _context: &PollContext) -> PollResult {
+    async fn disown_orphaned(&mut self, _context: &PollContext) -> PollResult {
         unimplemented!()
     }
 }
 
 #[async_trait::async_trait]
 impl ReCreate for OperationGuardArc<PoolSpec> {
-    async fn recreate_state(&self, context: &PollContext) -> PollResult {
+    async fn recreate_state(&mut self, context: &PollContext) -> PollResult {
         missing_pool_state_reconciler(self, context).await
     }
 }
@@ -92,7 +92,7 @@ impl ReCreate for OperationGuardArc<PoolSpec> {
 /// should exist.
 #[tracing::instrument(skip(pool, context), level = "trace", fields(pool.uuid = %pool.lock().id, request.reconcile = true))]
 async fn missing_pool_state_reconciler(
-    pool: &OperationGuardArc<PoolSpec>,
+    pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,
 ) -> PollResult {
     if !pool.lock().status().created() {
@@ -157,7 +157,7 @@ async fn missing_pool_state_reconciler(
 /// cleans up any such pool when node comes up.
 #[tracing::instrument(skip(pool, context), level = "trace", fields(pool.uuid = %pool.lock().id, request.reconcile = true))]
 async fn deleting_pool_spec_reconciler(
-    pool: &OperationGuardArc<PoolSpec>,
+    pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,
 ) -> PollResult {
     if !pool.lock().status().deleting() {
