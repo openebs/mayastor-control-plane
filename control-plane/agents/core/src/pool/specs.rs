@@ -182,7 +182,8 @@ impl ResourceSpecs {
     fn get_pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
         let mut replicas = vec![];
         for replica in self.replicas.to_vec() {
-            if id == &replica.lock().pool {
+            let pool_id = replica.lock().pool.pool_name().clone();
+            if id == &pool_id {
                 replicas.push(replica.clone())
             }
         }

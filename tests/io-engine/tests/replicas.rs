@@ -17,7 +17,8 @@ async fn create_replica() {
     let replica = v0::CreateReplica {
         node: cluster.node(0),
         uuid: v0::ReplicaId::new(),
-        pool: cluster.pool(0, 0),
+        pool_id: cluster.pool(0, 0),
+        pool_uuid: None,
         size: 5 * 1024 * 1024,
         thin: true,
         share: v0::Protocol::None,
@@ -26,7 +27,7 @@ async fn create_replica() {
     let created_replica = rep_client.create(&replica, None).await.unwrap();
     assert_eq!(created_replica.node, replica.node);
     assert_eq!(created_replica.uuid, replica.uuid);
-    assert_eq!(created_replica.pool, replica.pool);
+    assert_eq!(created_replica.pool_id, replica.pool_id);
 
     // todo: why is this not the same?
     // because replica size is multiple of pool chunks, maybe we should expose the chunk size..
@@ -60,7 +61,8 @@ async fn create_replica_protocols() {
                 &v0::CreateReplica {
                     node: cluster.node(0),
                     uuid: v0::ReplicaId::new(),
-                    pool: cluster.pool(0, 0),
+                    pool_id: cluster.pool(0, 0),
+                    pool_uuid: None,
                     size: 5 * 1024 * 1024,
                     thin: true,
                     share: *protocol,
@@ -101,7 +103,8 @@ async fn create_replica_sizes() {
                     &v0::CreateReplica {
                         node: cluster.node(0),
                         uuid: v0::ReplicaId::new(),
-                        pool: cluster.pool(0, 0),
+                        pool_id: cluster.pool(0, 0),
+                        pool_uuid: None,
                         size,
                         thin: false,
                         ..Default::default()
@@ -140,7 +143,8 @@ async fn create_replica_idempotent_different_sizes() {
             &v0::CreateReplica {
                 node: cluster.node(0),
                 uuid: uuid.clone(),
-                pool: cluster.pool(0, 0),
+                pool_id: cluster.pool(0, 0),
+                pool_uuid: None,
                 size,
                 thin: false,
                 share: v0::Protocol::None,
@@ -157,7 +161,8 @@ async fn create_replica_idempotent_different_sizes() {
             &v0::CreateReplica {
                 node: cluster.node(0),
                 uuid: uuid.clone(),
-                pool: cluster.pool(0, 0),
+                pool_id: cluster.pool(0, 0),
+                pool_uuid: None,
                 size,
                 thin: replica.thin,
                 share: v0::Protocol::None,
@@ -177,7 +182,8 @@ async fn create_replica_idempotent_different_sizes() {
                 &v0::CreateReplica {
                     node: cluster.node(0),
                     uuid: replica.uuid.clone(),
-                    pool: cluster.pool(0, 0),
+                    pool_id: cluster.pool(0, 0),
+                    pool_uuid: None,
                     size,
                     thin: replica.thin,
                     share: v0::Protocol::None,
@@ -209,7 +215,8 @@ async fn create_replica_idempotent_different_protocols() {
             &v0::CreateReplica {
                 node: cluster.node(0),
                 uuid: uuid.clone(),
-                pool: cluster.pool(0, 0),
+                pool_id: cluster.pool(0, 0),
+                pool_uuid: None,
                 size,
                 thin: false,
                 share: v0::Protocol::None,
@@ -234,7 +241,8 @@ async fn create_replica_idempotent_different_protocols() {
                 &v0::CreateReplica {
                     node: cluster.node(0),
                     uuid: replica.uuid.clone(),
-                    pool: replica.pool.clone(),
+                    pool_id: replica.pool_id.clone(),
+                    pool_uuid: replica.pool_uuid.clone(),
                     size: replica.size,
                     thin: replica.thin,
                     share: *protocol,

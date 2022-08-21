@@ -40,7 +40,8 @@ async fn nexus() {
             &CreateReplica {
                 node: cluster.node(1),
                 uuid: ReplicaId::new(),
-                pool: cluster.pool(1, 0),
+                pool_id: cluster.pool(1, 0),
+                pool_uuid: None,
                 size: 12582912, /* actual size will be a multiple of 4MB so just
                                  * create it like so */
                 thin: true,

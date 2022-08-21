@@ -326,8 +326,8 @@ impl ResourceSpecsLocked {
                                 .ok_or(SvcError::ReplicaNotFound {
                                     replica_id: replica.uuid().clone(),
                                 })?;
-                        let pool_id = replica_spec.lock().pool.clone();
-                        match Self::get_pool_node(registry, pool_id).await {
+                        let pool_ref = replica_spec.lock().pool.clone();
+                        match Self::get_pool_node(registry, pool_ref.pool_name().clone()).await {
                             Some(node) => {
                                 if let Err(error) = self
                                     .disown_and_destroy_replica(registry, &node, replica.uuid())
