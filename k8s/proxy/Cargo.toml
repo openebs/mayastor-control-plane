@@ -8,13 +8,12 @@ description = "Kubernetes OpenApi Client via k8s-proxy"
 
 [features]
 default = [ "rls" ]
-rls = [ "openapi/tower-client-rls", "rest-plugin/rls" ]
-tls = [ "openapi/tower-client-tls", "rest-plugin/rls" ]
+rls = [ "openapi/tower-client-rls" ]
+tls = [ "openapi/tower-client-tls" ]
 
 [dependencies]
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-trace" ] }
 utils = { path = "../../utils/utils-lib" }
-rest-plugin = { path = "../../control-plane/plugin", default-features = false }
 kube = { version = "0.74.0", features = [ "derive" ] }
 anyhow = "1.0.44"
 kube-forward = { path = "../forward" }

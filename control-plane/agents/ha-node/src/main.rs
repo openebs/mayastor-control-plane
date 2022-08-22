@@ -24,11 +24,11 @@ pub(crate) struct Cli {
     #[structopt(long, short, default_value = DEFAULT_CLUSTER_AGENT_CLIENT_ADDR)]
     cluster_agent: Uri,
 
-    /// Node name(spec.nodeName). This must be the same as provided in csi-node
+    /// Node name(spec.nodeName). This must be the same as provided in csi-node.
     #[structopt(short, long)]
     node_name: String,
 
-    /// IP address and port for the ha node-agent to listen on
+    /// IP address and port for the ha node-agent to listen on.
     #[structopt(short, long, default_value = DEFAULT_NODE_AGENT_SERVER_ADDR)]
     grpc_endpoint: Uri,
 
@@ -48,7 +48,7 @@ pub(crate) struct Cli {
     #[structopt(short, long, env = "AGGREGATION_PERIOD", default_value = NVME_PATH_AGGREGATION_PERIOD)]
     aggregation_period: humantime::Duration,
 
-    /// Trace rest requests to the Jaeger endpoint agent
+    /// Trace rest requests to the Jaeger endpoint agent.
     #[structopt(long, short)]
     jaeger: Option<String>,
 }
@@ -103,7 +103,7 @@ async fn main() {
         );
     }
 
-    // Instantinate path failure detector.
+    // Instantiate path failure detector.
     let detector =
         PathFailureDetector::new(&cli_args).expect("Failed to initialize path failure detector");
 

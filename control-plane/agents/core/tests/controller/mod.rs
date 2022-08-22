@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use common_lib::{
     store::etcd::Etcd,
     types::v0::{

@@ -19,7 +19,3 @@ pub(crate) mod states;
 mod task_poller;
 /// helper wrappers over the resources
 pub(crate) mod wrapper;
-
-/// Core tests
-#[cfg(test)]
-mod tests;

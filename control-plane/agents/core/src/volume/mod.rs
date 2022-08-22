@@ -15,7 +15,3 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
     let volume_service = VolumeServer::new(new_service);
     builder.with_shared_state(volume_service)
 }
-
-/// Volume Agent's Tests
-#[cfg(test)]
-mod tests;

@@ -14,7 +14,6 @@ cleanup_handler() {
 trap cleanup_handler ERR INT QUIT TERM HUP
 
 set -euxo pipefail
-export PATH=$PATH:${HOME}/.cargo/bin
 # test dependencies
 cargo build --bins
 for test in deployer-cluster grpc agents rest io-engine-tests kubectl-plugin shutdown csi-driver; do
