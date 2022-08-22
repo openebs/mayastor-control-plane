@@ -1,9 +1,37 @@
-use crate::ha_cluster_agent::{FailedNvmePath, HaNodeInfo, ReportFailedNvmePathsRequest};
+use crate::ha_cluster_agent::{
+    FailedNvmePath, HaNodeInfo, ReplacePathRequest, ReportFailedNvmePathsRequest,
+};
 use common_lib::{
     transport_api::ReplyError,
     types::v0::transport::{cluster_agent::NodeAgentInfo, FailedPath, ReportFailedPaths},
     IntoVec,
 };
+
+/// NodeAgentOperations trait implemented by client which supports cluster-agent operations
+#[tonic::async_trait]
+pub trait NodeAgentOperations: Send + Sync {
+    /// Replace failed NVMe path for target NQN.
+    async fn replace_path(&self, request: &dyn ReplacePathInfo) -> Result<(), ReplyError>;
+}
+
+/// ReplacePathInfo trait for the failed path replacement to be implemented by entities
+/// which want to use this operation.
+pub trait ReplacePathInfo: Send + Sync + std::fmt::Debug {
+    /// NQN of the target
+    fn target_nqn(&self) -> String;
+    /// URI of the new path
+    fn new_path(&self) -> String;
+}
+
+impl ReplacePathInfo for ReplacePathRequest {
+    fn target_nqn(&self) -> String {
+        self.target_nqn.clone()
+    }
+
+    fn new_path(&self) -> String {
+        self.new_path.clone()
+    }
+}
 
 /// ClusterAgentOperations trait implemented by client which supports cluster-agent operations
 #[tonic::async_trait]

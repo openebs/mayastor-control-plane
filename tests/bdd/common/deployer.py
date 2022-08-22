@@ -58,7 +58,7 @@ class StartOptions:
 
         agent_arg = "--agents=Core"
         if self.ha_node_agent:
-            agent_arg += ",HaNodeAgent"
+            agent_arg += ",HANodeAgent"
         if self.ha_cluster_agent:
             agent_arg += ",ClusterAgent"
         args.append(agent_arg)

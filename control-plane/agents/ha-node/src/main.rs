@@ -13,8 +13,10 @@ use utils::{
 mod detector;
 mod path_provider;
 mod reporter;
+mod server;
 
 use detector::PathFailureDetector;
+use server::NodeAgentApiServer;
 
 /// TODO
 #[derive(Debug, StructOpt)]
@@ -71,6 +73,7 @@ impl Cli {
 async fn main() {
     let cli_args = Cli::args();
 
+    println!("** START **");
     utils::print_package_info!();
 
     utils::tracing_telemetry::init_tracing(
@@ -103,12 +106,22 @@ async fn main() {
         );
     }
 
-    // Instantiate path failure detector.
+    // Instantiate path failure detector along with Nvme cache object.
     let detector =
         PathFailureDetector::new(&cli_args).expect("Failed to initialize path failure detector");
 
-    detector
-        .start()
-        .await
-        .expect("Failed to start NVMe path failure detector");
+    let cache = detector.get_cache();
+
+    // Instantiate gRPC server.
+    let server = NodeAgentApiServer::new(cli_args.grpc_endpoint.clone(), cache);
+
+    // Start gRPC server and path failure detection loop.
+    tokio::select! {
+        _ = detector.start() => {
+            tracing::info!("Path failure detector stopped.")
+        },
+        _ = server.serve() => {
+            tracing::info!("gRPC server stopped.");
+        },
+    }
 }

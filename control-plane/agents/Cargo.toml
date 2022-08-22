@@ -62,6 +62,7 @@ nvmeadm = { path = "../../utils/dependencies/nvmeadm" }
 futures-util = { version = "0.3.21" }
 tokio-stream = { version = "0.1.9" }
 crossbeam-queue = "0.3.6"
+shutdown = { path = "../../utils/shutdown" }
 
 # Tracing
 opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio-current-thread"] }

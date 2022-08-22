@@ -263,6 +263,7 @@ dependencies = [
  "rpc",
  "serde",
  "serde_json",
+ "shutdown",
  "snafu",
  "state",
  "structopt",

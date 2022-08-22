@@ -30,3 +30,17 @@ message ReportFailedNvmePathsRequest {
   // List of failed
   repeated FailedNvmePath failed_paths = 4;
 }
+
+// Service for managing node-agent rpc calls
+service HaNodeRpc {
+  rpc ReplacePath (ReplacePathRequest) returns (google.protobuf.Empty) {}
+}
+
+// Path replacement message.
+message ReplacePathRequest {
+  // NQN of the target
+  string target_nqn = 1;
+
+  // URI of the new path
+  string new_path = 2;
+}
