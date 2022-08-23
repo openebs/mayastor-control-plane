@@ -1,6 +1,6 @@
 use std::{boxed::Box, collections::HashMap, path::Path, time::Duration, vec::Vec};
-
 use tonic::{Code, Request, Response, Status};
+use tracing::{debug, error, info, trace};
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
@@ -490,7 +490,7 @@ impl node_server::Node for Node {
         match access_type {
             AccessType::Mount(mnt) => {
                 if let Err(fsmount_error) =
-                    stage_fs_volume(&msg, device_path, mnt, &self.filesystems).await
+                    stage_fs_volume(&msg, &device_path, mnt, &self.filesystems).await
                 {
                     detach(
                         &uuid,
@@ -507,6 +507,7 @@ impl node_server::Node for Node {
                 // block volumes are not staged
             }
         }
+
         Ok(Response::new(NodeStageVolumeResponse {}))
     }
 

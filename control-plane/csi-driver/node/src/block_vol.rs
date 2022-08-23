@@ -1,8 +1,8 @@
 //! Functions for CSI publish and unpublish block mode volumes.
 
 use std::path::Path;
-
 use tonic::{Code, Status};
+use tracing::{debug, error, info, warn};
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};

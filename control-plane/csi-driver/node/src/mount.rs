@@ -1,9 +1,9 @@
 //! Utility functions for mounting and unmounting filesystems.
 
-use std::{collections::HashSet, io::Error};
-
 use devinfo::mountinfo::{MountInfo, MountIter};
+use std::{collections::HashSet, io::Error};
 use sys_mount::{unmount, FilesystemType, Mount, MountFlags, UnmountFlags};
+use tracing::{debug, info};
 
 // Simple trait for checking if the readonly (ro) option
 // is present in a "list" of options, while allowing for

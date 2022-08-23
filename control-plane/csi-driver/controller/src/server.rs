@@ -126,7 +126,6 @@ impl CsiServer {
         };
 
         // Try to detect REST API endpoint to debug the accessibility status.
-
         ping_rest_api().await;
 
         Server::builder()

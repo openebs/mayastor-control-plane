@@ -1,25 +1,26 @@
-//! The io_engine node plugin gRPC service
+//! The internal node plugin gRPC service.
 //! This provides access to functionality that needs to be executed on the same
 //! node as a IoEngine CSI node plugin, but it is not possible to do so within
 //! the CSI framework. This service must be deployed on all nodes the
 //! IoEngine CSI node plugin is deployed.
 use crate::{nodeplugin_svc, shutdown_event::Shutdown};
-use io_engine_node_plugin::{
-    io_engine_node_plugin_server::{IoEngineNodePlugin, IoEngineNodePluginServer},
+use node_plugin_service::{
+    node_plugin_server::{NodePlugin, NodePluginServer},
     FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
     UnfreezeFsRequest, VolumeType,
 };
 use nodeplugin_svc::{find_volume, freeze_volume, unfreeze_volume, ServiceError, TypeOfMount};
 use tonic::{transport::Server, Code, Request, Response, Status};
+use tracing::{debug, error, info};
 
-pub(crate) mod io_engine_node_plugin {
+pub(crate) mod node_plugin_service {
     #![allow(clippy::derive_partial_eq_without_eq)]
     #![allow(clippy::upper_case_acronyms)]
-    tonic::include_proto!("ioenginenodeplugin");
+    tonic::include_proto!("node.service");
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct IoEngineNodePluginSvc {}
+pub(crate) struct NodePluginSvc {}
 
 impl From<ServiceError> for Status {
     fn from(err: ServiceError) -> Self {
@@ -40,7 +41,7 @@ impl From<ServiceError> for Status {
 }
 
 #[tonic::async_trait]
-impl IoEngineNodePlugin for IoEngineNodePluginSvc {
+impl NodePlugin for NodePluginSvc {
     async fn freeze_fs(
         &self,
         request: Request<FreezeFsRequest>,
@@ -78,16 +79,16 @@ impl IoEngineNodePlugin for IoEngineNodePluginSvc {
     }
 }
 
-pub(crate) struct IoEngineNodePluginGrpcServer {}
+pub(crate) struct NodePluginGrpcServer {}
 
-impl IoEngineNodePluginGrpcServer {
+impl NodePluginGrpcServer {
     pub(crate) async fn run(endpoint: std::net::SocketAddr) -> Result<(), ()> {
         info!(
-            "IoEngine node plugin gRPC server configured at address {:?}",
+            "node plugin gRPC server configured at address {:?}",
             endpoint
         );
         if let Err(e) = Server::builder()
-            .add_service(IoEngineNodePluginServer::new(IoEngineNodePluginSvc {}))
+            .add_service(NodePluginServer::new(NodePluginSvc {}))
             .serve_with_shutdown(endpoint, Shutdown::wait())
             .await
         {

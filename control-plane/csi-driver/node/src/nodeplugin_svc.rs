@@ -7,6 +7,7 @@ use crate::{
 };
 use snafu::{ResultExt, Snafu};
 use tokio::process::Command;
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug, Snafu)]

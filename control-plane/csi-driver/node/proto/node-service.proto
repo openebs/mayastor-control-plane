@@ -1,4 +1,4 @@
-// The definition of ioengine node plugin gRPC interface.
+// The definition of the internal node plugin gRPC interface.
 // The node plugin service runs on all nodes running
 // the IoEngine CSI node plugin, and is complementary
 // to the CSI node plugin service.
@@ -8,22 +8,17 @@
 
 syntax = "proto3";
 
-option java_multiple_files = true;
-option java_package = "io.grpc.examples.ioenginenodeplugin";
-option java_outer_classname = "IoEngineNodePluginProto";
+package node.service;
 
-package ioenginenodeplugin;
-
-// Service for freezing and unfreezing file systems.
-service IoEngineNodePlugin {
+// Service with added functionality, specific to our product.
+service NodePlugin {
   // Freeze the file system identified by the volume ID
   // no check is made if the file system had been previously frozen.
   rpc FreezeFS (FreezeFSRequest) returns (FreezeFSReply) {}
   // Unfreeze the file system identified by the volume ID,
   // no check is made if the file system had been previously frozen.
   rpc UnfreezeFS (UnfreezeFSRequest) returns (UnfreezeFSReply) {}
-  // Find the volume identified by the volume ID, and return the mount type:
-  // raw block or filesystem
+  // Find the volume identified by the volume ID, and return volume information.
   rpc FindVolume (FindVolumeRequest) returns (FindVolumeReply) {}
 }
 
@@ -42,7 +37,6 @@ message FreezeFSReply {
 
 // The request message containing ID of the volume to be unfrozen
 message UnfreezeFSRequest {
-
   string volume_id = 1;
 }
 

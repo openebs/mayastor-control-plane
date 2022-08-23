@@ -5,6 +5,7 @@
 use std::{env, process::Command};
 
 use regex::Regex;
+use tracing::{debug, trace};
 
 use super::DeviceError;
 
@@ -122,7 +123,7 @@ impl IscsiAdmin {
     }
 
     fn find_target(portal: &str, iqn: &str, data: Vec<u8>) -> bool {
-        lazy_static! {
+        lazy_static::lazy_static! {
             static ref PATTERN: Regex = Regex::new(r"(?P<portal>[[:digit:]]+(\.[[:digit:]]+){3}:[[:digit:]]+),[[:digit:]]+ +(?P<target>iqn\.[^ ]+)").unwrap();
         }
 
@@ -142,7 +143,7 @@ impl IscsiAdmin {
     fn get_binary() -> Result<&'static str, DeviceError> {
         const IO_ENGINE_ISCSIADM: &str = "/bin/io-engine-iscsiadm";
 
-        lazy_static! {
+        lazy_static::lazy_static! {
             static ref ISCSIADM: String = match env::var("ISCSIADM") {
                 Ok(path) => {
                     debug!("using environment: ISCSIADM={}", &path);
