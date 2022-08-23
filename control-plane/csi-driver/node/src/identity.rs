@@ -1,6 +1,6 @@
 //! Implementation of gRPC methods from CSI Identity gRPC service.
 
-use super::csi::*;
+use csi_driver::csi::*;
 use std::{boxed::Box, collections::HashMap};
 use tonic::{Request, Response, Status};
 use tracing::debug;

@@ -11,12 +11,18 @@ use uuid::Uuid;
 
 use crate::{
     block_vol::{publish_block_volume, unpublish_block_volume},
-    csi::{
-        volume_capability::{access_mode::Mode, AccessType},
-        *,
-    },
     dev::Device,
     filesystem_vol::{publish_fs_volume, stage_fs_volume, unpublish_fs_volume, unstage_fs_volume},
+};
+use csi_driver::csi::volume_capability::{access_mode::Mode, AccessType};
+use rpc::csi::{
+    node_server, node_service_capability, NodeExpandVolumeRequest, NodeExpandVolumeResponse,
+    NodeGetCapabilitiesRequest, NodeGetCapabilitiesResponse, NodeGetInfoRequest,
+    NodeGetInfoResponse, NodeGetVolumeStatsRequest, NodeGetVolumeStatsResponse,
+    NodePublishVolumeRequest, NodePublishVolumeResponse, NodeServiceCapability,
+    NodeStageVolumeRequest, NodeStageVolumeResponse, NodeUnpublishVolumeRequest,
+    NodeUnpublishVolumeResponse, NodeUnstageVolumeRequest, NodeUnstageVolumeResponse, Topology,
+    VolumeCapability,
 };
 
 #[derive(Clone, Debug)]

@@ -5,7 +5,7 @@
 
 use crate::{identity::Identity, mount::probe_filesystems, node::Node, shutdown_event::Shutdown};
 use clap::{App, Arg};
-use csi::{identity_server::IdentityServer, node_server::NodeServer};
+use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
 use nodeplugin_grpc::NodePluginGrpcServer;
 use std::{
@@ -21,16 +21,6 @@ use tokio::{
 };
 use tonic::transport::{server::Connected, Server};
 use tracing::{debug, error, info};
-
-#[allow(clippy::type_complexity)]
-#[allow(clippy::unit_arg)]
-#[allow(clippy::redundant_closure)]
-#[allow(clippy::enum_variant_names)]
-#[allow(clippy::upper_case_acronyms)]
-pub(crate) mod csi {
-    #![allow(clippy::derive_partial_eq_without_eq)]
-    tonic::include_proto!("csi.v1");
-}
 
 mod block_vol;
 /// Configuration Parameters
@@ -99,7 +89,7 @@ impl AsyncWrite for UnixStream {
     }
 }
 
-const GRPC_PORT: u16 = 10199;
+const GRPC_PORT: u16 = 50051;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

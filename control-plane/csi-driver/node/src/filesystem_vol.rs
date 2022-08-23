@@ -11,9 +11,12 @@ macro_rules! failure {
 }
 
 use crate::{
-    csi::{volume_capability::MountVolume, *},
     format::prepare_device,
     mount::{self, subset, ReadOnly},
+};
+use csi_driver::csi::{
+    volume_capability::MountVolume, NodePublishVolumeRequest, NodeStageVolumeRequest,
+    NodeUnpublishVolumeRequest, NodeUnstageVolumeRequest,
 };
 
 pub(crate) async fn stage_fs_volume(

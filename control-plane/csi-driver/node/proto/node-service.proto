@@ -51,5 +51,6 @@ message FindVolumeRequest {
 
 // Message for response to a request for a volume
 message FindVolumeReply {
-  VolumeType volume_type = 1;
+  optional VolumeType volume_type = 1;
+  string device_path = 2; // the device path for the volume
 }

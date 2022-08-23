@@ -10,7 +10,7 @@ impl Shutdown {
 
 #[cfg(test)]
 mod tests {
-    use crate::nodeplugin_grpc::node_plugin_service::{
+    use csi_driver::node::internal::{
         node_plugin_client::NodePluginClient,
         node_plugin_server::{NodePlugin, NodePluginServer},
         FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
@@ -69,7 +69,8 @@ mod tests {
             tokio::time::sleep(Duration::from_secs(2)).await;
             println!("Done...");
             Ok(Response::new(FindVolumeReply {
-                volume_type: VolumeType::Rawblock as i32,
+                volume_type: Some(VolumeType::Rawblock as i32),
+                device_path: "".to_string(),
             }))
         }
     }
@@ -135,7 +136,7 @@ mod tests {
         println!("First Request Response: {:?}", first_request_resp);
         assert_eq!(
             first_request_resp.unwrap().into_inner().volume_type,
-            VolumeType::Rawblock as i32
+            Some(VolumeType::Rawblock as i32)
         );
     }
 }

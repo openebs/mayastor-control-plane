@@ -10,11 +10,11 @@ macro_rules! failure {
 }
 
 use crate::{
-    csi::*,
     dev::Device,
     findmnt,
     mount::{self},
 };
+use csi_driver::csi::{NodePublishVolumeRequest, NodeUnpublishVolumeRequest};
 
 pub(crate) async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Result<(), Status> {
     let target_path = &msg.target_path;

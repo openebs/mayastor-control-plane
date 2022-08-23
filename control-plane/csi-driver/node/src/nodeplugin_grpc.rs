@@ -3,21 +3,19 @@
 //! node as a IoEngine CSI node plugin, but it is not possible to do so within
 //! the CSI framework. This service must be deployed on all nodes the
 //! IoEngine CSI node plugin is deployed.
-use crate::{nodeplugin_svc, shutdown_event::Shutdown};
-use node_plugin_service::{
+use crate::{
+    nodeplugin_svc,
+    nodeplugin_svc::{find_mount, lookup_device},
+    shutdown_event::Shutdown,
+};
+use csi_driver::node::internal::{
     node_plugin_server::{NodePlugin, NodePluginServer},
     FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
     UnfreezeFsRequest, VolumeType,
 };
-use nodeplugin_svc::{find_volume, freeze_volume, unfreeze_volume, ServiceError, TypeOfMount};
+use nodeplugin_svc::{freeze_volume, unfreeze_volume, ServiceError, TypeOfMount};
 use tonic::{transport::Server, Code, Request, Response, Status};
 use tracing::{debug, error, info};
-
-pub(crate) mod node_plugin_service {
-    #![allow(clippy::derive_partial_eq_without_eq)]
-    #![allow(clippy::upper_case_acronyms)]
-    tonic::include_proto!("node.service");
-}
 
 #[derive(Debug, Default)]
 pub(crate) struct NodePluginSvc {}
@@ -68,20 +66,29 @@ impl NodePlugin for NodePluginSvc {
     ) -> Result<Response<FindVolumeReply>, Status> {
         let volume_id = request.into_inner().volume_id;
         debug!("find_volume({})", volume_id);
-        match find_volume(&volume_id).await? {
-            TypeOfMount::FileSystem => Ok(Response::new(FindVolumeReply {
-                volume_type: VolumeType::Filesystem as i32,
-            })),
-            TypeOfMount::RawBlock => Ok(Response::new(FindVolumeReply {
-                volume_type: VolumeType::Rawblock as i32,
-            })),
+        let device = lookup_device(&volume_id).await?;
+        let mount = find_mount(&volume_id, device.as_ref()).await?;
+        Ok(Response::new(FindVolumeReply {
+            volume_type: mount.map(Into::<VolumeType>::into).map(Into::into),
+            device_path: device.devname(),
+        }))
+    }
+}
+
+impl From<TypeOfMount> for VolumeType {
+    fn from(mount: TypeOfMount) -> Self {
+        match mount {
+            TypeOfMount::FileSystem => Self::Filesystem,
+            TypeOfMount::RawBlock => Self::Rawblock,
         }
     }
 }
 
+/// The Grpc server which services a `NodePluginServer`.
 pub(crate) struct NodePluginGrpcServer {}
 
 impl NodePluginGrpcServer {
+    /// Run `Self` as a tonic server.
     pub(crate) async fn run(endpoint: std::net::SocketAddr) -> Result<(), ()> {
         info!(
             "node plugin gRPC server configured at address {:?}",

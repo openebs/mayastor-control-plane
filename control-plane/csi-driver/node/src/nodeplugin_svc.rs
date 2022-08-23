@@ -2,10 +2,10 @@
 //! find volumes provisioned by us
 //! freeze and unfreeze filesystem volumes provisioned by us
 use crate::{
-    dev::{Device, DeviceError},
+    dev::{Detach, Device, DeviceError},
     findmnt, mount,
 };
-use snafu::{ResultExt, Snafu};
+use snafu::{OptionExt, ResultExt, Snafu};
 use tokio::process::Command;
 use tracing::debug;
 use uuid::Uuid;
@@ -32,6 +32,7 @@ pub(crate) enum ServiceError {
     BlockDeviceMount { volid: String },
 }
 
+/// Type of mount.
 pub(crate) enum TypeOfMount {
     FileSystem,
     RawBlock,
@@ -111,45 +112,56 @@ pub(crate) async fn unfreeze_volume(volume_id: &str) -> Result<(), ServiceError>
     fsfreeze(volume_id, "--unfreeze").await
 }
 
-pub(crate) async fn find_volume(volume_id: &str) -> Result<TypeOfMount, ServiceError> {
+/// Lookup the device by its volume id.
+pub(crate) async fn lookup_device(volume_id: &str) -> Result<Box<dyn Detach>, ServiceError> {
     let uuid = Uuid::parse_str(volume_id).context(InvalidVolumeId {
         volid: volume_id.to_string(),
     })?;
 
-    if let Some(device) = Device::lookup(&uuid).await.context(InternalFailure {
-        volid: volume_id.to_string(),
-    })? {
-        let device_path = device.devname();
-        let mountpaths = findmnt::get_mountpaths(&device_path).context(InternalFailure {
+    Device::lookup(&uuid)
+        .await
+        .context(InternalFailure {
             volid: volume_id.to_string(),
-        })?;
-        debug!("mountpaths for volume_id :{} : {:?}", volume_id, mountpaths);
-        if !mountpaths.is_empty() {
-            let fstype = mountpaths[0].fstype();
-            for devmount in mountpaths {
-                if fstype != devmount.fstype() {
-                    debug!(
-                        "Find volume_id :{} : failed, multiple fstypes {}, {}",
-                        volume_id,
-                        fstype,
-                        devmount.fstype()
-                    );
-                    // This failure is very unlikely but include for
-                    // completeness
-                    return Err(ServiceError::InconsistentMountFs {
-                        volid: volume_id.to_string(),
-                    });
-                }
-            }
-            debug!("fstype for volume_id :{} is {}", volume_id, fstype);
-            if fstype == "devtmpfs" {
-                return Ok(TypeOfMount::RawBlock);
-            } else {
-                return Ok(TypeOfMount::FileSystem);
+        })?
+        .context(VolumeNotFound {
+            volid: volume_id.to_string(),
+        })
+}
+
+/// Find the `TypeOfMount` for the given volume.
+pub(crate) async fn find_mount(
+    volume_id: &str,
+    device: &dyn Detach,
+) -> Result<Option<TypeOfMount>, ServiceError> {
+    let device_path = device.devname();
+    let mountpaths = findmnt::get_mountpaths(&device_path).context(InternalFailure {
+        volid: volume_id.to_string(),
+    })?;
+    debug!("mountpaths for volume_id :{} : {:?}", volume_id, mountpaths);
+    if !mountpaths.is_empty() {
+        let fstype = mountpaths[0].fstype();
+        for devmount in mountpaths {
+            if fstype != devmount.fstype() {
+                debug!(
+                    "Find volume_id :{} : failed, multiple fstypes {}, {}",
+                    volume_id,
+                    fstype,
+                    devmount.fstype()
+                );
+                // This failure is very unlikely but include for
+                // completeness
+                return Err(ServiceError::InconsistentMountFs {
+                    volid: volume_id.to_string(),
+                });
             }
         }
+        debug!("fstype for volume_id :{} is {}", volume_id, fstype);
+        if fstype == "devtmpfs" {
+            Ok(Some(TypeOfMount::RawBlock))
+        } else {
+            Ok(Some(TypeOfMount::FileSystem))
+        }
+    } else {
+        Ok(None)
     }
-    Err(ServiceError::VolumeNotFound {
-        volid: volume_id.to_string(),
-    })
 }
