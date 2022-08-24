@@ -30,6 +30,11 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
                 node_id: request.node.to_string(),
             });
         }
+        if request.disks.len() != 1 {
+            return Err(SvcError::InvalidPoolDeviceNum {
+                disks: request.disks.clone(),
+            });
+        }
 
         let node = registry.get_node_wrapper(&request.node).await?;
         let pool = specs

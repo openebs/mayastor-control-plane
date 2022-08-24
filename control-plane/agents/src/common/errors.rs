@@ -2,7 +2,7 @@ use common_lib::{
     transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         store::definitions::StoreError,
-        transport::{APIVersion, Filter, NodeId, PoolId, ReplicaId},
+        transport::{pool::PoolDeviceUri, APIVersion, Filter, NodeId, PoolId, ReplicaId},
     },
 };
 use snafu::{Error, Snafu};
@@ -69,6 +69,8 @@ pub enum SvcError {
     NodeNotFound { node_id: NodeId },
     #[snafu(display("Pool '{}' not found", pool_id))]
     PoolNotFound { pool_id: PoolId },
+    #[snafu(display("Disk list should have only 1 device. Received :{:?}", disks))]
+    InvalidPoolDeviceNum { disks: Vec<PoolDeviceUri> },
     #[snafu(display("Nexus '{}' not found", nexus_id))]
     NexusNotFound { nexus_id: String },
     #[snafu(display("{} '{}' not found", kind.to_string(), id))]
@@ -423,6 +425,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::PoolNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Pool,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::InvalidPoolDeviceNum { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Pool,
                 source: desc.to_string(),
                 extra: error.full_string(),

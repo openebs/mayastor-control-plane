@@ -6,8 +6,8 @@ use common_lib::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, ChildStateReason, Nexus, NexusId, NexusStatus, NodeId, Protocol,
-            Replica, ReplicaId, ReplicaName, ReplicaStatus,
+            self, ChildState, ChildStateReason, Nexus, NexusId, NexusStatus, NodeId, PoolState,
+            Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
@@ -81,8 +81,7 @@ impl IoEngineToAgent for v0_rpc::BlockDevice {
     }
 }
 
-///  Pool Agent conversions
-
+/// Pool Agent conversions.
 impl IoEngineToAgent for v0_rpc::Pool {
     type AgentMessage = transport::PoolState;
     fn to_agent(&self) -> Self::AgentMessage {
@@ -378,4 +377,11 @@ pub fn rpc_nexus_v2_to_agent(rpc_nexus: &v0_rpc::NexusV2, id: &NodeId) -> Result
     let mut nexus = rpc_nexus.try_to_agent()?;
     nexus.node = id.clone();
     Ok(nexus)
+}
+
+/// Converts rpc pool to an agent pool.
+pub fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) -> PoolState {
+    let mut pool = rpc_pool.to_agent();
+    pool.node = id.clone();
+    pool
 }

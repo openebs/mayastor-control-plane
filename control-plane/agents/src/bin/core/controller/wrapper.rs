@@ -13,12 +13,13 @@ use agents::{
     errors::{GrpcRequest as GrpcRequestError, SvcError},
     msg_translation::{
         v0::{
-            rpc_nexus_to_agent as v0_rpc_nexus_to_agent,
+            rpc_nexus_to_agent as v0_rpc_nexus_to_agent, rpc_pool_to_agent as v0_rpc_pool_to_agent,
             rpc_replica_to_agent as v0_rpc_replica_to_agent, AgentToIoEngine as v0_conversion,
         },
         v1::{
             rpc_nexus_to_agent as v1_rpc_nexus_to_agent,
             rpc_nexus_to_child_agent as v1_rpc_nexus_to_child_agent,
+            rpc_pool_to_agent as v1_rpc_pool_to_agent,
             rpc_replica_to_agent as v1_rpc_replica_to_agent, AgentToIoEngine as v1_conversion,
         },
         IoEngineToAgent,
@@ -851,22 +852,39 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         let ctx = self.read().await.grpc_context_ext(request)?;
         ctx.connect_locked().await.map_err(|(_, error)| error)
     }
-
+    /// Create a pool on the node via gRPC.
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let pool = dataplane.create_pool(request).await?;
+        let create_response = dataplane.create_pool(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_pool_states(ctx.deref_mut()).await?;
         self.update_replica_states(ctx.deref_mut()).await?;
-        Ok(pool)
+        let pool = self.read().await.pool(&request.id);
+        match (pool, create_response) {
+            (_, Ok(pool)) => Ok(pool),
+            (Some(pool), Err(SvcError::GrpcRequestError { source, .. }))
+                if source.code() == tonic::Code::AlreadyExists =>
+            {
+                Ok(pool)
+            }
+            (_, Err(error)) => Err(error),
+        }
     }
     /// Destroy a pool on the node via gRPC.
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let _ = dataplane.destroy_pool(request).await?;
+        let destroy_response = dataplane.destroy_pool(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_pool_states(ctx.deref_mut()).await?;
-        Ok(())
+        match destroy_response {
+            Err(SvcError::GrpcRequestError { source, .. })
+                if source.code() == tonic::Code::NotFound =>
+            {
+                Ok(())
+            }
+            Err(error) => Err(error),
+            Ok(_) => Ok(()),
+        }
     }
 
     /// Create a replica on the pool via gRPC.
@@ -1105,17 +1123,27 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let rpc_pool = self
                     .client_v0()?
-                    .create_pool(request.to_rpc())
+                    .create_pool(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Pool,
                         request: "create_pool",
                     })?;
-                let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
+                let pool = v0_rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
                 Ok(pool)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_pool = self
+                    .client_v1()?
+                    .pool()
+                    .create_pool(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Pool,
+                        request: "create_pool",
+                    })?;
+                let pool = v1_rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
+                Ok(pool)
             }
         }
     }
@@ -1125,7 +1153,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let _ = self
                     .client_v0()?
-                    .destroy_pool(request.to_rpc())
+                    .destroy_pool(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Pool,
@@ -1134,7 +1162,16 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let _ = self
+                    .client_v1()?
+                    .pool()
+                    .destroy_pool(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Pool,
+                        request: "destroy_pool",
+                    })?;
+                Ok(())
             }
         }
     }
@@ -1471,15 +1508,8 @@ impl ClientOps for GrpcClientLocked {
     }
 }
 
-/// Convert rpc pool to a agent pool.
-pub(crate) fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) -> PoolState {
-    let mut pool = rpc_pool.to_agent();
-    pool.node = id.clone();
-    pool
-}
-
-/// Wrapper over the rpc `Pool` which includes all the replicas
-/// and Ord traits to aid pool selection for volume replicas.
+/// Wrapper over the message bus `Pool` which includes all the replicas
+/// and Ord traits to aid pool selection for volume replicas
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct PoolWrapper {
     state: PoolState,
