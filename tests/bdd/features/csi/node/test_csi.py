@@ -145,7 +145,9 @@ def volume_id(fs_type):
 @pytest.fixture
 def published_nexus(volumes, share_type, volume_id):
     uuid = volume_id
-    volume = ApiClient.volumes_api().put_volume_target(uuid, NODE1, Protocol("nvmf"))
+    volume = ApiClient.volumes_api().put_volume_target(
+        uuid, Protocol("nvmf"), node=NODE1
+    )
     yield volume.state["target"]
     ApiClient.volumes_api().del_volume_target(volume.spec.uuid)
 

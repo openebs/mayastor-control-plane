@@ -382,9 +382,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 // if the csi-node happens to be a data-plane node, use that for nexus creation, otherwise
                 // let the control-plane select the target node.
                 let target_node = match IoEngineApiClient::get_client().get_node(&node_id).await {
-                    Err(ApiClientError::ResourceNotExists(_)) => None,
-                    _ => Some(node_id.as_str()),
-                };
+                    Err(ApiClientError::ResourceNotExists(_)) => Ok(None),
+                    Err(error) => Err(error),
+                    Ok(_) => Ok(Some(node_id.as_str())),
+                }?;
 
                 // Volume is not published.
                 let v = IoEngineApiClient::get_client()

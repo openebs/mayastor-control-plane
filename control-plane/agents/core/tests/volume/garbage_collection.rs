@@ -60,8 +60,8 @@ async fn deleting_volume_reconcile(cluster: &Cluster) {
         .publish(
             &PublishVolume {
                 uuid: volume.uuid().clone(),
-                target_node: None,
                 share: None,
+                target_node: None,
             },
             None,
         )
@@ -152,8 +152,8 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            &free_node,
             models::VolumeShareProtocol::Nvmf,
+            Some(&free_node),
         )
         .await
         .unwrap();
@@ -214,8 +214,8 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            cluster.node(0).as_str(),
             models::VolumeShareProtocol::Nvmf,
+            Some(cluster.node(0).as_str()),
         )
         .await
         .unwrap();
@@ -295,8 +295,8 @@ async fn unused_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            nexus_node.id.as_str(),
             models::VolumeShareProtocol::Nvmf,
+            Some(nexus_node.id.as_str()),
         )
         .await
         .unwrap();
@@ -313,8 +313,8 @@ async fn unused_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            unused_node.id.as_str(),
             models::VolumeShareProtocol::Nvmf,
+            Some(unused_node.id.as_str()),
         )
         .await
         .unwrap();
@@ -398,8 +398,8 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec().uuid,
-            cluster.node(0).as_str(),
             models::VolumeShareProtocol::Nvmf,
+            Some(cluster.node(0).as_str()),
         )
         .await
         .unwrap();

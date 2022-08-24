@@ -47,7 +47,7 @@ def a_published_selfhealing_volume():
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, IO_ENGINE_1, Protocol("nvmf")
+        VOLUME_UUID, Protocol("nvmf"), node=IO_ENGINE_1
     )
 
 

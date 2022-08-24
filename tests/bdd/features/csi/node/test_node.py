@@ -284,7 +284,7 @@ def published_nexuses(setup, volumes):
 def publish_nexus(setup, volumes, published_nexuses):
     def publish(uuid, protocol):
         volume = ApiClient.volumes_api().put_volume_target(
-            uuid, NODE1, Protocol("nvmf")
+            uuid, Protocol("nvmf"), node=NODE1
         )
         nexus = Nexus(uuid, protocol, volume.state["target"]["deviceUri"])
         published_nexuses[uuid] = nexus

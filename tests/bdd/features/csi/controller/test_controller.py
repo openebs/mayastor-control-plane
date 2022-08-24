@@ -41,8 +41,6 @@ VOLUME2_SIZE = 1024 * 1024 * 22
 VOLUME3_SIZE = 1024 * 1024 * 28
 VOLUME4_SIZE = 1024 * 1024 * 32
 OPENEBS_TOPOLOGY_KEY = "openebs.io/nodename"
-IO_ENGINE_SELECTOR_KEY = "openebs.io/engine"
-IO_ENGINE_SELECTOR_VALUE = "io-engine"
 
 
 @pytest.fixture(scope="module")
@@ -96,12 +94,6 @@ def test_node_capacity(setup):
 @scenario("controller.feature", "create 1 replica nvmf volume")
 def test_create_1_replica_nvmf_volume(setup):
     """create 1 replica nvmf volume"""
-
-
-@pytest.mark.skip(reason="local parameter not supported")
-@scenario("controller.feature", "unpinned volume creation")
-def test_unpinned_volume_creation(setup):
-    """unpinned volume creation."""
 
 
 @scenario("controller.feature", "volume creation idempotency")
@@ -307,30 +299,6 @@ def create_1_replica_local_nvmf_volume(_create_1_replica_local_nvmf_volume):
     return _create_1_replica_local_nvmf_volume
 
 
-@when("a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)")
-def a_createvolume_request_is_sent_to_create_a_1_replica_nvmf_volume_localfalse(
-    _create_1_replica_nvmf_volume_local_false,
-):
-    """a CreateVolume request is sent to create a 1 replica nvmf volume (local=false)."""
-
-
-@when("a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)")
-def a_createvolume_request_is_sent_to_create_a_1_replica_nvmf_volume_local_unset(
-    _create_1_replica_nvmf_volume_local_unset,
-):
-    """a CreateVolume request is sent to create a 1 replica nvmf volume (local unset)."""
-
-
-@then("volume creation should fail with invalid argument")
-def volume_creation_should_fail_with_invalid_argument(context):
-    """volume creation should fail with invalid argument."""
-    create_volume_result = context["create_result"]
-    assert isinstance(
-        create_volume_result, grpc.RpcError
-    ), "Expect the volume not to be created"
-    assert create_volume_result.code() is grpc.StatusCode.INVALID_ARGUMENT
-
-
 @when(
     "a ControllerPublishVolume request is sent to CSI controller to re-publish volume on a different node",
     target_fixture="republish_volume_on_a_different_node",
@@ -354,17 +322,10 @@ def check_1_replica_local_nvmf_volume(create_1_replica_local_nvmf_volume):
 def check_local_volume_topology(volume):
     topologies = volume.volume.accessible_topology
 
-    found_key_value = False
-    for topology in topologies:
-        if IO_ENGINE_SELECTOR_KEY in topology.segments:
-            if (
-                topology.segments.get(IO_ENGINE_SELECTOR_KEY)
-                == IO_ENGINE_SELECTOR_VALUE
-            ):
-                found_key_value = True
-    assert (
-        found_key_value is True
-    ), f"{IO_ENGINE_SELECTOR_KEY}: {IO_ENGINE_SELECTOR_VALUE} not found in volume topology"
+    is_empty = False
+    if not topologies:
+        is_empty = True
+    assert is_empty is True, f"Accessible volume topology should be empty"
 
 
 @then("local volume must be accessible only from all existing Io-Engine nodes")
@@ -945,15 +906,15 @@ def check_local_volume_accessible_from_ms_nodes(list_2_volumes):
     check_local_volume_topology(vols[0])
 
 
-@then("no topology restrictions should be imposed to non-local volumes")
-def check_no_topology_restrictions_for_non_local_volume(list_2_volumes):
+@then("no topology restrictions should be imposed to volumes")
+def check_no_topology_restrictions_for_volume(list_2_volumes):
     """Non local volumes not supported at the moment"""
-    # vols = [v for v in list_2_volumes[1] if v.volume.volume_id != VOLUME3_UUID]
-    # assert len(vols) == 2, "Invalid number of non-local volumes reported"
-    # for v in vols:
-    #     assert (
-    #         len(v.volume.accessible_topology) == 0
-    #     ), "Non-local volume has topology restrictions"
+    vols = [v for v in list_2_volumes[1] if v.volume.volume_id != VOLUME3_UUID]
+    assert len(vols) == 2, "Invalid number of volumes reported"
+    for v in vols:
+        assert (
+            len(v.volume.accessible_topology) == 0
+        ), "Volume has topology restrictions"
 
 
 @when(

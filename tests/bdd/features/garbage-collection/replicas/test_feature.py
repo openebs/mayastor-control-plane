@@ -76,7 +76,7 @@ def init(create_pool_disk_images):
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, IO_ENGINE_1, Protocol("nvmf")
+        VOLUME_UUID, Protocol("nvmf"), node=IO_ENGINE_1
     )
 
     yield

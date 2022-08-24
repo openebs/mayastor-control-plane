@@ -78,7 +78,7 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, 10241024, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
-        volume.spec.uuid, NODE1, Protocol("nvmf")
+        volume.spec.uuid, Protocol("nvmf"), node=NODE1
     )
     device_uri = volume.state["target"]["deviceUri"]
     print(device_uri)
