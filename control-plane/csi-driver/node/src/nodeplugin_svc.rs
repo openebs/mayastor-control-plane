@@ -10,26 +10,33 @@ use tokio::process::Command;
 use tracing::debug;
 use uuid::Uuid;
 
+/// Error for the internal node service.
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub(crate)), context(suffix(false)))]
 pub(crate) enum ServiceError {
-    #[snafu(display("Cannot find volume: volume ID: {}", volid))]
-    VolumeNotFound { volid: String },
-    #[snafu(display("Invalid volume ID: {}, {}", volid, source))]
-    InvalidVolumeId { source: uuid::Error, volid: String },
-    #[snafu(display("fsfreeze failed: volume ID: {}, {}", volid, error))]
-    FsfreezeFailed { volid: String, error: String },
-    #[snafu(display("Internal failure: volume ID: {}, {}", volid, source))]
-    InternalFailure { source: DeviceError, volid: String },
-    #[snafu(display("IO error: volume ID: {}, {}", volid, source))]
+    #[snafu(display("Cannot find volume: volume ID: {}", volume_id))]
+    VolumeNotFound { volume_id: String },
+    #[snafu(display("Invalid volume ID: {}, {}", volume_id, source))]
+    InvalidVolumeId {
+        source: uuid::Error,
+        volume_id: String,
+    },
+    #[snafu(display("fsfreeze failed: volume ID: {}, {}", volume_id, error))]
+    FsfreezeFailed { volume_id: String, error: String },
+    #[snafu(display("Internal failure: volume ID: {}, {}", volume_id, source))]
+    InternalFailure {
+        source: DeviceError,
+        volume_id: String,
+    },
+    #[snafu(display("IO error: volume ID: {}, {}", volume_id, source))]
     IoError {
         source: std::io::Error,
-        volid: String,
+        volume_id: String,
     },
-    #[snafu(display("Inconsistent mount filesystems: volume ID: {}", volid))]
-    InconsistentMountFs { volid: String },
-    #[snafu(display("Not a filesystem mount: volume ID: {}", volid))]
-    BlockDeviceMount { volid: String },
+    #[snafu(display("Inconsistent mount filesystems: volume ID: {}", volume_id))]
+    InconsistentMountFs { volume_id: String },
+    #[snafu(display("Not a filesystem mount: volume ID: {}", volume_id))]
+    BlockDeviceMount { volume_id: String },
 }
 
 /// Type of mount.
@@ -42,11 +49,11 @@ const FSFREEZE: &str = "fsfreeze";
 
 async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> {
     let uuid = Uuid::parse_str(volume_id).context(InvalidVolumeId {
-        volid: volume_id.to_string(),
+        volume_id: volume_id.to_string(),
     })?;
 
     if let Some(device) = Device::lookup(&uuid).await.context(InternalFailure {
-        volid: volume_id.to_string(),
+        volume_id: volume_id.to_string(),
     })? {
         let device_path = device.devname();
         if let Some(mnt) = mount::find_mount(Some(&device_path), None) {
@@ -57,7 +64,7 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
                 .output()
                 .await
                 .context(Io {
-                    volid: volume_id.to_string(),
+                    volume_id: volume_id.to_string(),
                 })?;
             return if output.status.success() {
                 Ok(())
@@ -68,7 +75,7 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
                     freeze_op, volume_id, errmsg
                 );
                 Err(ServiceError::FsfreezeFailed {
-                    volid: volume_id.to_string(),
+                    volume_id: volume_id.to_string(),
                     error: errmsg,
                 })
             };
@@ -82,7 +89,7 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
             // block, i.e. we get some matches, and return the
             // BlockDeviceMount error.
             let mountpaths = findmnt::get_mountpaths(&device_path).context(InternalFailure {
-                volid: volume_id.to_string(),
+                volume_id: volume_id.to_string(),
             })?;
             if !mountpaths.is_empty() {
                 debug!(
@@ -90,7 +97,7 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
                     freeze_op, volume_id
                 );
                 return Err(ServiceError::BlockDeviceMount {
-                    volid: volume_id.to_string(),
+                    volume_id: volume_id.to_string(),
                 });
             }
             debug!(
@@ -100,7 +107,7 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
         }
     }
     Err(ServiceError::VolumeNotFound {
-        volid: volume_id.to_string(),
+        volume_id: volume_id.to_string(),
     })
 }
 
@@ -115,16 +122,16 @@ pub(crate) async fn unfreeze_volume(volume_id: &str) -> Result<(), ServiceError>
 /// Lookup the device by its volume id.
 pub(crate) async fn lookup_device(volume_id: &str) -> Result<Box<dyn Detach>, ServiceError> {
     let uuid = Uuid::parse_str(volume_id).context(InvalidVolumeId {
-        volid: volume_id.to_string(),
+        volume_id: volume_id.to_string(),
     })?;
 
     Device::lookup(&uuid)
         .await
         .context(InternalFailure {
-            volid: volume_id.to_string(),
+            volume_id: volume_id.to_string(),
         })?
         .context(VolumeNotFound {
-            volid: volume_id.to_string(),
+            volume_id: volume_id.to_string(),
         })
 }
 
@@ -135,7 +142,7 @@ pub(crate) async fn find_mount(
 ) -> Result<Option<TypeOfMount>, ServiceError> {
     let device_path = device.devname();
     let mountpaths = findmnt::get_mountpaths(&device_path).context(InternalFailure {
-        volid: volume_id.to_string(),
+        volume_id: volume_id.to_string(),
     })?;
     debug!("mountpaths for volume_id :{} : {:?}", volume_id, mountpaths);
     if !mountpaths.is_empty() {
@@ -151,7 +158,7 @@ pub(crate) async fn find_mount(
                 // This failure is very unlikely but include for
                 // completeness
                 return Err(ServiceError::InconsistentMountFs {
-                    volid: volume_id.to_string(),
+                    volume_id: volume_id.to_string(),
                 });
             }
         }
