@@ -1,4 +1,4 @@
-use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
+use crate::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
 use regex::Regex;
 use rpc::csi::*;
 use std::collections::HashMap;
@@ -85,7 +85,6 @@ fn check_existing_volume(
     volume: &Volume,
     replica_count: u8,
     size: u64,
-    _pinned_volume: bool,
     thin: bool,
 ) -> Result<(), Status> {
     // Check if the existing volume is compatible, which means
@@ -133,14 +132,9 @@ impl VolumeTopologyMapper {
     }
 
     /// Determine the list of nodes where the workload can be placed.
-    /// If volume is created as pinned (i.e. local=true), then the nexus and the workload
-    /// must be placed on the same node, which in fact means running workloads only on IO Engine
-    /// daemonset nodes.
-    /// For non-pinned volumes, workload can be put on any node in the cluster.
     fn volume_accessible_topology(&self) -> Vec<CsiTopology> {
-        vec![rpc::csi::Topology {
-            segments: CsiControllerConfig::get_config().io_engine_selector(),
-        }]
+        // TODO: handle accessibility
+        Vec::new()
     }
 }
 
@@ -228,9 +222,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             None => 1,
         };
 
-        // Currently we only support pinned volumes
-        let pinned_volume = true;
-
         let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
 
         inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
@@ -249,7 +240,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         // First check if the volume already exists.
         match IoEngineApiClient::get_client().get_volume(&u).await {
             Ok(volume) => {
-                check_existing_volume(&volume, replica_count, size, pinned_volume, thin)?;
+                check_existing_volume(&volume, replica_count, size, thin)?;
                 debug!(
                     "Volume {} already exists and is compatible with requested config",
                     volume_uuid
@@ -266,20 +257,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 );
 
                 IoEngineApiClient::get_client()
-                    .create_volume(
-                        &u,
-                        replica_count,
-                        size,
-                        volume_topology,
-                        pinned_volume,
-                        thin,
-                    )
+                    .create_volume(&u, replica_count, size, volume_topology, thin)
                     .await?;
 
-                debug!(
-                    "Volume {} successfully created, pinned volume = {}",
-                    volume_uuid, pinned_volume
-                );
+                debug!(volume.uuid = volume_uuid, "Volume successfully created");
             }
             Err(e) => return Err(e.into()),
         }
@@ -398,9 +379,16 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     }
                 },
             _ => {
+                // if the csi-node happens to be a data-plane node, use that for nexus creation, otherwise
+                // let the control-plane select the target node.
+                let target_node = match IoEngineApiClient::get_client().get_node(&node_id).await {
+                    Err(ApiClientError::ResourceNotExists(_)) => None,
+                    _ => Some(node_id.as_str()),
+                };
+
                 // Volume is not published.
                 let v = IoEngineApiClient::get_client()
-                    .publish_volume(&volume_id, &node_id, protocol)
+                    .publish_volume(&volume_id, target_node, protocol)
                     .await?;
 
                 if let Some((node, uri)) = get_volume_share_location(&v) {

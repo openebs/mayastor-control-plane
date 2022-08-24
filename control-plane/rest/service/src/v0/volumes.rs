@@ -128,13 +128,13 @@ impl apis::actix_server::Volumes for RestApi {
 
     async fn put_volume_target(
         Path(volume_id): Path<Uuid>,
-        Query((node, protocol)): Query<(String, VolumeShareProtocol)>,
+        Query((node, protocol)): Query<(Option<String>, VolumeShareProtocol)>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
         let volume = client()
             .publish(
                 &PublishVolume {
                     uuid: volume_id.into(),
-                    target_node: Some(node.into()),
+                    target_node: node.map(|id| id.into()),
                     share: Some(protocol.into()),
                 },
                 None,

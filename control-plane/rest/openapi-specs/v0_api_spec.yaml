@@ -1400,7 +1400,6 @@ paths:
             The node where the front-end workload resides.
             If the workload moves then the volume must be republished.
           name: node
-          required: true
           schema:
             $ref: '#/components/schemas/NodeId'
         - in: query
