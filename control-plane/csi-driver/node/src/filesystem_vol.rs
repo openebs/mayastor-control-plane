@@ -3,6 +3,7 @@
 use std::{fs, io::ErrorKind, path::PathBuf};
 
 use tonic::{Code, Status};
+use tracing::{debug, error, info};
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
@@ -10,14 +11,17 @@ macro_rules! failure {
 }
 
 use crate::{
-    csi::{volume_capability::MountVolume, *},
     format::prepare_device,
     mount::{self, subset, ReadOnly},
+};
+use csi_driver::csi::{
+    volume_capability::MountVolume, NodePublishVolumeRequest, NodeStageVolumeRequest,
+    NodeUnpublishVolumeRequest, NodeUnstageVolumeRequest,
 };
 
 pub(crate) async fn stage_fs_volume(
     msg: &NodeStageVolumeRequest,
-    device_path: String,
+    device_path: &str,
     mnt: &MountVolume,
     filesystems: &[String],
 ) -> Result<(), Status> {
@@ -55,7 +59,7 @@ pub(crate) async fn stage_fs_volume(
         }
     };
 
-    if mount::find_mount(Some(&device_path), Some(fs_staging_path)).is_some() {
+    if mount::find_mount(Some(device_path), Some(fs_staging_path)).is_some() {
         debug!(
             "Device {} is already mounted onto {}",
             device_path, fs_staging_path
@@ -68,7 +72,7 @@ pub(crate) async fn stage_fs_volume(
     }
 
     // abort if device is mounted somewhere else
-    if mount::find_mount(Some(&device_path), None).is_some() {
+    if mount::find_mount(Some(device_path), None).is_some() {
         return Err(failure!(
             Code::AlreadyExists,
             "Failed to stage volume {}: device {} is already mounted elsewhere",
@@ -87,7 +91,7 @@ pub(crate) async fn stage_fs_volume(
         ));
     }
 
-    if let Err(error) = prepare_device(&device_path, &fstype).await {
+    if let Err(error) = prepare_device(device_path, &fstype).await {
         return Err(failure!(
             Code::Internal,
             "Failed to stage volume {}: error preparing device {}: {}",
@@ -100,7 +104,7 @@ pub(crate) async fn stage_fs_volume(
     debug!("Mounting device {} onto {}", device_path, fs_staging_path);
 
     if let Err(error) =
-        mount::filesystem_mount(&device_path, fs_staging_path, &fstype, &mnt.mount_flags)
+        mount::filesystem_mount(device_path, fs_staging_path, &fstype, &mnt.mount_flags)
     {
         return Err(failure!(
             Code::Internal,

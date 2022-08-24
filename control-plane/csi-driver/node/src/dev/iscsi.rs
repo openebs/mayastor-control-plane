@@ -34,7 +34,7 @@ impl IscsiDevice {
     }
 
     fn from_path(path: &str) -> Result<IscsiDevice, DeviceError> {
-        lazy_static! {
+        lazy_static::lazy_static! {
             static ref PATTERN: Regex = Regex::new(r"^ip-(?P<host>[^:]+):(?P<port>[[:digit:]]+)-(?P<scheme>[[:alpha:]]+)-(?P<iqn>[[:alpha:]]+\.[[:digit:]]{4}-[[:digit:]]{2}\.[^:]+:(?P<suffix>[[:alnum:]]+(?:-[[:xdigit:]]+)+))-lun-(?P<lun>[[:digit:]]+)$").unwrap();
         }
 

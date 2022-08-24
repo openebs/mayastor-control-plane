@@ -40,7 +40,7 @@ impl NvmeConfig {
 
 /// Get a mutex guard over the `Config`.
 pub(crate) fn config<'a>() -> MutexGuard<'a, Config> {
-    lazy_static! {
+    lazy_static::lazy_static! {
         static ref CONFIG: Arc<Mutex<Config>> = Arc::new(Mutex::new(Config::default()));
     }
     CONFIG.lock().expect("not poisoned")

@@ -3,22 +3,16 @@
 //! Implementation of gRPC methods from the CSI spec. This includes mounting
 //! of volumes using iscsi/nvmf protocols on the node.
 
-extern crate clap;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate tracing;
-
-use std::{fs, io::ErrorKind, sync::Arc};
-
 use crate::{identity::Identity, mount::probe_filesystems, node::Node, shutdown_event::Shutdown};
 use clap::{App, Arg};
-use csi::{identity_server::IdentityServer, node_server::NodeServer};
+use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
-use nodeplugin_grpc::IoEngineNodePluginGrpcServer;
+use nodeplugin_grpc::NodePluginGrpcServer;
 use std::{
-    env,
+    env, fs,
+    io::ErrorKind,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 use tokio::{
@@ -26,17 +20,7 @@ use tokio::{
     net::UnixListener,
 };
 use tonic::transport::{server::Connected, Server};
-use tracing::info;
-
-#[allow(clippy::type_complexity)]
-#[allow(clippy::unit_arg)]
-#[allow(clippy::redundant_closure)]
-#[allow(clippy::enum_variant_names)]
-#[allow(clippy::upper_case_acronyms)]
-pub(crate) mod csi {
-    #![allow(clippy::derive_partial_eq_without_eq)]
-    tonic::include_proto!("csi.v1");
-}
+use tracing::{debug, error, info};
 
 mod block_vol;
 /// Configuration Parameters
@@ -105,7 +89,7 @@ impl AsyncWrite for UnixStream {
     }
 }
 
-const GRPC_PORT: u16 = 10199;
+const GRPC_PORT: u16 = 50051;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -210,7 +194,7 @@ async fn main() -> Result<(), String> {
 
     let _ = tokio::join!(
         CsiServer::run(csi_socket, node_name),
-        IoEngineNodePluginGrpcServer::run(sock_addr.parse().expect("Invalid gRPC endpoint")),
+        NodePluginGrpcServer::run(sock_addr.parse().expect("Invalid gRPC endpoint")),
     );
 
     Ok(())
@@ -223,6 +207,17 @@ impl CsiServer {
         let incoming = {
             let uds = UnixListener::bind(csi_socket).unwrap();
             info!("CSI plugin bound to {}", csi_socket);
+
+            // Change permissions on CSI socket to allow non-privileged clients to access it
+            // to simplify testing.
+            if let Err(e) = fs::set_permissions(
+                &csi_socket,
+                std::os::unix::fs::PermissionsExt::from_mode(0o777),
+            ) {
+                error!("Failed to change permissions for CSI socket: {:?}", e);
+            } else {
+                debug!("Successfully changed file permissions for CSI socket");
+            }
 
             async_stream::stream! {
                 loop {

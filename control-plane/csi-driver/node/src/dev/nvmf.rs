@@ -11,6 +11,7 @@ use nvmeadm::{
 
 use glob::glob;
 use regex::Regex;
+use tracing::debug;
 use udev::{Device, Enumerator};
 use url::Url;
 use uuid::Uuid;
@@ -23,7 +24,7 @@ use crate::{
 
 use super::{Attach, Detach, DeviceError, DeviceName};
 
-lazy_static! {
+lazy_static::lazy_static! {
     static ref DEVICE_REGEX: Regex = Regex::new(r"nvme(\d{1,3})n1").unwrap();
 }
 

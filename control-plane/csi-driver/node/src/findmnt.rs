@@ -1,6 +1,7 @@
 use crate::error::DeviceError;
 use serde_json::Value;
 use std::{collections::HashMap, process::Command, string::String, vec::Vec};
+use tracing::{error, warn};
 
 // Keys of interest we expect to find in the JSON output generated
 // by findmnt.
@@ -40,7 +41,7 @@ struct Filter<'a> {
 ///   dev[/nvme0n1], udev[/nvme0n1], tmpfs[/nvme0n1], devtmpfs[/nvme0n1]
 /// this function converts those values to the expected /dev/nvme0n1
 fn key_adjusted_value(key: &str, value: &Value) -> String {
-    lazy_static! {
+    lazy_static::lazy_static! {
         static ref RE_UDEVPATH: regex::Regex = regex::Regex::new(
             r"(?x).*\[(?P<device>/.*)\]
         ",

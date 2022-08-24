@@ -1,6 +1,6 @@
 use std::{boxed::Box, collections::HashMap, path::Path, time::Duration, vec::Vec};
-
 use tonic::{Code, Request, Response, Status};
+use tracing::{debug, error, info, trace};
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
@@ -11,12 +11,18 @@ use uuid::Uuid;
 
 use crate::{
     block_vol::{publish_block_volume, unpublish_block_volume},
-    csi::{
-        volume_capability::{access_mode::Mode, AccessType},
-        *,
-    },
     dev::Device,
     filesystem_vol::{publish_fs_volume, stage_fs_volume, unpublish_fs_volume, unstage_fs_volume},
+};
+use csi_driver::csi::volume_capability::{access_mode::Mode, AccessType};
+use rpc::csi::{
+    node_server, node_service_capability, NodeExpandVolumeRequest, NodeExpandVolumeResponse,
+    NodeGetCapabilitiesRequest, NodeGetCapabilitiesResponse, NodeGetInfoRequest,
+    NodeGetInfoResponse, NodeGetVolumeStatsRequest, NodeGetVolumeStatsResponse,
+    NodePublishVolumeRequest, NodePublishVolumeResponse, NodeServiceCapability,
+    NodeStageVolumeRequest, NodeStageVolumeResponse, NodeUnpublishVolumeRequest,
+    NodeUnpublishVolumeResponse, NodeUnstageVolumeRequest, NodeUnstageVolumeResponse, Topology,
+    VolumeCapability,
 };
 
 #[derive(Clone, Debug)]
@@ -490,7 +496,7 @@ impl node_server::Node for Node {
         match access_type {
             AccessType::Mount(mnt) => {
                 if let Err(fsmount_error) =
-                    stage_fs_volume(&msg, device_path, mnt, &self.filesystems).await
+                    stage_fs_volume(&msg, &device_path, mnt, &self.filesystems).await
                 {
                     detach(
                         &uuid,
@@ -507,6 +513,7 @@ impl node_server::Node for Node {
                 // block volumes are not staged
             }
         }
+
         Ok(Response::new(NodeStageVolumeResponse {}))
     }
 

@@ -1,8 +1,8 @@
 //! Functions for CSI publish and unpublish block mode volumes.
 
 use std::path::Path;
-
 use tonic::{Code, Status};
+use tracing::{debug, error, info, warn};
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
@@ -10,11 +10,11 @@ macro_rules! failure {
 }
 
 use crate::{
-    csi::*,
     dev::Device,
     findmnt,
     mount::{self},
 };
+use csi_driver::csi::{NodePublishVolumeRequest, NodeUnpublishVolumeRequest};
 
 pub(crate) async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Result<(), Status> {
     let target_path = &msg.target_path;

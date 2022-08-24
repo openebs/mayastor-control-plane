@@ -2,7 +2,7 @@ use regex::Regex;
 use uuid::{Error, Uuid};
 
 pub(super) fn extract_uuid(value: &str) -> Result<Uuid, Error> {
-    lazy_static! {
+    lazy_static::lazy_static! {
         static ref PATTERN: Regex = Regex::new(r"^[[:xdigit:]]+-").unwrap();
     }
 

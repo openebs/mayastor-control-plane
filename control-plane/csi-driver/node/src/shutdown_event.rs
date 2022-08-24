@@ -10,9 +10,9 @@ impl Shutdown {
 
 #[cfg(test)]
 mod tests {
-    use crate::nodeplugin_grpc::io_engine_node_plugin::{
-        io_engine_node_plugin_client::IoEngineNodePluginClient,
-        io_engine_node_plugin_server::{IoEngineNodePlugin, IoEngineNodePluginServer},
+    use csi_driver::node::internal::{
+        node_plugin_client::NodePluginClient,
+        node_plugin_server::{NodePlugin, NodePluginServer},
         FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
         UnfreezeFsRequest, VolumeType,
     };
@@ -27,10 +27,10 @@ mod tests {
     };
 
     #[derive(Debug, Default)]
-    struct IoEngineNodePluginSvc {
+    struct NodePluginSvc {
         first_call: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     }
-    impl IoEngineNodePluginSvc {
+    impl NodePluginSvc {
         fn new(chan: tokio::sync::oneshot::Sender<()>) -> Self {
             Self {
                 first_call: Arc::new(Mutex::new(Some(chan))),
@@ -39,7 +39,7 @@ mod tests {
     }
 
     #[tonic::async_trait]
-    impl IoEngineNodePlugin for IoEngineNodePluginSvc {
+    impl NodePlugin for NodePluginSvc {
         async fn freeze_fs(
             &self,
             _request: Request<FreezeFsRequest>,
@@ -69,7 +69,8 @@ mod tests {
             tokio::time::sleep(Duration::from_secs(2)).await;
             println!("Done...");
             Ok(Response::new(FindVolumeReply {
-                volume_type: VolumeType::Rawblock as i32,
+                volume_type: Some(VolumeType::Rawblock as i32),
+                device_path: "".to_string(),
             }))
         }
     }
@@ -88,9 +89,7 @@ mod tests {
 
         tokio::spawn(async move {
             if let Err(e) = Server::builder()
-                .add_service(IoEngineNodePluginServer::new(IoEngineNodePluginSvc::new(
-                    first_sender,
-                )))
+                .add_service(NodePluginServer::new(NodePluginSvc::new(first_sender)))
                 .serve_with_shutdown("0.0.0.0:50011".parse().unwrap(), wait(shutdown_receiver))
                 .await
             {
@@ -103,7 +102,7 @@ mod tests {
                 .connect()
                 .await
                 .unwrap();
-        let mut cli = IoEngineNodePluginClient::new(channel);
+        let mut cli = NodePluginClient::new(channel);
 
         // 1. schedule the first request
         let mut cli_first = cli.clone();
@@ -137,7 +136,7 @@ mod tests {
         println!("First Request Response: {:?}", first_request_resp);
         assert_eq!(
             first_request_resp.unwrap().into_inner().volume_type,
-            VolumeType::Rawblock as i32
+            Some(VolumeType::Rawblock as i32)
         );
     }
 }
