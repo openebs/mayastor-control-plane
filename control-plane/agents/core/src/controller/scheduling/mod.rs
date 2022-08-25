@@ -75,18 +75,41 @@ impl NodeFilters {
     }
 }
 
-/// Filter pools used for replica creation
+/// Filter pools used for replica creation.
 pub(crate) struct PoolFilters {}
 impl PoolFilters {
-    /// Should only attempt to use pools with sufficient free space
-    pub(crate) fn free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        item.pool.free_space() > request.size
+    /// The minimum free space in a pool for it to be eligible for thin provisioned replicas.
+    fn free_space_watermark() -> u64 {
+        16 * 1024 * 1024
     }
-    /// Should only attempt to use usable (not faulted) pools
+    /// Should only attempt to use pools with capacity bigger than the requested replica size.
+    pub(crate) fn capacity(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        item.pool.capacity > request.size
+    }
+    /// Should only attempt to use pools with sufficient free space.
+    pub(crate) fn free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        match request.thin {
+            true => item.pool.free_space() > Self::free_space_watermark(),
+            false => item.pool.free_space() > request.size,
+        }
+    }
+    /// Should only attempt to use pools with sufficient free space for a full rebuild.
+    /// Currently the data-plane fully rebuilds a volume, meaning a thin provisioned volume
+    /// becomes fully allocated.
+    pub(crate) fn free_space_full_rebuild(
+        request: &GetSuitablePoolsContext,
+        item: &PoolItem,
+    ) -> bool {
+        match request.thin && request.last_nexus_id.is_none() {
+            true => item.pool.free_space() > Self::free_space_watermark(),
+            false => item.pool.free_space() > request.size,
+        }
+    }
+    /// Should only attempt to use usable (not faulted) pools.
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
     }
-    /// Should only attempt to use pools having specific creation label iff topology has it
+    /// Should only attempt to use pools having specific creation label if topology has it.
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let volume_pool_topology_labels: HashMap<String, String>;
         match request.topology.clone() {
@@ -107,7 +130,7 @@ impl PoolFilters {
             },
         };
         // We will reach this part of code only if the volume has pool topology labels.
-        return match request.registry().specs().get_pool(&item.pool.id) {
+        match request.registry().specs().get_pool(&item.pool.id) {
             Ok(spec) => match spec.labels {
                 None => false,
                 Some(label) => volume_pool_topology_labels.keys().all(|k| {
@@ -115,7 +138,7 @@ impl PoolFilters {
                 }),
             },
             Err(_) => false,
-        };
+        }
     }
 }
 
