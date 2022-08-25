@@ -15,6 +15,7 @@ let
   pytest_inputs = python3.withPackages
     (ps: with ps; [ virtualenv grpcio grpcio-tools black ]);
   rust_chan = channel.default_src;
+  rust = rust_chan.${rust-profile};
 in
 mkShell {
   name = "control-plane-shell";
@@ -43,7 +44,7 @@ mkShell {
     udev
     utillinux
     which
-  ] ++ pkgs.lib.optional (!norust) rust_chan.${rust-profile};
+  ] ++ pkgs.lib.optional (!norust) rust;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
@@ -54,8 +55,9 @@ mkShell {
 
   # using the nix rust toolchain
   USE_NIX_RUST = "${toString (!norust)}";
-  # copy the rust-src to a writable directory, see: https://github.com/rust-lang/cargo/issues/10096
-  RUST_SRC_CLONE = "/tmp/rust-src";
+  # copy the rust toolchain to a writable directory, see: https://github.com/rust-lang/cargo/issues/10096
+  # the whole toolchain is copied to allow the src to be retrievable through "rustc --print sysroot"
+  RUST_TOOLCHAIN = "/tmp/rust-toolchain/${rust.version}";
 
   NODE_PATH = "${nodePackages."@commitlint/config-conventional"}/lib/node_modules";
 
@@ -65,14 +67,15 @@ mkShell {
     ${pkgs.lib.optionalString (norust) "echo 'Hint: use rustup tool.'"}
     ${pkgs.lib.optionalString (norust) "echo"}
     if [ -n "$USE_NIX_RUST" ]; then
-      RUST_SRC_PATH="${rust_chan.nightly_src}/lib/rustlib/src/rust/library/"
-      if ! diff -r "$RUST_SRC_PATH" "$RUST_SRC_CLONE" &>/dev/null; then
-        rm -rf "$RUST_SRC_CLONE"
-        mkdir -p "$RUST_SRC_CLONE" 2>/dev/null
-        cp -r "$RUST_SRC_PATH"/* "$RUST_SRC_CLONE"
-        chmod -R 775 "$RUST_SRC_CLONE"
+      RUST_TOOLCHAIN_RD="${rust}"
+      if ! diff -r --exclude Cargo.lock "$RUST_TOOLCHAIN_RD" "$RUST_TOOLCHAIN" &>/dev/null; then
+        rm -rf "$RUST_TOOLCHAIN"
+        mkdir -p "$RUST_TOOLCHAIN" 2>/dev/null
+        cp -r "$RUST_TOOLCHAIN_RD"/* "$RUST_TOOLCHAIN"
+        chmod -R +w "$RUST_TOOLCHAIN"
       fi
     fi
+    export PATH=$RUST_TOOLCHAIN/bin:$PATH
     pre-commit install
     pre-commit install --hook commit-msg
     export WORKSPACE_ROOT=`pwd`
