@@ -916,6 +916,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "lazy_static",
+ "nix",
  "nvmeadm",
  "once_cell",
  "opentelemetry",

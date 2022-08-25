@@ -35,6 +35,7 @@ rpc = { path = "../../rpc" }
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = { version = "0.1.7", features = ["net"] }
 clap = "2.33.3"
+nix = "0.22.3"
 
 # Tracing
 tracing = "0.1.35"

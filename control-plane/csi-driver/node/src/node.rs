@@ -1,3 +1,5 @@
+use nix::{errno::Errno, sys};
+use rpc::csi;
 use std::{boxed::Box, collections::HashMap, path::Path, time::Duration, vec::Vec};
 use tonic::{Code, Request, Response, Status};
 use tracing::{debug, error, info, trace};
@@ -151,7 +153,10 @@ impl node_server::Node for Node {
         &self,
         _request: Request<NodeGetCapabilitiesRequest>,
     ) -> Result<Response<NodeGetCapabilitiesResponse>, Status> {
-        let caps = vec![node_service_capability::rpc::Type::StageUnstageVolume];
+        let caps = vec![
+            node_service_capability::rpc::Type::StageUnstageVolume,
+            node_service_capability::rpc::Type::GetVolumeStats,
+        ];
 
         debug!("NodeGetCapabilities request: {:?}", caps);
 
@@ -317,30 +322,51 @@ impl node_server::Node for Node {
         Ok(Response::new(NodeUnpublishVolumeResponse {}))
     }
 
-    /// Get volume stats method is currently not implemented,
-    /// although it's simple to do.
-    ///
-    /// TODO: Just read the data about capacity/used space
-    /// inodes/bytes from the system using the mountpoint.
+    /// Get volume stats method evaluates and returns capacity metrics
     async fn node_get_volume_stats(
         &self,
         request: Request<NodeGetVolumeStatsRequest>,
     ) -> Result<Response<NodeGetVolumeStatsResponse>, Status> {
         let msg = request.into_inner();
         trace!("node_get_volume_stats {:?}", msg);
-
-        /*
-        Ok(Response::new(NodeGetVolumeStatsResponse {
-            usage: vec![VolumeUsage {
-                total: 0 as i64,
-                unit: volume_usage::Unit::Bytes as i32,
-                available: 0,
-                used: 0,
-            }],
-        }))
-        */
-        error!("Unimplemented {:?}", msg);
-        Err(Status::new(Code::Unimplemented, "Method not implemented"))
+        if msg.volume_id.is_empty() {
+            return Err(failure!(
+                Code::InvalidArgument,
+                "Failed to stage volume: missing volume id"
+            ));
+        }
+        if msg.volume_path.is_empty() {
+            return Err(failure!(
+                Code::InvalidArgument,
+                "Failed to stage volume: missing volume path"
+            ));
+        }
+        match sys::statfs::statfs(&*msg.volume_path) {
+            Ok(info) => Ok(Response::new(NodeGetVolumeStatsResponse {
+                usage: vec![
+                    csi::VolumeUsage {
+                        total: info.blocks() as i64 * info.block_size(),
+                        unit: csi::volume_usage::Unit::Bytes as i32,
+                        available: info.blocks_available() as i64 * info.block_size(),
+                        used: (info.blocks() - info.blocks_free()) as i64 * info.block_size(),
+                    },
+                    csi::VolumeUsage {
+                        total: info.files() as i64,
+                        unit: csi::volume_usage::Unit::Inodes as i32,
+                        available: info.files_free() as i64,
+                        used: (info.files() - info.files_free()) as i64,
+                    },
+                ],
+                volume_condition: None,
+            })),
+            Err(err) => match err {
+                Errno::ENOENT => Err(Status::new(Code::NotFound, err.to_string())),
+                Errno::EIO => Err(Status::new(Code::Internal, err.to_string())),
+                Errno::ENOSYS => Err(Status::new(Code::Unavailable, err.to_string())),
+                Errno::ENOTDIR => Err(Status::new(Code::FailedPrecondition, err.to_string())),
+                _ => Err(Status::new(Code::InvalidArgument, err.to_string())),
+            },
+        }
     }
 
     async fn node_expand_volume(
