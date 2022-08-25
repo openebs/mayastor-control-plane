@@ -149,13 +149,13 @@ def published_nexus(volumes, share_type, volume_id):
     yield volume.state["target"]
     ApiClient.volumes_api().del_volume_target(volume.spec.uuid)
 
-
+@pytest.fixture
 def test_get_volume_stats(csi_instance, published_nexus, volume_id, target_path):
     with pytest.raises(grpc.RpcError) as error:
         csi_instance.node.NodeGetVolumeStats(
             pb.NodeGetVolumeStatsRequest(volume_id=volume_id, volume_path=target_path)
         )
-    assert error.value.code() == grpc.StatusCode.UNIMPLEMENTED
+    assert error.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
 @pytest.fixture(params=["multi-node-reader-only", "multi-node-single-writer"])
