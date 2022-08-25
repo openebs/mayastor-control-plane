@@ -31,6 +31,7 @@ fn main() {
         .compile(
             &[
                 "api/protobuf/v1/host.proto",
+                "api/protobuf/v1/replica.proto",
                 "api/protobuf/v1/registration.proto",
             ],
             &["api/protobuf/v1"],

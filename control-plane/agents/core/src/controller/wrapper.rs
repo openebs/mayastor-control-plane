@@ -10,7 +10,11 @@ use crate::{
 
 use common::{
     errors::{GrpcRequest as GrpcRequestError, SvcError},
-    msg_translation::{v0::AgentToIoEngine as v0_conversion, IoEngineToAgent, TryIoEngineToAgent},
+    msg_translation::{
+        v0::{rpc_replica_to_agent as v0_rpc_replica_to_agent, AgentToIoEngine as v0_conversion},
+        v1::{rpc_replica_to_agent as v1_rpc_replica_to_agent, AgentToIoEngine as v1_conversion},
+        IoEngineToAgent, TryIoEngineToAgent,
+    },
 };
 use common_lib::{
     transport_api::{Message, MessageId, ResourceKind},
@@ -33,6 +37,7 @@ use common_lib::types::v0::{
     transport::{APIVersion, Register},
 };
 
+use common_lib::types::v0::transport::ReplicaName;
 use parking_lot::RwLock;
 use snafu::ResultExt;
 use std::{
@@ -372,7 +377,7 @@ impl NodeWrapper {
                     .get_replica_states()
                     .filter_map(|replica_state| {
                         let replica_state = replica_state.lock();
-                        if replica_state.replica.pool == pool_state.uuid() {
+                        if replica_state.replica.pool_id == pool_state.uuid() {
                             Some(replica_state.replica.clone())
                         } else {
                             None
@@ -400,7 +405,7 @@ impl NodeWrapper {
                     .get_replica_states()
                     .filter_map(|r| {
                         let replica = r.lock();
-                        if replica.replica.pool == pool_state.uuid() {
+                        if replica.replica.pool_id == pool_state.uuid() {
                             Some(replica.replica.clone())
                         } else {
                             None
@@ -841,11 +846,27 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             });
         }
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let replica = dataplane.create_replica(request).await?;
+        let replica = dataplane.create_replica(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_replica_states(ctx.deref_mut()).await?;
         self.update_pool_states(ctx.deref_mut()).await?;
-        Ok(replica)
+        // check for idempotency
+        match replica {
+            Ok(replica) => Ok(replica),
+            Err(error) => {
+                match self.read().await.replicas().iter().find(|replica| {
+                    replica.uuid == request.uuid
+                        || replica.name
+                            == ReplicaName::from_opt_uuid(request.name.as_ref(), &request.uuid)
+                }) {
+                    Some(replica) => {
+                        // return Ok if replica with the requested uuid and name already exists
+                        Ok(replica.clone())
+                    }
+                    None => Err(error),
+                }
+            }
+        }
     }
 
     /// Share a replica on the pool via gRPC
@@ -869,19 +890,29 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Destroy a replica on the pool via gRPC
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let _ = dataplane.destroy_replica(request).await?;
+        let result = dataplane.destroy_replica(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_replica_states(ctx.deref_mut()).await?;
         // todo: remove when CAS-1107 is resolved
         if let Some(replica) = self.read().await.replica(&request.uuid) {
-            if replica.pool == request.pool {
+            if replica.pool_id == request.pool_id {
                 return Err(SvcError::Internal {
                     details: "replica was not destroyed by the io-engine".to_string(),
                 });
             }
         }
         self.update_pool_states(ctx.deref_mut()).await?;
-        Ok(())
+        // check for idempotency
+        match result {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                // return Ok if a replica with the requested uuid doesn't exist
+                if self.read().await.replica(&request.uuid).is_none() {
+                    return Ok(());
+                }
+                return Err(error);
+            }
+        }
     }
 
     /// Create a nexus on the node via gRPC
@@ -1031,17 +1062,31 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let rpc_replica = self
                     .client_v0()?
-                    .create_replica_v2(request.to_rpc())
+                    .create_replica_v2(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Replica,
                         request: "create_replica",
                     })?;
-                let replica = rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
+                let replica = v0_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
                 Ok(replica)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_replica = self
+                    .client_v1()?
+                    .replica()
+                    .create_replica(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Replica,
+                        request: "create_replica",
+                    })?;
+                let mut replica =
+                    v1_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
+                // Replica doesn't have the pool name.
+                // Fill this with the requested pool name.
+                replica.pool_id = request.pool_id.clone();
+                Ok(replica)
             }
         }
     }
@@ -1050,7 +1095,7 @@ impl ClientOps for GrpcClientLocked {
         match self.api_version() {
             APIVersion::V0 => Ok(self
                 .client_v0()?
-                .share_replica(request.to_rpc())
+                .share_replica(v0_conversion::to_rpc(request))
                 .await
                 .context(GrpcRequestError {
                     resource: ResourceKind::Replica,
@@ -1058,9 +1103,17 @@ impl ClientOps for GrpcClientLocked {
                 })?
                 .into_inner()
                 .uri),
-            APIVersion::V1 => {
-                unimplemented!()
-            }
+            APIVersion::V1 => Ok(self
+                .client_v1()?
+                .replica()
+                .share_replica(v1_conversion::to_rpc(request))
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Replica,
+                    request: "share_replica",
+                })?
+                .into_inner()
+                .uri),
         }
     }
 
@@ -1068,7 +1121,7 @@ impl ClientOps for GrpcClientLocked {
         match self.api_version() {
             APIVersion::V0 => Ok(self
                 .client_v0()?
-                .share_replica(request.to_rpc())
+                .share_replica(v0_conversion::to_rpc(request))
                 .await
                 .context(GrpcRequestError {
                     resource: ResourceKind::Replica,
@@ -1076,9 +1129,17 @@ impl ClientOps for GrpcClientLocked {
                 })?
                 .into_inner()
                 .uri),
-            APIVersion::V1 => {
-                unimplemented!()
-            }
+            APIVersion::V1 => Ok(self
+                .client_v1()?
+                .replica()
+                .unshare_replica(v1_conversion::to_rpc(request))
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Replica,
+                    request: "unshare_replica",
+                })?
+                .into_inner()
+                .uri),
         }
     }
 
@@ -1087,7 +1148,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let _ = self
                     .client_v0()?
-                    .destroy_replica(request.to_rpc())
+                    .destroy_replica(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Replica,
@@ -1096,7 +1157,16 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let _ = self
+                    .client_v1()?
+                    .replica()
+                    .destroy_replica(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Replica,
+                        request: "destroy_replica",
+                    })?;
+                Ok(())
             }
         }
     }
@@ -1223,16 +1293,6 @@ pub(crate) fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) ->
     let mut pool = rpc_pool.to_agent();
     pool.node = id.clone();
     pool
-}
-
-/// convert rpc replica to a agent replica
-pub(crate) fn rpc_replica_to_agent(
-    rpc_replica: &rpc::io_engine::ReplicaV2,
-    id: &NodeId,
-) -> Result<Replica, SvcError> {
-    let mut replica = rpc_replica.try_to_agent()?;
-    replica.node = id.clone();
-    Ok(replica)
 }
 
 /// convert rpc nexus v2 to a agent nexus

@@ -173,13 +173,14 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         replica,
         models::Replica {
             node: pool.spec.clone().unwrap().node,
+            pool_id: pool.id.clone(),
             uuid: FromStr::from_str("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
-            pool: pool.id.clone(),
             thin: false,
             size: 12582912,
             share: models::Protocol::Nvmf,
             uri,
-            state: models::ReplicaState::Online
+            state: models::ReplicaState::Online,
+            pool_uuid: None,
         }
     );
     assert_eq!(
@@ -188,7 +189,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     );
     client
         .replicas_api()
-        .del_node_pool_replica(&replica.node, &replica.pool, &replica.uuid)
+        .del_node_pool_replica(&replica.node, &replica.pool_id, &replica.uuid)
         .await
         .unwrap();
 

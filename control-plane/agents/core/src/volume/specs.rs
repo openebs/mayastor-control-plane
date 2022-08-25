@@ -48,6 +48,7 @@ use common_lib::{
 };
 use grpc::operations::{PaginatedResult, Pagination};
 
+use common_lib::types::v0::store::replica::PoolRef;
 use snafu::OptionExt;
 use std::convert::From;
 
@@ -160,7 +161,8 @@ pub(crate) async fn get_volume_replica_candidates(
                 node: p.node.clone(),
                 name: Some(ReplicaName::new(&replica_uuid, Some(&request.uuid))),
                 uuid: replica_uuid,
-                pool: p.id.clone(),
+                pool_id: p.id.clone(),
+                pool_uuid: None,
                 size: request.size,
                 thin: false,
                 share: Protocol::None,
@@ -311,7 +313,7 @@ impl ResourceSpecsLocked {
             .replicas
             .values()
             .filter(|r| r.lock().owners.owned_by(id))
-            .map(|r| r.lock().pool.clone())
+            .map(|r| r.lock().pool.pool_name().clone())
             .collect::<Vec<_>>();
         self.read()
             .get_pools()
@@ -355,7 +357,7 @@ impl ResourceSpecsLocked {
     ) -> Option<NodeId> {
         let pools = registry.get_pool_states_inner().await;
         pools.iter().find_map(|p| {
-            if p.id == replica.pool {
+            if p.id == replica.pool.pool_name().clone() {
                 Some(p.node.clone())
             } else {
                 None
@@ -415,9 +417,18 @@ impl ResourceSpecsLocked {
         by: ReplicaOwners,
         node: &NodeId,
     ) -> DestroyReplica {
+        let pool_id = match spec.pool.clone() {
+            PoolRef::Named(id) => id,
+            PoolRef::Uuid(id, _) => id,
+        };
+        let pool_uuid = match spec.pool {
+            PoolRef::Named(_) => None,
+            PoolRef::Uuid(_, uuid) => Some(uuid),
+        };
         DestroyReplica {
             node: node.clone(),
-            pool: spec.pool,
+            pool_id,
+            pool_uuid,
             uuid: spec.uuid,
             name: spec.name.into(),
             disowners: by,
@@ -1029,12 +1040,14 @@ impl ResourceSpecsLocked {
                 match registry.get_replica(&replica_uuid).await {
                     Ok(state) => state.node.clone(),
                     Err(_) => {
-                        let pool_id = replica.lock().pool.clone();
-                        let pool_spec =
-                            self.get_locked_pool(&pool_id)
-                                .context(errors::PoolNotFound {
-                                    pool_id: pool_id.to_string(),
-                                })?;
+                        let pool_ref = replica.lock().pool.clone();
+                        let pool_id = match pool_ref {
+                            PoolRef::Named(name) => name,
+                            PoolRef::Uuid(name, _) => name,
+                        };
+                        let pool_spec = self
+                            .get_locked_pool(&pool_id)
+                            .context(errors::PoolNotFound { pool_id })?;
                         let node_id = pool_spec.lock().node.clone();
                         node_id
                     }

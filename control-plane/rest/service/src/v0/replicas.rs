@@ -44,7 +44,8 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
     let destroy = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => DestroyReplica {
             node: node_id,
-            pool: pool_id,
+            pool_id,
+            pool_uuid: None,
             name: None,
             uuid: replica_id,
             ..Default::default()
@@ -57,7 +58,8 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
 
             DestroyReplica {
                 node: node_id,
-                pool: pool_id,
+                pool_id,
+                pool_uuid: None,
                 name: None,
                 uuid: replica_id,
                 ..Default::default()
@@ -83,7 +85,8 @@ async fn share_replica(
     let share = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => ShareReplica {
             node: node_id,
-            pool: pool_id,
+            pool_id,
+            pool_uuid: None,
             name: None,
             uuid: replica_id,
             protocol,
@@ -96,7 +99,8 @@ async fn share_replica(
 
             ShareReplica {
                 node: node_id,
-                pool: pool_id,
+                pool_id,
+                pool_uuid: None,
                 name: None,
                 uuid: replica_id,
                 protocol,
@@ -119,7 +123,8 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
     let unshare = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => UnshareReplica {
             node: node_id,
-            pool: pool_id,
+            pool_id,
+            pool_uuid: None,
             name: None,
             uuid: replica_id,
         },
@@ -131,7 +136,8 @@ async fn unshare_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
 
             UnshareReplica {
                 node: node_id,
-                pool: pool_id,
+                pool_id,
+                pool_uuid: None,
                 name: None,
                 uuid: replica_id,
             }

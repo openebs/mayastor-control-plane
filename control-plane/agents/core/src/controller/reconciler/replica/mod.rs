@@ -179,8 +179,10 @@ async fn destroy_replica(
     replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let pool_id = replica.lock().pool.clone();
-    if let Some(node) = ResourceSpecsLocked::get_pool_node(context.registry(), pool_id).await {
+    let pool_ref = replica.lock().pool.clone();
+    if let Some(node) =
+        ResourceSpecsLocked::get_pool_node(context.registry(), pool_ref.pool_name().clone()).await
+    {
         let replica_spec = replica.lock().clone();
         match replica
             .destroy(

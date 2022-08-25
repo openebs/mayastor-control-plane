@@ -1598,6 +1598,11 @@ components:
       description: storage pool identifier
       example: pool-1
       type: string
+    PoolUuid:
+      description: storage pool unique identifier
+      example: 22ca10d3-4f2b-4b95-9814-9181c025cc1a
+      type: string
+      format: uuid
     BlockDevice:
       example:
         available: false
@@ -2192,8 +2197,10 @@ components:
       properties:
         node:
           $ref: '#/components/schemas/NodeId'
-        pool:
+        poolId:
           $ref: '#/components/schemas/PoolId'
+        poolUuid:
+          $ref: '#/components/schemas/PoolUuid'
         share:
           $ref: '#/components/schemas/Protocol'
         size:
@@ -2218,7 +2225,7 @@ components:
           format: uuid
       required:
         - node
-        - pool
+        - poolId
         - share
         - size
         - state
@@ -2426,7 +2433,8 @@ components:
           nexuses:
             - 514ed1c8-7174-49ac-b9cd-ad44ef670a67
           volume: null
-        pool: pooloop
+        poolId: pooloop
+        poolUuid: 22ca10d3-4f2b-4b95-9814-9181c025cc1a
         share: none
         size: 80241024
         state: Created
@@ -2476,9 +2484,10 @@ components:
               format: uuid
           required:
             - nexuses
-        pool:
-          description: The pool that the replica should live on.
-          type: string
+        poolId:
+          $ref: '#/components/schemas/PoolId'
+        poolUuid:
+          $ref: '#/components/schemas/PoolUuid'
         share:
           $ref: '#/components/schemas/Protocol'
         size:
@@ -2498,7 +2507,7 @@ components:
       required:
         - managed
         - owners
-        - pool
+        - poolId
         - share
         - size
         - status

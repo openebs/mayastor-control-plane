@@ -1,10 +1,13 @@
 use crate::{
-    controller::wrapper::{rpc_nexus_v2_to_agent, rpc_pool_to_agent, rpc_replica_to_agent},
+    controller::wrapper::{rpc_nexus_v2_to_agent, rpc_pool_to_agent},
     node::service::NodeCommsTimeout,
 };
 use common::{
     errors::{GrpcConnect, GrpcConnectUri, GrpcRequest as GrpcRequestError, SvcError},
-    msg_translation::IoEngineToAgent,
+    msg_translation::{
+        v0::rpc_replica_to_agent as v0_rpc_replica_to_agent,
+        v1::rpc_replica_to_agent as v1_rpc_replica_to_agent, IoEngineToAgent,
+    },
 };
 use common_lib::{
     transport_api::{v0::BlockDevices, MessageId, ResourceKind},
@@ -15,7 +18,7 @@ use common_lib::{
 use grpc::{context::timeout_grpc, operations::registration::traits::ApiVersion};
 use rpc::{
     io_engine::{IoEngineClient, ListBlockDevicesRequest as V0ListBlockDevicesRequest, Null},
-    v1::host::ListBlockDevicesRequest as V1ListBlockDevicesRequest,
+    v1::{host::ListBlockDevicesRequest as V1ListBlockDevicesRequest, replica::ListReplicaOptions},
 };
 use snafu::ResultExt;
 use std::{
@@ -100,10 +103,20 @@ impl GrpcContext {
 pub(crate) type MayaClientV0 = IoEngineClient<Channel>;
 /// V1 HostClient
 pub(crate) type HostClient = rpc::v1::host::host_rpc_client::HostRpcClient<Channel>;
+/// V1 ReplicaClient
+pub(crate) type ReplicaClient = rpc::v1::replica::replica_rpc_client::ReplicaRpcClient<Channel>;
 
 #[derive(Clone, Debug)]
 pub(crate) struct MayaClientV1 {
     host: HostClient,
+    replica: ReplicaClient,
+}
+
+impl MayaClientV1 {
+    /// get the v1 replica client
+    pub(crate) fn replica(&self) -> ReplicaClient {
+        self.replica.clone()
+    }
 }
 
 /// Wrapper over all gRPC Clients types
@@ -162,10 +175,26 @@ impl GrpcClient {
                         endpoint: context.endpoint.uri().to_string(),
                     })?),
                 }?;
+                let replica = match tokio::time::timeout(
+                    context.comms_timeouts.connect(),
+                    ReplicaClient::connect(context.endpoint.clone()),
+                )
+                .await
+                {
+                    Err(_) => Err(SvcError::GrpcConnectTimeout {
+                        node_id: context.node.to_string(),
+                        endpoint: context.endpoint.uri().to_string(),
+                        timeout: context.comms_timeouts.connect(),
+                    }),
+                    Ok(client) => Ok(client.context(GrpcConnect {
+                        node_id: context.node.to_string(),
+                        endpoint: context.endpoint.uri().to_string(),
+                    })?),
+                }?;
                 Ok(Self {
                     context: context.clone(),
                     io_engine_v0: None,
-                    io_engine_v1: Some(MayaClientV1 { host }),
+                    io_engine_v1: Some(MayaClientV1 { host, replica }),
                 })
             }
         }
@@ -317,7 +346,7 @@ impl GrpcClient {
 
                 let replicas = rpc_replicas
                     .iter()
-                    .filter_map(|p| match rpc_replica_to_agent(p, id) {
+                    .filter_map(|p| match v0_rpc_replica_to_agent(p, id) {
                         Ok(r) => Some(r),
                         Err(error) => {
                             tracing::error!(error=%error, "Could not convert rpc replica");
@@ -329,7 +358,33 @@ impl GrpcClient {
                 Ok(replicas)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_replicas = self
+                    .client_v1()?
+                    .replica()
+                    .list_replicas(ListReplicaOptions {
+                        name: None,
+                        poolname: None,
+                    })
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Replica,
+                        request: "list_replicas",
+                    })?;
+
+                let rpc_replicas = &rpc_replicas.get_ref().replicas;
+
+                let replicas = rpc_replicas
+                    .iter()
+                    .filter_map(|p| match v1_rpc_replica_to_agent(p, id) {
+                        Ok(r) => Some(r),
+                        Err(error) => {
+                            tracing::error!(error=%error, "Could not convert rpc replica");
+                            None
+                        }
+                    })
+                    .collect();
+
+                Ok(replicas)
             }
         }
     }

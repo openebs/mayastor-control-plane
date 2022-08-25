@@ -92,7 +92,7 @@ impl Registry {
     /// If the replica cannot be found, return the default replica topology.
     async fn replica_topology(&self, spec: &ReplicaSpec) -> ReplicaTopology {
         match self.get_replica(&spec.uuid).await {
-            Ok(state) => ReplicaTopology::new(Some(state.node), Some(state.pool), state.status),
+            Ok(state) => ReplicaTopology::new(Some(state.node), Some(state.pool_id), state.status),
             Err(_) => {
                 tracing::trace!(replica.uuid = %spec.uuid, "Replica not found. Constructing default replica topology");
                 ReplicaTopology::default()

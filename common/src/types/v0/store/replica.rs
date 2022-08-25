@@ -1,16 +1,19 @@
 //! Definition of replica types that can be saved to the persistent store.
 
-use crate::types::v0::{
-    openapi::models,
-    store::{
-        definitions::{ObjectKey, StorableObject, StorableObjectType},
-        AsOperationSequencer, OperationSequence, ResourceMutex, ResourceUuid, SpecStatus,
-        SpecTransaction,
+use crate::{
+    types::v0::{
+        openapi::models,
+        store::{
+            definitions::{ObjectKey, StorableObject, StorableObjectType},
+            AsOperationSequencer, OperationSequence, ResourceMutex, ResourceUuid, SpecStatus,
+            SpecTransaction,
+        },
+        transport::{
+            self, CreateReplica, NodeId, PoolId, PoolUuid, Protocol, Replica as MbusReplica,
+            ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol,
+        },
     },
-    transport::{
-        self, CreateReplica, NodeId, PoolId, Protocol, Replica as MbusReplica, ReplicaId,
-        ReplicaName, ReplicaOwners, ReplicaShareProtocol,
-    },
+    IntoOption,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -74,8 +77,8 @@ pub struct ReplicaSpec {
     pub uuid: ReplicaId,
     /// The size that the replica should be.
     pub size: u64,
-    /// The pool that the replica should live on.
-    pub pool: PoolId,
+    /// Reference of a pool that the replica should live on.
+    pub pool: PoolRef,
     /// Protocol used for exposing the replica.
     pub share: Protocol,
     /// Thin provisioning.
@@ -91,6 +94,102 @@ pub struct ReplicaSpec {
     pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<ReplicaOperationState>,
+}
+
+/// Reference of a pool.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(untagged)]
+pub enum PoolRef {
+    /// Name referenced pool.
+    Named(PoolId),
+    /// Uuid and name referenced pool.
+    Uuid(PoolId, PoolUuid),
+}
+
+impl Default for PoolRef {
+    fn default() -> Self {
+        Self::Named("".into())
+    }
+}
+
+impl PoolRef {
+    /// Get the pool name.
+    pub fn pool_name(&self) -> &PoolId {
+        match &self {
+            PoolRef::Named(name) => name,
+            PoolRef::Uuid(name, _) => name,
+        }
+    }
+
+    /// Get the pool uuid.
+    pub fn pool_uuid(&self) -> Option<PoolUuid> {
+        match &self {
+            PoolRef::Named(_) => None,
+            PoolRef::Uuid(_, uuid) => Some(uuid.clone()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_deserializer {
+    use super::*;
+    use crate::types::v0::transport::{ReplicaStatus, VolumeId};
+
+    #[test]
+    fn test_replica_spec_deserializer() {
+        struct Test<'a> {
+            input: &'a str,
+            expected: ReplicaSpec,
+        }
+        let tests: Vec<Test> = vec![
+            Test {
+                input: r#"{"name":"30b1a62e-4301-445b-88af-125eca1dcc6d","uuid":"30b1a62e-4301-445b-88af-125eca1dcc6d","size":10485761,"pool":"pool-1","share":"none","thin":false,"status":{"Created":"online"},"managed":true,"owners":{"volume":"ec4e66fd-3b33-4439-b504-d49aba53da26","disown_all":false},"operation":null}"#,
+                expected: ReplicaSpec {
+                    name: "30b1a62e-4301-445b-88af-125eca1dcc6d".into(),
+                    uuid: ReplicaId::try_from("30b1a62e-4301-445b-88af-125eca1dcc6d").unwrap(),
+                    size: 10485761,
+                    pool: PoolRef::Named("pool-1".into()),
+                    share: Protocol::None,
+                    thin: false,
+                    status: ReplicaSpecStatus::Created(ReplicaStatus::Online),
+                    managed: true,
+                    owners: ReplicaOwners::new(
+                        Some(VolumeId::try_from("ec4e66fd-3b33-4439-b504-d49aba53da26").unwrap()),
+                        vec![],
+                    ),
+                    sequencer: Default::default(),
+                    operation: None,
+                },
+            },
+            Test {
+                input: r#"{"name":"30b1a62e-4301-445b-88af-125eca1dcc6d","uuid":"30b1a62e-4301-445b-88af-125eca1dcc6d","size":10485761,"pool":["pool-1","22ca10d3-4f2b-4b95-9814-9181c025cc1a"],"share":"none","thin":false,"status":{"Created":"online"},"managed":true,"owners":{"volume":"ec4e66fd-3b33-4439-b504-d49aba53da26","disown_all":false},"operation":null}"#,
+                expected: ReplicaSpec {
+                    name: "30b1a62e-4301-445b-88af-125eca1dcc6d".into(),
+                    uuid: ReplicaId::try_from("30b1a62e-4301-445b-88af-125eca1dcc6d").unwrap(),
+                    size: 10485761,
+                    pool: PoolRef::Uuid(
+                        "pool-1".into(),
+                        PoolUuid::try_from("22ca10d3-4f2b-4b95-9814-9181c025cc1a").unwrap(),
+                    ),
+                    share: Protocol::None,
+                    thin: false,
+                    status: ReplicaSpecStatus::Created(ReplicaStatus::Online),
+                    managed: true,
+                    owners: ReplicaOwners::new(
+                        Some(VolumeId::try_from("ec4e66fd-3b33-4439-b504-d49aba53da26").unwrap()),
+                        vec![],
+                    ),
+                    sequencer: Default::default(),
+                    operation: None,
+                },
+            },
+        ];
+
+        for test in &tests {
+            let replica_spec: ReplicaSpec = serde_json::from_str(test.input).unwrap();
+            assert_eq!(test.expected, replica_spec);
+        }
+    }
 }
 
 impl ResourceMutex<ReplicaSpec> {
@@ -119,10 +218,12 @@ impl ResourceUuid for ReplicaSpec {
 
 impl From<ReplicaSpec> for models::ReplicaSpec {
     fn from(src: ReplicaSpec) -> Self {
-        Self::new(
+        Self::new_all(
             src.managed,
+            None,
             src.owners,
-            src.pool,
+            src.pool.pool_name(),
+            src.pool.pool_uuid().into_opt(),
             src.share,
             src.size,
             src.status,
@@ -225,7 +326,8 @@ impl From<&ReplicaSpec> for transport::Replica {
             node: NodeId::default(),
             name: replica.name.clone(),
             uuid: replica.uuid.clone(),
-            pool: replica.pool.clone(),
+            pool_id: replica.pool.pool_name().clone(),
+            pool_uuid: replica.pool.pool_uuid(),
             thin: replica.thin,
             size: replica.size,
             share: replica.share,
@@ -244,7 +346,10 @@ impl From<&CreateReplica> for ReplicaSpec {
             name: ReplicaName::from_opt_uuid(request.name.as_ref(), &request.uuid),
             uuid: request.uuid.clone(),
             size: request.size,
-            pool: request.pool.clone(),
+            pool: match request.pool_uuid.clone() {
+                Some(uuid) => PoolRef::Uuid(request.pool_id.clone(), uuid),
+                None => PoolRef::Named(request.pool_id.clone()),
+            },
             share: request.share,
             thin: request.thin,
             status: ReplicaSpecStatus::Creating,
@@ -265,6 +370,10 @@ impl PartialEq<CreateReplica> for ReplicaSpec {
 }
 impl PartialEq<transport::Replica> for ReplicaSpec {
     fn eq(&self, other: &transport::Replica) -> bool {
-        self.share == other.share && self.pool == other.pool
+        let pool = match other.pool_uuid.clone() {
+            Some(uuid) => PoolRef::Uuid(other.pool_id.clone(), uuid),
+            None => PoolRef::Named(other.pool_id.clone()),
+        };
+        self.share == other.share && self.pool == pool
     }
 }

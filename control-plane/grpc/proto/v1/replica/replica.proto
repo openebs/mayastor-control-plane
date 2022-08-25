@@ -25,6 +25,8 @@ message Replica{
   string uri = 8;
   // status of the replica
   ReplicaStatus status = 9;
+  // uuid of the pool
+  optional google.protobuf.StringValue pool_uuid = 10;
 }
 
 // Multiple replicas
@@ -64,6 +66,8 @@ message CreateReplicaRequest{
   bool managed = 8;
   // Owners of the resource
   ReplicaOwners owners = 9;
+  // uuid of the pool
+  optional google.protobuf.StringValue pool_uuid = 10;
 }
 
 // Replica owners which is a volume or none and a list of nexuses
@@ -84,6 +88,8 @@ message DestroyReplicaRequest{
   string pool_id = 4;
   // delete by owners
   ReplicaOwners disowners = 5;
+  // uuid of the pool
+  optional google.protobuf.StringValue pool_uuid = 6;
 }
 
 message ShareReplicaRequest {
@@ -97,6 +103,8 @@ message ShareReplicaRequest {
   string pool_id = 4;
   // protocol used for exposing the replica
   ReplicaShareProtocol protocol = 5;
+  // uuid of the pool
+  optional google.protobuf.StringValue pool_uuid = 6;
 }
 
 // The protocol used to share the replica.
@@ -113,6 +121,8 @@ message UnshareReplicaRequest {
   google.protobuf.StringValue replica_id = 3;
   // id of the pool
   string pool_id = 4;
+  // uuid of the pool
+  optional google.protobuf.StringValue pool_uuid = 5;
 }
 
 // Reply type for a CreateReplica request
@@ -187,6 +197,8 @@ message ReplicaSpec{
   ReplicaOwners owners = 9;
   // Record of the operation in progress
   optional common.SpecOperation operation = 10;
+  // uuid of the pool
+  optional google.protobuf.StringValue pool_uuid = 11;
 }
 
 // Service for managing replicas

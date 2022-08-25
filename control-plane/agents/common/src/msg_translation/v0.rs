@@ -6,7 +6,8 @@ use common_lib::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, NexusId, NexusStatus, Protocol, ReplicaId, ReplicaName, ReplicaStatus,
+            self, ChildState, NexusId, NexusStatus, NodeId, Protocol, Replica, ReplicaId,
+            ReplicaName, ReplicaStatus,
         },
     },
 };
@@ -107,7 +108,8 @@ impl TryIoEngineToAgent for v0_rpc::ReplicaV2 {
                 uuid: self.uuid.to_owned(),
                 kind: ResourceKind::Replica,
             })?,
-            pool: self.pool.clone().into(),
+            pool_id: self.pool.clone().into(),
+            pool_uuid: None,
             thin: self.thin,
             size: self.size,
             share: self.share.into(),
@@ -218,7 +220,7 @@ impl AgentToIoEngine for transport::CreateReplica {
         Self::IoEngineMessage {
             name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             uuid: self.uuid.clone().into(),
-            pool: self.pool.clone().into(),
+            pool: self.pool_id.clone().into(),
             thin: self.thin,
             size: self.size,
             share: self.share as i32,
@@ -343,4 +345,14 @@ impl AgentToIoEngine for transport::RemoveNexusChild {
             uri: self.uri.clone().into(),
         }
     }
+}
+
+/// convert rpc replica to a agent replica
+pub fn rpc_replica_to_agent(
+    rpc_replica: &v0_rpc::ReplicaV2,
+    id: &NodeId,
+) -> Result<Replica, SvcError> {
+    let mut replica = rpc_replica.try_to_agent()?;
+    replica.node = id.clone();
+    Ok(replica)
 }

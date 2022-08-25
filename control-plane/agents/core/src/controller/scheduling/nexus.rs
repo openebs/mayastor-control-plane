@@ -138,9 +138,10 @@ impl GetPersistedNexusChildrenCtx {
                         }
                     })
                 });
+                let pool_id = replica_spec.pool.pool_name().clone();
                 pool_wrappers
                     .iter()
-                    .find(|p| p.id == replica_spec.pool)
+                    .find(|p| p.id == pool_id)
                     .and_then(|pool| {
                         replica_state.map(|replica_state| {
                             ChildItem::new(&replica_spec, replica_state, child_info, pool)
