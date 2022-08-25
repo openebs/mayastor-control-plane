@@ -44,7 +44,8 @@ use common_lib::types::v0::{
     transport::{APIVersion, Register},
 };
 
-use common_lib::types::v0::transport::ReplicaName;
+use common_lib::types::v0::transport::{FaultNexusChild, ReplicaName};
+
 use parking_lot::RwLock;
 use snafu::ResultExt;
 use std::{
@@ -691,6 +692,8 @@ pub(crate) trait ClientOps {
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError>;
     /// Remove a child from its parent nexus via gRPC
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError>;
+    /// Fault a child from its parent nexus via gRPC.
+    async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError>;
 }
 
 /// Internal Operations on a io-engine locked `NodeWrapper` for the implementor
@@ -1046,6 +1049,26 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                             request.nexus
                         );
                         return Ok(());
+                    }
+                }
+                Err(error)
+            }
+        }
+    }
+
+    async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let result = dataplane.fault_child(request).await;
+        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
+        match result {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                if let Some(nexus) = self.read().await.nexus(&request.nexus) {
+                    if let Some(child) = nexus.children.into_iter().find(|c| c.uri == request.uri) {
+                        if child.state.faulted() {
+                            return Ok(());
+                        }
                     }
                 }
                 Err(error)
@@ -1408,6 +1431,25 @@ impl ClientOps for GrpcClientLocked {
                         request: "remove_child_nexus",
                     })?;
                 Ok(())
+            }
+        }
+    }
+
+    async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
+        match self.api_version() {
+            APIVersion::V0 => {
+                let _ = self
+                    .client_v0()?
+                    .fault_nexus_child(request.to_rpc())
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Child,
+                        request: "fault_child_nexus",
+                    })?;
+                Ok(())
+            }
+            APIVersion::V1 => {
+                unimplemented!()
             }
         }
     }

@@ -83,16 +83,19 @@ impl ComponentAction for CsiNode {
 }
 
 impl CsiNode {
-    fn name(i: u32) -> String {
+    /// The node-name for the csi-node plugin instance.
+    pub fn name(i: u32) -> String {
         format!("app-node-{}", i + 1)
     }
-    fn container_name(i: u32) -> String {
+    /// The container name for the csi-node plugin instance.
+    pub fn container_name(i: u32) -> String {
         format!("{}-{}", CSI_NODE, i + 1)
     }
     fn local_container_name(io_engine: &str) -> String {
         format!("{}-{}", CSI_NODE, io_engine)
     }
-    fn socket(node_name: &str) -> String {
+    /// The socket path for the csi-node plugin instance.
+    pub fn socket(node_name: &str) -> String {
         format!("/var/tmp/csi-{}.sock", node_name)
     }
     fn with_app_node(index: u32, cfg: Builder) -> Builder {
@@ -148,7 +151,7 @@ impl CsiNode {
         // Step 1: Wait till CSI node's gRPC server is registered and is ready
         // to serve API requests.
         let endpoint =
-            Endpoint::try_from("http://[::]:50051")?.connect_timeout(Duration::from_millis(150));
+            Endpoint::try_from("http://[::]")?.connect_timeout(Duration::from_millis(150));
 
         let channel = loop {
             let socket = socket.to_string();

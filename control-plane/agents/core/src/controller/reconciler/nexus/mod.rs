@@ -30,7 +30,10 @@ use crate::controller::{
     reconciler::{ReCreate, Reconciler},
     wrapper::NodeWrapper,
 };
-use common_lib::types::v0::{store::OperationGuardArc, transport::NexusStatus};
+use common_lib::types::v0::{
+    store::OperationGuardArc,
+    transport::{FaultNexusChild, NexusStatus},
+};
 use std::{convert::TryFrom, sync::Arc};
 use tokio::sync::RwLock;
 use tracing::Instrument;
@@ -113,7 +116,7 @@ async fn nexus_reconciler(
             unknown_children_remover(nexus, context).await,
             missing_children_remover(nexus, context).await,
             fixup_nexus_protocol(nexus, context).await,
-            enospc_children_finder(nexus, context).await,
+            enospc_children_faulter(nexus, context).await,
         ])
     } else {
         PollResult::Ok(PollerState::Idle)
@@ -177,7 +180,7 @@ pub(super) async fn faulted_children_remover(
 
 /// Find and removes unknown children from the given nexus
 /// If the child is a replica it also disowns and destroys it
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 pub(super) async fn unknown_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
@@ -480,10 +483,10 @@ pub(super) async fn faulted_nexus_remover(
     PollResult::Ok(PollerState::Idle)
 }
 
-/// Find thin-provisioned Nexus children which are degraded due to ENOSPC.
+/// Find thin-provisioned Nexus children which are degraded due to ENOSPC and fault them.
 /// fixme: This is just a place-holder for the actual logic.
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
-pub(super) async fn enospc_children_finder(
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+pub(super) async fn enospc_children_faulter(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
@@ -493,9 +496,19 @@ pub(super) async fn enospc_children_finder(
 
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
         for child in nexus_state.children.iter().filter(|c| c.enospc()) {
-            nexus.info_span(|| {
+            nexus.warn_span(|| {
                 tracing::info!(child.uri = child.uri.as_str(), "Found child with enospc")
             });
+            let node = context
+                .registry()
+                .get_node_wrapper(&nexus_state.node)
+                .await?;
+            node.fault_child(&FaultNexusChild {
+                node: nexus_state.node.clone(),
+                nexus: nexus_state.uuid.clone(),
+                uri: child.uri.clone(),
+            })
+            .await?;
         }
     }
 

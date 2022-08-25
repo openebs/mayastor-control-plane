@@ -112,3 +112,32 @@ async fn existing_replicas(volume_id: &VolumeId, client: &dyn VolumeOperations) 
         .filter(|(_id, topology)| topology.node().is_some() && topology.pool().is_some())
         .count()
 }
+
+/// Wait for the published volume target to have the specified number of children.
+pub(crate) async fn wait_till_volume_children(
+    volume: &VolumeId,
+    children: usize,
+    volume_client: &dyn VolumeOperations,
+) -> Vec<Child> {
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let start = std::time::Instant::now();
+    loop {
+        let volume = volume_client
+            .get(GetVolumes::new(volume).filter, None, None)
+            .await
+            .unwrap();
+        let volume_state = volume.entries.clone().first().unwrap().state();
+        let nexus = volume_state.target.clone().unwrap();
+
+        if nexus.children.len() == children {
+            return nexus.children;
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            panic!(
+                "Timeout waiting for the volume to reach the specified state (children: '{}')! Current: {:#?}",
+                children, volume_state
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}

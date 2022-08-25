@@ -93,6 +93,8 @@ pub enum MessageIdVs {
     RemoveNexusChild,
     /// Add a child to a nexus
     AddNexusChild,
+    /// Fault the nexus child.
+    FaultNexusChild,
     /// Get all volumes
     GetVolumes,
     /// Create Volume,

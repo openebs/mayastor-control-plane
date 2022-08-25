@@ -346,6 +346,16 @@ impl AgentToIoEngine for transport::RemoveNexusChild {
     }
 }
 
+impl AgentToIoEngine for transport::FaultNexusChild {
+    type IoEngineMessage = v0_rpc::FaultNexusChildRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            uuid: self.nexus.clone().into(),
+            uri: self.uri.clone().into(),
+        }
+    }
+}
+
 /// convert rpc replica to a agent replica
 pub fn rpc_replica_to_agent(
     rpc_replica: &v0_rpc::ReplicaV2,

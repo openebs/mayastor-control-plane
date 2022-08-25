@@ -9,7 +9,7 @@ use crate::controller::{
 
 use common_lib::types::v0::store::volume::VolumeSpec;
 
-use crate::controller::reconciler::nexus::faulted_nexus_remover;
+use crate::controller::reconciler::nexus::{enospc_children_faulter, faulted_nexus_remover};
 use common_lib::types::v0::{store::ResourceMutex, transport::VolumeStatus};
 
 /// Volume nexus reconciler
@@ -70,6 +70,7 @@ async fn volume_nexus_reconcile(
             if volume_state.status != VolumeStatus::Online {
                 faulted_nexus_remover(&mut nexus, context).await?;
                 missing_nexus_recreate(&mut nexus, context).await?;
+                enospc_children_faulter(&mut nexus, context).await?;
             }
             fixup_nexus_protocol(&mut nexus, context).await
         }

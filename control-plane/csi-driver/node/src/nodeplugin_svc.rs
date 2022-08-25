@@ -144,14 +144,17 @@ pub(crate) async fn find_mount(
     let mountpaths = findmnt::get_mountpaths(&device_path).context(InternalFailure {
         volume_id: volume_id.to_string(),
     })?;
-    debug!("mountpaths for volume_id :{} : {:?}", volume_id, mountpaths);
+    debug!(
+        volume.uuid = volume_id,
+        "Mountpaths for volume: {:?}", mountpaths
+    );
     if !mountpaths.is_empty() {
         let fstype = mountpaths[0].fstype();
         for devmount in mountpaths {
             if fstype != devmount.fstype() {
                 debug!(
-                    "Find volume_id :{} : failed, multiple fstypes {}, {}",
-                    volume_id,
+                    volume.uuid = volume_id,
+                    "Find volume failed, multiple fstypes {}, {}",
                     fstype,
                     devmount.fstype()
                 );
@@ -162,7 +165,7 @@ pub(crate) async fn find_mount(
                 });
             }
         }
-        debug!("fstype for volume_id :{} is {}", volume_id, fstype);
+        debug!(volume.uuid = volume_id, fstype, "Found fstype for volume");
         if fstype == "devtmpfs" {
             Ok(Some(TypeOfMount::RawBlock))
         } else {

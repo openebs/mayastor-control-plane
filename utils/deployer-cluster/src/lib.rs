@@ -21,6 +21,8 @@ use common_lib::{
         transport::CreatePool,
     },
 };
+pub use csi_driver::node::internal::*;
+use deployer_lib::infra::CsiNode;
 pub use etcd_client;
 use etcd_client::DeleteOptions;
 use grpc::{
@@ -31,7 +33,8 @@ use grpc::{
         replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
     },
 };
-use rpc::io_engine::RpcHandle;
+use openapi::models::Volume;
+use rpc::{csi::NodeStageVolumeResponse, io_engine::RpcHandle};
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
@@ -41,6 +44,7 @@ use std::{
     time::Duration,
 };
 use structopt::StructOpt;
+use tokio::net::UnixStream;
 use tonic::transport::Uri;
 use tracing::dispatcher::DefaultGuard;
 use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
@@ -169,6 +173,37 @@ impl Cluster {
         }
     }
 
+    /// Return a grpc handle to the csi-node plugin.
+    pub async fn csi_node_client(&self, index: u32) -> Result<CsiNodeClient, Error> {
+        let csi_socket = self.csi_socket(index);
+
+        let endpoint = tonic::transport::Endpoint::try_from("http://[::]")?
+            .connect_timeout(Duration::from_millis(100));
+        let channel = loop {
+            let csi_socket = csi_socket.to_string();
+            match endpoint
+                .connect_with_connector(tower::service_fn(move |_: Uri| {
+                    UnixStream::connect(csi_socket.to_string())
+                }))
+                .await
+            {
+                Ok(channel) => break channel,
+                Err(_) => tokio::time::sleep(Duration::from_millis(150)).await,
+            }
+        };
+
+        let csi = rpc::csi::node_client::NodeClient::new(channel);
+        let csi_endpoint = self
+            .composer()
+            .container_ip(&CsiNode::container_name(index));
+        let internal = csi_driver::node::internal::node_plugin_client::NodePluginClient::connect(
+            format!("http://{}:50051", csi_endpoint),
+        )
+        .await?;
+
+        Ok(CsiNodeClient { csi, internal })
+    }
+
     /// restart the core agent
     pub async fn restart_core(&self) {
         self.remove_store_lock(ControlPlaneService::CoreAgent).await;
@@ -192,6 +227,21 @@ impl Cluster {
     /// node id for `index`
     pub fn node(&self, index: u32) -> transport::NodeId {
         IoEngine::name(index, &self.builder.opts).into()
+    }
+
+    /// The node id for `index`.
+    pub fn csi_node(&self, index: u32) -> transport::NodeId {
+        CsiNode::name(index).into()
+    }
+
+    /// The container name for `index`.
+    pub fn csi_container(&self, index: u32) -> String {
+        CsiNode::container_name(index)
+    }
+
+    /// node id for `index`
+    pub fn csi_socket(&self, index: u32) -> String {
+        CsiNode::socket(self.csi_node(index).as_str())
     }
 
     /// node ip for `index`
@@ -421,7 +471,7 @@ struct Replica {
     share: transport::Protocol,
 }
 
-/// default timeout options for every grpc request
+/// The default timeout options for every grpc request.
 fn grpc_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_req_timeout(Duration::from_secs(5))
@@ -430,7 +480,7 @@ fn grpc_timeout_opts() -> TimeoutOptions {
 }
 
 impl ClusterBuilder {
-    /// Cluster Builder with default options
+    /// Cluster Builder with default options.
     #[must_use]
     pub fn builder() -> Self {
         ClusterBuilder {
@@ -445,7 +495,7 @@ impl ClusterBuilder {
         }
         .with_default_tracing()
     }
-    /// Update the start options
+    /// Update the start options.
     #[must_use]
     pub fn with_options<F>(mut self, set: F) -> Self
     where
@@ -497,13 +547,13 @@ impl ClusterBuilder {
         self.env_filter = filter.into().map(tracing_subscriber::EnvFilter::new);
         self
     }
-    /// Rest request timeout
+    /// Rest request timeout.
     #[must_use]
     pub fn with_rest_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.rest_timeout = timeout;
         self
     }
-    /// Add `count` malloc pools (100MiB size) to each node
+    /// Add `count` malloc pools (100MiB size) to each node.
     #[must_use]
     pub fn with_pools(mut self, count: u32) -> Self {
         for _ in 0 .. count {
@@ -518,7 +568,7 @@ impl ClusterBuilder {
         }
         self
     }
-    /// Add pool URI with `disk` to the node `index`
+    /// Add pool URI with `disk` to the node `index`.
     #[must_use]
     pub fn with_pool(mut self, index: u32, disk: &str) -> Self {
         if let Some(pools) = self.pools.get_mut(&index) {
@@ -529,7 +579,7 @@ impl ClusterBuilder {
         }
         self
     }
-    /// Add a tmpfs img pool with `disk` to each io-engine node with the specified `size`
+    /// Add a tmpfs img pool with `disk` to each io-engine node with the specified `size`.
     #[must_use]
     pub fn with_tmpfs_pool(mut self, size: u64) -> Self {
         for node in 0 .. self.opts.io_engines {
@@ -542,13 +592,13 @@ impl ClusterBuilder {
         }
         self
     }
-    /// Specify `count` replicas to add to each node per pool
+    /// Specify `count` replicas to add to each node per pool.
     #[must_use]
     pub fn with_replicas(mut self, count: u32, size: u64, share: transport::Protocol) -> Self {
         self.replicas = Replica { count, size, share };
         self
     }
-    /// Specify `count` io_engines for the cluster
+    /// Specify `count` io_engines for the cluster.
     #[must_use]
     pub fn with_io_engines(mut self, count: u32) -> Self {
         self.opts = self.opts.with_io_engines(count);
@@ -560,21 +610,21 @@ impl ClusterBuilder {
         self.opts = self.opts.with_pull_policy(policy);
         self
     }
-    /// Specify which agents to use
+    /// Specify which agents to use.
     #[must_use]
     pub fn with_agents(mut self, agents: Vec<&str>) -> Self {
         self.opts = self.opts.with_agents(agents);
         self
     }
-    /// Specify the node deadline for the node agent
-    /// eg: 2s
+    /// Specify the node deadline for the node agent.
+    /// eg: 2s.
     #[must_use]
     pub fn with_node_deadline(mut self, deadline: &str) -> Self {
         self.opts = self.opts.with_node_deadline(deadline);
         self
     }
     /// The period at which the registry updates its cache of all
-    /// resources from all nodes
+    /// resources from all nodes.
     #[must_use]
     pub fn with_cache_period(mut self, period: &str) -> Self {
         self.opts = self.opts.with_cache_period(period);
@@ -583,31 +633,31 @@ impl ClusterBuilder {
 
     /// With reconcile periods:
     /// `busy` for when there's work that needs to be retried on the next poll
-    /// `idle` when there's no work pending
+    /// `idle` when there's no work pending.
     #[must_use]
     pub fn with_reconcile_period(mut self, busy: Duration, idle: Duration) -> Self {
         self.opts = self.opts.with_reconcile_period(busy, idle);
         self
     }
-    /// With store operation timeout
+    /// With store operation timeout.
     #[must_use]
     pub fn with_store_timeout(mut self, timeout: Duration) -> Self {
         self.opts = self.opts.with_store_timeout(timeout);
         self
     }
-    /// With store lease ttl
+    /// With store lease ttl.
     #[must_use]
     pub fn with_store_lease_ttl(mut self, ttl: Duration) -> Self {
         self.opts = self.opts.with_store_lease_ttl(ttl);
         self
     }
-    /// Specify the node connect and request timeouts
+    /// Specify the node connect and request timeouts.
     #[must_use]
     pub fn with_req_timeouts(mut self, connect: Duration, request: Duration) -> Self {
         self.opts = self.opts.with_req_timeouts(true, connect, request);
         self
     }
-    /// Specify the node connect and request timeouts and whether to use minimum timeouts or not
+    /// Specify the node connect and request timeouts and whether to use minimum timeouts or not.
     #[must_use]
     pub fn with_req_timeouts_min(
         mut self,
@@ -618,19 +668,25 @@ impl ClusterBuilder {
         self.opts = self.opts.with_req_timeouts(no_min, connect, request);
         self
     }
-    /// Specify the message grpc timeout options
+    /// Specify the message grpc timeout options.
     #[must_use]
     pub fn with_grpc_timeouts(mut self, timeout: TimeoutOptions) -> Self {
         self.grpc_timeout = timeout;
         self
     }
-    /// Specify whether rest is enabled or not
+    /// Specify whether rest is enabled or not.
     #[must_use]
     pub fn with_rest(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_rest(enabled, None);
         self
     }
-    /// Specify whether jaeger is enabled or not
+    /// Specify which csi components should be enabled.
+    #[must_use]
+    pub fn with_csi(mut self, controller: bool, node: bool) -> Self {
+        self.opts = self.opts.with_csi(controller, node);
+        self
+    }
+    /// Specify whether jaeger is enabled or not.
     #[must_use]
     pub fn with_jaeger(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_jaeger(enabled);
@@ -639,26 +695,26 @@ impl ClusterBuilder {
         }
         self
     }
-    /// Specify whether rest is enabled or not and wether to use authentication or not
+    /// Specify whether rest is enabled or not and whether to use authentication or not.
     #[must_use]
     pub fn with_rest_auth(mut self, enabled: bool, jwk: Option<String>) -> Self {
         self.opts = self.opts.with_rest(enabled, jwk);
         self
     }
-    /// Specify whether the components should be cargo built or not
+    /// Specify whether the components should be cargo built or not.
     #[must_use]
     pub fn with_build(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_build(enabled);
         self
     }
-    /// Specify whether the workspace binaries should be cargo built or not
+    /// Specify whether the workspace binaries should be cargo built or not.
     #[must_use]
     pub fn with_build_all(mut self, enabled: bool) -> Self {
         self.opts = self.opts.with_build_all(enabled);
         self
     }
     /// Build into the resulting Cluster using a composer closure, eg:
-    /// .compose_build(|c| c.with_logs(false))
+    /// .compose_build(|c| c.with_logs(false)).
     pub async fn compose_build<F>(mut self, set: F) -> Result<Cluster, Error>
     where
         F: Fn(Builder) -> Builder,
@@ -669,7 +725,7 @@ impl ClusterBuilder {
         cluster.builder = self;
         Ok(cluster)
     }
-    /// Build into the resulting Cluster
+    /// Build into the resulting Cluster.
     pub async fn build(mut self) -> Result<Cluster, Error> {
         let (components, composer) = self.build_prepare()?;
         let mut cluster = self.new_cluster(components, composer).await?;
@@ -848,4 +904,57 @@ impl Pool {
 
 fn grpc_addr(ip: String) -> String {
     format!("https://{}:50051", ip)
+}
+
+/// Bundles both the csi and the internal node service.
+pub struct CsiNodeClient {
+    csi: csi_driver::csi::node_client::NodeClient<tonic::transport::Channel>,
+    internal:
+        csi_driver::node::internal::node_plugin_client::NodePluginClient<tonic::transport::Channel>,
+}
+impl CsiNodeClient {
+    /// Get a mutable reference to the node-plugin csi client.
+    pub fn csi(
+        &mut self,
+    ) -> &mut csi_driver::csi::node_client::NodeClient<tonic::transport::Channel> {
+        &mut self.csi
+    }
+    /// Get a mutable reference to the node-plugin internal node client.
+    pub fn internal(
+        &mut self,
+    ) -> &mut csi_driver::node::internal::node_plugin_client::NodePluginClient<
+        tonic::transport::Channel,
+    > {
+        &mut self.internal
+    }
+    /// Stage the given volume.
+    pub async fn node_stage_volume(
+        &mut self,
+        volume: &Volume,
+    ) -> Result<NodeStageVolumeResponse, Error> {
+        let request = rpc::csi::NodeStageVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            publish_context: {
+                let mut context = std::collections::HashMap::new();
+                context.insert(
+                    "uri".into(),
+                    volume.state.target.as_ref().unwrap().device_uri.to_string(),
+                );
+                context
+            },
+            staging_target_path: "/tmp/staging/mount".to_string(),
+            volume_capability: Some(rpc::csi::VolumeCapability {
+                access_mode: Some(rpc::csi::volume_capability::AccessMode {
+                    mode: rpc::csi::volume_capability::access_mode::Mode::SingleNodeWriter as i32,
+                }),
+                access_type: Some(rpc::csi::volume_capability::AccessType::Block(
+                    rpc::csi::volume_capability::BlockVolume {},
+                )),
+            }),
+            secrets: Default::default(),
+            volume_context: Default::default(),
+        };
+        let response = self.csi.node_stage_volume(request).await?;
+        Ok(response.into_inner())
+    }
 }

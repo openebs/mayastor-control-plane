@@ -164,7 +164,7 @@ pub(crate) async fn get_volume_replica_candidates(
                 pool_id: p.id.clone(),
                 pool_uuid: None,
                 size: request.size,
-                thin: false,
+                thin: request.thin,
                 share: Protocol::None,
                 managed: true,
                 owners: ReplicaOwners::from_volume(&request.uuid),
@@ -483,7 +483,8 @@ impl ResourceSpecsLocked {
         result
     }
 
-    /// Create `count` replicas for the given volume using the provided list of candidates, in order
+    /// Create `count` replicas for the given volume using the provided
+    /// list of candidates, in order.
     pub(crate) async fn create_volume_replicas(
         &self,
         registry: &Registry,
