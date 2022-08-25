@@ -17,11 +17,6 @@ pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 /// Io-Engine container image used for testing
 pub const IO_ENGINE_IMAGE: &str = "mayadata/mayastor-io-engine:develop";
 
-/// IO-Engine node selector label key.
-pub const IO_ENGINE_SELECTOR_KEY: &str = "openebs.io/engine";
-/// IO-Engine node selector label value.
-pub const IO_ENGINE_SELECTOR_VALUE: &str = "io-engine";
-
 /// Environment variable that points to an io-engine binary
 /// This must be in sync with shell.nix
 pub const DATA_PLANE_BINARY: &str = "IO_ENGINE_BIN";

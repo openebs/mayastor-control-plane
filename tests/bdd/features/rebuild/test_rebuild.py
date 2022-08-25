@@ -87,7 +87,7 @@ def an_existing_published_volume():
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, NODE_1_NAME, Protocol("nvmf")
+        VOLUME_UUID, Protocol("nvmf"), node=NODE_1_NAME
     )
 
     # Now the volume has been created, create the additional pool.

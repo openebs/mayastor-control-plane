@@ -283,8 +283,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .volumes_api()
         .put_volume_target(
             &volume.state.uuid,
-            io_engine1.as_str(),
             models::VolumeShareProtocol::Nvmf,
+            Some(io_engine1.as_str()),
         )
         .await
         .unwrap();

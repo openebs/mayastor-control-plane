@@ -32,6 +32,7 @@ use std::{
     str::FromStr,
     time::Duration,
 };
+use tokio::time::sleep;
 
 #[tokio::test]
 async fn volume() {
@@ -818,4 +819,264 @@ async fn smoke_test(cluster: &Cluster) {
         .unwrap()
         .0
         .is_empty());
+}
+
+const VOLUME_1: &str = "359b7e1a-b724-443b-98b4-e6d97fabbb40";
+const VOLUME_2: &str = "359b7e1a-b724-443b-98b4-e6d97fabbb41";
+
+#[tokio::test]
+async fn volume_publish_target_decoupled() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
+        .with_pools(2)
+        .with_cache_period("1s")
+        .with_node_deadline("1s")
+        .build()
+        .await
+        .unwrap();
+
+    // Create the volumes
+    let volume_client = cluster.grpc_client().volume();
+    let _ = volume_client
+        .create(
+            &CreateVolume {
+                uuid: VolumeId::try_from(VOLUME_1).unwrap(),
+                size: 5242880,
+                replicas: 2,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let _ = volume_client
+        .create(
+            &CreateVolume {
+                uuid: VolumeId::try_from(VOLUME_2).unwrap(),
+                size: 5242880,
+                replicas: 2,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    publish_unpublish(&cluster).await;
+    target_distribution(&cluster).await;
+    offline_node(&cluster).await;
+}
+
+// Given: 2 Nodes, 2 Pools, 2 Volumes with 2 replicas each.
+// Scenario: Volume publish calls made without specifying any node,
+// the publish calls should succeed, and so should the volume unpublish calls.
+async fn publish_unpublish(cluster: &Cluster) {
+    let volume_client = cluster.grpc_client().volume();
+
+    // Publish the volume1 without specifying any target node
+    let _ = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: VolumeId::try_from(VOLUME_1).unwrap(),
+                target_node: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Should not fail");
+
+    // Publish the volume2 without specifying any target node
+    let _ = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: VolumeId::try_from(VOLUME_2).unwrap(),
+                target_node: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Should not fail");
+
+    // Unpublish the volume2
+    let _ = volume_client
+        .unpublish(
+            &UnpublishVolume::new(&VolumeId::try_from(VOLUME_2).unwrap(), false),
+            None,
+        )
+        .await
+        .expect("Should not fail");
+
+    // Unpublish the volume1
+    let _ = volume_client
+        .unpublish(
+            &UnpublishVolume::new(&VolumeId::try_from(VOLUME_1).unwrap(), false),
+            None,
+        )
+        .await
+        .expect("Should not fail");
+}
+
+// Given: 2 Nodes, 2 Pools, 2 Volumes with 2 replicas each, 1 Volume published on some node.
+// Scenario: When the second volume is to be published it should not choose the same node
+// to ensure equal distribution of targets.
+async fn target_distribution(cluster: &Cluster) {
+    let volume_client = cluster.grpc_client().volume();
+    // Publish volume1
+    let pub_vol1 = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: VolumeId::try_from(VOLUME_1).unwrap(),
+                target_node: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Should not fail");
+
+    // Publish volume2
+    let pub_vol2 = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: VolumeId::try_from(VOLUME_2).unwrap(),
+                target_node: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Should not fail");
+
+    // Both volume's target node should be different
+    assert_ne!(
+        pub_vol1.state().target.unwrap().node,
+        pub_vol2.state().target.unwrap().node
+    );
+
+    // Cleanup
+    let _ = volume_client
+        .unpublish(
+            &UnpublishVolume::new(&VolumeId::try_from(VOLUME_1).unwrap(), false),
+            None,
+        )
+        .await
+        .expect("The volume should be unpublished");
+    let _ = volume_client
+        .unpublish(
+            &UnpublishVolume::new(&VolumeId::try_from(VOLUME_2).unwrap(), false),
+            None,
+        )
+        .await
+        .expect("The volume should be unpublished");
+}
+
+// Given: 2 Nodes, 2 Pools, 2 Volumes with 2 replicas each, 1 Volume published on some node.
+// Scenario 1: The node2 is killed, when the second volume is to be published it should choose
+// the same node for publish as there is no other node.
+// Scenario 2: The node1 and node2 both killed, when the second volume is to be published it should
+// fail with ResourceExhausted error.
+async fn offline_node(cluster: &Cluster) {
+    let volume_client = cluster.grpc_client().volume();
+
+    // Publish volume1
+    let pub_vol1 = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: VolumeId::try_from(VOLUME_1).unwrap(),
+                target_node: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Should not fail");
+
+    // determine in which node the volume1 was published
+    let kill_node = if pub_vol1.state().target.unwrap().node == cluster.node(0) {
+        cluster.node(1).to_string()
+    } else {
+        cluster.node(0).to_string()
+    };
+
+    // kill the node where the volume was published
+    cluster
+        .composer()
+        .stop(kill_node.as_str())
+        .await
+        .unwrap_or_else(|_| panic!("The {} container should stop", kill_node));
+    sleep(Duration::from_secs(2)).await;
+
+    // Publish volume2
+    let pub_vol2 = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: VolumeId::try_from(VOLUME_2).unwrap(),
+                target_node: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Should not fail");
+
+    // Both volume's target node should be same
+    assert_eq!(
+        pub_vol1.state().target.unwrap().node,
+        pub_vol2.state().target.unwrap().node
+    );
+
+    // Bring back the node to unpublish the volume2
+    cluster
+        .composer()
+        .start(kill_node.as_str())
+        .await
+        .unwrap_or_else(|_| panic!("The {} container should be starting", kill_node));
+    sleep(Duration::from_secs(2)).await;
+
+    // Unpublish volume2
+    let _ = volume_client
+        .unpublish(
+            &UnpublishVolume::new(&VolumeId::try_from(VOLUME_1).unwrap(), false),
+            None,
+        )
+        .await
+        .expect("The volume should be unpublished");
+
+    // Now stop both the nodes
+    cluster
+        .composer()
+        .kill("io-engine-1")
+        .await
+        .expect("The io-engine-1 container should stop");
+    cluster
+        .composer()
+        .kill("io-engine-2")
+        .await
+        .expect("The io-engine-2 container should stop");
+    sleep(Duration::from_secs(2)).await;
+
+    // Publish volume2
+    match volume_client
+        .publish(
+            &PublishVolume {
+                uuid: VolumeId::try_from(VOLUME_2).unwrap(),
+                target_node: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+    {
+        Ok(_) => {
+            panic!("We should have failed to publish as there are no suitable nodes")
+        }
+        Err(err) => {
+            assert_eq!(err.kind, ReplyErrorKind::ResourceExhausted)
+        }
+    }
 }

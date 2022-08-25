@@ -24,7 +24,6 @@ fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
 
 #[tokio::main(worker_threads = 2)]
 async fn main() -> anyhow::Result<()> {
-    let default_io_selector = CsiControllerConfig::default_io_selector();
     let args = App::new(utils::package_description!())
         .author(clap::crate_authors!())
         .version(utils::version_info_str!())
@@ -61,18 +60,6 @@ async fn main() -> anyhow::Result<()> {
                 .long("rest-timeout")
                 .env("REST_TIMEOUT")
                 .default_value("5s"),
-        )
-        .arg(
-            Arg::with_name("io-engine-selector")
-                .long("io-engine-selector")
-                .multiple(true)
-                .number_of_values(1)
-                .allow_hyphen_values(true)
-                .default_value(&default_io_selector)
-                .help(
-                    "Adds io-engine selector labels (supports multiple values).\n\
-                Example:\n --io-engine-selector key:value --io-engine-selector key2:value2",
-                ),
         )
         .get_matches();
 

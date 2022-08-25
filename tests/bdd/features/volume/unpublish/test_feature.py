@@ -54,7 +54,7 @@ def test_unpublish_an_already_unpublished_volume():
 def a_published_volume():
     """a published volume."""
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, NODE_NAME, Protocol("nvmf")
+        VOLUME_UUID, Protocol("nvmf"), node=NODE_NAME
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
