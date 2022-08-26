@@ -1,7 +1,7 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::ResourceOffspring,
+        operations::{ResourceOffspring, ResourceOwnerUpdate},
         operations_helper::{
             GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
             SpecOperationsHelper,
@@ -292,7 +292,8 @@ impl ResourceSpecsLocked {
                 .await?;
 
             let result = node.remove_child(&request.into()).await;
-            self.on_remove_disown_replica(request, &result);
+            self.on_remove_disown_replica(registry, request, &result)
+                .await;
 
             nexus.complete_update(registry, result, spec_clone).await
         } else {
@@ -322,16 +323,17 @@ impl ResourceSpecsLocked {
                     .await
                 {
                     Ok(_) if destroy_replica => {
-                        let replica_spec =
-                            self.get_replica(replica.uuid())
-                                .ok_or(SvcError::ReplicaNotFound {
-                                    replica_id: replica.uuid().clone(),
-                                })?;
-                        let pool_ref = replica_spec.lock().pool.clone();
-                        match Self::get_pool_node(registry, pool_ref.pool_name()).await {
+                        let mut replica = self
+                            .get_replica(replica.uuid())
+                            .ok_or(SvcError::ReplicaNotFound {
+                                replica_id: replica.uuid().clone(),
+                            })?
+                            .operation_guard()?;
+                        let pool_ref = replica.as_ref().pool.pool_name();
+                        match Self::get_pool_node(registry, pool_ref).await {
                             Some(node) => {
                                 if let Err(error) = self
-                                    .disown_and_destroy_replica(registry, &node, replica.uuid())
+                                    .disown_and_destroy_replica(registry, &node, &mut replica)
                                     .await
                                 {
                                     nexus_guard.lock().clone().error_span(|| {
@@ -348,13 +350,14 @@ impl ResourceSpecsLocked {
                                 // The replica can't be destroyed because the node isn't there.
                                 // Instead, disown the replica from the volume and let the garbage
                                 // collector destroy it later.
-                                nexus_guard.lock().clone().warn_span(|| {
+                                nexus_guard.warn_span(|| {
                                     tracing::warn!(
                                         replica.uuid = %replica.uuid(),
                                         "Failed to find the node where the replica is hosted"
                                     )
                                 });
-                                let _ = self.disown_volume_replica(registry, &replica_spec).await;
+                                let disowner = ReplicaOwners::new_disown_all();
+                                let _ = replica.remove_owners(registry, &disowner, true).await;
                             }
                         }
 
@@ -374,16 +377,18 @@ impl ResourceSpecsLocked {
         }
     }
 
-    fn on_remove_disown_replica(
+    async fn on_remove_disown_replica(
         &self,
+        registry: &Registry,
         request: &RemoveNexusReplica,
         result: &Result<(), SvcError>,
     ) {
         if result.is_ok() {
             if let Some(replica) = self.get_replica(request.replica.uuid()) {
-                replica
-                    .lock()
-                    .disown(&ReplicaOwners::new(None, vec![request.nexus.clone()]));
+                if let Ok(mut replica) = replica.operation_guard() {
+                    let disowner = ReplicaOwners::new(None, vec![request.nexus.clone()]);
+                    let _ = replica.remove_owners(registry, &disowner, true).await;
+                }
             }
         }
     }

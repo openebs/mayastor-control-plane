@@ -101,7 +101,7 @@ async fn remove_missing_owners(
     let owned = replica.as_ref().managed && replica.as_ref().owned();
 
     if owned {
-        let replica_uuid = &replica.arc().uuid;
+        let replica_uuid = &replica.immutable_arc().uuid;
         let mut remove_owners = ReplicaOwners::default();
         if let Some(volume) = replica.as_ref().owners.volume() {
             if specs.get_volume(volume).is_err() {

@@ -182,7 +182,7 @@ async fn deleting_pool_spec_reconciler(
         Err(_) => return PollResult::Ok(PollerState::Idle),
     };
 
-    let pool_id = &pool.arc().id;
+    let pool_id = &pool.immutable_arc().id;
     async {
         let request = DestroyPool {
             node: pool.as_ref().node.clone(),

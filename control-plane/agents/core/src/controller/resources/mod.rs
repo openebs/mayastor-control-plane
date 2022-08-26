@@ -83,7 +83,7 @@ impl<T: Clone> ResourceMutex<T> {
     /// # Note:
     /// This is only useful for immutable fields, such as the resource identifier.
     /// Useful over `as_ref` as it returns the `Arc` directly.
-    pub(crate) fn arc(&self) -> Arc<T> {
+    pub(crate) fn immutable_arc(&self) -> Arc<T> {
         self.inner.immutable_peek.clone()
     }
 }

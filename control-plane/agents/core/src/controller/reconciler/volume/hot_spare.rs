@@ -39,7 +39,7 @@ impl TaskPoller for HotSpareReconciler {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true))]
 async fn hot_spare_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
@@ -51,10 +51,10 @@ async fn hot_spare_reconcile(
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
 
-    if !volume.lock().policy.self_heal {
+    if !volume.as_ref().policy.self_heal {
         return PollResult::Ok(PollerState::Idle);
     }
-    if !volume.lock().status.created() {
+    if !volume.as_ref().status.created() {
         return PollResult::Ok(PollerState::Idle);
     }
 

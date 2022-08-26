@@ -51,6 +51,7 @@ use common_lib::{
 };
 use grpc::operations::{PaginatedResult, Pagination};
 
+use crate::controller::resources::operations::ResourceOwnerUpdate;
 use common_lib::types::v0::store::replica::PoolRef;
 use snafu::OptionExt;
 use std::convert::From;
@@ -809,11 +810,10 @@ impl ResourceSpecsLocked {
         volume: &mut OperationGuardArc<VolumeSpec>,
         mut count: usize,
     ) -> Result<(), SvcError> {
-        let spec_clone = volume.lock().clone();
-        let state = registry.get_volume_state(&spec_clone.uuid).await?;
+        let state = registry.get_volume_state(volume.uuid()).await?;
 
         let mut candidates =
-            get_volume_unused_replica_remove_candidates(&spec_clone, &state, registry).await?;
+            get_volume_unused_replica_remove_candidates(volume.as_ref(), &state, registry).await?;
 
         let mut result = Ok(());
         while let Some(replica) = candidates.next() {
@@ -825,14 +825,14 @@ impl ResourceSpecsLocked {
                 .await
             {
                 Ok(_) => {
-                    spec_clone.info(&format!(
+                    volume.info(&format!(
                         "Successfully removed unused replica '{}'",
                         replica.spec().uuid
                     ));
                     count -= 1;
                 }
                 Err(error) => {
-                    spec_clone.warn_span(|| {
+                    volume.warn_span(|| {
                         tracing::warn!(
                             "Failed to remove unused replicas, error: {}",
                             error.full_string()
@@ -855,11 +855,11 @@ impl ResourceSpecsLocked {
         volume: &mut OperationGuardArc<VolumeSpec>,
         replica_id: &ReplicaId,
     ) -> Result<(), SvcError> {
-        let volume_uuid = volume.lock().uuid.clone();
+        let state = registry.get_volume_state(volume.uuid()).await?;
         let spec_clone = volume
             .start_update(
                 registry,
-                &registry.get_volume_state(&volume_uuid).await?,
+                &state,
                 VolumeOperation::RemoveUnusedReplica(replica_id.clone()),
             )
             .await?;
@@ -872,7 +872,8 @@ impl ResourceSpecsLocked {
 
         // disown it from the volume first, so at the very least it can be garbage collected
         // at a later point if the node is not accessible
-        let result = self.disown_volume_replica(registry, &replica).await;
+        let disowner = ReplicaOwners::from_volume(volume.uuid());
+        let result = replica.remove_owners(registry, &disowner, true).await;
         volume
             .validate_update_step(registry, result, &spec_clone)
             .await?;
@@ -1006,18 +1007,6 @@ impl ResourceSpecsLocked {
         Ok(())
     }
 
-    /// Disown replica from its volume
-    /// fixme: not explicitly guarded
-    pub(crate) async fn disown_volume_replica(
-        &self,
-        registry: &Registry,
-        replica: &ResourceMutex<ReplicaSpec>,
-    ) -> Result<(), SvcError> {
-        replica.lock().owners.disowned_by_volume();
-        let clone = replica.lock().clone();
-        registry.store_obj(&clone).await
-    }
-
     /// Disown nexus from its owner
     /// fixme: not explicitly guarded
     pub(crate) async fn disown_nexus(
@@ -1073,13 +1062,13 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         node: &NodeId,
-        replica_uuid: &ReplicaId,
+        replica: &mut OperationGuardArc<ReplicaSpec>,
     ) -> Result<(), SvcError> {
-        let mut replica = self.replica(replica_uuid).await?;
         // disown it from the volume first, so at the very least it can be garbage collected
         // at a later point if the node is not accessible
-        self.disown_volume_replica(registry, &replica).await?;
-        self.destroy_volume_replica(registry, Some(node), &mut replica)
+        let disowner = ReplicaOwners::new_disown_all();
+        replica.remove_owners(registry, &disowner, true).await?;
+        self.destroy_volume_replica(registry, Some(node), replica)
             .await
     }
 

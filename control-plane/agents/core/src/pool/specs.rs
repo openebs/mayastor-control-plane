@@ -214,7 +214,7 @@ impl ResourceSpecs {
 }
 
 impl ResourceSpecsLocked {
-    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists.
     pub(crate) async fn replica_opt(
         &self,
         replica: &ReplicaId,
@@ -224,7 +224,7 @@ impl ResourceSpecsLocked {
             Some(replica) => Some(replica.operation_guard_wait().await?),
         })
     }
-    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists.
     pub(crate) async fn replica(
         &self,
         replica: &ReplicaId,
