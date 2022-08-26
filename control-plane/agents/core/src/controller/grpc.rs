@@ -1,12 +1,16 @@
-use crate::{
-    controller::wrapper::{rpc_nexus_v2_to_agent, rpc_pool_to_agent},
-    node::service::NodeCommsTimeout,
-};
+use crate::{controller::wrapper::rpc_pool_to_agent, node::service::NodeCommsTimeout};
 use common::{
     errors::{GrpcConnect, GrpcConnectUri, GrpcRequest as GrpcRequestError, SvcError},
     msg_translation::{
-        v0::rpc_replica_to_agent as v0_rpc_replica_to_agent,
-        v1::rpc_replica_to_agent as v1_rpc_replica_to_agent, IoEngineToAgent,
+        v0::{
+            rpc_nexus_v2_to_agent as v0_rpc_nexus_v2_to_agent,
+            rpc_replica_to_agent as v0_rpc_replica_to_agent,
+        },
+        v1::{
+            rpc_nexus_to_agent as v1_rpc_nexus_to_agent,
+            rpc_replica_to_agent as v1_rpc_replica_to_agent,
+        },
+        IoEngineToAgent,
     },
 };
 use common_lib::{
@@ -18,7 +22,10 @@ use common_lib::{
 use grpc::{context::timeout_grpc, operations::registration::traits::ApiVersion};
 use rpc::{
     io_engine::{IoEngineClient, ListBlockDevicesRequest as V0ListBlockDevicesRequest, Null},
-    v1::{host::ListBlockDevicesRequest as V1ListBlockDevicesRequest, replica::ListReplicaOptions},
+    v1::{
+        host::ListBlockDevicesRequest as V1ListBlockDevicesRequest, nexus::ListNexusOptions,
+        replica::ListReplicaOptions,
+    },
 };
 use snafu::ResultExt;
 use std::{
@@ -105,17 +112,24 @@ pub(crate) type MayaClientV0 = IoEngineClient<Channel>;
 pub(crate) type HostClient = rpc::v1::host::host_rpc_client::HostRpcClient<Channel>;
 /// V1 ReplicaClient
 pub(crate) type ReplicaClient = rpc::v1::replica::replica_rpc_client::ReplicaRpcClient<Channel>;
+/// V1 NexusClient
+pub(crate) type NexusClient = rpc::v1::nexus::nexus_rpc_client::NexusRpcClient<Channel>;
 
 #[derive(Clone, Debug)]
 pub(crate) struct MayaClientV1 {
     host: HostClient,
     replica: ReplicaClient,
+    nexus: NexusClient,
 }
 
 impl MayaClientV1 {
     /// get the v1 replica client
     pub(crate) fn replica(&self) -> ReplicaClient {
         self.replica.clone()
+    }
+    /// Get the v1 nexus client.
+    pub(crate) fn nexus(self) -> NexusClient {
+        self.nexus
     }
 }
 
@@ -191,10 +205,30 @@ impl GrpcClient {
                         endpoint: context.endpoint.uri().to_string(),
                     })?),
                 }?;
+                let nexus = match tokio::time::timeout(
+                    context.comms_timeouts.connect(),
+                    NexusClient::connect(context.endpoint.clone()),
+                )
+                .await
+                {
+                    Err(_) => Err(SvcError::GrpcConnectTimeout {
+                        node_id: context.node.to_string(),
+                        endpoint: context.endpoint.uri().to_string(),
+                        timeout: context.comms_timeouts.connect(),
+                    }),
+                    Ok(client) => Ok(client.context(GrpcConnect {
+                        node_id: context.node.to_string(),
+                        endpoint: context.endpoint.uri().to_string(),
+                    })?),
+                }?;
                 Ok(Self {
                     context: context.clone(),
                     io_engine_v0: None,
-                    io_engine_v1: Some(MayaClientV1 { host, replica }),
+                    io_engine_v1: Some(MayaClientV1 {
+                        host,
+                        replica,
+                        nexus,
+                    }),
                 })
             }
         }
@@ -431,7 +465,7 @@ impl GrpcClient {
 
                 let nexuses = rpc_nexuses
                     .iter()
-                    .filter_map(|n| match rpc_nexus_v2_to_agent(n, id) {
+                    .filter_map(|n| match v0_rpc_nexus_v2_to_agent(n, id) {
                         Ok(n) => Some(n),
                         Err(error) => {
                             tracing::error!(error=%error, "Could not convert rpc nexus");
@@ -443,7 +477,30 @@ impl GrpcClient {
                 Ok(nexuses)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_nexuses = self
+                    .client_v1()?
+                    .nexus
+                    .list_nexus(ListNexusOptions { name: None })
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Nexus,
+                        request: "list_nexus",
+                    })?;
+
+                let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
+
+                let nexuses = rpc_nexuses
+                    .iter()
+                    .filter_map(|n| match v1_rpc_nexus_to_agent(n, id) {
+                        Ok(n) => Some(n),
+                        Err(error) => {
+                            tracing::error!(error=%error, "Could not convert rpc nexus");
+                            None
+                        }
+                    })
+                    .collect();
+
+                Ok(nexuses)
             }
         }
     }

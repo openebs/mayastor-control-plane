@@ -11,9 +11,16 @@ use crate::{
 use common::{
     errors::{GrpcRequest as GrpcRequestError, SvcError},
     msg_translation::{
-        v0::{rpc_replica_to_agent as v0_rpc_replica_to_agent, AgentToIoEngine as v0_conversion},
-        v1::{rpc_replica_to_agent as v1_rpc_replica_to_agent, AgentToIoEngine as v1_conversion},
-        IoEngineToAgent, TryIoEngineToAgent,
+        v0::{
+            rpc_nexus_to_agent as v0_rpc_nexus_to_agent,
+            rpc_replica_to_agent as v0_rpc_replica_to_agent, AgentToIoEngine as v0_conversion,
+        },
+        v1::{
+            rpc_nexus_to_agent as v1_rpc_nexus_to_agent,
+            rpc_nexus_to_child_agent as v1_rpc_nexus_to_child_agent,
+            rpc_replica_to_agent as v1_rpc_replica_to_agent, AgentToIoEngine as v1_conversion,
+        },
+        IoEngineToAgent,
     },
 };
 use common_lib::{
@@ -924,22 +931,60 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             });
         }
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let mut nexus = dataplane.create_nexus(request).await?;
-        // CAS-1107 - create_nexus_v2 returns NexusV1...
-        nexus.name = request.name();
-        nexus.uuid = request.uuid.clone();
+        let nexus = dataplane.create_nexus(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_nexus_states(ctx.deref_mut()).await?;
-        Ok(nexus)
+        match nexus {
+            Ok(mut nexus) => {
+                // CAS-1107 - create_nexus_v2 returns NexusV1...
+                nexus.name = request.name();
+                nexus.uuid = request.uuid.clone();
+                Ok(nexus)
+            }
+            Err(error) => {
+                let nexus_name = request.name();
+                match self
+                    .read()
+                    .await
+                    .nexuses()
+                    .iter()
+                    .find(|nexus| nexus.uuid == request.uuid || nexus.name == nexus_name)
+                {
+                    Some(nexus) => {
+                        // return Ok if nexus with the requested uuid and name already exists
+                        tracing::warn!(
+                            "Trying to create nexus with uuid '{}' and name '{}' which already exists.Ok",
+                            request.uuid,
+                            nexus_name
+                        );
+                        Ok(nexus.clone())
+                    }
+                    None => Err(error),
+                }
+            }
+        }
     }
 
     /// Destroy a nexus on the node via gRPC
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let _ = dataplane.destroy_nexus(request).await?;
+        let result = dataplane.destroy_nexus(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_nexus_states(ctx.deref_mut()).await?;
-        Ok(())
+        match result {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                // return Ok if nexus with the requested uuid already doesn't exists
+                if self.read().await.nexus(&request.uuid).is_none() {
+                    tracing::warn!(
+                        "Trying to destroy nexus '{}' which is already destroyed.Ok",
+                        request.uuid,
+                    );
+                    return Ok(());
+                }
+                return Err(error);
+            }
+        }
     }
 
     /// Share a nexus on the node via gRPC
@@ -968,22 +1013,19 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         self.update_nexus_states(ctx.deref_mut()).await?;
         match result {
             Ok(child) => Ok(child),
-            Err(error) => match error {
-                SvcError::AlreadyExists { .. } => {
-                    if let Some(nexus) = self.read().await.nexus(&request.nexus) {
-                        if let Some(child) = nexus.children.iter().find(|c| c.uri == request.uri) {
-                            tracing::warn!(
-                                "Trying to add Child '{}' which is already part of nexus '{}'.Ok",
-                                request.uri,
-                                request.nexus
-                            );
-                            return Ok(child.clone());
-                        }
+            Err(error) => {
+                if let Some(nexus) = self.read().await.nexus(&request.nexus) {
+                    if let Some(child) = nexus.children.iter().find(|c| c.uri == request.uri) {
+                        tracing::warn!(
+                            "Trying to add Child '{}' which is already part of nexus '{}'.Ok",
+                            request.uri,
+                            request.nexus
+                        );
+                        return Ok(child.clone());
                     }
-                    Err(error)
                 }
-                _ => Err(error),
-            },
+                Err(error)
+            }
         }
     }
 
@@ -1176,17 +1218,36 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let rpc_nexus = self
                     .client_v0()?
-                    .create_nexus_v2(request.to_rpc())
+                    .create_nexus_v2(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Nexus,
                         request: "create_nexus",
                     })?;
-                let nexus = rpc_nexus_to_agent(&rpc_nexus.into_inner(), &request.node)?;
+                let nexus = v0_rpc_nexus_to_agent(&rpc_nexus.into_inner(), &request.node)?;
                 Ok(nexus)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_nexus = self
+                    .client_v1()?
+                    .nexus()
+                    .create_nexus(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Nexus,
+                        request: "create_nexus",
+                    })?;
+                if let Some(nexus) = rpc_nexus.into_inner().nexus {
+                    let nexus = v1_rpc_nexus_to_agent(&nexus, &request.node)?;
+                    Ok(nexus)
+                } else {
+                    Err(SvcError::Internal {
+                        details: format!(
+                            "resource: {}, request: {}, err: {}",
+                            "Nexus", "create_nexus", "no nexus returned"
+                        ),
+                    })
+                }
             }
         }
     }
@@ -1196,7 +1257,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let _ = self
                     .client_v0()?
-                    .destroy_nexus(request.to_rpc())
+                    .destroy_nexus(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Nexus,
@@ -1205,7 +1266,16 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let _ = self
+                    .client_v1()?
+                    .nexus()
+                    .destroy_nexus(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Nexus,
+                        request: "destroy_nexus",
+                    })?;
+                Ok(())
             }
         }
     }
@@ -1215,7 +1285,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let share = self
                     .client_v0()?
-                    .publish_nexus(request.to_rpc())
+                    .publish_nexus(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Nexus,
@@ -1225,7 +1295,25 @@ impl ClientOps for GrpcClientLocked {
                 Ok(share)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_nexus = self
+                    .client_v1()?
+                    .nexus()
+                    .publish_nexus(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Nexus,
+                        request: "publish_nexus",
+                    })?;
+                if let Some(nexus) = rpc_nexus.into_inner().nexus {
+                    Ok(nexus.device_uri)
+                } else {
+                    Err(SvcError::Internal {
+                        details: format!(
+                            "resource: {}, request: {}, err: {}",
+                            "Nexus", "publish_nexus", "no nexus returned"
+                        ),
+                    })
+                }
             }
         }
     }
@@ -1235,7 +1323,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let _ = self
                     .client_v0()?
-                    .unpublish_nexus(request.to_rpc())
+                    .unpublish_nexus(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Nexus,
@@ -1244,7 +1332,16 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let _ = self
+                    .client_v1()?
+                    .nexus()
+                    .unpublish_nexus(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Nexus,
+                        request: "unpublish_nexus",
+                    })?;
+                Ok(())
             }
         }
     }
@@ -1254,7 +1351,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let rpc_child = self
                     .client_v0()?
-                    .add_child_nexus(request.to_rpc())
+                    .add_child_nexus(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Child,
@@ -1263,7 +1360,26 @@ impl ClientOps for GrpcClientLocked {
                 Ok(rpc_child.into_inner().to_agent())
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_nexus = self
+                    .client_v1()?
+                    .nexus()
+                    .add_child_nexus(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Child,
+                        request: "add_child_nexus",
+                    })?;
+                if let Some(nexus) = rpc_nexus.into_inner().nexus {
+                    let child = v1_rpc_nexus_to_child_agent(&nexus, request.uri.clone().into())?;
+                    Ok(child)
+                } else {
+                    Err(SvcError::Internal {
+                        details: format!(
+                            "resource: {}, request: {}, err: {}",
+                            "Nexus", "add_child", "no nexus returned"
+                        ),
+                    })
+                }
             }
         }
     }
@@ -1273,7 +1389,7 @@ impl ClientOps for GrpcClientLocked {
             APIVersion::V0 => {
                 let _ = self
                     .client_v0()?
-                    .remove_child_nexus(request.to_rpc())
+                    .remove_child_nexus(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Child,
@@ -1282,7 +1398,16 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let _ = self
+                    .client_v1()?
+                    .nexus()
+                    .remove_child_nexus(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Child,
+                        request: "remove_child_nexus",
+                    })?;
+                Ok(())
             }
         }
     }
@@ -1293,22 +1418,6 @@ pub(crate) fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) ->
     let mut pool = rpc_pool.to_agent();
     pool.node = id.clone();
     pool
-}
-
-/// convert rpc nexus v2 to a agent nexus
-pub(crate) fn rpc_nexus_v2_to_agent(
-    rpc_nexus: &rpc::io_engine::NexusV2,
-    id: &NodeId,
-) -> Result<Nexus, SvcError> {
-    let mut nexus = rpc_nexus.try_to_agent()?;
-    nexus.node = id.clone();
-    Ok(nexus)
-}
-
-fn rpc_nexus_to_agent(rpc_nexus: &rpc::io_engine::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
-    let mut nexus = rpc_nexus.try_to_agent()?;
-    nexus.node = id.clone();
-    Ok(nexus)
 }
 
 /// Wrapper over the message bus `Pool` which includes all the replicas

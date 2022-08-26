@@ -6,14 +6,13 @@ use common_lib::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, NexusId, NexusStatus, NodeId, Protocol, Replica, ReplicaId,
-            ReplicaName, ReplicaStatus,
+            self, ChildState, ChildStateReason, Nexus, NexusId, NexusStatus, NodeId, Protocol,
+            Replica, ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
 
 use crate::msg_translation::{IoEngineToAgent, TryIoEngineToAgent};
-use common_lib::types::v0::transport::ChildStateReason;
 use rpc::io_engine as v0_rpc;
 use std::convert::TryFrom;
 
@@ -355,4 +354,18 @@ pub fn rpc_replica_to_agent(
     let mut replica = rpc_replica.try_to_agent()?;
     replica.node = id.clone();
     Ok(replica)
+}
+
+/// convert rpc nexus to a agent nexus
+pub fn rpc_nexus_to_agent(rpc_nexus: &v0_rpc::Nexus, id: &NodeId) -> Result<Nexus, SvcError> {
+    let mut nexus = rpc_nexus.try_to_agent()?;
+    nexus.node = id.clone();
+    Ok(nexus)
+}
+
+/// convert rpc nexus v2 to a agent nexus
+pub fn rpc_nexus_v2_to_agent(rpc_nexus: &v0_rpc::NexusV2, id: &NodeId) -> Result<Nexus, SvcError> {
+    let mut nexus = rpc_nexus.try_to_agent()?;
+    nexus.node = id.clone();
+    Ok(nexus)
 }
