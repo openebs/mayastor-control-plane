@@ -1,13 +1,13 @@
 use crate::controller::{
-    operations::ResourceLifecycle,
     reconciler::{GarbageCollect, PollContext, TaskPoller},
-    specs::{OperationSequenceGuard, SpecOperationsHelper},
+    resources::{
+        operations::ResourceLifecycle,
+        operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
+        OperationGuardArc, TraceSpan,
+    },
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
-use common_lib::types::v0::{
-    store::{nexus::NexusSpec, OperationGuardArc, TraceSpan},
-    transport::DestroyNexus,
-};
+use common_lib::types::v0::{store::nexus::NexusSpec, transport::DestroyNexus};
 use tracing::Instrument;
 
 /// Nexus Garbage Collector reconciler

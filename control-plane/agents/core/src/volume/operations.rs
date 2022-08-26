@@ -1,9 +1,16 @@
 use crate::{
     controller::{
-        operations::{ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing},
         reconciler::PollTriggerEvent,
         registry::Registry,
-        specs::{GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked},
+        resources::{
+            operations::{
+                ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing,
+            },
+            operations_helper::{
+                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
+            },
+            OperationGuardArc, TraceSpan, TraceStrLog,
+        },
     },
     volume::specs::{get_create_volume_replicas, get_volume_target_node},
 };
@@ -15,7 +22,6 @@ use common_lib::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{VolumeOperation, VolumeSpec},
-            OperationGuardArc, TraceSpan, TraceStrLog,
         },
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyVolume, NexusId, Protocol,

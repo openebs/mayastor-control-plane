@@ -5,8 +5,7 @@ use crate::types::v0::{
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         nexus_child::NexusChild,
-        AsOperationSequencer, OperationGuardArc, OperationSequence, ResourceMutex, ResourceUuid,
-        SpecStatus, SpecTransaction,
+        AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
     },
     transport::{
         self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus,
@@ -35,13 +34,6 @@ pub struct NexusState {
 impl From<MbusNexus> for NexusState {
     fn from(nexus: MbusNexus) -> Self {
         Self { nexus }
-    }
-}
-
-impl ResourceUuid for NexusState {
-    type Id = NexusId;
-    fn uuid(&self) -> Self::Id {
-        self.nexus.uuid.clone()
     }
 }
 
@@ -115,56 +107,6 @@ impl NexusSpec {
         let _ = self.owner.take();
     }
 }
-impl ResourceMutex<NexusSpec> {
-    /// Get the resource uuid.
-    pub fn uuid(&mut self) -> &NexusId {
-        &self.immutable_ref().uuid
-    }
-}
-
-macro_rules! nexus_log {
-    ($Self:tt, $Level:expr, $Message:tt) => {
-        match tracing::Span::current().field("nexus.uuid") {
-            None => {
-                if let Some(volume_uuid) = &$Self.owner {
-                    let _span = tracing::span!($Level, "log_event", volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid).entered();
-                    tracing::event!($Level, volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid, $Message);
-                } else {
-                    let _span = tracing::span!($Level, "log_event", nexus.uuid = %$Self.uuid).entered();
-                    tracing::event!($Level, nexus.uuid = %$Self.uuid, $Message);
-                }
-            }
-            Some(_) => {
-                if let Some(volume_uuid) = &$Self.owner {
-                    tracing::event!($Level, volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid, $Message);
-                } else {
-                    tracing::event!($Level, nexus.uuid = %$Self.uuid, $Message);
-                }
-            }
-        }
-    };
-}
-crate::impl_trace_str_log!(nexus_log, NexusSpec);
-
-macro_rules! nexus_span {
-    ($Self:tt, $Level:expr, $func:expr) => {
-        match tracing::Span::current().field("nexus.uuid") {
-            None => {
-                if let Some(volume_uuid) = &$Self.owner {
-                    let _span = tracing::span!($Level, "log_event", volume.uuid = %volume_uuid, nexus.uuid = %$Self.uuid, nexus.node.uuid = %$Self.node).entered();
-                    $func();
-                } else {
-                    let _span = tracing::span!($Level, "log_event", nexus.uuid = %$Self.uuid, nexus.node.uuid = %$Self.node).entered();
-                    $func();
-                }
-            }
-            Some(_) => {
-                $func();
-            }
-        }
-    };
-}
-crate::impl_trace_span!(nexus_span, NexusSpec);
 
 impl From<&NexusSpec> for CreateNexus {
     fn from(spec: &NexusSpec) -> Self {
@@ -187,13 +129,6 @@ impl AsOperationSequencer for NexusSpec {
 
     fn as_mut(&mut self) -> &mut OperationSequence {
         &mut self.sequencer
-    }
-}
-
-impl ResourceUuid for NexusSpec {
-    type Id = NexusId;
-    fn uuid(&self) -> Self::Id {
-        self.uuid.clone()
     }
 }
 

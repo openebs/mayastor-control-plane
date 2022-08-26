@@ -1,13 +1,16 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing},
     registry::Registry,
-    specs::ResourceSpecsLocked,
+    resources::{
+        operations::{ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing},
+        operations_helper::ResourceSpecsLocked,
+        OperationGuardArc,
+    },
 };
 use common::errors::SvcError;
 use common_lib::{
     transport_api::{v0::Volumes, ReplyError},
     types::v0::{
-        store::{volume::VolumeSpec, OperationGuardArc},
+        store::volume::VolumeSpec,
         transport::{
             CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
             ShareVolume, UnpublishVolume, UnshareVolume, Volume,

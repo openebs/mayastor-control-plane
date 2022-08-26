@@ -1,7 +1,10 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourceSharing},
     registry::Registry,
-    specs::{OperationSequenceGuard, ResourceSpecsLocked},
+    resources::{
+        operations::{ResourceLifecycle, ResourceSharing},
+        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
+        OperationGuardArc, ResourceMutex,
+    },
     wrapper::GetterOps,
 };
 use common::errors::{PoolNotFound, ReplicaNotFound, SvcError};
@@ -11,7 +14,7 @@ use common_lib::{
         ReplyError,
     },
     types::v0::{
-        store::{pool::PoolSpec, replica::ReplicaSpec, OperationGuardArc, ResourceMutex},
+        store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
             NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,

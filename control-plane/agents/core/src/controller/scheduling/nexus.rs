@@ -15,7 +15,7 @@ use itertools::Itertools;
 use std::{collections::HashMap, ops::Deref};
 
 /// Request to retrieve a list of healthy nexus children which is used for nexus creation
-/// used by `CreateVolumeNexus`
+/// used by `CreateVolumeNexus`.
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum GetPersistedNexusChildren {
@@ -24,29 +24,29 @@ pub(crate) enum GetPersistedNexusChildren {
 }
 
 impl GetPersistedNexusChildren {
-    /// Retrieve a list of children for a volume nexus creation
+    /// Retrieve a list of children for a volume nexus creation.
     pub(crate) fn new_create(spec: &VolumeSpec, target_node: &NodeId) -> Self {
         Self::Create((spec.clone(), target_node.clone()))
     }
-    /// Retrieve a list of children for a nexus REcreation
+    /// Retrieve a list of children for a nexus REcreation.
     pub(crate) fn new_recreate(spec: &NexusSpec) -> Self {
         Self::ReCreate(spec.clone())
     }
-    /// Get the optional volume spec (used for nexus creation)
+    /// Get the optional volume spec (used for nexus creation).
     pub(crate) fn vol_spec(&self) -> Option<&VolumeSpec> {
         match self {
             Self::Create((spec, _)) => Some(spec),
             Self::ReCreate(_) => None,
         }
     }
-    /// Get the target node where the nexus will be created/recreated on
+    /// Get the target node where the nexus will be created/recreated on.
     pub(crate) fn target_node(&self) -> &NodeId {
         match self {
             Self::Create((_, node)) => node,
             Self::ReCreate(nexus) => &nexus.node,
         }
     }
-    /// Get the current nexus persistent information Id
+    /// Get the current nexus persistent information Id.
     pub(crate) fn nexus_info_id(&self) -> Option<&NexusId> {
         match self {
             Self::Create((vol, _)) => vol.last_nexus_id.as_ref(),
@@ -66,7 +66,7 @@ impl GetPersistedNexusChildren {
     }
 }
 
-/// `GetPersistedNexusChildren` context used by the filter functions for `GetPersistedNexusChildren`
+/// `GetPersistedNexusChildren` context used by the filter fn's for `GetPersistedNexusChildren`.
 #[derive(Clone)]
 pub(crate) struct GetPersistedNexusChildrenCtx {
     request: GetPersistedNexusChildren,
@@ -75,15 +75,15 @@ pub(crate) struct GetPersistedNexusChildrenCtx {
 }
 
 impl GetPersistedNexusChildrenCtx {
-    /// Get the optional volume spec (used for nexus creation)
+    /// Get the optional volume spec (used for nexus creation).
     pub(crate) fn vol_spec(&self) -> Option<&VolumeSpec> {
         self.request.vol_spec()
     }
-    /// Get the target node where the nexus will be created on
+    /// Get the target node where the nexus will be created on.
     pub(crate) fn target_node(&self) -> &NodeId {
         self.request.target_node()
     }
-    /// Get the current nexus persistent information
+    /// Get the current nexus persistent information.
     pub(crate) fn nexus_info(&self) -> &Option<NexusInfo> {
         &self.nexus_info
     }
@@ -152,7 +152,7 @@ impl GetPersistedNexusChildrenCtx {
     }
 }
 
-/// Builder used to retrieve a list of healthy nexus children which is used for nexus creation
+/// Builder used to retrieve a list of healthy nexus children which is used for nexus creation.
 #[derive(Clone)]
 pub(crate) struct CreateVolumeNexus {
     context: GetPersistedNexusChildrenCtx,
@@ -169,7 +169,7 @@ impl CreateVolumeNexus {
         Ok(Self { list, context })
     }
 
-    /// Get the inner context
+    /// Get the inner context.
     pub(crate) fn context(&self) -> &GetPersistedNexusChildrenCtx {
         &self.context
     }
@@ -178,7 +178,7 @@ impl CreateVolumeNexus {
     /// criteria (any order):
     /// 1. if it's a nexus recreation, then use only children marked as healthy by the io-engine
     /// 2. use only replicas which report the status of online by their state
-    /// 3. use only replicas which are large enough for the volume
+    /// 3. use only replicas which are large enough for the volume.
     pub(crate) async fn builder_with_defaults(
         request: &GetPersistedNexusChildren,
         registry: &Registry,

@@ -5,8 +5,7 @@ use crate::{
         openapi::models,
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
-            AsOperationSequencer, OperationSequence, ResourceMutex, ResourceUuid, SpecStatus,
-            SpecTransaction,
+            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
             self, CreateReplica, NodeId, PoolId, PoolUuid, Protocol, Replica as MbusReplica,
@@ -37,13 +36,6 @@ pub struct ReplicaState {
 impl From<MbusReplica> for ReplicaState {
     fn from(replica: MbusReplica) -> Self {
         Self { replica }
-    }
-}
-
-impl ResourceUuid for ReplicaState {
-    type Id = ReplicaId;
-    fn uuid(&self) -> Self::Id {
-        self.replica.uuid.clone()
     }
 }
 
@@ -192,13 +184,6 @@ mod tests_deserializer {
     }
 }
 
-impl ResourceMutex<ReplicaSpec> {
-    /// Get the resource uuid.
-    pub fn uuid(&mut self) -> &ReplicaId {
-        &self.immutable_ref().uuid
-    }
-}
-
 impl AsOperationSequencer for ReplicaSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
@@ -206,13 +191,6 @@ impl AsOperationSequencer for ReplicaSpec {
 
     fn as_mut(&mut self) -> &mut OperationSequence {
         &mut self.sequencer
-    }
-}
-
-impl ResourceUuid for ReplicaSpec {
-    type Id = ReplicaId;
-    fn uuid(&self) -> Self::Id {
-        self.uuid.clone()
     }
 }
 

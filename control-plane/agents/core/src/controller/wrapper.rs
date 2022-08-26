@@ -2,6 +2,7 @@ use super::{super::node::watchdog::Watchdog, grpc::GrpcContext};
 use crate::{
     controller::{
         grpc::{GrpcClient, GrpcClientLocked},
+        resources::ResourceUid,
         states::{ResourceStates, ResourceStatesLocked},
     },
     node::service::NodeCommsTimeout,
@@ -28,24 +29,18 @@ use common_lib::{
     types::v0::{
         store,
         store::{nexus::NexusState, replica::ReplicaState},
+        transport,
         transport::{
-            AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
-            DestroyPool, DestroyReplica, MessageIdVs, Nexus, NexusId, NodeId, NodeState,
-            NodeStatus, PoolId, PoolState, PoolStatus, Protocol, RemoveNexusChild, Replica,
-            ReplicaId, ShareNexus, ShareReplica, UnshareNexus, UnshareReplica,
+            APIVersion, AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
+            DestroyPool, DestroyReplica, FaultNexusChild, MessageIdVs, Nexus, NexusId, NodeId,
+            NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
+            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ShareNexus, ShareReplica,
+            UnshareNexus, UnshareReplica,
         },
     },
 };
 
 use async_trait::async_trait;
-use common_lib::types::v0::{
-    store::ResourceUuid,
-    transport,
-    transport::{APIVersion, Register},
-};
-
-use common_lib::types::v0::transport::{FaultNexusChild, ReplicaName};
-
 use parking_lot::RwLock;
 use snafu::ResultExt;
 use std::{
@@ -385,7 +380,7 @@ impl NodeWrapper {
                     .get_replica_states()
                     .filter_map(|replica_state| {
                         let replica_state = replica_state.lock();
-                        if replica_state.replica.pool_id == pool_state.uuid() {
+                        if &replica_state.replica.pool_id == pool_state.uid() {
                             Some(replica_state.replica.clone())
                         } else {
                             None
@@ -413,7 +408,7 @@ impl NodeWrapper {
                     .get_replica_states()
                     .filter_map(|r| {
                         let replica = r.lock();
-                        if replica.replica.pool_id == pool_state.uuid() {
+                        if &replica.replica.pool_id == pool_state.uid() {
                             Some(replica.replica.clone())
                         } else {
                             None

@@ -1,6 +1,9 @@
 use crate::controller::{
     reconciler::{nexus, PollContext, TaskPoller},
-    specs::OperationSequenceGuard,
+    resources::{
+        operations_helper::OperationSequenceGuard, OperationGuardArc, ResourceMutex, TraceSpan,
+        TraceStrLog,
+    },
     task_poller::{squash_results, PollResult, PollerState},
 };
 
@@ -8,13 +11,8 @@ use common_lib::{
     transport_api::ErrorChain,
     types::v0::{
         store::{nexus::NexusSpec, volume::VolumeSpec},
-        transport::{VolumeState, VolumeStatus},
+        transport::{Nexus, VolumeState, VolumeStatus},
     },
-};
-
-use common_lib::types::v0::{
-    store::{OperationGuardArc, ResourceMutex, TraceSpan, TraceStrLog},
-    transport::Nexus,
 };
 
 use std::cmp::Ordering;

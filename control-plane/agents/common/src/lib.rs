@@ -10,9 +10,9 @@ use snafu::Snafu;
 use state::Container;
 use std::sync::Arc;
 
-/// Agent level errors
+/// Agent level errors.
 pub mod errors;
-/// message translation to agent types from rpc v0,v1 types
+/// Message translation to agent types from rpc v0,v1 types.
 pub mod msg_translation;
 
 #[derive(Debug, Snafu)]
@@ -23,7 +23,7 @@ pub enum ServiceError {
 }
 
 /// Runnable service with N subscriptions which listen on a given
-/// message bus channel on a specific ID
+/// message bus channel on a specific ID.
 pub struct Service {
     shared_state: Arc<Container![Send + Sync]>,
     tonic_server: tonic::transport::Server,
@@ -39,7 +39,7 @@ impl Default for Service {
 }
 
 impl Service {
-    /// Setup default service connecting to `server` on subject `channel`
+    /// Setup default service connecting to `server` on subject `channel`.
     pub fn builder() -> Self {
         Self {
             ..Default::default()
@@ -73,7 +73,7 @@ impl Service {
         }
         self
     }
-    /// Get the shared state of type `T` added with `with_shared_state`
+    /// Get the shared state of type `T` added with `with_shared_state`.
     pub fn shared_state<T: Send + Sync + 'static>(&self) -> &T {
         match self.shared_state.try_get() {
             Some(state) => state,
@@ -88,7 +88,7 @@ impl Service {
         }
     }
 
-    /// Configure `self` through a configure closure
+    /// Configure `self` through a configure closure.
     #[must_use]
     pub fn configure<F>(self, configure: F) -> Self
     where
@@ -97,7 +97,7 @@ impl Service {
         configure(self)
     }
 
-    /// Configure `self` through an async configure closure
+    /// Configure `self` through an async configure closure.
     pub async fn configure_async<F, Fut>(self, configure: F) -> Self
     where
         F: FnOnce(Service) -> Fut,

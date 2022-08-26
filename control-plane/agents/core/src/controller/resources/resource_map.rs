@@ -1,7 +1,5 @@
-use common_lib::{
-    types::v0::store::{ResourceMutex, ResourceUuid},
-    IntoVec,
-};
+use super::{ResourceMutex, ResourceUid};
+use common_lib::IntoVec;
 use indexmap::{map::Values, IndexMap};
 use std::{fmt::Debug, hash::Hash};
 
@@ -12,8 +10,8 @@ pub(crate) struct ResourceMap<I, S: Clone> {
 
 impl<I, S> ResourceMap<I, S>
 where
-    I: Eq + Hash,
-    S: Clone + ResourceUuid<Id = I> + Debug,
+    I: Eq + Hash + Clone,
+    S: Clone + ResourceUid<Uid = I> + Debug,
 {
     /// Get the resource with the given key.
     pub(crate) fn get(&self, key: &I) -> Option<&ResourceMutex<S>> {
@@ -27,14 +25,14 @@ where
 
     /// Insert an element or update an existing entry in the map.
     pub(crate) fn insert(&mut self, value: S) -> ResourceMutex<S> {
-        let key = value.uuid();
-        match self.map.get(&key) {
+        match self.map.get(value.uid()) {
             Some(entry) => {
                 let mut e = entry.lock();
                 *e = value;
                 entry.clone()
             }
             None => {
+                let key = value.uid().clone();
                 let resource: ResourceMutex<S> = value.into();
                 self.map.insert(key, resource.clone());
                 resource
@@ -53,7 +51,7 @@ where
     pub(crate) fn populate(&mut self, values: impl IntoVec<S>) {
         assert!(self.map.is_empty());
         for value in values.into_vec() {
-            self.map.insert(value.uuid(), value.into());
+            self.map.insert(value.uid().clone(), value.into());
         }
     }
 

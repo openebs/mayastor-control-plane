@@ -2,10 +2,7 @@
 
 use crate::types::v0::{
     openapi::models,
-    store::{
-        definitions::{ObjectKey, StorableObject, StorableObjectType},
-        ResourceUuid,
-    },
+    store::definitions::{ObjectKey, StorableObject, StorableObjectType},
     transport::{self, NodeId},
 };
 use serde::{Deserialize, Serialize};
@@ -93,13 +90,6 @@ impl NodeSpec {
 impl From<NodeSpec> for models::NodeSpec {
     fn from(src: NodeSpec) -> Self {
         Self::new(src.endpoint, src.id, src.cordon_labels)
-    }
-}
-
-impl ResourceUuid for NodeSpec {
-    type Id = NodeId;
-    fn uuid(&self) -> Self::Id {
-        self.id.clone()
     }
 }
 

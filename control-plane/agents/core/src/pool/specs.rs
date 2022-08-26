@@ -1,9 +1,12 @@
 use crate::controller::{
-    operations::ResourceLifecycle,
     registry::Registry,
-    specs::{
-        GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
-        SpecOperationsHelper,
+    resources::{
+        operations::ResourceLifecycle,
+        operations_helper::{
+            GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
+            SpecOperationsHelper,
+        },
+        OperationGuardArc, ResourceMutex,
     },
 };
 use common::errors::{SvcError, SvcError::PoolNotFound};
@@ -13,7 +16,7 @@ use common_lib::{
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
-            OperationGuardArc, ResourceMutex, SpecStatus, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
         transport::{
             CreatePool, CreateReplica, PoolId, PoolState, PoolStatus, Replica, ReplicaId,

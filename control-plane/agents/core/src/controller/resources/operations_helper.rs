@@ -1,4 +1,5 @@
-use crate::controller::{registry::Registry, resource_map::ResourceMap};
+use super::{super::registry::Registry, resource_map::ResourceMap};
+
 use common::errors::SvcError;
 use common_lib::{
     transport_api::ResourceKind,
@@ -13,15 +14,14 @@ use common_lib::{
             pool::PoolSpec,
             replica::ReplicaSpec,
             volume::VolumeSpec,
-            AsOperationSequencer, OperationGuardArc, OperationMode, OperationSequence, SpecStatus,
-            SpecTransaction,
+            AsOperationSequencer, OperationMode, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
     },
 };
 
+use super::{OperationGuardArc, ResourceMutex, ResourceUid, UpdateInnerValue};
 use async_trait::async_trait;
-use common_lib::types::v0::store::{ResourceMutex, ResourceUuid, UpdateInnerValue};
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
@@ -512,7 +512,7 @@ pub(crate) trait GuardedOperationsHelper:
 
 #[async_trait::async_trait]
 pub(crate) trait SpecOperationsHelper:
-    Clone + Debug + StorableObject + AsOperationSequencer + ResourceUuid + PartialEq<Self::Create>
+    Clone + Debug + StorableObject + AsOperationSequencer + ResourceUid + PartialEq<Self::Create>
 {
     type Create: Debug + PartialEq + Sync + Send;
     type Status: PartialEq + Sync + Send;

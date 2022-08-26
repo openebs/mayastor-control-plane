@@ -1,12 +1,16 @@
 use crate::controller::{
-    operations::ResourceLifecycle,
     reconciler::{GarbageCollect, ReCreate},
-    specs::{OperationSequenceGuard, SpecOperationsHelper},
+    resources::{
+        operations::ResourceLifecycle,
+        operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
+        OperationGuardArc, TraceSpan,
+    },
     task_poller::{PollContext, PollPeriods, PollResult, PollTimer, PollerState, TaskPoller},
     wrapper::ClientOps,
 };
+
 use common_lib::types::v0::{
-    store::{pool::PoolSpec, OperationGuardArc, TraceSpan},
+    store::pool::PoolSpec,
     transport::{CreatePool, DestroyPool, NodeStatus},
 };
 use tracing::Instrument;

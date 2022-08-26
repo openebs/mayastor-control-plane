@@ -1,7 +1,7 @@
 use super::*;
 use crate::controller::{
-    reconciler::PollTriggerEvent, registry::Registry, specs::ResourceSpecsLocked,
-    wrapper::NodeWrapper,
+    reconciler::PollTriggerEvent, registry::Registry,
+    resources::operations_helper::ResourceSpecsLocked, wrapper::NodeWrapper,
 };
 use common::errors::SvcError;
 use common_lib::types::v0::transport::{

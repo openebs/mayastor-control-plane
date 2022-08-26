@@ -1,15 +1,15 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourceOwnerUpdate},
     reconciler::{GarbageCollect, ReCreate},
-    specs::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperationsHelper},
+    resources::{
+        operations::{ResourceLifecycle, ResourceOwnerUpdate},
+        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperationsHelper},
+        OperationGuardArc,
+    },
     task_poller::{
         PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
     },
 };
-use common_lib::types::v0::{
-    store::{replica::ReplicaSpec, OperationGuardArc},
-    transport::ReplicaOwners,
-};
+use common_lib::types::v0::{store::replica::ReplicaSpec, transport::ReplicaOwners};
 
 /// Replica reconciler
 #[derive(Debug)]

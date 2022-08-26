@@ -1,7 +1,14 @@
 use crate::{
     controller::{
-        operations::{ResourceLifecycle, ResourceSharing},
         registry::Registry,
+        resources::{
+            operations::{ResourceLifecycle, ResourceSharing},
+            operations_helper::{
+                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs,
+                ResourceSpecsLocked, SpecOperationsHelper,
+            },
+            OperationGuardArc, ResourceMutex, TraceSpan, TraceStrLog,
+        },
         scheduling::{
             nexus::GetPersistedNexusChildren,
             resources::{ChildItem, HealthyChildItems, ReplicaItem},
@@ -10,10 +17,6 @@ use crate::{
                 ReplicaRemovalCandidates,
             },
             ResourceFilter,
-        },
-        specs::{
-            GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
-            SpecOperationsHelper,
         },
     },
     nexus::scheduling::get_target_node_candidate,
@@ -36,7 +39,7 @@ use common_lib::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{VolumeOperation, VolumeSpec},
-            OperationGuardArc, ResourceMutex, SpecStatus, SpecTransaction, TraceSpan, TraceStrLog,
+            SpecStatus, SpecTransaction,
         },
         transport::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyReplica,

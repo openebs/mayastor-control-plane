@@ -3,14 +3,14 @@ use crate::controller::{
         nexus::{fixup_nexus_protocol, missing_nexus_recreate},
         PollContext, TaskPoller,
     },
-    specs::OperationSequenceGuard,
+    resources::{operations_helper::OperationSequenceGuard, ResourceMutex},
     task_poller::{PollResult, PollerState},
 };
 
 use common_lib::types::v0::store::volume::VolumeSpec;
 
 use crate::controller::reconciler::nexus::{enospc_children_faulter, faulted_nexus_remover};
-use common_lib::types::v0::{store::ResourceMutex, transport::VolumeStatus};
+use common_lib::types::v0::transport::VolumeStatus;
 
 /// Volume nexus reconciler
 /// When io-engine instances restart they come up "empty" and so we need to recreate

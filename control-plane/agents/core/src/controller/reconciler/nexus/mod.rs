@@ -2,8 +2,8 @@ mod garbage_collector;
 
 use crate::{
     controller::{
+        resources::operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
         scheduling::resources::HealthyChildItems,
-        specs::{OperationSequenceGuard, SpecOperationsHelper},
         task_poller::{
             squash_results, PollContext, PollPeriods, PollResult, PollTimer, PollerState,
             TaskPoller,
@@ -18,7 +18,6 @@ use common_lib::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
-            TraceSpan, TraceStrLog,
         },
         transport::{CreateNexus, NexusShareProtocol, NodeStatus, ShareNexus, UnshareNexus},
     },
@@ -26,14 +25,11 @@ use common_lib::{
 use garbage_collector::GarbageCollector;
 
 use crate::controller::{
-    operations::ResourceSharing,
     reconciler::{ReCreate, Reconciler},
+    resources::{operations::ResourceSharing, OperationGuardArc, TraceSpan, TraceStrLog},
     wrapper::NodeWrapper,
 };
-use common_lib::types::v0::{
-    store::OperationGuardArc,
-    transport::{FaultNexusChild, NexusStatus},
-};
+use common_lib::types::v0::transport::{FaultNexusChild, NexusStatus};
 use std::{convert::TryFrom, sync::Arc};
 use tokio::sync::RwLock;
 use tracing::Instrument;

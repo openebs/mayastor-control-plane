@@ -1,12 +1,15 @@
 use crate::controller::{
-    operations::ResourceLifecycle,
     registry::Registry,
-    specs::{GuardedOperationsHelper, OperationSequenceGuard},
+    resources::{
+        operations::ResourceLifecycle,
+        operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+        OperationGuardArc,
+    },
     wrapper::ClientOps,
 };
 use common::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
-    store::{pool::PoolSpec, OperationGuardArc},
+    store::pool::PoolSpec,
     transport::{CreatePool, DestroyPool, Pool},
 };
 

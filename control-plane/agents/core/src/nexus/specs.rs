@@ -1,9 +1,12 @@
 use crate::controller::{
-    operations::ResourceOffspring,
     registry::Registry,
-    specs::{
-        GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
-        SpecOperationsHelper,
+    resources::{
+        operations::ResourceOffspring,
+        operations_helper::{
+            GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
+            SpecOperationsHelper,
+        },
+        OperationGuardArc, ResourceMutex, TraceSpan,
     },
     wrapper::ClientOps,
 };
@@ -15,7 +18,7 @@ use common_lib::{
             nexus::{NexusOperation, NexusSpec},
             nexus_child::NexusChild,
             replica::ReplicaSpec,
-            OperationGuardArc, SpecStatus, SpecTransaction, TraceSpan,
+            SpecStatus, SpecTransaction,
         },
         transport::{
             AddNexusReplica, Child, ChildUri, CreateNexus, Nexus, NexusId, NexusOwners,
@@ -23,8 +26,6 @@ use common_lib::{
         },
     },
 };
-
-use common_lib::types::v0::store::ResourceMutex;
 
 #[async_trait::async_trait]
 impl GuardedOperationsHelper for OperationGuardArc<NexusSpec> {

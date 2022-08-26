@@ -1,15 +1,15 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceSharing},
     registry::Registry,
-    specs::{GuardedOperationsHelper, OperationSequenceGuard},
+    resources::{
+        operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceSharing},
+        operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+        OperationGuardArc, UpdateInnerValue,
+    },
     wrapper::ClientOps,
 };
 use common::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
-    store::{
-        replica::{ReplicaOperation, ReplicaSpec},
-        OperationGuardArc, UpdateInnerValue,
-    },
+    store::replica::{ReplicaOperation, ReplicaSpec},
     transport::{
         CreateReplica, DestroyReplica, Replica, ReplicaOwners, ShareReplica, UnshareReplica,
     },

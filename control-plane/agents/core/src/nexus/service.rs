@@ -1,13 +1,16 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
     registry::Registry,
-    specs::ResourceSpecsLocked,
+    resources::{
+        operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
+        operations_helper::ResourceSpecsLocked,
+        OperationGuardArc,
+    },
 };
 use common::errors::SvcError;
 use common_lib::{
     transport_api::{v0::Nexuses, ReplyError},
     types::v0::{
-        store::{nexus::NexusSpec, OperationGuardArc},
+        store::nexus::NexusSpec,
         transport::{
             AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
             RemoveNexusChild, ShareNexus, UnshareNexus,

@@ -1,17 +1,16 @@
 use crate::controller::{
-    reconciler::{PollContext, TaskPoller},
-    specs::OperationSequenceGuard,
+    reconciler::{GarbageCollect, PollContext, TaskPoller},
+    resources::{
+        operations::ResourceLifecycle,
+        operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
+        OperationGuardArc, TraceSpan, TraceStrLog,
+    },
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 
-use common_lib::types::v0::store::{volume::VolumeSpec, OperationGuardArc, TraceSpan, TraceStrLog};
-
-use crate::controller::{
-    operations::ResourceLifecycle, reconciler::GarbageCollect, specs::SpecOperationsHelper,
-};
 use common::errors::SvcError;
 use common_lib::types::v0::{
-    store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},
+    store::{nexus_persistence::NexusInfo, replica::ReplicaSpec, volume::VolumeSpec},
     transport::{DestroyVolume, VolumeStatus},
 };
 use tracing::Instrument;

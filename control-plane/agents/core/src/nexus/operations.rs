@@ -1,7 +1,10 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
     registry::Registry,
-    specs::{GuardedOperationsHelper, OperationSequenceGuard},
+    resources::{
+        operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
+        operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+        OperationGuardArc,
+    },
     wrapper::ClientOps,
 };
 use common::errors::{SvcError, SvcError::CordonedNode};
@@ -9,7 +12,6 @@ use common_lib::types::v0::{
     store::{
         nexus::{NexusOperation, NexusSpec},
         nexus_child::NexusChild,
-        OperationGuardArc,
     },
     transport::{
         child::Child,
