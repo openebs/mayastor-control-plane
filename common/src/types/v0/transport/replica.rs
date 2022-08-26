@@ -253,7 +253,11 @@ impl ReplicaOwners {
         self.volume.take();
         self.nexuses.clear();
     }
-    /// Add new nexus owner
+    /// Add new volume owner.
+    pub fn add_volume(&mut self, new: VolumeId) {
+        self.volume = Some(new);
+    }
+    /// Add new nexus owner.
     pub fn add_owner(&mut self, new: &NexusId) {
         match self.nexuses.iter().find(|nexus| nexus == &new) {
             None => self.nexuses.push(new.clone()),

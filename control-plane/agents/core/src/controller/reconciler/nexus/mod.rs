@@ -125,7 +125,7 @@ async fn nexus_reconciler(
 
 /// Find and removes faulted children from the given nexus
 /// If the child is a replica it also disowns and destroys it
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 pub(super) async fn faulted_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
@@ -235,7 +235,7 @@ pub(super) async fn unknown_children_remover(
 /// Find missing children from the given nexus
 /// They are removed from the spec as we don't know why they got removed, so it's safer
 /// to just disown and destroy them.
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 pub(super) async fn missing_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
@@ -382,7 +382,7 @@ pub(super) async fn missing_nexus_recreate(
 /// Fixup the nexus share protocol if it does not match what the specs says
 /// If the nexus is shared but the protocol is not the same as the spec, then we must first
 /// unshare the nexus, and then share it via the correct protocol
-#[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 pub(super) async fn fixup_nexus_protocol(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,

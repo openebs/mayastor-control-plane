@@ -327,7 +327,7 @@ impl ResourceSpecsLocked {
                                     replica_id: replica.uuid().clone(),
                                 })?;
                         let pool_ref = replica_spec.lock().pool.clone();
-                        match Self::get_pool_node(registry, pool_ref.pool_name().clone()).await {
+                        match Self::get_pool_node(registry, pool_ref.pool_name()).await {
                             Some(node) => {
                                 if let Err(error) = self
                                     .disown_and_destroy_replica(registry, &node, replica.uuid())

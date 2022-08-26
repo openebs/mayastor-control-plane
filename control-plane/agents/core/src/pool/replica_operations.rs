@@ -1,5 +1,5 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourceSharing},
+    operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceSharing},
     registry::Registry,
     specs::{GuardedOperationsHelper, OperationSequenceGuard},
     wrapper::ClientOps,
@@ -8,9 +8,11 @@ use common::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
     store::{
         replica::{ReplicaOperation, ReplicaSpec},
-        OperationGuardArc,
+        OperationGuardArc, UpdateInnerValue,
     },
-    transport::{CreateReplica, DestroyReplica, Replica, ShareReplica, UnshareReplica},
+    transport::{
+        CreateReplica, DestroyReplica, Replica, ReplicaOwners, ShareReplica, UnshareReplica,
+    },
 };
 
 #[async_trait::async_trait]
@@ -153,6 +155,36 @@ impl ResourceSharing for Option<&mut OperationGuardArc<ReplicaSpec>> {
             replica.complete_update(registry, result, spec_clone).await
         } else {
             node.unshare_replica(request).await
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceOwnerUpdate for OperationGuardArc<ReplicaSpec> {
+    type Update = ReplicaOwners;
+
+    async fn remove_owners(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Update,
+        update_on_commit: bool,
+    ) -> Result<(), SvcError> {
+        // we don't really need the state, this is a configuration-only change.
+        let state = Default::default();
+        let mut current = self.lock().owners.clone();
+        current.disown(request);
+        let spec_clone = self
+            .start_update(registry, &state, ReplicaOperation::OwnerUpdate(current))
+            .await?;
+
+        match self.complete_update(registry, Ok(()), spec_clone).await {
+            Ok(_) => Ok(()),
+            Err(SvcError::Store { .. }) if update_on_commit => {
+                self.lock().owners.disown(request);
+                self.update();
+                Ok(())
+            }
+            Err(error) => Err(error),
         }
     }
 }

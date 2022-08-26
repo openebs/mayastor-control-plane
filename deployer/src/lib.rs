@@ -401,14 +401,17 @@ impl StartOptions {
         self.io_engine_env = Some(env);
         self
     }
+    #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
         self
     }
+    #[must_use]
     pub fn with_io_engine_devices(mut self, devices: Vec<&str>) -> Self {
         self.io_engine_devices = devices.into_iter().map(Into::into).collect();
         self
     }
+    #[must_use]
     pub fn with_show_info(mut self, show_info: bool) -> Self {
         self.show_info = show_info;
         self

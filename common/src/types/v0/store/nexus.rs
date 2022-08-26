@@ -118,7 +118,7 @@ impl NexusSpec {
 impl ResourceMutex<NexusSpec> {
     /// Get the resource uuid.
     pub fn uuid(&mut self) -> &NexusId {
-        &self.immutable_peek().uuid
+        &self.immutable_ref().uuid
     }
 }
 

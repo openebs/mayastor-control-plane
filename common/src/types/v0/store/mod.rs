@@ -163,11 +163,11 @@ pub struct ResourceMutex<T> {
 #[derive(Debug)]
 pub struct ResourceMutexInner<T> {
     resource: Mutex<T>,
-    immutable_peek: T,
+    immutable_peek: Arc<T>,
 }
 impl<T: Clone> From<T> for ResourceMutex<T> {
     fn from(resource: T) -> Self {
-        let immutable_peek = resource.clone();
+        let immutable_peek = Arc::new(resource.clone());
         let resource = Mutex::new(resource);
         Self {
             inner: Arc::new(ResourceMutexInner {
@@ -187,8 +187,15 @@ impl<T: Clone> ResourceMutex<T> {
     /// Peek the initial resource value without locking.
     /// # Note:
     /// This is only useful for immutable fields, such as the resource identifier.
-    pub fn immutable_peek(&self) -> &T {
+    pub fn immutable_ref(&self) -> &Arc<T> {
         &self.inner.immutable_peek
+    }
+    /// Peek the initial resource value without locking.
+    /// # Note:
+    /// This is only useful for immutable fields, such as the resource identifier.
+    /// Useful over `as_ref` as it returns the `Arc` directly.
+    pub fn arc(&self) -> Arc<T> {
+        self.inner.immutable_peek.clone()
     }
 }
 
@@ -204,6 +211,11 @@ impl<T: OperationSequencer, R> DerefMut for OperationGuard<T, R> {
     }
 }
 
+impl<T: OperationSequencer + Sized, R> AsRef<R> for OperationGuard<T, R> {
+    fn as_ref(&self) -> &R {
+        self.peek()
+    }
+}
 /// It unlocks the sequence lock on drop.
 #[derive(Debug)]
 pub struct OperationGuard<T: OperationSequencer, R> {
@@ -226,7 +238,7 @@ impl<T: OperationSequencer + Sized, R> OperationGuard<T, R> {
     /// Note, this value may be outdated *During* an operation, and so must not be used to
     /// inspect fields which are being mutated.
     /// To inspect fields being mutated, please use the locked resource itself.
-    pub fn peek(&self) -> &R {
+    fn peek(&self) -> &R {
         &self.inner_value
     }
     /// Create operation Guard for the resource with the operation mode
@@ -396,23 +408,23 @@ macro_rules! impl_trace_str_log {
         }
         impl crate::types::v0::store::TraceStrLog for OperationGuardArc<$type> {
             fn error(&self, message: &str) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $log_macro!(peek, tracing::Level::ERROR, message);
             }
             fn warn(&self, message: &str) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $log_macro!(peek, tracing::Level::WARN, message);
             }
             fn info(&self, message: &str) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $log_macro!(peek, tracing::Level::INFO, message);
             }
             fn debug(&self, message: &str) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $log_macro!(peek, tracing::Level::DEBUG, message);
             }
             fn trace(&self, message: &str) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $log_macro!(peek, tracing::Level::TRACE, message);
             }
         }
@@ -444,23 +456,23 @@ macro_rules! impl_trace_span {
         }
         impl crate::types::v0::store::TraceSpan for OperationGuardArc<$type> {
             fn error_span<F: FnOnce()>(&self, f: F) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $span_macro!(peek, tracing::Level::ERROR, f);
             }
             fn warn_span<F: FnOnce()>(&self, f: F) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $span_macro!(peek, tracing::Level::WARN, f);
             }
             fn info_span<F: FnOnce()>(&self, f: F) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $span_macro!(peek, tracing::Level::INFO, f);
             }
             fn debug_span<F: FnOnce()>(&self, f: F) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $span_macro!(peek, tracing::Level::DEBUG, f);
             }
             fn trace_span<F: FnOnce()>(&self, f: F) {
-                let peek = self.peek();
+                let peek = self.as_ref();
                 $span_macro!(peek, tracing::Level::TRACE, f);
             }
         }

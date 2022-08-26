@@ -90,18 +90,18 @@ impl ReCreate for OperationGuardArc<PoolSpec> {
 /// crashed/restarted.
 /// In such a case, we issue a new create pool request against the io-engine instance where the pool
 /// should exist.
-#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.uuid = %pool.lock().id, request.reconcile = true))]
+#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true))]
 async fn missing_pool_state_reconciler(
     pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,
 ) -> PollResult {
-    if !pool.lock().status().created() {
+    if !pool.as_ref().status().created() {
         // nothing to do here
         return PollResult::Ok(PollerState::Idle);
     }
-    let pool_id = pool.lock().id.clone();
+    let pool_id = pool.id();
 
-    if context.registry().get_pool_state(&pool_id).await.is_err() {
+    if context.registry().get_pool_state(pool_id).await.is_err() {
         let pool_spec = pool.lock().clone();
 
         let warn_missing = |pool_spec: &PoolSpec, node_status: NodeStatus| {
@@ -144,7 +144,7 @@ async fn missing_pool_state_reconciler(
                 }
             }
         }
-        .instrument(tracing::info_span!("missing_pool_state_reconciler", pool.uuid = %pool_spec.id, request.reconcile = true))
+        .instrument(tracing::info_span!("missing_pool_state_reconciler", pool.id = %pool_spec.id, request.reconcile = true))
         .await
     } else {
         PollResult::Ok(PollerState::Idle)
@@ -155,20 +155,19 @@ async fn missing_pool_state_reconciler(
 /// the pool deletion gets struck in Deleting state, this creates a problem as when
 /// the node comes up we cannot create a pool with same specs, the deleting_pool_spec_reconciler
 /// cleans up any such pool when node comes up.
-#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.uuid = %pool.lock().id, request.reconcile = true))]
+#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true))]
 async fn deleting_pool_spec_reconciler(
     pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,
 ) -> PollResult {
-    if !pool.lock().status().deleting() {
+    if !pool.as_ref().status().deleting() {
         // nothing to do here
         return PollResult::Ok(PollerState::Idle);
     }
 
-    let pool_spec = pool.lock().clone();
     match context
         .registry()
-        .get_node_wrapper(&pool_spec.node.clone())
+        .get_node_wrapper(&pool.as_ref().node)
         .await
     {
         Ok(node) => {
@@ -179,25 +178,29 @@ async fn deleting_pool_spec_reconciler(
         Err(_) => return PollResult::Ok(PollerState::Idle),
     };
 
+    let pool_id = &pool.arc().id;
     async {
         let request = DestroyPool {
-            node: pool_spec.node.clone(),
-            id: pool_spec.id.clone(),
+            node: pool.as_ref().node.clone(),
+            id: pool.as_ref().id.clone(),
         };
-        match pool
-            .destroy( context.registry(), &request)
-            .await
-        {
+        match pool.destroy(context.registry(), &request).await {
             Ok(_) => {
-                pool_spec.info_span(|| tracing::info!("Pool deleted successfully"));
+                pool.as_ref()
+                    .info_span(|| tracing::info!("Pool deleted successfully"));
                 PollResult::Ok(PollerState::Idle)
             }
             Err(error) => {
-                pool_spec.error_span(|| tracing::error!(error=%error, "Failed to delete the pool"));
+                pool.as_ref()
+                    .error_span(|| tracing::error!(error=%error, "Failed to delete the pool"));
                 Err(error)
             }
         }
     }
-    .instrument(tracing::info_span!("deleting_pool_spec_reconciler", pool.uuid = %pool_spec.id, request.reconcile = true))
+    .instrument(tracing::info_span!(
+        "deleting_pool_spec_reconciler",
+        pool.id = %pool_id,
+        request.reconcile = true
+    ))
     .await
 }

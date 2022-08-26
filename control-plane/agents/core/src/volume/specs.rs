@@ -366,10 +366,10 @@ impl ResourceSpecsLocked {
     }
 
     /// Get the `NodeId` where `pool` lives.
-    pub(crate) async fn get_pool_node(registry: &Registry, pool: PoolId) -> Option<NodeId> {
+    pub(crate) async fn get_pool_node(registry: &Registry, pool: &PoolId) -> Option<NodeId> {
         let pools = registry.get_pool_states_inner().await;
         pools.iter().find_map(|p| {
-            if p.id == pool {
+            if &p.id == pool {
                 Some(p.node.clone())
             } else {
                 None

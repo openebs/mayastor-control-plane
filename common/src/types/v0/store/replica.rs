@@ -195,7 +195,7 @@ mod tests_deserializer {
 impl ResourceMutex<ReplicaSpec> {
     /// Get the resource uuid.
     pub fn uuid(&mut self) -> &ReplicaId {
-        &self.immutable_peek().uuid
+        &self.immutable_ref().uuid
     }
 }
 
@@ -261,6 +261,9 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
                 ReplicaOperation::Unshare => {
                     self.share = Protocol::None;
                 }
+                ReplicaOperation::OwnerUpdate(owners) => {
+                    self.owners = owners;
+                }
             }
         }
         self.clear_op();
@@ -291,6 +294,7 @@ pub enum ReplicaOperation {
     Destroy,
     Share(ReplicaShareProtocol),
     Unshare,
+    OwnerUpdate(ReplicaOwners),
 }
 
 /// Key used by the store to uniquely identify a ReplicaSpec structure.

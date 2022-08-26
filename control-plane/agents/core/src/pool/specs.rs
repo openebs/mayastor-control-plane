@@ -132,6 +132,7 @@ impl SpecOperationsHelper for ReplicaSpec {
                 })
             }
             ReplicaOperation::Unshare => Ok(()),
+            ReplicaOperation::OwnerUpdate(_) => Ok(()),
             _ => unreachable!(),
         }?;
         self.start_op(op);

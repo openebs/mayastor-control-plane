@@ -95,15 +95,15 @@ pub struct PoolSpec {
 impl ResourceMutex<PoolSpec> {
     /// Get the resource id.
     pub fn id(&mut self) -> &PoolId {
-        &self.immutable_peek().id
+        &self.immutable_ref().id
     }
 }
 
 macro_rules! pool_span {
     ($Self:tt, $Level:expr, $func:expr) => {
-        match tracing::Span::current().field("pool.uuid") {
+        match tracing::Span::current().field("pool.id") {
             None => {
-                let _span = tracing::span!($Level, "log_event", pool.uuid = %$Self.id).entered();
+                let _span = tracing::span!($Level, "log_event", pool.id = %$Self.id).entered();
                 $func();
             }
             Some(_) => {

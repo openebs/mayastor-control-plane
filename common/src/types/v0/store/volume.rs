@@ -109,7 +109,7 @@ pub struct VolumeSpec {
 impl ResourceMutex<VolumeSpec> {
     /// Get the resource uuid.
     pub fn uuid(&mut self) -> &VolumeId {
-        &self.immutable_peek().uuid
+        &self.immutable_ref().uuid
     }
 }
 
