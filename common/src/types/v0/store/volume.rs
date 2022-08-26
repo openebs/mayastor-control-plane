@@ -5,8 +5,7 @@ use crate::{
         openapi::models,
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
-            AsOperationSequencer, OperationGuardArc, OperationSequence, ResourceMutex,
-            ResourceUuid, SpecStatus, SpecTransaction,
+            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
             self, CreateVolume, NexusId, NodeId, ReplicaId, Topology, VolumeId, VolumeLabels,
@@ -106,43 +105,6 @@ pub struct VolumeSpec {
     pub thin: bool,
 }
 
-impl ResourceMutex<VolumeSpec> {
-    /// Get the resource uuid.
-    pub fn uuid(&mut self) -> &VolumeId {
-        &self.immutable_peek().uuid
-    }
-}
-
-macro_rules! volume_log {
-    ($Self:tt, $Level:expr, $Message:tt) => {
-        match tracing::Span::current().field("volume.uuid") {
-            None => {
-                let _span = tracing::span!($Level, "log_event", volume.uuid = %$Self.uuid).entered();
-                tracing::event!($Level, volume.uuid = %$Self.uuid, $Message);
-            }
-            Some(_) => {
-                tracing::event!($Level, volume.uuid = %$Self.uuid, $Message);
-            }
-        }
-    };
-}
-crate::impl_trace_str_log!(volume_log, VolumeSpec);
-
-macro_rules! volume_span {
-    ($Self:tt, $Level:expr, $func:expr) => {
-        match tracing::Span::current().field("volume.uuid") {
-            None => {
-                let _span = tracing::span!($Level, "log_event", volume.uuid = %$Self.uuid).entered();
-                $func();
-            }
-            Some(_) => {
-                $func();
-            }
-        }
-    };
-}
-crate::impl_trace_span!(volume_span, VolumeSpec);
-
 impl AsOperationSequencer for VolumeSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
@@ -174,13 +136,6 @@ impl VolumeSpec {
             },
             _ => self.num_replicas,
         }
-    }
-}
-
-impl ResourceUuid for VolumeSpec {
-    type Id = VolumeId;
-    fn uuid(&self) -> Self::Id {
-        self.uuid.clone()
     }
 }
 

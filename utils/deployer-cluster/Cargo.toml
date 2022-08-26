@@ -13,6 +13,7 @@ openapi = { path = "../../openapi", features = [ "tower-client", "tower-trace" ]
 composer = { path = "../../utils/dependencies/composer", default-features = false }
 deployer = { path = "../../deployer" }
 rpc = { path = "../../rpc" }
+csi-driver = { path = "../../control-plane/csi-driver" }
 utils = { path = "../../utils/utils-lib" }
 anyhow = "1.0.44"
 common-lib = { path = "../../common" }
@@ -21,6 +22,7 @@ backtrace = "0.3.61"
 etcd-client = "0.10.1"
 grpc = { path = "../../control-plane/grpc" }
 tonic = "0.8.0"
+tower = { version = "0.4.13", features = [ "timeout", "util" ] }
 # Tracing
 tracing = "0.1.35"
 tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }

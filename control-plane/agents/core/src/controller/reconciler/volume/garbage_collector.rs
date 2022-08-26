@@ -1,28 +1,28 @@
 use crate::controller::{
-    reconciler::{PollContext, TaskPoller},
-    specs::OperationSequenceGuard,
+    reconciler::{GarbageCollect, PollContext, TaskPoller},
+    resources::{
+        operations::ResourceLifecycle,
+        operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
+        OperationGuardArc, TraceSpan, TraceStrLog,
+    },
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 
-use common_lib::types::v0::store::{volume::VolumeSpec, OperationGuardArc, TraceSpan, TraceStrLog};
-
-use crate::controller::{
-    operations::ResourceLifecycle, reconciler::GarbageCollect, specs::SpecOperationsHelper,
-};
+use crate::controller::resources::{operations::ResourceOwnerUpdate, ResourceUid};
 use common::errors::SvcError;
 use common_lib::types::v0::{
-    store::{nexus_persistence::NexusInfo, replica::ReplicaSpec},
-    transport::{DestroyVolume, VolumeStatus},
+    store::{nexus_persistence::NexusInfo, replica::ReplicaSpec, volume::VolumeSpec},
+    transport::{DestroyVolume, ReplicaOwners, VolumeStatus},
 };
 use tracing::Instrument;
 
-/// Volume Garbage Collector reconciler
+/// Volume Garbage Collector reconciler.
 #[derive(Debug)]
 pub(super) struct GarbageCollector {
     counter: PollTimer,
 }
 impl GarbageCollector {
-    /// Return a new `Self`
+    /// Return a new `Self`.
     pub(super) fn new() -> Self {
         Self {
             counter: PollTimer::from(5),
@@ -92,7 +92,7 @@ async fn destroy_deleting_volume(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let deleting = volume.lock().status().deleting();
+    let deleting = volume.as_ref().status().deleting();
     if deleting {
         destroy_volume(volume, context)
             .instrument(tracing::info_span!(
@@ -109,21 +109,17 @@ async fn destroy_volume(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let uuid = volume.lock().uuid.clone();
+    let volume_uuid = &volume.immutable_arc().uuid;
     match volume
-        .destroy(context.registry(), &DestroyVolume::new(&uuid))
+        .destroy(context.registry(), &DestroyVolume::new(volume_uuid))
         .await
     {
         Ok(_) => {
-            volume
-                .lock()
-                .info_span(|| tracing::info!("Successfully destroyed volume"));
+            volume.info_span(|| tracing::info!("Successfully destroyed volume"));
             Ok(PollerState::Idle)
         }
         Err(error) => {
-            volume
-                .lock()
-                .error_span(|| tracing::error!(error = %error, "Failed to destroy volume"));
+            volume.error_span(|| tracing::error!(error = %error, "Failed to destroy volume"));
             Err(error)
         }
     }
@@ -139,11 +135,10 @@ async fn disown_unused_nexuses(
     context: &PollContext,
 ) -> PollResult {
     let mut results = vec![];
-    let volume_clone = volume.lock().clone();
 
-    for nexus in context.specs().get_volume_nexuses(&volume_clone.uuid) {
-        match &volume_clone.target {
-            Some(target) if target.nexus() == &nexus.lock().uuid => continue,
+    for nexus in context.specs().get_volume_nexuses(volume.uuid()) {
+        match &volume.as_ref().target {
+            Some(target) if target.nexus() == nexus.uid() => continue,
             _ => {}
         };
         let nexus_clone = nexus.lock().clone();
@@ -176,24 +171,20 @@ async fn disown_unused_replicas(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let volume_clone = volume.lock().clone();
-    let target = match context.specs().get_volume_target_nexus(&volume_clone) {
-        Some(target) => target,
+    let target = match context.specs().get_volume_target_nexus(volume.as_ref()) {
+        Some(target) => target.operation_guard()?,
         None => {
             // if the volume is not published, then leave the replicas around as they might
             // still reappear as online by the time we publish
             return PollResult::Ok(PollerState::Busy);
         }
     };
-    if !target.lock().status().created() {
+    if !target.as_ref().status().created() || target.as_ref().dirty() {
         // don't attempt to disown the replicas if the nexus that should own them is not stable
         return PollResult::Ok(PollerState::Busy);
     }
 
-    let volume_state = context
-        .registry()
-        .get_volume_state(&volume_clone.uuid)
-        .await?;
+    let volume_state = context.registry().get_volume_state(volume.uuid()).await?;
     if matches!(
         volume_state.status,
         VolumeStatus::Faulted | VolumeStatus::Unknown
@@ -205,33 +196,38 @@ async fn disown_unused_replicas(
     let mut nexus_info = None; // defer reading from the persistent store unless we find a candidate
     let mut results = vec![];
 
-    for replica in context.specs().get_volume_replicas(&volume_clone.uuid) {
-        let replica = match replica.operation_guard() {
+    for replica in context.specs().get_volume_replicas(volume.uuid()) {
+        let mut replica = match replica.operation_guard() {
             Ok(guard) => guard,
             Err(_) => continue,
         };
-        let replica_clone = replica.lock().clone();
 
-        let replica_in_target = target.lock().contains_replica(&replica_clone.uuid);
-        let replica_online = matches!(context.registry().get_replica(&replica_clone.uuid).await, Ok(state) if state.online());
+        let replica_in_target = target.as_ref().contains_replica(&replica.as_ref().uuid);
+        let replica_online = matches!(context.registry().get_replica(&replica.as_ref().uuid).await, Ok(state) if state.online());
         if !replica_online
-            && replica_clone.owners.owned_by(&volume_clone.uuid)
-            && !replica_clone.owners.owned_by_a_nexus()
+            && !replica.as_ref().dirty()
+            && replica.as_ref().owners.owned_by(volume.uuid())
+            && !replica.as_ref().owners.owned_by_a_nexus()
             && !replica_in_target
-            && !is_replica_healthy(context, &mut nexus_info, &replica_clone, &volume_clone).await?
+            && !is_replica_healthy(context, &mut nexus_info, replica.as_ref(), volume.as_ref())
+                .await?
         {
-            volume_clone.warn_span(|| tracing::warn!(replica.uuid = %replica_clone.uuid, "Attempting to disown unused replica"));
+            volume.warn_span(|| tracing::warn!(replica.uuid = %replica.as_ref().uuid, "Attempting to disown unused replica"));
+
             // the replica garbage collector will destroy the disowned replica
-            match context
-                .specs()
-                .disown_volume_replica(context.registry(), &replica)
+            match replica
+                .remove_owners(
+                    context.registry(),
+                    &ReplicaOwners::from_volume(volume.uuid()),
+                    true,
+                )
                 .await
             {
                 Ok(_) => {
-                    volume_clone.info_span(|| tracing::info!(replica.uuid = %replica_clone.uuid, "Successfully disowned unused replica"));
+                    volume.info_span(|| tracing::info!(replica.uuid = %replica.as_ref().uuid, "Successfully disowned unused replica"));
                 }
                 Err(error) => {
-                    volume_clone.error_span(|| tracing::error!(replica.uuid = %replica_clone.uuid, "Failed to disown unused replica"));
+                    volume.error_span(|| tracing::error!(replica.uuid = %replica.as_ref().uuid, "Failed to disown unused replica"));
                     results.push(Err(error));
                 }
             }

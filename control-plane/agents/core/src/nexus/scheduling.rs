@@ -1,5 +1,6 @@
 use crate::controller::{
     registry::Registry,
+    resources::TraceStrLog,
     scheduling::{
         nexus,
         nexus::{GetPersistedNexusChildren, GetSuitableNodes},
@@ -9,7 +10,7 @@ use crate::controller::{
     wrapper::NodeWrapper,
 };
 use common::errors::{NotEnough, SvcError};
-use common_lib::types::v0::store::{nexus::NexusSpec, TraceStrLog};
+use common_lib::types::v0::store::nexus::NexusSpec;
 
 /// Return healthy replicas for volume/nexus
 /// The persistent store has the latest information from io-engine, which tells us if any replica

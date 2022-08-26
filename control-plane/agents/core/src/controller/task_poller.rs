@@ -1,4 +1,4 @@
-use crate::controller::{registry::Registry, specs::ResourceSpecsLocked};
+use crate::controller::{registry::Registry, resources::operations_helper::ResourceSpecsLocked};
 use common::errors::SvcError;
 
 /// Poll Event that identifies why a poll is running

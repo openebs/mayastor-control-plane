@@ -16,6 +16,7 @@ use common_lib::types::v0::{
 use itertools::Itertools;
 use std::{collections::HashMap, ops::Deref};
 
+/// Select suitable pools for volume replica creation.
 #[derive(Clone)]
 pub(crate) struct GetSuitablePools {
     spec: VolumeSpec,
@@ -34,13 +35,14 @@ impl From<&VolumeSpec> for GetSuitablePools {
     }
 }
 
+/// The context to select suitable pools for volume replica creation.
 #[derive(Clone)]
 pub(crate) struct GetSuitablePoolsContext {
     registry: Registry,
     spec: VolumeSpec,
 }
 impl GetSuitablePoolsContext {
-    /// Get the registry
+    /// Get the registry.
     pub(crate) fn registry(&self) -> &Registry {
         &self.registry
     }
@@ -61,8 +63,8 @@ impl Deref for GetSuitablePools {
     }
 }
 
-/// Add replicas to a volume
-/// Selects the best pool candidates to create lvol replicas on
+/// Add replicas to a volume.
+/// Selects the best pool candidates to create lvol replicas on.
 #[derive(Clone)]
 pub(crate) struct AddVolumeReplica {
     context: GetSuitablePoolsContext,
@@ -80,7 +82,7 @@ impl AddVolumeReplica {
             list: PoolItemLister::list(registry).await,
         }
     }
-    /// Default rules for pool selection when creating replicas for a volume
+    /// Default rules for pool selection when creating replicas for a volume.
     pub(crate) async fn builder_with_defaults(
         request: impl Into<GetSuitablePools>,
         registry: &Registry,
@@ -101,7 +103,9 @@ impl AddVolumeReplica {
             .filter(NodeFilters::allowed)
             .filter(NodeFilters::unused)
             .filter(PoolFilters::usable)
+            .filter(PoolFilters::capacity)
             .filter(PoolFilters::free_space)
+            .filter(PoolFilters::free_space_full_rebuild)
             .filter(PoolFilters::topology)
             // sort pools in order of preference (from least to most number of replicas)
             .sort(PoolSorters::sort_by_replica_count)
@@ -140,26 +144,26 @@ impl ResourceFilter for AddVolumeReplica {
     }
 }
 
-/// Decrease a volume's replicas when it exceeds the required count
+/// Decrease a volume's replicas when it exceeds the required count.
 #[derive(Clone)]
 pub(crate) struct DecreaseVolumeReplica {
     context: GetChildForRemovalContext,
     list: Vec<ReplicaItem>,
 }
 
-/// Request to decrease volume replicas
-/// Specifies the volume spec, state and whether to only remove currently unused replicas
+/// Request to decrease volume replicas.
+/// Specifies the volume spec, state and whether to only remove currently unused replicas.
 #[derive(Clone)]
 pub(crate) struct GetChildForRemoval {
     spec: VolumeSpec,
     state: VolumeState,
     /// Used when we have more replicas than we need, so we can be picky and try to remove
-    /// unused replicas first (replicas which are not attached to a nexus)
+    /// unused replicas first (replicas which are not attached to a nexus).
     unused_only: bool,
 }
 
 impl GetChildForRemoval {
-    /// Return a new `Self` from the provided parameters
+    /// Return a new `Self` from the provided parameters.
     pub(crate) fn new(spec: &VolumeSpec, state: &VolumeState, unused_only: bool) -> Self {
         Self {
             spec: spec.clone(),
@@ -277,7 +281,7 @@ impl DecreaseVolumeReplica {
             context,
         })
     }
-    /// Create new `Self` from the given arguments with a default list of sorting rules
+    /// Create new `Self` from the given arguments with a default list of sorting rules.
     pub(crate) async fn builder_with_defaults(
         request: &GetChildForRemoval,
         registry: &Registry,
@@ -287,7 +291,7 @@ impl DecreaseVolumeReplica {
             .sort(ChildSorters::sort))
     }
     /// Get the `ReplicaRemovalCandidates` for this request, which splits the candidates into
-    /// healthy and unhealthy candidates
+    /// healthy and unhealthy candidates.
     pub(crate) fn candidates(self) -> ReplicaRemovalCandidates {
         ReplicaRemovalCandidates::new(self.context, self.list)
     }
@@ -295,7 +299,7 @@ impl DecreaseVolumeReplica {
 
 /// Replica Removal Candidates with explicit partitioning between the healthy and unhealthy replicas
 /// This way we can make sure we do not unintentionally remove "too many" healthy candidates and
-/// risk making the volume degraded, or worst faulted
+/// risk making the volume degraded, or worst faulted.
 #[derive(Debug)]
 pub(crate) struct ReplicaRemovalCandidates {
     context: GetChildForRemovalContext,
@@ -304,7 +308,7 @@ pub(crate) struct ReplicaRemovalCandidates {
 }
 
 impl ReplicaRemovalCandidates {
-    /// Get the next healthy replica removal candidate
+    /// Get the next healthy replica removal candidate.
     fn next_healthy(&mut self) -> Option<ReplicaItem> {
         let replica_count = self.context.spec.desired_num_replicas();
         let healthy_online = self.healthy.iter().filter(|replica| match replica.state() {
@@ -323,12 +327,12 @@ impl ReplicaRemovalCandidates {
             None
         }
     }
-    /// Get the next unhealthy candidates (any is a good fit)
+    /// Get the next unhealthy candidates (any is a good fit).
     fn next_unhealthy(&mut self) -> Option<ReplicaItem> {
         self.unhealthy.pop()
     }
     /// Get the next removal candidate.
-    /// Unhealthy replicas are removed before healthy replicas
+    /// Unhealthy replicas are removed before healthy replicas.
     pub(crate) fn next(&mut self) -> Option<ReplicaItem> {
         self.next_unhealthy().or_else(|| self.next_healthy())
     }
@@ -386,7 +390,7 @@ impl ResourceFilter for DecreaseVolumeReplica {
 }
 
 /// `VolumeReplicasForNexusCtx` context used by the filter functions for `AddVolumeNexusReplicas`
-/// which is used to add replicas to a volume nexus
+/// which is used to add replicas to a volume nexus.
 #[derive(Clone)]
 pub(crate) struct VolumeReplicasForNexusCtx {
     registry: Registry,
@@ -396,20 +400,20 @@ pub(crate) struct VolumeReplicasForNexusCtx {
 }
 
 impl VolumeReplicasForNexusCtx {
-    /// Get the volume spec
+    /// Get the volume spec.
     pub(crate) fn vol_spec(&self) -> &VolumeSpec {
         &self.vol_spec
     }
-    /// Get the nexus spec
+    /// Get the nexus spec.
     pub(crate) fn nexus_spec(&self) -> &NexusSpec {
         &self.nexus_spec
     }
-    /// Get the current nexus persistent information
+    /// Get the current nexus persistent information.
     #[allow(dead_code)]
     pub(crate) fn nexus_info(&self) -> &Option<NexusInfo> {
         &self.nexus_info
     }
-    /// Get the registry
+    /// Get the registry.
     #[allow(dead_code)]
     pub(crate) fn registry(&self) -> &Registry {
         &self.registry
@@ -502,7 +506,7 @@ impl AddVolumeNexusReplicas {
     /// Sorted by:
     /// 1. nexus local replicas
     /// 2. replicas which have never been marked as faulted by io-engine
-    /// 3. replicas from pools with more free space
+    /// 3. replicas from pools with more free space.
     pub(crate) async fn builder_with_defaults(
         vol_spec: &VolumeSpec,
         nx_spec: &NexusSpec,

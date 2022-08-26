@@ -1,10 +1,10 @@
-use crate::controller::{registry::Registry, specs::ResourceSpecsLocked};
+use crate::controller::{
+    registry::Registry,
+    resources::{operations_helper::ResourceSpecsLocked, ResourceMutex},
+};
 use common::errors::{NodeNotFound, SvcError};
 use common_lib::types::v0::{
-    store::{
-        node::{NodeLabels, NodeSpec},
-        ResourceMutex,
-    },
+    store::node::{NodeLabels, NodeSpec},
     transport::{NodeId, Register},
 };
 use snafu::OptionExt;

@@ -91,7 +91,7 @@ pub struct StartOptions {
     pub kube_config: Option<String>,
 
     /// Use a base image for the binary components (eg: alpine:latest).
-    #[structopt(long)]
+    #[structopt(long, env = "BASE_IMAGE")]
     pub base_image: Option<String>,
 
     /// Use the jaegertracing service.
@@ -364,8 +364,9 @@ impl StartOptions {
         self
     }
     #[must_use]
-    pub fn with_csi(mut self, enabled: bool) -> Self {
-        self.csi_controller = enabled;
+    pub fn with_csi(mut self, controller: bool, node: bool) -> Self {
+        self.csi_controller = controller;
+        self.csi_node = node;
         self
     }
     #[must_use]
@@ -400,10 +401,17 @@ impl StartOptions {
         self.io_engine_env = Some(env);
         self
     }
+    #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
         self
     }
+    #[must_use]
+    pub fn with_io_engine_devices(mut self, devices: Vec<&str>) -> Self {
+        self.io_engine_devices = devices.into_iter().map(Into::into).collect();
+        self
+    }
+    #[must_use]
     pub fn with_show_info(mut self, show_info: bool) -> Self {
         self.show_info = show_info;
         self

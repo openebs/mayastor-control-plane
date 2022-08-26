@@ -1,6 +1,9 @@
 use crate::controller::{
     reconciler::{nexus, PollContext, TaskPoller},
-    specs::OperationSequenceGuard,
+    resources::{
+        operations_helper::OperationSequenceGuard, OperationGuardArc, ResourceMutex, TraceSpan,
+        TraceStrLog,
+    },
     task_poller::{squash_results, PollResult, PollerState},
 };
 
@@ -8,13 +11,8 @@ use common_lib::{
     transport_api::ErrorChain,
     types::v0::{
         store::{nexus::NexusSpec, volume::VolumeSpec},
-        transport::{VolumeState, VolumeStatus},
+        transport::{Nexus, VolumeState, VolumeStatus},
     },
-};
-
-use common_lib::types::v0::{
-    store::{OperationGuardArc, ResourceMutex, TraceSpan, TraceStrLog},
-    transport::Nexus,
 };
 
 use std::cmp::Ordering;
@@ -41,7 +39,7 @@ impl TaskPoller for HotSpareReconciler {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true))]
 async fn hot_spare_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
@@ -53,10 +51,10 @@ async fn hot_spare_reconcile(
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
 
-    if !volume.lock().policy.self_heal {
+    if !volume.as_ref().policy.self_heal {
         return PollResult::Ok(PollerState::Idle);
     }
-    if !volume.lock().status.created() {
+    if !volume.as_ref().status.created() {
         return PollResult::Ok(PollerState::Idle);
     }
 
@@ -94,7 +92,7 @@ async fn hot_spare_nexus_reconcile(
     squash_results(results)
 }
 
-#[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 async fn generic_nexus_reconciler(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
@@ -150,8 +148,8 @@ async fn nexus_replica_count_reconciler(
     let nexus_uuid = nexus.uuid();
     let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
 
-    let vol_spec_clone = volume.peek();
-    let nexus_spec_clone = nexus.peek();
+    let vol_spec_clone = volume.as_ref();
+    let nexus_spec_clone = nexus.as_ref();
     let volume_replicas = vol_spec_clone.num_replicas as usize;
     let nexus_replica_children =
         nexus_spec_clone
@@ -181,7 +179,7 @@ async fn nexus_replica_count_reconciler(
         Ordering::Equal => PollResult::Ok(PollerState::Idle),
     }
 }
-#[tracing::instrument(skip(context, volume, nexus), fields(nexus.uuid = %nexus.lock().uuid, request.reconcile = true))]
+#[tracing::instrument(skip(context, volume, nexus), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 async fn nexus_replica_count_reconciler_traced(
     volume: &mut OperationGuardArc<VolumeSpec>,
     nexus: &mut OperationGuardArc<NexusSpec>,
@@ -189,7 +187,7 @@ async fn nexus_replica_count_reconciler_traced(
     nexus_replica_children: usize,
     context: &PollContext,
 ) -> PollResult {
-    let vol_spec_clone = volume.peek();
+    let vol_spec_clone = volume.as_ref();
     let volume_replicas = vol_spec_clone.num_replicas as usize;
 
     match nexus_replica_children.cmp(&volume_replicas) {
@@ -237,7 +235,7 @@ async fn volume_replica_count_reconciler(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let required_replica_count = volume.peek().num_replicas as usize;
+    let required_replica_count = volume.as_ref().num_replicas as usize;
 
     let current_replicas = context.specs().get_volume_replicas(volume.uuid());
     let current_replica_count = current_replicas.len();
@@ -255,7 +253,7 @@ async fn volume_replica_count_reconciler_traced(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let required_replica_count = volume.peek().num_replicas as usize;
+    let required_replica_count = volume.as_ref().num_replicas as usize;
 
     let current_replicas = context.specs().get_volume_replicas(volume.uuid());
     let mut current_replica_count = current_replicas.len();
@@ -273,7 +271,7 @@ async fn volume_replica_count_reconciler_traced(
             let diff = required_replica_count - current_replica_count;
             match context
                 .specs()
-                .create_volume_replicas(context.registry(), volume.peek(), diff)
+                .create_volume_replicas(context.registry(), volume.as_ref(), diff)
                 .await?
             {
                 result if !result.is_empty() => {

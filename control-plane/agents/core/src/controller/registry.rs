@@ -13,7 +13,7 @@
 //!
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
-use super::{specs::*, wrapper::NodeWrapper};
+use super::{resources::operations_helper::*, wrapper::NodeWrapper};
 use crate::controller::{
     reconciler::ReconcilerControl,
     task_poller::{PollEvent, PollTriggerEvent},
@@ -37,13 +37,13 @@ use std::{
 };
 use tokio::sync::{Mutex, RwLock};
 
-/// Registry containing all io-engine instances (aka nodes)
+/// Registry containing all io-engine instances (aka nodes).
 #[derive(Clone, Debug)]
 pub(crate) struct Registry {
     inner: Arc<RegistryInner<Etcd>>,
 }
 
-/// Map that stores the actual state of the nodes
+/// Map that stores the actual state of the nodes.
 pub(crate) type NodesMapLocked = Arc<RwLock<HashMap<NodeId, Arc<RwLock<NodeWrapper>>>>>;
 
 impl Deref for Registry {
@@ -54,35 +54,35 @@ impl Deref for Registry {
     }
 }
 
-/// Number of rebuilds
+/// Number of rebuilds.
 pub(crate) type NumRebuilds = u32;
 
-/// Generic Registry Inner with a Store trait
+/// Generic Registry Inner with a Store trait.
 #[derive(Debug)]
 pub(crate) struct RegistryInner<S: Store> {
-    /// the actual state of the nodes
+    /// the actual state of the nodes.
     nodes: NodesMapLocked,
-    /// spec (aka desired state) of the various resources
+    /// spec (aka desired state) of the various resources.
     specs: ResourceSpecsLocked,
-    /// period to refresh the cache
+    /// period to refresh the cache.
     cache_period: std::time::Duration,
     store: Arc<Mutex<S>>,
-    /// store gRPC operation timeout
+    /// store gRPC operation timeout.
     store_timeout: std::time::Duration,
-    /// reconciliation period when no work is being done
+    /// reconciliation period when no work is being done.
     reconcile_idle_period: std::time::Duration,
-    /// reconciliation period when work is pending
+    /// reconciliation period when work is pending.
     reconcile_period: std::time::Duration,
     reconciler: ReconcilerControl,
     config: CoreRegistryConfig,
-    /// system-wide maximum number of concurrent rebuilds allowed
+    /// system-wide maximum number of concurrent rebuilds allowed.
     max_rebuilds: Option<NumRebuilds>,
 }
 
 impl Registry {
     /// Create a new registry with the `cache_period` to reload the cache, the
     /// `store_url` to connect to, a `store_timeout` for store operations
-    /// and a `reconcile_period` for reconcile operations
+    /// and a `reconcile_period` for reconcile operations.
     pub(crate) async fn new(
         cache_period: std::time::Duration,
         store_url: String,
@@ -150,25 +150,25 @@ impl Registry {
         &self.config
     }
 
-    /// reconciliation period when no work is being done
+    /// reconciliation period when no work is being done.
     pub(crate) fn reconcile_idle_period(&self) -> std::time::Duration {
         self.reconcile_idle_period
     }
-    /// reconciliation period when work is pending
+    /// reconciliation period when work is pending.
     pub(crate) fn reconcile_period(&self) -> std::time::Duration {
         self.reconcile_period
     }
 
-    /// Get a reference to the actual state of the nodes
+    /// Get a reference to the actual state of the nodes.
     pub(crate) fn nodes(&self) -> &NodesMapLocked {
         &self.nodes
     }
-    /// Get a reference to the locked resource specs object
+    /// Get a reference to the locked resource specs object.
     pub(crate) fn specs(&self) -> &ResourceSpecsLocked {
         &self.specs
     }
 
-    /// Serialized write to the persistent store
+    /// Serialized write to the persistent store.
     pub(crate) async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(
@@ -186,7 +186,7 @@ impl Registry {
         }
     }
 
-    /// Serialized read from the persistent store
+    /// Serialized read from the persistent store.
     pub(crate) async fn load_obj<O: StorableObject>(&self, key: &O::Key) -> Result<O, SvcError> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(self.store_timeout, async move { store.get_obj(key).await })
@@ -201,7 +201,7 @@ impl Registry {
         }
     }
 
-    /// Serialized delete to the persistent store
+    /// Serialized delete to the persistent store.
     pub(crate) async fn delete_kv<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(
@@ -231,7 +231,7 @@ impl Registry {
         &self.store
     }
 
-    /// Check if the persistent store is currently online
+    /// Check if the persistent store is currently online.
     pub(crate) async fn store_online(&self) -> bool {
         let mut store = self.store.lock().await;
         tokio::time::timeout(self.store_timeout, async move { store.online().await })
@@ -239,7 +239,7 @@ impl Registry {
             .unwrap_or(false)
     }
 
-    /// Start the worker thread which updates the registry
+    /// Start the worker thread which updates the registry.
     pub(crate) async fn start(&self) {
         let registry = self.clone();
         tokio::spawn(async move {
@@ -249,7 +249,7 @@ impl Registry {
         self.reconciler.start(registry).await;
     }
 
-    /// Stops the core registry, which at the moment only revokes the persistent store lease
+    /// Stops the core registry, which at the moment only revokes the persistent store lease.
     pub(crate) async fn stop(&self) {
         tokio::time::timeout(std::time::Duration::from_secs(1), async move {
             let store = self.store.lock().await;
@@ -265,12 +265,12 @@ impl Registry {
         self.specs.init(store.deref_mut()).await;
     }
 
-    /// Send a triggered event signal to the reconciler module
+    /// Send a triggered event signal to the reconciler module.
     pub(crate) async fn notify(&self, event: PollTriggerEvent) {
         self.reconciler.notify(PollEvent::Triggered(event)).await
     }
 
-    /// Poll each node for resource updates
+    /// Poll each node for resource updates.
     async fn poller(&self) {
         loop {
             {

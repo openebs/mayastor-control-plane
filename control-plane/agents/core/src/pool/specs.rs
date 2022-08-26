@@ -1,9 +1,12 @@
 use crate::controller::{
-    operations::ResourceLifecycle,
     registry::Registry,
-    specs::{
-        GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
-        SpecOperationsHelper,
+    resources::{
+        operations::ResourceLifecycle,
+        operations_helper::{
+            GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
+            SpecOperationsHelper,
+        },
+        OperationGuardArc, ResourceMutex,
     },
 };
 use common::errors::{SvcError, SvcError::PoolNotFound};
@@ -13,7 +16,7 @@ use common_lib::{
         store::{
             pool::{PoolOperation, PoolSpec},
             replica::{ReplicaOperation, ReplicaSpec},
-            OperationGuardArc, ResourceMutex, SpecStatus, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
         transport::{
             CreatePool, CreateReplica, PoolId, PoolState, PoolStatus, Replica, ReplicaId,
@@ -132,6 +135,7 @@ impl SpecOperationsHelper for ReplicaSpec {
                 })
             }
             ReplicaOperation::Unshare => Ok(()),
+            ReplicaOperation::OwnerUpdate(_) => Ok(()),
             _ => unreachable!(),
         }?;
         self.start_op(op);
@@ -210,7 +214,7 @@ impl ResourceSpecs {
 }
 
 impl ResourceSpecsLocked {
-    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists.
     pub(crate) async fn replica_opt(
         &self,
         replica: &ReplicaId,
@@ -220,7 +224,7 @@ impl ResourceSpecsLocked {
             Some(replica) => Some(replica.operation_guard_wait().await?),
         })
     }
-    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists
+    /// Get the guarded ReplicaSpec for the given replica `id`, if any exists.
     pub(crate) async fn replica(
         &self,
         replica: &ReplicaId,

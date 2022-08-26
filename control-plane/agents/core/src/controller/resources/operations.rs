@@ -96,3 +96,19 @@ pub(crate) trait ResourceOffspring {
         request: &Self::Remove,
     ) -> Result<(), SvcError>;
 }
+
+/// Update this resource's owners list.
+#[async_trait::async_trait]
+pub(crate) trait ResourceOwnerUpdate {
+    /// The updated resource owners.
+    type Update: Sync + Send;
+
+    /// Update the owners list.
+    async fn remove_owners(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Update,
+        // pre-update the actual spec anyway since this is a removal,
+        update_on_commit: bool,
+    ) -> Result<(), SvcError>;
+}

@@ -204,3 +204,25 @@ pub struct AddNexusChild {
     /// auto start rebuilding
     pub auto_rebuild: bool,
 }
+
+/// Fault Child from Nexus Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FaultNexusChild {
+    /// The id of the io-engine instance.
+    pub node: NodeId,
+    /// The uuid of the nexus.
+    pub nexus: NexusId,
+    /// The URI of the child device to be faulted.
+    pub uri: ChildUri,
+}
+impl FaultNexusChild {
+    /// Return new `Self`.
+    pub fn new(node: &NodeId, nexus: &NexusId, uri: &ChildUri) -> Self {
+        Self {
+            node: node.clone(),
+            nexus: nexus.clone(),
+            uri: uri.clone(),
+        }
+    }
+}

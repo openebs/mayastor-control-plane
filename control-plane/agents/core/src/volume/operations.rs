@@ -1,9 +1,17 @@
 use crate::{
     controller::{
-        operations::{ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing},
         reconciler::PollTriggerEvent,
         registry::Registry,
-        specs::{GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked},
+        resources::{
+            operations::{
+                ResourceLifecycle, ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas,
+                ResourceSharing,
+            },
+            operations_helper::{
+                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
+            },
+            OperationGuardArc, TraceSpan, TraceStrLog,
+        },
     },
     volume::specs::{get_create_volume_replicas, get_volume_target_node},
 };
@@ -15,7 +23,6 @@ use common_lib::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{VolumeOperation, VolumeSpec},
-            OperationGuardArc, TraceSpan, TraceStrLog,
         },
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyVolume, NexusId, Protocol,
@@ -155,25 +162,26 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
 
         let replicas = specs.get_volume_replicas(&request.uuid);
         for replica in replicas {
-            let spec = replica.lock().deref().clone();
-            if let Some(node) = ResourceSpecsLocked::get_replica_node(registry, &spec).await {
-                let result = match specs.replica(&spec.uuid).await {
-                    Ok(mut replica) => {
-                        replica
-                            .destroy(
-                                registry,
-                                &ResourceSpecsLocked::destroy_replica_request(
-                                    spec.clone(),
-                                    ReplicaOwners::new_disown_all(),
-                                    &node,
-                                ),
-                            )
-                            .await
-                    }
-                    Err(error) => Err(error),
-                };
+            let mut replica = match replica.operation_guard_wait().await {
+                Ok(replica) => replica,
+                Err(_) => continue,
+            };
+            if let Some(node) =
+                ResourceSpecsLocked::get_replica_node(registry, replica.as_ref()).await
+            {
+                let replica_spec = replica.as_ref().clone();
+                let result = replica
+                    .destroy(
+                        registry,
+                        &ResourceSpecsLocked::destroy_replica_request(
+                            replica_spec,
+                            ReplicaOwners::new_disown_all(),
+                            &node,
+                        ),
+                    )
+                    .await;
                 if let Err(error) = result {
-                    tracing::warn!(replica.uuid=%spec.uuid, error=%error,
+                    tracing::warn!(replica.uuid=%replica.uuid(), error=%error,
                         "Replica destruction failed. This will be garbage collected later"
                     );
                 }
@@ -181,9 +189,10 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
                 // The above is able to handle when a pool is moved to a different node but if a
                 // pool is unplugged we should disown the replica and allow the garbage
                 // collector to destroy it later.
-                tracing::warn!(replica.uuid=%spec.uuid,"Replica node not found");
-                if let Err(error) = specs.disown_volume_replica(registry, &replica).await {
-                    tracing::error!(replica.uuid=%spec.uuid, error=%error, "Failed to disown volume replica");
+                tracing::warn!(replica.uuid=%replica.uuid(),"Replica node not found");
+                let disowner = ReplicaOwners::from_volume(self.uuid());
+                if let Err(error) = replica.remove_owners(registry, &disowner, true).await {
+                    tracing::error!(replica.uuid=%replica.uuid(), error=%error, "Failed to disown volume replica");
                 }
             }
         }

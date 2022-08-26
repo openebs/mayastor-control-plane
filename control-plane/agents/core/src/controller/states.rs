@@ -1,19 +1,19 @@
+use crate::controller::resources::{resource_map::ResourceMap, ResourceMutex};
 use common_lib::types::v0::{
     store::{nexus::NexusState, pool::PoolState, replica::ReplicaState},
     transport::{self, Nexus, NexusId, PoolId, Replica, ReplicaId},
 };
+
 use indexmap::map::Values;
+use parking_lot::RwLock;
 use std::{ops::Deref, sync::Arc};
 
-use super::resource_map::ResourceMap;
-use common_lib::types::v0::store::ResourceMutex;
-use parking_lot::RwLock;
-
-/// Locked Resource States
+/// Locked Resource States.
 #[derive(Default, Clone, Debug)]
 pub(crate) struct ResourceStatesLocked(Arc<RwLock<ResourceStates>>);
 
 impl ResourceStatesLocked {
+    /// Return a new empty `Self`.
     pub(crate) fn new() -> Self {
         ResourceStatesLocked::default()
     }
@@ -26,7 +26,7 @@ impl Deref for ResourceStatesLocked {
     }
 }
 
-/// Resource States
+/// Resource States.
 #[derive(Default, Debug)]
 pub(crate) struct ResourceStates {
     nexuses: ResourceMap<NexusId, NexusState>,

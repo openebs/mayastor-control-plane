@@ -1,4 +1,4 @@
-use crate::{controller, controller::specs::ResourceSpecsLocked};
+use crate::{controller, controller::resources::operations_helper::ResourceSpecsLocked};
 use common::errors::SvcError;
 use common_lib::{
     transport_api::ReplyError,

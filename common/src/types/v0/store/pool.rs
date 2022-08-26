@@ -4,16 +4,14 @@ use crate::types::v0::{
     openapi::models,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
-        AsOperationSequencer, OperationGuardArc, OperationSequence, ResourceUuid, SpecStatus,
-        SpecTransaction,
+        AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
     },
     transport::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
 };
 
 // PoolLabel is the type for the labels
-pub type PoolLabel = ::std::collections::HashMap<String, String>;
+pub type PoolLabel = std::collections::HashMap<String, String>;
 
-use crate::types::v0::store::ResourceMutex;
 use serde::{Deserialize, Serialize};
 use std::{convert::From, fmt::Debug};
 
@@ -37,13 +35,6 @@ pub struct PoolState {
 impl From<transport::PoolState> for PoolState {
     fn from(pool: transport::PoolState) -> Self {
         Self { pool }
-    }
-}
-
-impl ResourceUuid for PoolState {
-    type Id = PoolId;
-    fn uuid(&self) -> Self::Id {
-        self.pool.id.clone()
     }
 }
 
@@ -92,28 +83,6 @@ pub struct PoolSpec {
     pub operation: Option<PoolOperationState>,
 }
 
-impl ResourceMutex<PoolSpec> {
-    /// Get the resource id.
-    pub fn id(&mut self) -> &PoolId {
-        &self.immutable_peek().id
-    }
-}
-
-macro_rules! pool_span {
-    ($Self:tt, $Level:expr, $func:expr) => {
-        match tracing::Span::current().field("pool.uuid") {
-            None => {
-                let _span = tracing::span!($Level, "log_event", pool.uuid = %$Self.id).entered();
-                $func();
-            }
-            Some(_) => {
-                $func();
-            }
-        }
-    };
-}
-crate::impl_trace_span!(pool_span, PoolSpec);
-
 impl AsOperationSequencer for PoolSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
@@ -121,13 +90,6 @@ impl AsOperationSequencer for PoolSpec {
 
     fn as_mut(&mut self) -> &mut OperationSequence {
         &mut self.sequencer
-    }
-}
-
-impl ResourceUuid for PoolSpec {
-    type Id = PoolId;
-    fn uuid(&self) -> Self::Id {
-        self.id.clone()
     }
 }
 

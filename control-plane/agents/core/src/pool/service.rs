@@ -1,7 +1,10 @@
 use crate::controller::{
-    operations::{ResourceLifecycle, ResourceSharing},
     registry::Registry,
-    specs::{OperationSequenceGuard, ResourceSpecsLocked},
+    resources::{
+        operations::{ResourceLifecycle, ResourceSharing},
+        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
+        OperationGuardArc, ResourceMutex,
+    },
     wrapper::GetterOps,
 };
 use common::errors::{PoolNotFound, ReplicaNotFound, SvcError};
@@ -11,7 +14,7 @@ use common_lib::{
         ReplyError,
     },
     types::v0::{
-        store::{pool::PoolSpec, replica::ReplicaSpec, OperationGuardArc, ResourceMutex},
+        store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
             NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,
@@ -131,18 +134,18 @@ impl Service {
     }
 
     /// Get pools according to the filter
-    #[tracing::instrument(level = "info", skip(self), err, fields(pool.uuid))]
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id))]
     pub(super) async fn get_pools(&self, request: &GetPools) -> Result<Pools, SvcError> {
         let filter = request.filter.clone();
         match filter {
             Filter::None => self.node_pools(None, None).await,
             Filter::Node(node_id) => self.node_pools(Some(node_id), None).await,
             Filter::NodePool(node_id, pool_id) => {
-                tracing::Span::current().record("pool.uuid", &pool_id.as_str());
+                tracing::Span::current().record("pool.id", &pool_id.as_str());
                 self.node_pools(Some(node_id), Some(pool_id)).await
             }
             Filter::Pool(pool_id) => {
-                tracing::Span::current().record("pool.uuid", &pool_id.as_str());
+                tracing::Span::current().record("pool.id", &pool_id.as_str());
                 self.node_pools(None, Some(pool_id)).await
             }
             _ => Err(SvcError::InvalidFilter { filter }),
@@ -257,13 +260,13 @@ impl Service {
     }
 
     /// Create a pool using the given parameters.
-    #[tracing::instrument(level = "debug", skip(self), err, fields(pool.uuid = %request.id))]
+    #[tracing::instrument(level = "debug", skip(self), err, fields(pool.id = %request.id))]
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         OperationGuardArc::<PoolSpec>::create(&self.registry, request).await
     }
 
     /// Destroy a pool using the given parameters.
-    #[tracing::instrument(level = "info", skip(self), err, fields(pool.uuid = %request.id))]
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.id))]
     pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         let mut pool = self.pool_opt(&request.id).await?;
         pool.destroy(&self.registry, request).await
