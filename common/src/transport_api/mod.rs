@@ -273,6 +273,15 @@ impl ReplyError {
             extra: msg,
         }
     }
+    /// for internal errors.
+    pub fn internal_error(resource: ResourceKind, source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::Internal,
+            resource,
+            source,
+            extra,
+        }
+    }
 }
 
 impl std::fmt::Display for ReplyError {

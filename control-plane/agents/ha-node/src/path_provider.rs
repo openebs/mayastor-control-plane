@@ -33,7 +33,7 @@ impl NvmePath {
 
 /// Check that NVMe path represents a target created by our product and
 /// obtain a Path object that represents a system path for this NVMe device.
-fn get_nvme_path_buf(path: &String) -> Option<PathBuf> {
+pub fn get_nvme_path_buf(path: &String) -> Option<PathBuf> {
     Path::new(path).canonicalize().ok().and_then(|pb| {
         Subsystem::new(pb.as_path()).ok().and_then(|s| {
             // Check NQN of the subsystem to make sure it belongs to the product.
