@@ -933,12 +933,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_nexus_states(ctx.deref_mut()).await?;
         match nexus {
-            Ok(mut nexus) => {
-                // CAS-1107 - create_nexus_v2 returns NexusV1...
-                nexus.name = request.name();
-                nexus.uuid = request.uuid.clone();
-                Ok(nexus)
-            }
+            Ok(nexus) => Ok(nexus),
             Err(error) => {
                 let nexus_name = request.name();
                 match self
@@ -1242,7 +1237,10 @@ impl ClientOps for GrpcClientLocked {
                         resource: ResourceKind::Nexus,
                         request: "create_nexus",
                     })?;
-                let nexus = v0_rpc_nexus_to_agent(&rpc_nexus.into_inner(), &request.node)?;
+                let mut nexus = v0_rpc_nexus_to_agent(&rpc_nexus.into_inner(), &request.node)?;
+                // CAS-1107 - create_nexus_v2 returns NexusV1...
+                nexus.name = request.name();
+                nexus.uuid = request.uuid.clone();
                 Ok(nexus)
             }
             APIVersion::V1 => {
