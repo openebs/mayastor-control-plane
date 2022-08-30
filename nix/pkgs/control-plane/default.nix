@@ -28,6 +28,16 @@ let
         src = agents_builder { inherit buildType builder; };
         name = "core";
       };
+      ha = {
+        node = agent_installer {
+          src = agents_builder { inherit buildType builder; };
+          name = "agent-ha-node";
+        };
+        cluster = agent_installer {
+          src = agents_builder { inherit buildType builder; };
+          name = "agent-ha-cluster";
+        };
+      };
     };
 
     api-rest = installer {

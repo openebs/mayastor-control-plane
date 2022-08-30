@@ -7,8 +7,8 @@ use super::*;
 impl ComponentAction for ClusterAgent {
     fn configure(&self, _options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let spec = ContainerSpec::from_binary(
-            "agent-cluster",
-            Binary::from_dbg("agent-cluster").with_args(vec!["-g=0.0.0.0:11500"]),
+            "agent-ha-cluster",
+            Binary::from_dbg("agent-ha-cluster").with_args(vec!["-g=0.0.0.0:11500"]),
         )
         .with_portmap("11500", "11500");
 
@@ -16,7 +16,7 @@ impl ComponentAction for ClusterAgent {
     }
 
     async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
-        cfg.start("agent-cluster").await?;
+        cfg.start("agent-ha-cluster").await?;
         Ok(())
     }
 
