@@ -23,11 +23,11 @@ path = "common/src/lib.rs"
 
 [[bin]]
  name = "agent-ha-node"
- path = "ha-node/src/main.rs"
+ path = "ha/node/src/main.rs"
 
 [[bin]]
- name = "agent-cluster"
- path = "cluster/src/main.rs"
+ name = "agent-ha-cluster"
+ path = "ha/cluster/src/main.rs"
 
 [dependencies]
 anyhow = "1.0.44"

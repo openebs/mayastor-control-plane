@@ -35,7 +35,7 @@ let
         };
         cluster = agent_installer {
           src = agents_builder { inherit buildType builder; };
-          name = "agent-cluster";
+          name = "agent-ha-cluster";
         };
       };
     };
