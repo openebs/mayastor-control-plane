@@ -28,6 +28,12 @@ let
       name = "agent-${name}";
       package = control-plane.${buildType}.agents.${name};
     };
+  build-agent-cat-image = { buildType, name, category }:
+    build-control-plane-image {
+      inherit buildType;
+      name = "agent-${category}-${name}";
+      package = control-plane.${buildType}.agents.${category}.${name};
+    };
   build-rest-image = { buildType }:
     build-control-plane-image {
       inherit buildType;
@@ -62,6 +68,21 @@ let
     jsongrpc = build-agent-image {
       inherit buildType;
       name = "jsongrpc";
+    };
+    ha = rec {
+      build-ha-agent-image = { buildType, name }:
+        build-agent-cat-image {
+          inherit buildType name;
+          category = "ha";
+        };
+      node = build-ha-agent-image {
+        inherit buildType;
+        name = "node";
+      };
+      cluster = build-ha-agent-image {
+        inherit buildType;
+        name = "cluster";
+      };
     };
   };
   build-operator-images = { buildType }: {
