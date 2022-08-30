@@ -1,17 +1,17 @@
 use crate::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
+
+use common_lib::types::v0::openapi::models::{
+    LabelledTopology, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
+    VolumeShareProtocol,
+};
+use rpc::csi::{Topology as CsiTopology, *};
+use utils::{CREATED_BY_KEY, DSP_OPERATOR};
+
 use regex::Regex;
-use rpc::csi::*;
 use std::collections::HashMap;
 use tonic::{Response, Status};
 use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
-
-use common_lib::types::v0::openapi::models::{
-    LabelledTopology, Pool, PoolStatus, PoolTopology, SpecStatus, Volume, VolumeShareProtocol,
-};
-use utils::{CREATED_BY_KEY, DSP_OPERATOR};
-
-use rpc::csi::Topology as CsiTopology;
 
 const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 const VOLUME_NAME_PATTERN: &str =
@@ -384,7 +384,12 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 let target_node = match IoEngineApiClient::get_client().get_node(&node_id).await {
                     Err(ApiClientError::ResourceNotExists(_)) => Ok(None),
                     Err(error) => Err(error),
-                    Ok(_) => Ok(Some(node_id.as_str())),
+                    // When nodes are not online for any reason (eg: io-engine no longer runs) on said node,
+                    // then let the control-plane decide where to place the target.
+                    Ok(node) if node.state.as_ref().map(|n| n.status).unwrap_or(NodeStatus::Unknown) != NodeStatus::Online => {
+                        Ok(None)
+                    },
+                    Ok(_) => Ok(Some(node_id.as_str()))
                 }?;
 
                 // Volume is not published.
