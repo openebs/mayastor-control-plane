@@ -14,5 +14,5 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
     let registry = builder.shared_state::<Registry>().clone();
     let new_service = Arc::new(service::Service::new(registry));
     let nexus_service = NexusServer::new(new_service);
-    builder.with_shared_state(nexus_service)
+    builder.with_service(nexus_service.into_grpc_server())
 }

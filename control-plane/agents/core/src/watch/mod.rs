@@ -10,5 +10,5 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
     let registry = builder.shared_state::<Registry>().clone();
     let new_service = Arc::new(service::Service::new(registry));
     let watch_service = WatchServer::new(new_service);
-    builder.with_shared_state(watch_service)
+    builder.with_service(watch_service.into_grpc_server())
 }

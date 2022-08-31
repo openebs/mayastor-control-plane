@@ -6,9 +6,10 @@
 //! subscribe handlers for different message identifiers.
 
 use futures::Future;
+use grpc::tracing::OpenTelServer;
 use snafu::Snafu;
 use state::Container;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 /// Agent level errors.
 pub mod errors;
@@ -22,30 +23,91 @@ pub enum ServiceError {
     GrpcServer { source: tonic::transport::Error },
 }
 
-/// Runnable service with N subscriptions which listen on a given
-/// message bus channel on a specific ID.
-pub struct Service {
+type LayerStack = tower::layer::util::Stack<OpenTelServer, tower::layer::util::Identity>;
+/// An agent service with shareable state and a tonic server for gRPC services.
+pub struct Service<S = tonic::transport::server::Router<LayerStack>> {
     shared_state: Arc<Container![Send + Sync]>,
-    tonic_server: tonic::transport::Server,
+    tonic_server: S,
 }
+/// A `Service` that has not yet been added any routes.
+pub type ServiceEmpty = Service<tonic::transport::Server<LayerStack>>;
 
-impl Default for Service {
-    fn default() -> Self {
-        Self {
-            shared_state: Arc::new(<Container![Send + Sync]>::new()),
-            tonic_server: tonic::transport::Server::builder(),
+impl ServiceEmpty {
+    /// Create a router with the `S` typed service as the first service.
+    ///
+    /// This will clone the `Server` builder and create a router that will
+    /// route around different services.
+    #[must_use]
+    pub fn with_service<S>(mut self, svc: S) -> Service
+    where
+        S: tower::Service<
+                http::Request<hyper::body::Body>,
+                Response = http::Response<tonic::body::BoxBody>,
+                Error = std::convert::Infallible,
+            > + tonic::server::NamedService
+            + Clone
+            + Send
+            + 'static,
+        S::Future: Send + 'static,
+    {
+        Service {
+            shared_state: self.shared_state,
+            tonic_server: self.tonic_server.add_service(svc),
         }
     }
 }
 
 impl Service {
-    /// Setup default service connecting to `server` on subject `channel`.
-    pub fn builder() -> Self {
-        Self {
-            ..Default::default()
+    /// Setup default service with an opentelemetry layer configured on the tonic server.
+    pub fn builder() -> Service<tonic::transport::Server<LayerStack>> {
+        Service::<tonic::transport::Server<LayerStack>> {
+            shared_state: Arc::new(<Container![Send + Sync]>::new()),
+            tonic_server: tonic::transport::Server::builder().layer(OpenTelServer::new()),
         }
     }
 
+    /// Adds a new service to the tonic server router.
+    #[must_use]
+    pub fn with_service<S>(self, svc: S) -> Self
+    where
+        S: tower::Service<
+                http::Request<hyper::body::Body>,
+                Response = http::Response<tonic::body::BoxBody>,
+                Error = std::convert::Infallible,
+            > + tonic::server::NamedService
+            + Clone
+            + Send
+            + 'static,
+        S::Future: Send + 'static,
+    {
+        Self {
+            shared_state: self.shared_state,
+            tonic_server: self.tonic_server.add_service(svc),
+        }
+    }
+
+    /// Runs this server as a future until a shutdown signal is received.
+    pub async fn run(self, socket: SocketAddr) {
+        let result = self
+            .tonic_server
+            .serve_with_shutdown(socket, Self::shutdown_signal())
+            .await
+            .map_err(|source| ServiceError::GrpcServer { source });
+
+        if let Err(error) = result {
+            tracing::error!(error=?error, "Error running service thread");
+        }
+    }
+
+    /// Waits until the process receives a shutdown: either TERM or INT.
+    /// The opentel traces are also immediately flushed before returning.
+    pub async fn shutdown_signal() {
+        shutdown::Shutdown::wait().await;
+        opentelemetry::global::force_flush_tracer_provider();
+    }
+}
+
+impl<L> Service<L> {
     /// Add a new service-wide shared state which can be retried in the handlers
     /// (more than one type of data can be added).
     /// The type must be `Send + Sync + 'static`.
@@ -90,46 +152,19 @@ impl Service {
 
     /// Configure `self` through a configure closure.
     #[must_use]
-    pub fn configure<F>(self, configure: F) -> Self
+    pub fn configure<F>(self, configure: F) -> Service
     where
-        F: FnOnce(Service) -> Service,
+        F: FnOnce(Self) -> Service,
     {
         configure(self)
     }
 
     /// Configure `self` through an async configure closure.
-    pub async fn configure_async<F, Fut>(self, configure: F) -> Self
+    pub async fn configure_async<F, Fut>(self, configure: F) -> Service
     where
-        F: FnOnce(Service) -> Fut,
+        F: FnOnce(Self) -> Fut,
         Fut: Future<Output = Service>,
     {
         configure(self).await
-    }
-
-    /// Get the configured tonic Server.
-    pub fn tonic_server(self) -> tonic::transport::Server {
-        self.tonic_server
-    }
-
-    /// Get a shutdown_signal as a oneshot channel when the process receives either TERM or INT.
-    /// When received the opentel traces are also immediately flushed.
-    pub fn shutdown_signal() -> tokio::sync::oneshot::Receiver<()> {
-        let mut signal_term =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
-        let mut signal_int =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).unwrap();
-        let (stop_sender, stop_receiver) = tokio::sync::oneshot::channel();
-        tokio::spawn(async move {
-            tokio::select! {
-                _term = signal_term.recv() => {tracing::info!("SIGTERM received")},
-                _int = signal_int.recv() => {tracing::info!("SIGINT received")},
-            }
-            opentelemetry::global::force_flush_tracer_provider();
-            if stop_sender.send(()).is_err() {
-                // should we panic here?
-                tracing::warn!("Failed to stop the tonic server");
-            }
-        });
-        stop_receiver
     }
 }

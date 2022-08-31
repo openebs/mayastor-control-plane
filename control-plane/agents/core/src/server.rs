@@ -11,16 +11,15 @@ pub(crate) mod node;
 pub(crate) mod pool;
 /// The registry which contains all the resources.
 pub(crate) mod registry;
-mod service;
 /// The volume related operations.
 pub(crate) mod volume;
 /// The watch related operations.
 pub(crate) mod watch;
 
 use controller::registry::NumRebuilds;
+use std::net::SocketAddr;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
-use http::Uri;
 use opentelemetry::{trace::TracerProvider, KeyValue};
 use structopt::StructOpt;
 
@@ -79,7 +78,7 @@ pub(crate) struct CliArgs {
     /// The GRPC Server URLs to connect to.
     /// (supports the http/https schema)
     #[structopt(long, short, default_value = DEFAULT_GRPC_SERVER_ADDR)]
-    pub(crate) grpc_server_addr: Uri,
+    pub(crate) grpc_server_addr: SocketAddr,
     /// The maximum number of system-wide rebuilds permitted at any given time.
     /// If `None` do not limit the number of rebuilds.
     #[structopt(long)]
@@ -117,14 +116,14 @@ async fn server(cli_args: CliArgs) {
     )
     .await;
 
-    let base_service = common::Service::builder()
+    let service = common::Service::builder()
         .with_shared_state(opentelemetry::global::tracer_provider().versioned_tracer(
             "core-agent",
             Some(env!("CARGO_PKG_VERSION")),
             None,
         ))
         .with_shared_state(registry.clone())
-        .with_shared_state(cli_args.grpc_server_addr.clone())
+        .with_shared_state(cli_args.grpc_server_addr)
         .configure_async(node::configure)
         .await
         .configure(pool::configure)
@@ -133,9 +132,8 @@ async fn server(cli_args: CliArgs) {
         .configure(watch::configure)
         .configure(registry::configure);
 
-    let service = service::Service::new(base_service);
     registry.start().await;
-    service.run().await;
+    service.run(cli_args.grpc_server_addr).await;
     registry.stop().await;
     opentelemetry::global::shutdown_tracer_provider();
 }

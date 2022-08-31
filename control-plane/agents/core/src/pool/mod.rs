@@ -17,6 +17,6 @@ pub(crate) fn configure(builder: Service) -> Service {
     let pool_service = PoolServer::new(new_service.clone());
     let replica_service = ReplicaServer::new(new_service);
     builder
-        .with_shared_state(pool_service)
-        .with_shared_state(replica_service)
+        .with_service(pool_service.into_grpc_server())
+        .with_service(replica_service.into_grpc_server())
 }

@@ -15,17 +15,17 @@ use grpc::operations::{node::server::NodeServer, registration::server::Registrat
 use std::sync::Arc;
 
 /// Configure the Service and return the builder.
-pub(crate) async fn configure(builder: Service) -> Service {
+pub(crate) async fn configure(builder: common::ServiceEmpty) -> Service {
     let node_service = create_node_service(&builder).await;
     let node_grpc_service = NodeServer::new(Arc::new(node_service.clone()));
-    let registration_service = RegistrationServer::new(Arc::new(node_service.clone()));
+    let registration_service = RegistrationServer::new(Arc::new(node_service));
+
     builder
-        .with_shared_state(node_service)
-        .with_shared_state(node_grpc_service)
-        .with_shared_state(registration_service)
+        .with_service(node_grpc_service.into_grpc_server())
+        .with_service(registration_service.into_grpc_server())
 }
 
-async fn create_node_service(builder: &Service) -> service::Service {
+async fn create_node_service<S>(builder: &Service<S>) -> service::Service {
     let registry = builder.shared_state::<Registry>().clone();
     let deadline = CliArgs::args().deadline.into();
     let request = CliArgs::args().request_timeout.into();

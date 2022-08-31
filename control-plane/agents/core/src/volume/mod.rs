@@ -13,5 +13,5 @@ pub(crate) fn configure(builder: common::Service) -> common::Service {
     let registry = builder.shared_state::<Registry>().clone();
     let new_service = Arc::new(service::Service::new(registry));
     let volume_service = VolumeServer::new(new_service);
-    builder.with_shared_state(volume_service)
+    builder.with_service(volume_service.into_grpc_server())
 }
