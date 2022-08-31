@@ -1,10 +1,10 @@
-use super::*;
+use crate::infra::*;
 
 use tokio::time::{sleep, Duration};
 use tonic::transport::Endpoint;
 
 #[async_trait]
-impl ComponentAction for HANodeAgent {
+impl ComponentAction for HaNodeAgent {
     fn configure(&self, _options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let mut spec = ContainerSpec::from_binary(
             "agent-ha-node",

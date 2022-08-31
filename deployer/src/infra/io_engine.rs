@@ -1,4 +1,7 @@
-use super::*;
+use crate::infra::{
+    async_trait, Builder, ComponentAction, ComposeTest, Error, IoEngine, StartOptions,
+};
+use composer::{Binary, ContainerSpec};
 use rpc::io_engine::RpcHandle;
 use std::net::{IpAddr, SocketAddr};
 use utils::DEFAULT_GRPC_CLIENT_ADDR;

@@ -5,7 +5,6 @@ use infra::*;
 use composer::Builder;
 use std::{collections::HashMap, convert::TryInto, fmt::Write, str::FromStr, time::Duration};
 use structopt::StructOpt;
-use strum::VariantNames;
 pub(crate) use utils::tracing_telemetry::KeyValue;
 
 const TEST_LABEL_PREFIX: &str = "io.composer.test";
@@ -80,7 +79,7 @@ pub struct StartOptions {
         short,
         long,
         default_value = default_agents(),
-        possible_values = ControlPlaneAgent::VARIANTS,
+        possible_values = &ControlPlaneAgent::variants(),
         value_delimiter = ","
     )]
     pub agents: Vec<ControlPlaneAgent>,

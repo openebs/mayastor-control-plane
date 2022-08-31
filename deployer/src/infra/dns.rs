@@ -1,4 +1,5 @@
-use super::*;
+use crate::infra::{async_trait, Builder, ComponentAction, ComposeTest, Dns, Error, StartOptions};
+use composer::ContainerSpec;
 
 #[async_trait]
 impl ComponentAction for Dns {
@@ -17,6 +18,9 @@ impl ComponentAction for Dns {
         if options.dns {
             cfg.start("dns").await?;
         }
+        Ok(())
+    }
+    async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         Ok(())
     }
 }

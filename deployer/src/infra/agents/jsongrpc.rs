@@ -1,8 +1,8 @@
-use super::*;
+use crate::infra::*;
 use grpc::operations::jsongrpc::client::JsonGrpcClient;
 
 #[async_trait]
-impl ComponentAction for JsonGrpc {
+impl ComponentAction for JsonGrpcAgent {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let name = "jsongrpc";
         if options.build {

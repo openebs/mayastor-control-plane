@@ -1,10 +1,10 @@
 use tokio::time::{sleep, Duration};
 use tonic::transport::Endpoint;
 
-use super::*;
+use crate::infra::*;
 
 #[async_trait]
-impl ComponentAction for ClusterAgent {
+impl ComponentAction for HaClusterAgent {
     fn configure(&self, _options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let spec = ContainerSpec::from_binary(
             "agent-ha-cluster",

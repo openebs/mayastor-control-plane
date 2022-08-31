@@ -1,7 +1,7 @@
-use super::*;
+use crate::infra::*;
 
 #[async_trait]
-impl ComponentAction for Core {
+impl ComponentAction for CoreAgent {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let name = "core";
         if options.build {
