@@ -122,7 +122,7 @@ async fn execute(cli_args: CliArgs) {
     };
 
     tokio::select! {
-        _shutdown = shutdown::Shutdown::wait() => {},
+        _shutdown = shutdown::Shutdown::wait_sig() => {},
         _done = fut => {}
     }
 }

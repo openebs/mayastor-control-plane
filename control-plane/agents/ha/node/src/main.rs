@@ -3,6 +3,7 @@ use grpc::operations::ha_node::{client::ClusterAgentClient, traits::ClusterAgent
 use http::Uri;
 use once_cell::sync::OnceCell;
 use opentelemetry::KeyValue;
+use std::net::SocketAddr;
 use structopt::StructOpt;
 use utils::{
     package_description, version_info_str, DEFAULT_CLUSTER_AGENT_CLIENT_ADDR,
@@ -32,7 +33,7 @@ pub(crate) struct Cli {
 
     /// IP address and port for the ha node-agent to listen on.
     #[structopt(short, long, default_value = DEFAULT_NODE_AGENT_SERVER_ADDR)]
-    grpc_endpoint: Uri,
+    grpc_endpoint: SocketAddr,
 
     /// Add process service tags to the traces
     #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
@@ -90,13 +91,7 @@ async fn main() {
     if let Err(e) = cluster_agent_client()
         .register(&NodeAgentInfo::new(
             cli_args.node_name.clone(),
-            cli_args
-                .grpc_endpoint
-                .authority()
-                .unwrap()
-                .to_string()
-                .parse()
-                .unwrap(),
+            cli_args.grpc_endpoint,
         ))
         .await
     {
@@ -113,7 +108,7 @@ async fn main() {
     let cache = detector.get_cache();
 
     // Instantiate gRPC server.
-    let server = NodeAgentApiServer::new(cli_args.grpc_endpoint.clone(), cache);
+    let server = NodeAgentApiServer::new(cli_args.grpc_endpoint, cache);
 
     // Start gRPC server and path failure detection loop.
     tokio::select! {

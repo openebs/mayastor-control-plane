@@ -26,41 +26,40 @@ const HA_AGENT_ERR_SOURCE: &str = "HA Node agent gRPC server";
 const SUBSYSTEM_STATE_REFRESH_INTERVAL_MS: u64 = 500;
 
 /// High-level object that represents HA Node agent gRPC server.
-pub struct NodeAgentApiServer {
+pub(crate) struct NodeAgentApiServer {
     endpoint: SocketAddr,
     path_cache: NvmePathCache,
 }
 
 impl NodeAgentApiServer {
-    pub fn new(uri: Uri, path_cache: NvmePathCache) -> Self {
-        let endpoint = uri.authority().unwrap().to_string().parse().unwrap();
-
+    /// Returns a new `Self` with the given parameters.
+    pub(crate) fn new(endpoint: SocketAddr, path_cache: NvmePathCache) -> Self {
         Self {
             endpoint,
             path_cache,
         }
     }
 
-    pub async fn serve(&self) -> anyhow::Result<()> {
+    /// Runs this server as a future until a shutdown signal is received.
+    pub(crate) async fn serve(&self) -> anyhow::Result<()> {
         let r = NodeAgentServer::new(Arc::new(NodeAgentSvc::new(self.path_cache.clone())));
         tracing::info!("Starting gRPC server at {:?}", self.endpoint);
         Server::builder()
             .add_service(r.into_grpc_server())
-            .serve_with_shutdown(self.endpoint, async move {
-                let _ = shutdown::Shutdown::wait().await;
-            })
+            .serve_with_shutdown(self.endpoint, common::Service::shutdown_signal())
             .await
             .map_err(|err| anyhow!("Failed to start gRPC server: {err}"))
     }
 }
 
-/// gRPC server implementation for HA Node agent.
+/// The gRPC server implementation for the HA Node agent.
 struct NodeAgentSvc {
     path_cache: NvmePathCache,
 }
 
 impl NodeAgentSvc {
-    pub fn new(path_cache: NvmePathCache) -> Self {
+    /// Returns a new `Self` with the given parameters.
+    pub(crate) fn new(path_cache: NvmePathCache) -> Self {
         Self { path_cache }
     }
 }
@@ -222,7 +221,7 @@ impl NodeAgentOperations for NodeAgentSvc {
                 )
             })?;
 
-        // Step 1: populate an aditional healthy path to target NQN in addition to
+        // Step 1: populate an additional healthy path to target NQN in addition to
         // existing failed path. Once this additional path is created, client I/O
         // automatically resumes.
         self.connect_controller(request.new_path()).await?;

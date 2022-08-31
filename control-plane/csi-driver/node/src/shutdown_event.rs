@@ -4,7 +4,7 @@ impl Shutdown {
     /// Returns a future that completes when the shutdown signal has been received.
     pub(crate) async fn wait() {
         // We don't care which shutdown event it was..
-        let _ = shutdown::Shutdown::wait().await;
+        let _ = shutdown::Shutdown::wait_sig().await;
     }
 }
 

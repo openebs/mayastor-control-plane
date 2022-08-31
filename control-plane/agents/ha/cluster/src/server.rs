@@ -7,20 +7,22 @@ use grpc::operations::ha_node::{
 use std::{net::SocketAddr, sync::Arc};
 use tonic::transport::Server;
 
+/// High-level object that represents HA Cluster agent gRPC server.
 pub(crate) struct ClusterAgent {
     endpoint: SocketAddr,
 }
 
 impl ClusterAgent {
+    /// Returns a new `Self` with the given parameters.
     pub(crate) fn new(endpoint: SocketAddr) -> Self {
         ClusterAgent { endpoint }
     }
-
+    /// Runs this server as a future until a shutdown signal is received.
     pub(crate) async fn run(&self) -> anyhow::Result<()> {
         let r = ClusterAgentServer::new(Arc::new(ClusterAgentSvc {}));
         Server::builder()
             .add_service(r.into_grpc_server())
-            .serve(self.endpoint)
+            .serve_with_shutdown(self.endpoint, common::Service::shutdown_signal())
             .await
             .map_err(|err| anyhow!("Failed to start server: {err}"))
     }

@@ -8,7 +8,7 @@ mod server;
 #[derive(Debug, StructOpt)]
 #[structopt(name = package_description!(), version = version_info_str!())]
 struct Cli {
-    /// IP address and port for the cluster-agent to listen on
+    /// IP address and port for the cluster-agent to listen on.
     #[structopt(long, short, default_value = DEFAULT_CLUSTER_AGENT_SERVER_ADDR)]
     grpc_endpoint: SocketAddr,
 }

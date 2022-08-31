@@ -56,8 +56,12 @@ impl Shutdown {
     /// The output of the future is signal which triggered the shutdown.
     /// None is returned if we failed to receive the event from the internal task.
     /// Shutdown events: INT|TERM.
-    pub fn wait() -> impl Future<Output = Option<SignalKind>> {
+    pub fn wait_sig() -> impl Future<Output = Option<SignalKind>> {
         Self::wait_int_term()
+    }
+    /// Helper async fn over `Self::wait` with no return.
+    pub async fn wait() {
+        let _ = Self::wait_sig().await;
     }
     fn wait_int_term() -> impl Future<Output = Option<SignalKind>> {
         lazy_static! {
