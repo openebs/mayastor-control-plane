@@ -4,7 +4,7 @@ use crate::{types::v0::store::volume::VolumeSpec, IntoOption};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom, fmt::Debug};
 
-bus_impl_string_uuid!(VolumeId, "UUID of a volume");
+rpc_impl_string_uuid!(VolumeId, "UUID of a volume");
 
 /// Volumes
 ///

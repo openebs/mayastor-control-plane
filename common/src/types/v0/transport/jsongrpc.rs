@@ -3,11 +3,11 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-bus_impl_string_id!(
+rpc_impl_string_id!(
     JsonGrpcParams,
     "Parameters to be passed to a JSON gRPC method"
 );
-bus_impl_string_id!(JsonGrpcMethod, "JSON gRPC method");
+rpc_impl_string_id!(JsonGrpcMethod, "JSON gRPC method");
 
 /// Generic JSON gRPC request
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]

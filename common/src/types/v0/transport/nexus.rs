@@ -65,7 +65,7 @@ impl From<Nexus> for models::Nexus {
     }
 }
 
-bus_impl_string_uuid!(NexusId, "UUID of a nexus");
+rpc_impl_string_uuid!(NexusId, "UUID of a nexus");
 
 /// Nexus State information
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]

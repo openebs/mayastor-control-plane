@@ -34,7 +34,7 @@ impl From<Child> for models::Child {
     }
 }
 
-bus_impl_string_id_percent_decoding!(ChildUri, "URI of a nexus child");
+rpc_impl_string_id_percent_decoding!(ChildUri, "URI of a nexus child");
 
 impl ChildUri {
     /// Get the io-engine bdev uuid from the ChildUri

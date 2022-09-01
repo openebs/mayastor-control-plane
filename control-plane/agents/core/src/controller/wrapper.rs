@@ -675,9 +675,9 @@ pub(crate) trait ClientOps {
     /// Destroy a replica on the pool via gRPC
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError>;
 
-    /// Create a nexus on a node via gRPC or MBUS
+    /// Create a nexus on a node via gRPC
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError>;
-    /// Destroy a nexus on a node via gRPC or MBUS
+    /// Destroy a nexus on a node via gRPC
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError>;
     /// Share a nexus on the node via gRPC
     async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError>;
@@ -1455,7 +1455,7 @@ pub(crate) fn rpc_pool_to_agent(rpc_pool: &rpc::io_engine::Pool, id: &NodeId) ->
     pool
 }
 
-/// Wrapper over the message bus `Pool` which includes all the replicas
+/// Wrapper over the rpc `Pool` which includes all the replicas
 /// and Ord traits to aid pool selection for volume replicas
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct PoolWrapper {

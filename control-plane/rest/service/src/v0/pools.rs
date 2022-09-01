@@ -93,7 +93,7 @@ impl apis::actix_server::Pools for RestApi {
         Body(create_pool_body): Body<models::CreatePoolBody>,
     ) -> Result<models::Pool, RestError<RestJsonError>> {
         let create =
-            CreatePoolBody::from(create_pool_body).bus_request(node_id.into(), pool_id.into());
+            CreatePoolBody::from(create_pool_body).to_request(node_id.into(), pool_id.into());
         let pool = client().create(&create, None).await?;
         Ok(pool.into())
     }

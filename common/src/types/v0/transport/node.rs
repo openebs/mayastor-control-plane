@@ -152,7 +152,7 @@ impl NodeState {
     }
 }
 
-bus_impl_string_id!(NodeId, "ID of a node");
+rpc_impl_string_id!(NodeId, "ID of a node");
 
 impl From<NodeState> for models::NodeState {
     fn from(src: NodeState) -> Self {

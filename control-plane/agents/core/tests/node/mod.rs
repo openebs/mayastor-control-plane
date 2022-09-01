@@ -34,7 +34,7 @@ async fn node() {
         .build()
         .await
         .unwrap();
-    let bus_timeout = common_lib::transport_api::TimeoutOptions::default()
+    let rpc_timeout = common_lib::transport_api::TimeoutOptions::default()
         .with_req_timeout(Duration::from_secs(1))
         .with_timeout_backoff(Duration::from_millis(100))
         .with_max_retries(6);
@@ -73,7 +73,7 @@ async fn node() {
     let node = nodes.0.first().cloned().unwrap();
     cluster.restart_core().await;
     cluster
-        .node_service_liveness(Some(bus_timeout.clone()))
+        .node_service_liveness(Some(rpc_timeout.clone()))
         .await
         .expect("Should have restarted by now");
 
@@ -88,7 +88,7 @@ async fn node() {
     cluster.composer().stop(maya_name.as_str()).await.unwrap();
     cluster.restart_core().await;
     cluster
-        .node_service_liveness(Some(bus_timeout.clone()))
+        .node_service_liveness(Some(rpc_timeout.clone()))
         .await
         .expect("Should have restarted by now");
 

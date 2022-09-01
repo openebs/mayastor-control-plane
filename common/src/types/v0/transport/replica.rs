@@ -123,7 +123,7 @@ impl From<Replica> for models::Replica {
     }
 }
 
-bus_impl_string_uuid!(ReplicaId, "UUID of a pool replica");
+rpc_impl_string_uuid!(ReplicaId, "UUID of a pool replica");
 
 impl From<Replica> for DestroyReplica {
     fn from(replica: Replica) -> Self {

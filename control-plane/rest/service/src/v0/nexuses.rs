@@ -107,7 +107,7 @@ impl apis::actix_server::Nexuses for RestApi {
         Body(create_nexus_body): Body<models::CreateNexusBody>,
     ) -> Result<models::Nexus, RestError<RestJsonError>> {
         let create =
-            CreateNexusBody::from(create_nexus_body).bus_request(node_id.into(), nexus_id.into());
+            CreateNexusBody::from(create_nexus_body).to_request(node_id.into(), nexus_id.into());
         let nexus = client().create(&create, None).await?;
         Ok(nexus.into())
     }

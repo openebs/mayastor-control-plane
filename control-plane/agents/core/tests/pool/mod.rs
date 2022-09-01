@@ -190,7 +190,7 @@ async fn pool() {
 /// arguments for timeouts.
 /// This is required because as of now, we don't have a good mocking strategy
 
-/// default timeout options for every bus request
+/// default timeout options for every rpc request
 fn grpc_timeout_opts() -> TimeoutOptions {
     TimeoutOptions::default()
         .with_max_retries(0)

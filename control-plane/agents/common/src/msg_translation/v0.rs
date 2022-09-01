@@ -1,4 +1,4 @@
-//! Converts rpc messages to message bus messages and vice versa.
+//! Converts rpc messages to rpc agent messages and vice versa.
 
 use crate::errors::SvcError;
 use common_lib::{

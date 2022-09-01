@@ -8,8 +8,8 @@ use crate::types::v0::{
         AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
     },
     transport::{
-        self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus,
-        Nexus as MbusNexus, NexusId, NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
+        self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, NexusId,
+        NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -31,8 +31,8 @@ pub struct NexusState {
     pub nexus: transport::Nexus,
 }
 
-impl From<MbusNexus> for NexusState {
-    fn from(nexus: MbusNexus) -> Self {
+impl From<transport::Nexus> for NexusState {
+    fn from(nexus: transport::Nexus) -> Self {
         Self { nexus }
     }
 }

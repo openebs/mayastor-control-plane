@@ -71,8 +71,8 @@ impl From<CreatePool> for CreatePoolBody {
     }
 }
 impl CreatePoolBody {
-    /// convert into message bus type
-    pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId) -> CreatePool {
+    /// Convert into rpc request type.
+    pub fn to_request(&self, node_id: NodeId, pool_id: PoolId) -> CreatePool {
         CreatePool {
             node: node_id,
             id: pool_id,
@@ -91,8 +91,8 @@ impl From<CreateReplica> for CreateReplicaBody {
     }
 }
 impl CreateReplicaBody {
-    /// convert into message bus type
-    pub fn bus_request(&self, node_id: NodeId, pool_id: PoolId, uuid: ReplicaId) -> CreateReplica {
+    /// Convert into rpc request type.
+    pub fn to_request(&self, node_id: NodeId, pool_id: PoolId, uuid: ReplicaId) -> CreateReplica {
         CreateReplica {
             node: node_id,
             name: None,
@@ -136,8 +136,8 @@ impl From<models::CreateNexusBody> for CreateNexusBody {
     }
 }
 impl CreateNexusBody {
-    /// convert into message bus type
-    pub fn bus_request(&self, node_id: NodeId, nexus_id: NexusId) -> CreateNexus {
+    /// Convert into rpc request type.
+    pub fn to_request(&self, node_id: NodeId, nexus_id: NexusId) -> CreateNexus {
         CreateNexus {
             node: node_id,
             uuid: nexus_id,
@@ -191,7 +191,7 @@ impl From<CreateVolume> for CreateVolumeBody {
     }
 }
 impl CreateVolumeBody {
-    /// convert into message bus type
+    /// Convert into rpc request type.
     pub fn to_create_volume(&self, volume_id: VolumeId) -> CreateVolume {
         CreateVolume {
             uuid: volume_id,

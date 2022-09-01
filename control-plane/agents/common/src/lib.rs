@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Control Plane Agents library with emphasis on the message bus interaction
+//! Control Plane Agents library with emphasis on the rpc transport interaction
 //! including errors.
 //!
 //! It's meant to facilitate the creation of agents with a helper builder to
