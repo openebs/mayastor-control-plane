@@ -1,4 +1,7 @@
-use super::*;
+use crate::infra::{
+    async_trait, Builder, ComponentAction, Components, ComposeTest, Error, Kibana, StartOptions,
+};
+use composer::ContainerSpec;
 
 #[async_trait]
 impl ComponentAction for Kibana {

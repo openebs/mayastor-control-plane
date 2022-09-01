@@ -1,4 +1,7 @@
-use super::*;
+use crate::infra::{
+    async_trait, Builder, ComponentAction, Components, ComposeTest, Error, Rest, StartOptions,
+};
+use composer::{Binary, ContainerSpec};
 use std::time::Duration;
 use utils::DEFAULT_JSON_GRPC_CLIENT_ADDR;
 

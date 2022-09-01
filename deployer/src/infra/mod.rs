@@ -1,15 +1,12 @@
-mod cluster_agent;
-mod core;
-mod csi_controller;
-mod csi_node;
+pub(crate) mod agents;
+#[path = "csi-driver/mod.rs"]
+pub(crate) mod csi_driver;
 pub mod dns;
 mod elastic;
 mod empty;
 mod etcd;
-mod hanodeagent;
 mod io_engine;
 mod jaeger;
-mod jsongrpc;
 mod kibana;
 mod rest;
 
@@ -21,34 +18,41 @@ use futures::future::{join_all, try_join_all};
 use paste::paste;
 use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
 use structopt::StructOpt;
-use strum::VariantNames;
 use strum_macros::{EnumVariantNames, ToString};
 
-/// Error type used by the deployer
+/// Error type used by the deployer.
 pub type Error = Box<dyn std::error::Error>;
 
 #[macro_export]
 macro_rules! impl_ctrlp_agents {
     ($($name:ident,)+) => {
-        /// List of Control Plane Agents to deploy
+        /// List of Control Plane Agents to deploy.
         #[derive(Debug, Clone)]
         pub struct ControlPlaneAgents(Vec<ControlPlaneAgent>);
 
         impl ControlPlaneAgents {
-            /// Get inner vector of ControlPlaneAgent's
+            /// Get inner vector of ControlPlaneAgent's.
             pub fn into_inner(self) -> Vec<ControlPlaneAgent> {
                 self.0
             }
         }
 
-        /// All the Control Plane Agents
-        #[derive(Debug, Clone, StructOpt, ToString, EnumVariantNames)]
+        /// All the Control Plane Agents.
+        /// concat_idents!($name, Agent)(concat_idents!($name, Agent)),
+        #[derive(Debug, Clone, StructOpt, ToString)]
         #[structopt(about = "Control Plane Agents")]
         pub enum ControlPlaneAgent {
             Empty(Empty),
             $(
                 $name($name),
             )+
+        }
+        impl ControlPlaneAgent {
+            pub fn variants() -> Vec<&'static str> {
+                vec![$(
+                    stringify!($name).trim_end_matches("Agent"),
+                )+]
+            }
         }
 
         impl TryFrom<Vec<&str>> for ControlPlaneAgents {
@@ -77,14 +81,15 @@ macro_rules! impl_ctrlp_agents {
                 type Err = String;
 
                 fn from_str(source: &str) -> Result<Self, Self::Err> {
-                    Ok(match source.trim().to_ascii_lowercase().as_str() {
+                    let name = source.trim().to_ascii_lowercase();
+                    Ok(match format!("{}agent", name.trim_end_matches("agent")).as_str() {
                         "" => Self::Empty(Empty::default()),
                         "empty" => Self::Empty(Empty::default()),
                         $(stringify!([<$name:lower>]) => Self::$name($name::default()),)+
                         _ => return Err(format!(
                             "\"{}\" is an invalid type of agent! Available types: {:?}",
                             source,
-                            Self::VARIANTS
+                            Self::variants()
                         )),
                     })
                 }
@@ -148,7 +153,7 @@ impl Components {
             tokio::time::sleep(get_timeout).await;
         }
     }
-    /// Start all components and wait up to the provided timeout
+    /// Start all components and wait up to the provided timeout.
     pub async fn start_wait(
         &self,
         cfg: &ComposeTest,
@@ -162,7 +167,7 @@ impl Components {
             }
         }
     }
-    /// Start all components, in order, but don't wait for them
+    /// Start all components, in order, but don't wait for them.
     pub async fn start(&self, cfg: &ComposeTest) -> Result<(), Error> {
         let mut last_done = None;
         for component in &self.0 {
@@ -186,7 +191,7 @@ impl Components {
         Ok(())
     }
     /// Start all components, in order. Then wait for all components with a wait between each
-    /// component to make sure they start orderly
+    /// component to make sure they start orderly.
     async fn start_wait_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
         let mut last_done = None;
 
@@ -224,14 +229,14 @@ impl Components {
 
     /// to check whether core agent is being deployed or not
     pub fn core_enabled(&self) -> bool {
-        self.0.contains(&Component::Core(Default::default()))
+        self.0.contains(&Component::CoreAgent(Default::default()))
     }
 }
 
 #[macro_export]
 macro_rules! impl_component {
     ($($name:ident,$order:literal,)+) => {
-        /// All the Control Plane Components
+        /// All the Control Plane Components.
         #[derive(Debug, Clone, StructOpt, ToString, EnumVariantNames, Eq, PartialEq)]
         #[structopt(about = "Control Plane Components")]
         pub enum Component {
@@ -240,41 +245,7 @@ macro_rules! impl_component {
             )+
         }
 
-        /// List of Control Plane Components to deploy
-        #[derive(Debug, Clone)]
-        pub struct Components(Vec<Component>, StartOptions);
-        impl BuilderConfigure for Components {
-            fn configure(&self, cfg: Builder) -> Result<Builder, Error> {
-                if self.1.build_all {
-                    let path = std::path::PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
-                    let status = std::process::Command::new("cargo")
-                        .current_dir(path.parent().expect("main workspace"))
-                        .args(&["build", "--bins"])
-                        .status()?;
-                    build_error("all the workspace binaries", status.code())?;
-                }
-                let mut cfg = cfg;
-                for component in &self.0 {
-                    cfg = component.configure(&self.1, cfg)?;
-                }
-                Ok(cfg.with_spec_map(|spec| {
-                    let spec = spec.with_direct_bind("/etc/machine-id")
-                                   .with_direct_bind("/sys/class/dmi/id/product_uuid");
-                    if let Some(uid) = &self.1.cluster_uid {
-                        spec.with_env("NOPLATFORM_UUID", uid)
-                    } else {
-                        spec
-                    }
-                }))
-            }
-        }
-
         impl Components {
-            pub fn push_generic_components(&mut self, name: &str, component: Component) {
-                if !ControlPlaneAgent::VARIANTS.iter().any(|&s| s == name) {
-                    self.0.push(component);
-                }
-            }
             pub fn new(options: StartOptions) -> Components {
                 let agents = options.agents.clone();
                 let components = agents
@@ -286,50 +257,6 @@ macro_rules! impl_component {
                 $(components.push_generic_components(stringify!($name), $name::default().into());)+
                 components.0.sort();
                 components
-            }
-            pub async fn wait_on(
-                &self,
-                cfg: &ComposeTest,
-                timeout: std::time::Duration,
-            ) -> Result<(), Error> {
-                match tokio::time::timeout(timeout, self.wait_on_inner(cfg)).await {
-                    Ok(result) => result,
-                    Err(_) => {
-                        let error = format!("Time out of {:?} expired", timeout);
-                        Err(std::io::Error::new(std::io::ErrorKind::TimedOut, error).into())
-                    }
-                }
-            }
-            async fn wait_on_components(&self, components: &[&Component], cfg: &ComposeTest) -> Result<(), Error> {
-                let mut futures = vec![];
-                for component in components {
-                    futures.push(async move {
-                        component.wait_on(&self.1, cfg).await
-                    })
-                }
-                let result = join_all(futures).await;
-                result.iter().for_each(|result| match result {
-                    Err(error) => println!("Failed to wait for component: {:?}", error),
-                    _ => {}
-                });
-                if let Some(Err(error)) = result.iter().find(|result| result.is_err()) {
-                    Err(std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, error.to_string()).into())
-                } else {
-                    Ok(())
-                }
-            }
-            async fn wait_on_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
-                self.wait_on_components(&self.0.iter().collect::<Vec<_>>(), cfg).await
-            }
-        }
-
-        /// Trait to manage a component startup sequence
-        #[async_trait]
-        pub trait ComponentAction {
-            fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error>;
-            async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
-            async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
-                Ok(())
             }
         }
 
@@ -361,7 +288,7 @@ macro_rules! impl_component {
             }
         })+
 
-        /// Control Plane Component
+        /// An individual Component.
         $(#[derive(Default, Debug, Clone, StructOpt, Eq, PartialEq)]
         pub struct $name {})+
 
@@ -372,23 +299,106 @@ macro_rules! impl_component {
                 }
             }
         }
-
-        impl PartialOrd for Component {
-            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                self.boot_order().partial_cmp(&other.boot_order())
-            }
-        }
-        impl Ord for Component {
-            fn cmp(&self, other: &Self) -> Ordering {
-                self.boot_order().cmp(&other.boot_order())
-            }
-        }
     };
     ($($name:ident, $order:ident), +) => {
         impl_component!($($name,$order)+);
     };
 }
 
+/// Trait to manage a component startup sequence.
+#[async_trait]
+pub trait ComponentAction {
+    fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error>;
+    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
+    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
+}
+/// List of Control Plane Components to deploy.
+#[derive(Debug, Clone)]
+pub struct Components(Vec<Component>, StartOptions);
+impl BuilderConfigure for Components {
+    fn configure(&self, cfg: Builder) -> Result<Builder, Error> {
+        if self.1.build_all {
+            let path = std::path::PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
+            let status = std::process::Command::new("cargo")
+                .current_dir(path.parent().expect("main workspace"))
+                .args(&["build", "--bins"])
+                .status()?;
+            build_error("all the workspace binaries", status.code())?;
+        }
+        let mut cfg = cfg;
+        for component in &self.0 {
+            cfg = component.configure(&self.1, cfg)?;
+        }
+        Ok(cfg.with_spec_map(|spec| {
+            let spec = spec
+                .with_direct_bind("/etc/machine-id")
+                .with_direct_bind("/sys/class/dmi/id/product_uuid");
+            if let Some(uid) = &self.1.cluster_uid {
+                spec.with_env("NOPLATFORM_UUID", uid)
+            } else {
+                spec
+            }
+        }))
+    }
+}
+impl Components {
+    fn push_generic_components(&mut self, name: &str, component: Component) {
+        if !ControlPlaneAgent::variants()
+            .iter()
+            .any(|&s| s == name.trim_end_matches("Agent"))
+        {
+            self.0.push(component);
+        }
+    }
+    pub async fn wait_on(
+        &self,
+        cfg: &ComposeTest,
+        timeout: std::time::Duration,
+    ) -> Result<(), Error> {
+        match tokio::time::timeout(timeout, self.wait_on_inner(cfg)).await {
+            Ok(result) => result,
+            Err(_) => {
+                let error = format!("Time out of {:?} expired", timeout);
+                Err(std::io::Error::new(std::io::ErrorKind::TimedOut, error).into())
+            }
+        }
+    }
+    async fn wait_on_components(
+        &self,
+        components: &[&Component],
+        cfg: &ComposeTest,
+    ) -> Result<(), Error> {
+        let mut futures = vec![];
+        for component in components {
+            futures.push(async move { component.wait_on(&self.1, cfg).await })
+        }
+        let result = join_all(futures).await;
+        result.iter().for_each(|result| {
+            if let Err(error) = result {
+                println!("Failed to wait for component: {:?}", error)
+            }
+        });
+        if let Some(Err(error)) = result.iter().find(|result| result.is_err()) {
+            Err(std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, error.to_string()).into())
+        } else {
+            Ok(())
+        }
+    }
+    async fn wait_on_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
+        self.wait_on_components(&self.0.iter().collect::<Vec<_>>(), cfg)
+            .await
+    }
+}
+impl PartialOrd for Component {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.boot_order().partial_cmp(&other.boot_order())
+    }
+}
+impl Ord for Component {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.boot_order().cmp(&other.boot_order())
+    }
+}
 struct TraceFn(String, String);
 impl TraceFn {
     fn new(component: &Component, func: &str) -> Self {
@@ -406,21 +416,21 @@ impl Drop for TraceFn {
 // Component Name and bootstrap ordering
 // from lower to high
 impl_component! {
-    Empty,         0,
-    Jaeger,        0,
-    Dns,           1,
-    Etcd,          1,
-    Elastic,       1,
-    Kibana,        1,
-    Core,          3,
-    JsonGrpc,      3,
-    Rest,          3,
-    ClusterAgent,  3,
-    IoEngine,      4,
-    CsiNode,       5,
-    CsiController, 5,
-    HANodeAgent,   5,
+    Empty,          0,
+    Jaeger,         0,
+    Dns,            1,
+    Etcd,           1,
+    Elastic,        1,
+    Kibana,         1,
+    CoreAgent,      3,
+    JsonGrpcAgent,  3,
+    Rest,           3,
+    HaClusterAgent, 3,
+    IoEngine,       4,
+    CsiNode,        5,
+    CsiController,  5,
+    HaNodeAgent,    5,
 }
 
-// Message Bus Control Plane Agents
-impl_ctrlp_agents!(Core, JsonGrpc, HANodeAgent, ClusterAgent);
+// Control Plane Agents
+impl_ctrlp_agents!(CoreAgent, JsonGrpcAgent, HaNodeAgent, HaClusterAgent);

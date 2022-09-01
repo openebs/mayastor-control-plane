@@ -131,9 +131,7 @@ impl CsiServer {
         Server::builder()
             .add_service(IdentityServer::new(CsiIdentitySvc::default()))
             .add_service(ControllerServer::new(CsiControllerSvc::default()))
-            .serve_with_incoming_shutdown(incoming, async move {
-                let _ = shutdown::Shutdown::wait().await;
-            })
+            .serve_with_incoming_shutdown(incoming, shutdown::Shutdown::wait())
             .await
             .map_err(|_| "Failed to start gRPC server")?;
         Ok(())

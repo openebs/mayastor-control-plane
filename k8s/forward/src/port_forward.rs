@@ -66,7 +66,7 @@ impl PortForward {
         tracing::trace!(port, "Bound to local port");
 
         let server = TcpListenerStream::new(bind)
-            .take_until(shutdown::Shutdown::wait())
+            .take_until(shutdown::Shutdown::wait_sig())
             .try_for_each(move |client_conn| {
                 let pf = self.clone();
 

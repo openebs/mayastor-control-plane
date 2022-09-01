@@ -46,13 +46,13 @@ pub const LOKI_LABEL: &str = "app=loki";
 pub const LOKI_PORT: &str = "http-metrics";
 
 /// The default value to be assigned as GRPC server addr if not overridden
-pub const DEFAULT_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50051";
+pub const DEFAULT_GRPC_SERVER_ADDR: &str = "0.0.0.0:50051";
 
 /// The default value to be assigned as GRPC client addr if not overridden
 pub const DEFAULT_GRPC_CLIENT_ADDR: &str = "https://core:50051";
 
 /// The default value to be assigned as JSON GRPC server addr if not overridden
-pub const DEFAULT_JSON_GRPC_SERVER_ADDR: &str = "https://0.0.0.0:50052";
+pub const DEFAULT_JSON_GRPC_SERVER_ADDR: &str = "0.0.0.0:50052";
 
 /// The default value to be assigned as JSON GRPC client addr if not overridden
 pub const DEFAULT_JSON_GRPC_CLIENT_ADDR: &str = "https://jsongrpc:50052";
@@ -65,13 +65,13 @@ pub const RUST_LOG_SILENCE_DEFAULTS: &str =
     "actix_web=info,actix_server=info,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,tokio_tungstenite=info,tungstenite=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
 
 /// The default value to be assigned as cluster agent GRPC server addr if not overridden
-pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "https://0.0.0.0:11500";
+pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "0.0.0.0:11500";
 
 /// The default value to be assigned as cluster agent GRPC client addr if not overridden
 pub const DEFAULT_CLUSTER_AGENT_CLIENT_ADDR: &str = "https://ha-cluster-agent:11500";
 
 /// The default value to be assigned as node-agent GRPC server addr if not overridden
-pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "https://0.0.0.0:11600";
+pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "0.0.0.0:11600";
 
 /// The default worker threads cap for the api-rest service.
 pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";

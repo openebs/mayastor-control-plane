@@ -10,7 +10,7 @@ use strum_macros::{EnumString, ToString};
 /// # Example:
 /// // Get all nexuses from the node `node_id`
 /// let nexuses =
-///     MessageBus::get_nexuses(Filter::Node(node_id)).await.unwrap();
+///     client.get_nexuses(Filter::Node(node_id)).await.unwrap();
 #[derive(Serialize, Deserialize, Debug, Clone, strum_macros::ToString)] // likely this ToString does not do the right thing...
 pub enum Filter {
     /// All objects
@@ -47,7 +47,7 @@ impl Default for Filter {
 }
 
 #[macro_export]
-macro_rules! bus_impl_string_id_inner {
+macro_rules! rpc_impl_string_id_inner {
     ($Name:ident, $Doc:literal) => {
         #[doc = $Doc]
         #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -97,9 +97,9 @@ macro_rules! bus_impl_string_id_inner {
 }
 
 #[macro_export]
-macro_rules! bus_impl_string_id {
+macro_rules! rpc_impl_string_id {
     ($Name:ident, $Doc:literal) => {
-        bus_impl_string_id_inner!($Name, $Doc);
+        rpc_impl_string_id_inner!($Name, $Doc);
         impl Default for $Name {
             /// Generates new blank identifier
             fn default() -> Self {
@@ -120,7 +120,7 @@ macro_rules! bus_impl_string_id {
 }
 
 #[macro_export]
-macro_rules! bus_impl_string_uuid_inner {
+macro_rules! rpc_impl_string_uuid_inner {
     ($Name:ident, $Doc:literal) => {
         #[doc = $Doc]
         #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -220,9 +220,9 @@ macro_rules! bus_impl_string_uuid_inner {
 }
 
 #[macro_export]
-macro_rules! bus_impl_string_uuid {
+macro_rules! rpc_impl_string_uuid {
     ($Name:ident, $Doc:literal) => {
-        bus_impl_string_uuid_inner!($Name, $Doc);
+        rpc_impl_string_uuid_inner!($Name, $Doc);
         impl Default for $Name {
             /// Generates new blank identifier
             fn default() -> Self {
@@ -241,9 +241,9 @@ macro_rules! bus_impl_string_uuid {
 }
 
 #[macro_export]
-macro_rules! bus_impl_string_id_percent_decoding {
+macro_rules! rpc_impl_string_id_percent_decoding {
     ($Name:ident, $Doc:literal) => {
-        bus_impl_string_id_inner!($Name, $Doc);
+        rpc_impl_string_id_inner!($Name, $Doc);
         impl Default for $Name {
             fn default() -> Self {
                 $Name("".to_string())

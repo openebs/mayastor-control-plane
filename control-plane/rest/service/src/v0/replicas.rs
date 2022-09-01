@@ -18,14 +18,14 @@ async fn put_replica(
 ) -> Result<models::Replica, RestError<RestJsonError>> {
     let create = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
-            body.bus_request(node_id, pool_id, replica_id)
+            body.to_request(node_id, pool_id, replica_id)
         }
         Filter::PoolReplica(pool_id, replica_id) => {
             let node_id = match pool_client().get(Filter::Pool(pool_id.clone()), None).await {
                 Ok(pools) => pool(pool_id.to_string(), pools.into_inner().get(0))?.node(),
                 Err(error) => return Err(RestError::from(error)),
             };
-            body.bus_request(node_id, pool_id, replica_id)
+            body.to_request(node_id, pool_id, replica_id)
         }
         _ => {
             return Err(RestError::from(ReplyError {

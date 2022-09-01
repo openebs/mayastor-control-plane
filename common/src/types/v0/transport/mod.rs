@@ -32,8 +32,8 @@ use strum_macros::{EnumString, ToString};
 
 use crate::transport_api::MessageId;
 pub use crate::{
-    bus_impl_string_id, bus_impl_string_id_inner, bus_impl_string_id_percent_decoding,
-    bus_impl_string_uuid, bus_impl_string_uuid_inner,
+    rpc_impl_string_id, rpc_impl_string_id_inner, rpc_impl_string_id_percent_decoding,
+    rpc_impl_string_uuid, rpc_impl_string_uuid_inner,
 };
 
 pub const VERSION: &str = "v0";

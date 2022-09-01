@@ -8,8 +8,8 @@ use crate::{
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
-            self, CreateReplica, NodeId, PoolId, PoolUuid, Protocol, Replica as MbusReplica,
-            ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol,
+            self, CreateReplica, NodeId, PoolId, PoolUuid, Protocol, ReplicaId, ReplicaName,
+            ReplicaOwners, ReplicaShareProtocol,
         },
     },
     IntoOption,
@@ -33,8 +33,8 @@ pub struct ReplicaState {
     pub replica: transport::Replica,
 }
 
-impl From<MbusReplica> for ReplicaState {
-    fn from(replica: MbusReplica) -> Self {
+impl From<transport::Replica> for ReplicaState {
+    fn from(replica: transport::Replica) -> Self {
         Self { replica }
     }
 }
