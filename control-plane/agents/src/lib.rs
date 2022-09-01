@@ -90,15 +90,17 @@ impl Service {
 
     /// Runs this server as a future until a shutdown signal is received.
     pub async fn run(self, socket: SocketAddr) {
-        let result = self
-            .tonic_server
-            .serve_with_shutdown(socket, Self::shutdown_signal())
-            .await
-            .map_err(|source| ServiceError::GrpcServer { source });
-
-        if let Err(error) = result {
+        if let Err(error) = self.run_err(socket).await {
             tracing::error!(error=?error, "Error running service thread");
         }
+    }
+
+    /// Runs this server as a future until a shutdown signal is received.
+    pub async fn run_err(self, socket: SocketAddr) -> Result<(), ServiceError> {
+        self.tonic_server
+            .serve_with_shutdown(socket, Self::shutdown_signal())
+            .await
+            .map_err(|source| ServiceError::GrpcServer { source })
     }
 
     /// Waits until the process receives a shutdown: either TERM or INT.

@@ -3,7 +3,6 @@ use crate::{
     path_provider::get_nvme_path_buf,
 };
 use agents::errors::SvcError;
-use anyhow::anyhow;
 use common_lib::transport_api::{ReplyError, ResourceKind};
 use grpc::operations::ha_node::{
     server::NodeAgentServer,
@@ -16,7 +15,6 @@ use nvmeadm::{
 };
 use std::{net::SocketAddr, sync::Arc};
 use tokio::time::{sleep, Duration};
-use tonic::transport::Server;
 use utils::NVME_TARGET_NQN_PREFIX;
 
 /// Common error source name for all gRPC errors in HA Node agent.
@@ -41,14 +39,13 @@ impl NodeAgentApiServer {
     }
 
     /// Runs this server as a future until a shutdown signal is received.
-    pub(crate) async fn serve(&self) -> anyhow::Result<()> {
+    pub(crate) async fn serve(&self) -> Result<(), agents::ServiceError> {
         let r = NodeAgentServer::new(Arc::new(NodeAgentSvc::new(self.path_cache.clone())));
         tracing::info!("Starting gRPC server at {:?}", self.endpoint);
-        Server::builder()
-            .add_service(r.into_grpc_server())
-            .serve_with_shutdown(self.endpoint, agents::Service::shutdown_signal())
+        agents::Service::builder()
+            .with_service(r.into_grpc_server())
+            .run_err(self.endpoint)
             .await
-            .map_err(|err| anyhow!("Failed to start gRPC server: {err}"))
     }
 }
 

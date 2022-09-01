@@ -1,11 +1,9 @@
-use anyhow::anyhow;
 use common_lib::transport_api::{ReplyError, ResourceKind};
 use grpc::operations::ha_node::{
     server::ClusterAgentServer,
     traits::{ClusterAgentOperations, NodeInfo, ReportFailedPathsInfo},
 };
 use std::{net::SocketAddr, sync::Arc};
-use tonic::transport::Server;
 
 /// High-level object that represents HA Cluster agent gRPC server.
 pub(crate) struct ClusterAgent {
@@ -18,13 +16,12 @@ impl ClusterAgent {
         ClusterAgent { endpoint }
     }
     /// Runs this server as a future until a shutdown signal is received.
-    pub(crate) async fn run(&self) -> anyhow::Result<()> {
+    pub(crate) async fn run(&self) -> Result<(), agents::ServiceError> {
         let r = ClusterAgentServer::new(Arc::new(ClusterAgentSvc {}));
-        Server::builder()
-            .add_service(r.into_grpc_server())
-            .serve_with_shutdown(self.endpoint, agents::Service::shutdown_signal())
+        agents::Service::builder()
+            .with_service(r.into_grpc_server())
+            .run_err(self.endpoint)
             .await
-            .map_err(|err| anyhow!("Failed to start server: {err}"))
     }
 }
 
