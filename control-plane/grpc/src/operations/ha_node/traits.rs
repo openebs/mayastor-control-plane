@@ -1,5 +1,8 @@
-use crate::ha_cluster_agent::{
-    FailedNvmePath, HaNodeInfo, ReplacePathRequest, ReportFailedNvmePathsRequest,
+use crate::{
+    context::Context,
+    ha_cluster_agent::{
+        FailedNvmePath, HaNodeInfo, ReplacePathRequest, ReportFailedNvmePathsRequest,
+    },
 };
 use common_lib::{
     transport_api::ReplyError,
@@ -11,7 +14,11 @@ use common_lib::{
 #[tonic::async_trait]
 pub trait NodeAgentOperations: Send + Sync {
     /// Replace failed NVMe path for target NQN.
-    async fn replace_path(&self, request: &dyn ReplacePathInfo) -> Result<(), ReplyError>;
+    async fn replace_path(
+        &self,
+        request: &dyn ReplacePathInfo,
+        context: Option<Context>,
+    ) -> Result<(), ReplyError>;
 }
 
 /// ReplacePathInfo trait for the failed path replacement to be implemented by entities
@@ -36,13 +43,18 @@ impl ReplacePathInfo for ReplacePathRequest {
 /// ClusterAgentOperations trait implemented by client which supports cluster-agent operations
 #[tonic::async_trait]
 pub trait ClusterAgentOperations: Send + Sync {
-    /// Register node with cluster-agent
-    async fn register(&self, request: &dyn NodeInfo) -> Result<(), ReplyError>;
+    /// Register node with cluster-agent.
+    async fn register(
+        &self,
+        request: &dyn NodeInfo,
+        context: Option<Context>,
+    ) -> Result<(), ReplyError>;
 
     /// Report failed NVMe paths.
     async fn report_failed_nvme_paths(
         &self,
         request: &dyn ReportFailedPathsInfo,
+        context: Option<Context>,
     ) -> Result<(), ReplyError>;
 }
 
@@ -72,6 +84,15 @@ impl NodeInfo for HaNodeInfo {
 
     fn endpoint(&self) -> String {
         self.endpoint.clone()
+    }
+}
+
+impl From<&dyn NodeInfo> for HaNodeInfo {
+    fn from(src: &dyn NodeInfo) -> Self {
+        Self {
+            nodename: src.node(),
+            endpoint: src.endpoint(),
+        }
     }
 }
 

@@ -38,98 +38,100 @@ pub use crate::{
 
 pub const VERSION: &str = "v0";
 
-/// Versioned Message Id's
+/// Versioned Message Id's.
 #[derive(Debug, PartialEq, Clone, ToString, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum MessageIdVs {
-    /// Default
+    /// Default.
     Default,
-    /// Liveness Probe
+    /// Liveness Probe.
     Liveness,
-    /// Update Config
+    /// Update Config.
     ConfigUpdate,
-    /// Request current Config
+    /// Request current Config.
     ConfigGetCurrent,
-    /// Register the io-engine
+    /// Register the io-engine.
     Register,
-    /// Deregister the io-engine
+    /// Deregister the io-engine.
     Deregister,
     /// Node Service
-    /// Get all node information
+    /// Get all node information.
     GetNodes,
-    /// Cordon a node
+    /// Cordon a node.
     CordonNode,
     /// Pool Service
     ///
-    /// Get pools with filter
+    /// Get pools with filter.
     GetPools,
-    /// Create Pool,
+    /// Create Pool.
     CreatePool,
-    /// Destroy Pool,
+    /// Destroy Pool.
     DestroyPool,
-    /// Get replicas with filter
+    /// Get replicas with filter.
     GetReplicas,
-    /// Create Replica,
+    /// Create Replica.
     CreateReplica,
-    /// Destroy Replica,
+    /// Destroy Replica.
     DestroyReplica,
-    /// Share Replica,
+    /// Share Replica.
     ShareReplica,
-    /// Unshare Replica,
+    /// Unshare Replica.
     UnshareReplica,
     /// Volume Service
     ///
-    /// Get nexuses with filter
+    /// Get nexuses with filter.
     GetNexuses,
-    /// Create nexus
+    /// Create nexus.
     CreateNexus,
-    /// Destroy Nexus
+    /// Destroy Nexus.
     DestroyNexus,
-    /// Share Nexus
+    /// Share Nexus.
     ShareNexus,
-    /// Unshare Nexus
+    /// Unshare Nexus.
     UnshareNexus,
-    /// Remove a child from its parent nexus
+    /// Remove a child from its parent nexus.
     RemoveNexusChild,
-    /// Add a child to a nexus
+    /// Add a child to a nexus.
     AddNexusChild,
     /// Fault the nexus child.
     FaultNexusChild,
-    /// Get all volumes
+    /// Get all volumes.
     GetVolumes,
-    /// Create Volume,
+    /// Create Volume.
     CreateVolume,
-    /// Delete Volume
+    /// Delete Volume.
     DestroyVolume,
-    /// Publish Volume,
+    /// Publish Volume.
     PublishVolume,
-    /// Unpublish Volume
+    /// Unpublish Volume.
     UnpublishVolume,
-    /// Share Volume
+    /// Share Volume.
     ShareVolume,
-    /// Unshare Volume
+    /// Unshare Volume.
     UnshareVolume,
-    /// Add nexus to volume
+    /// Add nexus to volume.
     AddVolumeNexus,
-    /// Remove nexus from volume
+    /// Remove nexus from volume.
     RemoveVolumeNexus,
-    /// Set replica count
+    /// Set replica count.
     SetVolumeReplica,
-    /// Generic JSON gRPC message
+    /// Generic JSON gRPC message.
     JsonGrpc,
-    /// Get block devices
+    /// Get block devices.
     GetBlockDevices,
-    /// Create new Resource Watch
+    /// Create new Resource Watch.
     CreateWatch,
-    /// Get watches
+    /// Get watches.
     GetWatches,
-    /// Delete Resource Watch
+    /// Delete Resource Watch.
     DeleteWatch,
-    /// Get Specs
+    /// Get Specs.
     GetSpecs,
-    /// Get States
+    /// Get States.
     GetStates,
-    /// Report failed NVMe paths
+    /// High Availability Agents.
+    RegisterHaNode,
+    /// Report failed NVMe paths.
     ReportFailedPaths,
 }
 

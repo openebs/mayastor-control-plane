@@ -76,7 +76,7 @@ impl PathReporter {
                     let client = cluster_agent_client();
 
                     loop {
-                        match client.report_failed_nvme_paths(&req).await {
+                        match client.report_failed_nvme_paths(&req, None).await {
                             Ok(_) => break,
                             Err(e) => {
                                 tracing::error!("Failed to report failed NVMe paths: {}", e);

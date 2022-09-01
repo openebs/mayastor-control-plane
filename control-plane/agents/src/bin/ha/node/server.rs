@@ -4,9 +4,12 @@ use crate::{
 };
 use agents::errors::SvcError;
 use common_lib::transport_api::{ReplyError, ResourceKind};
-use grpc::operations::ha_node::{
-    server::NodeAgentServer,
-    traits::{NodeAgentOperations, ReplacePathInfo},
+use grpc::{
+    context::Context,
+    operations::ha_node::{
+        server::NodeAgentServer,
+        traits::{NodeAgentOperations, ReplacePathInfo},
+    },
 };
 use http::Uri;
 use nvmeadm::{
@@ -202,7 +205,11 @@ impl NodeAgentSvc {
 
 #[tonic::async_trait]
 impl NodeAgentOperations for NodeAgentSvc {
-    async fn replace_path(&self, request: &dyn ReplacePathInfo) -> Result<(), ReplyError> {
+    async fn replace_path(
+        &self,
+        request: &dyn ReplacePathInfo,
+        _context: Option<Context>,
+    ) -> Result<(), ReplyError> {
         tracing::info!("Replacing failed NVMe path: {:?}", request);
 
         // Lookup NVMe controller whose path has failed.

@@ -88,10 +88,10 @@ async fn main() {
         .expect("Expect to be initialized only once");
 
     if let Err(error) = cluster_agent_client()
-        .register(&NodeAgentInfo::new(
-            cli_args.node_name.clone(),
-            cli_args.grpc_endpoint,
-        ))
+        .register(
+            &NodeAgentInfo::new(cli_args.node_name.clone(), cli_args.grpc_endpoint),
+            None,
+        )
         .await
     {
         tracing::error!(

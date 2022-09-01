@@ -1,6 +1,6 @@
 use crate::{
-    context::{Client, TracedChannel},
-    ha_cluster_agent::{ha_rpc_client::HaRpcClient, HaNodeInfo},
+    context::{Client, Context, TracedChannel},
+    ha_cluster_agent::ha_rpc_client::HaRpcClient,
     operations::ha_node::traits::{ClusterAgentOperations, NodeInfo, ReportFailedPathsInfo},
 };
 use common_lib::{
@@ -38,15 +38,13 @@ impl ClusterAgentOperations for ClusterAgentClient {
         skip(self),
         err
     )]
-    async fn register(&self, request: &dyn NodeInfo) -> Result<(), ReplyError> {
-        let _response = self
-            .client()
-            .register_node_agent(HaNodeInfo {
-                nodename: request.node(),
-                endpoint: request.endpoint(),
-            })
-            .await?;
-        tracing::trace!("node agent successfully registered");
+    async fn register(
+        &self,
+        request: &dyn NodeInfo,
+        context: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let req = self.request(request, context, MessageIdVs::RegisterHaNode);
+        let _ = self.client().register_node_agent(req).await?;
         Ok(())
     }
 
@@ -60,8 +58,9 @@ impl ClusterAgentOperations for ClusterAgentClient {
     async fn report_failed_nvme_paths(
         &self,
         request: &dyn ReportFailedPathsInfo,
+        context: Option<Context>,
     ) -> Result<(), ReplyError> {
-        let req = self.request(request, None, MessageIdVs::ReportFailedPaths);
+        let req = self.request(request, context, MessageIdVs::ReportFailedPaths);
         match self.client().report_failed_nvme_paths(req).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
