@@ -2,7 +2,12 @@ use common_lib::{
     transport_api::ReplyError,
     types::v0::transport::{APIVersion, Deregister, NodeId, Register},
 };
-use rpc::v1::registration::{DeregisterRequest, RegisterRequest};
+use rpc::{
+    v1::registration::{DeregisterRequest, RegisterRequest},
+    v1_alpha::registration::{
+        DeregisterRequest as V1AlphaDeregisterRequest, RegisterRequest as V1AlphaRegisterRequest,
+    },
+};
 
 /// new type to wrap grpc ApiVersion type
 pub struct ApiVersion(pub rpc::v1::registration::ApiVersion);
@@ -69,6 +74,21 @@ impl RegisterInfo for RegisterRequest {
     }
 }
 
+impl RegisterInfo for V1AlphaRegisterRequest {
+    fn node_id(&self) -> NodeId {
+        self.id.clone().into()
+    }
+
+    fn grpc_endpoint(&self) -> String {
+        self.grpc_endpoint.clone()
+    }
+
+    fn api_version(&self) -> Option<Vec<APIVersion>> {
+        // Older versions support only V0
+        Some(vec![APIVersion::V0])
+    }
+}
+
 impl DeregisterInfo for Deregister {
     fn node_id(&self) -> NodeId {
         self.id.clone()
@@ -76,6 +96,12 @@ impl DeregisterInfo for Deregister {
 }
 
 impl DeregisterInfo for DeregisterRequest {
+    fn node_id(&self) -> NodeId {
+        self.id.clone().into()
+    }
+}
+
+impl DeregisterInfo for V1AlphaDeregisterRequest {
     fn node_id(&self) -> NodeId {
         self.id.clone().into()
     }

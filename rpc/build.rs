@@ -38,4 +38,13 @@ fn main() {
             &["api/protobuf/v1"],
         )
         .unwrap_or_else(|e| panic!("mayastor v1 protobuf compilation failed: {}", e));
+
+    tonic_build::configure()
+        .build_server(true)
+        .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize, Eq)]")
+        .compile(
+            &["api/protobuf/v1-alpha/registration.proto"],
+            &["api/protobuf/v1-alpha"],
+        )
+        .unwrap_or_else(|e| panic!("v1-alpha registration protobuf compilation failed: {}", e));
 }
