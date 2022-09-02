@@ -89,9 +89,7 @@ impl TryIoEngineToAgent for v1_rpc::replica::Replica {
                 uuid: self.uuid.to_owned(),
                 kind: ResourceKind::Replica,
             })?,
-            // Replica only contains pooluuid.
-            // Patch the pool name after this call.
-            pool_id: Default::default(),
+            pool_id: self.poolname.clone().into(),
             pool_uuid: Some(PoolUuid::try_from(self.pooluuid.clone()).map_err(|_| {
                 SvcError::InvalidUuid {
                     uuid: self.pooluuid.to_owned(),
