@@ -1136,11 +1136,7 @@ impl ClientOps for GrpcClientLocked {
                         resource: ResourceKind::Replica,
                         request: "create_replica",
                     })?;
-                let mut replica =
-                    v1_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
-                // Replica doesn't have the pool name.
-                // Fill this with the requested pool name.
-                replica.pool_id = request.pool_id.clone();
+                let replica = v1_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
                 Ok(replica)
             }
         }
