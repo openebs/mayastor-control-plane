@@ -155,11 +155,7 @@ pub struct ReplyError {
 
 impl From<tonic::Status> for ReplyError {
     fn from(status: tonic::Status) -> Self {
-        Self::tonic_reply_error(
-            status.code().into(),
-            status.message().to_string(),
-            status.full_string(),
-        )
+        Self::tonic_reply_error(status.code().into(), status.to_string(), String::new())
     }
 }
 
@@ -171,7 +167,7 @@ impl From<ReplyError> for tonic::Status {
 
 impl From<tonic::transport::Error> for ReplyError {
     fn from(e: tonic::transport::Error) -> Self {
-        Self::tonic_reply_error(ReplyErrorKind::Aborted, e.to_string(), e.full_string())
+        Self::tonic_reply_error(ReplyErrorKind::Aborted, e.to_string(), String::new())
     }
 }
 

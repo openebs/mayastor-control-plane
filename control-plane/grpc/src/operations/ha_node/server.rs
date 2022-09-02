@@ -35,7 +35,7 @@ impl HaNodeRpc for NodeAgentServer {
     ) -> Result<tonic::Response<()>, tonic::Status> {
         let msg = request.into_inner();
 
-        match self.service.replace_path(&msg).await {
+        match self.service.replace_path(&msg, None).await {
             Ok(_) => Ok(Response::new(())),
             Err(err) => Err(Status::internal(format!(
                 "Failed to replace failed NVMe path: {:?}",
@@ -69,7 +69,7 @@ impl HaRpc for ClusterAgentServer {
         request: tonic::Request<HaNodeInfo>,
     ) -> Result<tonic::Response<()>, tonic::Status> {
         let nodeinfo = request.into_inner();
-        match self.service.register(&nodeinfo).await {
+        match self.service.register(&nodeinfo, None).await {
             Ok(_) => Ok(Response::new(())),
             Err(err) => Err(Status::internal(format!(
                 "Failed to register node-agent: {:?}",

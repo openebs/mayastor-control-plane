@@ -6,11 +6,16 @@ use crate::infra::*;
 #[async_trait]
 impl ComponentAction for HaClusterAgent {
     fn configure(&self, _options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
-        let spec = ContainerSpec::from_binary(
+        let mut spec = ContainerSpec::from_binary(
             "agent-ha-cluster",
             Binary::from_dbg("agent-ha-cluster").with_args(vec!["-g=0.0.0.0:11500"]),
         )
         .with_portmap("11500", "11500");
+
+        if cfg.container_exists("jaeger") {
+            let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
+            spec = spec.with_args(vec!["--jaeger", &jaeger_config])
+        };
 
         Ok(cfg.add_container_spec(spec))
     }
@@ -32,10 +37,7 @@ impl ComponentAction for HaClusterAgent {
             .await
             {
                 Ok(_) => break,
-                Err(error) => {
-                    println!("TIMEOUT! {error}");
-                    sleep(Duration::from_millis(100)).await
-                }
+                Err(_) => sleep(Duration::from_millis(100)).await,
             }
         }
         Ok(())
