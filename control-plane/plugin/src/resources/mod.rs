@@ -1,6 +1,11 @@
-use crate::resources::{blockdevice::BlockDeviceArgs, node::GetNodeArgs};
+use crate::resources::{
+    blockdevice::BlockDeviceArgs,
+    node::{DrainNodeArgs, GetNodeArgs},
+};
 
 pub mod blockdevice;
+pub mod cordon;
+pub mod drain;
 pub mod node;
 pub mod pool;
 pub mod utils;
@@ -14,6 +19,12 @@ pub type NodeId = String;
 /// The types of resources that support the 'get' operation.
 #[derive(clap::Subcommand, Debug)]
 pub enum GetResources {
+    /// get cordon
+    #[clap(subcommand)]
+    Cordon(GetCordonArgs),
+    /// get drain
+    #[clap(subcommand)]
+    Drain(GetDrainArgs),
     /// Get all volumes.
     Volumes,
     /// Get volume with the given ID.
@@ -51,6 +62,32 @@ pub enum ScaleResources {
 pub enum CordonResources {
     /// Cordon the node with the given ID by applying the cordon label to that node.
     Node { id: NodeId, label: String },
+}
+
+/// The types of resources that support the 'get cordon' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum GetCordonArgs {
+    /// Get the cordon for the node with the given ID.
+    Node {
+        id: NodeId,
+    },
+    Nodes,
+}
+
+/// The types of resources that support the 'drain' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum DrainResources {
+    /// Drain node with the given ID.
+    Node(DrainNodeArgs),
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum GetDrainArgs {
+    /// Get the drain for the node with the given ID.
+    Node {
+        id: NodeId,
+    },
+    Nodes,
 }
 
 /// Tabular Output Tests

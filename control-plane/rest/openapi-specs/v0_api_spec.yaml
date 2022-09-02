@@ -285,6 +285,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/nodes/{id}/drain/{label}':
+    put:
+      tags:
+        - Nodes
+      operationId: put_node_drain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: label
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/nodes/{id}/nexuses':
     get:
       tags:
@@ -2076,23 +2105,23 @@ components:
       example:
         grpcEndpoint: '10.1.0.5:10124'
         id: io-engine-1
-        cordonLabels: [label-1]
-      description: io-engine storage node information
+      description: Node spec
       type: object
       properties:
         grpcEndpoint:
           description: gRPC endpoint of the io-engine instance
           type: string
         id:
+          description: node ID
           $ref: '#/components/schemas/NodeId'
-        cordonLabels:
-          type: array
-          items:
-            type: string
+        cordondrainstate:
+          description: the drain state
+          allOf:
+            - $ref: '#/components/schemas/CordonDrainState'
+      additionalProperties: false
       required:
         - grpcEndpoint
         - id
-        - cordonLabels
     NodeState:
       example:
         grpcEndpoint: '10.1.0.5:10124'
@@ -2742,6 +2771,50 @@ components:
           $ref: '#/components/schemas/ReplicaState'
       required:
         - state
+    CordonDrainState:
+      description: The drain state
+      type: object
+      properties:
+        cordonedstate:
+          $ref: '#/components/schemas/CordonedState'
+        drainingstate:
+          $ref: '#/components/schemas/DrainState'
+        drainedstate:
+          $ref: '#/components/schemas/DrainState'
+      oneOf:
+        - required:
+            - cordonedstate
+        - required:
+            - drainingstate
+        - required:
+            - drainedstate
+    CordonLabels:
+      type: array
+      items:
+        type: string
+    DrainLabels:
+      type: array
+      items:
+        type: string
+    CordonedState:
+      description: The item is cordoned
+      type: object
+      properties:
+        cordonlabels:
+          $ref: '#/components/schemas/CordonLabels'
+      required:
+        - cordonlabels
+    DrainState:
+      description: The item is draining
+      type: object
+      properties:
+        cordonlabels:
+          $ref: '#/components/schemas/CordonLabels'
+        drainlabels:
+          $ref: '#/components/schemas/DrainLabels'
+      required:
+        - cordonlabels
+        - drainlabels
   responses:
     ClientError:
       description: Client side error

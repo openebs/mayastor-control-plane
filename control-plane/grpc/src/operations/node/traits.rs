@@ -1,9 +1,6 @@
 use crate::{
-    blockdevice,
-    blockdevice::GetBlockDevicesRequest,
-    context::Context,
-    node,
-    node::{get_nodes_request, NodeCordon},
+    blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
+    node::get_nodes_request,
 };
 use common_lib::{
     transport_api::{
@@ -11,7 +8,7 @@ use common_lib::{
         ReplyError, ResourceKind,
     },
     types::v0::{
-        store::node::NodeSpec,
+        store::node::{CordonDrainState, CordonedState, DrainState, NodeSpec},
         transport::{
             BlockDevice, Filesystem, Filter, GetBlockDevices, Node, NodeId, NodeState, NodeStatus,
             Partition,
@@ -37,17 +34,44 @@ pub trait NodeOperations: Send + Sync {
     async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
     /// Uncordon the node with the given ID by removing the associated label.
     async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
+    /// Drain the node with the given ID and associate the label with the draining node.
+    async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
 }
 
 impl TryFrom<node::Node> for Node {
     type Error = ReplyError;
     fn try_from(node_grpc_type: node::Node) -> Result<Self, Self::Error> {
-        let node_spec = node_grpc_type.spec.map(|spec| {
+        let node_spec = node_grpc_type.spec.map(|grpc_nodespec| {
             NodeSpec::new(
-                spec.node_id.into(),
-                spec.endpoint,
-                spec.labels.unwrap_or_default().value,
-                spec.cordon.map(|cordon| cordon.label),
+                grpc_nodespec.node_id.into(),
+                grpc_nodespec.endpoint,
+                grpc_nodespec.labels.unwrap_or_default().value,
+                match grpc_nodespec.cordon_drain_state {
+                    Some(state) => match state.cordondrainstate {
+                        Some(node::cordon_drain_state::Cordondrainstate::Cordoned(state)) => {
+                            let type_v0_cordoned_state = CordonedState {
+                                cordonlabels: state.cordon_labels,
+                            };
+                            Some(CordonDrainState::Cordoned(type_v0_cordoned_state))
+                        }
+                        Some(node::cordon_drain_state::Cordondrainstate::Draining(state)) => {
+                            let type_v0_draining_state = DrainState {
+                                cordonlabels: state.cordon_labels,
+                                drainlabels: state.drain_labels,
+                            };
+                            Some(CordonDrainState::Draining(type_v0_draining_state))
+                        }
+                        Some(node::cordon_drain_state::Cordondrainstate::Drained(state)) => {
+                            let type_v0_drained_state = DrainState {
+                                cordonlabels: state.cordon_labels,
+                                drainlabels: state.drain_labels,
+                            };
+                            Some(CordonDrainState::Drained(type_v0_drained_state))
+                        }
+                        None => None,
+                    },
+                    None => None,
+                },
             )
         });
         let node_state = match node_grpc_type.state {
@@ -81,32 +105,65 @@ impl TryFrom<node::Node> for Node {
 }
 
 impl From<Node> for node::Node {
-    fn from(node: Node) -> Self {
-        let node_spec = node.spec().map(|spec| node::NodeSpec {
-            node_id: spec.id().to_string(),
-            endpoint: spec.endpoint().to_string(),
+    fn from(types_v0_node: Node) -> Self {
+        let grpc_node_spec = types_v0_node.spec().map(|types_v0_spec| node::NodeSpec {
+            node_id: types_v0_spec.id().to_string(),
+            endpoint: types_v0_spec.endpoint().to_string(),
             labels: Some(crate::common::StringMapValue {
-                value: spec.labels().clone(),
+                value: types_v0_spec.labels().clone(),
             }),
-            cordon: Some(NodeCordon {
-                label: spec.cordon_labels(),
-            }),
+            cordon_drain_state: match types_v0_spec.cordon_drain_state() {
+                Some(e_types_v0_ds) => {
+                    let grpc_str_drainstate = node::CordonDrainState {
+                        cordondrainstate: match e_types_v0_ds {
+                            CordonDrainState::Cordoned(state) => {
+                                let grpc_cordoned_state = node::CordonedState {
+                                    cordon_labels: state.cordonlabels.clone(),
+                                };
+                                Some(node::cordon_drain_state::Cordondrainstate::Cordoned(
+                                    grpc_cordoned_state,
+                                ))
+                            }
+                            CordonDrainState::Draining(state) => {
+                                let grpc_draining_state = node::DrainState {
+                                    cordon_labels: state.cordonlabels.clone(),
+                                    drain_labels: state.drainlabels.clone(),
+                                };
+                                Some(node::cordon_drain_state::Cordondrainstate::Draining(
+                                    grpc_draining_state,
+                                ))
+                            }
+                            CordonDrainState::Drained(state) => {
+                                let grpc_drained_state = node::DrainState {
+                                    cordon_labels: state.cordonlabels.clone(),
+                                    drain_labels: state.drainlabels.clone(),
+                                };
+                                Some(node::cordon_drain_state::Cordondrainstate::Drained(
+                                    grpc_drained_state,
+                                ))
+                            }
+                        },
+                    };
+                    Some(grpc_str_drainstate)
+                }
+                None => None,
+            },
         });
-        let node_state = match node.state() {
+        let grpc_node_state = match types_v0_node.state() {
             None => None,
-            Some(state) => {
-                let status: node::NodeStatus = state.status.clone().into();
+            Some(types_v0_state) => {
+                let grpc_node_status: node::NodeStatus = types_v0_state.status.clone().into();
                 Some(node::NodeState {
-                    node_id: state.id.to_string(),
-                    endpoint: state.grpc_endpoint.to_string(),
-                    status: status as i32,
+                    node_id: types_v0_state.id.to_string(),
+                    endpoint: types_v0_state.grpc_endpoint.to_string(),
+                    status: grpc_node_status as i32,
                 })
             }
         };
         node::Node {
-            node_id: node.id().to_string(),
-            spec: node_spec,
-            state: node_state,
+            node_id: types_v0_node.id().to_string(),
+            spec: grpc_node_spec,
+            state: grpc_node_state,
         }
     }
 }
@@ -160,6 +217,40 @@ impl From<NodeStatus> for node::NodeStatus {
             NodeStatus::Unknown => Self::Unknown,
             NodeStatus::Online => Self::Online,
             NodeStatus::Offline => Self::Offline,
+        }
+    }
+}
+
+// from grpc type to stored version
+impl From<node::CordonedState> for CordonedState {
+    fn from(src: node::CordonedState) -> Self {
+        Self {
+            cordonlabels: src.cordon_labels,
+        }
+    }
+}
+impl From<node::DrainState> for DrainState {
+    fn from(src: node::DrainState) -> Self {
+        Self {
+            cordonlabels: src.cordon_labels,
+            drainlabels: src.drain_labels,
+        }
+    }
+}
+
+// from stored version to grpc type
+impl From<CordonedState> for node::CordonedState {
+    fn from(src: CordonedState) -> Self {
+        Self {
+            cordon_labels: src.cordonlabels,
+        }
+    }
+}
+impl From<DrainState> for node::DrainState {
+    fn from(src: DrainState) -> Self {
+        Self {
+            cordon_labels: src.cordonlabels,
+            drain_labels: src.drainlabels,
         }
     }
 }

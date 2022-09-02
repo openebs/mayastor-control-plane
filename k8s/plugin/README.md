@@ -130,25 +130,61 @@ The plugin needs to be able to connect to the REST server in order to make the a
 ```
 **NOTE: The above command lists usable blockdevices if `--all` flag is not used, but currently since there isn't a way to identify whether the `disk` has a blobstore pool, `disks` not used by `pools` created by `control-plane` are shown as usable if they lack any filesystem uuid.**
 
-10. Node Cordoning
-```
-❯ kubectl mayastor cordon node io-engine-1 my-label
-Node io-engine-1 cordoned successfully
-```
+</details>
 
-11. Node Uncordoning
+<details>
+<summary> Node Cordon And Drain Operations </summary>
+
+1. Node Cordoning
 ```
-❯ kubectl mayastor uncordon node io-engine-1 my-label
+❯ kubectl mayastor cordon node node-1-14048 my_cordon_1
+Node node-1-14048 cordoned successfully
+```
+2. Node Uncordoning
+```
+❯ kubectl mayastor uncordon node node-1-14048 my_cordon_1
+Node node-1-14048 successfully uncordoned
+```
+3. Get Cordon
+```
+❯ kubectl mayastor get cordon node node-1-14048
+ ID            GRPC ENDPOINT        STATUS  CORDONED  CORDON LABELS
+ node-1-14048  95.217.158.66:10124  Online  true      my_cordon_1
+
+❯ kubectl mayastor get cordon nodes
+ ID            GRPC ENDPOINT        STATUS  CORDONED  CORDON LABELS
+ node-2-14048  95.217.152.7:10124   Online  true      my_cordon_2
+ node-1-14048  95.217.158.66:10124  Online  true      my_cordon_1
+```
+4. Node Draining
+```
+❯ kubectl mayastor drain node io-engine-1 my-drain-label
+Node node-1-14048 successfully drained
+
+❯ kubectl mayastor drain node node-1-14048 my-drain-label --drain-timeout 10s
+Node node-1-14048 drain command timed out
+```
+5. Cancel Node Drain (via uncordon)
+```
+❯ kubectl mayastor uncordon node io-engine-1 my-drain-label
 Node io-engine-1 successfully uncordoned
 ```
-
-12. Listing Cordon Labels
+6. Get Drain
 ```
-❯ kubectl mayastor get node io-engine-1 --show-cordon-labels
- ID           GRPC ENDPOINT   STATUS  CORDONED  CORDON LABELS
- io-engine-1  10.1.0.5:10124  Online  true      my-label
-```
+❯ kubectl mayastor get drain node node-2-14048
+ ID            GRPC ENDPOINT       STATUS  CORDONED  DRAIN STATE  DRAIN LABELS
+ node-2-14048  95.217.152.7:10124  Online  true      Draining     my_drain_2
 
+❯ kubectl-plugin/bin/kubectl-mayastor get drain node node-0-14048
+ ID            GRPC ENDPOINT          STATUS  CORDONED  DRAIN STATE   DRAIN LABELS
+ node-0-14048  135.181.206.173:10124  Online  false     Not draining
+
+❯ kubectl mayastor get drain nodes
+ ID            GRPC ENDPOINT        STATUS  CORDONED  DRAIN STATE  DRAIN LABELS
+ node-2-14048  95.217.152.7:10124   Online  true      Draining     my_drain_2
+ node-1-14048  95.217.158.66:10124  Online  true      Drained      my_drain_1
+
+```
 </details>
 
 <details>
