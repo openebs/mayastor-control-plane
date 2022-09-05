@@ -22,7 +22,8 @@ pub(crate) async fn configure(builder: agents::ServiceEmpty) -> Service {
 
     builder
         .with_service(node_grpc_service.into_grpc_server())
-        .with_service(registration_service.into_grpc_server())
+        .with_service(registration_service.clone().into_v1_grpc_server())
+        .with_service(registration_service.into_v1_alpha_grpc_server())
 }
 
 async fn create_node_service<S>(builder: &Service<S>) -> service::Service {
