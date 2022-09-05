@@ -60,7 +60,7 @@ impl NodeFilters {
         !used_nodes.contains(&item.pool.node)
     }
     /// Should only attempt to use nodes which are not cordoned.
-    pub(crate) fn cordoned(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(crate) fn cordoned_for_pool(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let registry = request.registry();
         !registry
             .specs()
@@ -72,6 +72,16 @@ impl NodeFilters {
     /// Should only attempt to use online nodes.
     pub(crate) fn online(_request: &GetSuitableNodesContext, item: &NodeItem) -> bool {
         item.node_wrapper().is_online()
+    }
+
+    /// Should only attempt to use nodes which are not cordoned.
+    pub(crate) fn cordoned(request: &GetSuitableNodesContext, item: &NodeItem) -> bool {
+        let registry = request.registry();
+        !registry
+            .specs()
+            .get_cordoned_nodes()
+            .into_iter()
+            .any(|node_spec| node_spec.id() == item.node_wrapper().id())
     }
 }
 

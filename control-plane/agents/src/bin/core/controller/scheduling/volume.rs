@@ -98,7 +98,7 @@ impl AddVolumeReplica {
             // 4. ideally use only healthy(online) pools with degraded pools as a
             // fallback
             // 5. only one replica per node
-            .filter(NodeFilters::cordoned)
+            .filter(NodeFilters::cordoned_for_pool)
             .filter(NodeFilters::online_for_pool)
             .filter(NodeFilters::allowed)
             .filter(NodeFilters::unused)
