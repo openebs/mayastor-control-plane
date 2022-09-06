@@ -301,14 +301,15 @@ impl GrpcClient {
     }
 
     /// probe node for liveness based on api version in context
-    pub(crate) async fn liveness_probe(&self, id: &NodeId) -> Result<Register, SvcError> {
+    pub(crate) async fn liveness_probe(&self) -> Result<Register, SvcError> {
         match self.context.api_version {
             APIVersion::V0 => {
                 self.client_v0()?
                     .get_mayastor_info(rpc::io_engine::Null {})
                     .await
-                    .map_err(|_| SvcError::NodeNotOnline {
-                        node: id.to_owned(),
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Node,
+                        request: "v0::get_mayastor_info",
                     })?;
 
                 // V0 GetMayastorInfo Liveness call doesn't return the registration info,
@@ -322,23 +323,20 @@ impl GrpcClient {
             APIVersion::V1 => {
                 // V1 liveness sends registration_info, which can be used to get the
                 // actual state of dataplane
-                let data = self
-                    .client_v1()?
-                    .host
-                    .get_mayastor_info(())
-                    .await
-                    .map_err(|_| SvcError::NodeNotOnline {
-                        node: id.to_owned(),
-                    })?;
+                let data = self.client_v1()?.host.get_mayastor_info(()).await.context(
+                    GrpcRequestError {
+                        resource: ResourceKind::Node,
+                        request: "v1::get_mayastor_info",
+                    },
+                )?;
 
                 let registration_info = match data.into_inner().registration_info {
                     Some(info) => info,
                     None => {
                         // The dataplane did not send anything in registration info, which should
-                        // not happen, probably the dataplane is not ready?
-                        return Err(SvcError::NotReady {
-                            kind: ResourceKind::Node,
-                            id: self.context.node.to_string(),
+                        // not happen.
+                        return Err(SvcError::NodeNotOnline {
+                            node: self.context.node.clone(),
                         });
                     }
                 };

@@ -284,7 +284,7 @@ impl Registry {
                     };
                     if online {
                         if let Err(error) = node.update_all(false).await {
-                            tracing::error!(node = %id, error = %error, "Failed to reload node");
+                            tracing::error!(node.id = %id, %error, "Failed to reload node");
                         }
                     }
                 }
