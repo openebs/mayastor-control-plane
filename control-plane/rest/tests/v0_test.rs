@@ -173,7 +173,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         replica,
         models::Replica {
             node: pool.spec.clone().unwrap().node,
-            pool_id: pool.id.clone(),
+            pool: pool.id.clone(),
             uuid: FromStr::from_str("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
             thin: false,
             size: 12582912,
@@ -189,7 +189,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     );
     client
         .replicas_api()
-        .del_node_pool_replica(&replica.node, &replica.pool_id, &replica.uuid)
+        .del_node_pool_replica(&replica.node, &replica.pool, &replica.uuid)
         .await
         .unwrap();
 

@@ -108,7 +108,7 @@ impl ReplicaClientWrapper {
         let replica = self.get_replica(id).await?;
         let topologer = self
             .pool_client
-            .get_topologer(Some(replica.pool_id.clone()))
+            .get_topologer(Some(replica.pool.clone()))
             .await?;
         let pool_topology = match topologer.downcast_ref::<PoolTopology>() {
             Some(val) => val.clone(),
