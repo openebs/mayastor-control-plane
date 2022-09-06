@@ -2226,7 +2226,7 @@ components:
       properties:
         node:
           $ref: '#/components/schemas/NodeId'
-        poolId:
+        pool:
           $ref: '#/components/schemas/PoolId'
         poolUuid:
           $ref: '#/components/schemas/PoolUuid'
@@ -2254,7 +2254,7 @@ components:
           format: uuid
       required:
         - node
-        - poolId
+        - pool
         - share
         - size
         - state
@@ -2462,7 +2462,7 @@ components:
           nexuses:
             - 514ed1c8-7174-49ac-b9cd-ad44ef670a67
           volume: null
-        poolId: pooloop
+        pool: pooloop
         poolUuid: 22ca10d3-4f2b-4b95-9814-9181c025cc1a
         share: none
         size: 80241024
@@ -2513,8 +2513,9 @@ components:
               format: uuid
           required:
             - nexuses
-        poolId:
-          $ref: '#/components/schemas/PoolId'
+        pool:
+          description: The pool that the replica should live on.
+          type: string
         poolUuid:
           $ref: '#/components/schemas/PoolUuid'
         share:
@@ -2536,7 +2537,7 @@ components:
       required:
         - managed
         - owners
-        - poolId
+        - pool
         - share
         - size
         - status
