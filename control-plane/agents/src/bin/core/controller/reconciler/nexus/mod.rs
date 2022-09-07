@@ -292,7 +292,7 @@ pub(super) async fn missing_nexus_recreate(
         let warn_missing = |nexus_spec: &NexusSpec, node_status: NodeStatus| {
             nexus_spec.debug_span(|| {
                 tracing::debug!(
-                    node.uuid = %nexus_spec.node,
+                    node.id = %nexus_spec.node,
                     node.status = %node_status.to_string(),
                     "Attempted to recreate missing nexus, but the node is not online"
                 )
