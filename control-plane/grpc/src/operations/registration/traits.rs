@@ -30,6 +30,8 @@ pub trait RegisterInfo: Send + Sync {
     fn grpc_endpoint(&self) -> String;
     /// Api-version supported by the dataplane.
     fn api_version(&self) -> Option<Vec<node::ApiVersion>>;
+    /// Used to identify dataplane process restarts.
+    fn instance_uuid(&self) -> Option<uuid::Uuid>;
 }
 
 /// Trait to be implemented for Register operation.
@@ -49,6 +51,10 @@ impl RegisterInfo for Register {
 
     fn api_version(&self) -> Option<Vec<node::ApiVersion>> {
         self.api_versions.clone()
+    }
+
+    fn instance_uuid(&self) -> Option<uuid::Uuid> {
+        self.instance_uuid
     }
 }
 
@@ -73,6 +79,12 @@ impl RegisterInfo for RegisterRequest {
                 .collect(),
         )
     }
+
+    fn instance_uuid(&self) -> Option<uuid::Uuid> {
+        self.instance_uuid
+            .as_ref()
+            .and_then(|u| uuid::Uuid::parse_str(u).ok())
+    }
 }
 
 impl RegisterInfo for V1AlphaRegisterRequest {
@@ -87,6 +99,10 @@ impl RegisterInfo for V1AlphaRegisterRequest {
     fn api_version(&self) -> Option<Vec<node::ApiVersion>> {
         // Older versions support only V0
         Some(vec![node::ApiVersion::V0])
+    }
+
+    fn instance_uuid(&self) -> Option<uuid::Uuid> {
+        None
     }
 }
 
@@ -123,6 +139,7 @@ impl TryFrom<&dyn RegisterInfo> for Register {
                 },
             )?,
             api_versions: register.api_version(),
+            instance_uuid: register.instance_uuid(),
         })
     }
 }

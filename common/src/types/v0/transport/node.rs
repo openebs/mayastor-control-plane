@@ -18,6 +18,8 @@ pub struct Register {
     pub grpc_endpoint: std::net::SocketAddr,
     /// Api versions registered by the dataplane.
     pub api_versions: Option<Vec<ApiVersion>>,
+    /// Used to identify dataplane process restarts.
+    pub instance_uuid: Option<uuid::Uuid>,
 }
 
 /// Deregister message payload
@@ -121,10 +123,12 @@ pub struct NodeState {
     pub status: NodeStatus,
     /// Api versions supported by the dataplane.
     pub api_versions: Option<Vec<ApiVersion>>,
+    /// Used to identify dataplane process restarts.
+    instance_uuid: Option<uuid::Uuid>,
 }
 
 impl NodeState {
-    /// Return a new `Self`
+    /// Return a new `Self`.
     pub fn new(
         id: NodeId,
         grpc_endpoint: std::net::SocketAddr,
@@ -136,15 +140,20 @@ impl NodeState {
             grpc_endpoint,
             status,
             api_versions,
+            instance_uuid: None,
         }
     }
-    /// Get the node identification
+    /// Get the node identification.
     pub fn id(&self) -> &NodeId {
         &self.id
     }
-    /// Get the node status
+    /// Get the node status.
     pub fn status(&self) -> &NodeStatus {
         &self.status
+    }
+    /// Get the instance uuid.
+    pub fn instance_uuid(&self) -> &Option<uuid::Uuid> {
+        &self.instance_uuid
     }
 }
 impl From<&Register> for NodeState {
@@ -159,6 +168,7 @@ impl From<Register> for NodeState {
             grpc_endpoint: src.grpc_endpoint,
             status: NodeStatus::Online,
             api_versions: src.api_versions,
+            instance_uuid: src.instance_uuid,
         }
     }
 }

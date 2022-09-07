@@ -37,24 +37,25 @@ use std::{
 };
 use tonic::transport::Channel;
 
-/// Context with a gRPC client and a lock to serialize mutating gRPC calls
+/// Context with a gRPC client and a lock to serialize mutating gRPC calls.
 #[derive(Clone)]
 pub(crate) struct GrpcContext {
-    /// gRPC CRUD lock
+    /// The gRPC CRUD lock.
     lock: Arc<tokio::sync::Mutex<()>>,
-    /// node identifier
+    /// The node identifier.
     node: NodeId,
-    /// socket endpoint
+    /// The gRPC socket endpoint.
     socket_endpoint: std::net::SocketAddr,
-    /// gRPC URI endpoint
+    /// The gRPC URI endpoint.
     endpoint: tonic::transport::Endpoint,
-    /// gRPC connect and request timeouts
+    /// The gRPC connect and request timeouts.
     comms_timeouts: NodeCommsTimeout,
-    /// the api version to be used for calls
+    /// The api version to be used for calls.
     api_version: ApiVersion,
 }
 
 impl GrpcContext {
+    /// Return a new `Self` from the given parameters.
     pub(crate) fn new(
         lock: Arc<tokio::sync::Mutex<()>>,
         node: &NodeId,
@@ -90,34 +91,37 @@ impl GrpcContext {
             api_version,
         })
     }
-    /// Override the timeout config in the context for the given request
+    /// Override the timeout config in the context for the given request.
     fn override_timeout(&mut self, _request: Option<MessageId>) {
-        // let timeout = request
-        //     .map(|r| r.timeout(self.comms_timeouts.request(), &bus()))
-        //     .unwrap_or_else(|| self.comms_timeouts.request());
-
         self.endpoint = self
             .endpoint
             .clone()
             .connect_timeout(self.comms_timeouts.connect() + Duration::from_millis(500))
             .timeout(self.comms_timeouts.request());
     }
+    /// Get the inner lock guard for this context.
     pub(crate) async fn lock(&self) -> GrpcLockGuard {
         self.lock.clone().lock_owned().await
     }
+    /// Use this context to connect a grpc client and return it.
     pub(crate) async fn connect(&self) -> Result<GrpcClient, SvcError> {
         GrpcClient::new(self).await
     }
-    pub(crate) fn endpoint(&self) -> std::net::SocketAddr {
-        self.socket_endpoint
-    }
+    /// Use this context to connect a grpc client and return it.
+    /// This client differs from `GrpcClient` from `Self::connect` in that it ensures only 1 request
+    /// is sent at a time among all `GrpcClientLocked` clients.
     pub(crate) async fn connect_locked(
         &self,
     ) -> Result<GrpcClientLocked, (GrpcLockGuard, SvcError)> {
         GrpcClientLocked::new(self).await
     }
+    /// Get the socket endpoint.
+    pub(crate) fn endpoint(&self) -> std::net::SocketAddr {
+        self.socket_endpoint
+    }
 }
 
+/// V0 Mayastor client.
 pub(crate) type MayaClientV0 = IoEngineClient<Channel>;
 /// V1 HostClient
 pub(crate) type HostClient = rpc::v1::host::host_rpc_client::HostRpcClient<Channel>;
@@ -129,6 +133,7 @@ pub(crate) type NexusClient = rpc::v1::nexus::nexus_rpc_client::NexusRpcClient<C
 /// The V1 PoolClient.
 pub(crate) type PoolClient = rpc::v1::pool::pool_rpc_client::PoolRpcClient<Channel>;
 
+/// A collection of all collects for the V1 dataplane interface.
 #[derive(Clone, Debug)]
 pub(crate) struct MayaClientV1 {
     host: HostClient,
@@ -138,7 +143,7 @@ pub(crate) struct MayaClientV1 {
 }
 
 impl MayaClientV1 {
-    /// get the v1 replica client
+    /// Get the v1 replica client.
     pub(crate) fn replica(&self) -> ReplicaClient {
         self.replica.clone()
     }
@@ -157,14 +162,14 @@ impl MayaClientV1 {
 pub(crate) struct GrpcClient {
     #[allow(dead_code)]
     context: GrpcContext,
-    /// v0 gRPC IoEngine Client
+    /// The v0 gRPC IoEngine Client.
     pub(crate) io_engine_v0: Option<MayaClientV0>,
-    /// v1 gRPC IoEngine Client
+    /// The v1 gRPC IoEngine Client.
     pub(crate) io_engine_v1: Option<MayaClientV1>,
 }
 
 impl GrpcClient {
-    /// create a new grpc client with a context
+    /// Create a new grpc client with a context.
     pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
         match context.api_version {
             ApiVersion::V0 => {
@@ -270,7 +275,7 @@ impl GrpcClient {
         }
     }
 
-    /// get the v0 api client
+    /// Get the v0 api client.
     pub(crate) fn client_v0(&self) -> Result<MayaClientV0, SvcError> {
         match self.io_engine_v0.clone() {
             Some(client) => Ok(client),
@@ -278,7 +283,7 @@ impl GrpcClient {
         }
     }
 
-    /// get the v1 api client wrapper
+    /// Get the v1 api client wrapper.
     pub(crate) fn client_v1(&self) -> Result<MayaClientV1, SvcError> {
         match self.io_engine_v1.clone() {
             Some(client) => Ok(client),
@@ -286,7 +291,7 @@ impl GrpcClient {
         }
     }
 
-    /// list blockdevices based on api versions
+    /// List blockdevices based on api versions.
     pub(crate) async fn list_blockdevices(
         &self,
         request: &GetBlockDevices,
@@ -336,7 +341,7 @@ impl GrpcClient {
         }
     }
 
-    /// probe node for liveness based on api version in context
+    /// Probe node for liveness based on api version in context.
     pub(crate) async fn liveness_probe(&self) -> Result<Register, SvcError> {
         match self.context.api_version {
             ApiVersion::V0 => {
@@ -354,6 +359,7 @@ impl GrpcClient {
                     id: self.context.node.clone(),
                     grpc_endpoint: self.context.endpoint(),
                     api_versions: Some(vec![ApiVersion::V0]),
+                    instance_uuid: None,
                 })
             }
             ApiVersion::V1 => {
@@ -399,12 +405,15 @@ impl GrpcClient {
                             })
                             .collect(),
                     ),
+                    instance_uuid: registration_info
+                        .instance_uuid
+                        .and_then(|u| uuid::Uuid::parse_str(&u).ok()),
                 })
             }
         }
     }
 
-    /// list replicas based on api version in context
+    /// List replicas based on api version in context.
     pub(crate) async fn list_replicas(&self, id: &NodeId) -> Result<Vec<Replica>, SvcError> {
         match self.context.api_version {
             ApiVersion::V0 => {
@@ -462,7 +471,7 @@ impl GrpcClient {
         }
     }
 
-    /// list pools based on api version in context
+    /// List pools based on api version in context.
     pub(crate) async fn list_pools(&self, id: &NodeId) -> Result<Vec<PoolState>, SvcError> {
         match self.context.api_version {
             ApiVersion::V0 => {
@@ -507,7 +516,7 @@ impl GrpcClient {
         }
     }
 
-    /// list nexus based on api version in context
+    /// List nexus based on api version in context.
     pub(crate) async fn list_nexus(&self, id: &NodeId) -> Result<Vec<Nexus>, SvcError> {
         match self.context.api_version {
             ApiVersion::V0 => {
@@ -572,7 +581,7 @@ type GrpcLockGuard = tokio::sync::OwnedMutexGuard<()>;
 
 /// Wrapper over all gRPC Clients types with implicit locking for serialization.
 pub(crate) struct GrpcClientLocked {
-    /// gRPC auto CRUD guard lock
+    /// The gRPC auto CRUD guard lock.
     _lock: GrpcLockGuard,
     client: GrpcClient,
 }
@@ -606,7 +615,7 @@ impl GrpcClientLocked {
             client,
         })
     }
-    /// get the api version from grpc context
+    /// Get the api version from grpc context.
     pub(crate) fn api_version(&self) -> ApiVersion {
         self.context.api_version.clone()
     }

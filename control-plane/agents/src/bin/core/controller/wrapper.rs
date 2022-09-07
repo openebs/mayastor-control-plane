@@ -111,9 +111,8 @@ impl NodeWrapper {
         // don't modify the status through the state.
         node_state.status = self.status();
         if self.node_state() != &node_state {
-            // during startup don't flag state changes as the first state is inferred so it may be
-            // incorrect.
-            // Example: we don't what api versions we've got yet.
+            // don't flag state changes as the first state is inferred so it may be incorrect.
+            // Example: we don't know what api versions the node supports yet.
             if !creation {
                 trace!(
                     node.id=%node_state.id,
@@ -124,9 +123,20 @@ impl NodeWrapper {
                 if self.node_state().api_versions != node_state.api_versions {
                     warn!(
                         node.id=%node_state.id,
-                        "API Versions changed from {:?} to {:?}",
+                        "Node grpc api versions changed from {:?} to {:?}",
                         self.node_state().api_versions,
                         node_state.api_versions
+                    );
+                }
+
+                if self.node_state().instance_uuid().is_some()
+                    && self.node_state().instance_uuid() != node_state.instance_uuid()
+                {
+                    warn!(
+                        node.id=%node_state.id,
+                        "Node restart detected: {:?} to {:?}",
+                        self.node_state().instance_uuid(),
+                        node_state.instance_uuid()
                     );
                 }
             }
