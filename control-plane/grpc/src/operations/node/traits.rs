@@ -15,7 +15,7 @@ use common_lib::{
         },
     },
 };
-use std::convert::TryFrom;
+use std::{convert::TryFrom, str::FromStr};
 
 /// Trait implemented by services which support node operations.
 #[tonic::async_trait]
@@ -41,12 +41,18 @@ pub trait NodeOperations: Send + Sync {
 impl TryFrom<node::Node> for Node {
     type Error = ReplyError;
     fn try_from(node_grpc_type: node::Node) -> Result<Self, Self::Error> {
-        let node_spec = node_grpc_type.spec.map(|grpc_nodespec| {
-            NodeSpec::new(
-                grpc_nodespec.node_id.into(),
-                grpc_nodespec.endpoint,
-                grpc_nodespec.labels.unwrap_or_default().value,
-                match grpc_nodespec.cordon_drain_state {
+        let node_spec = match node_grpc_type.spec {
+            Some(spec) => Some(NodeSpec::new(
+                spec.node_id.into(),
+                std::net::SocketAddr::from_str(&spec.endpoint).map_err(|e| {
+                    Self::Error::invalid_argument(
+                        ResourceKind::Node,
+                        "node.spec.endpoint",
+                        e.to_string(),
+                    )
+                })?,
+                spec.labels.unwrap_or_default().value,
+                match spec.cordon_drain_state {
                     Some(state) => match state.cordondrainstate {
                         Some(node::cordon_drain_state::Cordondrainstate::Cordoned(state)) => {
                             let type_v0_cordoned_state = CordonedState {
@@ -72,24 +78,29 @@ impl TryFrom<node::Node> for Node {
                     },
                     None => None,
                 },
-            )
-        });
+            )),
+            None => None,
+        };
         let node_state = match node_grpc_type.state {
             Some(state) => {
                 let status: NodeStatus = match node::NodeStatus::from_i32(state.status) {
-                    Some(status) => status.into(),
-                    None => {
-                        return Err(ReplyError::invalid_argument(
-                            ResourceKind::Node,
-                            "node.state.status",
-                            "".to_string(),
-                        ))
-                    }
-                };
+                    Some(status) => Ok(status.into()),
+                    None => Err(Self::Error::invalid_argument(
+                        ResourceKind::Node,
+                        "node.state.status",
+                        "".to_string(),
+                    )),
+                }?;
                 // todo: pass proper apiversion on the upper layer once openapi has the changes
                 Some(NodeState::new(
                     state.node_id.into(),
-                    state.endpoint,
+                    std::net::SocketAddr::from_str(&state.endpoint).map_err(|e| {
+                        Self::Error::invalid_argument(
+                            ResourceKind::Node,
+                            "node.state.endpoint",
+                            e.to_string(),
+                        )
+                    })?,
                     status,
                     None,
                 ))

@@ -130,12 +130,12 @@ pub struct NodeState {
 }
 
 /// Node spec data, including the cordon/drain state.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct NodeSpec {
     /// Node identification.
     id: NodeId,
     /// Endpoint of the io-engine instance (gRPC).
-    endpoint: String,
+    endpoint: std::net::SocketAddr,
     /// Node labels.
     labels: NodeLabels,
     /// Cordon/drain state.
@@ -148,7 +148,7 @@ impl NodeSpec {
     /// Return a new `Self`.
     pub fn new(
         id: NodeId,
-        endpoint: String,
+        endpoint: std::net::SocketAddr,
         labels: NodeLabels,
         cordon_drain_state: Option<CordonDrainState>,
     ) -> Self {
@@ -164,8 +164,8 @@ impl NodeSpec {
         &self.id
     }
     /// Node gRPC endpoint.
-    pub fn endpoint(&self) -> &str {
-        &self.endpoint
+    pub fn endpoint(&self) -> std::net::SocketAddr {
+        self.endpoint
     }
     /// Node labels.
     pub fn labels(&self) -> &NodeLabels {
@@ -177,7 +177,7 @@ impl NodeSpec {
     }
 
     /// Node gRPC endpoint.
-    pub fn set_endpoint(&mut self, endpoint: String) {
+    pub fn set_endpoint(&mut self, endpoint: std::net::SocketAddr) {
         self.endpoint = endpoint
     }
 
@@ -291,7 +291,11 @@ impl NodeSpec {
 
 impl From<NodeSpec> for models::NodeSpec {
     fn from(src: NodeSpec) -> Self {
-        Self::new_all(src.endpoint, src.id, src.cordon_drain_state.into_opt())
+        Self::new_all(
+            src.endpoint.to_string(),
+            src.id,
+            src.cordon_drain_state.into_opt(),
+        )
     }
 }
 

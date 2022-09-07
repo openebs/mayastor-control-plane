@@ -9,13 +9,13 @@ use parking_lot::RwLock;
 use std::{ops::Deref, sync::Arc};
 
 /// Locked Resource States.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct ResourceStatesLocked(Arc<RwLock<ResourceStates>>);
 
 impl ResourceStatesLocked {
     /// Return a new empty `Self`.
     pub(crate) fn new() -> Self {
-        ResourceStatesLocked::default()
+        Default::default()
     }
 }
 

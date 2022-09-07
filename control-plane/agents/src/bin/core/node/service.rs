@@ -108,7 +108,7 @@ impl NodeOperations for Service {
 #[tonic::async_trait]
 impl RegistrationOperations for Service {
     async fn register(&self, req: &dyn RegisterInfo) -> Result<(), ReplyError> {
-        let register = req.into();
+        let register = req.try_into()?;
         let service = self.clone();
         Context::spawn(async move { service.register(&register).await }).await?;
         Ok(())
@@ -143,7 +143,7 @@ impl Service {
                 .register_state(
                     &Register {
                         id: node.id().clone(),
-                        grpc_endpoint: node.endpoint().to_string(),
+                        grpc_endpoint: node.endpoint(),
                         api_versions: None,
                     },
                     true,
@@ -173,6 +173,7 @@ impl Service {
     }
 
     /// Register a new node through the register information
+    #[tracing::instrument(level = "trace", skip(self), fields(node.id = %registration.id))]
     pub(super) async fn register(&self, registration: &Register) {
         self.registry.register_node_spec(registration).await;
         self.register_state(registration, false).await;
@@ -182,12 +183,7 @@ impl Service {
     /// todo: if we enable concurrent registrations when we move to gRPC, we'll want
     /// to make sure we don't process registrations for the same node in parallel.
     pub(super) async fn register_state(&self, registration: &Register, startup: bool) {
-        let node_state = NodeState {
-            id: registration.id.clone(),
-            grpc_endpoint: registration.grpc_endpoint.clone(),
-            status: NodeStatus::Online,
-            api_versions: registration.api_versions.clone(),
-        };
+        let node_state = NodeState::from(registration);
         let nodes = self.registry.nodes();
         let node = nodes.write().await.get_mut(&node_state.id).cloned();
         let send_event = match node {
@@ -209,13 +205,7 @@ impl Service {
                     Ok(data) => {
                         let mut nodes = self.registry.nodes().write().await;
                         if nodes.get_mut(&node_state.id).is_none() {
-                            // Update the api version of the node when changed
-                            node.set_state_on_version_change(NodeState {
-                                id: data.id.clone(),
-                                grpc_endpoint: data.grpc_endpoint.clone(),
-                                status: NodeStatus::Online,
-                                api_versions: data.api_versions,
-                            });
+                            node.set_startup_creation(NodeState::from(data));
                             node.watchdog_mut().arm(self.clone());
                             let node = Arc::new(tokio::sync::RwLock::new(node));
                             nodes.insert(node_state.id().clone(), node);
@@ -228,7 +218,7 @@ impl Service {
                         tracing::warn!(
                             node = %node_state.id(),
                             error = %error,
-                            "Failed to register node"
+                            "Failed to register node state"
                         );
                         false
                     }
@@ -246,6 +236,7 @@ impl Service {
     }
 
     /// Deregister a node through the deregister information
+    #[tracing::instrument(level = "trace", skip(self), fields(node.id = %node.id))]
     pub(super) async fn deregister(&self, node: &Deregister) {
         let nodes = self.registry.nodes().read().await;
         match nodes.get(&node.id) {
