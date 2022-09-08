@@ -252,9 +252,15 @@ impl From<&VolumeSpec> for GetSuitableNodes {
 /// `GetSuitableNodes` context for filtering and sorting.
 #[derive(Clone)]
 pub(crate) struct GetSuitableNodesContext {
-    #[allow(dead_code)]
     registry: Registry,
     spec: VolumeSpec,
+}
+
+impl GetSuitableNodesContext {
+    /// Get the registry.
+    pub(crate) fn registry(&self) -> &Registry {
+        &self.registry
+    }
 }
 
 impl Deref for GetSuitableNodesContext {
@@ -347,6 +353,7 @@ impl NexusTargetNode {
         Self::builder(request, registry)
             .await
             .filter(NodeFilters::online)
+            .filter(NodeFilters::cordoned)
             .sort(NodeSorters::number_targets)
     }
 }
