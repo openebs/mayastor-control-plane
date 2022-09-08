@@ -1,13 +1,14 @@
-use crate::{controller::wrapper::rpc_pool_to_agent, node::service::NodeCommsTimeout};
+use crate::node::service::NodeCommsTimeout;
 use agents::{
     errors::{GrpcConnect, GrpcConnectUri, GrpcRequest as GrpcRequestError, SvcError},
     msg_translation::{
         v0::{
             rpc_nexus_v2_to_agent as v0_rpc_nexus_v2_to_agent,
+            rpc_pool_to_agent as v0_rpc_pool_to_agent,
             rpc_replica_to_agent as v0_rpc_replica_to_agent,
         },
         v1::{
-            rpc_nexus_to_agent as v1_rpc_nexus_to_agent,
+            rpc_nexus_to_agent as v1_rpc_nexus_to_agent, rpc_pool_to_agent as v1_rpc_pool_to_agent,
             rpc_replica_to_agent as v1_rpc_replica_to_agent,
         },
         IoEngineToAgent,
@@ -24,7 +25,7 @@ use rpc::{
     io_engine::{IoEngineClient, ListBlockDevicesRequest as V0ListBlockDevicesRequest, Null},
     v1::{
         host::ListBlockDevicesRequest as V1ListBlockDevicesRequest, nexus::ListNexusOptions,
-        replica::ListReplicaOptions,
+        pool::ListPoolOptions, replica::ListReplicaOptions,
     },
 };
 use snafu::ResultExt;
@@ -115,11 +116,15 @@ pub(crate) type ReplicaClient = rpc::v1::replica::replica_rpc_client::ReplicaRpc
 /// V1 NexusClient
 pub(crate) type NexusClient = rpc::v1::nexus::nexus_rpc_client::NexusRpcClient<Channel>;
 
+/// The V1 PoolClient.
+pub(crate) type PoolClient = rpc::v1::pool::pool_rpc_client::PoolRpcClient<Channel>;
+
 #[derive(Clone, Debug)]
 pub(crate) struct MayaClientV1 {
     host: HostClient,
     replica: ReplicaClient,
     nexus: NexusClient,
+    pool: PoolClient,
 }
 
 impl MayaClientV1 {
@@ -130,6 +135,10 @@ impl MayaClientV1 {
     /// Get the v1 nexus client.
     pub(crate) fn nexus(self) -> NexusClient {
         self.nexus
+    }
+    /// Get the v1 pool client.
+    pub(crate) fn pool(&self) -> PoolClient {
+        self.pool.clone()
     }
 }
 
@@ -221,6 +230,22 @@ impl GrpcClient {
                         endpoint: context.endpoint.uri().to_string(),
                     })?),
                 }?;
+                let pool = match tokio::time::timeout(
+                    context.comms_timeouts.connect(),
+                    PoolClient::connect(context.endpoint.clone()),
+                )
+                .await
+                {
+                    Err(_) => Err(SvcError::GrpcConnectTimeout {
+                        node_id: context.node.to_string(),
+                        endpoint: context.endpoint.uri().to_string(),
+                        timeout: context.comms_timeouts.connect(),
+                    }),
+                    Ok(client) => Ok(client.context(GrpcConnect {
+                        node_id: context.node.to_string(),
+                        endpoint: context.endpoint.uri().to_string(),
+                    })?),
+                }?;
                 Ok(Self {
                     context: context.clone(),
                     io_engine_v0: None,
@@ -228,6 +253,7 @@ impl GrpcClient {
                         host,
                         replica,
                         nexus,
+                        pool,
                     }),
                 })
             }
@@ -436,12 +462,32 @@ impl GrpcClient {
 
                 let rpc_pools = &rpc_pools.get_ref().pools;
 
-                let pools = rpc_pools.iter().map(|p| rpc_pool_to_agent(p, id)).collect();
+                let pools = rpc_pools
+                    .iter()
+                    .map(|p| v0_rpc_pool_to_agent(p, id))
+                    .collect();
 
                 Ok(pools)
             }
             APIVersion::V1 => {
-                unimplemented!()
+                let rpc_pools = self
+                    .client_v1()?
+                    .pool()
+                    .list_pools(ListPoolOptions {
+                        name: None,
+                        pooltype: None,
+                    })
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Pool,
+                        request: "list_pools",
+                    })?;
+                let rpc_pools = &rpc_pools.get_ref().pools;
+                let pools = rpc_pools
+                    .iter()
+                    .map(|p| v1_rpc_pool_to_agent(p, id))
+                    .collect();
+                Ok(pools)
             }
         }
     }

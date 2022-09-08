@@ -8,7 +8,7 @@ use common_lib::{
         openapi::apis::IntoVec,
         transport::{
             self, Child, ChildState, ChildStateReason, Nexus, NexusId, NexusStatus, NodeId,
-            PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
+            PoolState, PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
@@ -331,4 +331,50 @@ pub fn rpc_nexus_to_child_agent(
         kind: ResourceKind::Child,
         id: child_uri,
     })
+}
+
+impl IoEngineToAgent for v1_rpc::pool::Pool {
+    type AgentMessage = transport::PoolState;
+    /// This converts gRPC pool object into Control plane Pool state.
+    fn to_agent(&self) -> Self::AgentMessage {
+        Self::AgentMessage {
+            node: Default::default(),
+            id: self.name.clone().into(),
+            disks: self.disks.clone().into_vec(),
+            capacity: self.capacity,
+            used: self.used,
+            status: self.state.into(),
+        }
+    }
+}
+
+impl AgentToIoEngine for transport::CreatePool {
+    type IoEngineMessage = v1_rpc::pool::CreatePoolRequest;
+    /// This converts Control plane CreatePool struct to IO Engine gRPC message.
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            name: self.id.clone().into(),
+            disks: self.disks.iter().map(|d| d.to_string()).collect(),
+            uuid: None,
+            pooltype: v1_rpc::pool::PoolType::Lvs as i32,
+        }
+    }
+}
+
+impl AgentToIoEngine for transport::DestroyPool {
+    type IoEngineMessage = v1_rpc::pool::DestroyPoolRequest;
+    /// This converts Control plane DeletePool struct to IO Engine gRPC message.
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            name: self.id.clone().into(),
+            uuid: None,
+        }
+    }
+}
+
+/// Converts rpc pool to a agent pool.
+pub fn rpc_pool_to_agent(rpc_pool: &rpc::v1::pool::Pool, id: &NodeId) -> PoolState {
+    let mut pool = rpc_pool.to_agent();
+    pool.node = id.clone();
+    pool
 }
