@@ -1,6 +1,6 @@
 use common_lib::{
-    transport_api::ReplyError,
-    types::v0::transport::{APIVersion, Deregister, NodeId, Register},
+    transport_api::{ReplyError, ResourceKind},
+    types::v0::transport::{node, Deregister, NodeId, Register},
 };
 use rpc::{
     v1::registration::{DeregisterRequest, RegisterRequest},
@@ -8,32 +8,35 @@ use rpc::{
         DeregisterRequest as V1AlphaDeregisterRequest, RegisterRequest as V1AlphaRegisterRequest,
     },
 };
+use std::str::FromStr;
 
-/// new type to wrap grpc ApiVersion type
+/// New type to wrap grpc ApiVersion type.
 pub struct ApiVersion(pub rpc::v1::registration::ApiVersion);
 
-/// Operations to be supportes by the Registration Service
+/// Operations to be supportes by the Registration Service.
 #[tonic::async_trait]
 pub trait RegistrationOperations: Send + Sync {
-    /// Register a dataplane node to controlplane
+    /// Register a dataplane node to controlplane.
     async fn register(&self, req: &dyn RegisterInfo) -> Result<(), ReplyError>;
-    /// Deregister a dataplane node to controlplane
+    /// Deregister a dataplane node to controlplane.
     async fn deregister(&self, req: &dyn DeregisterInfo) -> Result<(), ReplyError>;
 }
 
-/// Trait to be implemented for Register operation
+/// Trait to be implemented for Register operation.
 pub trait RegisterInfo: Send + Sync {
-    /// Id of the IoEngine instance
+    /// Node Id of the IoEngine instance.
     fn node_id(&self) -> NodeId;
-    /// Grpc endpoint of the IoEngine instance
+    /// Grpc endpoint of the IoEngine instance.
     fn grpc_endpoint(&self) -> String;
-    /// api-version supported by the dataplane
-    fn api_version(&self) -> Option<Vec<APIVersion>>;
+    /// Api-version supported by the dataplane.
+    fn api_version(&self) -> Option<Vec<node::ApiVersion>>;
+    /// Used to identify dataplane process restarts.
+    fn instance_uuid(&self) -> Option<uuid::Uuid>;
 }
 
-/// Trait to be implemented for Register operation
+/// Trait to be implemented for Register operation.
 pub trait DeregisterInfo: Send + Sync {
-    /// Id of the IoEngine instance
+    /// Node Id of the IoEngine instance.
     fn node_id(&self) -> NodeId;
 }
 
@@ -43,11 +46,15 @@ impl RegisterInfo for Register {
     }
 
     fn grpc_endpoint(&self) -> String {
-        self.grpc_endpoint.clone()
+        self.grpc_endpoint.to_string()
     }
 
-    fn api_version(&self) -> Option<Vec<APIVersion>> {
+    fn api_version(&self) -> Option<Vec<node::ApiVersion>> {
         self.api_versions.clone()
+    }
+
+    fn instance_uuid(&self) -> Option<uuid::Uuid> {
+        self.instance_uuid
     }
 }
 
@@ -60,7 +67,7 @@ impl RegisterInfo for RegisterRequest {
         self.grpc_endpoint.clone()
     }
 
-    fn api_version(&self) -> Option<Vec<APIVersion>> {
+    fn api_version(&self) -> Option<Vec<node::ApiVersion>> {
         Some(
             self.api_version
                 .clone()
@@ -71,6 +78,12 @@ impl RegisterInfo for RegisterRequest {
                 })
                 .collect(),
         )
+    }
+
+    fn instance_uuid(&self) -> Option<uuid::Uuid> {
+        self.instance_uuid
+            .as_ref()
+            .and_then(|u| uuid::Uuid::parse_str(u).ok())
     }
 }
 
@@ -83,9 +96,13 @@ impl RegisterInfo for V1AlphaRegisterRequest {
         self.grpc_endpoint.clone()
     }
 
-    fn api_version(&self) -> Option<Vec<APIVersion>> {
+    fn api_version(&self) -> Option<Vec<node::ApiVersion>> {
         // Older versions support only V0
-        Some(vec![APIVersion::V0])
+        Some(vec![node::ApiVersion::V0])
+    }
+
+    fn instance_uuid(&self) -> Option<uuid::Uuid> {
+        None
     }
 }
 
@@ -107,13 +124,23 @@ impl DeregisterInfo for V1AlphaDeregisterRequest {
     }
 }
 
-impl From<&dyn RegisterInfo> for Register {
-    fn from(register: &dyn RegisterInfo) -> Self {
-        Self {
+impl TryFrom<&dyn RegisterInfo> for Register {
+    type Error = ReplyError;
+    fn try_from(register: &dyn RegisterInfo) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: register.node_id(),
-            grpc_endpoint: register.grpc_endpoint(),
+            grpc_endpoint: std::net::SocketAddr::from_str(&register.grpc_endpoint()).map_err(
+                |error| {
+                    Self::Error::invalid_argument(
+                        ResourceKind::Node,
+                        "register.grpc_endpoint",
+                        error.to_string(),
+                    )
+                },
+            )?,
             api_versions: register.api_version(),
-        }
+            instance_uuid: register.instance_uuid(),
+        })
     }
 }
 
@@ -125,16 +152,16 @@ impl From<&dyn DeregisterInfo> for Deregister {
     }
 }
 
-impl From<APIVersion> for ApiVersion {
-    fn from(v: APIVersion) -> Self {
+impl From<node::ApiVersion> for ApiVersion {
+    fn from(v: node::ApiVersion) -> Self {
         match v {
-            APIVersion::V0 => ApiVersion(rpc::v1::registration::ApiVersion::V0),
-            APIVersion::V1 => ApiVersion(rpc::v1::registration::ApiVersion::V1),
+            node::ApiVersion::V0 => Self(rpc::v1::registration::ApiVersion::V0),
+            node::ApiVersion::V1 => Self(rpc::v1::registration::ApiVersion::V1),
         }
     }
 }
 
-impl From<ApiVersion> for APIVersion {
+impl From<ApiVersion> for node::ApiVersion {
     fn from(v: ApiVersion) -> Self {
         match v {
             ApiVersion(rpc::v1::registration::ApiVersion::V0) => Self::V0,

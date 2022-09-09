@@ -31,7 +31,7 @@ use common_lib::{
         store,
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
-            APIVersion, AddNexusChild, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
+            AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
             DestroyPool, DestroyReplica, FaultNexusChild, MessageIdVs, Nexus, NexusId, NodeId,
             NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
             RemoveNexusChild, Replica, ReplicaId, ReplicaName, ShareNexus, ShareReplica,
@@ -48,7 +48,7 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use tracing::debug;
+use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
 
@@ -106,34 +106,67 @@ impl NodeWrapper {
         }
     }
 
-    /// set the node state to the passed argument
-    pub(crate) fn set_state(&mut self, node_state: NodeState) {
-        self.node_state = node_state;
+    /// Set the node state to the passed argument.
+    fn set_state_inner(&mut self, mut node_state: NodeState, creation: bool) -> bool {
+        // don't modify the status through the state.
+        node_state.status = self.status();
+        if self.node_state() != &node_state {
+            // don't flag state changes as the first state is inferred so it may be incorrect.
+            // Example: we don't know what api versions the node supports yet.
+            if !creation {
+                trace!(
+                    node.id=%node_state.id,
+                    "Node state changed from {:?} to {:?}",
+                    self.node_state(),
+                    node_state
+                );
+                if self.node_state().api_versions != node_state.api_versions {
+                    warn!(
+                        node.id=%node_state.id,
+                        "Node grpc api versions changed from {:?} to {:?}",
+                        self.node_state().api_versions,
+                        node_state.api_versions
+                    );
+                }
+
+                if self.node_state().instance_uuid().is_some()
+                    && self.node_state().instance_uuid() != node_state.instance_uuid()
+                {
+                    warn!(
+                        node.id=%node_state.id,
+                        "Node restart detected: {:?} to {:?}",
+                        self.node_state().instance_uuid(),
+                        node_state.instance_uuid()
+                    );
+                }
+            }
+            self.node_state = node_state;
+            true
+        } else {
+            false
+        }
     }
 
-    /// set the node state on apiversion change to the passed argument
-    pub(crate) fn set_state_on_version_change(&mut self, node_state: NodeState) {
-        if self.node_state().api_versions != node_state.api_versions {
-            debug!(
-                node.id=%node_state.id,
-                "API Versions changed from {:?} to {:?}",
-                self.node_state().api_versions,
-                node_state.api_versions
-            );
-            self.set_state(node_state)
-        }
+    /// Set the node state to the passed argument.
+    /// No state changes are not logged during creation since we're still constructing the node.
+    pub(crate) fn set_startup_creation(&mut self, node_state: NodeState) -> bool {
+        self.set_state_inner(node_state, true)
+    }
+    /// Set the node state to the passed argument.
+    pub(crate) fn set_state(&mut self, node_state: NodeState) -> bool {
+        self.set_state_inner(node_state, false)
     }
 
     /// get the latest api version from the list of supported api
     /// versions by the dataplane
-    pub(crate) fn latest_api_version(&self) -> Option<APIVersion> {
+    pub(crate) fn latest_api_version(&self) -> Option<ApiVersion> {
         match self.node_state.api_versions.clone() {
             None => None,
             Some(mut api_version) => {
                 api_version.sort();
                 // get the last element after sort, if it was an empty vec, then
                 // return the latest version as V0
-                Some(api_version.last().unwrap_or(&APIVersion::V0).clone())
+                Some(api_version.last().unwrap_or(&ApiVersion::V0).clone())
             }
         }
     }
@@ -155,7 +188,7 @@ impl NodeWrapper {
             Ok(GrpcContext::new(
                 self.lock.clone(),
                 self.id(),
-                &self.endpoint_str(),
+                self.node_state().grpc_endpoint,
                 &self.comms_timeouts,
                 Some(request),
                 api_version,
@@ -174,7 +207,7 @@ impl NodeWrapper {
             Ok(GrpcContext::new(
                 self.lock.clone(),
                 self.id(),
-                &self.endpoint_str(),
+                self.node_state().grpc_endpoint,
                 &timeout,
                 None,
                 api_version,
@@ -190,7 +223,7 @@ impl NodeWrapper {
             Ok(GrpcContext::new(
                 self.lock.clone(),
                 self.id(),
-                &self.endpoint_str(),
+                self.node_state().grpc_endpoint,
                 &self.comms_timeouts,
                 None,
                 api_version,
@@ -281,7 +314,7 @@ impl NodeWrapper {
         );
 
         // Set the api version to latest and make a call
-        self.node_state.api_versions = Some(vec![APIVersion::V1]);
+        self.node_state.api_versions = Some(vec![ApiVersion::V1]);
         let client = self.grpc_client_timeout(timeouts.clone()).await?;
         match client.liveness_probe().await {
             Ok(data) => return Ok(data),
@@ -306,14 +339,14 @@ impl NodeWrapper {
         }
 
         // Set the api version to second latest and make a call
-        self.node_state.api_versions = Some(vec![APIVersion::V0]);
+        self.node_state.api_versions = Some(vec![ApiVersion::V0]);
         let client = self.grpc_client_timeout(timeouts).await?;
-        client
-            .liveness_probe()
-            .await
-            .map_err(|_| SvcError::NodeNotOnline {
+        client.liveness_probe().await.map_err(|error| {
+            tracing::error!(?error, "V0 liveness probe failed");
+            SvcError::NodeNotOnline {
                 node: self.id().clone(),
-            })
+            }
+        })
     }
 
     /// Set the node status and return the previous status
@@ -384,7 +417,7 @@ impl NodeWrapper {
 
     /// Get the node grpc endpoint as string.
     pub(crate) fn endpoint_str(&self) -> String {
-        self.node_state().grpc_endpoint.clone()
+        self.node_state().grpc_endpoint.to_string()
     }
     /// Get all pools
     pub(crate) fn pools(&self) -> Vec<PoolState> {
@@ -826,15 +859,17 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     }
 
     async fn on_register(&self, node_state: NodeState) -> Result<bool, SvcError> {
-        let setting_online = {
+        let (not_online, state_changed) = {
             let mut node = self.write().await;
-            node.set_state_on_version_change(node_state);
+            // if the state changed we should update the node to fetch latest information
+            let state_changed = node.set_state(node_state);
             node.pet().await;
-            !node.is_online()
+            (!node.is_online(), state_changed)
         };
-        // if the node was not previously online then let's update all states right away
-        if setting_online {
-            self.update_all(setting_online).await.map(|_| true)
+        // if the node was not previously online or the state has changed then let's update all
+        // states right away
+        if not_online || state_changed {
+            self.update_all(not_online).await.map(|_| true)
         } else {
             Ok(false)
         }
@@ -1120,7 +1155,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let rpc_pool = self
                     .client_v0()?
                     .create_pool(v0_conversion::to_rpc(request))
@@ -1132,7 +1167,7 @@ impl ClientOps for GrpcClientLocked {
                 let pool = v0_rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
                 Ok(pool)
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let rpc_pool = self
                     .client_v1()?
                     .pool()
@@ -1150,7 +1185,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let _ = self
                     .client_v0()?
                     .destroy_pool(v0_conversion::to_rpc(request))
@@ -1161,7 +1196,7 @@ impl ClientOps for GrpcClientLocked {
                     })?;
                 Ok(())
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let _ = self
                     .client_v1()?
                     .pool()
@@ -1178,7 +1213,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let rpc_replica = self
                     .client_v0()?
                     .create_replica_v2(v0_conversion::to_rpc(request))
@@ -1190,7 +1225,7 @@ impl ClientOps for GrpcClientLocked {
                 let replica = v0_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
                 Ok(replica)
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let rpc_replica = self
                     .client_v1()?
                     .replica()
@@ -1208,7 +1243,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         match self.api_version() {
-            APIVersion::V0 => Ok(self
+            ApiVersion::V0 => Ok(self
                 .client_v0()?
                 .share_replica(v0_conversion::to_rpc(request))
                 .await
@@ -1218,7 +1253,7 @@ impl ClientOps for GrpcClientLocked {
                 })?
                 .into_inner()
                 .uri),
-            APIVersion::V1 => Ok(self
+            ApiVersion::V1 => Ok(self
                 .client_v1()?
                 .replica()
                 .share_replica(v1_conversion::to_rpc(request))
@@ -1234,7 +1269,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError> {
         match self.api_version() {
-            APIVersion::V0 => Ok(self
+            ApiVersion::V0 => Ok(self
                 .client_v0()?
                 .share_replica(v0_conversion::to_rpc(request))
                 .await
@@ -1244,7 +1279,7 @@ impl ClientOps for GrpcClientLocked {
                 })?
                 .into_inner()
                 .uri),
-            APIVersion::V1 => Ok(self
+            ApiVersion::V1 => Ok(self
                 .client_v1()?
                 .replica()
                 .unshare_replica(v1_conversion::to_rpc(request))
@@ -1260,7 +1295,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let _ = self
                     .client_v0()?
                     .destroy_replica(v0_conversion::to_rpc(request))
@@ -1271,7 +1306,7 @@ impl ClientOps for GrpcClientLocked {
                     })?;
                 Ok(())
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let _ = self
                     .client_v1()?
                     .replica()
@@ -1288,7 +1323,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let rpc_nexus = self
                     .client_v0()?
                     .create_nexus_v2(v0_conversion::to_rpc(request))
@@ -1303,7 +1338,7 @@ impl ClientOps for GrpcClientLocked {
                 nexus.uuid = request.uuid.clone();
                 Ok(nexus)
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let rpc_nexus = self
                     .client_v1()?
                     .nexus()
@@ -1330,7 +1365,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let _ = self
                     .client_v0()?
                     .destroy_nexus(v0_conversion::to_rpc(request))
@@ -1341,7 +1376,7 @@ impl ClientOps for GrpcClientLocked {
                     })?;
                 Ok(())
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let _ = self
                     .client_v1()?
                     .nexus()
@@ -1358,7 +1393,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let share = self
                     .client_v0()?
                     .publish_nexus(v0_conversion::to_rpc(request))
@@ -1370,7 +1405,7 @@ impl ClientOps for GrpcClientLocked {
                 let share = share.into_inner().device_uri;
                 Ok(share)
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let rpc_nexus = self
                     .client_v1()?
                     .nexus()
@@ -1396,7 +1431,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let _ = self
                     .client_v0()?
                     .unpublish_nexus(v0_conversion::to_rpc(request))
@@ -1407,7 +1442,7 @@ impl ClientOps for GrpcClientLocked {
                     })?;
                 Ok(())
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let _ = self
                     .client_v1()?
                     .nexus()
@@ -1424,7 +1459,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let rpc_child = self
                     .client_v0()?
                     .add_child_nexus(v0_conversion::to_rpc(request))
@@ -1435,7 +1470,7 @@ impl ClientOps for GrpcClientLocked {
                     })?;
                 Ok(rpc_child.into_inner().to_agent())
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let rpc_nexus = self
                     .client_v1()?
                     .nexus()
@@ -1462,7 +1497,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let _ = self
                     .client_v0()?
                     .remove_child_nexus(v0_conversion::to_rpc(request))
@@ -1473,7 +1508,7 @@ impl ClientOps for GrpcClientLocked {
                     })?;
                 Ok(())
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 let _ = self
                     .client_v1()?
                     .nexus()
@@ -1490,7 +1525,7 @@ impl ClientOps for GrpcClientLocked {
 
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
         match self.api_version() {
-            APIVersion::V0 => {
+            ApiVersion::V0 => {
                 let _ = self
                     .client_v0()?
                     .fault_nexus_child(request.to_rpc())
@@ -1501,7 +1536,7 @@ impl ClientOps for GrpcClientLocked {
                     })?;
                 Ok(())
             }
-            APIVersion::V1 => {
+            ApiVersion::V1 => {
                 unimplemented!()
             }
         }

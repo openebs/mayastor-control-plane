@@ -1,6 +1,6 @@
 use common_lib::types::v0::{
     store::node::{NodeLabels, NodeSpec},
-    transport::{APIVersion, Filter, Node, NodeId, NodeState, NodeStatus},
+    transport::{ApiVersion, Filter, Node, NodeId, NodeState, NodeStatus},
 };
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::node::traits::NodeOperations;
@@ -11,16 +11,12 @@ fn new_node(
     id: NodeId,
     endpoint: String,
     status: NodeStatus,
-    api_versions: Option<Vec<APIVersion>>,
+    api_versions: Option<Vec<ApiVersion>>,
 ) -> Node {
+    let endpoint = std::str::FromStr::from_str(&endpoint).unwrap();
     Node::new(
         id.clone(),
-        Some(NodeSpec::new(
-            id.clone(),
-            endpoint.clone(),
-            NodeLabels::new(),
-            None,
-        )),
+        Some(NodeSpec::new(id.clone(), endpoint, NodeLabels::new(), None)),
         Some(NodeState::new(id, endpoint, status, api_versions)),
     )
 }

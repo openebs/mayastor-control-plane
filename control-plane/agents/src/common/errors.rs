@@ -2,7 +2,7 @@ use common_lib::{
     transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         store::definitions::StoreError,
-        transport::{pool::PoolDeviceUri, APIVersion, Filter, NodeId, PoolId, ReplicaId},
+        transport::{pool::PoolDeviceUri, ApiVersion, Filter, NodeId, PoolId, ReplicaId},
     },
 };
 use snafu::{Error, Snafu};
@@ -19,6 +19,12 @@ pub enum SvcError {
     GetNodes { source: ReplyError },
     #[snafu(display("Node '{}' is not online", node))]
     NodeNotOnline { node: NodeId },
+    #[snafu(display("Node {} has invalid socket address {}", node, socket))]
+    NodeGrpcEndpoint {
+        node: NodeId,
+        socket: String,
+        error: std::net::AddrParseError,
+    },
     #[snafu(display("No available online nodes"))]
     NoNodes {},
     #[snafu(display("Node {} is cordoned", node_id))]
@@ -52,7 +58,7 @@ pub enum SvcError {
     GrpcConnectUri {
         node_id: String,
         uri: String,
-        source: http::uri::InvalidUri,
+        source: http::Error,
     },
     #[snafu(display(
         "gRPC request '{}' for '{}' failed with '{}'",
@@ -209,7 +215,7 @@ pub enum SvcError {
     ))]
     MaxRebuilds { max_rebuilds: u32 },
     #[snafu(display("The api version: {:?} is not valid", api_version))]
-    InvalidApiVersion { api_version: Option<APIVersion> },
+    InvalidApiVersion { api_version: Option<ApiVersion> },
 }
 
 impl From<StoreError> for SvcError {
@@ -328,6 +334,12 @@ impl From<SvcError> for ReplyError {
 
             SvcError::NodeNotOnline { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Node,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::NodeGrpcEndpoint { .. } => ReplyError {
+                kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Node,
                 source: desc.to_string(),
                 extra: error.full_string(),

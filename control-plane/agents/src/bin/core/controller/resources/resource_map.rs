@@ -3,9 +3,21 @@ use common_lib::IntoVec;
 use indexmap::{map::Values, IndexMap};
 use std::{fmt::Debug, hash::Hash};
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct ResourceMap<I, S: Clone> {
     map: IndexMap<I, ResourceMutex<S>>,
+}
+
+impl<I, S> Default for ResourceMap<I, S>
+where
+    I: Eq + Hash + Clone,
+    S: Clone + ResourceUid<Uid = I> + Debug,
+{
+    fn default() -> Self {
+        Self {
+            map: IndexMap::new(),
+        }
+    }
 }
 
 impl<I, S> ResourceMap<I, S>

@@ -20,6 +20,8 @@ common-lib = { path = "../../common" }
 humantime = "2.1.0"
 utils = { path = "../../utils/utils-lib" }
 rpc = { path = "../../rpc"}
+uuid = { version = "0.8.2", features = ["v4"] }
+
 # Tracing
 tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }
 tracing-opentelemetry = "0.17.4"

@@ -9,21 +9,23 @@ use strum_macros::{EnumString, ToString};
 /// Registration
 ///
 /// Register message payload
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Register {
-    /// id of the io-engine instance
+    /// Node Id of the io-engine instance.
     pub id: NodeId,
-    /// grpc endpoint of the io-engine instance
-    pub grpc_endpoint: String,
-    /// api versions registered by the dataplane
-    pub api_versions: Option<Vec<APIVersion>>,
+    /// Grpc endpoint of the io-engine instance.
+    pub grpc_endpoint: std::net::SocketAddr,
+    /// Api versions registered by the dataplane.
+    pub api_versions: Option<Vec<ApiVersion>>,
+    /// Used to identify dataplane process restarts.
+    pub instance_uuid: Option<uuid::Uuid>,
 }
 
 /// Deregister message payload
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Deregister {
-    /// id of the io-engine instance
+    /// Node Id of the io-engine instance.
     pub id: NodeId,
 }
 
@@ -110,45 +112,64 @@ impl Default for NodeStatus {
 }
 
 /// Node State information
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeState {
-    /// id of the io-engine instance
+    /// Node Id of the io-engine instance.
     pub id: NodeId,
-    /// grpc_endpoint of the io-engine instance
-    pub grpc_endpoint: String,
-    /// deemed status of the node
+    /// Grpc endpoint of the io-engine instance
+    pub grpc_endpoint: std::net::SocketAddr,
+    /// Deemed status of the node
     pub status: NodeStatus,
-    /// api versions supported by the dataplane
-    pub api_versions: Option<Vec<APIVersion>>,
+    /// Api versions supported by the dataplane.
+    pub api_versions: Option<Vec<ApiVersion>>,
+    /// Used to identify dataplane process restarts.
+    instance_uuid: Option<uuid::Uuid>,
 }
 
 impl NodeState {
-    /// Return a new `Self`
+    /// Return a new `Self`.
     pub fn new(
         id: NodeId,
-        grpc_endpoint: String,
+        grpc_endpoint: std::net::SocketAddr,
         status: NodeStatus,
-        api_versions: Option<Vec<APIVersion>>,
+        api_versions: Option<Vec<ApiVersion>>,
     ) -> Self {
         Self {
             id,
             grpc_endpoint,
             status,
             api_versions,
+            instance_uuid: None,
         }
     }
-    /// Get the node identification
+    /// Get the node identification.
     pub fn id(&self) -> &NodeId {
         &self.id
     }
-    /// Get the node's gRPC endpoint
-    pub fn grpc(&self) -> &str {
-        &self.grpc_endpoint
-    }
-    /// Get the node status
+    /// Get the node status.
     pub fn status(&self) -> &NodeStatus {
         &self.status
+    }
+    /// Get the instance uuid.
+    pub fn instance_uuid(&self) -> &Option<uuid::Uuid> {
+        &self.instance_uuid
+    }
+}
+impl From<&Register> for NodeState {
+    fn from(src: &Register) -> Self {
+        Self::from(src.clone())
+    }
+}
+impl From<Register> for NodeState {
+    fn from(src: Register) -> Self {
+        Self {
+            id: src.id,
+            grpc_endpoint: src.grpc_endpoint,
+            status: NodeStatus::Online,
+            api_versions: src.api_versions,
+            instance_uuid: src.instance_uuid,
+        }
     }
 }
 
@@ -156,14 +177,12 @@ rpc_impl_string_id!(NodeId, "ID of a node");
 
 impl From<NodeState> for models::NodeState {
     fn from(src: NodeState) -> Self {
-        Self::new(src.grpc_endpoint, src.id, src.status)
+        Self::new(src.grpc_endpoint.to_string(), src.id, src.status)
     }
 }
-
 impl From<&NodeState> for models::NodeState {
     fn from(src: &NodeState) -> Self {
-        let src = src.clone();
-        Self::new(src.grpc_endpoint, src.id, src.status)
+        Self::from(src.clone())
     }
 }
 
@@ -179,12 +198,12 @@ impl From<NodeStatus> for models::NodeStatus {
 
 /// api versions known by control plane
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum APIVersion {
+pub enum ApiVersion {
     V0,
     V1,
 }
 
-impl FromStr for APIVersion {
+impl FromStr for ApiVersion {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -196,7 +215,7 @@ impl FromStr for APIVersion {
     }
 }
 
-impl Default for APIVersion {
+impl Default for ApiVersion {
     fn default() -> Self {
         Self::V0
     }
