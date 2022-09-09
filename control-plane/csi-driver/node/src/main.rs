@@ -10,6 +10,7 @@ use futures::TryFutureExt;
 use nodeplugin_grpc::NodePluginGrpcServer;
 use std::{
     env, fs,
+    future::Future,
     io::ErrorKind,
     pin::Pin,
     sync::Arc,
@@ -92,7 +93,13 @@ impl AsyncWrite for UnixStream {
 const GRPC_PORT: u16 = 50051;
 
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn main() -> anyhow::Result<()> {
+    main_().await.map_err(|error| {
+        tracing::error!(%error, "Terminated with error");
+        error
+    })
+}
+async fn main_() -> anyhow::Result<()> {
     let matches = App::new(utils::package_description!())
         .about("k8s sidecar for IoEngine implementing CSI among others")
         .version(utils::version_info_str!())
@@ -145,6 +152,18 @@ async fn main() -> Result<(), String> {
                 .required(false)
                 .help("Sets the nvme-nr-io-queues parameter when connecting to a volume target"),
         )
+        .arg(
+            Arg::with_name("node-selector")
+                .long("node-selector")
+                .multiple(true)
+                .number_of_values(1)
+                .allow_hyphen_values(true)
+                .default_value(Box::leak(csi_driver::csi_node_selector().into_boxed_str()))
+                .help(
+                    "The node selector label which this plugin will report as part of its topology.\n\
+                    Example:\n --node-selector key=value --node-selector key2=value2",
+                ),
+        )
         .get_matches();
 
     utils::print_package_info!();
@@ -166,7 +185,7 @@ async fn main() -> Result<(), String> {
         );
 
         if let Err(error) = dev::nvmf::set_nvmecore_iotimeout(io_timeout_secs) {
-            panic!("Failed to set nvme_core io_timeout: {}", error);
+            anyhow::bail!("Failed to set nvme_core io_timeout: {}", error);
         }
     }
 
@@ -175,10 +194,7 @@ async fn main() -> Result<(), String> {
         Ok(_) => info!("Removed stale CSI socket {}", csi_socket),
         Err(err) => {
             if err.kind() != ErrorKind::NotFound {
-                return Err(format!(
-                    "Error removing stale CSI socket {}: {}",
-                    csi_socket, err
-                ));
+                anyhow::bail!("Error removing stale CSI socket {}: {}", csi_socket, err);
             }
         }
     }
@@ -190,20 +206,25 @@ async fn main() -> Result<(), String> {
     };
 
     *config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
-    let node_name = matches.value_of("node-name").unwrap();
 
-    let _ = tokio::join!(
-        CsiServer::run(csi_socket, node_name),
+    let (csi, grpc) = tokio::join!(
+        CsiServer::run(csi_socket, &matches)?,
         NodePluginGrpcServer::run(sock_addr.parse().expect("Invalid gRPC endpoint")),
     );
-
-    Ok(())
+    vec![csi, grpc].into_iter().collect()
 }
 
 struct CsiServer {}
 
 impl CsiServer {
-    async fn run(csi_socket: &str, node_name: &str) -> Result<(), ()> {
+    fn run(
+        csi_socket: &str,
+        cli_args: &clap::ArgMatches<'_>,
+    ) -> anyhow::Result<impl Future<Output = anyhow::Result<()>>> {
+        let node_name = cli_args.value_of("node-name").expect("required");
+        let node_selector =
+            csi_driver::csi_node_selector_parse(cli_args.values_of("node-selector"))?;
+
         let incoming = {
             let uds = UnixListener::bind(csi_socket).unwrap();
             info!("CSI plugin bound to {}", csi_socket);
@@ -227,19 +248,17 @@ impl CsiServer {
             }
         };
 
-        if let Err(e) = Server::builder()
-            .add_service(NodeServer::new(Node::new(
-                node_name.into(),
-                probe_filesystems(),
-            )))
-            .add_service(IdentityServer::new(Identity {}))
-            .serve_with_incoming_shutdown(incoming, Shutdown::wait())
-            .await
-        {
-            error!("CSI server failed with error: {}", e);
-            return Err(());
-        }
-
-        Ok(())
+        let node = Node::new(node_name.into(), node_selector, probe_filesystems());
+        Ok(async move {
+            Server::builder()
+                .add_service(NodeServer::new(node))
+                .add_service(IdentityServer::new(Identity {}))
+                .serve_with_incoming_shutdown(incoming, Shutdown::wait())
+                .await
+                .map_err(|error| {
+                    error!(?error, "CSI server failed");
+                    anyhow::anyhow!("CSI server failed with error: {}", error)
+                })
+        })
     }
 }

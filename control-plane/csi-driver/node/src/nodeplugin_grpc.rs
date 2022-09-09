@@ -89,19 +89,18 @@ pub(crate) struct NodePluginGrpcServer {}
 
 impl NodePluginGrpcServer {
     /// Run `Self` as a tonic server.
-    pub(crate) async fn run(endpoint: std::net::SocketAddr) -> Result<(), ()> {
+    pub(crate) async fn run(endpoint: std::net::SocketAddr) -> anyhow::Result<()> {
         info!(
             "node plugin gRPC server configured at address {:?}",
             endpoint
         );
-        if let Err(e) = Server::builder()
+        Server::builder()
             .add_service(NodePluginServer::new(NodePluginSvc {}))
             .serve_with_shutdown(endpoint, Shutdown::wait())
             .await
-        {
-            error!("gRPC server failed with error: {}", e);
-            return Err(());
-        }
-        Ok(())
+            .map_err(|error| {
+                error!(?error, "gRPC server failed");
+                anyhow::anyhow!("gRPC server failed with error: {}", error)
+            })
     }
 }

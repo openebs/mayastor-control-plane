@@ -61,6 +61,18 @@ async fn main() -> anyhow::Result<()> {
                 .env("REST_TIMEOUT")
                 .default_value("5s"),
         )
+        .arg(
+            Arg::with_name("node-selector")
+                .long("node-selector")
+                .multiple(true)
+                .number_of_values(1)
+                .allow_hyphen_values(true)
+                .default_value(Box::leak(csi_driver::csi_node_selector().into_boxed_str()))
+                .help(
+                    "The node selector label which this plugin will report as part of its topology.\n\
+                    Example:\n --node-selector key=value --node-selector key2=value2",
+                ),
+        )
         .get_matches();
 
     utils::print_package_info!();

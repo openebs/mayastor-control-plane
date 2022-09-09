@@ -2,11 +2,14 @@
 use nvmeadm::nvmf_discovery;
 use std::string::FromUtf8Error;
 
+/// A Device Attach/Detach error.
+/// todo: should this be an enum?
 pub(crate) struct DeviceError {
     pub(crate) message: String,
 }
 
 impl DeviceError {
+    /// Return a new `Self` with the given message.
     pub(crate) fn new(message: &str) -> DeviceError {
         DeviceError {
             message: String::from(message),
@@ -90,6 +93,14 @@ impl From<nvmeadm::error::NvmeError> for DeviceError {
     fn from(error: nvmeadm::error::NvmeError) -> DeviceError {
         DeviceError {
             message: format!("{}", error),
+        }
+    }
+}
+
+impl From<anyhow::Error> for DeviceError {
+    fn from(error: anyhow::Error) -> DeviceError {
+        DeviceError {
+            message: error.to_string(),
         }
     }
 }

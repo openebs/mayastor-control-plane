@@ -1,4 +1,4 @@
-use crate::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
+use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 
 use common_lib::types::v0::openapi::models::{
     LabelledTopology, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
@@ -134,7 +134,9 @@ impl VolumeTopologyMapper {
     /// Determine the list of nodes where the workload can be placed.
     fn volume_accessible_topology(&self) -> Vec<CsiTopology> {
         // TODO: handle accessibility
-        Vec::new()
+        vec![CsiTopology {
+            segments: CsiControllerConfig::get_config().node_selector_segment(),
+        }]
     }
 }
 

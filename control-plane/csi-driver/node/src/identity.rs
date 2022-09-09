@@ -1,11 +1,10 @@
 //! Implementation of gRPC methods from CSI Identity gRPC service.
 
-use csi_driver::csi::*;
+use csi_driver::{csi::*, CSI_PLUGIN_NAME};
 use std::{boxed::Box, collections::HashMap};
 use tonic::{Request, Response, Status};
 use tracing::debug;
 
-const PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
 // TODO: can we generate version with commit SHA dynamically?
 const PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -19,10 +18,13 @@ impl identity_server::Identity for Identity {
         &self,
         _request: Request<GetPluginInfoRequest>,
     ) -> Result<Response<GetPluginInfoResponse>, Status> {
-        debug!("GetPluginInfo request ({}:{})", PLUGIN_NAME, PLUGIN_VERSION);
+        debug!(
+            "GetPluginInfo request ({}:{})",
+            CSI_PLUGIN_NAME, PLUGIN_VERSION
+        );
 
         Ok(Response::new(GetPluginInfoResponse {
-            name: PLUGIN_NAME.to_owned(),
+            name: CSI_PLUGIN_NAME.to_owned(),
             vendor_version: PLUGIN_VERSION.to_owned(),
             manifest: HashMap::new(),
         }))
