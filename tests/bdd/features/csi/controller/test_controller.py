@@ -176,16 +176,6 @@ def test_republish_volume_on_a_different_node(setup):
     """republish volume on a different node"""
 
 
-@scenario("controller.feature", "create 1 replica local nvmf volume")
-def test_create_1_replica_local_nvmf_volume(setup):
-    """create 1 replica local nvmf volume"""
-
-
-@scenario("controller.feature", "list local volume")
-def test_list_local_volume(setup):
-    """list local volume"""
-
-
 @scenario("controller.feature", "unpublish volume when nexus node is offline")
 def test_unpublish_volume_with_offline_nexus_node(setup):
     """unpublish volume when nexus node is offline"""
@@ -317,20 +307,6 @@ def check_1_replica_local_nvmf_volume(create_1_replica_local_nvmf_volume):
     volume = ApiClient.volumes_api().get_volume(VOLUME3_UUID)
     assert volume.spec.num_replicas == 1, "Number of volume replicas mismatches"
     assert volume.spec.size == VOLUME3_SIZE, "Volume size mismatches"
-
-
-def check_local_volume_topology(volume):
-    topologies = volume.volume.accessible_topology
-
-    is_empty = False
-    if not topologies:
-        is_empty = True
-    assert is_empty is True, f"Accessible volume topology should be empty"
-
-
-@then("local volume must be accessible only from all existing Io-Engine nodes")
-def check_1_replica_local_nvmf_volume_topology(create_1_replica_local_nvmf_volume):
-    check_local_volume_topology(create_1_replica_local_nvmf_volume)
 
 
 @then(
@@ -899,13 +875,6 @@ def an_existing_volume(_create_1_replica_local_nvmf_volume):
     return _create_1_replica_local_nvmf_volume
 
 
-@then("listed local volume must be accessible only from all existing Io-Engine nodes")
-def check_local_volume_accessible_from_ms_nodes(list_2_volumes):
-    vols = [v for v in list_2_volumes[1] if v.volume.volume_id == VOLUME3_UUID]
-    assert len(vols) == 1, "Invalid number of local volumes reported"
-    check_local_volume_topology(vols[0])
-
-
 @then("no topology restrictions should be imposed to volumes")
 def check_no_topology_restrictions_for_volume(list_2_volumes):
     """Non local volumes not supported at the moment"""
@@ -913,7 +882,7 @@ def check_no_topology_restrictions_for_volume(list_2_volumes):
     assert len(vols) == 2, "Invalid number of volumes reported"
     for v in vols:
         assert (
-            len(v.volume.accessible_topology) == 0
+            len(v.volume.accessible_topology) == 1
         ), "Volume has topology restrictions"
 
 
