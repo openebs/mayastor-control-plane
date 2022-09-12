@@ -27,26 +27,51 @@ use rpc::csi::{
     VolumeCapability,
 };
 
+/// The Csi Node implementation.
 #[derive(Clone, Debug)]
-/// Node structure
 pub(crate) struct Node {
     node_name: String,
+    node_selector: HashMap<String, String>,
     filesystems: Vec<String>,
 }
 
 impl Node {
-    /// create new node
-    pub(crate) fn new(node_name: String, filesystems: Vec<String>) -> Node {
-        Self {
+    /// Creates new node.
+    pub(crate) fn new(
+        node_name: String,
+        node_selector: HashMap<String, String>,
+        filesystems: Vec<String>,
+    ) -> Node {
+        let self_ = Self {
             node_name,
+            node_selector,
             filesystems,
-        }
+        };
+        info!("Node topology segments: {:?}", self_.segments());
+        self_
+    }
+    /// Get the node_name label segment.
+    fn node_name_segment(&self) -> (String, String) {
+        (
+            csi_driver::NODE_NAME_TOPOLOGY_KEY.to_string(),
+            self.node_name.clone(),
+        )
+    }
+    /// Get the node selector label segment.
+    fn node_selector_segment(&self) -> HashMap<String, String> {
+        self.node_selector.clone()
+    }
+    /// Get the topology segments.
+    fn segments(&self) -> HashMap<String, String> {
+        self.node_selector_segment()
+            .into_iter()
+            .chain(vec![self.node_name_segment()])
+            .collect()
     }
 }
 
 const ATTACH_TIMEOUT_INTERVAL: Duration = Duration::from_millis(100);
 const ATTACH_RETRIES: u32 = 100;
-const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 
 // Determine if given access mode in conjunction with ro mount flag makes
 // sense or not. If access mode is not supported or the combination does
@@ -137,15 +162,15 @@ impl node_server::Node for Node {
         _request: Request<NodeGetInfoRequest>,
     ) -> Result<Response<NodeGetInfoResponse>, Status> {
         let node_id = self.node_name.clone();
-        let mut segments = HashMap::new();
-        segments.insert(OPENEBS_TOPOLOGY_KEY.to_owned(), self.node_name.clone());
 
-        debug!("NodeGetInfo request: ID={}", node_id);
+        debug!(node.id = node_id, "NodeGetInfo request");
 
         Ok(Response::new(NodeGetInfoResponse {
             node_id,
             max_volumes_per_node: 0,
-            accessible_topology: Some(Topology { segments }),
+            accessible_topology: Some(Topology {
+                segments: self.segments(),
+            }),
         }))
     }
 
@@ -426,7 +451,7 @@ impl node_server::Node for Node {
             }
         };
 
-        let uri = &msg.publish_context.get("uri").ok_or_else(|| {
+        let uri = msg.publish_context.get("uri").ok_or_else(|| {
             failure!(
                 Code::InvalidArgument,
                 "Failed to stage volume {}: URI attribute missing from publish context",

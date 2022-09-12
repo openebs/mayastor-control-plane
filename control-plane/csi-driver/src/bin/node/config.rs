@@ -50,15 +50,16 @@ pub(crate) fn config<'a>() -> MutexGuard<'a, Config> {
 #[derive(Default)]
 pub(crate) struct NvmeArgValues(HashMap<String, String>);
 impl TryFrom<NvmeArgValues> for NvmeConfig {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(src: NvmeArgValues) -> Result<Self, Self::Error> {
         let nvme_nr_ioq = match src.0.get(NVME_NR_IO_QUEUES_NAME) {
             None => None,
             Some(value) => {
                 let value = value.parse::<u32>().map_err(|error| {
-                    format!(
+                    anyhow::anyhow!(
                         "Invalid value for {}, error = {}",
-                        NVME_NR_IO_QUEUES_NAME, error
+                        NVME_NR_IO_QUEUES_NAME,
+                        error
                     )
                 })?;
                 Some(value)
@@ -70,20 +71,20 @@ impl TryFrom<NvmeArgValues> for NvmeConfig {
 /// Nvme Arguments taken from the CSI volume calls (storage class parameters)
 pub(crate) type NvmeParseParams<'a> = &'a HashMap<String, String>;
 impl TryFrom<NvmeParseParams<'_>> for NvmeArgValues {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(_value: NvmeParseParams) -> Result<Self, Self::Error> {
         // nothing parsed for now
         Ok(Default::default())
     }
 }
 impl TryFrom<NvmeParseParams<'_>> for NvmeConfig {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(value: NvmeParseParams) -> Result<Self, Self::Error> {
         Self::try_from(NvmeArgValues::try_from(value)?)
     }
 }
 impl TryFrom<&ArgMatches<'_>> for NvmeArgValues {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(matches: &ArgMatches<'_>) -> Result<Self, Self::Error> {
         let mut map = NvmeArgValues::default();
         if let Some(value) = matches.value_of(NVME_NR_IO_QUEUES_NAME) {
@@ -94,7 +95,7 @@ impl TryFrom<&ArgMatches<'_>> for NvmeArgValues {
     }
 }
 impl TryFrom<&ArgMatches<'_>> for NvmeConfig {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(matches: &ArgMatches) -> Result<Self, Self::Error> {
         Self::try_from(NvmeArgValues::try_from(matches)?)
     }

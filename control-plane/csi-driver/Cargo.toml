@@ -8,11 +8,11 @@ edition = "2021"
 
 [[bin]]
 name = "csi-controller"
-path = "controller/src/main.rs"
+path = "src/bin/controller/main.rs"
 
 [[bin]]
 name = "csi-node"
-path = "node/src/main.rs"
+path = "src/bin/node/main.rs"
 
 
 [build-dependencies]

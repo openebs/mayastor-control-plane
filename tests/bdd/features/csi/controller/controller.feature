@@ -96,19 +96,6 @@ Scenario: republish volume on a different node
     Then a ControllerPublishVolume request should fail with FAILED_PRECONDITION error mentioning node mismatch
     And volume should report itself as published
 
-Scenario: create 1 replica local nvmf volume
-    Given 2 Io-Engine nodes with one pool on each node
-    When a CreateVolume request is sent to create a 1 replica local nvmf volume (local=true)
-    Then a new local volume of requested size should be successfully created
-    And local volume must be accessible only from all existing Io-Engine nodes
-
-Scenario: list local volume
-    Given 2 existing volumes
-    Given an existing unpublished local volume
-    When a ListVolumesRequest is sent to CSI controller
-    Then listed local volume must be accessible only from all existing Io-Engine nodes
-    And no topology restrictions should be imposed to volumes
-
 Scenario: unpublish volume when nexus node is offline
     Given a volume published on a node
     When a node that hosts the nexus becomes offline

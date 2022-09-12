@@ -99,7 +99,6 @@ resource "kubernetes_daemonset" "csi_node" {
             "--node-name=$(MY_NODE_NAME)",
             "--grpc-endpoint=$(MY_POD_IP):10199",
             format("--nvme-nr-io-queues=%s", var.io_queues),
-            "-v"
           ]
 
           env {
@@ -125,6 +124,10 @@ resource "kubernetes_daemonset" "csi_node" {
           env {
             name  = "RUST_BACKTRACE"
             value = "1"
+          }
+          env {
+            name  = "RUST_LOG"
+            value = var.rust_log
           }
 
 

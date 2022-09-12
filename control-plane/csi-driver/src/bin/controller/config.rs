@@ -1,7 +1,7 @@
 use anyhow::Context;
 use clap::ArgMatches;
 use once_cell::sync::OnceCell;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 static CONFIG: OnceCell<CsiControllerConfig> = OnceCell::new();
 
@@ -11,6 +11,8 @@ pub(crate) struct CsiControllerConfig {
     rest_endpoint: String,
     /// I/O timeout for REST API operations.
     io_timeout: Duration,
+    /// Node Plugin selector label.
+    node_selector: HashMap<String, String>,
 }
 
 impl CsiControllerConfig {
@@ -30,9 +32,12 @@ impl CsiControllerConfig {
             .context("I/O timeout must be specified")?
             .parse::<humantime::Duration>()?;
 
+        let node_selector = csi_driver::csi_node_selector_parse(args.values_of("node-selector"))?;
+
         CONFIG.get_or_init(|| Self {
             rest_endpoint: rest_endpoint.into(),
             io_timeout: io_timeout.into(),
+            node_selector,
         });
         Ok(())
     }
@@ -52,5 +57,10 @@ impl CsiControllerConfig {
     /// Get I/O timeout for REST API operations.
     pub(crate) fn io_timeout(&self) -> Duration {
         self.io_timeout
+    }
+
+    /// Get the node selector label segment.
+    pub(crate) fn node_selector_segment(&self) -> HashMap<String, String> {
+        self.node_selector.clone()
     }
 }

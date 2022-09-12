@@ -13,7 +13,7 @@ variable "tag" {
 variable "image_pull_policy" {
   type        = string
   description = "The image pull policy"
-  default     = "IfNotPresent"
+  default     = "Always"
 }
 
 variable "image_prefix" {
