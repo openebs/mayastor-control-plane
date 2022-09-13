@@ -137,12 +137,7 @@ async fn concurrent_rebuilds() {
                 let nodes = cluster.rest_v00().nodes_api().get_nodes().await.unwrap();
                 for node in nodes {
                     if let Ok(mut handle) = cluster.grpc_handle(&node.id).await {
-                        if handle
-                            .io_engine
-                            .list_nexus(rpc::io_engine::Null {})
-                            .await
-                            .is_err()
-                        {
+                        if handle.ping().await.is_err() {
                             nodes_ok = false;
                             break;
                         }

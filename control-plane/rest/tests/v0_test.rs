@@ -180,7 +180,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             share: models::Protocol::Nvmf,
             uri,
             state: models::ReplicaState::Online,
-            pool_uuid: None,
+            pool_uuid: replica.pool_uuid,
         }
     );
     assert_eq!(

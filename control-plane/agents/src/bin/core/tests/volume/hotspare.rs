@@ -20,7 +20,6 @@ use grpc::operations::{
     node::traits::NodeOperations, registry::traits::RegistryOperations,
     replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
 };
-use rpc::io_engine::FaultNexusChildRequest;
 use std::{convert::TryInto, time::Duration};
 
 #[tokio::test]
@@ -84,22 +83,11 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
 
     let fault_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .io_engine
-        .fault_nexus_child(FaultNexusChildRequest {
-            uuid: nexus.uuid.to_string(),
-            uri: fault_child.clone(),
-        })
+        .fault_child(nexus.uuid.as_str(), &fault_child)
         .await
         .unwrap();
 
-    tracing::debug!(
-        "Nexus: {:?}",
-        rpc_handle
-            .io_engine
-            .list_nexus(rpc::io_engine::Null {})
-            .await
-            .unwrap()
-    );
+    tracing::debug!("Nexus: {:?}", rpc_handle.list_nexuses().await.unwrap());
 
     let children = wait_till_volume_nexus(
         volume.uuid(),
@@ -165,23 +153,11 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
     // todo: this sometimes fails??
     // is the reconciler interleaving with the add_child_nexus?
     rpc_handle
-        .io_engine
-        .add_child_nexus(rpc::io_engine::AddChildNexusRequest {
-            uuid: nexus.uuid.to_string(),
-            uri: unknown_replica.clone(),
-            norebuild: true,
-        })
+        .add_child(nexus.uuid.as_str(), &unknown_replica, true)
         .await
         .ok();
 
-    tracing::debug!(
-        "Nexus: {:?}",
-        rpc_handle
-            .io_engine
-            .list_nexus(rpc::io_engine::Null {})
-            .await
-            .unwrap()
-    );
+    tracing::debug!("Nexus: {:?}", rpc_handle.list_nexuses().await.unwrap());
     let children = wait_till_volume_nexus(
         volume.uuid(),
         2,
@@ -238,22 +214,11 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 
     let missing_child = nexus.children.first().unwrap().uri.to_string();
     rpc_handle
-        .io_engine
-        .remove_child_nexus(rpc::io_engine::RemoveChildNexusRequest {
-            uuid: nexus.uuid.to_string(),
-            uri: missing_child.clone(),
-        })
+        .remove_child(nexus.uuid.as_str(), &missing_child)
         .await
         .unwrap();
 
-    tracing::debug!(
-        "Nexus: {:?}",
-        rpc_handle
-            .io_engine
-            .list_nexus(rpc::io_engine::Null {})
-            .await
-            .unwrap()
-    );
+    tracing::debug!("Nexus: {:?}", rpc_handle.list_nexuses().await.unwrap());
     let children = wait_till_volume_nexus(
         volume.uuid(),
         2,

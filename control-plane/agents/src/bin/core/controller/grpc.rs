@@ -22,7 +22,7 @@ use common_lib::{
 };
 use grpc::{context::timeout_grpc, operations::registration};
 use rpc::{
-    io_engine::{IoEngineClient, ListBlockDevicesRequest as V0ListBlockDevicesRequest, Null},
+    io_engine::{IoEngineClientV0, ListBlockDevicesRequest as V0ListBlockDevicesRequest, Null},
     v1::{
         host::ListBlockDevicesRequest as V1ListBlockDevicesRequest, nexus::ListNexusOptions,
         pool::ListPoolOptions, replica::ListReplicaOptions,
@@ -122,7 +122,7 @@ impl GrpcContext {
 }
 
 /// V0 Mayastor client.
-pub(crate) type MayaClientV0 = IoEngineClient<Channel>;
+pub(crate) type MayaClientV0 = IoEngineClientV0<Channel>;
 /// V1 HostClient
 pub(crate) type HostClient = rpc::v1::host::host_rpc_client::HostRpcClient<Channel>;
 /// V1 ReplicaClient

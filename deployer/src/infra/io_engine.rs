@@ -2,7 +2,7 @@ use crate::infra::{
     async_trait, Builder, ComponentAction, ComposeTest, Error, IoEngine, StartOptions,
 };
 use composer::{Binary, ContainerSpec};
-use rpc::io_engine::RpcHandle;
+use rpc::io_engine::{IoEngineApiVersion, RpcHandle};
 use std::net::{IpAddr, SocketAddr};
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
@@ -27,7 +27,10 @@ impl ComponentAction for IoEngine {
             .with_args(vec!["-N", &name])
             .with_args(vec!["-g", &io_engine_socket])
             .with_args(vec!["-R", DEFAULT_GRPC_CLIENT_ADDR])
-            .with_args(vec!["--api-versions", &options.io_engine_api_versions])
+            .with_args(vec![
+                "--api-versions".to_string(),
+                IoEngineApiVersion::vec_to_str(options.io_engine_api_versions.clone()),
+            ])
             .with_args(vec![
                 "-r",
                 format!("/host/tmp/{}.sock", Self::name(i, options)).as_str(),
@@ -75,11 +78,9 @@ impl ComponentAction for IoEngine {
             let name = Self::name(i, options);
             let container_ip = cfg.container_ip_as_ref(&name);
             let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
-            let mut hdl = RpcHandle::connect(&name, socket).await?;
-            hdl.io_engine
-                .list_nexus(rpc::io_engine::Null {})
-                .await
-                .unwrap();
+            let mut hdl =
+                RpcHandle::connect(options.latest_io_api_version(), &name, socket).await?;
+            hdl.ping().await.unwrap();
         }
         Ok(())
     }

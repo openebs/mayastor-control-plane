@@ -3,6 +3,7 @@ pub mod infra;
 use infra::*;
 
 use composer::Builder;
+use rpc::io_engine::IoEngineApiVersion;
 use std::{collections::HashMap, convert::TryInto, fmt::Write, str::FromStr, time::Duration};
 use structopt::StructOpt;
 pub(crate) use utils::tracing_telemetry::KeyValue;
@@ -274,8 +275,8 @@ pub struct StartOptions {
     max_rebuilds: Option<u32>,
 
     /// api versions to be passed to the io-engine
-    #[structopt(long, env = "IO_ENGINE_API_VERSIONS", default_value = "V0")]
-    io_engine_api_versions: String,
+    #[structopt(long, env = "IO_ENGINE_API_VERSIONS", default_value = "v1")]
+    io_engine_api_versions: Vec<IoEngineApiVersion>,
 }
 
 /// List of KeyValues
@@ -451,6 +452,17 @@ impl StartOptions {
         } else {
             0
         }
+    }
+
+    /// Get the io-engine api versions.
+    pub fn io_api_versions(&self) -> &Vec<IoEngineApiVersion> {
+        &self.io_engine_api_versions
+    }
+    /// Get the latest io-engine api version.
+    pub fn latest_io_api_version(&self) -> IoEngineApiVersion {
+        let mut sorted = self.io_engine_api_versions.clone();
+        sorted.sort();
+        *sorted.last().unwrap_or(&IoEngineApiVersion::V1)
     }
 }
 
