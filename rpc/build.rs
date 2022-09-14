@@ -35,6 +35,7 @@ fn main() {
                 "api/protobuf/v1/registration.proto",
                 "api/protobuf/v1/nexus.proto",
                 "api/protobuf/v1/pool.proto",
+                "api/protobuf/v1/json.proto",
             ],
             &["api/protobuf/v1"],
         )

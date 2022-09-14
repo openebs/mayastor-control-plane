@@ -70,25 +70,25 @@ enum ResourceType {
 /// responding to gRPC liveness probes.
 #[derive(Debug, Clone)]
 pub(crate) struct NodeWrapper {
-    /// inner Node state
+    /// The inner Node state.
     node_state: NodeState,
-    /// watchdog to track the node state
+    /// The watchdog to track the node state.
     watchdog: Watchdog,
-    /// indicates whether the node has already missed its deadline and in such case we don't
-    /// need to keep posting duplicate error events
+    /// Indicates whether the node has already missed its deadline and in such case we don't
+    /// need to keep posting duplicate error events.
     missed_deadline: bool,
-    /// gRPC CRUD lock
+    /// The gRPC CRUD lock
     lock: Arc<tokio::sync::Mutex<()>>,
-    /// node communication timeouts
+    /// The node communication timeouts.
     comms_timeouts: NodeCommsTimeout,
-    /// runtime state information
+    /// The runtime state information.
     states: ResourceStatesLocked,
-    /// number of rebuilds in progress on the node
+    /// The number of rebuilds in progress on the node.
     num_rebuilds: Arc<RwLock<NumRebuilds>>,
 }
 
 impl NodeWrapper {
-    /// Create a new wrapper for a `Node` with a `deadline` for its watchdog
+    /// Create a new wrapper for a `Node` with a `deadline` for its watchdog.
     pub(crate) fn new(
         node: &NodeState,
         deadline: std::time::Duration,
@@ -158,7 +158,7 @@ impl NodeWrapper {
     }
 
     /// get the latest api version from the list of supported api
-    /// versions by the dataplane
+    /// versions by the dataplane.
     pub(crate) fn latest_api_version(&self) -> Option<ApiVersion> {
         match self.node_state.api_versions.clone() {
             None => None,
@@ -166,23 +166,23 @@ impl NodeWrapper {
                 api_version.sort();
                 // get the last element after sort, if it was an empty vec, then
                 // return the latest version as V0
-                Some(api_version.last().unwrap_or(&ApiVersion::V0).clone())
+                Some(api_version.last().unwrap_or(&ApiVersion::V1).clone())
             }
         }
     }
 
-    /// Get `GrpcClient` for this node
+    /// Get `GrpcClient` for this node.
     async fn grpc_client(&self) -> Result<GrpcClient, SvcError> {
         GrpcClient::new(&self.grpc_context()?).await
     }
 
-    /// Get `GrpcClient` for this node, and specify the comms timeout
+    /// Get `GrpcClient` for this node, and specify the comms timeout.
     async fn grpc_client_timeout(&self, timeout: NodeCommsTimeout) -> Result<GrpcClient, SvcError> {
         GrpcClient::new(&self.grpc_context_timeout(timeout)?).await
     }
 
-    /// Get `GrpcContext` for this node
-    /// It will be used to execute the `request` operation
+    /// Get `GrpcContext` for this node.
+    /// It will be used to execute the `request` operation.
     pub(crate) fn grpc_context_ext(&self, request: MessageId) -> Result<GrpcContext, SvcError> {
         if let Some(api_version) = self.latest_api_version() {
             Ok(GrpcContext::new(
@@ -198,7 +198,7 @@ impl NodeWrapper {
         }
     }
 
-    /// Get `GrpcContext` for this node using the specified timeout
+    /// Get `GrpcContext` for this node using the specified timeout.
     pub(crate) fn grpc_context_timeout(
         &self,
         timeout: NodeCommsTimeout,
@@ -217,7 +217,7 @@ impl NodeWrapper {
         }
     }
 
-    /// Get `GrpcContext` for this node
+    /// Get `GrpcContext` for this node.
     pub(crate) fn grpc_context(&self) -> Result<GrpcContext, SvcError> {
         if let Some(api_version) = self.latest_api_version() {
             Ok(GrpcContext::new(
@@ -238,12 +238,12 @@ impl NodeWrapper {
         NodeStateFetcher::new(self.node_state.clone())
     }
 
-    /// Whether the watchdog deadline has expired
+    /// Whether the watchdog deadline has expired.
     pub(crate) fn registration_expired(&self) -> bool {
         self.watchdog.timestamp().elapsed() > self.watchdog.deadline()
     }
 
-    /// "Pet" the node to meet the node's watchdog timer deadline
+    /// "Pet" the node to meet the node's watchdog timer deadline.
     pub(crate) async fn pet(&mut self) {
         self.watchdog.pet().await.ok();
         if self.missed_deadline {
@@ -252,7 +252,7 @@ impl NodeWrapper {
         self.missed_deadline = false;
     }
 
-    /// Update the node liveness if the watchdog's registration expired
+    /// Update the node liveness if the watchdog's registration expired.
     /// If the node is still responding to gRPC then consider it as online and reset the watchdog.
     pub(crate) async fn update_liveness(&mut self) {
         if self.registration_expired() {
@@ -285,7 +285,7 @@ impl NodeWrapper {
         }
     }
 
-    /// Probe the node for liveness
+    /// Probe the node for liveness.
     pub(crate) async fn liveness_probe(&mut self) -> Result<Register, SvcError> {
         //use the connect timeout for liveness
         let timeouts = NodeCommsTimeout::new(
@@ -304,7 +304,7 @@ impl NodeWrapper {
     }
 
     /// Probe the node for liveness with all known api versions, as on startup its not known
-    /// which api version to reach
+    /// which api version to reach.
     pub(crate) async fn liveness_probe_all(&mut self) -> Result<Register, SvcError> {
         //use the connect timeout for liveness
         let timeouts = NodeCommsTimeout::new(
@@ -349,7 +349,7 @@ impl NodeWrapper {
         })
     }
 
-    /// Set the node status and return the previous status
+    /// Set the node status and return the previous status.
     pub(crate) fn set_status(&mut self, next: NodeStatus) -> NodeStatus {
         let previous = self.status();
         if previous != next {
@@ -383,34 +383,34 @@ impl NodeWrapper {
         previous
     }
 
-    /// Clear all states from the node
+    /// Clear all states from the node.
     fn clear_states(&mut self) {
         self.resources_mut().clear_all();
     }
 
-    /// Get the inner states
+    /// Get the inner states.
     fn resources(&self) -> parking_lot::RwLockReadGuard<ResourceStates> {
         self.states.read()
     }
 
-    /// Get the inner resource states
+    /// Get the inner resource states.
     fn resources_mut(&self) -> parking_lot::RwLockWriteGuard<ResourceStates> {
         self.states.write()
     }
 
-    /// Get a mutable reference to the node's watchdog
+    /// Get a mutable reference to the node's watchdog.
     pub(crate) fn watchdog_mut(&mut self) -> &mut Watchdog {
         &mut self.watchdog
     }
-    /// Get the inner node
+    /// Get the inner node.
     pub(crate) fn node_state(&self) -> &NodeState {
         &self.node_state
     }
-    /// Get the node `NodeId`
+    /// Get the node `NodeId`.
     pub(crate) fn id(&self) -> &NodeId {
         self.node_state().id()
     }
-    /// Get the node `NodeStatus`
+    /// Get the node `NodeStatus`.
     pub(crate) fn status(&self) -> NodeStatus {
         self.node_state().status().clone()
     }
@@ -426,7 +426,7 @@ impl NodeWrapper {
             .map(|p| p.lock().pool.clone())
             .collect()
     }
-    /// Get all pool wrappers
+    /// Get all pool wrappers.
     pub(crate) fn pool_wrappers(&self) -> Vec<PoolWrapper> {
         let pools = self.resources().get_cloned_pool_states();
         let resources = self.resources();
@@ -448,11 +448,11 @@ impl NodeWrapper {
             })
             .collect()
     }
-    /// Get all pool states
+    /// Get all pool states.
     pub(crate) fn pool_states(&self) -> Vec<store::pool::PoolState> {
         self.resources().get_cloned_pool_states()
     }
-    /// Get pool from `pool_id` or None
+    /// Get pool from `pool_id` or None.
     pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
         self.resources().get_pool_state(pool_id).map(|p| p.pool)
     }
@@ -477,44 +477,44 @@ impl NodeWrapper {
             None => None,
         }
     }
-    /// Get all replicas
+    /// Get all replicas.
     pub(crate) fn replicas(&self) -> Vec<Replica> {
         self.resources()
             .get_replica_states()
             .map(|r| r.lock().replica.clone())
             .collect()
     }
-    /// Get all replica states
+    /// Get all replica states.
     pub(crate) fn replica_states(&self) -> Vec<ReplicaState> {
         self.resources().get_cloned_replica_states()
     }
-    /// Get all nexuses
+    /// Get all nexuses.
     fn nexuses(&self) -> Vec<Nexus> {
         self.resources()
             .get_nexus_states()
             .map(|nexus_state| nexus_state.lock().nexus.clone())
             .collect()
     }
-    /// Get all nexus states
+    /// Get all nexus states.
     pub(crate) fn nexus_states(&self) -> Vec<NexusState> {
         self.resources().get_cloned_nexus_states()
     }
-    /// Get nexus
+    /// Get nexus.
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
         self.resources().get_nexus_state(nexus_id).map(|s| s.nexus)
     }
-    /// Get replica from `replica_id`
+    /// Get replica from `replica_id`.
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
         self.resources()
             .get_replica_state(replica_id)
             .map(|r| r.lock().replica.clone())
     }
-    /// Is the node online
+    /// Is the node online.
     pub(crate) fn is_online(&self) -> bool {
         self.status() == NodeStatus::Online
     }
 
-    /// Load the node by fetching information from io-engine
+    /// Load the node by fetching information from io-engine.
     pub(crate) async fn load(&mut self, startup: bool) -> Result<(), SvcError> {
         tracing::info!(
             node.id = %self.id(),
@@ -543,7 +543,7 @@ impl NodeWrapper {
         }
     }
 
-    /// Update the node by updating its state from the states fetched from io-engine
+    /// Update the node by updating its state from the states fetched from io-engine.
     fn update(
         &mut self,
         setting_online: bool,
@@ -717,7 +717,7 @@ impl NodeStateFetcher {
 }
 
 /// CRUD Operations on a locked io-engine `NodeWrapper` such as:
-/// pools, replicas, nexuses and their children
+/// pools, replicas, nexuses and their children.
 #[async_trait]
 pub(crate) trait ClientOps {
     /// Get the grpc lock and client pair to execute the provided `request`
@@ -1528,7 +1528,7 @@ impl ClientOps for GrpcClientLocked {
             ApiVersion::V0 => {
                 let _ = self
                     .client_v0()?
-                    .fault_nexus_child(request.to_rpc())
+                    .fault_nexus_child(v0_conversion::to_rpc(request))
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Child,
@@ -1537,7 +1537,16 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
             ApiVersion::V1 => {
-                unimplemented!()
+                let _ = self
+                    .client_v1()?
+                    .nexus()
+                    .fault_nexus_child(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Child,
+                        request: "fault_child_nexus",
+                    })?;
+                Ok(())
             }
         }
     }

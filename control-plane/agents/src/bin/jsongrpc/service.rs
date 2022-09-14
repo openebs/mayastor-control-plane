@@ -6,7 +6,7 @@ use ::rpc::io_engine::{JsonRpcReply, JsonRpcRequest};
 use agents::errors::{JsonRpcDeserialise, NodeNotOnline, SvcError};
 use common_lib::{
     transport_api::ReplyError,
-    types::v0::transport::{Filter, JsonGrpcRequest, Node, NodeId},
+    types::v0::transport::{ApiVersion, Filter, JsonGrpcRequest, Node, NodeId},
 };
 use grpc::{
     context::Context,
@@ -53,24 +53,52 @@ impl JsonGrpcSvc {
         let node = node.state().context(NodeNotOnline {
             node: request.node.to_owned(),
         })?;
-        // todo: use the cli argument timeouts
-        let mut client = JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
-            .await
-            .unwrap();
-        let response: JsonRpcReply = client
-            .json_rpc_call(JsonRpcRequest {
-                method: request.method.to_string(),
-                params: request.params.to_string(),
-            })
-            .await
-            .map_err(|error| SvcError::JsonRpc {
-                method: request.method.to_string(),
-                params: request.params.to_string(),
-                error: error.to_string(),
-            })?
-            .into_inner();
 
-        serde_json::from_str(&response.result).context(JsonRpcDeserialise)
+        let mut api_versions = node.api_versions.clone().unwrap_or_default();
+        api_versions.sort();
+
+        // todo: use the cli argument timeouts
+        let response = match api_versions.last().unwrap_or(&ApiVersion::V1) {
+            ApiVersion::V0 => {
+                let mut client = JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
+                    .await
+                    .unwrap();
+                let response: JsonRpcReply = client
+                    .json_rpc_call(JsonRpcRequest {
+                        method: request.method.to_string(),
+                        params: request.params.to_string(),
+                    })
+                    .await
+                    .map_err(|error| SvcError::JsonRpc {
+                        method: request.method.to_string(),
+                        params: request.params.to_string(),
+                        error: error.to_string(),
+                    })?
+                    .into_inner();
+                response.result
+            }
+            ApiVersion::V1 => {
+                let mut client =
+                    rpc::v1::json::JsonRpcClient::connect(format!("http://{}", node.grpc_endpoint))
+                        .await
+                        .unwrap();
+                let response: rpc::v1::json::JsonRpcResponse = client
+                    .json_rpc_call(rpc::v1::json::JsonRpcRequest {
+                        method: request.method.to_string(),
+                        params: request.params.to_string(),
+                    })
+                    .await
+                    .map_err(|error| SvcError::JsonRpc {
+                        method: request.method.to_string(),
+                        params: request.params.to_string(),
+                        error: error.to_string(),
+                    })?
+                    .into_inner();
+                response.result
+            }
+        };
+
+        serde_json::from_str(&response).context(JsonRpcDeserialise)
     }
 }
 

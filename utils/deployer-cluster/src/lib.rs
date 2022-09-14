@@ -163,6 +163,7 @@ impl Cluster {
     pub async fn grpc_handle(&self, name: &str) -> Result<RpcHandle, String> {
         match self.composer.containers().iter().find(|&c| c.0 == name) {
             Some(container) => Ok(RpcHandle::connect(
+                self.builder.opts.latest_io_api_version(),
                 container.0,
                 format!("{}:10124", container.1 .1)
                     .parse::<SocketAddr>()
