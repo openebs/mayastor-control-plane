@@ -99,6 +99,7 @@ let
           fi
           sed -i '/deployer-cluster.*=/d' ./control-plane/plugin/Cargo.toml
         '';
+        inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
         cargoBuildOptions = attrs: attrs ++ [ "-p" "kubectl-plugin" ];
         nativeBuildInputs = with pkgs; [ clang openapi-generator which git openssl.dev ];
         doCheck = false;

@@ -11,12 +11,13 @@ jobs:
   kubectl-plugin:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            target: apple-darwin
           - os: ubuntu-latest
             target: linux-musl
+          - os: macos-latest
+            target: apple-darwin
 # TODO: not currently working
 #          - os: ubuntu-latest
 #            target: windows-gnu
