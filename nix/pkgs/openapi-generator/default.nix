@@ -24,9 +24,8 @@ let
       "find $out/.m2 -type f -regex '.+\\(\\.lastUpdated\\|resolver-status\\.properties\\|_remote\\.repositories\\)' -delete";
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = "sha256-MieSA5Y8u35H1xdP27A+YDekyyQ6CThNXOjQ82ArM7U=";
+    outputHash = if stdenv.hostPlatform.isDarwin then "sha256-9Li0uSD39ZwptIRgOXeBkLeZvfy/9w69faNDm75zdws=" else "sha256-MieSA5Y8u35H1xdP27A+YDekyyQ6CThNXOjQ82ArM7U=";
   };
-
 in
 stdenv.mkDerivation rec {
   inherit version;
