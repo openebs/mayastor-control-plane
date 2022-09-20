@@ -1,4 +1,4 @@
-{ git, lib, stdenv, openapi-generator, pkgs, which, sources, llvmPackages, protobuf }:
+{ git, lib, stdenv, openapi-generator, pkgs, which, sources, llvmPackages, protobuf, incremental }:
 let
   versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
   version = builtins.readFile "${versionDrv}";
@@ -13,6 +13,7 @@ let
           allowedPrefixes)
       src;
   src = whitelistSource ../../../. project-builder.src_list;
+  singleStep = !incremental;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
@@ -30,7 +31,7 @@ let
     # TODO: currently broken, at least 1 package fails to cross compile to windows (brotli2)
     windows-gnu = {
       kubectl-plugin = naersk_cross.buildPackage {
-        inherit release src version;
+        inherit release src version singleStep;
         name = "kubectl-plugin";
 
         preBuild = ''
@@ -62,7 +63,7 @@ let
     };
     linux-musl = {
       kubectl-plugin = naersk.buildPackage {
-        inherit release src version;
+        inherit release src version singleStep;
         name = "kubectl-plugin";
 
         preBuild = ''
@@ -88,7 +89,7 @@ let
     # Can only be built on apple-darwin
     apple-darwin = {
       kubectl-plugin = naersk.buildPackage {
-        inherit release src version;
+        inherit release src version singleStep;
         name = "kubectl-plugin";
 
         preBuild = ''
