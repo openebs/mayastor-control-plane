@@ -23,12 +23,9 @@ let
     rustc = channel.stable;
     cargo = channel.stable;
   };
-  naersk = naersk_package channel.static;
   naersk_cross = naersk_package channel.windows_cross;
-  arch = with lib; head (splitString "-" stdenv.hostPlatform.system);
 
   components = { release ? false }: {
-    # TODO: currently broken, at least 1 package fails to cross compile to windows (brotli2)
     windows-gnu = {
       kubectl-plugin = naersk_cross.buildPackage {
         inherit release src version singleStep;
@@ -49,21 +46,27 @@ let
         '';
         cargoBuildOptions = attrs: attrs ++ [ "-p" "kubectl-plugin" "--no-default-features" "--features" "tls" ];
         buildInputs = with pkgs.pkgsCross.mingwW64.windows; [ mingw_w64_pthreads pthreads ];
-        nativeBuildInputs = [ pkgs.pkgsCross.mingwW64.clangStdenv.cc openapi-generator which git pkgs.pkgsCross.mingwW64.openssl.dev ];
+        nativeBuildInputs = [ pkgs.pkgsCross.mingwW64.stdenv.cc openapi-generator which git pkgs.pkgsCross.mingwW64.openssl.dev ];
         doCheck = false;
         usePureFromTOML = true;
 
         PROTOC = "${protobuf}/bin/protoc";
         CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
         CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
-        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = with pkgs.pkgsCross.mingwW64.clangStdenv;
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = with pkgs.pkgsCross.mingwW64.stdenv;
           "${cc}/bin/${cc.targetPrefix}cc";
       };
       recurseForDerivations = true;
     };
-    linux-musl = {
+    linux-musl = rec {
+      target = channel.makeRustTarget pkgs.pkgsStatic.hostPlatform;
+      naersk = naersk_package (channel.static {
+        inherit target;
+      });
+      check_assert = lib.asserts.assertMsg (pkgs.hostPlatform.isLinux == true) "This may only be built on Linux";
+
       kubectl-plugin = naersk.buildPackage {
-        inherit release src version singleStep;
+        inherit release src version singleStep check_assert;
         name = "kubectl-plugin";
 
         preBuild = ''
@@ -81,15 +84,22 @@ let
         doCheck = false;
         usePureFromTOML = true;
 
-        CARGO_BUILD_TARGET = "${arch}-unknown-linux-musl";
+        CARGO_BUILD_TARGET = target;
         CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
       };
       recurseForDerivations = true;
     };
     # Can only be built on apple-darwin
-    apple-darwin = {
+    apple-darwin = rec {
+      target = channel.makeRustTarget pkgs.pkgsStatic.hostPlatform;
+      x84_64-apple-darwin = channel.makeRustTarget pkgs.pkgsCross.x86_64-darwin.hostPlatform;
+      naersk = naersk_package (channel.static {
+        inherit target;
+      });
+      check_assert = lib.asserts.assertMsg (target == x84_64-apple-darwin) "This may only be built on ${x84_64-apple-darwin}";
+
       kubectl-plugin = naersk.buildPackage {
-        inherit release src version singleStep;
+        inherit release src version singleStep check_assert;
         name = "kubectl-plugin";
 
         preBuild = ''
@@ -106,7 +116,7 @@ let
         doCheck = false;
         usePureFromTOML = true;
 
-        CARGO_BUILD_TARGET = "x86_64-apple-darwin";
+        CARGO_BUILD_TARGET = target;
       };
       recurseForDerivations = true;
     };
