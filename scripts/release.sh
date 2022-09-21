@@ -5,6 +5,8 @@
 # The script assumes that a user is logged on to dockerhub for public images,
 # or has insecure registry access setup for CI.
 
+CI=${CI:false}
+
 set -euo pipefail
 
 # Test if the image already exists in dockerhub
@@ -41,8 +43,8 @@ Options:
   --skip-build               Don't perform nix-build.
   --skip-publish             Don't publish built images.
   --skip-tag                 Don't publish built images with the git tag.
-  --image                    Specify what image to build.
-  --alias-tag                Explicit alias for short commit hash tag.
+  --image           <image>  Specify what image to build.
+  --alias-tag       <tag>    Explicit alias for short commit hash tag.
   --incremental              Builds components in two stages allowing for faster rebuilds during development.
   --build-bins               Builds all the static binaries.
   --build-bin                Specify which binary to build.
@@ -60,12 +62,13 @@ RM="rm"
 SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
 BRANCH=`git rev-parse --abbrev-ref HEAD`
+BRANCH=${BRANCH////-}
 IMAGES=
 DEFAULT_IMAGES="agents.core agents.ha.node operators.diskpool rest csi.controller csi.node"
 UPLOAD=
 SKIP_PUBLISH=
 SKIP_BUILD=
-SKIP_TAG_PUBLISH=
+OVERRIDE_COMMIT_HASH=
 REGISTRY=
 ALIAS=
 BUILD_TYPE="release"
@@ -76,6 +79,9 @@ BUILD_BINARIES=
 BIN_TARGET_PLAT="linux-musl"
 BINARY_OUT_LINK="."
 
+if [ "$CI" != "true" ]; then
+  OVERRIDE_COMMIT_HASH="true"
+fi
 
 # Check if all needed tools are installed
 curl --version >/dev/null
@@ -186,6 +192,24 @@ elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
   fi
 fi
 
+# Create alias
+alias_tag=
+if [ -n "$ALIAS" ]; then
+  alias_tag=$ALIAS
+elif [ "$BRANCH" == "develop" ]; then
+  alias_tag="$BRANCH"
+elif [ "${BRANCH#release-}" != "${BRANCH}" ]; then
+  alias_tag="${BRANCH}"
+fi
+
+if [ -n "$OVERRIDE_COMMIT_HASH" ] && [ -n "$alias_tag" ]; then
+  # Set the TAG to the alias and remove the alias
+  NIX_TAG_ARGS="--argstr img_tag $alias_tag"
+  NIX_BUILD="$NIX_BUILD $NIX_TAG_ARGS"
+  TAG="$alias_tag"
+  alias_tag=
+fi
+
 for name in $IMAGES; do
   image_basename=$($NIX_EVAL -f . images.$BUILD_TYPE.$name.imageName | xargs)
   image=$image_basename
@@ -222,15 +246,6 @@ if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
       done
   fi
 
-  # Create alias
-  alias_tag=
-  if [ -n "$ALIAS" ]; then
-    alias_tag=$ALIAS
-  elif [ "$BRANCH" == "develop" ]; then
-    alias_tag=develop
-  elif [ "${BRANCH#release-}" != "${BRANCH}" ]; then
-    alias_tag="${BRANCH}"
-  fi
   if [ -n "$alias_tag" ]; then
     for img in $UPLOAD; do
       echo "Uploading $img:$alias_tag to registry ..."
@@ -239,3 +254,5 @@ if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
     done
   fi
 fi
+
+$DOCKER image prune -f

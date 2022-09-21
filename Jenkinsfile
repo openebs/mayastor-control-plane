@@ -35,7 +35,7 @@ def notifySlackUponStateChange(build) {
 }
 
 def mainBranches() {
-    return BRANCH_NAME == "develop" || BRANCH_NAME.startsWith("release-");
+    return BRANCH_NAME == "develop" || BRANCH_NAME.startsWith("release/");
 }
 
 run_linter = true
@@ -87,7 +87,7 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'release-*'
+            branch 'release/*'
             branch 'hotfix-*'
             expression { run_linter == false }
           }
@@ -171,7 +171,7 @@ pipeline {
           expression { params.build_images == true }
           anyOf {
             branch 'master'
-            branch 'release-*'
+            branch 'release/*'
             branch 'hotfix-*'
             branch 'develop'
           }
