@@ -43,7 +43,10 @@ let
     builtins.filterSource
       (path: type:
         lib.any
-          (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
+          (allowedPrefix:
+            (lib.hasPrefix (toString (src + "/${allowedPrefix}")) path) ||
+            (type == "directory" && lib.hasPrefix path (toString (src + "/${allowedPrefix}")))
+          )
           allowedPrefixes)
       src;
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
@@ -57,18 +60,16 @@ let
     "control-plane"
     "deployer"
     "k8s"
-    "kubectl-plugin"
     "openapi"
     "rpc"
-    "scripts"
-    "tests"
+    "scripts/rust/generate-openapi-bindings.sh"
+    "tests/io-engine"
     "utils"
   ];
+  src = whitelistSource ../../../. src_list;
   buildProps = rec {
     name = "control-plane-${version}";
-    inherit version;
-
-    src = whitelistSource ../../../. src_list;
+    inherit version src;
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [ clang pkg-config openapi-generator which git ];
@@ -107,7 +108,7 @@ let
   builder = if incremental then build_with_naersk else build_with_default;
 in
 {
-  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src_list;
+  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src;
 
   build = { buildType, cargoBuildFlags ? [ ] }:
     if allInOne then

@@ -8,6 +8,7 @@
 /package-lock.json
 /package.json
 /result*
+/kubectl-plugin
 __pycache__
 /tests/bdd/openapi/
 /chart/charts/

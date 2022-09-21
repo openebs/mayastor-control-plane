@@ -5,14 +5,7 @@ let
   channel = import ../../lib/rust.nix { inherit sources; };
   project-builder =
     pkgs.callPackage ../control-plane/cargo-project.nix { inherit version; };
-  whitelistSource = src: allowedPrefixes:
-    builtins.filterSource
-      (path: type:
-        lib.any
-          (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
-          allowedPrefixes)
-      src;
-  src = whitelistSource ../../../. project-builder.src_list;
+  src = project-builder.src;
   singleStep = !incremental;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
