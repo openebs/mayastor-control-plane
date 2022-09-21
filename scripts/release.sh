@@ -42,7 +42,6 @@ Options:
   --debug                    Build debug version of images where possible.
   --skip-build               Don't perform nix-build.
   --skip-publish             Don't publish built images.
-  --skip-tag                 Don't publish built images with the git tag.
   --image           <image>  Specify what image to build.
   --alias-tag       <tag>    Explicit alias for short commit hash tag.
   --incremental              Builds components in two stages allowing for faster rebuilds during development.
@@ -135,10 +134,6 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-publish)
       SKIP_PUBLISH="yes"
-      shift
-      ;;
-    --skip-tag)
-      SKIP_TAG_PUBLISH="yes"
       shift
       ;;
     --debug)
@@ -238,13 +233,11 @@ for name in $IMAGES; do
 done
 
 if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
-  if [ -n "$SKIP_TAG_PUBLISH" ]; then
-      # Upload them
-      for img in $UPLOAD; do
-          echo "Uploading $img:$TAG to registry ..."
-          $DOCKER push $img:$TAG
-      done
-  fi
+  # Upload them
+  for img in $UPLOAD; do
+      echo "Uploading $img:$TAG to registry ..."
+      $DOCKER push $img:$TAG
+  done
 
   if [ -n "$alias_tag" ]; then
     for img in $UPLOAD; do
