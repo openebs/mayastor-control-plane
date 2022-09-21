@@ -2,7 +2,7 @@
 # avoid dependency on docker tool chain. Though the maturity of OCI
 # builder in nixpkgs is questionable which is why we postpone this step.
 
-{ busybox, dockerTools, lib, xfsprogs, e2fsprogs, utillinux, fetchurl, control-plane, tini }:
+{ busybox, dockerTools, lib, xfsprogs, e2fsprogs, utillinux, fetchurl, control-plane, tini, img_tag ? "" }:
 let
   e2fsprogs_1_46_2 = (e2fsprogs.overrideAttrs (oldAttrs: rec {
     version = "1.46.2";
@@ -11,10 +11,11 @@ let
       sha256 = "1mawh41ikrxy2nwhxdrza0dcxhs061mfrq8jraghbp2vyss2d7zp";
     };
   }));
+  tag = if img_tag != "" then img_tag else control-plane.version;
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
   build-control-plane-image = { buildType, name, package, config ? { } }:
     dockerTools.buildImage {
-      tag = control-plane.version;
+      inherit tag;
       created = "now";
       name = "mayadata/mayastor-${name}${image_suffix.${buildType}}";
       contents = [ tini busybox package ];
