@@ -3,7 +3,27 @@ use std::{
     future::Future,
     sync::{Arc, Mutex},
 };
-use tokio::{signal::unix::SignalKind, sync::oneshot};
+use tokio::sync::oneshot;
+
+#[cfg(unix)]
+/// Represents the specific kind of signal to listen for.
+pub use tokio::signal::unix::SignalKind;
+#[cfg(windows)]
+#[derive(Debug, Copy, Clone)]
+/// Represents the specific kind of signal to listen for.
+pub enum SignalKind {
+    CtrlC,
+    Break,
+}
+#[cfg(windows)]
+impl SignalKind {
+    fn ctrl_c() -> Self {
+        Self::CtrlC
+    }
+    fn ctrl_break() -> Self {
+        Self::CtrlC
+    }
+}
 
 type ShutdownSync = Arc<Mutex<Shutdown>>;
 
@@ -83,32 +103,51 @@ trait ShutdownEvent: Send + Sync {
     async fn wait(&self) -> SignalKind;
 }
 
-/// Shutdown Event when INT | TERM are received.
+/// Unix: Shutdown Event when INT | TERM are received
+/// Windows: Shutdown Event when C | Break are received
 struct IntTermEvent {}
 #[async_trait::async_trait]
 impl ShutdownEvent for IntTermEvent {
     async fn wait(&self) -> SignalKind {
-        let mut sig_int =
-            tokio::signal::unix::signal(SignalKind::interrupt()).expect("to register SIGINT");
-        let mut sig_term =
-            tokio::signal::unix::signal(SignalKind::terminate()).expect("to register SIGTERM");
+        #[cfg(unix)]
+        {
+            let mut sig_int =
+                tokio::signal::unix::signal(SignalKind::interrupt()).expect("to register SIGINT");
+            let mut sig_term =
+                tokio::signal::unix::signal(SignalKind::terminate()).expect("to register SIGTERM");
 
-        let kind = tokio::select! {
-            _ = sig_int.recv() => {
-                tracing::warn!(signal = ?SignalKind::interrupt(), "Signalled");
-                SignalKind::interrupt()
-            },
-            _ = sig_term.recv() => {
-                tracing::warn!(signal = ?SignalKind::terminate(), "Signalled");
-                SignalKind::terminate()
-            },
-        };
+            tokio::select! {
+                _ = sig_int.recv() => {
+                    tracing::warn!(signal = ?SignalKind::interrupt(), "Signalled");
+                    SignalKind::interrupt()
+                },
+                _ = sig_term.recv() => {
+                    tracing::warn!(signal = ?SignalKind::terminate(), "Signalled");
+                    SignalKind::terminate()
+                },
+            }
+        }
+        #[cfg(windows)]
+        {
+            let mut ctrl_c = tokio::signal::windows::ctrl_c().expect("to register Ctrl_C");
+            let mut ctrl_b = tokio::signal::windows::ctrl_break().expect("to register Ctrl_Break");
 
-        kind
+            tokio::select! {
+                _ = ctrl_c.recv() => {
+                    tracing::warn!(signal = ?SignalKind::ctrl_c(), "Signalled");
+                    SignalKind::ctrl_c()
+                },
+                _ = ctrl_b.recv() => {
+                    tracing::warn!(signal = ?SignalKind::ctrl_break(), "Signalled");
+                    SignalKind::ctrl_break()
+                },
+            }
+        }
     }
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use crate::{Shutdown, ShutdownEvent, ShutdownSync};
     use lazy_static::lazy_static;

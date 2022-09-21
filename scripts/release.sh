@@ -60,6 +60,7 @@ RM="rm"
 SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
 BRANCH=`git rev-parse --abbrev-ref HEAD`
+BRANCH=${BRANCH////-}
 IMAGES=
 DEFAULT_IMAGES="agents.core operators.diskpool rest csi.controller csi.node"
 UPLOAD=
