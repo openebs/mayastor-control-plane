@@ -13,10 +13,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux-musl
+            arch: x86_64
           - os: macos-latest
             target: apple-darwin
+            arch: x86_64
           - os: ubuntu-latest
             target: windows-gnu
+            arch: x86_64
             suffix: .exe
     steps:
       - uses: actions/checkout@v3
@@ -28,6 +31,6 @@ jobs:
       - run: nix-build -A utils.release.${{ matrix.target }}.kubectl-plugin --arg incremental false
       - uses: actions/upload-artifact@v3
         with:
-          name: kubectl-mayastor-${{ matrix.target }}
+          name: kubectl-mayastor-${{ matrix.arch }}-${{ matrix.target }}
           path: ./result/bin/kubectl-mayastor${{ matrix.suffix }}
           if-no-files-found: error

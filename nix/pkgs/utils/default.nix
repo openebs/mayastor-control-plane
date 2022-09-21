@@ -92,11 +92,11 @@ let
     # Can only be built on apple-darwin
     apple-darwin = rec {
       target = channel.makeRustTarget pkgs.pkgsStatic.hostPlatform;
-      x84_64-apple-darwin = channel.makeRustTarget pkgs.pkgsCross.x86_64-darwin.hostPlatform;
+      x86_64-apple-darwin = channel.makeRustTarget pkgs.pkgsCross.x86_64-darwin.hostPlatform;
       naersk = naersk_package (channel.static {
         inherit target;
       });
-      check_assert = lib.asserts.assertMsg (target == x84_64-apple-darwin) "This may only be built on ${x84_64-apple-darwin}";
+      check_assert = lib.asserts.assertMsg (target == x86_64-apple-darwin) "This may only be built on ${x86_64-apple-darwin}";
 
       kubectl-plugin = naersk.buildPackage {
         inherit release src version singleStep check_assert;
