@@ -2,10 +2,7 @@ name: Release Artifacts
 on:
   push:
     branches:
-      - master
-      - 'release-**'
       - 'release/**'
-      - 'hotfix-v**'
 
 jobs:
   kubectl-plugin:
@@ -18,10 +15,9 @@ jobs:
             target: linux-musl
           - os: macos-latest
             target: apple-darwin
-# TODO: not currently working
-#          - os: ubuntu-latest
-#            target: windows-gnu
-#            suffix: .exe
+          - os: ubuntu-latest
+            target: windows-gnu
+            suffix: .exe
     steps:
       - uses: actions/checkout@v3
         with:
