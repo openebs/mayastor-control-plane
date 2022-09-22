@@ -1,4 +1,4 @@
-use nix::{errno::Errno, sys};
+use nix::{errno::Errno, sys, sys::statfs::FsType};
 use rpc::csi;
 use std::{boxed::Box, collections::HashMap, path::Path, time::Duration, vec::Vec};
 use tonic::{Code, Request, Response, Status};
@@ -8,6 +8,7 @@ macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
     (Code::$code:ident, $fmt:literal $(,$args:expr)+) => {{ let message = format!($fmt $(,$args)+); error!("{}", message); Status::new(Code::$code, message) }};
 }
+const XFS_MAGIC: i64 = 0x58465342;
 
 use uuid::Uuid;
 
@@ -368,23 +369,29 @@ impl node_server::Node for Node {
             ));
         }
         match sys::statfs::statfs(&*msg.volume_path) {
-            Ok(info) => Ok(Response::new(NodeGetVolumeStatsResponse {
-                usage: vec![
-                    csi::VolumeUsage {
-                        total: info.blocks() as i64 * info.block_size(),
-                        unit: csi::volume_usage::Unit::Bytes as i32,
-                        available: info.blocks_available() as i64 * info.block_size(),
-                        used: (info.blocks() - info.blocks_free()) as i64 * info.block_size(),
-                    },
-                    csi::VolumeUsage {
-                        total: info.files() as i64,
-                        unit: csi::volume_usage::Unit::Inodes as i32,
-                        available: info.files_free() as i64,
-                        used: (info.files() - info.files_free()) as i64,
-                    },
-                ],
-                volume_condition: None,
-            })),
+            Ok(info) => match info.filesystem_type() {
+                sys::statfs::EXT4_SUPER_MAGIC | FsType(XFS_MAGIC) => {
+                    Ok(Response::new(NodeGetVolumeStatsResponse {
+                        usage: vec![
+                            csi::VolumeUsage {
+                                total: info.blocks() as i64 * info.block_size(),
+                                unit: csi::volume_usage::Unit::Bytes as i32,
+                                available: info.blocks_available() as i64 * info.block_size(),
+                                used: (info.blocks() - info.blocks_free()) as i64
+                                    * info.block_size(),
+                            },
+                            csi::VolumeUsage {
+                                total: info.files() as i64,
+                                unit: csi::volume_usage::Unit::Inodes as i32,
+                                available: info.files_free() as i64,
+                                used: (info.files() - info.files_free()) as i64,
+                            },
+                        ],
+                        volume_condition: None,
+                    }))
+                }
+                _ => Err(Status::new(Code::InvalidArgument, "unsupported filesystem")),
+            },
             Err(err) => match err {
                 Errno::ENOENT => Err(Status::new(Code::NotFound, err.to_string())),
                 Errno::EIO => Err(Status::new(Code::Internal, err.to_string())),
