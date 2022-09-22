@@ -166,6 +166,7 @@ pub enum StorableObjectType {
     CoreRegistryConfig,
     StoreLeaseLock,
     StoreLeaseOwner,
+    SwitchOver,
 }
 
 /// Returns the key prefix that should is used for the keys, when running from within the cluster.

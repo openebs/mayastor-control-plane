@@ -78,7 +78,7 @@ def context():
 @pytest.fixture
 def register_node_agent(context):
     hdl = cluster_agent_rpc_handle()
-    req = pb.HaNodeInfo(nodename="test", endpoint="http://node-agent-test:1111")
+    req = pb.HaNodeInfo(nodename="test", endpoint="0.0.0.0:1111")
 
     context["attempt"] = hdl.api.RegisterNodeAgent(req)
 

@@ -79,10 +79,15 @@ impl HaRpc for ClusterAgentServer {
     }
     async fn report_failed_nvme_paths(
         &self,
-        _request: tonic::Request<ReportFailedNvmePathsRequest>,
+        request: tonic::Request<ReportFailedNvmePathsRequest>,
     ) -> Result<tonic::Response<()>, tonic::Status> {
-        Err(Status::unimplemented(
-            "NVMe path reporting is not yet implemented",
-        ))
+        let pathinfo = request.into_inner();
+        match self.service.report_failed_nvme_paths(&pathinfo, None).await {
+            Ok(_) => Ok(Response::new(())),
+            Err(err) => Err(Status::internal(format!(
+                "Failed to report path: {:?}",
+                err
+            ))),
+        }
     }
 }
