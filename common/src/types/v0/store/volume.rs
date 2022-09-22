@@ -184,6 +184,10 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.target = Some(VolumeTarget::new(node, nexus.clone(), protocol));
                     self.last_nexus_id = Some(nexus);
                 }
+                VolumeOperation::Republish((node, nexus, protocol)) => {
+                    self.target = Some(VolumeTarget::new(node, nexus.clone(), Some(protocol)));
+                    self.last_nexus_id = Some(nexus);
+                }
                 VolumeOperation::Unpublish => {
                     self.target = None;
                 }
@@ -219,6 +223,7 @@ pub enum VolumeOperation {
     Unshare,
     SetReplica(u8),
     Publish((NodeId, NexusId, Option<VolumeShareProtocol>)),
+    Republish((NodeId, NexusId, VolumeShareProtocol)),
     Unpublish,
     RemoveUnusedReplica(ReplicaId),
 }
@@ -232,6 +237,7 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
             VolumeOperation::Unshare => models::volume_spec_operation::Operation::Unshare,
             VolumeOperation::SetReplica(_) => models::volume_spec_operation::Operation::SetReplica,
             VolumeOperation::Publish(_) => models::volume_spec_operation::Operation::Publish,
+            VolumeOperation::Republish(_) => models::volume_spec_operation::Operation::Republish,
             VolumeOperation::Unpublish => models::volume_spec_operation::Operation::Unpublish,
             VolumeOperation::RemoveUnusedReplica(_) => {
                 models::volume_spec_operation::Operation::RemoveUnusedReplica

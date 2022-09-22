@@ -64,6 +64,7 @@ async fn hot_spare_reconcile(
             hot_spare_nexus_reconcile(&mut volume, &volume_state, context).await
         }
         VolumeStatus::Faulted => PollResult::Ok(PollerState::Idle),
+        VolumeStatus::Shutdown => PollResult::Ok(PollerState::Idle),
     }
 }
 

@@ -41,6 +41,7 @@ use common_lib::{
 };
 
 use async_trait::async_trait;
+use common_lib::types::v0::transport::ShutdownNexus;
 use parking_lot::RwLock;
 use snafu::ResultExt;
 use std::{
@@ -750,6 +751,8 @@ pub(crate) trait ClientOps {
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError>;
     /// Fault a child from its parent nexus via gRPC.
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError>;
+    /// Shutdown an existing nexus.
+    async fn shutdown_nexus(&self, _: &ShutdownNexus) -> Result<(), SvcError>;
 }
 
 /// Internal Operations on a io-engine locked `NodeWrapper` for the implementor
@@ -1144,6 +1147,11 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 Err(error)
             }
         }
+    }
+
+    async fn shutdown_nexus(&self, _: &ShutdownNexus) -> Result<(), SvcError> {
+        // todo: add implementation
+        Ok(())
     }
 }
 
@@ -1549,6 +1557,11 @@ impl ClientOps for GrpcClientLocked {
                 Ok(())
             }
         }
+    }
+
+    async fn shutdown_nexus(&self, _: &ShutdownNexus) -> Result<(), SvcError> {
+        // todo: add implementation
+        Ok(())
     }
 }
 

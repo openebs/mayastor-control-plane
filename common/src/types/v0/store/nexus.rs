@@ -9,7 +9,7 @@ use crate::types::v0::{
     },
     transport::{
         self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, NexusId,
-        NexusShareProtocol, NodeId, Protocol, ReplicaId, VolumeId,
+        NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId, VolumeId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -106,6 +106,13 @@ impl NexusSpec {
     pub fn disowned_by_volume(&mut self) {
         let _ = self.owner.take();
     }
+    /// Check if the nexus spec has a shutdown status.
+    pub fn is_shutdown(&self) -> bool {
+        matches!(
+            self.spec_status,
+            NexusSpecStatus::Created(NexusStatus::Shutdown)
+        )
+    }
 }
 
 impl From<&NexusSpec> for CreateNexus {
@@ -201,6 +208,9 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                 NexusOperation::Unshare => {
                     self.share = Protocol::None;
                 }
+                NexusOperation::Shutdown => {
+                    self.spec_status = SpecStatus::Created(transport::NexusStatus::Shutdown)
+                }
                 NexusOperation::AddChild(uri) => self.children.push(uri),
                 NexusOperation::RemoveChild(uri) => self.children.retain(|c| c != &uri),
             }
@@ -231,6 +241,7 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
 pub enum NexusOperation {
     Create,
     Destroy,
+    Shutdown,
     Share(NexusShareProtocol),
     Unshare,
     AddChild(NexusChild),

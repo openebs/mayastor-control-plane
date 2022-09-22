@@ -1,11 +1,13 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
+        operations::{
+            ResourceLifecycle, ResourceOffspring, ResourceSharing, ResourceShutdownOperations,
+        },
         operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
         OperationGuardArc,
     },
-    wrapper::ClientOps,
+    wrapper::{ClientOps, GetterOps},
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
@@ -16,7 +18,7 @@ use common_lib::types::v0::{
     transport::{
         child::Child,
         nexus::{CreateNexus, DestroyNexus, Nexus, ShareNexus, UnshareNexus},
-        AddNexusChild, RemoveNexusChild,
+        AddNexusChild, RemoveNexusChild, ShutdownNexus,
     },
 };
 
@@ -243,5 +245,41 @@ impl ResourceOffspring for Option<&mut OperationGuardArc<NexusSpec>> {
         } else {
             node.remove_child(request).await
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
+    type RemoveShutdownTargets = ();
+    type Shutdown = ShutdownNexus;
+
+    async fn shutdown(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Shutdown,
+    ) -> Result<(), SvcError> {
+        let node_id = self.as_ref().node.clone();
+        let nexus_id = self.uuid();
+        let node = registry.get_node_wrapper(&node_id).await?;
+        let nexus_state = match node.nexus(nexus_id).await {
+            None => self.as_ref().into(),
+            Some(state) => state,
+        };
+        let spec_clone = self
+            .start_update(registry, &nexus_state, NexusOperation::Shutdown)
+            .await?;
+
+        let result = node.shutdown_nexus(request).await;
+        self.complete_update(registry, result, spec_clone).await?;
+        Ok(())
+    }
+
+    async fn remove_shutdown_targets(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::RemoveShutdownTargets,
+    ) -> Result<(), SvcError> {
+        // Not applicable for nexus
+        unimplemented!()
     }
 }

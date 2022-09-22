@@ -1,7 +1,10 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::{ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing},
+        operations::{
+            ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing,
+            ResourceShutdownOperations,
+        },
         operations_helper::ResourceSpecsLocked,
         OperationGuardArc,
     },
@@ -12,8 +15,8 @@ use common_lib::{
     types::v0::{
         store::volume::VolumeSpec,
         transport::{
-            CreateVolume, DestroyVolume, Filter, GetVolumes, PublishVolume, SetVolumeReplica,
-            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, GetVolumes, PublishVolume,
+            RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
         },
     },
 };
@@ -21,8 +24,9 @@ use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
-            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
+            RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
+            UnshareVolumeInfo, VolumeOperations,
         },
         Pagination,
     },
@@ -104,6 +108,19 @@ impl VolumeOperations for Service {
         Ok(volume)
     }
 
+    async fn republish(
+        &self,
+        req: &dyn RepublishVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let republish_volume = req.into();
+        let service = self.clone();
+        let volume =
+            Context::spawn(async move { service.republish_volume(&republish_volume).await })
+                .await??;
+        Ok(volume)
+    }
+
     async fn unpublish(
         &self,
         req: &dyn UnpublishVolumeInfo,
@@ -132,6 +149,18 @@ impl VolumeOperations for Service {
 
     async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
         return Ok(true);
+    }
+
+    async fn destroy_shutdown_target(
+        &self,
+        req: &dyn DestroyShutdownTargetsInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let destroy_volume = req.into();
+        let service = self.clone();
+        Context::spawn(async move { service.destroy_shutdown_target(&destroy_volume).await })
+            .await??;
+        Ok(())
     }
 }
 
@@ -198,6 +227,18 @@ impl Service {
         Ok(())
     }
 
+    /// Destroy the shutdown targets associate with the volume.
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    pub(super) async fn destroy_shutdown_target(
+        &self,
+        request: &DestroyShutdownTargets,
+    ) -> Result<(), SvcError> {
+        let mut volume = self.specs().volume(&request.uuid).await?;
+        volume
+            .remove_shutdown_targets(&self.registry, request)
+            .await
+    }
+
     /// Share a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn share_volume(&self, request: &ShareVolume) -> Result<String, SvcError> {
@@ -217,6 +258,16 @@ impl Service {
     pub(super) async fn publish_volume(&self, request: &PublishVolume) -> Result<Volume, SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.publish(&self.registry, request).await
+    }
+
+    /// Republish a volume by shutting down the older target first.
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    pub(super) async fn republish_volume(
+        &self,
+        request: &RepublishVolume,
+    ) -> Result<Volume, SvcError> {
+        let mut volume = self.specs().volume(&request.uuid).await?;
+        volume.republish(&self.registry, request).await
     }
 
     /// Unpublish a volume using the given parameters.
