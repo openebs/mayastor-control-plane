@@ -5,7 +5,7 @@ use crate::{
         resources::{
             operations::{
                 ResourceLifecycle, ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas,
-                ResourceSharing,
+                ResourceSharing, ResourceShutdownOperations,
             },
             operations_helper::{
                 GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
@@ -25,13 +25,15 @@ use common_lib::{
             volume::{VolumeOperation, VolumeSpec},
         },
         transport::{
-            CreateVolume, DestroyNexus, DestroyReplica, DestroyVolume, NexusId, Protocol,
-            PublishVolume, Replica, ReplicaOwners, SetVolumeReplica, ShareNexus, ShareVolume,
-            UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
+            CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
+            NexusId, Protocol, PublishVolume, Replica, ReplicaOwners, RepublishVolume,
+            SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume,
+            UnshareNexus, UnshareVolume, Volume,
         },
     },
 };
 use std::ops::Deref;
+use tracing::debug;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
@@ -263,6 +265,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     type Publish = PublishVolume;
     type PublishOutput = Volume;
     type Unpublish = UnpublishVolume;
+    type Republish = RepublishVolume;
 
     async fn publish(
         &mut self,
@@ -271,7 +274,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     ) -> Result<Self::PublishOutput, SvcError> {
         let specs = registry.specs();
         let state = registry.get_volume_state(&request.uuid).await?;
-        let nexus_node = get_volume_target_node(registry, &state, request).await?;
+        let nexus_node = get_volume_target_node(registry, &state, request, false).await?;
         let nexus_id = NexusId::new();
 
         let operation =
@@ -376,6 +379,95 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         self.complete_update(registry, result, spec_clone).await
     }
+
+    async fn republish(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Republish,
+    ) -> Result<Self::PublishOutput, SvcError> {
+        let specs = registry.specs();
+        let spec = self.as_ref().clone();
+        let state = registry.get_volume_state(&request.uuid).await?;
+        // If the volume is not published then it should issue publish call rather than republish.
+        let volume_target = match spec.target {
+            None => {
+                return Err(SvcError::VolumeNotPublished {
+                    vol_id: request.uuid.to_string(),
+                })
+            }
+            Some(target) => target,
+        };
+        let nexus_node = get_volume_target_node(registry, &state, request, true).await?;
+        let newer_nexus_id = NexusId::new();
+        let operation =
+            VolumeOperation::Republish((nexus_node.clone(), newer_nexus_id.clone(), request.share));
+        let spec_clone = self.start_update(registry, &state, operation).await?;
+        let result = specs.nexus(volume_target.nexus()).await;
+        let mut older_nexus = self
+            .validate_update_step(registry, result, &spec_clone)
+            .await?;
+
+        let older_nexus_id = older_nexus.uuid().clone();
+        // shutdown the older nexus before newer nexus creation.
+        // todo: Handle scenario when node is offline and shutdown fails.
+        let result = older_nexus
+            .shutdown(registry, &ShutdownNexus::new(older_nexus_id))
+            .await;
+        self.validate_update_step(registry, result, &spec_clone)
+            .await?;
+
+        // Create a Nexus on the requested or auto-selected node
+        let result = specs
+            .volume_create_nexus(registry, &nexus_node, &newer_nexus_id, &spec_clone)
+            .await;
+        let (mut nexus, nexus_state) = self
+            .validate_update_step(registry, result, &spec_clone)
+            .await?;
+
+        let (volume_id, last_nexus_id) = {
+            let volume_spec = self.lock();
+            (volume_spec.uuid.clone(), volume_spec.last_nexus_id.clone())
+        };
+
+        // Share the Nexus
+        let result = match nexus
+            .share(
+                registry,
+                &ShareNexus::from((&nexus_state, None, request.share)),
+            )
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                // Since we failed to share, we'll revert back to the previous state.
+                // If we fail to do this inline, the reconcilers will pick up the slack.
+                nexus
+                    .destroy(registry, &DestroyNexus::from(nexus_state).with_disown_all())
+                    .await
+                    .ok();
+                Err(error)
+            }
+        };
+
+        self.complete_update(registry, result, spec_clone).await?;
+
+        // If there was a previous nexus we should delete the persisted NexusInfo structure.
+        // todo: This needs to be revisited, as there might be inconsistency on child state after
+        // creation of nexus.
+        if let Some(nexus_id) = last_nexus_id {
+            ResourceSpecsLocked::delete_nexus_info(
+                &NexusInfoKey::new(&Some(volume_id), &nexus_id),
+                registry,
+            )
+            .await;
+        }
+
+        let volume = registry.get_volume(&request.uuid).await?;
+        registry
+            .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
+            .await;
+        Ok(volume)
+    }
 }
 
 #[async_trait::async_trait]
@@ -403,6 +495,71 @@ impl ResourceReplicas for OperationGuardArc<VolumeSpec> {
             specs
                 .decrease_volume_replica(self, registry, state, spec_clone)
                 .await?;
+        }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
+    type RemoveShutdownTargets = DestroyShutdownTargets;
+    type Shutdown = ();
+
+    async fn shutdown(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Shutdown,
+    ) -> Result<(), SvcError> {
+        // not applicable for volume
+        unimplemented!()
+    }
+
+    async fn remove_shutdown_targets(
+        &mut self,
+        registry: &Registry,
+        request: &Self::RemoveShutdownTargets,
+    ) -> Result<(), SvcError> {
+        let shutdown_nexuses = registry
+            .specs()
+            .get_volume_shutdown_nexuses(&request.uuid)
+            .await;
+
+        for mut nexus_res in shutdown_nexuses {
+            match nexus_res.operation_guard_wait().await {
+                Ok(mut guard) => {
+                    let nexus_spec = guard.as_ref().clone();
+                    let destroy_req = DestroyNexus::from(nexus_spec).with_disown(&request.uuid);
+                    match guard.destroy(registry, &destroy_req).await {
+                        Ok(_) => {
+                            // todo: handle cleanup properly, as mutiple replublish followed by
+                            // destroy is causing loss of key.
+                            // ResourceSpecsLocked::delete_nexus_info(
+                            //     &NexusInfoKey::new(&Some(request.uuid.clone()), guard.uuid()),
+                            //     registry,
+                            // )
+                            // .await;
+                        }
+                        Err(err) => match err {
+                            SvcError::Store { .. } => return Err(err),
+                            SvcError::StoreSave { .. } => return Err(err),
+                            _ => {
+                                debug!(
+                                error = %err,
+                                nexus.uuid = %destroy_req.uuid,
+                                "Encountered error while destroying shutdown nexus"
+                                )
+                            }
+                        },
+                    }
+                }
+                Err(err) => {
+                    debug!(
+                        error = %err,
+                        nexus.uuid = %nexus_res.uuid(),
+                        "Failed to guard one of the destroying shutdown nexus"
+                    );
+                }
+            }
         }
         Ok(())
     }

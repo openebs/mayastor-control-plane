@@ -43,9 +43,9 @@ use common_lib::{
         },
         transport::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyReplica,
-            Nexus, NexusId, NodeId, PoolId, Protocol, PublishVolume, RemoveNexusReplica, Replica,
-            ReplicaId, ReplicaName, ReplicaOwners, Volume, VolumeId, VolumeShareProtocol,
-            VolumeState, VolumeStatus,
+            Nexus, NexusId, NodeId, PoolId, Protocol, RemoveNexusReplica, Replica, ReplicaId,
+            ReplicaName, ReplicaOwners, Volume, VolumeId, VolumeShareProtocol, VolumeState,
+            VolumeStatus,
         },
     },
 };
@@ -53,6 +53,7 @@ use grpc::operations::{PaginatedResult, Pagination};
 
 use crate::controller::resources::operations::ResourceOwnerUpdate;
 use common_lib::types::v0::store::replica::PoolRef;
+use grpc::operations::volume::traits::PublishVolumeInfo;
 use snafu::OptionExt;
 use std::convert::From;
 
@@ -394,6 +395,24 @@ impl ResourceSpecsLocked {
             .cloned()
             .collect()
     }
+
+    /// Get a list of protected NexusSpecs's which are associated with the given volume `id`
+    /// and are currently in shutdown state.
+    pub(crate) async fn get_volume_shutdown_nexuses(
+        &self,
+        id: &VolumeId,
+    ) -> Vec<ResourceMutex<NexusSpec>> {
+        self.read()
+            .nexuses
+            .values()
+            .filter(|nexus| {
+                let nexus_spec = nexus.lock();
+                nexus_spec.name == id.as_str() && nexus_spec.is_shutdown()
+            })
+            .cloned()
+            .collect()
+    }
+
     /// Get the protected volume nexus target for the given volume
     pub(crate) fn get_volume_target_nexus(
         &self,
@@ -1109,18 +1128,21 @@ impl ResourceSpecsLocked {
 pub(crate) async fn get_volume_target_node(
     registry: &Registry,
     status: &VolumeState,
-    request: &PublishVolume,
+    request: &impl PublishVolumeInfo,
+    republish: bool,
 ) -> Result<NodeId, SvcError> {
-    // We can't configure a new target_node if the volume is currently published
-    if let Some(nexus) = &status.target {
-        return Err(SvcError::VolumeAlreadyPublished {
-            vol_id: status.uuid.to_string(),
-            node: nexus.node.to_string(),
-            protocol: nexus.share.to_string(),
-        });
+    if !republish {
+        // We can't configure a new target_node if the volume is currently published
+        if let Some(nexus) = &status.target {
+            return Err(SvcError::VolumeAlreadyPublished {
+                vol_id: status.uuid.to_string(),
+                node: nexus.node.to_string(),
+                protocol: nexus.share.to_string(),
+            });
+        }
     }
 
-    match request.target_node.as_ref() {
+    match request.target_node().as_ref() {
         None => {
             // in case there is no target node specified, let the control-plane scheduling logic
             // determine a suitable node for the same.
@@ -1176,7 +1198,9 @@ impl SpecOperationsHelper for VolumeSpec {
     ) -> Result<(), SvcError> {
         if !matches!(
             &operation,
-            VolumeOperation::Publish(..) | VolumeOperation::Unpublish
+            VolumeOperation::Publish(..)
+                | VolumeOperation::Unpublish
+                | VolumeOperation::Republish(..)
         ) {
             // don't attempt to modify the volume parameters if the nexus target is not "stable"
             if self.target.is_some() != state.target.is_some() {
@@ -1239,6 +1263,14 @@ impl SpecOperationsHelper for VolumeSpec {
                         share: format!("{:?}", protocol),
                     }),
                 },
+            },
+            VolumeOperation::Republish((_, _, protocol)) => match protocol {
+                VolumeShareProtocol::Nvmf => Ok(()),
+                VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
+                    kind: ResourceKind::Volume,
+                    id: self.uuid_str(),
+                    share: format!("{:?}", protocol),
+                }),
             },
             VolumeOperation::Unpublish if self.target.is_none() => {
                 Err(SvcError::VolumeNotPublished {

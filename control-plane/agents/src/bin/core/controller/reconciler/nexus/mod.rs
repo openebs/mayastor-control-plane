@@ -101,12 +101,12 @@ async fn nexus_reconciler(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let created = {
+    let reconcile = {
         let nexus_spec = nexus.lock();
-        nexus_spec.status().created()
+        nexus_spec.status().created() && !nexus_spec.is_shutdown()
     };
 
-    if created {
+    if reconcile {
         squash_results(vec![
             faulted_children_remover(nexus, context).await,
             unknown_children_remover(nexus, context).await,

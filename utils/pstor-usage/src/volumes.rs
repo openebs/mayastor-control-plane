@@ -85,6 +85,7 @@ impl ResourceUpdates for Vec<models::Volume> {
                     &volume.spec.uuid,
                     models::VolumeShareProtocol::Nvmf,
                     Some(node_id.as_str()),
+                    Some(false),
                 )
                 .await?;
             node_index = (node_index + 1) % node_ids.len();

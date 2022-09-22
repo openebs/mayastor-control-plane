@@ -48,6 +48,7 @@ pub(crate) trait ResourcePublishing {
     type Publish: Sync + Send;
     type PublishOutput: Sync + Send;
     type Unpublish: Sync + Send;
+    type Republish: Sync + Send;
 
     /// Publish the resource.
     async fn publish(
@@ -61,6 +62,12 @@ pub(crate) trait ResourcePublishing {
         registry: &Registry,
         request: &Self::Unpublish,
     ) -> Result<(), SvcError>;
+    /// Republish the resource by shutting down existing dependents.
+    async fn republish(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Republish,
+    ) -> Result<Self::PublishOutput, SvcError>;
 }
 
 /// Resource Replica Operations.
@@ -110,5 +117,26 @@ pub(crate) trait ResourceOwnerUpdate {
         request: &Self::Update,
         // pre-update the actual spec anyway since this is a removal,
         update_on_commit: bool,
+    ) -> Result<(), SvcError>;
+}
+
+/// Resource shutdown related operations.
+#[async_trait::async_trait]
+pub(crate) trait ResourceShutdownOperations {
+    type RemoveShutdownTargets: Sync + Send;
+    type Shutdown: Sync + Send;
+
+    /// Shutdown the resource itself.
+    async fn shutdown(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Shutdown,
+    ) -> Result<(), SvcError>;
+
+    /// Remove the shutdown targets.
+    async fn remove_shutdown_targets(
+        &mut self,
+        registry: &Registry,
+        request: &Self::RemoveShutdownTargets,
     ) -> Result<(), SvcError>;
 }

@@ -171,6 +171,16 @@ message PublishVolumeRequest {
   optional VolumeShareProtocol share = 3;
 }
 
+// Republish a volume on a node by shutting down existing target
+message RepublishVolumeRequest {
+  // uuid of the volume
+  google.protobuf.StringValue uuid = 1;
+  // the node where front-end IO will be sent to
+  optional string target_node = 2;
+  // share protocol
+  VolumeShareProtocol share = 3;
+}
+
 // Unpublish a volume from any node where it may be published
 // Unshares the children nexuses from the volume and destroys them.
 message UnpublishVolumeRequest {
@@ -252,6 +262,14 @@ message PublishVolumeReply {
   }
 }
 
+// Reply type for a RepublishVolume request
+message RepublishVolumeReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 // Reply type for a UnpublishVolume request
 message UnpublishVolumeReply {
   oneof reply {
@@ -276,11 +294,24 @@ message ProbeResponse {
   bool ready = 1;
 }
 
+// Destroy Shutdown orphaned Nexus Request
+message DestroyShutdownTargetRequest {
+  // uuid of the volume
+  google.protobuf.StringValue volume_id = 1;
+}
+
+// Reply type for a DestroyShutdownTargetRequest request
+message DestroyShutdownTargetReply {
+  optional common.ReplyError error = 1;
+}
+
 service VolumeGrpc {
   rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
   rpc DestroyVolume (DestroyVolumeRequest) returns (DestroyVolumeReply) {}
+  rpc DestroyShutdownTarget (DestroyShutdownTargetRequest) returns (DestroyShutdownTargetReply) {}
   rpc GetVolumes (GetVolumesRequest) returns (GetVolumesReply) {}
   rpc PublishVolume (PublishVolumeRequest) returns (PublishVolumeReply) {}
+  rpc RepublishVolume (RepublishVolumeRequest) returns (RepublishVolumeReply) {}
   rpc UnpublishVolume (UnpublishVolumeRequest) returns (UnpublishVolumeReply) {}
   rpc ShareVolume (ShareVolumeRequest) returns (ShareVolumeReply) {}
   rpc UnshareVolume (UnshareVolumeRequest) returns (UnshareVolumeReply) {}

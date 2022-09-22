@@ -41,6 +41,8 @@ enum NexusStatus {
   Degraded = 2;
   // broken and unable to serve IO
   Faulted = 3;
+  // shutdown i.e. blocked from serving IO
+  Shutdown = 4;
 }
 
 message Child {

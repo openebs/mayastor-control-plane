@@ -1437,6 +1437,14 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/VolumeShareProtocol'
+        - in: query
+          name: republish
+          x-api-scope: internal
+          description: |-
+            Allows republishing the volume on the node by shutting down the existing target first.
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: OK
@@ -2038,6 +2046,7 @@ components:
         - Online
         - Degraded
         - Faulted
+        - Shutdown
     Nexus:
       example:
         children:
@@ -2583,6 +2592,7 @@ components:
                 - SetReplica
                 - RemoveUnusedReplica
                 - Publish
+                - Republish
                 - Unpublish
             result:
               description: Result of the operation
@@ -2648,6 +2658,7 @@ components:
         - Online
         - Degraded
         - Faulted
+        - Shutdown
     VolumeShareProtocol:
       description: Volume Share Protocol
       type: string

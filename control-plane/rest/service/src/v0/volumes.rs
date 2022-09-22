@@ -2,8 +2,8 @@ use super::*;
 use common_lib::types::v0::{
     openapi::{apis::Uuid, models::VolumeShareProtocol},
     transport::{
-        DestroyVolume, Filter, PublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume,
-        UnshareVolume, Volume,
+        DestroyVolume, Filter, PublishVolume, RepublishVolume, SetVolumeReplica, ShareVolume,
+        UnpublishVolume, UnshareVolume, Volume,
     },
 };
 use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
@@ -128,18 +128,39 @@ impl apis::actix_server::Volumes for RestApi {
 
     async fn put_volume_target(
         Path(volume_id): Path<Uuid>,
-        Query((node, protocol)): Query<(Option<String>, VolumeShareProtocol)>,
+        Query((node, protocol, republish)): Query<(
+            Option<String>,
+            VolumeShareProtocol,
+            Option<bool>,
+        )>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
-        let volume = client()
-            .publish(
-                &PublishVolume {
-                    uuid: volume_id.into(),
-                    target_node: node.map(|id| id.into()),
-                    share: Some(protocol.into()),
-                },
-                None,
-            )
-            .await?;
+        let volume = match republish.unwrap_or(false) {
+            true => {
+                client()
+                    .republish(
+                        &RepublishVolume {
+                            uuid: volume_id.into(),
+                            target_node: node.map(|id| id.into()),
+                            share: protocol.into(),
+                        },
+                        None,
+                    )
+                    .await?
+            }
+            false => {
+                client()
+                    .publish(
+                        &PublishVolume {
+                            uuid: volume_id.into(),
+                            target_node: node.map(|id| id.into()),
+                            share: Some(protocol.into()),
+                        },
+                        None,
+                    )
+                    .await?
+            }
+        };
+
         Ok(volume.into())
     }
 }

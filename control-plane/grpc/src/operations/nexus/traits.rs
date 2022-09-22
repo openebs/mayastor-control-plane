@@ -170,16 +170,18 @@ impl From<nexus::NexusStatus> for NexusStatus {
             nexus::NexusStatus::Online => Self::Online,
             nexus::NexusStatus::Degraded => Self::Degraded,
             nexus::NexusStatus::Faulted => Self::Faulted,
+            nexus::NexusStatus::Shutdown => Self::Shutdown,
         }
     }
 }
 impl From<NexusStatus> for nexus::NexusStatus {
     fn from(src: NexusStatus) -> Self {
         match src {
-            NexusStatus::Unknown => Self::Unknown,
             NexusStatus::Online => Self::Online,
             NexusStatus::Degraded => Self::Degraded,
             NexusStatus::Faulted => Self::Faulted,
+            NexusStatus::Shutdown => Self::Shutdown,
+            NexusStatus::Unknown => Self::Unknown,
         }
     }
 }

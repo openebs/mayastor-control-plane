@@ -2,19 +2,20 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::{volume::traits::VolumeOperations, Pagination},
     volume::{
-        create_volume_reply, get_volumes_reply, publish_volume_reply, set_volume_replica_reply,
-        share_volume_reply, unpublish_volume_reply,
+        create_volume_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
+        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
-        CreateVolumeReply, CreateVolumeRequest, DestroyVolumeReply, DestroyVolumeRequest,
-        GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply,
-        PublishVolumeRequest, SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply,
-        ShareVolumeRequest, UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply,
-        UnshareVolumeRequest,
+        CreateVolumeReply, CreateVolumeRequest, DestroyShutdownTargetReply,
+        DestroyShutdownTargetRequest, DestroyVolumeReply, DestroyVolumeRequest, GetVolumesReply,
+        GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply, PublishVolumeRequest,
+        RepublishVolumeReply, RepublishVolumeRequest, SetVolumeReplicaReply,
+        SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest, UnpublishVolumeReply,
+        UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use common_lib::types::v0::transport::Filter;
 use std::{convert::TryFrom, sync::Arc};
-use tonic::Response;
+use tonic::{Request, Response, Status};
 
 /// RPC Volume Server
 #[derive(Clone)]
@@ -63,6 +64,20 @@ impl VolumeGrpc for VolumeServer {
             })),
         }
     }
+
+    async fn destroy_shutdown_target(
+        &self,
+        request: Request<DestroyShutdownTargetRequest>,
+    ) -> Result<Response<DestroyShutdownTargetReply>, Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.destroy_shutdown_target(&req, None).await {
+            Ok(()) => Ok(Response::new(DestroyShutdownTargetReply { error: None })),
+            Err(e) => Ok(Response::new(DestroyShutdownTargetReply {
+                error: Some(e.into()),
+            })),
+        }
+    }
+
     async fn get_volumes(
         &self,
         request: tonic::Request<GetVolumesRequest>,
@@ -101,6 +116,20 @@ impl VolumeGrpc for VolumeServer {
             })),
             Err(err) => Ok(Response::new(PublishVolumeReply {
                 reply: Some(publish_volume_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+    async fn republish_volume(
+        &self,
+        request: tonic::Request<RepublishVolumeRequest>,
+    ) -> Result<tonic::Response<RepublishVolumeReply>, tonic::Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.republish(&req, None).await {
+            Ok(volume) => Ok(Response::new(RepublishVolumeReply {
+                reply: Some(republish_volume_reply::Reply::Volume(volume.into())),
+            })),
+            Err(err) => Ok(Response::new(RepublishVolumeReply {
+                reply: Some(republish_volume_reply::Reply::Error(err.into())),
             })),
         }
     }
