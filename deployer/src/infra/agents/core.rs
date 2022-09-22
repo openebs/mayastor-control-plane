@@ -57,7 +57,9 @@ impl ComponentAction for CoreAgent {
         if let Some(max_rebuilds) = &options.max_rebuilds {
             binary = binary.with_args(vec!["--max-rebuilds", &max_rebuilds.to_string()]);
         }
-        Ok(cfg.add_container_bin(name, binary))
+        Ok(cfg.add_container_spec(
+            ContainerSpec::from_binary(name, binary).with_portmap("50051", "50051"),
+        ))
     }
     async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         cfg.start("core").await?;

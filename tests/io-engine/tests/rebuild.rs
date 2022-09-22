@@ -49,6 +49,7 @@ async fn concurrent_rebuilds() {
                 &volume.spec.uuid,
                 models::VolumeShareProtocol::Nvmf,
                 Some(cluster.node(i).as_str()),
+                Some(false),
             )
             .await
             .unwrap();
