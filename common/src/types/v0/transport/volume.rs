@@ -100,20 +100,6 @@ impl VolumeState {
     }
 }
 
-impl From<(&VolumeId, &Nexus)> for VolumeState {
-    fn from(src: (&VolumeId, &Nexus)) -> Self {
-        let uuid = src.0.clone();
-        let nexus = src.1;
-        Self {
-            uuid,
-            size: nexus.size,
-            status: nexus.status.clone(),
-            target: Some(nexus.clone()),
-            replica_topology: HashMap::new(),
-        }
-    }
-}
-
 /// The protocol used to share the volume
 /// Currently it's the same as the nexus
 pub type VolumeShareProtocol = NexusShareProtocol;
@@ -145,6 +131,7 @@ impl From<VolumeStatus> for models::VolumeStatus {
             VolumeStatus::Online => models::VolumeStatus::Online,
             VolumeStatus::Degraded => models::VolumeStatus::Degraded,
             VolumeStatus::Faulted => models::VolumeStatus::Faulted,
+            VolumeStatus::Shutdown => models::VolumeStatus::Unknown,
         }
     }
 }
@@ -427,6 +414,29 @@ impl PublishVolume {
     }
 }
 
+/// Republishes the nexus on a new node decided by the control-plane,
+/// by shutting down the older nexus.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RepublishVolume {
+    /// Uuid of the volume.
+    pub uuid: VolumeId,
+    /// The node where front-end IO will be sent to.
+    pub target_node: Option<NodeId>,
+    /// Share protocol.
+    pub share: VolumeShareProtocol,
+}
+impl RepublishVolume {
+    /// Create new `RepublishVolume` based on the provided arguments.
+    pub fn new(uuid: VolumeId, target_node: Option<NodeId>, share: VolumeShareProtocol) -> Self {
+        Self {
+            uuid,
+            target_node,
+            share,
+        }
+    }
+}
+
 /// Unpublish a volume from any node where it may be published
 /// Unshares the children nexuses from the volume and destroys them.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -559,5 +569,20 @@ impl From<&ReplicaTopology> for models::ReplicaTopology {
             replica_topology.pool.clone().map(Into::into),
             replica_topology.status.clone(),
         )
+    }
+}
+
+/// Destroy Shutdown Targets request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DestroyShutdownTargets {
+    /// The uuid of the owner, i.e the volume.
+    pub uuid: VolumeId,
+}
+
+impl DestroyShutdownTargets {
+    /// Create new `Self` from the given volume id.
+    pub fn new(uuid: VolumeId) -> Self {
+        DestroyShutdownTargets { uuid }
     }
 }

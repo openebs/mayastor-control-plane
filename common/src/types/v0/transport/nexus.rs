@@ -70,14 +70,16 @@ rpc_impl_string_uuid!(NexusId, "UUID of a nexus");
 /// Nexus State information
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
 pub enum NexusStatus {
-    /// Default Unknown state
+    /// Default Unknown state.
     Unknown = 0,
-    /// healthy and working
+    /// Healthy and working.
     Online = 1,
-    /// not healthy but is able to serve IO (i.e. rebuild is in progress)
+    /// Not healthy but is able to serve IO (i.e. rebuild is in progress).
     Degraded = 2,
-    /// broken and unable to serve IO
+    /// Broken and unable to serve IO.
     Faulted = 3,
+    /// Shutdown state, i.e. blocked from serving IO.
+    Shutdown = 4,
 }
 impl Default for NexusStatus {
     fn default() -> Self {
@@ -90,6 +92,7 @@ impl From<i32> for NexusStatus {
             1 => Self::Online,
             2 => Self::Degraded,
             3 => Self::Faulted,
+            4 => Self::Shutdown,
             _ => Self::Unknown,
         }
     }
@@ -97,10 +100,11 @@ impl From<i32> for NexusStatus {
 impl From<NexusStatus> for models::NexusState {
     fn from(src: NexusStatus) -> Self {
         match src {
-            NexusStatus::Unknown => Self::Unknown,
             NexusStatus::Online => Self::Online,
             NexusStatus::Degraded => Self::Degraded,
             NexusStatus::Faulted => Self::Faulted,
+            NexusStatus::Unknown => Self::Unknown,
+            NexusStatus::Shutdown => Self::Shutdown,
         }
     }
 }
@@ -371,6 +375,25 @@ impl DestroyNexus {
     /// Return a reference to the disowners.
     pub fn disowners(&self) -> &NexusOwners {
         &self.disowners
+    }
+}
+
+/// Shutdown Nexus Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShutdownNexus {
+    /// The uuid of the nexus.
+    uuid: NexusId,
+}
+
+impl ShutdownNexus {
+    /// Create a new `ShutdownNexus` using `uuid`.
+    pub fn new(uuid: NexusId) -> Self {
+        Self { uuid }
+    }
+    /// Get uuid of the nexus.
+    pub fn uuid(&self) -> NexusId {
+        self.uuid.clone()
     }
 }
 

@@ -6,7 +6,8 @@ use crate::{
     operations::Pagination,
     replica, volume,
     volume::{
-        get_volumes_request, CreateVolumeRequest, DestroyVolumeRequest, PublishVolumeRequest,
+        get_volumes_request, CreateVolumeRequest, DestroyShutdownTargetRequest,
+        DestroyVolumeRequest, PublishVolumeRequest, RepublishVolumeRequest,
         SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
@@ -15,17 +16,17 @@ use common_lib::{
     types::v0::{
         store::volume::{VolumeSpec, VolumeTarget},
         transport::{
-            CreateVolume, DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus,
-            NexusId, NodeId, NodeTopology, PoolTopology, PublishVolume, ReplicaId, ReplicaStatus,
-            ReplicaTopology, SetVolumeReplica, ShareVolume, Topology, UnpublishVolume,
-            UnshareVolume, Volume, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol,
-            VolumeState,
+            CreateVolume, DestroyShutdownTargets, DestroyVolume, ExplicitNodeTopology, Filter,
+            LabelledTopology, Nexus, NexusId, NodeId, NodeTopology, PoolTopology, PublishVolume,
+            ReplicaId, ReplicaStatus, ReplicaTopology, RepublishVolume, SetVolumeReplica,
+            ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeLabels,
+            VolumePolicy, VolumeShareProtocol, VolumeState,
         },
     },
 };
 use std::{collections::HashMap, convert::TryFrom};
 
-/// All volume crud operations to be a part of the VolumeOperations trait
+/// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]
 pub trait VolumeOperations: Send + Sync {
     /// Create a volume
@@ -65,6 +66,12 @@ pub trait VolumeOperations: Send + Sync {
         req: &dyn PublishVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
+    /// Republish a volume, by shutting down previous dependents
+    async fn republish(
+        &self,
+        req: &dyn RepublishVolumeInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError>;
     /// Unpublish a volume
     async fn unpublish(
         &self,
@@ -79,6 +86,12 @@ pub trait VolumeOperations: Send + Sync {
     ) -> Result<Volume, ReplyError>;
     /// Liveness probe for volume service
     async fn probe(&self, ctx: Option<Context>) -> Result<bool, ReplyError>;
+    /// Destroy shutdown targets
+    async fn destroy_shutdown_target(
+        &self,
+        req: &dyn DestroyShutdownTargetsInfo,
+        ctx: Option<Context>,
+    ) -> Result<(), ReplyError>;
 }
 
 impl From<VolumeSpec> for volume::VolumeDefinition {
@@ -599,7 +612,7 @@ impl TryFrom<get_volumes_request::Filter> for Filter {
     }
 }
 
-/// Trait to be implemented for CreateVolume operation
+/// Trait to be implemented for CreateVolume operation.
 pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the volume
     fn uuid(&self) -> VolumeId;
@@ -647,7 +660,7 @@ impl CreateVolumeInfo for CreateVolume {
     }
 }
 
-/// Intermediate structure that validates the conversion to CreateVolumeRequest type
+/// Intermediate structure that validates the conversion to CreateVolumeRequest type.
 #[derive(Debug)]
 pub struct ValidatedCreateVolumeRequest {
     inner: CreateVolumeRequest,
@@ -744,7 +757,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
     }
 }
 
-/// Trait to be implemented for DestroyVolume operation
+/// Trait to be implemented for DestroyVolume operation.
 pub trait DestroyVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the volume to be destroyed
     fn uuid(&self) -> VolumeId;
@@ -756,7 +769,7 @@ impl DestroyVolumeInfo for DestroyVolume {
     }
 }
 
-/// Intermediate structure that validates the conversion to DestroyVolumeRequest type
+/// Intermediate structure that validates the conversion to DestroyVolumeRequest type.
 #[derive(Debug)]
 pub struct ValidatedDestroyVolumeRequest {
     uuid: VolumeId,
@@ -791,7 +804,7 @@ impl From<&dyn DestroyVolumeInfo> for DestroyVolumeRequest {
     }
 }
 
-/// Trait to be implemented for ShareVolume operation
+/// Trait to be implemented for ShareVolume operation.
 pub trait ShareVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the volume to be shared
     fn uuid(&self) -> VolumeId;
@@ -809,7 +822,7 @@ impl ShareVolumeInfo for ShareVolume {
     }
 }
 
-/// Intermediate structure that validates the conversion to ShareVolumeRequest type
+/// Intermediate structure that validates the conversion to ShareVolumeRequest type.
 #[derive(Debug)]
 pub struct ValidatedShareVolumeRequest {
     uuid: VolumeId,
@@ -864,7 +877,7 @@ impl From<&dyn ShareVolumeInfo> for ShareVolumeRequest {
     }
 }
 
-/// Trait to be implemented for UnshareVolume operation
+/// Trait to be implemented for UnshareVolume operation.
 pub trait UnshareVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the volume to be unshared
     fn uuid(&self) -> VolumeId;
@@ -876,7 +889,7 @@ impl UnshareVolumeInfo for UnshareVolume {
     }
 }
 
-/// Intermediate structure that validates the conversion to UnshareVolumeRequest type
+/// Intermediate structure that validates the conversion to UnshareVolumeRequest type.
 #[derive(Debug)]
 pub struct ValidatedUnshareVolumeRequest {
     uuid: VolumeId,
@@ -935,7 +948,21 @@ impl PublishVolumeInfo for PublishVolume {
     }
 }
 
-/// Intermediate structure that validates the conversion to PublishVolumeRequest type
+impl PublishVolumeInfo for RepublishVolume {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+
+    fn target_node(&self) -> Option<NodeId> {
+        self.target_node.clone()
+    }
+
+    fn share(&self) -> Option<VolumeShareProtocol> {
+        Some(self.share)
+    }
+}
+
+/// Intermediate structure that validates the conversion to PublishVolumeRequest type.
 #[derive(Debug)]
 pub struct ValidatedPublishVolumeRequest {
     inner: PublishVolumeRequest,
@@ -1010,7 +1037,97 @@ impl From<&dyn PublishVolumeInfo> for PublishVolumeRequest {
     }
 }
 
-/// Trait to be implemented for PublishVolume operation
+/// Trait to be implemented for Republish operation.
+pub trait RepublishVolumeInfo: Send + Sync + std::fmt::Debug {
+    /// Uuid of the volume to be published
+    fn uuid(&self) -> VolumeId;
+    /// The node where front-end IO will be sent to
+    fn target_node(&self) -> Option<NodeId>;
+    /// The protocol over which volume be published
+    fn share(&self) -> VolumeShareProtocol;
+}
+
+impl RepublishVolumeInfo for RepublishVolume {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+
+    fn target_node(&self) -> Option<NodeId> {
+        self.target_node.clone()
+    }
+
+    fn share(&self) -> VolumeShareProtocol {
+        self.share
+    }
+}
+
+impl From<&dyn RepublishVolumeInfo> for RepublishVolume {
+    fn from(data: &dyn RepublishVolumeInfo) -> Self {
+        Self {
+            uuid: data.uuid(),
+            target_node: data.target_node(),
+            share: data.share(),
+        }
+    }
+}
+
+impl From<&dyn RepublishVolumeInfo> for RepublishVolumeRequest {
+    fn from(data: &dyn RepublishVolumeInfo) -> Self {
+        let protocol: volume::VolumeShareProtocol = data.share().into();
+        Self {
+            uuid: Some(data.uuid().to_string()),
+            target_node: data.target_node().map(|node_id| node_id.to_string()),
+            share: protocol as i32,
+        }
+    }
+}
+
+/// Intermediate structure that validates the conversion to RepublishVolumeRequest type.
+#[derive(Debug)]
+pub struct ValidatedRepublishVolumeRequest {
+    inner: RepublishVolumeRequest,
+    uuid: VolumeId,
+    share: VolumeShareProtocol,
+}
+
+impl RepublishVolumeInfo for ValidatedRepublishVolumeRequest {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+
+    fn target_node(&self) -> Option<NodeId> {
+        self.inner
+            .target_node
+            .clone()
+            .map(|target_node| target_node.into())
+    }
+
+    fn share(&self) -> VolumeShareProtocol {
+        self.share
+    }
+}
+
+impl ValidateRequestTypes for RepublishVolumeRequest {
+    type Validated = ValidatedRepublishVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedRepublishVolumeRequest {
+            uuid: VolumeId::try_from(StringValue(self.uuid.clone()))?,
+            share: match volume::VolumeShareProtocol::from_i32(self.share) {
+                Some(share) => share.into(),
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Volume,
+                        "republish_volume_request.share",
+                        "".to_string(),
+                    ))
+                }
+            },
+            inner: self,
+        })
+    }
+}
+
+/// Trait to be implemented for UnpublishVolume operation.
 pub trait UnpublishVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the volume to unpublish
     fn uuid(&self) -> VolumeId;
@@ -1028,7 +1145,7 @@ impl UnpublishVolumeInfo for UnpublishVolume {
     }
 }
 
-/// Intermediate structure that validates the conversion to UnpublishVolumeRequest type
+/// Intermediate structure that validates the conversion to UnpublishVolumeRequest type.
 #[derive(Debug)]
 pub struct ValidatedUnpublishVolumeRequest {
     inner: UnpublishVolumeRequest,
@@ -1069,7 +1186,7 @@ impl From<&dyn UnpublishVolumeInfo> for UnpublishVolumeRequest {
     }
 }
 
-/// Trait to be implemented for SetVolumeReplica operation
+/// Trait to be implemented for SetVolumeReplica operation.
 pub trait SetVolumeReplicaInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the concerned volume
     fn uuid(&self) -> VolumeId;
@@ -1087,7 +1204,7 @@ impl SetVolumeReplicaInfo for SetVolumeReplica {
     }
 }
 
-/// Intermediate structure that validates the conversion to SetVolumeReplicaRequest type
+/// Intermediate structure that validates the conversion to SetVolumeReplicaRequest type.
 #[derive(Debug)]
 pub struct ValidatedSetVolumeReplicaRequest {
     inner: SetVolumeReplicaRequest,
@@ -1131,7 +1248,7 @@ impl From<&dyn SetVolumeReplicaInfo> for SetVolumeReplicaRequest {
     }
 }
 
-/// A helper to convert the replica topology map form grpc type to corresponding control plane type
+/// A helper to convert the replica topology map form grpc type to corresponding control plane type.
 fn to_replica_topology_map(
     map: HashMap<String, volume::ReplicaTopology>,
 ) -> Result<HashMap<ReplicaId, ReplicaTopology>, ReplyError> {
@@ -1153,7 +1270,7 @@ fn to_replica_topology_map(
     Ok(replica_topology_map)
 }
 
-/// A helper to convert the replica topology map form control plane type to corresponding grpc type
+/// A helper to convert the replica topology map form control plane type to corresponding grpc type.
 fn to_grpc_replica_topology_map(
     map: HashMap<ReplicaId, ReplicaTopology>,
 ) -> HashMap<String, volume::ReplicaTopology> {
@@ -1182,5 +1299,53 @@ impl TryFrom<StringValue> for VolumeId {
                 "volume.definition.spec.uuid",
             )),
         }
+    }
+}
+
+/// DestroyShutdownTargetInfo trait for the shutdown targets deletion to be implemented by entities
+/// which want to use this operation.
+pub trait DestroyShutdownTargetsInfo: Send + Sync + std::fmt::Debug {
+    /// uuid of the volume, i.e the owner
+    fn uuid(&self) -> VolumeId;
+}
+
+impl DestroyShutdownTargetsInfo for DestroyShutdownTargets {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+}
+
+/// Intermediate structure that validates the conversion to DestroyShutdownNexusRequest type.
+#[derive(Debug)]
+pub struct ValidatedDestroyShutdownTargetRequest {
+    uuid: VolumeId,
+}
+
+impl DestroyShutdownTargetsInfo for ValidatedDestroyShutdownTargetRequest {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+}
+
+impl ValidateRequestTypes for DestroyShutdownTargetRequest {
+    type Validated = ValidatedDestroyShutdownTargetRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedDestroyShutdownTargetRequest {
+            uuid: VolumeId::try_from(StringValue(self.volume_id))?,
+        })
+    }
+}
+
+impl From<&dyn DestroyShutdownTargetsInfo> for DestroyShutdownTargetRequest {
+    fn from(data: &dyn DestroyShutdownTargetsInfo) -> Self {
+        Self {
+            volume_id: Some(data.uuid().to_string()),
+        }
+    }
+}
+
+impl From<&dyn DestroyShutdownTargetsInfo> for DestroyShutdownTargets {
+    fn from(data: &dyn DestroyShutdownTargetsInfo) -> Self {
+        Self::new(data.uuid())
     }
 }

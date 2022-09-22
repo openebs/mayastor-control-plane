@@ -103,6 +103,8 @@ pub enum MessageIdVs {
     DestroyVolume,
     /// Publish Volume.
     PublishVolume,
+    /// Republish Volume.
+    RepublishVolume,
     /// Unpublish Volume.
     UnpublishVolume,
     /// Share Volume.

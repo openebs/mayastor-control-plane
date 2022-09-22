@@ -3,15 +3,17 @@ use crate::{
     context::{Client, Context, TracedChannel},
     operations::{
         volume::traits::{
-            CreateVolumeInfo, DestroyVolumeInfo, PublishVolumeInfo, SetVolumeReplicaInfo,
-            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
+            RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
+            UnshareVolumeInfo, VolumeOperations,
         },
         Pagination,
     },
     volume::{
         create_volume_reply, get_volumes_reply, get_volumes_request, publish_volume_reply,
-        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
-        volume_grpc_client::VolumeGrpcClient, GetVolumesRequest, ProbeRequest,
+        republish_volume_reply, set_volume_replica_reply, share_volume_reply,
+        unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetVolumesRequest,
+        ProbeRequest,
     },
 };
 use common_lib::{
@@ -155,6 +157,23 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::republish", level = "debug", skip(self), err)]
+    async fn republish(
+        &self,
+        request: &dyn RepublishVolumeInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::RepublishVolume);
+        let response = self.client().republish_volume(req).await?.into_inner();
+        match response.reply {
+            Some(republish_volume_reply) => match republish_volume_reply {
+                republish_volume_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
+                republish_volume_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
+        }
+    }
+
     #[tracing::instrument(name = "VolumeClient::unpublish", level = "debug", skip(self), err)]
     async fn unpublish(
         &self,
@@ -194,6 +213,23 @@ impl VolumeOperations for VolumeClient {
         match self.client().probe(ProbeRequest {}).await {
             Ok(resp) => Ok(resp.into_inner().ready),
             Err(e) => Err(e.into()),
+        }
+    }
+
+    async fn destroy_shutdown_target(
+        &self,
+        request: &dyn DestroyShutdownTargetsInfo,
+        ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::DestroyNexus);
+        let response = self
+            .client()
+            .destroy_shutdown_target(req)
+            .await?
+            .into_inner();
+        match response.error {
+            None => Ok(()),
+            Some(err) => Err(err.into()),
         }
     }
 }
