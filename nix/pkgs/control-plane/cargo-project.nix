@@ -9,7 +9,7 @@
 , protobuf
 , sources
 , pkgs
-, version
+, gitVersions
 , openapi-generator
 , which
 , udev
@@ -43,32 +43,37 @@ let
     builtins.filterSource
       (path: type:
         lib.any
-          (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
+          (allowedPrefix:
+            (lib.hasPrefix (toString (src + "/${allowedPrefix}")) path) ||
+            (type == "directory" && lib.hasPrefix path (toString (src + "/${allowedPrefix}")))
+          )
           allowedPrefixes)
       src;
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
+  version = gitVersions.version;
   src_list = [
-    ".git"
     "Cargo.lock"
     "Cargo.toml"
     "common"
     "control-plane"
     "deployer"
     "k8s"
-    "kubectl-plugin"
-    "openapi"
+    "openapi/Cargo.toml"
+    "openapi/build.rs"
     "rpc"
-    "scripts"
-    "tests"
+    "scripts/rust/generate-openapi-bindings.sh"
+    "tests/io-engine"
     "utils"
   ];
+  src = whitelistSource ../../../. src_list;
   buildProps = rec {
     name = "control-plane-${version}";
-    inherit version;
+    inherit version src;
 
-    src = whitelistSource ../../../. src_list;
+    GIT_VERSION_LONG = "${gitVersions.long}";
+    GIT_VERSION = "${gitVersions.tag_or_long}";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [ clang pkg-config openapi-generator which git ];
@@ -107,7 +112,7 @@ let
   builder = if incremental then build_with_naersk else build_with_default;
 in
 {
-  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src_list;
+  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src;
 
   build = { buildType, cargoBuildFlags ? [ ] }:
     if allInOne then

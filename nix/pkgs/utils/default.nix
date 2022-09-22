@@ -1,24 +1,16 @@
-{ git, lib, stdenv, openapi-generator, pkgs, which, sources, llvmPackages, protobuf, incremental }:
+{ git, lib, stdenv, openapi-generator, pkgs, which, sources, llvmPackages, protobuf, control-plane, incremental }:
 let
-  versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
-  version = builtins.readFile "${versionDrv}";
   channel = import ../../lib/rust.nix { inherit sources; };
-  project-builder =
-    pkgs.callPackage ../control-plane/cargo-project.nix { inherit version; };
-  whitelistSource = src: allowedPrefixes:
-    builtins.filterSource
-      (path: type:
-        lib.any
-          (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
-          allowedPrefixes)
-      src;
-  src = whitelistSource ../../../. project-builder.src_list;
-  singleStep = !incremental;
+  src = control-plane.project-builder.src;
+  version = control-plane.version;
+  GIT_VERSION_LONG = control-plane.gitVersions.long;
+  GIT_VERSION = control-plane.gitVersions.tag_or_long;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
 
+  singleStep = !incremental;
   naersk_package = channel: pkgs.callPackage sources.naersk {
     rustc = channel.stable;
     cargo = channel.stable;
@@ -28,7 +20,7 @@ let
   components = { release ? false }: {
     windows-gnu = {
       kubectl-plugin = naersk_cross.buildPackage {
-        inherit release src version singleStep;
+        inherit release src version singleStep GIT_VERSION_LONG GIT_VERSION;
         name = "kubectl-plugin";
 
         preBuild = ''
@@ -66,7 +58,7 @@ let
       check_assert = lib.asserts.assertMsg (pkgs.hostPlatform.isLinux == true) "This may only be built on Linux";
 
       kubectl-plugin = naersk.buildPackage {
-        inherit release src version singleStep check_assert;
+        inherit release src version singleStep GIT_VERSION_LONG GIT_VERSION check_assert;
         name = "kubectl-plugin";
 
         preBuild = ''
@@ -99,7 +91,7 @@ let
       check_assert = lib.asserts.assertMsg (target == x86_64-apple-darwin) "This may only be built on ${x86_64-apple-darwin}";
 
       kubectl-plugin = naersk.buildPackage {
-        inherit release src version singleStep check_assert;
+        inherit release src version singleStep GIT_VERSION_LONG GIT_VERSION check_assert;
         name = "kubectl-plugin";
 
         preBuild = ''
