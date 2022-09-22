@@ -350,7 +350,8 @@ pub mod v1 {
             ChildStateReason, CreateNexusRequest, CreateNexusResponse, DestroyNexusRequest,
             FaultNexusChildRequest, ListNexusOptions, ListNexusResponse, Nexus, NexusState,
             NvmeAnaState, PublishNexusRequest, PublishNexusResponse, RemoveChildNexusRequest,
-            RemoveChildNexusResponse, UnpublishNexusRequest, UnpublishNexusResponse,
+            RemoveChildNexusResponse, ShutdownNexusRequest, UnpublishNexusRequest,
+            UnpublishNexusResponse,
         };
     }
 

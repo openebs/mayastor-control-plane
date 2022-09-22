@@ -316,6 +316,15 @@ impl AgentToIoEngine for transport::FaultNexusChild {
     }
 }
 
+impl AgentToIoEngine for transport::ShutdownNexus {
+    type IoEngineMessage = v1_rpc::nexus::ShutdownNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            uuid: self.uuid().into(),
+        }
+    }
+}
+
 /// convert rpc nexus to a agent nexus
 pub fn rpc_nexus_to_agent(
     rpc_nexus: &v1_rpc::nexus::Nexus,
