@@ -9,7 +9,7 @@
 , protobuf
 , sources
 , pkgs
-, version
+, gitVersions
 , openapi-generator
 , which
 , udev
@@ -52,15 +52,16 @@ let
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
+  version = gitVersions.version;
   src_list = [
-    ".git"
     "Cargo.lock"
     "Cargo.toml"
     "common"
     "control-plane"
     "deployer"
     "k8s"
-    "openapi"
+    "openapi/Cargo.toml"
+    "openapi/build.rs"
     "rpc"
     "scripts/rust/generate-openapi-bindings.sh"
     "tests/io-engine"
@@ -70,6 +71,9 @@ let
   buildProps = rec {
     name = "control-plane-${version}";
     inherit version src;
+
+    GIT_VERSION_LONG = "${gitVersions.long}";
+    GIT_VERSION = "${gitVersions.tag_or_long}";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [ clang pkg-config openapi-generator which git ];
