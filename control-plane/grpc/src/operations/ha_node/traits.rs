@@ -115,6 +115,19 @@ impl ReportFailedPathsInfo for ReportFailedPaths {
     }
 }
 
+impl ReportFailedPathsInfo for ReportFailedNvmePathsRequest {
+    fn node(&self) -> String {
+        self.nodename.clone()
+    }
+
+    fn failed_paths(&self) -> Vec<FailedPath> {
+        self.failed_paths
+            .iter()
+            .map(|p| FailedPath::new(p.target_nqn.to_string()))
+            .collect()
+    }
+}
+
 impl From<&dyn ReportFailedPathsInfo> for ReportFailedNvmePathsRequest {
     fn from(info: &dyn ReportFailedPathsInfo) -> Self {
         Self {
