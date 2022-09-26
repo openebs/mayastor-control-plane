@@ -1,8 +1,7 @@
 use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 
 use common_lib::types::v0::openapi::models::{
-    LabelledTopology, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
-    VolumeShareProtocol,
+    LabelledTopology, Pool, PoolStatus, PoolTopology, SpecStatus, Volume, VolumeShareProtocol,
 };
 use rpc::csi::{Topology as CsiTopology, *};
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
@@ -381,22 +380,9 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     }
                 },
             _ => {
-                // if the csi-node happens to be a data-plane node, use that for nexus creation, otherwise
-                // let the control-plane select the target node.
-                let target_node = match IoEngineApiClient::get_client().get_node(&node_id).await {
-                    Err(ApiClientError::ResourceNotExists(_)) => Ok(None),
-                    Err(error) => Err(error),
-                    // When nodes are not online for any reason (eg: io-engine no longer runs) on said node,
-                    // then let the control-plane decide where to place the target.
-                    Ok(node) if node.state.as_ref().map(|n| n.status).unwrap_or(NodeStatus::Unknown) != NodeStatus::Online => {
-                        Ok(None)
-                    },
-                    Ok(_) => Ok(Some(node_id.as_str()))
-                }?;
-
                 // Volume is not published.
                 let v = IoEngineApiClient::get_client()
-                    .publish_volume(&volume_id, target_node, protocol)
+                    .publish_volume(&volume_id, Some(node_id.as_str()), protocol)
                     .await?;
 
                 if let Some((node, uri)) = get_volume_share_location(&v) {

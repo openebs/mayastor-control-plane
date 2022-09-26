@@ -134,12 +134,6 @@ impl IoEngineApiClient {
         Ok(response.into_body())
     }
 
-    /// Get a particular node available in IoEngine cluster.
-    pub(crate) async fn get_node(&self, node_id: &str) -> Result<Node, ApiClientError> {
-        let response = self.rest_client.nodes_api().get_node(node_id).await?;
-        Ok(response.into_body())
-    }
-
     /// List all pools available in IoEngine cluster.
     pub(crate) async fn list_pools(&self) -> Result<Vec<Pool>, ApiClientError> {
         let response = self.rest_client.pools_api().get_pools().await?;
