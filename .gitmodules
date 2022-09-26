@@ -1,6 +1,8 @@
 [submodule "utils/dependencies"]
 	path = utils/dependencies
 	url = https://github.com/openebs/mayastor-dependencies.git
+	branch = release/2.0
 [submodule "rpc/api"]
 	path = rpc/api
 	url = https://github.com/openebs/mayastor-api.git
+	branch = release/2.0
