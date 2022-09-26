@@ -135,6 +135,8 @@ pub enum MessageIdVs {
     RegisterHaNode,
     /// Report failed NVMe paths.
     ReportFailedPaths,
+    /// Shutdown Nexus
+    ShutdownNexus,
 }
 
 impl From<MessageIdVs> for MessageId {

@@ -35,13 +35,12 @@ use common_lib::{
             DestroyPool, DestroyReplica, FaultNexusChild, MessageIdVs, Nexus, NexusId, NodeId,
             NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
             RemoveNexusChild, Replica, ReplicaId, ReplicaName, ShareNexus, ShareReplica,
-            UnshareNexus, UnshareReplica,
+            ShutdownNexus, UnshareNexus, UnshareReplica,
         },
     },
 };
 
 use async_trait::async_trait;
-use common_lib::types::v0::transport::ShutdownNexus;
 use parking_lot::RwLock;
 use snafu::ResultExt;
 use std::{
@@ -751,8 +750,8 @@ pub(crate) trait ClientOps {
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError>;
     /// Fault a child from its parent nexus via gRPC.
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError>;
-    /// Shutdown an existing nexus.
-    async fn shutdown_nexus(&self, _: &ShutdownNexus) -> Result<(), SvcError>;
+    /// Shutdown a nexus via gRPC.
+    async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError>;
 }
 
 /// Internal Operations on a io-engine locked `NodeWrapper` for the implementor
@@ -1149,9 +1148,16 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         }
     }
 
-    async fn shutdown_nexus(&self, _: &ShutdownNexus) -> Result<(), SvcError> {
-        // todo: add implementation
-        Ok(())
+    async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let result = dataplane.shutdown_nexus(request).await;
+        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
+        match result {
+            // TODO: Handle idempotency
+            Ok(_) => Ok(()),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -1559,9 +1565,32 @@ impl ClientOps for GrpcClientLocked {
         }
     }
 
-    async fn shutdown_nexus(&self, _: &ShutdownNexus) -> Result<(), SvcError> {
-        // todo: add implementation
-        Ok(())
+    async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {
+        match self.api_version() {
+            ApiVersion::V0 => {
+                let _ = self
+                    .client_v0()?
+                    .shutdown_nexus(v0_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Nexus,
+                        request: "shutdown_nexus",
+                    })?;
+                Ok(())
+            }
+            ApiVersion::V1 => {
+                let _ = self
+                    .client_v1()?
+                    .nexus()
+                    .shutdown_nexus(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Nexus,
+                        request: "shutdown_nexus",
+                    })?;
+                Ok(())
+            }
+        }
     }
 }
 

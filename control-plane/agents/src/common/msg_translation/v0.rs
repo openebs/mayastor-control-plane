@@ -355,6 +355,16 @@ impl AgentToIoEngine for transport::FaultNexusChild {
     }
 }
 
+/// Converts Control plane Nexus shutdown struct to IO Engine message
+impl AgentToIoEngine for transport::ShutdownNexus {
+    type IoEngineMessage = v0_rpc::ShutdownNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            uuid: self.uuid().into(),
+        }
+    }
+}
+
 /// convert rpc replica to a agent replica
 pub fn rpc_replica_to_agent(
     rpc_replica: &v0_rpc::ReplicaV2,
