@@ -19,3 +19,4 @@ __pycache__
 /tests/bdd/autogen/
 /terraform/cluster/ansible-hosts
 /terraform/cluster/current_user.txt
+/rust-toolchain.toml
