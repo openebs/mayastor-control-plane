@@ -158,10 +158,8 @@ pub(crate) fn filesystem_mount(
 /// Unmount a device from a directory (mountpoint)
 /// Should not be used for removing bind mounts.
 pub(crate) fn filesystem_unmount(target: &str) -> Result<(), Error> {
-    let mut flags = UnmountFlags::empty();
-
-    flags.insert(UnmountFlags::DETACH);
-
+    let flags = UnmountFlags::empty();
+    // read more about the umount system call and it's flags at `man 2 umount`
     unmount(target, flags)?;
 
     debug!("Target {} unmounted", target);
