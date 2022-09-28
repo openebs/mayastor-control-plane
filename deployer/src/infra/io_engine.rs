@@ -82,6 +82,10 @@ impl ComponentAction for IoEngine {
                 RpcHandle::connect(options.latest_io_api_version(), &name, socket).await?;
             hdl.ping().await.unwrap();
         }
+        for i in 0 .. options.io_engines {
+            let name = Self::name(i, options);
+            super::CoreAgent::wait_node_online(cfg, &name).await;
+        }
         Ok(())
     }
 }

@@ -1,4 +1,6 @@
 use crate::infra::*;
+use common_lib::types::v0::transport::{Filter, NodeStatus};
+use grpc::operations::node::traits::NodeOperations;
 
 #[async_trait]
 impl ComponentAction for CoreAgent {
@@ -76,5 +78,30 @@ impl ComponentAction for CoreAgent {
         })?;
 
         Ok(())
+    }
+}
+
+impl CoreAgent {
+    /// Wait for a node to become online.
+    pub(crate) async fn wait_node_online(cfg: &ComposeTest, node: &str) {
+        let ip = cfg.container_ip("core");
+        let uri = tonic::transport::Uri::from_str(&format!("https://{}:50051", ip)).unwrap();
+
+        let timeout = grpc::context::TimeoutOptions::new()
+            .with_req_timeout(std::time::Duration::from_millis(100));
+        let core =
+            grpc::client::CoreClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;
+
+        loop {
+            let filter = Filter::Node(node.into());
+            if let Ok(nodes) = core.node().get(filter, None).await {
+                if let Some(node) = nodes.0.into_iter().find(|n| n.id().as_str() == node) {
+                    if node.state().map(|s| &s.status) == Some(&NodeStatus::Online) {
+                        return;
+                    }
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
     }
 }
