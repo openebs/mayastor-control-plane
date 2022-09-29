@@ -5,20 +5,22 @@
 # The script assumes that a user is logged on to dockerhub for public images,
 # or has insecure registry access setup for CI.
 
+CI=${CI-}
+
 set -euo pipefail
 
 # Test if the image already exists in dockerhub
 dockerhub_tag_exists() {
-  curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 1>/dev/null 2>&1
+  curl --silent -f -lSL https://hub.docker.com/v2/repositories/$1/tags/$2 1>/dev/null 2>&1
 }
 
-# Derives tag name from the git repo. That is git tag value or short commit
-# hash if there is no git tag on HEAD.
+# Get the tag at the HEAD
 get_tag() {
   vers=`git tag --points-at HEAD`
-  if [ -z "$vers" ]; then
-    vers=`git rev-parse --short=12 HEAD`
-  fi
+  echo -n $vers
+}
+get_hash() {
+  vers=`git rev-parse --short=12 HEAD`
   echo -n $vers
 }
 nix_experimental() {
@@ -40,9 +42,8 @@ Options:
   --debug                    Build debug version of images where possible.
   --skip-build               Don't perform nix-build.
   --skip-publish             Don't publish built images.
-  --skip-tag                 Don't publish built images with the git tag.
-  --image                    Specify what image to build.
-  --alias-tag                Explicit alias for short commit hash tag.
+  --image           <image>  Specify which image to build.
+  --alias-tag       <tag>    Explicit alias for short commit hash tag.
   --incremental              Builds components in two stages allowing for faster rebuilds during development.
   --build-bins               Builds all the static binaries.
   --build-bin                Specify which binary to build.
@@ -59,6 +60,7 @@ NIX_EVAL="nix eval$(nix_experimental)"
 RM="rm"
 SCRIPTDIR=$(dirname "$0")
 TAG=`get_tag`
+HASH=`get_hash`
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 BRANCH=${BRANCH////-}
 IMAGES=
@@ -66,7 +68,7 @@ DEFAULT_IMAGES="agents.core operators.diskpool rest csi.controller csi.node"
 UPLOAD=
 SKIP_PUBLISH=
 SKIP_BUILD=
-SKIP_TAG_PUBLISH=
+OVERRIDE_COMMIT_HASH=
 REGISTRY=
 ALIAS=
 BUILD_TYPE="release"
@@ -76,7 +78,6 @@ DEFAULT_BINARIES="kubectl-plugin"
 BUILD_BINARIES=
 BIN_TARGET_PLAT="linux-musl"
 BINARY_OUT_LINK="."
-
 
 # Check if all needed tools are installed
 curl --version >/dev/null
@@ -132,10 +133,6 @@ while [ "$#" -gt 0 ]; do
       SKIP_PUBLISH="yes"
       shift
       ;;
-    --skip-tag)
-      SKIP_TAG_PUBLISH="yes"
-      shift
-      ;;
     --debug)
       BUILD_TYPE="debug"
       shift
@@ -187,6 +184,28 @@ elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
   fi
 fi
 
+# Create alias
+alias_tag=
+if [ -n "$ALIAS" ]; then
+  alias_tag=$ALIAS
+elif [ "$BRANCH" == "develop" ]; then
+  alias_tag="$BRANCH"
+elif [ "${BRANCH#release-}" != "${BRANCH}" ]; then
+  alias_tag="${BRANCH}"
+fi
+
+if [ -z "$CI" ] && [ -z "$TAG" ] && [ -n "$alias_tag" ]; then
+  OVERRIDE_COMMIT_HASH="true"
+fi
+TAG=${TAG:-$HASH}
+if [ -n "$OVERRIDE_COMMIT_HASH" ]; then
+  # Set the TAG to the alias and remove the alias
+  NIX_TAG_ARGS="--argstr img_tag $alias_tag"
+  NIX_BUILD="$NIX_BUILD $NIX_TAG_ARGS"
+  TAG="$alias_tag"
+  alias_tag=
+fi
+
 for name in $IMAGES; do
   image_basename=$($NIX_EVAL -f . images.$BUILD_TYPE.$name.imageName | xargs)
   image=$image_basename
@@ -197,10 +216,6 @@ for name in $IMAGES; do
   # the images we already have locally.
   if [ -z $SKIP_BUILD ]; then
     archive=${name}
-    if [ -z "$REGISTRY" ] && dockerhub_tag_exists $image $TAG; then
-      echo "Skipping $image:$TAG that already exists"
-      continue
-    fi
     echo "Building $image:$TAG ..."
     $NIX_BUILD --out-link $archive-image -A images.$BUILD_TYPE.$archive --arg allInOne "$ALL_IN_ONE" --arg incremental "$INCREMENTAL"
     $DOCKER load -i $archive-image
@@ -215,23 +230,16 @@ for name in $IMAGES; do
 done
 
 if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
-  if [ -n "$SKIP_TAG_PUBLISH" ]; then
-      # Upload them
-      for img in $UPLOAD; do
-          echo "Uploading $img:$TAG to registry ..."
-          $DOCKER push $img:$TAG
-      done
-  fi
+  # Upload them
+  for img in $UPLOAD; do
+    if [ -z "$REGISTRY" ] && [ -z "$OVERRIDE_COMMIT_HASH" ] && dockerhub_tag_exists $image $TAG; then
+      echo "Skipping $image:$TAG that already exists"
+      continue
+    fi
+    echo "Uploading $img:$TAG to registry ..."
+    $DOCKER push $img:$TAG
+  done
 
-  # Create alias
-  alias_tag=
-  if [ -n "$ALIAS" ]; then
-    alias_tag=$ALIAS
-  elif [ "$BRANCH" == "develop" ]; then
-    alias_tag=develop
-  elif [ "${BRANCH#release-}" != "${BRANCH}" ]; then
-    alias_tag="${BRANCH}"
-  fi
   if [ -n "$alias_tag" ]; then
     for img in $UPLOAD; do
       echo "Uploading $img:$alias_tag to registry ..."
@@ -240,3 +248,5 @@ if [ -n "$UPLOAD" ] && [ -z "$SKIP_PUBLISH" ]; then
     done
   fi
 fi
+
+$DOCKER image prune -f
