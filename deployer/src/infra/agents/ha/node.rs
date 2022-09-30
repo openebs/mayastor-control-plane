@@ -10,9 +10,12 @@ use tonic::transport::Endpoint;
 #[async_trait]
 impl ComponentAction for HaNodeAgent {
     fn configure(&self, _options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
+        let socket = format!("-g{}:11600", cfg.next_ip_for_name("agent-ha-node")?);
         let mut spec = ContainerSpec::from_binary(
             "agent-ha-node",
-            Binary::from_dbg("agent-ha-node").with_arg(format!("-n{}", CsiNode::name(0)).as_str()),
+            Binary::from_dbg("agent-ha-node")
+                .with_arg(format!("-n{}", CsiNode::name(0)).as_str())
+                .with_arg(socket.as_str()),
         )
         .with_bind("/run/udev", "/run/udev:ro")
         .with_bind("/dev", "/dev:ro")

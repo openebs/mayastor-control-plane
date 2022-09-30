@@ -1,7 +1,10 @@
 use crate::{
     context::{Client, Context, TracedChannel},
-    ha_cluster_agent::ha_rpc_client::HaRpcClient,
-    operations::ha_node::traits::{ClusterAgentOperations, NodeInfo, ReportFailedPathsInfo},
+    ha_cluster_agent::{ha_node_rpc_client::HaNodeRpcClient, ha_rpc_client::HaRpcClient},
+    operations::ha_node::traits::{
+        ClusterAgentOperations, NodeAgentOperations, NodeInfo, ReplacePathInfo,
+        ReportFailedPathsInfo,
+    },
 };
 use common_lib::{
     transport_api::{ReplyError, TimeoutOptions},
@@ -62,6 +65,47 @@ impl ClusterAgentOperations for ClusterAgentClient {
     ) -> Result<(), ReplyError> {
         let req = self.request(request, context, MessageIdVs::ReportFailedPaths);
         match self.client().report_failed_nvme_paths(req).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+}
+
+/// Node agent RPC Client.
+pub struct NodeAgentClient {
+    inner: Client<HaNodeRpcClient<TracedChannel>>,
+}
+
+impl NodeAgentClient {
+    /// creates a new base tonic endpoint with the timeout options and the address
+    pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {
+        let client = Client::new(addr, opts, HaNodeRpcClient::new).await;
+        Self { inner: client }
+    }
+}
+
+impl Deref for NodeAgentClient {
+    type Target = Client<HaNodeRpcClient<TracedChannel>>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[tonic::async_trait]
+impl NodeAgentOperations for NodeAgentClient {
+    #[tracing::instrument(
+        name = "NodeAgentClient::replace_path",
+        level = "debug",
+        skip(self),
+        err
+    )]
+    async fn replace_path(
+        &self,
+        request: &dyn ReplacePathInfo,
+        context: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let req = self.request(request, context, MessageIdVs::ReplacePathInfo);
+        match self.client().replace_path(req).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
         }

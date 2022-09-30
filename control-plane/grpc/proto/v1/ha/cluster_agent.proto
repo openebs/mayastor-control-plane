@@ -26,9 +26,10 @@ message FailedNvmePath {
 message ReportFailedNvmePathsRequest {
   // Node which reports failed paths.
   string nodename = 1;
-
+  // Grpc node endpoint.
+  string endpoint = 2;
   // List of failed
-  repeated FailedNvmePath failed_paths = 4;
+  repeated FailedNvmePath failed_paths = 3;
 }
 
 // Service for managing node-agent rpc calls

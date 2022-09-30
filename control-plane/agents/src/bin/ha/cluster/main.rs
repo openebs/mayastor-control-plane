@@ -1,4 +1,4 @@
-use grpc::operations::volume::client::VolumeClient;
+use grpc::client::CoreClient;
 use http::Uri;
 use once_cell::sync::OnceCell;
 use opentelemetry::{global, KeyValue};
@@ -9,7 +9,6 @@ use utils::{
     package_description, version_info_str, DEFAULT_CLUSTER_AGENT_SERVER_ADDR,
     DEFAULT_GRPC_CLIENT_ADDR,
 };
-
 mod etcd;
 mod nodes;
 mod server;
@@ -51,7 +50,14 @@ impl Cli {
 }
 
 /// Once cell static variable to store the grpc client and initialize once at startup.
-pub static CORE_CLIENT: OnceCell<VolumeClient> = OnceCell::new();
+pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
+
+/// Get Core gRPC Client
+pub(crate) fn core_grpc<'a>() -> &'a CoreClient {
+    CORE_CLIENT
+        .get()
+        .expect("gRPC Core Client should have been initialised")
+}
 
 fn initialize_tracing(args: &Cli) {
     utils::tracing_telemetry::init_tracing(
@@ -69,8 +75,9 @@ async fn main() -> anyhow::Result<()> {
 
     initialize_tracing(&cli);
 
+    // Initialise the core client to be used in rest
     CORE_CLIENT
-        .set(VolumeClient::new(cli.core_grpc, None).await)
+        .set(CoreClient::new(cli.core_grpc, None).await)
         .ok()
         .expect("Expect to be initialised only once");
 

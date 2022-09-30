@@ -1,6 +1,4 @@
 """Swap ANA enabled Nexus on ANA enabled host feature tests."""
-import http
-
 from pytest_bdd import (
     given,
     scenario,
@@ -27,13 +25,10 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
-from openapi.exceptions import ApiException
 
-import cluster_agent_pb2 as pb
-
-VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
+VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1123"
 VOLUME_SIZE = 10485761
-POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
+POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444456"
 POOL_NODE = "io-engine-3"
 TARGET_NODE_1 = "io-engine-1"
 TARGET_NODE_2 = "io-engine-2"
@@ -96,11 +91,14 @@ def fio_client_should_successfully_complete_with_the_replaced_io_path(
 
 
 @then("it should be possible to create a second nexus and replace failed path with it")
-def it_should_be_possible_to_create_a_second_nexus_and_replace_failed_path_with_it(
-    publish_to_node_2, replace_failed_path_with_node2
-):
+def it_should_be_possible_to_create_a_second_nexus_and_replace_failed_path_with_it():
     """it should be possible to create a second nexus and connect it as the second path."""
-    pass
+    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    try:
+        if volume["state"]["target"]["node"] not in [POOL_NODE, TARGET_NODE_2]:
+            pytest.fail("New target did not get created for the volume")
+    except:
+        pytest.fail("New target did not get created for the volume")
 
 
 """" FixTure Implementations """
@@ -158,47 +156,7 @@ def degrade_first_path():
     Docker.kill_container(TARGET_NODE_1)
     # Sleep some time to allow HA node agent detect failed path.
     # Add one extra second to make sure detection 100% happens.
-    sleep(PATH_DETECTION_TIME + 1)
-
-
-@pytest.fixture
-def publish_to_node_2(background):
-    volume = background
-    device_uri = volume.state["target"]["deviceUri"]
-
-    try:
-        ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
-    except ApiException as e:
-        # Timeout or node not online
-        assert (
-            e.status == http.HTTPStatus.REQUEST_TIMEOUT
-            or e.status == http.HTTPStatus.PRECONDITION_FAILED
-        )
-
-    ApiClient.volumes_api().del_volume_target(VOLUME_UUID, force="true")
-    volume_updated = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=TARGET_NODE_2
-    )
-    device_uri_2 = volume_updated.state["target"]["deviceUri"]
-    assert device_uri != device_uri_2
-    return device_uri_2
-
-
-@pytest.fixture
-def replace_failed_path_with_node2(
-    connect_to_first_path, publish_to_node_2, ha_node_instance
-):
-    ha_node_instance.api.ReplacePath(
-        pb.ReplacePathRequest(target_nqn=NEXUS_NQN, new_path=publish_to_node_2)
-    )
-
-    device = connect_to_first_path
-    desc = nvme_list_subsystems(device)
-    subsystem = desc["Subsystems"][0]
-    assert len(subsystem["Paths"]) == 1, "Second nexus must be added to I/O path"
-    assert (
-        subsystem["Paths"][0]["State"] == "live"
-    ), "Healthy I/O path has incorrect state"
+    sleep(PATH_DETECTION_TIME * 2 + 1)
 
 
 @pytest.fixture

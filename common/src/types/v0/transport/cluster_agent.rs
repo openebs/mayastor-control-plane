@@ -11,6 +11,8 @@ pub struct NodeAgentInfo {
 }
 
 impl NodeAgentInfo {
+    /// Creates an instance containing node name and node agent's grpc endpoint. Used for
+    /// registering node agent with cluster agent.
     pub fn new(node_name: String, endpoint: SocketAddr) -> Self {
         NodeAgentInfo {
             node_name,
@@ -18,10 +20,12 @@ impl NodeAgentInfo {
         }
     }
 
+    /// Get node name.
     pub fn node_name(&self) -> &str {
         &self.node_name
     }
 
+    /// Get node agents grpc address.
     pub fn endpoint(&self) -> SocketAddr {
         self.endpoint
     }
@@ -34,7 +38,7 @@ pub struct FailedPath {
 }
 
 impl FailedPath {
-    /// Create a new instance of FailedPath for a given NVMe target NQN.
+    /// Create a new instance with FailedPath for a given NVMe target NQN.
     pub fn new(target_nqn: String) -> Self {
         Self { target_nqn }
     }
@@ -49,19 +53,59 @@ impl FailedPath {
 #[derive(Debug)]
 pub struct ReportFailedPaths {
     node: String,
+    endpoint: SocketAddr,
     failed_paths: Vec<FailedPath>,
 }
 
 impl ReportFailedPaths {
-    pub fn new(node: String, failed_paths: Vec<FailedPath>) -> Self {
-        Self { node, failed_paths }
+    /// Creates instance listing failed paths, reporting node id and node agent's grpc address.
+    pub fn new(node: String, failed_paths: Vec<FailedPath>, endpoint: SocketAddr) -> Self {
+        Self {
+            node,
+            failed_paths,
+            endpoint,
+        }
     }
 
+    /// Get node name reporting Nvme path failures.
     pub fn node_name(&self) -> &str {
         &self.node
     }
 
+    /// Get the grpc address of node reporting failed paths.
+    pub fn endpoint(&self) -> SocketAddr {
+        self.endpoint
+    }
+
+    /// Get list of all failed paths in the request.
     pub fn failed_paths(&self) -> &Vec<FailedPath> {
         &self.failed_paths
+    }
+}
+
+#[derive(Debug)]
+pub struct ReplacePath {
+    target_nqn: String,
+    new_path: String,
+}
+
+impl ReplacePath {
+    /// Creates an instance containing failed and new nexus path to be reported back to node agent
+    /// for Nvme connect.
+    pub fn new(target_nqn: String, new_path: String) -> Self {
+        Self {
+            target_nqn,
+            new_path,
+        }
+    }
+
+    /// Get failed nexus path.
+    pub fn target(&self) -> &str {
+        &self.target_nqn
+    }
+
+    /// Get newly published nexus path.
+    pub fn new_path(&self) -> &str {
+        &self.new_path
     }
 }

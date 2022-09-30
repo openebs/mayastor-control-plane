@@ -1,4 +1,4 @@
-use crate::cluster_agent_client;
+use crate::{cluster_agent_client, Cli};
 use common_lib::types::v0::transport::{FailedPath, ReportFailedPaths};
 use grpc::operations::ha_node::traits::ClusterAgentOperations;
 use tokio::{
@@ -68,8 +68,8 @@ impl PathReporter {
                     .iter()
                     .map(|p| FailedPath::new(p.to_string()))
                     .collect::<Vec<FailedPath>>();
-
-                let req = ReportFailedPaths::new(node_name.clone(), failed_paths);
+                let node_ep = Cli::args().grpc_endpoint;
+                let req = ReportFailedPaths::new(node_name.clone(), failed_paths, node_ep);
 
                 // Report all paths in a separate task, continue till transmission succeeds.
                 tokio::spawn(async move {
