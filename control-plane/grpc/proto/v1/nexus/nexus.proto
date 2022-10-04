@@ -179,6 +179,25 @@ message NexusNvmfConfig {
   uint64 reservation_key = 2;
   // preempts this reservation key
   optional uint64 preempt_reservation_key = 3;
+  optional NvmeReservation reservation_type = 4; // the reservation type to use
+  NexusNvmePreemption preempt_policy = 5; // the preemption policy to use
+}
+
+// Nexus NVMe preemption policy.
+enum NexusNvmePreemption {
+  ArgKey = 0; // preempts using the preemptKey argument, if any
+  Holder = 1; // preempts the current reservation holder, if any
+}
+
+// NVMe reservation types.
+enum NvmeReservation {
+  Reserved = 0;
+  WriteExclusive = 1;
+  ExclusiveAccess = 2;
+  WriteExclusiveRegsOnly = 3;
+  ExclusiveAccessRegsOnly = 4;
+  WriteExclusiveAllRegs = 5;
+  ExclusiveAccessAllRegs = 6;
 }
 
 // Reply type for CreateNexusRequest

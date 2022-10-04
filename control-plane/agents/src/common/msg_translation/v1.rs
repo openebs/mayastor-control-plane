@@ -7,8 +7,9 @@ use common_lib::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, Child, ChildState, ChildStateReason, Nexus, NexusId, NexusStatus, NodeId,
-            PoolState, PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
+            self, Child, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
+            NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol, Replica,
+            ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
@@ -242,7 +243,7 @@ impl AgentToIoEngine for transport::CreateNexus {
     type IoEngineMessage = v1_rpc::nexus::CreateNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         let nexus_config = self.config.clone().unwrap_or_default();
-        Self::IoEngineMessage {
+        let create = Self::IoEngineMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
             size: self.size,
@@ -252,7 +253,15 @@ impl AgentToIoEngine for transport::CreateNexus {
             preempt_key: nexus_config.preempt_key(),
             children: self.children.clone().into_vec(),
             nexus_info_key: self.nexus_info_key(),
-        }
+            resv_type: Some(v1_rpc::nexus::NvmeReservation::from(ExternalType(
+                nexus_config.resv_type(),
+            )) as i32),
+            preempt_policy: v1_rpc::nexus::NexusNvmePreemption::from(ExternalType(
+                nexus_config.preempt_policy(),
+            )) as i32,
+        };
+        tracing::error!("{:?}", create);
+        create
     }
 }
 
@@ -396,4 +405,26 @@ pub fn rpc_pool_to_agent(rpc_pool: &rpc::v1::pool::Pool, id: &NodeId) -> PoolSta
     let mut pool = rpc_pool.to_agent();
     pool.node = id.clone();
     pool
+}
+
+impl From<ExternalType<NvmeReservation>> for v1_rpc::nexus::NvmeReservation {
+    fn from(value: ExternalType<NvmeReservation>) -> Self {
+        match value.0 {
+            NvmeReservation::Reserved => Self::Reserved,
+            NvmeReservation::WriteExclusive => Self::WriteExclusive,
+            NvmeReservation::ExclusiveAccess => Self::ExclusiveAccess,
+            NvmeReservation::WriteExclusiveRegsOnly => Self::WriteExclusiveRegsOnly,
+            NvmeReservation::ExclusiveAccessRegsOnly => Self::ExclusiveAccessRegsOnly,
+            NvmeReservation::WriteExclusiveAllRegs => Self::WriteExclusiveAllRegs,
+            NvmeReservation::ExclusiveAccessAllRegs => Self::ExclusiveAccessAllRegs,
+        }
+    }
+}
+impl From<ExternalType<NexusNvmePreemption>> for v1_rpc::nexus::NexusNvmePreemption {
+    fn from(value: ExternalType<NexusNvmePreemption>) -> Self {
+        match value.0 {
+            NexusNvmePreemption::ArgKey(_) => Self::ArgKey,
+            NexusNvmePreemption::Holder => Self::Holder,
+        }
+    }
 }

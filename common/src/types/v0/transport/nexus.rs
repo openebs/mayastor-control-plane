@@ -182,6 +182,29 @@ pub struct CreateNexus {
     pub config: Option<NexusNvmfConfig>,
 }
 
+/// NVMe reservation types.
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum NvmeReservation {
+    Reserved = 0,
+    WriteExclusive = 1,
+    ExclusiveAccess = 2,
+    WriteExclusiveRegsOnly = 3,
+    ExclusiveAccessRegsOnly = 4,
+    WriteExclusiveAllRegs = 5,
+    ExclusiveAccessAllRegs = 6,
+}
+
+/// Nexus NVMe preemption policy.
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum NexusNvmePreemption {
+    /// A "manual" preemption where we explicitly specify the reservation key,
+    /// type and preempt key.
+    ArgKey(Option<u64>),
+    /// An "automatic" preemption where we can preempt whatever is current
+    /// holder. Useful when we just want to boot the existing holder out.
+    Holder,
+}
+
 /// Nvmf Controller Id Range
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -232,58 +255,72 @@ impl Default for NvmfControllerIdRange {
     }
 }
 
-/// Nexus Nvmf target configuration
+/// Nexus Nvmf target configuration.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NexusNvmfConfig {
-    /// limits the controller id range
+    /// Limits the controller id range.
     controller_id_range: NvmfControllerIdRange,
-    /// persistent reservation key
+    /// Persistent reservation key.
     reservation_key: u64,
-    /// preempts this reservation key
-    preempt_reservation_key: Option<u64>,
+    /// Persistent reservation type.
+    reservation_type: NvmeReservation,
+    /// Preemption policy.
+    preempt_policy: NexusNvmePreemption,
 }
 
 impl NexusNvmfConfig {
-    /// minimum controller id that can be used by the nvmf target
+    /// The minimum controller id that can be used by the nvmf target
     pub fn min_cntl_id(&self) -> u16 {
         *self.controller_id_range.min()
     }
-    /// maximum controller id that can be used by the nvmf target
+    /// The maximum controller id that can be used by the nvmf target.
     pub fn max_cntl_id(&self) -> u16 {
         *self.controller_id_range.max()
     }
-    /// persistent reservation key
+    /// The persistent reservation key.
     pub fn resv_key(&self) -> u64 {
         self.reservation_key
     }
-    /// reservation key to be preempted
-    pub fn preempt_key(&self) -> u64 {
-        self.preempt_reservation_key.unwrap_or_default()
+    /// The persistent reservation type.
+    pub fn resv_type(&self) -> NvmeReservation {
+        self.reservation_type
     }
-    /// create a new NexusNvmfConfig with the args
+    /// The reservation key to be preempted.
+    pub fn preempt_key(&self) -> u64 {
+        match self.preempt_policy {
+            NexusNvmePreemption::ArgKey(v) => v.unwrap_or_default(),
+            NexusNvmePreemption::Holder => 0,
+        }
+    }
+    /// The optional preemption reservation key value.
+    pub fn preempt_key_opt(&self) -> Option<u64> {
+        match self.preempt_policy {
+            NexusNvmePreemption::ArgKey(v) => v,
+            NexusNvmePreemption::Holder => None,
+        }
+    }
+    /// The nexus preemption policy.
+    pub fn preempt_policy(&self) -> NexusNvmePreemption {
+        self.preempt_policy
+    }
+    /// Create a new NexusNvmfConfig with the args.
     pub fn new(
         controller_id_range: NvmfControllerIdRange,
         reservation_key: u64,
-        preempt_reservation_key: Option<u64>,
+        reservation_type: NvmeReservation,
+        preempt_policy: NexusNvmePreemption,
     ) -> Self {
         Self {
             controller_id_range,
             reservation_key,
-            preempt_reservation_key,
+            reservation_type,
+            preempt_policy,
         }
     }
     /// get controller_id_range
     pub fn controller_id_range(&self) -> NvmfControllerIdRange {
         self.controller_id_range.clone()
-    }
-    /// get reservation_key
-    pub fn reservation_key(&self) -> u64 {
-        self.reservation_key
-    }
-    /// get preempt_reservation_key
-    pub fn preempt_reservation_key(&self) -> Option<u64> {
-        self.preempt_reservation_key
     }
 }
 
@@ -293,13 +330,15 @@ impl Default for NexusNvmfConfig {
             Self {
                 controller_id_range: NvmfControllerIdRange::random_min(),
                 reservation_key: 1,
-                preempt_reservation_key: None,
+                reservation_type: NvmeReservation::ExclusiveAccess,
+                preempt_policy: NexusNvmePreemption::Holder,
             }
         } else {
             Self {
                 controller_id_range: NvmfControllerIdRange::default(),
                 reservation_key: 1,
-                preempt_reservation_key: None,
+                reservation_type: NvmeReservation::ExclusiveAccess,
+                preempt_policy: NexusNvmePreemption::Holder,
             }
         }
     }

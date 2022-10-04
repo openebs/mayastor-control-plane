@@ -348,10 +348,10 @@ pub mod v1 {
         pub use super::pb::{
             nexus_rpc_client, AddChildNexusRequest, AddChildNexusResponse, Child, ChildState,
             ChildStateReason, CreateNexusRequest, CreateNexusResponse, DestroyNexusRequest,
-            FaultNexusChildRequest, ListNexusOptions, ListNexusResponse, Nexus, NexusState,
-            NvmeAnaState, PublishNexusRequest, PublishNexusResponse, RemoveChildNexusRequest,
-            RemoveChildNexusResponse, ShutdownNexusRequest, UnpublishNexusRequest,
-            UnpublishNexusResponse,
+            FaultNexusChildRequest, ListNexusOptions, ListNexusResponse, Nexus,
+            NexusNvmePreemption, NexusState, NvmeAnaState, NvmeReservation, PublishNexusRequest,
+            PublishNexusResponse, RemoveChildNexusRequest, RemoveChildNexusResponse,
+            ShutdownNexusRequest, UnpublishNexusRequest, UnpublishNexusResponse,
         };
     }
 
