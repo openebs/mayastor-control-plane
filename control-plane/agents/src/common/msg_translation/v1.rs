@@ -243,7 +243,7 @@ impl AgentToIoEngine for transport::CreateNexus {
     type IoEngineMessage = v1_rpc::nexus::CreateNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         let nexus_config = self.config.clone().unwrap_or_default();
-        let create = Self::IoEngineMessage {
+        Self::IoEngineMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
             size: self.size,
@@ -259,9 +259,7 @@ impl AgentToIoEngine for transport::CreateNexus {
             preempt_policy: v1_rpc::nexus::NexusNvmePreemption::from(ExternalType(
                 nexus_config.preempt_policy(),
             )) as i32,
-        };
-        tracing::error!("{:?}", create);
-        create
+        }
     }
 }
 
