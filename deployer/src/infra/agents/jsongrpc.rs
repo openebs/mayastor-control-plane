@@ -1,5 +1,12 @@
-use crate::infra::*;
+use crate::{
+    build_error,
+    infra::{
+        async_trait, Builder, ComponentAction, ComposeTest, Error, JsonGrpcAgent, StartOptions,
+    },
+};
+use composer::Binary;
 use grpc::operations::jsongrpc::client::JsonGrpcClient;
+use std::str::FromStr;
 
 #[async_trait]
 impl ComponentAction for JsonGrpcAgent {

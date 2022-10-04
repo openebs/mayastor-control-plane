@@ -1,6 +1,7 @@
 use crate::infra::{
     async_trait, Builder, ComponentAction, ComposeTest, Error, IoEngine, StartOptions,
 };
+use common_lib::types::v0::openapi::apis::Uuid;
 use composer::{Binary, ContainerSpec};
 use rpc::io_engine::{IoEngineApiVersion, RpcHandle};
 use std::net::{IpAddr, SocketAddr};
@@ -35,6 +36,7 @@ impl ComponentAction for IoEngine {
                 "-r",
                 format!("/host/tmp/{}.sock", Self::name(i, options)).as_str(),
             ])
+            .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
             .with_bind("/tmp", "/host/tmp");
 
             if options.io_engine_isolate {

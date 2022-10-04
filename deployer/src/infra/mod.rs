@@ -5,6 +5,7 @@ pub mod dns;
 mod elastic;
 mod empty;
 mod etcd;
+mod fio_spdk;
 mod io_engine;
 mod jaeger;
 mod kibana;
@@ -13,7 +14,7 @@ mod rest;
 use super::StartOptions;
 use async_trait::async_trait;
 
-use composer::{Binary, Builder, BuilderConfigure, ComposeTest, ContainerSpec};
+use composer::{Builder, BuilderConfigure, ComposeTest};
 use futures::future::{join_all, try_join_all};
 use paste::paste;
 use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
@@ -426,6 +427,7 @@ impl_component! {
     JsonGrpcAgent,  3,
     Rest,           3,
     HaClusterAgent, 3,
+    FioSpdk,        3,
     IoEngine,       4,
     CsiNode,        5,
     CsiController,  5,

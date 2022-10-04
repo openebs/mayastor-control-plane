@@ -136,6 +136,10 @@ pub struct StartOptions {
     #[structopt(long, conflicts_with = "no-rest")]
     pub rest_jwk: Option<String>,
 
+    /// Use the following image pull policy when creating containers from images.
+    #[structopt(long, default_value = "ifnotpresent")]
+    pub image_pull_policy: composer::ImagePullPolicy,
+
     /// Use `N` io_engine instances
     /// Note: the io_engine containers have the host's /tmp directory mapped into the container
     /// as /host/tmp. This is useful to create pool's from file images.
@@ -145,10 +149,6 @@ pub struct StartOptions {
     /// Use the following docker image for the io_engine instances.
     #[structopt(long, env = "IO_ENGINE_IMAGE", default_value = utils::IO_ENGINE_IMAGE)]
     pub io_engine_image: String,
-
-    /// Use the following image pull policy when creating containers from images.
-    #[structopt(long, default_value = "ifnotpresent")]
-    pub image_pull_policy: composer::ImagePullPolicy,
 
     /// Use the following runnable binary for the io_engine instances.
     #[structopt(long, env = "IO_ENGINE_BIN", conflicts_with = "io-engine-image")]
@@ -168,6 +168,19 @@ pub struct StartOptions {
     /// Add the following environment variables to the io_engine containers.
     #[structopt(long, env = "IO_ENGINE_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub io_engine_env: Option<Vec<KeyValue>>,
+
+    /// The gRPC api versions to be passed to the io-engine.
+    #[structopt(
+        long,
+        env = "IO_ENGINE_API_VERSIONS",
+        value_delimiter = ",",
+        default_value = "v1"
+    )]
+    io_engine_api_versions: Vec<IoEngineApiVersion>,
+
+    /// Set the developer delayed env flag of the io_engine reactor.
+    #[structopt(short, long)]
+    pub developer_delayed: bool,
 
     /// Add the following environment variables to the agent containers.
     #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
@@ -247,7 +260,7 @@ pub struct StartOptions {
     #[structopt(long)]
     pub reconcile_idle_period: Option<humantime::Duration>,
 
-    /// Override the core agent's reconcile idle period.
+    /// Override the opentel max exporter batch size.
     #[structopt(long, env = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE")]
     pub otel_max_batch_size: Option<String>,
 
@@ -262,10 +275,6 @@ pub struct StartOptions {
     #[structopt(short, long)]
     pub reuse_cluster: bool,
 
-    /// Set the developer delayed env flag of the io_engine reactor.
-    #[structopt(short, long)]
-    pub developer_delayed: bool,
-
     /// Add process service tags to the traces.
     #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     tracing_tags: Vec<KeyValue>,
@@ -274,9 +283,10 @@ pub struct StartOptions {
     #[structopt(long)]
     max_rebuilds: Option<u32>,
 
-    /// api versions to be passed to the io-engine
-    #[structopt(long, env = "IO_ENGINE_API_VERSIONS", default_value = "v1")]
-    io_engine_api_versions: Vec<IoEngineApiVersion>,
+    /// Deploy a fio-spdk container.
+    /// This can be used for userspace io against a volume's nvmf target using the spdk ioengine.
+    #[structopt(long)]
+    pub(crate) fio_spdk: bool,
 }
 
 /// List of KeyValues
@@ -443,6 +453,12 @@ impl StartOptions {
     #[must_use]
     pub fn with_max_rebuilds(mut self, max: Option<u32>) -> Self {
         self.max_rebuilds = max;
+        self
+    }
+    /// Enable/Disable the fio-spdk container.
+    #[must_use]
+    pub fn with_fio_spdk(mut self, fio_spdk: bool) -> Self {
+        self.fio_spdk = fio_spdk;
         self
     }
 
