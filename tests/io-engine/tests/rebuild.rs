@@ -97,7 +97,7 @@ async fn concurrent_rebuilds() {
     ) {
         let start = std::time::Instant::now();
         let mut timeout = std::time::Duration::from_secs(120);
-        let timeout_slack = timeout / 2;
+        let timeout_slack = timeout;
         let mut added_slack = false;
         let check_interval = std::time::Duration::from_secs(5);
         loop {
