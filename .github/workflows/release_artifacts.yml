@@ -2,10 +2,7 @@ name: "Release Artifacts"
 on:
   push:
     branches:
-      - master
       - 'release/**'
-      - 'release-v**'
-      - 'hotfix-v**'
 
 jobs:
   kubectl-plugin:
@@ -18,10 +15,10 @@ jobs:
     - run: nix-build -A utils.release.linux-musl.kubectl-plugin
     - uses: actions/upload-artifact@v2
       with:
-        name: kubectl-mayastor
+        name: kubectl-mayastor-x86_64-linux-musl
         path: ./result/bin/kubectl-mayastor
     - run: nix-build -A utils.release.windows-gnu.kubectl-plugin
     - uses: actions/upload-artifact@v2
       with:
-        name: kubectl-mayastor.exe
+        name: kubectl-mayastor-x86_64-windows-gnu
         path: ./result/bin/kubectl-mayastor.exe

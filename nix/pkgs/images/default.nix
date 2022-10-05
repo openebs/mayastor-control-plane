@@ -8,10 +8,12 @@
 , utillinux
 , control-plane
 , tini
+, img_tag ? ""
 }:
 let
+  tag = if img_tag != "" then img_tag else control-plane.version;
   build-control-plane-image = { build, name, config ? { } }: dockerTools.buildImage {
-    tag = control-plane.version;
+    inherit tag;
     created = "now";
     name = "mayadata/mcp-${name}";
     contents = [ tini busybox control-plane.${build}.${name} ];
@@ -33,7 +35,6 @@ let
     inherit build;
     name = "csi-controller";
   };
-
 in
 {
   core = build-agent-image { build = "release"; name = "core"; };

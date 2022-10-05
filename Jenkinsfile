@@ -34,22 +34,26 @@ def notifySlackUponStateChange(build) {
   }
 }
 
+def mainBranches() {
+    return BRANCH_NAME == "develop" || BRANCH_NAME.startsWith("release/");
+}
+
+// TODO: Use multiple choices
 run_linter = true
 rust_test = true
 bdd_test = true
+run_tests = params.run_tests
+build_images = params.build_images
 
-// Will ABORT current job for cases when we don't want to build
-if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') &&
-    BRANCH_NAME == "develop") {
+// Will skip steps for cases when we don't want to build
+if (currentBuild.getBuildCauses('jenkins.branch.BranchIndexingCause') && mainBranches()) {
     print "INFO: Branch Indexing, skip tests and push the new images."
-    run_linter = false
-    rust_test = false
-    bdd_test = false
+    run_tests = false
     build_images = true
 }
 
-// Only schedule regular builds on develop branch, so we don't need to guard against it
-String cron_schedule = BRANCH_NAME == "develop" ? "0 2 * * *" : ""
+// Only schedule regular builds on main branches, so we don't need to guard against it
+String cron_schedule = mainBranches() ? "0 2 * * *" : ""
 
 pipeline {
   agent none
@@ -57,7 +61,8 @@ pipeline {
     timeout(time: 1, unit: 'HOURS')
   }
   parameters {
-    booleanParam(defaultValue: true, name: 'build_images')
+    booleanParam(defaultValue: false, name: 'build_images')
+    booleanParam(defaultValue: true, name: 'run_tests')
   }
   triggers {
     cron(cron_schedule)
@@ -84,7 +89,7 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'hotfix-*'
+            branch 'release/*'
             expression { run_linter == false }
           }
         }
@@ -105,9 +110,9 @@ pipeline {
         not {
           anyOf {
             branch 'master'
-            branch 'hotfix-*'
           }
         }
+        expression { run_tests == true }
       }
       parallel {
         stage('rust unit tests') {
@@ -116,6 +121,9 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+            }
             sh 'printenv'
             sh 'nix-shell --run "./scripts/ctrlp-cargo-test.sh"'
           }
@@ -132,8 +140,28 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+            }
             sh 'printenv'
             sh 'nix-shell --run "./scripts/bdd-tests.sh"'
+          }
+          post {
+            always {
+              // in case of abnormal termination of any nvmf test
+              sh 'sudo nvme disconnect-all'
+            }
+          }
+        }
+        stage('image build test') {
+          when {
+            branch 'staging'
+          }
+          agent { label 'nixos-mayastor' }
+          steps {
+            sh 'printenv'
+            sh './scripts/git-submodule-init.sh --force'
+            sh './scripts/release.sh --skip-publish --debug --build-bins'
           }
         }
       }// parallel stages block
@@ -142,13 +170,11 @@ pipeline {
       agent { label 'nixos-mayastor' }
       when {
         beforeAgent true
-        allOf {
-          expression { params.build_images == true }
+        anyOf {
+          expression { build_images == true }
           anyOf {
             branch 'master'
-            branch 'release-*'
             branch 'release/*'
-            branch 'hotfix-*'
             branch 'develop'
           }
         }
@@ -157,6 +183,8 @@ pipeline {
         withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
             sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
         }
+        sh 'printenv'
+        sh './scripts/git-submodule-init.sh --force'
         sh './scripts/release.sh'
       }
       post {
@@ -179,20 +207,20 @@ pipeline {
           // status in github nor send any slack messages
           if (currentBuild.result != null) {
             step([
-                    $class            : 'GitHubCommitStatusSetter',
-                    errorHandlers     : [[$class: "ChangingBuildStatusErrorHandler", result: "UNSTABLE"]],
-                    contextSource     : [
-                            $class : 'ManuallyEnteredCommitContextSource',
-                            context: 'continuous-integration/jenkins/branch'
-                    ],
-                    statusResultSource: [
-                            $class : 'ConditionalStatusResultSource',
-                            results: [
-                                    [$class: 'AnyBuildResult', message: 'Pipeline result', state: currentBuild.getResult()]
-                            ]
-                    ]
+              $class            : 'GitHubCommitStatusSetter',
+              errorHandlers     : [[$class: "ChangingBuildStatusErrorHandler", result: "UNSTABLE"]],
+              contextSource     : [
+                $class : 'ManuallyEnteredCommitContextSource',
+                context: 'continuous-integration/jenkins/branch'
+              ],
+              statusResultSource: [
+                $class : 'ConditionalStatusResultSource',
+                results: [
+                  [$class: 'AnyBuildResult', message: 'Pipeline result', state: currentBuild.getResult()]
+                ]
+              ]
             ])
-            if (env.BRANCH_NAME == 'develop') {
+            if (mainBranches()) {
               notifySlackUponStateChange(currentBuild)
             }
           }
