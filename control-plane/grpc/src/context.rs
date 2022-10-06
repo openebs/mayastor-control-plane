@@ -58,6 +58,9 @@ pub fn timeout_grpc(op_id: MessageId, timeout_opts: TimeoutOptions) -> Duration 
 
                 MessageIdVs::CreateReplica => min_timeouts.replica(),
                 MessageIdVs::DestroyReplica => min_timeouts.replica(),
+
+                MessageIdVs::CreatePool => min_timeouts.pool(),
+                MessageIdVs::DestroyPool => min_timeouts.pool(),
                 _ => base,
             },
         };
@@ -124,7 +127,10 @@ impl Context {
             // we use the same timeout for the connection so we can pass the existing nats tests
             // todo: use a shorter connect timeout
             .connect_timeout(timeout)
-            .timeout(timeout)
+            // todo: Channel will pick the shorter timeout, rather than override the default
+            // timeout with a per-request timeout. For now set this default timeout high, but
+            // we probably want to use our own timeout logic instead.
+            .timeout(std::time::Duration::from_secs(60))
             .http2_keep_alive_interval(self.keep_alive_interval())
             .keep_alive_timeout(self.keep_alive_timeout())
             .concurrency_limit(utils::DEFAULT_GRPC_CLIENT_CONCURRENCY)

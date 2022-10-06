@@ -59,11 +59,12 @@ impl TaskPoller for NexusReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
         for nexus in context.specs().get_nexuses() {
-            if !nexus.lock().managed {
-                continue;
-            }
-            // at the moment, nexuses owned by a volume are only reconciled by the volume
-            if nexus.lock().owned() {
+            let skip = {
+                let nexus = nexus.lock();
+                // at the moment, nexuses owned by a volume are only reconciled by the volume
+                !nexus.managed || nexus.owned() || nexus.dirty()
+            };
+            if skip {
                 continue;
             }
             let mut nexus = match nexus.operation_guard() {

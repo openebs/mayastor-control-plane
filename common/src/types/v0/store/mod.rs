@@ -79,6 +79,7 @@ pub trait SpecTransaction<Operation> {
 pub struct OperationSequence {
     uuid: String,
     state: OperationSequenceState,
+    log_error: bool,
 }
 impl OperationSequence {
     /// Create new `Self` with a uuid for observability
@@ -86,6 +87,7 @@ impl OperationSequence {
         Self {
             uuid: uuid.into(),
             state: Default::default(),
+            log_error: true,
         }
     }
 }
@@ -118,10 +120,10 @@ pub trait OperationSequencer: Debug + Clone {
     /// Check if the transition is valid.
     fn valid(&self, next: OperationSequenceState) -> bool;
     /// Try to transition from current to next state.
-    fn transition(&self, next: OperationSequenceState) -> Option<OperationSequenceState>;
+    fn transition(&self, next: OperationSequenceState) -> Result<OperationSequenceState, bool>;
     /// Sequence an operation using the provided `OperationMode`.
     /// It returns the state which must be used to revert this operation.
-    fn sequence(&self, mode: OperationMode) -> Option<OperationSequenceState>;
+    fn sequence(&self, mode: OperationMode) -> Result<OperationSequenceState, bool>;
     /// Complete the operation sequenced using the provided `OperationMode`.
     fn complete(&self, revert: OperationSequenceState);
 }
@@ -182,23 +184,29 @@ impl OperationSequence {
         }
     }
     /// Try to transition from current to next state.
-    pub fn transition(&mut self, next: OperationSequenceState) -> Option<OperationSequenceState> {
+    pub fn transition(
+        &mut self,
+        next: OperationSequenceState,
+    ) -> Result<OperationSequenceState, bool> {
         if self.valid(next) {
             let previous = self.state;
             self.state = next;
-            Some(previous)
+            self.log_error = true;
+            Ok(previous)
         } else {
-            None
+            let first_error = self.log_error;
+            self.log_error = false;
+            Err(first_error)
         }
     }
     /// Sequence an operation using the provided `OperationMode`.
     /// It returns the state which must be used to revert this operation.
-    pub fn sequence(&mut self, mode: OperationMode) -> Option<OperationSequenceState> {
+    pub fn sequence(&mut self, mode: OperationMode) -> Result<OperationSequenceState, bool> {
         self.transition(mode.apply())
     }
     /// Complete the operation sequenced using the provided `OperationMode`.
     pub fn complete(&mut self, revert: OperationSequenceState) {
-        if self.transition(revert).is_none() {
+        if self.transition(revert).is_err() {
             debug_assert!(false, "Invalid revert from '{:?}' to '{:?}'", self, revert);
             self.state = OperationSequenceState::Idle;
         }
