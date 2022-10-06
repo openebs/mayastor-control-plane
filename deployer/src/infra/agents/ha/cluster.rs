@@ -1,7 +1,11 @@
+use std::convert::TryFrom;
 use tokio::time::{sleep, Duration};
 use tonic::transport::Endpoint;
 
-use crate::infra::*;
+use crate::infra::{
+    async_trait, Builder, ComponentAction, ComposeTest, Error, HaClusterAgent, StartOptions,
+};
+use composer::{Binary, ContainerSpec};
 
 #[async_trait]
 impl ComponentAction for HaClusterAgent {

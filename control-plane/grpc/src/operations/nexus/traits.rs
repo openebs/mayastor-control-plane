@@ -17,9 +17,9 @@ use common_lib::{
         },
         transport::{
             AddNexusChild, Child, ChildState, ChildStateReason, ChildUri, CreateNexus,
-            DestroyNexus, Filter, Nexus, NexusId, NexusNvmfConfig, NexusShareProtocol, NexusStatus,
-            NodeId, NvmfControllerIdRange, RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus,
-            VolumeId,
+            DestroyNexus, Filter, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
+            NexusShareProtocol, NexusStatus, NodeId, NvmeReservation, NvmfControllerIdRange,
+            RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
         },
     },
 };
@@ -465,8 +465,50 @@ impl TryFrom<nexus::NexusNvmfConfig> for NexusNvmfConfig {
                 }
             },
             data.reservation_key,
-            data.preempt_reservation_key,
+            {
+                match data
+                    .reservation_type
+                    .and_then(nexus::NvmeReservation::from_i32)
+                {
+                    None => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Nexus,
+                            "nexus_nvmf_config.reservation_type",
+                            format!("{:?}", data.reservation_type),
+                        ))
+                    }
+                    Some(s) => s.into(),
+                }
+            },
+            match nexus::NexusNvmePreemption::from_i32(data.preempt_policy) {
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Nexus,
+                        "nexus_nvmf_config.preempt_policy",
+                        format!("{:?}", data.preempt_policy),
+                    ))
+                }
+                Some(v) => match v {
+                    nexus::NexusNvmePreemption::ArgKey => {
+                        NexusNvmePreemption::ArgKey(data.preempt_reservation_key)
+                    }
+                    nexus::NexusNvmePreemption::Holder => NexusNvmePreemption::Holder,
+                },
+            },
         ))
+    }
+}
+impl From<nexus::NvmeReservation> for NvmeReservation {
+    fn from(src: nexus::NvmeReservation) -> Self {
+        match src {
+            nexus::NvmeReservation::Reserved => Self::Reserved,
+            nexus::NvmeReservation::WriteExclusive => Self::WriteExclusive,
+            nexus::NvmeReservation::ExclusiveAccess => Self::ExclusiveAccess,
+            nexus::NvmeReservation::WriteExclusiveRegsOnly => Self::WriteExclusiveRegsOnly,
+            nexus::NvmeReservation::ExclusiveAccessRegsOnly => Self::ExclusiveAccessRegsOnly,
+            nexus::NvmeReservation::WriteExclusiveAllRegs => Self::WriteExclusiveAllRegs,
+            nexus::NvmeReservation::ExclusiveAccessAllRegs => Self::ExclusiveAccessAllRegs,
+        }
     }
 }
 
@@ -481,8 +523,13 @@ impl From<NexusNvmfConfig> for nexus::NexusNvmfConfig {
     fn from(data: NexusNvmfConfig) -> Self {
         Self {
             controller_id_range: Some(data.controller_id_range().into()),
-            reservation_key: data.reservation_key(),
-            preempt_reservation_key: data.preempt_reservation_key(),
+            reservation_key: data.resv_key(),
+            preempt_reservation_key: data.preempt_key_opt(),
+            reservation_type: Some(data.resv_type() as i32),
+            preempt_policy: match data.preempt_policy() {
+                NexusNvmePreemption::ArgKey(_) => nexus::NexusNvmePreemption::ArgKey as i32,
+                NexusNvmePreemption::Holder => nexus::NexusNvmePreemption::Holder as i32,
+            },
         }
     }
 }

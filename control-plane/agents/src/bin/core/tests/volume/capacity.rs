@@ -95,7 +95,7 @@ async fn fault_enospc_child() {
         .await
         .unwrap();
 
-    tracing::info!("\n{}", output.unwrap());
+    tracing::info!("\n{:?}", output.unwrap());
 
     let volume_client = cluster.grpc_client().volume();
     let _ = wait_till_volume_children(&volume_1.spec.uuid.into(), 1, &volume_client).await;
