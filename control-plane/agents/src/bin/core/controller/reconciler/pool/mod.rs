@@ -40,6 +40,9 @@ impl TaskPoller for PoolReconciler {
         let pools = context.specs().get_locked_pools();
         let mut results = Vec::with_capacity(pools.len());
         for pool in pools {
+            if pool.lock().dirty() {
+                continue;
+            }
             let mut pool = match pool.operation_guard() {
                 Ok(guard) => guard,
                 Err(_) => continue,

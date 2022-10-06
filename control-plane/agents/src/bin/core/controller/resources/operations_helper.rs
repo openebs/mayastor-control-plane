@@ -679,10 +679,13 @@ impl<T: AsOperationSequencer + SpecOperationsHelper> OperationSequenceGuard<T>
 {
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
         let get_value = |s: &Self| s.lock().clone();
+
         match OperationGuardArc::try_sequence(self, get_value, mode) {
             Ok(guard) => Ok(guard),
-            Err(error) => {
-                tracing::debug!("Resource '{}' is busy: {}", self.lock().uuid_str(), error);
+            Err((error, log)) => {
+                if log {
+                    tracing::debug!("Resource '{}' is busy: {}", self.lock().uuid_str(), error);
+                }
                 Err(SvcError::Conflict {})
             }
         }

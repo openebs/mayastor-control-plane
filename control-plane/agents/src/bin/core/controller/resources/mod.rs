@@ -29,10 +29,10 @@ impl<T: AsOperationSequencer + std::fmt::Debug + Clone> OperationSequencer for R
     fn valid(&self, next: OperationSequenceState) -> bool {
         self.lock().as_mut().valid(next)
     }
-    fn transition(&self, next: OperationSequenceState) -> Option<OperationSequenceState> {
+    fn transition(&self, next: OperationSequenceState) -> Result<OperationSequenceState, bool> {
         self.lock().as_mut().transition(next)
     }
-    fn sequence(&self, mode: OperationMode) -> Option<OperationSequenceState> {
+    fn sequence(&self, mode: OperationMode) -> Result<OperationSequenceState, bool> {
         self.lock().as_mut().sequence(mode)
     }
     fn complete(&self, revert: OperationSequenceState) {
@@ -137,19 +137,22 @@ impl<T: OperationSequencer + Sized, R> OperationGuard<T, R> {
         resource: &T,
         value: fn(&T) -> R,
         mode: OperationMode,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, (String, bool)> {
         // use result variable to make sure the mutex's temporary guard is dropped
         match resource.sequence(mode) {
-            Some(revert) => Ok(Self {
+            Ok(revert) => Ok(Self {
                 inner: resource.clone(),
                 inner_value: value(resource),
                 mode,
                 locked: Some(revert),
             }),
-            None => Err(format!(
-                "Cannot transition from '{:?}' to '{:?}'",
-                resource,
-                mode.apply()
+            Err(log) => Err((
+                format!(
+                    "Cannot transition from '{:?}' to '{:?}'",
+                    resource,
+                    mode.apply()
+                ),
+                log,
             )),
         }
     }

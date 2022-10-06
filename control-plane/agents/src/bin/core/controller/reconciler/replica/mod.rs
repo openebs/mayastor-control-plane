@@ -33,6 +33,9 @@ impl TaskPoller for ReplicaReconciler {
         let mut results = Vec::with_capacity(replicas.len());
 
         for replica in replicas {
+            if replica.lock().dirty() {
+                continue;
+            }
             let mut replica = match replica.operation_guard() {
                 Ok(guard) => guard,
                 Err(_) => continue,

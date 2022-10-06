@@ -389,6 +389,7 @@ pub struct TimeoutOptions {
 pub struct RequestMinTimeout {
     replica: Duration,
     nexus: Duration,
+    pool: Duration,
 }
 
 impl Default for RequestMinTimeout {
@@ -396,6 +397,7 @@ impl Default for RequestMinTimeout {
         Self {
             replica: Duration::from_secs(10),
             nexus: Duration::from_secs(30),
+            pool: Duration::from_secs(20),
         }
     }
 }
@@ -407,6 +409,10 @@ impl RequestMinTimeout {
     /// minimum timeout for a nexus operation.
     pub fn nexus(&self) -> Duration {
         self.nexus
+    }
+    /// minimum timeout for a pool operation.
+    pub fn pool(&self) -> Duration {
+        self.pool
     }
 }
 
