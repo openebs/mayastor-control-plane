@@ -161,6 +161,7 @@ def test_unpublish_volume_idempotency(setup):
     """unpublish volume idempotency"""
 
 
+@pytest.mark.skip("This test is no longer valid as local restriction is revoked")
 @scenario("controller.feature", "unpublish volume from a different node")
 def test_unpublish_volume_from_a_different_node(setup):
     """unpublish volume on a different node"""
