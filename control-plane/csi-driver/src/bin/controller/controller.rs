@@ -457,15 +457,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             Err(e) => return Err(Status::from(e)),
         };
 
-        // Check if target volume is published and the node matches.
-        if let Some(target) = &volume.spec.target.as_ref() {
-            if !args.node_id.is_empty() && target.node != args.node_id {
-                return Err(Status::not_found(format!(
-                    "Volume {} is published on a different node: {}",
-                    &args.volume_id, target.node
-                )));
-            }
-        } else {
+        if volume.spec.target.is_none() {
             // Volume is not published, bail out.
             debug!(
                 "Volume {} is not published, not unpublishing",
