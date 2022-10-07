@@ -199,7 +199,14 @@ impl Service {
                 };
 
                 let result = match result {
-                    Ok(result) => node.load(startup).await.map(|_| result),
+                    Ok(mut result) => {
+                        // old v0 doesn't have the instance uuid
+                        if result.instance_uuid().is_none() && node_state.instance_uuid().is_some()
+                        {
+                            result.instance_uuid = *node_state.instance_uuid();
+                        }
+                        node.load(startup).await.map(|_| result)
+                    }
                     Err(e) => Err(e),
                 };
                 match result {
