@@ -7,7 +7,7 @@ ROOTDIR="$SCRIPTDIR"/../
 DEPLOYDIR="$ROOTDIR"/deploy
 
 PROFILE=release
-TAG=v1.0.2
+TAG=v1.0.3
 
 "$SCRIPTDIR"/generate-deploy-yamls.sh -t "$TAG" "$PROFILE"
 
