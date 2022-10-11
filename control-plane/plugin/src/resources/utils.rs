@@ -18,7 +18,8 @@ lazy_static! {
         "TARGET-NODE",
         "ACCESSIBILITY",
         "STATUS",
-        "SIZE"
+        "SIZE",
+        "THIN-PROVISIONED"
     ];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",
