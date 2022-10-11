@@ -33,13 +33,17 @@ impl LeaseLockInfo {
         }
     }
     /// Revokes the lease and releases the associated lock
-    pub(crate) async fn revoke(&self) {
+    pub(crate) async fn revoke(&self) -> Result<(), StoreError> {
         let info = self.lease_info_inner();
         let mut client = info.client;
         if let Some(lease_id) = info.lease_id {
             client.lease_revoke(lease_id).await.ok();
         }
-        client.unlock(info.lock_key).await.unwrap();
+        client
+            .unlock(info.lock_key)
+            .await
+            .map_err(|source| StoreError::FailedUnlock { source })?;
+        Ok(())
     }
 
     /// Set the provided lease id.

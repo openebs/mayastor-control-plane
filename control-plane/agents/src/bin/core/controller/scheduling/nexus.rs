@@ -49,7 +49,7 @@ impl GetPersistedNexusChildren {
     /// Get the current nexus persistent information Id.
     pub(crate) fn nexus_info_id(&self) -> Option<&NexusId> {
         match self {
-            Self::Create((vol, _)) => vol.last_nexus_id.as_ref(),
+            Self::Create((vol, _)) => vol.last_nexus_id(),
             Self::ReCreate(nexus) => Some(&nexus.uuid),
         }
     }

@@ -22,13 +22,17 @@ use common_lib::{
         store::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
-            volume::{VolumeOperation, VolumeSpec},
+            volume::{
+                PublishOperation, RepublishOperation, TargetConfig, VolumeOperation, VolumeSpec,
+                VolumeTarget,
+            },
         },
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
-            NexusId, Protocol, PublishVolume, Replica, ReplicaOwners, RepublishVolume,
-            SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume,
-            UnshareNexus, UnshareVolume, Volume,
+            NexusId, NexusNvmePreemption, NexusNvmfConfig, NodeId, NvmeReservation,
+            NvmfControllerIdRange, Protocol, PublishVolume, Replica, ReplicaOwners,
+            RepublishVolume, SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus,
+            UnpublishVolume, UnshareNexus, UnshareVolume, Volume, VolumeShareProtocol,
         },
     },
 };
@@ -275,25 +279,25 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let specs = registry.specs();
         let state = registry.get_volume_state(&request.uuid).await?;
         let nexus_node = get_volume_target_node(registry, &state, request, false).await?;
-        let nexus_id = NexusId::new();
 
-        let operation =
-            VolumeOperation::Publish((nexus_node.clone(), nexus_id.clone(), request.share));
+        let last_target = self.as_ref().last_nexus_id().cloned();
+        let target_cfg = self.next_target_config(&nexus_node, &request.share).await;
+        let operation = VolumeOperation::Publish(PublishOperation::new(
+            nexus_node.clone(),
+            target_cfg.uuid().clone(),
+            request.share,
+            Some(target_cfg.config().clone()),
+        ));
         let spec_clone = self.start_update(registry, &state, operation).await?;
 
         // Create a Nexus on the requested or auto-selected node
         let result = specs
-            .volume_create_nexus(registry, &nexus_node, &nexus_id, &spec_clone)
+            .volume_create_nexus(registry, &target_cfg, &spec_clone)
             .await;
 
         let (mut nexus, nexus_state) = self
             .validate_update_step(registry, result, &spec_clone)
             .await?;
-
-        let (volume_id, last_nexus_id) = {
-            let volume_spec = self.lock();
-            (volume_spec.uuid.clone(), volume_spec.last_nexus_id.clone())
-        };
 
         // Share the Nexus if it was requested
         let mut result = Ok(());
@@ -318,9 +322,9 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         self.complete_update(registry, result, spec_clone).await?;
 
         // If there was a previous nexus we should delete the persisted NexusInfo structure.
-        if let Some(nexus_id) = last_nexus_id {
+        if let Some(nexus_id) = last_target {
             ResourceSpecsLocked::delete_nexus_info(
-                &NexusInfoKey::new(&Some(volume_id), &nexus_id),
+                &NexusInfoKey::new(&Some(self.uuid().clone()), &nexus_id),
                 registry,
             )
             .await;
@@ -398,9 +402,15 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             Some(target) => target,
         };
         let nexus_node = get_volume_target_node(registry, &state, request, true).await?;
-        let newer_nexus_id = NexusId::new();
-        let operation =
-            VolumeOperation::Republish((nexus_node.clone(), newer_nexus_id.clone(), request.share));
+        let target_cfg = self
+            .next_target_config(&nexus_node, &Some(request.share))
+            .await;
+        let operation = VolumeOperation::Republish(RepublishOperation::new(
+            nexus_node.clone(),
+            target_cfg.uuid().clone(),
+            request.share,
+            target_cfg.config().clone(),
+        ));
         let spec_clone = self.start_update(registry, &state, operation).await?;
         let result = specs.nexus(volume_target.nexus()).await;
         let mut older_nexus = self
@@ -418,16 +428,11 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         // Create a Nexus on the requested or auto-selected node
         let result = specs
-            .volume_create_nexus(registry, &nexus_node, &newer_nexus_id, &spec_clone)
+            .volume_create_nexus(registry, &target_cfg, &spec_clone)
             .await;
         let (mut nexus, nexus_state) = self
             .validate_update_step(registry, result, &spec_clone)
             .await?;
-
-        let (volume_id, last_nexus_id) = {
-            let volume_spec = self.lock();
-            (volume_spec.uuid.clone(), volume_spec.last_nexus_id.clone())
-        };
 
         // Share the Nexus
         let result = match nexus
@@ -451,16 +456,14 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         self.complete_update(registry, result, spec_clone).await?;
 
-        // If there was a previous nexus we should delete the persisted NexusInfo structure.
+        // Delete the persisted NexusInfo structure.
         // todo: This needs to be revisited, as there might be inconsistency on child state after
         // creation of nexus.
-        if let Some(nexus_id) = last_nexus_id {
-            ResourceSpecsLocked::delete_nexus_info(
-                &NexusInfoKey::new(&Some(volume_id), &nexus_id),
-                registry,
-            )
-            .await;
-        }
+        ResourceSpecsLocked::delete_nexus_info(
+            &NexusInfoKey::new(&Some(self.uuid().clone()), older_nexus.uuid()),
+            registry,
+        )
+        .await;
 
         let volume = registry.get_volume(&request.uuid).await?;
         registry
@@ -562,5 +565,45 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
             }
         }
         Ok(())
+    }
+}
+
+impl OperationGuardArc<VolumeSpec> {
+    fn published(&self) -> bool {
+        self.as_ref().target.is_some()
+    }
+    /// Make the next target config.
+    /// This essentially bumps up the controller id by 1 as otherwise the initiator cannot tell
+    /// this target apart from others.
+    /// Also sets the reservation key based off the nexus uuid.
+    async fn next_target_config(
+        &self,
+        node: &NodeId,
+        share: &Option<VolumeShareProtocol>,
+    ) -> TargetConfig {
+        let nexus = NexusId::new();
+        let resv_key = nexus.as_u128() as u64;
+        let range = match self.as_ref().config() {
+            None => NvmfControllerIdRange::new_min(),
+            Some(cfg) => {
+                #[allow(clippy::if_same_then_else)]
+                if self.published() {
+                    cfg.config().controller_id_range().next()
+                } else {
+                    // if we're not published should we start over?
+                    // NvmfControllerIdRange::new_min()
+                    cfg.config().controller_id_range().next()
+                }
+            }
+        };
+        TargetConfig::new(
+            VolumeTarget::new(node.clone(), nexus, *share),
+            NexusNvmfConfig::new(
+                range,
+                resv_key,
+                NvmeReservation::ExclusiveAccess,
+                NexusNvmePreemption::Holder,
+            ),
+        )
     }
 }

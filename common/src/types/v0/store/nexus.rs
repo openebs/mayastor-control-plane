@@ -9,13 +9,13 @@ use crate::types::v0::{
     },
     transport::{
         self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, NexusId,
-        NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId, VolumeId,
+        NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId, VolumeId,
     },
 };
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
-/// Nexus information
+/// Nexus information.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Nexus {
     /// Current state of the nexus.
@@ -64,13 +64,13 @@ impl StorableObject for NexusState {
     }
 }
 
-/// Status of the Nexus Spec
+/// Status of the Nexus Spec.
 pub type NexusSpecStatus = SpecStatus<transport::NexusStatus>;
 
 /// User specification of a nexus.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct NexusSpec {
-    /// Nexus Id
+    /// Nexus Id.
     pub uuid: NexusId,
     /// Name of the nexus
     pub name: String,
@@ -82,20 +82,23 @@ pub struct NexusSpec {
     pub size: u64,
     /// The status the nexus spec.
     pub spec_status: NexusSpecStatus,
-    /// Share Protocol
+    /// Share Protocol.
     pub share: Protocol,
-    /// Managed by our control plane
+    /// Managed by our control plane.
     pub managed: bool,
-    /// Volume which owns this nexus, if any
+    /// Volume which owns this nexus, if any.
     pub owner: Option<VolumeId>,
-    /// Update of the state in progress
+    /// Update of the state in progress.
     #[serde(skip)]
     pub sequencer: OperationSequence,
-    /// Record of the operation in progress
+    /// Record of the operation in progress.
     pub operation: Option<NexusOperationState>,
+    /// Nexus Nvmf Configuration.
+    #[serde(default)]
+    pub nvmf_config: Option<NexusNvmfConfig>,
 }
 impl NexusSpec {
-    /// Check if the spec contains the provided replica by it's `ReplicaId`
+    /// Check if the spec contains the provided replica by it's `ReplicaId`.
     pub fn contains_replica(&self, uuid: &ReplicaId) -> bool {
         self.children.iter().any(|child| match child {
             NexusChild::Replica(replica) => &replica.uuid == uuid,
@@ -153,8 +156,8 @@ impl From<NexusSpec> for models::NexusSpec {
     }
 }
 
-/// ReplicaUri used by managed nexus creation
-/// Includes the ReplicaId which is unique and allows us to pinpoint the exact replica
+/// ReplicaUri used by managed nexus creation.
+/// Includes the ReplicaId which is unique and allows us to pinpoint the exact replica.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct ReplicaUri {
     uuid: ReplicaId,
@@ -162,29 +165,29 @@ pub struct ReplicaUri {
 }
 
 impl ReplicaUri {
-    /// Create a new ReplicaUri from a replicaId and a share nvmf URI
+    /// Create a new ReplicaUri from a replicaId and a share nvmf URI.
     pub fn new(uuid: &ReplicaId, share_uri: &ChildUri) -> Self {
         Self {
             uuid: uuid.clone(),
             share_uri: share_uri.clone(),
         }
     }
-    /// Get the replica uuid
+    /// Get the replica uuid.
     pub fn uuid(&self) -> &ReplicaId {
         &self.uuid
     }
-    /// Get the replica uri
+    /// Get the replica uri.
     pub fn uri(&self) -> &ChildUri {
         &self.share_uri
     }
 }
 
-/// Operation State for a Nexus spec resource
+/// Operation State for a Nexus spec resource.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NexusOperationState {
-    /// Record of the operation
+    /// Record of the operation.
     pub operation: NexusOperation,
-    /// Result of the operation
+    /// Result of the operation.
     pub result: Option<bool>,
 }
 
@@ -236,7 +239,7 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
     }
 }
 
-/// Available Nexus Operations
+/// Available Nexus Operations.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum NexusOperation {
     Create,
@@ -289,6 +292,7 @@ impl From<&CreateNexus> for NexusSpec {
             owner: request.owner.clone(),
             sequencer: OperationSequence::new(request.uuid.clone()),
             operation: None,
+            nvmf_config: request.config.clone(),
         }
     }
 }

@@ -7,13 +7,13 @@ import "google/protobuf/wrappers.proto";
 
 package v1.volume;
 
-// An IoEngine Volume
+// A Volume
 // It has a spec which is the specification provided by the creator
-// It has a state if such state is retrieved from an io-engine storage nodes
+// It has a state if such state is retrieved from io-engine storage nodes
 message Volume {
-  // Desired specification of the pool and metadata
+  // Desired specification of the volume
   VolumeDefinition definition = 1;
-  // Runtime state of the pool.
+  // Runtime state of the volume.
   VolumeState state = 2;
 }
 
@@ -58,6 +58,15 @@ message VolumeSpec {
 message Metadata {
   // spec status of the volume
   common.SpecStatus spec_status = 1;
+  // Persistent Configuration of the target (current/last)
+  TargetConfig target_config = 2;
+}
+
+message TargetConfig {
+  // Persistent Configuration of the target (current/last)
+  VolumeTarget target = 1;
+  // The nvmf configuration
+  nexus.NexusNvmfConfig config = 2;
 }
 
 message VolumeTarget {

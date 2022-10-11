@@ -22,6 +22,7 @@ use common_lib::{
             RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
         },
     },
+    IntoOption, TryIntoOption,
 };
 use std::convert::TryFrom;
 
@@ -357,6 +358,7 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
                 operation: NexusOperation::Create,
                 result: op.result,
             }),
+            nvmf_config: value.nvmf_config.try_into_opt()?,
         })
     }
 }
@@ -382,6 +384,7 @@ impl From<NexusSpec> for nexus::NexusSpec {
             operation: value.operation.map(|operation| common::SpecOperation {
                 result: operation.result,
             }),
+            nvmf_config: value.nvmf_config.into_opt(),
         }
     }
 }

@@ -210,6 +210,11 @@ pub enum NexusNvmePreemption {
 #[serde(rename_all = "camelCase")]
 pub struct NvmfControllerIdRange(std::ops::RangeInclusive<u16>);
 impl NvmfControllerIdRange {
+    /// Create `Self` with the minimum controller id.
+    pub fn new_min() -> Self {
+        let min = *Self::controller_id_range().start();
+        Self(min ..= min)
+    }
     /// create `Self` with a random minimum controller id
     pub fn random_min() -> Self {
         let min = *Self::controller_id_range().start();
@@ -234,7 +239,7 @@ impl NvmfControllerIdRange {
     pub fn new(start: u16, end: u16) -> Result<Self, ReplyError> {
         if NvmfControllerIdRange::controller_id_range().contains(&start)
             && NvmfControllerIdRange::controller_id_range().contains(&end)
-            && start < end
+            && start <= end
         {
             Ok(NvmfControllerIdRange(RangeInclusive::new(start, end)))
         } else {
@@ -246,6 +251,20 @@ impl NvmfControllerIdRange {
                     start, end
                 ),
             ))
+        }
+    }
+    /// Bump the controller id range by 1.
+    /// # Note: this will wrap around back to the minimum.
+    pub fn next(&self) -> Self {
+        let range = self.0.clone();
+        let start = *range.start();
+        if start >= *Self::controller_id_range().end() {
+            // wrap around to the start of the range
+            let start = *Self::controller_id_range().start();
+            Self(start ..= start)
+        } else {
+            let start = start + 1;
+            Self(start ..= start)
         }
     }
 }
@@ -270,7 +289,7 @@ pub struct NexusNvmfConfig {
 }
 
 impl NexusNvmfConfig {
-    /// The minimum controller id that can be used by the nvmf target
+    /// The minimum controller id that can be used by the nvmf target.
     pub fn min_cntl_id(&self) -> u16 {
         *self.controller_id_range.min()
     }
@@ -318,7 +337,7 @@ impl NexusNvmfConfig {
             preempt_policy,
         }
     }
-    /// get controller_id_range
+    /// Get the controller id range.
     pub fn controller_id_range(&self) -> NvmfControllerIdRange {
         self.controller_id_range.clone()
     }
@@ -326,26 +345,17 @@ impl NexusNvmfConfig {
 
 impl Default for NexusNvmfConfig {
     fn default() -> Self {
-        if std::env::var("TEST_NEXUS_NVMF_ANA_ENABLE").is_ok() {
-            Self {
-                controller_id_range: NvmfControllerIdRange::random_min(),
-                reservation_key: 1,
-                reservation_type: NvmeReservation::ExclusiveAccess,
-                preempt_policy: NexusNvmePreemption::Holder,
-            }
-        } else {
-            Self {
-                controller_id_range: NvmfControllerIdRange::default(),
-                reservation_key: 1,
-                reservation_type: NvmeReservation::ExclusiveAccess,
-                preempt_policy: NexusNvmePreemption::Holder,
-            }
+        Self {
+            controller_id_range: NvmfControllerIdRange::default(),
+            reservation_key: 1,
+            reservation_type: NvmeReservation::ExclusiveAccess,
+            preempt_policy: NexusNvmePreemption::Holder,
         }
     }
 }
 
 impl CreateNexus {
-    /// Create new `Self` from the given parameters
+    /// Create new `Self` from the given parameters.
     pub fn new(
         node: &NodeId,
         uuid: &NexusId,

@@ -197,11 +197,7 @@ impl std::fmt::Debug for GetChildForRemovalContext {
 impl GetChildForRemovalContext {
     async fn new(registry: &Registry, request: &GetChildForRemoval) -> Result<Self, SvcError> {
         let nexus_info = registry
-            .get_nexus_info(
-                Some(&request.spec.uuid),
-                request.spec.last_nexus_id.as_ref(),
-                true,
-            )
+            .get_nexus_info(Some(&request.spec.uuid), request.spec.last_nexus_id(), true)
             .await?;
 
         Ok(GetChildForRemovalContext {

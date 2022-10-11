@@ -43,16 +43,15 @@ use common_lib::{
         },
         transport::{
             AddNexusReplica, ChildUri, CreateNexus, CreateReplica, CreateVolume, DestroyReplica,
-            Nexus, NexusId, NodeId, PoolId, Protocol, RemoveNexusReplica, Replica, ReplicaId,
-            ReplicaName, ReplicaOwners, Volume, VolumeId, VolumeShareProtocol, VolumeState,
-            VolumeStatus,
+            Nexus, NodeId, PoolId, Protocol, RemoveNexusReplica, Replica, ReplicaId, ReplicaName,
+            ReplicaOwners, Volume, VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
 };
 use grpc::operations::{PaginatedResult, Pagination};
 
 use crate::controller::resources::operations::ResourceOwnerUpdate;
-use common_lib::types::v0::store::replica::PoolRef;
+use common_lib::types::v0::store::{replica::PoolRef, volume::TargetConfig};
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use snafu::OptionExt;
 use std::convert::From;
@@ -718,10 +717,11 @@ impl ResourceSpecsLocked {
     pub(crate) async fn volume_create_nexus(
         &self,
         registry: &Registry,
-        target_node: &NodeId,
-        nexus_id: &NexusId,
+        target_config: &TargetConfig,
         vol_spec: &VolumeSpec,
     ) -> Result<(OperationGuardArc<NexusSpec>, Nexus), SvcError> {
+        let target_node = target_config.target().node();
+        let nexus_id = target_config.target().nexus();
         let children = get_healthy_volume_replicas(vol_spec, target_node, registry).await?;
         let (count, items) = match children {
             HealthyChildItems::One(_, candidates) => (1, candidates),
@@ -761,7 +761,7 @@ impl ResourceSpecsLocked {
                 &nexus_replicas,
                 true,
                 Some(&vol_spec.uuid),
-                None,
+                Some(target_config.config().clone()),
             ),
         )
         .await?;
@@ -1243,7 +1243,7 @@ impl SpecOperationsHelper for VolumeSpec {
                 }),
                 _ => Ok(()),
             },
-            VolumeOperation::Publish((_, _, protocol)) => match protocol {
+            VolumeOperation::Publish(args) => match args.protocol() {
                 None => Ok(()),
                 Some(protocol) => match protocol {
                     VolumeShareProtocol::Nvmf => {
@@ -1260,16 +1260,16 @@ impl SpecOperationsHelper for VolumeSpec {
                     VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
                         kind: ResourceKind::Volume,
                         id: self.uuid_str(),
-                        share: format!("{:?}", protocol),
+                        share: format!("{:?}", args.protocol()),
                     }),
                 },
             },
-            VolumeOperation::Republish((_, _, protocol)) => match protocol {
+            VolumeOperation::Republish(args) => match args.protocol() {
                 VolumeShareProtocol::Nvmf => Ok(()),
                 VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
                     kind: ResourceKind::Volume,
                     id: self.uuid_str(),
-                    share: format!("{:?}", protocol),
+                    share: format!("{:?}", args.protocol()),
                 }),
             },
             VolumeOperation::Unpublish if self.target.is_none() => {
@@ -1324,7 +1324,7 @@ impl SpecOperationsHelper for VolumeSpec {
                     })
                 } else {
                     match registry
-                        .get_nexus_info(Some(&self.uuid), self.last_nexus_id.as_ref(), true)
+                        .get_nexus_info(Some(&self.uuid), self.last_nexus_id(), true)
                         .await?
                     {
                         Some(info) => match info

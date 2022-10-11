@@ -31,6 +31,23 @@ impl<F: Into<T>, T> IntoOption<T> for Option<F> {
     }
 }
 
+/// Helper to convert from Option<F> into Option<T>
+pub trait TryIntoOption<T>: Sized {
+    type Error;
+    /// Performs the conversion.
+    fn try_into_opt(self) -> Result<Option<T>, Self::Error>;
+}
+
+impl<F: TryInto<T>, T> TryIntoOption<T> for Option<F> {
+    type Error = <F as TryInto<T>>::Error;
+    fn try_into_opt(self) -> Result<Option<T>, Self::Error> {
+        match self {
+            Some(v) => v.try_into().map(Some),
+            None => Ok(None),
+        }
+    }
+}
+
 /// Pre-init the Platform information.
 pub use platform::init_cluster_info_or_panic;
 
