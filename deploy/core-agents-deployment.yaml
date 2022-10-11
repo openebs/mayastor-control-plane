@@ -43,7 +43,7 @@ spec:
             requests:
               cpu: 500m
               memory: 16Mi
-          image: mayadata/mcp-core:v1.0.2
+          image: mayadata/mcp-core:v1.0.3
           imagePullPolicy: IfNotPresent
           args:
             - "-smayastor-etcd"
