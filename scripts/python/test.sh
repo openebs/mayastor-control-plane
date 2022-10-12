@@ -28,3 +28,4 @@ else
   pytest "$@"
 fi
 
+sh "$ROOT_DIR"/scripts/python/test_residue_cleanup.sh

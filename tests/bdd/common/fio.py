@@ -2,7 +2,11 @@ import shutil
 
 
 class Fio(object):
-    def __init__(self, name, rw, device, runtime=15, optstr=""):
+    def __init__(
+        self, name, rw, device="", runtime=15, optstr="", traddr="", subnqn=""
+    ):
+        self.subnqn = subnqn
+        self.traddr = traddr
         self.name = name
         self.rw = rw
         self.device = device
@@ -24,4 +28,14 @@ class Fio(object):
             self.optstr, self.rw, self.runtime, self.name, ":".join(map(str, devs))
         )
 
+        return command
+
+    def build_for_userspace(self):
+        command = (
+            "docker exec -i fio-spdk fio --name={} --filename='trtype=tcp adrfam=IPv4 traddr={} trsvcid=8420 "
+            "subnqn={} ns=1' --direct=1 --rw={} --ioengine=spdk --bs=4k --iodepth=64 --numjobs=1 --thread=1 "
+            "--size=50M --norandommap=1".format(
+                self.name, self.traddr, self.subnqn.replace(":", "\\:"), self.rw
+            )
+        )
         return command

@@ -76,7 +76,12 @@ def nvme_connect(uri):
 
     # we should only have one connection
     assert len(dev) == 1
-    device = "/dev/{}".format(dev[0]["Namespaces"][0].get("NameSpace"))
+    try:
+        device = "/dev/{}".format(dev[0]["Namespaces"][0].get("NameSpace"))
+    except KeyError:
+        device = "/dev/{}".format(
+            dev[0]["Controllers"][0]["Namespaces"][0].get("NameSpace")
+        )
     return device
 
 
