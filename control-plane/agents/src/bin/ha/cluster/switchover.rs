@@ -1,119 +1,72 @@
-use crate::{etcd::EtcdStore, nodes::NodeList};
+use crate::{core_grpc, etcd::EtcdStore, nodes::NodeList};
 use chrono::Utc;
 use common_lib::types::v0::{
     store::{
         switchover::{Operation, OperationState, SwitchOverSpec, SwitchOverTime},
         SpecTransaction,
     },
-    transport::VolumeId,
+    transport::{
+        DestroyShutdownTargets, ReplacePath, RepublishVolume, VolumeId, VolumeShareProtocol,
+    },
 };
+use grpc::operations::{ha_node::client::NodeAgentClient, volume::traits::VolumeOperations};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tracing::info;
 use utils::NVME_TARGET_NQN_PREFIX;
 
-use std::convert::TryFrom;
+use anyhow::anyhow;
+use grpc::operations::ha_node::traits::NodeAgentOperations;
+use std::{convert::TryFrom, net::SocketAddr};
+use tonic::transport::Uri;
+
+fn client() -> impl VolumeOperations {
+    core_grpc().volume()
+}
 
 /// Stage represents the steps for switchover request.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Stage {
     /// Initialize switchover request.
     Init,
-    /// Shutdown original/old volume target.
-    ShutdownOriginal,
-    /// Create new volume target.
-    ReconstructTarget,
-    /// Update volume with new volume target.
-    SwitchOverTarget,
-    /// Delete old target.
-    DeleteTarget,
+    /// Shutdown original/old volume target. Create new nexus for existing vol obj.
+    RepublishVolume,
     /// Publish updated path of volume to node-agent.
     PublishPath,
-    /// Represet failed switchover request.
+    /// Delete original/old volume target.
+    DeleteTarget,
+    /// Represent failed switchover request.
     Errored,
 }
 
 /// SwitchOverRequest defines spec for switchover.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct SwitchOverRequest {
-    callback_uri: String,
+    callback_uri: SocketAddr,
     pub volume_id: VolumeId,
     stage: Stage,
     // Timestamp when switchover request was initialized.
     timestamp: SwitchOverTime,
-}
-
-impl From<&SwitchOverRequest> for SwitchOverSpec {
-    fn from(req: &SwitchOverRequest) -> Self {
-        let op = OperationState::new(req.stage.clone().into(), None);
-        Self {
-            callback_uri: req.callback_uri.clone(),
-            volume: req.volume_id.clone(),
-            operation: Some(op),
-            timestamp: req.timestamp,
-        }
-    }
-}
-
-impl From<Stage> for Operation {
-    fn from(stage: Stage) -> Self {
-        match stage {
-            Stage::Init => Operation::Init,
-            Stage::ShutdownOriginal => Operation::ShutdownOriginal,
-            Stage::ReconstructTarget => Operation::ReconstructTarget,
-            Stage::SwitchOverTarget => Operation::SwitchOverTarget,
-            Stage::DeleteTarget => Operation::DeleteTarget,
-            Stage::PublishPath => Operation::PublishPath,
-            Stage::Errored => Operation::Errored("".to_string()),
-        }
-    }
-}
-
-impl From<Operation> for Stage {
-    fn from(op: Operation) -> Self {
-        match op {
-            Operation::Init => Stage::Init,
-            Operation::ShutdownOriginal => Stage::ShutdownOriginal,
-            Operation::ReconstructTarget => Stage::ReconstructTarget,
-            Operation::SwitchOverTarget => Stage::SwitchOverTarget,
-            Operation::DeleteTarget => Stage::DeleteTarget,
-            Operation::PublishPath => Stage::PublishPath,
-            Operation::Errored(_) => Stage::Errored,
-        }
-    }
-}
-
-impl From<&SwitchOverSpec> for SwitchOverRequest {
-    fn from(req: &SwitchOverSpec) -> Self {
-        let mut stage = Stage::Init;
-        if let Some(op) = req.operation() {
-            stage = op.into();
-        }
-
-        Self {
-            callback_uri: req.callback_uri.clone(),
-            volume_id: req.volume.clone(),
-            stage,
-            timestamp: req.timestamp,
-        }
-    }
-}
-
-/// SwitchOverEngine defines spec for switchover engine.
-#[derive(Debug, Clone)]
-pub struct SwitchOverEngine {
-    etcd: EtcdStore,
-    nodes: NodeList,
-    channel: UnboundedSender<SwitchOverRequest>,
+    // Failed nexus path of the volume.
+    existing_nqn: String,
+    // New nexus path of the volume.
+    new_path: Option<String>,
 }
 
 impl SwitchOverRequest {
-    pub fn new(callback_uri: String, volume: VolumeId) -> SwitchOverRequest {
+    /// Create a new switchover request for every failed Nvme path.
+    pub fn new(
+        callback_uri: SocketAddr,
+        volume: VolumeId,
+        existing_path: String,
+    ) -> SwitchOverRequest {
         SwitchOverRequest {
             callback_uri,
             volume_id: volume,
             stage: Stage::Init,
             timestamp: Utc::now(),
+            existing_nqn: existing_path,
+            new_path: None,
         }
     }
 
@@ -133,13 +86,11 @@ impl SwitchOverRequest {
     /// If a stage is PublishPath or Errored then it will not be updated.
     pub fn update_next_stage(&mut self) {
         self.stage = match self.stage {
-            Stage::Init => Stage::ShutdownOriginal,
-            Stage::ShutdownOriginal => Stage::ReconstructTarget,
-            Stage::ReconstructTarget => Stage::SwitchOverTarget,
-            Stage::SwitchOverTarget => Stage::DeleteTarget,
-            Stage::DeleteTarget => Stage::PublishPath,
-            // PublishPath and Errored stage mark request as complete, so no need to update
-            Stage::PublishPath => Stage::PublishPath,
+            Stage::Init => Stage::RepublishVolume,
+            Stage::RepublishVolume => Stage::PublishPath,
+            Stage::PublishPath => Stage::DeleteTarget,
+            // DeleteTarget and Errored stage mark request as complete, so no need to update
+            Stage::DeleteTarget => Stage::DeleteTarget,
             Stage::Errored => Stage::Errored,
         };
     }
@@ -182,42 +133,25 @@ impl SwitchOverRequest {
     /// Initialize the switchover request.
     async fn initialize(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
         self.start_op(Stage::Init, etcd).await?;
-
         info!(volume.uuid=%self.volume_id, "Initializing");
-
         self.complete_op(true, "".to_string(), etcd).await?;
         self.update_next_stage();
         Ok(())
     }
 
-    /// Shutdown original/old volume target.
-    async fn shutdown_original_target(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
-        self.start_op(Stage::ShutdownOriginal, etcd).await?;
-
-        info!(volume.uuid=%self.volume_id, "Shutting down traget");
-
-        self.complete_op(true, "".to_string(), etcd).await?;
-        self.update_next_stage();
-        Ok(())
-    }
-
-    /// Create new volume target for the switchover.
-    async fn reconstruct_target(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
-        self.start_op(Stage::ReconstructTarget, etcd).await?;
-
-        info!(volume.uuid=%self.volume_id, "Reconstructing volume target");
-
-        self.complete_op(true, "".to_string(), etcd).await?;
-        self.update_next_stage();
-        Ok(())
-    }
-
-    /// Update volume with newly constructed target.
-    async fn switchover_target(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
-        self.start_op(Stage::SwitchOverTarget, etcd).await?;
-
-        info!(volume.uuid=%self.volume_id, "Switching volume target");
-
+    async fn republish_volume(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
+        self.start_op(Stage::RepublishVolume, etcd).await?;
+        info!(volume.uuid=%self.volume_id, "Republishing");
+        let republish_req = RepublishVolume {
+            uuid: self.volume_id.clone(),
+            target_node: None,
+            share: VolumeShareProtocol::Nvmf,
+        };
+        let vol = client().republish(&republish_req, None).await?;
+        self.new_path = match vol.state().target {
+            Some(target) => Some(target.device_uri),
+            _ => None,
+        };
         self.complete_op(true, "".to_string(), etcd).await?;
         self.update_next_stage();
         Ok(())
@@ -228,7 +162,12 @@ impl SwitchOverRequest {
         self.start_op(Stage::DeleteTarget, etcd).await?;
 
         info!(volume.uuid=%self.volume_id, "Deleting volume target");
-
+        let destroy_request = DestroyShutdownTargets {
+            uuid: self.volume_id.clone(),
+        };
+        client()
+            .destroy_shutdown_target(&destroy_request, None)
+            .await?;
         self.complete_op(true, "".to_string(), etcd).await?;
         self.update_next_stage();
         Ok(())
@@ -242,17 +181,43 @@ impl SwitchOverRequest {
     ) -> Result<(), anyhow::Error> {
         self.start_op(Stage::PublishPath, etcd).await?;
 
-        info!(volume.uuid=%self.volume_id, "Publishing volume target");
-
-        nodes
-            .remove_failed_path(format!("{}{}", NVME_TARGET_NQN_PREFIX, self.volume_id))
-            .await;
-        self.complete_op(true, "".to_string(), etcd).await?;
-        Ok(())
+        info!(volume.uuid=%self.volume_id, "Publishing new volume target to node agent");
+        if let Ok(uri) = Uri::builder()
+            .scheme("http")
+            .authority(self.callback_uri.to_string())
+            .path_and_query("")
+            .build()
+        {
+            info!(uri=%uri, "Creating node agent client using callback uri");
+            if let Some(new_path) = self.new_path.clone() {
+                let replace_request = ReplacePath::new(self.existing_nqn.clone(), new_path.clone());
+                let client = NodeAgentClient::new(uri, None).await;
+                client.replace_path(&replace_request, None).await?;
+                nodes
+                    .remove_failed_path(format!("{}{}", NVME_TARGET_NQN_PREFIX, self.volume_id))
+                    .await;
+                self.complete_op(true, "".to_string(), etcd).await?;
+                self.update_next_stage();
+                Ok(())
+            } else {
+                Err(anyhow!("Could not to get new nexus target for the volume"))
+            }
+        } else {
+            Err(anyhow!("Could not get grpc address for the node"))
+        }
     }
 }
 
+/// SwitchOverEngine defines spec for switchover engine.
+#[derive(Debug, Clone)]
+pub struct SwitchOverEngine {
+    etcd: EtcdStore,
+    nodes: NodeList,
+    channel: UnboundedSender<SwitchOverRequest>,
+}
+
 impl SwitchOverEngine {
+    /// Creates a new switchover engine to process Nvme path failures.
     pub fn new(etcd: EtcdStore, nodes: NodeList) -> Self {
         let (rq_tx, rq_rx) = unbounded_channel();
 
@@ -278,11 +243,9 @@ impl SwitchOverEngine {
                         // TODO: error handling
                         let _res = match q.stage {
                             Stage::Init => q.initialize(&etcd).await,
-                            Stage::ShutdownOriginal => q.shutdown_original_target(&etcd).await,
-                            Stage::ReconstructTarget => q.reconstruct_target(&etcd).await,
-                            Stage::SwitchOverTarget => q.switchover_target(&etcd).await,
-                            Stage::DeleteTarget => q.delete_target(&etcd).await,
-                            Stage::PublishPath => match q.publish_path(&etcd, &nodes).await {
+                            Stage::RepublishVolume => q.republish_volume(&etcd).await,
+                            Stage::PublishPath => q.publish_path(&etcd, &nodes).await,
+                            Stage::DeleteTarget => match q.delete_target(&etcd).await {
                                 Ok(_) => break,
                                 Err(e) => Err(e),
                             },
@@ -296,5 +259,61 @@ impl SwitchOverEngine {
 
     pub fn initiate(&self, req: SwitchOverRequest) {
         self.channel.send(req).expect("sending req failed");
+    }
+}
+
+impl From<&SwitchOverRequest> for SwitchOverSpec {
+    fn from(req: &SwitchOverRequest) -> Self {
+        let op = OperationState::new(req.stage.clone().into(), None);
+        Self {
+            callback_uri: req.callback_uri,
+            volume: req.volume_id.clone(),
+            operation: Some(op),
+            timestamp: req.timestamp,
+            existing_nqn: req.existing_nqn.clone(),
+            new_path: None,
+        }
+    }
+}
+
+impl From<Stage> for Operation {
+    fn from(stage: Stage) -> Self {
+        match stage {
+            Stage::Init => Operation::Init,
+            Stage::RepublishVolume => Operation::RepublishVolume,
+            Stage::PublishPath => Operation::PublishPath,
+            Stage::DeleteTarget => Operation::DeleteTarget,
+            Stage::Errored => Operation::Errored("".to_string()),
+        }
+    }
+}
+
+impl From<Operation> for Stage {
+    fn from(op: Operation) -> Self {
+        match op {
+            Operation::Init => Stage::Init,
+            Operation::RepublishVolume => Stage::RepublishVolume,
+            Operation::PublishPath => Stage::PublishPath,
+            Operation::DeleteTarget => Stage::DeleteTarget,
+            Operation::Errored(_) => Stage::Errored,
+        }
+    }
+}
+
+impl From<&SwitchOverSpec> for SwitchOverRequest {
+    fn from(req: &SwitchOverSpec) -> Self {
+        let mut stage = Stage::Init;
+        if let Some(op) = req.operation() {
+            stage = op.into();
+        }
+
+        Self {
+            callback_uri: req.callback_uri,
+            volume_id: req.volume.clone(),
+            stage,
+            timestamp: req.timestamp,
+            existing_nqn: req.existing_nqn.clone(),
+            new_path: None,
+        }
     }
 }

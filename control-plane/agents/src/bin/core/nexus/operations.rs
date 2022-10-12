@@ -21,6 +21,7 @@ use common_lib::types::v0::{
         AddNexusChild, RemoveNexusChild, ShutdownNexus,
     },
 };
+use tracing::warn;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
@@ -252,7 +253,7 @@ impl ResourceOffspring for Option<&mut OperationGuardArc<NexusSpec>> {
 impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
     type RemoveShutdownTargets = ();
     type Shutdown = ShutdownNexus;
-
+    #[tracing::instrument(level = "debug", skip(self, registry), err)]
     async fn shutdown(
         &mut self,
         registry: &Registry,
@@ -270,7 +271,14 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
             .await?;
 
         let result = node.shutdown_nexus(request).await;
-        self.complete_update(registry, result, spec_clone).await?;
+        if result.is_err() {
+            warn!(
+                "IO-engine is not online to complete the nexus shutdown request for {}",
+                self.uuid()
+            )
+        }
+        // Updating nexus spec state as Shutdown irrespective of shutdown result.
+        self.complete_update(registry, Ok(()), spec_clone).await?;
         Ok(())
     }
 

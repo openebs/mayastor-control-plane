@@ -160,8 +160,11 @@ impl From<tonic::Status> for ReplyError {
 }
 
 impl From<ReplyError> for tonic::Status {
-    fn from(err: ReplyError) -> Self {
-        tonic::Status::new(Code::Aborted, err.full_string())
+    fn from(error: ReplyError) -> Self {
+        match error.kind {
+            ReplyErrorKind::InvalidArgument => tonic::Status::invalid_argument(error.full_string()),
+            _ => tonic::Status::internal(error.full_string()),
+        }
     }
 }
 

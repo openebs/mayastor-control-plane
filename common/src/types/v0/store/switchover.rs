@@ -5,26 +5,22 @@ use crate::types::v0::{
     },
     transport::VolumeId,
 };
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
 /// Defines operation for SwitchOverSpec.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Operation {
-    /// Initialize SwitchOverSpec.
+    /// Initialize switchover request.
     Init,
-    /// Shutdown original/old volume target of SwitchOverSpec.
-    ShutdownOriginal,
-    /// Create new volume target for SwitchOverSpec.
-    ReconstructTarget,
-    /// Switch volume target to newly created target.
-    SwitchOverTarget,
-    /// Delete old volume target.
-    DeleteTarget,
-    /// Publish updated path of volume.
+    /// Shutdown original/old volume target. Create new nexus for existing vol obj.
+    RepublishVolume,
+    /// Publish updated path of volume to node-agent.
     PublishPath,
-    /// Represent failed SwitchOverSpec.
+    /// Delete original/old volume target.
+    DeleteTarget,
+    /// Represent failed switchover request.
     Errored(String),
 }
 
@@ -49,13 +45,17 @@ pub type SwitchOverTime = DateTime<Utc>;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwitchOverSpec {
     /// Uri of node-agent to report new path.
-    pub callback_uri: String,
+    pub callback_uri: SocketAddr,
     /// Volume for which switchover needs to be executed.
     pub volume: VolumeId,
     /// Operation represent current running operation on SwitchOverSpec.
     pub operation: Option<OperationState>,
     /// Timestamp when switchover request was generated.
     pub timestamp: SwitchOverTime,
+    /// Failed nexus path.
+    pub existing_nqn: String,
+    /// New nexus path.
+    pub new_path: Option<String>,
 }
 
 impl SwitchOverSpec {
@@ -129,12 +129,10 @@ impl SpecTransaction<Operation> for SwitchOverSpec {
     fn commit_op(&mut self) {
         let next_op = if let Some(op) = self.operation.clone() {
             match op.operation {
-                Operation::Init => Some(Operation::ShutdownOriginal),
-                Operation::ShutdownOriginal => Some(Operation::ReconstructTarget),
-                Operation::ReconstructTarget => Some(Operation::SwitchOverTarget),
-                Operation::SwitchOverTarget => Some(Operation::DeleteTarget),
-                Operation::DeleteTarget => Some(Operation::PublishPath),
-                Operation::PublishPath => None,
+                Operation::Init => Some(Operation::RepublishVolume),
+                Operation::RepublishVolume => Some(Operation::PublishPath),
+                Operation::PublishPath => Some(Operation::DeleteTarget),
+                Operation::DeleteTarget => None,
                 Operation::Errored(_) => None,
             }
         } else {

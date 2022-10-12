@@ -7,10 +7,7 @@ use grpc::{
         traits::{ClusterAgentOperations, NodeInfo, ReportFailedPathsInfo},
     },
 };
-use std::{
-    net::{AddrParseError, SocketAddr},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
 /// High-level object that represents HA Cluster agent gRPC server.
 pub(crate) struct ClusterAgent {
@@ -60,19 +57,9 @@ impl ClusterAgentOperations for ClusterAgentSvc {
                 "node_name",
             ));
         }
-
-        if request.endpoint().is_empty() {
-            return Err(ReplyError::missing_argument(
-                ResourceKind::Unknown,
-                "endpoint",
-            ));
-        }
-
-        let ep: SocketAddr = request.endpoint().parse().map_err(|e: AddrParseError| {
-            ReplyError::invalid_argument(ResourceKind::Unknown, "endpoint", e.to_string())
-        })?;
-
-        self.nodes.register_node(request.node().into(), ep).await;
+        self.nodes
+            .register_node(request.node().into(), request.endpoint())
+            .await;
         tracing::trace!(agent = request.node(), "node successfully registered");
         Ok(())
     }
@@ -87,16 +74,18 @@ impl ClusterAgentOperations for ClusterAgentSvc {
 
         for x in request.failed_paths().into_iter() {
             let nodes = self.nodes.clone();
-            _ = nodes
+            match nodes
                 .report_failed_path(
                     request.node().into(),
                     x.target_nqn().to_string(),
                     self.mover.clone(),
+                    request.endpoint(),
                 )
                 .await
-                .map_err(|e| {
-                    v.push((x.target_nqn().to_string(), e.to_string()));
-                });
+            {
+                Ok(_) => continue,
+                Err(err) => v.push((x.target_nqn().to_string(), err.to_string())),
+            }
         }
 
         if !v.is_empty() {

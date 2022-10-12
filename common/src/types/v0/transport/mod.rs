@@ -137,6 +137,8 @@ pub enum MessageIdVs {
     ReportFailedPaths,
     /// Shutdown Nexus
     ShutdownNexus,
+    /// Replace Path
+    ReplacePathInfo,
 }
 
 impl From<MessageIdVs> for MessageId {

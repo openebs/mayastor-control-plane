@@ -7,6 +7,7 @@ from pytest_bdd import (
     when,
 )
 
+from time import sleep
 import pytest
 import cluster_agent_pb2 as pb
 import grpc
@@ -55,7 +56,7 @@ def the_request_should_be_failed(context):
     """the request should be failed."""
     e = context["attempt"]
     assert (
-        e.value.code() == grpc.StatusCode.INTERNAL
+        e.value.code() == grpc.StatusCode.INVALID_ARGUMENT
     ), "Unexpected error code: %s" + str(e.value.code())
 
 
@@ -87,7 +88,6 @@ def register_node_agent(context):
 def register_node_agent_with_empty_data(context):
     hdl = cluster_agent_rpc_handle()
     req = pb.HaNodeInfo()
-
     with pytest.raises(grpc.RpcError) as error:
         hdl.api.RegisterNodeAgent(req)
     context["attempt"] = error

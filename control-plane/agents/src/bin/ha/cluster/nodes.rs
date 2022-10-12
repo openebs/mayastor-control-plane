@@ -38,7 +38,15 @@ impl NodeList {
         node: NodeId,
         path: String,
         mover: VolumeMover,
+        endpoint: SocketAddr,
     ) -> Result<(), anyhow::Error> {
+        // Check if node is registered in the hashmap. Register if not.
+        self.list
+            .lock()
+            .await
+            .entry(node.clone())
+            .or_insert(endpoint);
+
         let uri = {
             let list = self.list.lock().await;
             list.get(&node).copied()
@@ -52,11 +60,10 @@ impl NodeList {
 
         info!(node.id=%node, %path, "Sending switchover for path");
 
-        if let Some(uri) = uri {
+        if let Some(socket) = uri {
             info!(node.id=%node, %path, "Sending switchover for path");
-
-            mover.switchover(uri.to_string(), path.clone()).await?;
-            failed_path.insert(path, uri);
+            mover.switchover(socket, path.clone()).await?;
+            failed_path.insert(path, socket);
             Ok(())
         } else {
             Err(anyhow::format_err!("Node {} is not registered", node))

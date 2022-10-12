@@ -5,10 +5,13 @@ use crate::{
     },
 };
 use common_lib::{
-    transport_api::ReplyError,
-    types::v0::transport::{cluster_agent::NodeAgentInfo, FailedPath, ReportFailedPaths},
+    transport_api::{ReplyError, ResourceKind},
+    types::v0::transport::{
+        cluster_agent::NodeAgentInfo, FailedPath, ReplacePath, ReportFailedPaths,
+    },
     IntoVec,
 };
+use std::net::SocketAddr;
 
 /// NodeAgentOperations trait implemented by client which supports cluster-agent operations
 #[tonic::async_trait]
@@ -30,13 +33,31 @@ pub trait ReplacePathInfo: Send + Sync + std::fmt::Debug {
     fn new_path(&self) -> String;
 }
 
+impl ReplacePathInfo for ReplacePath {
+    fn target_nqn(&self) -> String {
+        self.target().to_string()
+    }
+
+    fn new_path(&self) -> String {
+        self.new_path().to_string()
+    }
+}
+
 impl ReplacePathInfo for ReplacePathRequest {
     fn target_nqn(&self) -> String {
         self.target_nqn.clone()
     }
-
     fn new_path(&self) -> String {
         self.new_path.clone()
+    }
+}
+
+impl From<&dyn ReplacePathInfo> for ReplacePathRequest {
+    fn from(src: &dyn ReplacePathInfo) -> Self {
+        Self {
+            target_nqn: src.target_nqn(),
+            new_path: src.new_path(),
+        }
     }
 }
 
@@ -64,7 +85,14 @@ pub trait NodeInfo: Send + Sync + std::fmt::Debug {
     /// node name on which node-agent is running
     fn node(&self) -> String;
     /// endpoint of node-agent GRPC server
-    fn endpoint(&self) -> String;
+    fn endpoint(&self) -> SocketAddr;
+}
+
+/// Intermediate struct to convert grpc to control plane object.
+#[derive(Debug)]
+pub struct NodeInfoConv {
+    node: String,
+    endpoint: SocketAddr,
 }
 
 impl NodeInfo for NodeAgentInfo {
@@ -72,18 +100,35 @@ impl NodeInfo for NodeAgentInfo {
         self.node_name().to_owned()
     }
 
-    fn endpoint(&self) -> String {
-        self.endpoint().to_string()
+    fn endpoint(&self) -> SocketAddr {
+        self.endpoint()
     }
 }
 
-impl NodeInfo for HaNodeInfo {
+impl TryFrom<HaNodeInfo> for NodeInfoConv {
+    type Error = ReplyError;
+
+    fn try_from(value: HaNodeInfo) -> Result<Self, Self::Error> {
+        Ok(Self {
+            node: value.nodename,
+            endpoint: value.endpoint.parse().map_err(|_err| {
+                ReplyError::invalid_argument(
+                    ResourceKind::Unknown,
+                    "endpoint",
+                    "Failed parsing node endpoint".to_string(),
+                )
+            })?,
+        })
+    }
+}
+
+impl NodeInfo for NodeInfoConv {
     fn node(&self) -> String {
-        self.nodename.clone()
+        self.node.clone()
     }
 
-    fn endpoint(&self) -> String {
-        self.endpoint.clone()
+    fn endpoint(&self) -> SocketAddr {
+        self.endpoint
     }
 }
 
@@ -91,7 +136,7 @@ impl From<&dyn NodeInfo> for HaNodeInfo {
     fn from(src: &dyn NodeInfo) -> Self {
         Self {
             nodename: src.node(),
-            endpoint: src.endpoint(),
+            endpoint: src.endpoint().to_string(),
         }
     }
 }
@@ -100,7 +145,8 @@ impl From<&dyn NodeInfo> for HaNodeInfo {
 pub trait ReportFailedPathsInfo: Send + Sync + std::fmt::Debug {
     /// Id of the application node.
     fn node(&self) -> String;
-
+    /// Node agent's Grpc address
+    fn endpoint(&self) -> SocketAddr;
     /// List of failed NVMe paths.
     fn failed_paths(&self) -> Vec<FailedPath>;
 }
@@ -110,6 +156,9 @@ impl ReportFailedPathsInfo for ReportFailedPaths {
         self.node_name().to_string()
     }
 
+    fn endpoint(&self) -> SocketAddr {
+        self.endpoint()
+    }
     fn failed_paths(&self) -> Vec<FailedPath> {
         self.failed_paths().clone()
     }
@@ -118,6 +167,12 @@ impl ReportFailedPathsInfo for ReportFailedPaths {
 impl ReportFailedPathsInfo for ReportFailedNvmePathsRequest {
     fn node(&self) -> String {
         self.nodename.clone()
+    }
+
+    fn endpoint(&self) -> SocketAddr {
+        self.endpoint
+            .parse::<SocketAddr>()
+            .expect("Could not get node agent's grpc address")
     }
 
     fn failed_paths(&self) -> Vec<FailedPath> {
@@ -132,6 +187,7 @@ impl From<&dyn ReportFailedPathsInfo> for ReportFailedNvmePathsRequest {
     fn from(info: &dyn ReportFailedPathsInfo) -> Self {
         Self {
             nodename: info.node(),
+            endpoint: info.endpoint().to_string(),
             failed_paths: info.failed_paths().into_vec(),
         }
     }

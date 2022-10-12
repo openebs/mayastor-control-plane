@@ -3,7 +3,7 @@ use crate::{
     path_provider::get_nvme_path_buf,
 };
 use agents::errors::SvcError;
-use common_lib::transport_api::{ReplyError, ResourceKind};
+use common_lib::transport_api::{ErrorChain, ReplyError, ResourceKind};
 use grpc::{
     context::Context,
     operations::ha_node::{
@@ -122,7 +122,7 @@ impl NodeAgentSvc {
     }
 
     /// Connect NVMe controller. Wait till the controller is fully connected.
-    async fn connect_controller(&self, new_path: String) -> Result<(), SvcError> {
+    async fn connect_controller(&self, new_path: String, old_path: String) -> Result<(), SvcError> {
         let connect_args = match self.get_nvmf_connection_args(&new_path) {
             Some(ca) => ca,
             None => return Err(SvcError::InvalidArguments {}),
@@ -142,11 +142,15 @@ impl NodeAgentSvc {
                 tracing::error!(
                     new_path,
                     error=%error,
-                    "Failed to connect to NVMe target"
+                    "Failed to connect to new NVMe target"
                 );
-                return Err(SvcError::Internal {
-                    details: "Failed to connect to NVMe target".to_string(),
-                });
+                let nvme_err = format!(
+                    "Failed to connect to new NVMe target: {}, new path: {}, old path: {}",
+                    error.full_string(),
+                    new_path,
+                    old_path
+                );
+                return Err(SvcError::Internal { details: nvme_err });
             }
         };
 
@@ -211,7 +215,6 @@ impl NodeAgentOperations for NodeAgentSvc {
         _context: Option<Context>,
     ) -> Result<(), ReplyError> {
         tracing::info!("Replacing failed NVMe path: {:?}", request);
-
         // Lookup NVMe controller whose path has failed.
         let ctrlr = self
             .path_cache
@@ -228,7 +231,8 @@ impl NodeAgentOperations for NodeAgentSvc {
         // Step 1: populate an additional healthy path to target NQN in addition to
         // existing failed path. Once this additional path is created, client I/O
         // automatically resumes.
-        self.connect_controller(request.new_path()).await?;
+        self.connect_controller(request.new_path(), request.target_nqn())
+            .await?;
 
         // Step 2: disconnect broken path to leave the only new healthy path.
         // Note that errors under disconnection are not critical, since the second I/O

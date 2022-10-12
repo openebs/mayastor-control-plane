@@ -6,7 +6,7 @@ use crate::{
         ha_rpc_server::{HaRpc, HaRpcServer},
         HaNodeInfo, ReplacePathRequest, ReportFailedNvmePathsRequest,
     },
-    operations::ha_node::traits::{ClusterAgentOperations, NodeAgentOperations},
+    operations::ha_node::traits::{ClusterAgentOperations, NodeAgentOperations, NodeInfoConv},
 };
 use std::sync::Arc;
 
@@ -69,7 +69,11 @@ impl HaRpc for ClusterAgentServer {
         request: tonic::Request<HaNodeInfo>,
     ) -> Result<tonic::Response<()>, tonic::Status> {
         let nodeinfo = request.into_inner();
-        match self.service.register(&nodeinfo, None).await {
+        match self
+            .service
+            .register(&NodeInfoConv::try_from(nodeinfo)?, None)
+            .await
+        {
             Ok(_) => Ok(Response::new(())),
             Err(err) => Err(Status::internal(format!(
                 "Failed to register node-agent: {:?}",
