@@ -27,7 +27,8 @@ impl CreateRows for openapi::models::Volume {
             optional_cell(state.target.clone().map(|t| t.node)),
             optional_cell(state.target.as_ref().and_then(target_protocol)),
             state.status,
-            state.size
+            state.size,
+            self.spec.thin
         ]];
         rows
     }
