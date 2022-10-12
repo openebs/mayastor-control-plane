@@ -393,6 +393,7 @@ pub struct RequestMinTimeout {
     replica: Duration,
     nexus: Duration,
     pool: Duration,
+    nexus_shutdown: Duration,
 }
 
 impl Default for RequestMinTimeout {
@@ -401,6 +402,7 @@ impl Default for RequestMinTimeout {
             replica: Duration::from_secs(10),
             nexus: Duration::from_secs(30),
             pool: Duration::from_secs(20),
+            nexus_shutdown: Duration::from_secs(15),
         }
     }
 }
@@ -416,6 +418,10 @@ impl RequestMinTimeout {
     /// minimum timeout for a pool operation.
     pub fn pool(&self) -> Duration {
         self.pool
+    }
+    /// minimum timeout for nexus shutdown
+    pub fn nexus_shutdown(&self) -> Duration {
+        self.nexus_shutdown
     }
 }
 
