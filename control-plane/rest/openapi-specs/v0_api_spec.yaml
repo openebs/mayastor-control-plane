@@ -1489,6 +1489,26 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/volumes/{volume_id}/shutdown_targets':
+    delete:
+      tags:
+        - Volumes
+      operationId: del_volume_shutdown_targets
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
   '/volumes/{volume_id}/share/{protocol}':
     put:
       tags:
