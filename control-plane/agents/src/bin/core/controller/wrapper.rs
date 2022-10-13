@@ -342,7 +342,7 @@ impl NodeWrapper {
         self.node_state.api_versions = Some(vec![ApiVersion::V0]);
         let client = self.grpc_client_timeout(timeouts).await?;
         client.liveness_probe().await.map_err(|error| {
-            tracing::error!(?error, "V0 liveness probe failed");
+            tracing::error!(?error, node.id = %self.id(), "V0 liveness probe failed");
             SvcError::NodeNotOnline {
                 node: self.id().clone(),
             }

@@ -457,22 +457,27 @@ impl ResourceSpecsLocked {
         }
     }
 
-    // Delete the NexusInfo key from the persistent store.
-    // If deletion fails we just log it and continue.
+    /// Delete the NexusInfo key from the persistent store.
+    /// If deletion fails we just log it and continue.
     pub(crate) async fn delete_nexus_info(key: &NexusInfoKey, registry: &Registry) {
+        let vol_id = match key.volume_id() {
+            Some(v) => v.as_str(),
+            None => "",
+        };
         match registry.delete_kv(&key.key()).await {
             Ok(_) => {
                 tracing::trace!(
-                    "Deleted NexusInfo entry from persistent store. Volume {:?}, nexus {}",
-                    key.volume_id(),
-                    key.nexus_id()
+                    volume.uuid = %vol_id,
+                    nexus.uuid = %key.nexus_id(),
+                    "Deleted NexusInfo entry from persistent store",
                 );
             }
-            Err(e) => {
-                tracing::error!(error=%e,
-                    "Failed to delete NexusInfo entry from persistent store. Volume {:?}, nexus {}",
-                    key.volume_id(),
-                    key.nexus_id()
+            Err(error) => {
+                tracing::error!(
+                    %error,
+                    volume.uuid = %vol_id,
+                    nexus.uuid = %key.nexus_id(),
+                    "Failed to delete NexusInfo entry from persistent store",
                 );
             }
         }
@@ -1324,7 +1329,7 @@ impl SpecOperationsHelper for VolumeSpec {
                     })
                 } else {
                     match registry
-                        .get_nexus_info(Some(&self.uuid), self.last_nexus_id(), true)
+                        .get_nexus_info(Some(&self.uuid), self.health_info_id(), true)
                         .await?
                     {
                         Some(info) => match info

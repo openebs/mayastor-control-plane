@@ -97,7 +97,7 @@ pub trait VolumeOperations: Send + Sync {
 
 impl From<VolumeSpec> for volume::VolumeDefinition {
     fn from(volume_spec: VolumeSpec) -> Self {
-        let nexus_id = volume_spec.last_nexus_id().cloned();
+        let nexus_id = volume_spec.health_info_id().cloned();
         let spec_status: common::SpecStatus = volume_spec.status.into();
         Self {
             spec: Some(volume::VolumeSpec {

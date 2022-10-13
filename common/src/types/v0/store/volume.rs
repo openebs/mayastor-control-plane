@@ -171,7 +171,8 @@ impl VolumeSpec {
     pub fn config(&self) -> &Option<TargetConfig> {
         &self.target_config
     }
-    pub fn last_nexus_id(&self) -> Option<&NexusId> {
+    /// Get the health info key which is used to retrieve the volume's replica health information.
+    pub fn health_info_id(&self) -> Option<&NexusId> {
         if let Some(id) = &self.last_nexus_id {
             return Some(id);
         }

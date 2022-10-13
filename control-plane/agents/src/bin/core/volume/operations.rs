@@ -280,7 +280,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let state = registry.get_volume_state(&request.uuid).await?;
         let nexus_node = get_volume_target_node(registry, &state, request, false).await?;
 
-        let last_target = self.as_ref().last_nexus_id().cloned();
+        let last_target = self.as_ref().health_info_id().cloned();
         let target_cfg = self.next_target_config(&nexus_node, &request.share).await;
         let operation = VolumeOperation::Publish(PublishOperation::new(
             nexus_node.clone(),
@@ -419,7 +419,6 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         let older_nexus_id = older_nexus.uuid().clone();
         // shutdown the older nexus before newer nexus creation.
-        // todo: Handle scenario when node is offline and shutdown fails.
         let result = older_nexus
             .shutdown(registry, &ShutdownNexus::new(older_nexus_id))
             .await;
@@ -455,15 +454,6 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         };
 
         self.complete_update(registry, result, spec_clone).await?;
-
-        // Delete the persisted NexusInfo structure.
-        // todo: This needs to be revisited, as there might be inconsistency on child state after
-        // creation of nexus.
-        ResourceSpecsLocked::delete_nexus_info(
-            &NexusInfoKey::new(&Some(self.uuid().clone()), older_nexus.uuid()),
-            registry,
-        )
-        .await;
 
         let volume = registry.get_volume(&request.uuid).await?;
         registry
@@ -535,13 +525,13 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
                     let destroy_req = DestroyNexus::from(nexus_spec).with_disown(&request.uuid);
                     match guard.destroy(registry, &destroy_req).await {
                         Ok(_) => {
-                            // todo: handle cleanup properly, as mutiple replublish followed by
-                            // destroy is causing loss of key.
-                            // ResourceSpecsLocked::delete_nexus_info(
-                            //     &NexusInfoKey::new(&Some(request.uuid.clone()), guard.uuid()),
-                            //     registry,
-                            // )
-                            // .await;
+                            if self.as_ref().health_info_id() != Some(guard.uuid()) {
+                                ResourceSpecsLocked::delete_nexus_info(
+                                    &NexusInfoKey::new(&Some(request.uuid.clone()), guard.uuid()),
+                                    registry,
+                                )
+                                .await;
+                            }
                         }
                         Err(error) => match error {
                             // If the store is not available, no point in trying the others.
