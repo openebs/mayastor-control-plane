@@ -146,19 +146,21 @@ impl RequestAggregator {
         let aggregation_period = self.aggregation_period;
 
         tokio::spawn(async move {
-            loop {
-                // Phase 1: wait for the first path to trigger batch aggregation.
-                let p = path_receiver.recv().await.expect("Path sender disappeared");
-
+            // Phase 1: wait for the first path to trigger batch aggregation.
+            while let Some(path) = path_receiver.recv().await {
                 // Phase 2: add all subsequent reported paths to the batch.
                 let mut batch = PathBatch::new();
-                batch.add_path(p);
+                batch.add_path(path);
 
                 loop {
                     tokio::select! {
-                        r = path_receiver.recv() => {
-                            let p = r.expect("Path sender disappeared");
-                            batch.add_path(p);
+                        receiver = path_receiver.recv() => {
+                            match receiver {
+                                Some(path) => {
+                                    batch.add_path(path);
+                                }
+                                None => break
+                            }
                         },
                         _ = sleep(aggregation_period) => {
                             break;
@@ -166,9 +168,9 @@ impl RequestAggregator {
                     }
                 }
 
-                batch_sender
-                    .send(batch)
-                    .expect("Batch receiver disappeared");
+                if batch_sender.send(batch).is_err() {
+                    break;
+                }
             }
         });
     }

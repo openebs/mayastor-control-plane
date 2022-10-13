@@ -38,8 +38,7 @@ impl VolumeMover {
 
         // calling start_op here to store the request in etcd
         req.start_op(Stage::Init, &self.etcd).await?;
-        self.engine.initiate(req);
-        Ok(())
+        self.engine.initiate(req)
     }
 
     /// Send batch of switchover request to SwitchOverEngine.
@@ -52,7 +51,7 @@ impl VolumeMover {
 
         for entry in req {
             entry.start_op(entry.stage(), &self.etcd).await?;
-            self.engine.initiate(entry);
+            self.engine.initiate(entry)?;
         }
         Ok(())
     }
