@@ -9,6 +9,7 @@ use crate::{
             },
             operations_helper::{
                 GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
+                SpecOperationsHelper,
             },
             OperationGuardArc, TraceSpan, TraceStrLog,
         },
@@ -37,7 +38,6 @@ use common_lib::{
     },
 };
 use std::ops::Deref;
-use tracing::debug;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
@@ -527,7 +527,8 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
             .get_volume_shutdown_nexuses(&request.uuid)
             .await;
 
-        for mut nexus_res in shutdown_nexuses {
+        let mut result = Ok(());
+        for nexus_res in shutdown_nexuses {
             match nexus_res.operation_guard_wait().await {
                 Ok(mut guard) => {
                     let nexus_spec = guard.as_ref().clone();
@@ -542,29 +543,32 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
                             // )
                             // .await;
                         }
-                        Err(err) => match err {
-                            SvcError::Store { .. } => return Err(err),
-                            SvcError::StoreSave { .. } => return Err(err),
+                        Err(error) => match error {
+                            // If the store is not available, no point in trying the others.
+                            SvcError::Store { .. } => return Err(error),
                             _ => {
-                                debug!(
-                                error = %err,
-                                nexus.uuid = %destroy_req.uuid,
-                                "Encountered error while destroying shutdown nexus"
-                                )
+                                tracing::debug!(
+                                    %error,
+                                    nexus.uuid = %destroy_req.uuid,
+                                    "Encountered error while destroying shutdown nexus"
+                                );
+                                // if we're not at least marked for deletion then we'll have to
+                                // get the cluster agent to retry..
+                                if !(guard.as_ref().status().deleting()
+                                    || guard.as_ref().status().deleted())
+                                {
+                                    result = Err(error);
+                                }
                             }
                         },
                     }
                 }
-                Err(err) => {
-                    debug!(
-                        error = %err,
-                        nexus.uuid = %nexus_res.uuid(),
-                        "Failed to guard one of the destroying shutdown nexus"
-                    );
+                Err(error) => {
+                    result = Err(error);
                 }
             }
         }
-        Ok(())
+        result
     }
 }
 
@@ -586,12 +590,14 @@ impl OperationGuardArc<VolumeSpec> {
         let range = match self.as_ref().config() {
             None => NvmfControllerIdRange::new_min(),
             Some(cfg) => {
+                // todo: should the cluster agent tell us which controller Id to use?
                 #[allow(clippy::if_same_then_else)]
                 if self.published() {
                     cfg.config().controller_id_range().next()
                 } else {
                     // if we're not published should we start over?
-                    // NvmfControllerIdRange::new_min()
+                    // for now let's carry on to next as there might some cases where we unpublish
+                    // but the initiator doesn't disconnect properly.
                     cfg.config().controller_id_range().next()
                 }
             }
