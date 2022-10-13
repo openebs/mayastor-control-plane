@@ -2,7 +2,7 @@
 
 # Cleans up the iptables rules added by bdd tests
 
-set -e
+set -euo pipefail
 
 echo "Cleaning all IPTABLE rules added by tests..."
 

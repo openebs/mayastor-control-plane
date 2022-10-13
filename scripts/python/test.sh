@@ -28,4 +28,8 @@ else
   pytest "$@"
 fi
 
-sh "$ROOT_DIR"/scripts/python/test_residue_cleanup.sh
+cleanup_handler() {
+  "$ROOT_DIR"/scripts/python/test_residue_cleanup.sh
+}
+
+trap cleanup_handler ERR INT QUIT TERM HUP
