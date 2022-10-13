@@ -17,6 +17,7 @@ tokio = { version = "1.20.1", features = [ "full" ] }
 snafu = "0.7.1"
 etcd-client = "0.10.1"
 serde = { version = "1.0.140", features = ["derive"] }
+serde_tuple = "0.5.0"
 async-trait = "0.1.51"
 dyn-clonable = "0.9.0"
 openapi = { path = "../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }

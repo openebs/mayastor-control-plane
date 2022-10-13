@@ -199,7 +199,7 @@ impl GetChildForRemovalContext {
         let nexus_info = registry
             .get_nexus_info(
                 Some(&request.spec.uuid),
-                request.spec.last_nexus_id.as_ref(),
+                request.spec.health_info_id(),
                 true,
             )
             .await?;

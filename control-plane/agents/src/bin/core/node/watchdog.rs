@@ -2,7 +2,7 @@ use crate::node::service::Service;
 use common_lib::types::v0::transport::NodeId;
 
 /// Watchdog which must be pet within the deadline, otherwise
-/// it triggers the `on_timeout` callback from the node `Service`
+/// it triggers the `on_timeout` callback from the node `Service`.
 #[derive(Debug, Clone)]
 pub(crate) struct Watchdog {
     node_id: NodeId,
@@ -13,7 +13,7 @@ pub(crate) struct Watchdog {
 }
 
 impl Watchdog {
-    /// new empty watchdog with a deadline timeout for node `node_id`
+    /// New empty watchdog with a deadline timeout for node `node_id`.
     pub(crate) fn new(node_id: &NodeId, deadline: std::time::Duration) -> Self {
         Self {
             deadline,
@@ -24,20 +24,19 @@ impl Watchdog {
         }
     }
 
-    /// the set deadline
+    /// Get the deadline.
     pub(crate) fn deadline(&self) -> std::time::Duration {
         self.deadline
     }
 
-    /// last time the node was seen
+    /// Get the last time the node was seen.
     pub(crate) fn timestamp(&self) -> std::time::Instant {
         self.timestamp
     }
 
-    /// arm watchdog with self timeout and execute error callback if
-    /// the deadline is not met
+    /// Arm watchdog with self timeout and execute error callback if the deadline is not met.
     pub(crate) fn arm(&mut self, service: Service) {
-        tracing::debug!("Arming the watchdog for node '{}'", self.node_id);
+        tracing::debug!(node.id = %self.node_id, "Arming the node's watchdog");
         let (s, mut r) = tokio::sync::mpsc::channel(1);
         self.pet_chan = Some(s);
         self.service = Some(service.clone());
@@ -49,7 +48,7 @@ impl Watchdog {
                 match result {
                     Err(_) => Service::on_timeout(&service, &id).await,
                     Ok(None) => {
-                        tracing::warn!("Stopping Watchdog for node '{}'", id);
+                        tracing::warn!(node.id = %id, "Stopping Watchdog for node");
                         break;
                     }
                     _ => (),
@@ -58,7 +57,7 @@ impl Watchdog {
         });
     }
 
-    /// meet the deadline
+    /// Meet the deadline.
     pub(crate) async fn pet(&mut self) -> Result<(), tokio::sync::mpsc::error::SendError<()>> {
         self.timestamp = std::time::Instant::now();
         if let Some(chan) = &mut self.pet_chan {
@@ -71,9 +70,9 @@ impl Watchdog {
             Ok(())
         }
     }
-    /// stop the watchdog
+    /// Stop the watchdog.
     pub(crate) fn disarm(&mut self) {
-        tracing::debug!("Disarming the watchdog for node '{}'", self.node_id);
+        tracing::debug!(node.id = %self.node_id, "Disarming the node's watchdog");
         let _ = self.pet_chan.take();
     }
 }

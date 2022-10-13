@@ -21,7 +21,6 @@ use common_lib::types::v0::{
         AddNexusChild, RemoveNexusChild, ShutdownNexus,
     },
 };
-use tracing::warn;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
@@ -260,22 +259,22 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
         request: &Self::Shutdown,
     ) -> Result<(), SvcError> {
         let node_id = self.as_ref().node.clone();
-        let nexus_id = self.uuid();
         let node = registry.get_node_wrapper(&node_id).await?;
-        let nexus_state = match node.nexus(nexus_id).await {
-            None => self.as_ref().into(),
+        let nexus_state = match node.nexus(self.uuid()).await {
+            None => Nexus::from(self.as_ref()),
             Some(state) => state,
         };
         let spec_clone = self
             .start_update(registry, &nexus_state, NexusOperation::Shutdown)
             .await?;
 
-        let result = node.shutdown_nexus(request).await;
-        if result.is_err() {
-            warn!(
-                "IO-engine is not online to complete the nexus shutdown request for {}",
-                self.uuid()
-            )
+        if let Err(error) = node.shutdown_nexus(request).await {
+            tracing::warn!(
+                %error,
+                node.id = %node_id.as_str(),
+                nexus.uuid = %self.uuid().as_str(),
+                "Ignoring failure to complete the nexus shutdown request",
+            );
         }
         // Updating nexus spec state as Shutdown irrespective of shutdown result.
         self.complete_update(registry, Ok(()), spec_clone).await?;

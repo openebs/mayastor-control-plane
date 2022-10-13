@@ -37,6 +37,8 @@ impl ComponentAction for IoEngine {
                 format!("/host/tmp/{}.sock", Self::name(i, options)).as_str(),
             ])
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
+            .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
+            .with_env("NEXUS_NVMF_ANA_ENABLE", "1")
             .with_bind("/tmp", "/host/tmp");
 
             if options.io_engine_isolate {

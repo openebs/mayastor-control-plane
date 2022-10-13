@@ -82,10 +82,11 @@ impl Etcd {
     }
 
     /// Revokes the lease and releases the associated lock
-    pub async fn revoke(&self) {
+    pub async fn revoke(&self) -> Result<(), StoreError> {
         if let Some(info) = &self.lease_lock_info {
-            info.revoke().await;
+            info.revoke().await?;
         }
+        Ok(())
     }
 }
 

@@ -239,9 +239,12 @@ impl SwitchOverEngine {
         tokio::spawn(async move {
             loop {
                 if let Some(mut q) = recv.recv().await {
+                    let retry_delay_min = std::time::Duration::from_secs(1);
+                    let retry_delay_max = std::time::Duration::from_secs(384);
+                    let mut retry_delay = retry_delay_min;
                     loop {
-                        // TODO: error handling
-                        let _res = match q.stage {
+                        // TODO: handle error handling properly
+                        let result = match q.stage {
                             Stage::Init => q.initialize(&etcd).await,
                             Stage::RepublishVolume => q.republish_volume(&etcd).await,
                             Stage::PublishPath => q.publish_path(&etcd, &nodes).await,
@@ -251,14 +254,26 @@ impl SwitchOverEngine {
                             },
                             _ => break,
                         };
+                        match result {
+                            Ok(_) => {
+                                // reset retry delay back to the start.
+                                retry_delay = retry_delay_min;
+                            }
+                            Err(_) => {
+                                retry_delay = (retry_delay * 3).min(retry_delay_max);
+                                tokio::time::sleep(retry_delay).await;
+                            }
+                        }
                     }
                 }
             }
         });
     }
 
-    pub fn initiate(&self, req: SwitchOverRequest) {
-        self.channel.send(req).expect("sending req failed");
+    pub fn initiate(&self, req: SwitchOverRequest) -> anyhow::Result<()> {
+        self.channel
+            .send(req)
+            .map_err(|error| anyhow::anyhow!("Failed to send switchover request: {error}"))
     }
 }
 

@@ -110,7 +110,7 @@ impl PoolFilters {
         request: &GetSuitablePoolsContext,
         item: &PoolItem,
     ) -> bool {
-        match request.thin && request.last_nexus_id.is_none() {
+        match request.thin && request.config().is_none() {
             true => item.pool.free_space() > Self::free_space_watermark(),
             false => item.pool.free_space() > request.size,
         }

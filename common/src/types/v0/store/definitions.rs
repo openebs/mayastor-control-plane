@@ -60,6 +60,8 @@ pub enum StoreError {
     },
     #[snafu(display("Failed to grab the lease lock, reason: '{}'", reason))]
     FailedLock { reason: String },
+    #[snafu(display("Failed to unlock the lease. Error {}", source))]
+    FailedUnlock { source: Error },
     #[snafu(display("Etcd is not ready, reason: '{}'", reason))]
     NotReady { reason: String },
     #[snafu(display("Minimum paged value is 2"))]

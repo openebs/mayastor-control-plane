@@ -104,6 +104,8 @@ message NexusSpec {
   google.protobuf.StringValue owner = 9;
   // Record of the operation in progress
   optional common.SpecOperation operation = 10;
+  // Nexus Nvmf Configuration
+  optional NexusNvmfConfig nvmf_config = 11;
 }
 
 // Nexus children (replica or "raw" URI)

@@ -8,8 +8,8 @@ use crate::{
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
-            self, CreateVolume, NexusId, NodeId, ReplicaId, Topology, VolumeId, VolumeLabels,
-            VolumePolicy, VolumeShareProtocol, VolumeStatus,
+            self, CreateVolume, NexusId, NexusNvmfConfig, NodeId, ReplicaId, Topology, VolumeId,
+            VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeStatus,
         },
     },
     IntoOption,
@@ -39,15 +39,15 @@ impl ObjectKey for VolumeStateKey {
 /// Volume Target (node and nexus)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeTarget {
-    /// The node where front-end IO will be sent to
+    /// The node where front-end IO will be sent to.
     node: NodeId,
-    /// The identification of the nexus where the frontend-IO will be sent to
+    /// The identification of the nexus where the frontend-IO will be sent to.
     nexus: NexusId,
-    /// The protocol to use on the target
+    /// The protocol to use on the target.
     protocol: Option<VolumeShareProtocol>,
 }
 impl VolumeTarget {
-    /// Create a new `Self` based on the given parameters
+    /// Create a new `Self` based on the given parameters.
     pub fn new(node: NodeId, nexus: NexusId, protocol: Option<VolumeShareProtocol>) -> Self {
         Self {
             node,
@@ -55,15 +55,15 @@ impl VolumeTarget {
             protocol,
         }
     }
-    /// Get a reference to the node identification
+    /// Get a reference to the node identification.
     pub fn node(&self) -> &NodeId {
         &self.node
     }
-    /// Get a reference to the nexus identification
+    /// Get a reference to the nexus identification.
     pub fn nexus(&self) -> &NexusId {
         &self.nexus
     }
-    /// Get a reference to the volume protocol
+    /// Get a reference to the volume protocol.
     pub fn protocol(&self) -> Option<&VolumeShareProtocol> {
         self.protocol.as_ref()
     }
@@ -77,7 +77,7 @@ impl From<VolumeTarget> for models::VolumeTarget {
 /// User specification of a volume.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeSpec {
-    /// Volume Id
+    /// Volume Id.
     pub uuid: VolumeId,
     /// Size that the volume should be.
     pub size: u64,
@@ -87,22 +87,52 @@ pub struct VolumeSpec {
     pub num_replicas: u8,
     /// Status that the volume should eventually achieve.
     pub status: VolumeSpecStatus,
-    /// The target where front-end IO will be sent to
+    /// The target where front-end IO will be sent to.
     pub target: Option<VolumeTarget>,
-    /// volume policy
+    /// Volume policy.
     pub policy: VolumePolicy,
-    /// replica placement topology for the volume creation only
+    /// Replica placement topology for the volume creation only.
     pub topology: Option<Topology>,
-    /// Update of the state in progress
+    /// Update of the state in progress.
     #[serde(skip)]
     pub sequencer: OperationSequence,
-    /// Id of the last Nexus used by the volume
+    /// Id of the last Nexus used by the volume.
     pub last_nexus_id: Option<NexusId>,
     /// Record of the operation in progress
     pub operation: Option<VolumeOperationState>,
-    /// Flag indicating whether the volume should be thin provisioned
+    /// Flag indicating whether the volume should be thin provisioned.
     #[serde(default)]
     pub thin: bool,
+    /// Last used Target Configuration.
+    #[serde(default)]
+    pub target_config: Option<TargetConfig>,
+}
+
+/// The volume's Nvmf Configuration.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct TargetConfig {
+    /// Uuid of the last target used by the volume.
+    target: VolumeTarget,
+    /// The nexus target configuration.
+    config: NexusNvmfConfig,
+}
+impl TargetConfig {
+    /// Get the uuid of the target.
+    pub fn new(target: VolumeTarget, config: NexusNvmfConfig) -> Self {
+        Self { target, config }
+    }
+    /// Get the target.
+    pub fn target(&self) -> &VolumeTarget {
+        &self.target
+    }
+    /// Get the uuid of the target.
+    pub fn uuid(&self) -> &NexusId {
+        &self.target.nexus
+    }
+    /// Get the target configuration.
+    pub fn config(&self) -> &NexusNvmfConfig {
+        &self.config
+    }
 }
 
 impl AsOperationSequencer for VolumeSpec {
@@ -116,7 +146,7 @@ impl AsOperationSequencer for VolumeSpec {
 }
 
 impl VolumeSpec {
-    /// explicitly selected allowed_nodes
+    /// Explicitly selected allowed_nodes.
     pub fn allowed_nodes(&self) -> Vec<NodeId> {
         match &self.topology {
             None => vec![],
@@ -126,8 +156,8 @@ impl VolumeSpec {
                 .unwrap_or_default(),
         }
     }
-    /// desired volume replica count if during `SetReplica` operation
-    /// or otherwise the current num_replicas
+    /// Desired volume replica count if during `SetReplica` operation
+    /// or otherwise the current num_replicas.
     pub fn desired_num_replicas(&self) -> u8 {
         match &self.operation {
             Some(operation) => match operation.operation {
@@ -137,14 +167,25 @@ impl VolumeSpec {
             _ => self.num_replicas,
         }
     }
+    /// Get the last target configuration.
+    pub fn config(&self) -> &Option<TargetConfig> {
+        &self.target_config
+    }
+    /// Get the health info key which is used to retrieve the volume's replica health information.
+    pub fn health_info_id(&self) -> Option<&NexusId> {
+        if let Some(id) = &self.last_nexus_id {
+            return Some(id);
+        }
+        self.target_config.as_ref().map(|c| &c.target.nexus)
+    }
 }
 
-/// Operation State for a Nexus spec resource
+/// Operation State for a Nexus spec resource.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VolumeOperationState {
-    /// Record of the operation
+    /// Record of the operation.
     pub operation: VolumeOperation,
-    /// Result of the operation
+    /// Result of the operation.
     pub result: Option<bool>,
 }
 
@@ -180,13 +221,20 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 }
                 VolumeOperation::SetReplica(count) => self.num_replicas = count,
                 VolumeOperation::RemoveUnusedReplica(_) => {}
-                VolumeOperation::Publish((node, nexus, protocol)) => {
-                    self.target = Some(VolumeTarget::new(node, nexus.clone(), protocol));
-                    self.last_nexus_id = Some(nexus);
+                VolumeOperation::Publish(args) => {
+                    let (node, nexus, protocol) = (args.node, args.nexus, args.protocol);
+                    let target = VolumeTarget::new(node, nexus, protocol);
+                    self.target = Some(target.clone());
+                    self.last_nexus_id = None;
+                    self.target_config =
+                        Some(TargetConfig::new(target, args.config.unwrap_or_default()));
                 }
-                VolumeOperation::Republish((node, nexus, protocol)) => {
-                    self.target = Some(VolumeTarget::new(node, nexus.clone(), Some(protocol)));
-                    self.last_nexus_id = Some(nexus);
+                VolumeOperation::Republish(args) => {
+                    let (node, nexus, protocol) = (args.node, args.nexus, args.protocol);
+                    let target = VolumeTarget::new(node, nexus, Some(protocol));
+                    self.target = Some(target.clone());
+                    self.last_nexus_id = None;
+                    self.target_config = Some(TargetConfig::new(target, args.config));
                 }
                 VolumeOperation::Unpublish => {
                     self.target = None;
@@ -214,7 +262,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
     }
 }
 
-/// Available Volume Operations
+/// Available Volume Operations.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum VolumeOperation {
     Create,
@@ -222,10 +270,97 @@ pub enum VolumeOperation {
     Share(VolumeShareProtocol),
     Unshare,
     SetReplica(u8),
-    Publish((NodeId, NexusId, Option<VolumeShareProtocol>)),
-    Republish((NodeId, NexusId, VolumeShareProtocol)),
+    Publish(PublishOperation),
+    Republish(RepublishOperation),
     Unpublish,
     RemoveUnusedReplica(ReplicaId),
+}
+
+#[test]
+fn volume_op_deserializer() {
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    struct TestSpec {
+        op: VolumeOperation,
+    }
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    struct Test<'a> {
+        input: &'a str,
+        expected: VolumeOperation,
+    }
+    let tests: Vec<Test> = vec![Test {
+        input: r#"{"op":{"Publish":["4ffe7e43-46dd-4912-9d0f-6c9844fa7c6e","4ffe7e43-46dd-4912-9d0f-6c9844fa7c6e",null]}}"#,
+        expected: VolumeOperation::Publish(PublishOperation::new(
+            "4ffe7e43-46dd-4912-9d0f-6c9844fa7c6e".try_into().unwrap(),
+            "4ffe7e43-46dd-4912-9d0f-6c9844fa7c6e".try_into().unwrap(),
+            None,
+            None,
+        )),
+    }];
+
+    for test in &tests {
+        println!("{}", serde_json::to_string(&test.expected).unwrap());
+        let spec: TestSpec = serde_json::from_str(test.input).unwrap();
+        assert_eq!(test.expected, spec.op);
+    }
+}
+
+/// The `PublishOperation` which is easier to manage and update.
+#[derive(serde_tuple::Serialize_tuple, serde_tuple::Deserialize_tuple, Debug, Clone, PartialEq)]
+pub struct PublishOperation {
+    node: NodeId,
+    nexus: NexusId,
+    protocol: Option<VolumeShareProtocol>,
+    #[serde(default)]
+    config: Option<NexusNvmfConfig>,
+}
+impl PublishOperation {
+    /// Return new `Self` from the given parameters.
+    pub fn new(
+        node: NodeId,
+        nexus: NexusId,
+        protocol: Option<VolumeShareProtocol>,
+        config: Option<NexusNvmfConfig>,
+    ) -> Self {
+        Self {
+            node,
+            nexus,
+            protocol,
+            config,
+        }
+    }
+    /// Get the share protocol.
+    pub fn protocol(&self) -> Option<VolumeShareProtocol> {
+        self.protocol
+    }
+}
+
+/// Volume Republish Operation parameters.
+#[derive(serde_tuple::Serialize_tuple, serde_tuple::Deserialize_tuple, Debug, Clone, PartialEq)]
+pub struct RepublishOperation {
+    node: NodeId,
+    nexus: NexusId,
+    protocol: VolumeShareProtocol,
+    config: NexusNvmfConfig,
+}
+impl RepublishOperation {
+    /// Return new `Self` from the given parameters.
+    pub fn new(
+        node: NodeId,
+        nexus: NexusId,
+        protocol: VolumeShareProtocol,
+        config: NexusNvmfConfig,
+    ) -> Self {
+        Self {
+            node,
+            nexus,
+            protocol,
+            config,
+        }
+    }
+    /// Get the share protocol.
+    pub fn protocol(&self) -> VolumeShareProtocol {
+        self.protocol
+    }
 }
 
 impl From<VolumeOperation> for models::volume_spec_operation::Operation {
@@ -273,7 +408,7 @@ impl StorableObject for VolumeSpec {
     }
 }
 
-/// State of the Volume Spec
+/// State of the Volume Spec.
 pub type VolumeSpecStatus = SpecStatus<transport::VolumeStatus>;
 
 impl From<&CreateVolume> for VolumeSpec {
@@ -291,6 +426,7 @@ impl From<&CreateVolume> for VolumeSpec {
             last_nexus_id: None,
             operation: None,
             thin: request.thin,
+            target_config: None,
         }
     }
 }

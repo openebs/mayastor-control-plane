@@ -146,7 +146,7 @@ pub enum SvcError {
     #[snafu(display("Storage Error: {}", source))]
     Store { source: StoreError },
     #[snafu(display("Storage Error: {} Config for Resource id {} not committed to the store", kind.to_string(), id))]
-    StoreSave { kind: ResourceKind, id: String },
+    StoreDirty { kind: ResourceKind, id: String },
     #[snafu(display("Watch Config Not Found"))]
     WatchNotFound {},
     #[snafu(display("{} Resource to be watched does not exist", kind.to_string()))]
@@ -239,7 +239,7 @@ impl From<SvcError> for ReplyError {
         let desc: &String = &error.description().to_string();
         let error_str = error.full_string();
         match error {
-            SvcError::StoreSave { kind, .. } => ReplyError {
+            SvcError::StoreDirty { kind, .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPersist,
                 resource: kind,
                 source: desc.to_string(),

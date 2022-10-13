@@ -342,7 +342,7 @@ impl NodeWrapper {
         self.node_state.api_versions = Some(vec![ApiVersion::V0]);
         let client = self.grpc_client_timeout(timeouts).await?;
         client.liveness_probe().await.map_err(|error| {
-            tracing::error!(?error, "V0 liveness probe failed");
+            tracing::error!(?error, node.id = %self.id(), "V0 liveness probe failed");
             SvcError::NodeNotOnline {
                 node: self.id().clone(),
             }
@@ -1018,21 +1018,16 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             Ok(nexus) => Ok(nexus),
             Err(error) => {
                 let nexus_name = request.name();
-                match self
-                    .read()
-                    .await
-                    .nexuses()
-                    .iter()
-                    .find(|nexus| nexus.uuid == request.uuid && nexus.name == nexus_name)
-                {
+                let mut nexuses = self.read().await.nexuses().into_iter();
+                match nexuses.find(|nexus| nexus.uuid == request.uuid && nexus.name == nexus_name) {
                     Some(nexus) => {
-                        // return Ok if nexus with the requested uuid and name already exists
                         tracing::warn!(
-                            "Trying to create nexus with uuid '{}' and name '{}' which already exists.Ok",
-                            request.uuid,
-                            nexus_name
+                            node.id = request.node.as_str(),
+                            nexus.uuid = request.uuid.as_str(),
+                            nexus.name = nexus_name,
+                            "Trying to create a nexus which already exists"
                         );
-                        Ok(nexus.clone())
+                        Ok(nexus)
                     }
                     None => Err(error),
                 }
@@ -1091,13 +1086,13 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             Ok(child) => Ok(child),
             Err(error) => {
                 if let Some(nexus) = self.read().await.nexus(&request.nexus) {
-                    if let Some(child) = nexus.children.iter().find(|c| c.uri == request.uri) {
+                    if let Some(child) = nexus.children.into_iter().find(|c| c.uri == request.uri) {
                         tracing::warn!(
                             "Trying to add Child '{}' which is already part of nexus '{}'.Ok",
                             request.uri,
                             request.nexus
                         );
-                        return Ok(child.clone());
+                        return Ok(child);
                     }
                 }
                 Err(error)

@@ -14,7 +14,7 @@ use crate::{
 use common_lib::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
-        store::volume::{VolumeSpec, VolumeTarget},
+        store::volume::{TargetConfig, VolumeSpec, VolumeTarget},
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, ExplicitNodeTopology, Filter,
             LabelledTopology, Nexus, NexusId, NodeId, NodeTopology, PoolTopology, PublishVolume,
@@ -23,6 +23,7 @@ use common_lib::{
             VolumePolicy, VolumeShareProtocol, VolumeState,
         },
     },
+    IntoOption,
 };
 use std::{collections::HashMap, convert::TryFrom};
 
@@ -96,6 +97,7 @@ pub trait VolumeOperations: Send + Sync {
 
 impl From<VolumeSpec> for volume::VolumeDefinition {
     fn from(volume_spec: VolumeSpec) -> Self {
+        let nexus_id = volume_spec.health_info_id().cloned();
         let spec_status: common::SpecStatus = volume_spec.status.into();
         Self {
             spec: Some(volume::VolumeSpec {
@@ -108,11 +110,12 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 target: volume_spec.target.map(|target| target.into()),
                 policy: Some(volume_spec.policy.into()),
                 topology: volume_spec.topology.map(|topology| topology.into()),
-                last_nexus_id: volume_spec.last_nexus_id.map(|id| id.to_string()),
+                last_nexus_id: nexus_id.map(|id| id.to_string()),
                 thin: volume_spec.thin,
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
+                target_config: volume_spec.target_config.into_opt(),
             }),
         }
     }
@@ -228,6 +231,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             },
             operation: None,
             thin: volume_spec.thin,
+            target_config: None,
         };
         Ok(volume_spec)
     }
@@ -556,7 +560,7 @@ impl TryFrom<volume::VolumeTarget> for VolumeTarget {
                         return Err(ReplyError::invalid_argument(
                             ResourceKind::Volume,
                             "target.protocol",
-                            "".to_string(),
+                            "is empty".to_string(),
                         ))
                     }
                 },
@@ -566,7 +570,6 @@ impl TryFrom<volume::VolumeTarget> for VolumeTarget {
         Ok(target)
     }
 }
-
 impl From<VolumeTarget> for volume::VolumeTarget {
     fn from(target: VolumeTarget) -> Self {
         volume::VolumeTarget {
@@ -579,6 +582,36 @@ impl From<VolumeTarget> for volume::VolumeTarget {
                     Some(protocol as i32)
                 }
             },
+        }
+    }
+}
+
+impl TryFrom<volume::TargetConfig> for TargetConfig {
+    type Error = ReplyError;
+    fn try_from(src: volume::TargetConfig) -> Result<Self, Self::Error> {
+        Ok(Self::new(
+            match src.target {
+                Some(t) => t.try_into(),
+                None => Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "target_config.target",
+                )),
+            }?,
+            match src.config {
+                Some(c) => c.try_into(),
+                None => Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "target_config.config",
+                )),
+            }?,
+        ))
+    }
+}
+impl From<TargetConfig> for volume::TargetConfig {
+    fn from(src: TargetConfig) -> Self {
+        volume::TargetConfig {
+            target: Some(src.target().clone().into()),
+            config: Some(src.config().clone().into()),
         }
     }
 }

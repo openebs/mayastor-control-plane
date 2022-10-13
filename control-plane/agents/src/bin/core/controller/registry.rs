@@ -253,7 +253,7 @@ impl Registry {
     pub(crate) async fn stop(&self) {
         tokio::time::timeout(std::time::Duration::from_secs(1), async move {
             let store = self.store.lock().await;
-            store.revoke().await;
+            store.revoke().await
         })
         .await
         .ok();

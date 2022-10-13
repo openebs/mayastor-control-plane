@@ -590,7 +590,7 @@ pub(crate) trait SpecOperationsHelper:
     /// Check if the object is free to be modified or if it's still busy
     fn busy(&self) -> Result<(), SvcError> {
         if self.dirty() {
-            return Err(SvcError::StoreSave {
+            return Err(SvcError::StoreDirty {
                 kind: self.kind(),
                 id: self.uuid_str(),
             });
