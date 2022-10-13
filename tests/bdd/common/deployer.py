@@ -22,6 +22,7 @@ class StartOptions:
     max_rebuilds: str = ""
     ha_node_agent: bool = False
     ha_cluster_agent: bool = False
+    fio_spdk: bool = False
 
     def args(self):
         args = [
@@ -55,6 +56,8 @@ class StartOptions:
             args.append(self.extra_args)
         if len(self.max_rebuilds) > 0:
             args.append(f"--max-rebuilds={self.max_rebuilds}")
+        if self.fio_spdk:
+            args.append("--fio-spdk")
 
         agent_arg = "--agents=Core"
         if self.ha_node_agent:
@@ -84,6 +87,7 @@ class Deployer(object):
         max_rebuilds="",
         cluster_agent=False,
         node_agent=False,
+        fio_spdk=False,
     ):
         options = StartOptions(
             io_engines,
@@ -100,6 +104,7 @@ class Deployer(object):
             max_rebuilds=max_rebuilds,
             ha_node_agent=node_agent,
             ha_cluster_agent=cluster_agent,
+            fio_spdk=fio_spdk,
         )
         Deployer.start_with_opts(options)
 

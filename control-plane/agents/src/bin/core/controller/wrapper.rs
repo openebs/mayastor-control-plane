@@ -1023,7 +1023,7 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                     .await
                     .nexuses()
                     .iter()
-                    .find(|nexus| nexus.uuid == request.uuid || nexus.name == nexus_name)
+                    .find(|nexus| nexus.uuid == request.uuid && nexus.name == nexus_name)
                 {
                     Some(nexus) => {
                         // return Ok if nexus with the requested uuid and name already exists
@@ -1151,7 +1151,8 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
     async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        if let Some(nexus) = self.read().await.nexus(&request.uuid()) {
+        let nexus = self.read().await.nexus(&request.uuid());
+        if let Some(nexus) = nexus {
             if nexus.status == NexusStatus::Shutdown {
                 Ok(())
             } else {

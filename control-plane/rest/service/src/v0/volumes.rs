@@ -2,8 +2,8 @@ use super::*;
 use common_lib::types::v0::{
     openapi::{apis::Uuid, models::VolumeShareProtocol},
     transport::{
-        DestroyVolume, Filter, PublishVolume, RepublishVolume, SetVolumeReplica, ShareVolume,
-        UnpublishVolume, UnshareVolume, Volume,
+        DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume, RepublishVolume,
+        SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
     },
 };
 use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
@@ -30,6 +30,20 @@ impl apis::actix_server::Volumes for RestApi {
         client()
             .destroy(
                 &DestroyVolume {
+                    uuid: volume_id.into(),
+                },
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn del_volume_shutdown_targets(
+        Path(volume_id): Path<Uuid>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        client()
+            .destroy_shutdown_target(
+                &DestroyShutdownTargets {
                     uuid: volume_id.into(),
                 },
                 None,

@@ -137,11 +137,12 @@ async fn disown_unused_nexuses(
     let mut results = vec![];
 
     for nexus in context.specs().get_volume_nexuses(volume.uuid()) {
+        let nexus_clone = nexus.lock().clone();
+
         match &volume.as_ref().target {
-            Some(target) if target.nexus() == nexus.uid() => continue,
+            Some(target) if target.nexus() == nexus.uid() || nexus_clone.is_shutdown() => continue,
             _ => {}
         };
-        let nexus_clone = nexus.lock().clone();
 
         nexus_clone.warn_span(|| tracing::warn!("Attempting to disown unused nexus"));
         // the nexus garbage collector will destroy the disowned nexuses
