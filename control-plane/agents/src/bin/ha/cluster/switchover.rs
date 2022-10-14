@@ -35,6 +35,8 @@ pub enum Stage {
     PublishPath,
     /// Delete original/old volume target.
     DeleteTarget,
+    /// Marks switchover process as Complete.
+    Successful,
     /// Represent failed switchover request.
     Errored,
 }
@@ -89,8 +91,9 @@ impl SwitchOverRequest {
             Stage::Init => Stage::RepublishVolume,
             Stage::RepublishVolume => Stage::PublishPath,
             Stage::PublishPath => Stage::DeleteTarget,
-            // DeleteTarget and Errored stage mark request as complete, so no need to update
-            Stage::DeleteTarget => Stage::DeleteTarget,
+            Stage::DeleteTarget => Stage::Successful,
+            // Successful and Errored stage mark request as complete, so no need to update
+            Stage::Successful => Stage::Successful,
             Stage::Errored => Stage::Errored,
         };
     }
@@ -173,6 +176,19 @@ impl SwitchOverRequest {
         Ok(())
     }
 
+    /// Deletes Switchover request from etcd.
+    async fn delete_switchover(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
+        self.start_op(Stage::Successful, etcd).await?;
+        info!(volume.uuid=%self.volume_id, "Deleting Switchover request from etcd as request completed successfully");
+        match self.delete_request(etcd).await {
+            Ok(_) => Ok(()),
+            Err(_) => Err(anyhow!(
+                "Encountered error while trying to delete SwitchOverSpec from etcd for {}",
+                self.volume_id
+            )),
+        }
+    }
+
     /// Publish updated path for the volume to node-agent.
     async fn publish_path(
         &mut self,
@@ -248,7 +264,8 @@ impl SwitchOverEngine {
                             Stage::Init => q.initialize(&etcd).await,
                             Stage::RepublishVolume => q.republish_volume(&etcd).await,
                             Stage::PublishPath => q.publish_path(&etcd, &nodes).await,
-                            Stage::DeleteTarget => match q.delete_target(&etcd).await {
+                            Stage::DeleteTarget => q.delete_target(&etcd).await,
+                            Stage::Successful => match q.delete_switchover(&etcd).await {
                                 Ok(_) => break,
                                 Err(e) => Err(e),
                             },
@@ -298,6 +315,7 @@ impl From<Stage> for Operation {
             Stage::RepublishVolume => Operation::RepublishVolume,
             Stage::PublishPath => Operation::PublishPath,
             Stage::DeleteTarget => Operation::DeleteTarget,
+            Stage::Successful => Operation::Successful,
             Stage::Errored => Operation::Errored("".to_string()),
         }
     }
@@ -310,6 +328,7 @@ impl From<Operation> for Stage {
             Operation::RepublishVolume => Stage::RepublishVolume,
             Operation::PublishPath => Stage::PublishPath,
             Operation::DeleteTarget => Stage::DeleteTarget,
+            Operation::Successful => Stage::Successful,
             Operation::Errored(_) => Stage::Errored,
         }
     }

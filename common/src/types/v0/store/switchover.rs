@@ -20,6 +20,8 @@ pub enum Operation {
     PublishPath,
     /// Delete original/old volume target.
     DeleteTarget,
+    /// Marks switchover process as Complete.
+    Successful,
     /// Represent failed switchover request.
     Errored(String),
 }
@@ -132,7 +134,8 @@ impl SpecTransaction<Operation> for SwitchOverSpec {
                 Operation::Init => Some(Operation::RepublishVolume),
                 Operation::RepublishVolume => Some(Operation::PublishPath),
                 Operation::PublishPath => Some(Operation::DeleteTarget),
-                Operation::DeleteTarget => None,
+                Operation::DeleteTarget => Some(Operation::Successful),
+                Operation::Successful => None,
                 Operation::Errored(_) => None,
             }
         } else {
