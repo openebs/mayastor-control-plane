@@ -17,7 +17,8 @@ use utils::NVME_TARGET_NQN_PREFIX;
 
 use anyhow::anyhow;
 use grpc::operations::ha_node::traits::NodeAgentOperations;
-use std::{convert::TryFrom, net::SocketAddr};
+use std::{convert::TryFrom, net::SocketAddr, sync::Arc};
+use tokio::sync::Mutex;
 use tonic::transport::Uri;
 
 fn client() -> impl VolumeOperations {
@@ -232,6 +233,9 @@ pub struct SwitchOverEngine {
     channel: UnboundedSender<SwitchOverRequest>,
 }
 
+/// Number of Switchover worker tasks to be spawned.
+const WORKER_NUM: u8 = 4;
+
 impl SwitchOverEngine {
     /// Creates a new switchover engine to process Nvme path failures.
     pub fn new(etcd: EtcdStore, nodes: NodeList) -> Self {
@@ -243,48 +247,53 @@ impl SwitchOverEngine {
             nodes,
         };
 
-        sw.mover(rq_rx);
+        sw.init_worker(Arc::new(Mutex::new(rq_rx)));
         sw
     }
 
-    /// Mover is responsible for processing the switchover request sequentially.
-    pub fn mover(&self, mut recv: UnboundedReceiver<SwitchOverRequest>) {
-        let etcd = self.etcd.clone();
-        let nodes = self.nodes.clone();
+    /// Instantiates worker task to asynchronously process Switchover request.
+    pub fn init_worker(&self, recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>) {
+        for i in 0 .. WORKER_NUM {
+            info!("Starting worker-{} of Switchover Engine", i.to_string());
+            let cloned_self = self.clone();
+            let cloned_channel = recv.clone();
+            tokio::spawn(async move { cloned_self.process_request(cloned_channel).await });
+        }
+    }
 
-        tokio::spawn(async move {
-            loop {
-                if let Some(mut q) = recv.recv().await {
-                    let retry_delay_min = std::time::Duration::from_secs(1);
-                    let retry_delay_max = std::time::Duration::from_secs(384);
-                    let mut retry_delay = retry_delay_min;
-                    loop {
-                        // TODO: handle error handling properly
-                        let result = match q.stage {
-                            Stage::Init => q.initialize(&etcd).await,
-                            Stage::RepublishVolume => q.republish_volume(&etcd).await,
-                            Stage::PublishPath => q.publish_path(&etcd, &nodes).await,
-                            Stage::DeleteTarget => q.delete_target(&etcd).await,
-                            Stage::Successful => match q.delete_switchover(&etcd).await {
-                                Ok(_) => break,
-                                Err(e) => Err(e),
-                            },
-                            _ => break,
-                        };
-                        match result {
-                            Ok(_) => {
-                                // reset retry delay back to the start.
-                                retry_delay = retry_delay_min;
-                            }
-                            Err(_) => {
-                                retry_delay = (retry_delay * 3).min(retry_delay_max);
-                                tokio::time::sleep(retry_delay).await;
-                            }
+    /// Switchover request to be handled synchronously in each worker task.
+    async fn process_request(self, recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>) {
+        loop {
+            if let Some(mut q) = recv.lock().await.recv().await {
+                let retry_delay_min = std::time::Duration::from_secs(1);
+                let retry_delay_max = std::time::Duration::from_secs(384);
+                let mut retry_delay = retry_delay_min;
+                loop {
+                    // TODO: handle error handling properly
+                    let result = match q.stage {
+                        Stage::Init => q.initialize(&self.etcd).await,
+                        Stage::RepublishVolume => q.republish_volume(&self.etcd).await,
+                        Stage::PublishPath => q.publish_path(&self.etcd, &self.nodes).await,
+                        Stage::DeleteTarget => q.delete_target(&self.etcd).await,
+                        Stage::Successful => match q.delete_switchover(&self.etcd).await {
+                            Ok(_) => break,
+                            Err(e) => Err(e),
+                        },
+                        _ => break,
+                    };
+                    match result {
+                        Ok(_) => {
+                            // reset retry delay back to the start.
+                            retry_delay = retry_delay_min;
+                        }
+                        Err(_) => {
+                            retry_delay = (retry_delay * 3).min(retry_delay_max);
+                            tokio::time::sleep(retry_delay).await;
                         }
                     }
                 }
             }
-        });
+        }
     }
 
     pub fn initiate(&self, req: SwitchOverRequest) -> anyhow::Result<()> {
