@@ -47,6 +47,9 @@ pub struct SupportArgs {
     /// Kubernetes namespace of mayastor service, defaults to mayastor
     #[clap(global = true, long, short = 'n', default_value = "mayastor")]
     namespace: String,
+    // /// Kubernetes chart-name of upgrade, defaults to mayastor
+    // #[clap(global = true, long, short = 'c', default_value = "mayastor")]
+    // chart-name: String,
 }
 
 /// Supportability - collects state & log information of services and dumps it to a tar file.

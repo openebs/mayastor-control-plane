@@ -38,6 +38,12 @@ pub const API_REST_LABEL: &str = "app=api-rest";
 /// The service port for the api-rest label for the etcd pods.
 pub const API_REST_HTTP_PORT: &str = "http";
 
+/// The service label for the upgrade operator service.
+pub const UPGRADE_OPERATOR_LABEL: &str = "openebs.io/component=upgrade-operator";
+
+/// The service port for upgrade operator.
+pub const UPGRADE_OPERATOR_HTTP_PORT: &str = "http";
+
 /// The pod label for the etcd pods.
 pub const ETCD_LABEL: &str = "app=etcd";
 /// The port for the etcd pods.

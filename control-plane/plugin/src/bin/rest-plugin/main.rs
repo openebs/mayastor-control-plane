@@ -11,7 +11,7 @@ use plugin::{
     },
     rest_wrapper::RestClient,
 };
-use std::env;
+use std::{env, path::PathBuf};
 
 #[derive(clap::Parser, Debug)]
 #[clap(name = utils::package_description!(), version = utils::version_info_str!())]
@@ -24,6 +24,10 @@ struct CliArgs {
     #[clap(subcommand)]
     operations: Operations,
 
+    /// Path to kubeconfig file.
+    #[clap(parse(from_os_str), global = true, long, short = 'k')]
+    kube_config_path: Option<PathBuf>,
+
     /// The Output, viz yaml, json.
     #[clap(global = true, default_value = plugin::resources::utils::OutputFormat::None.as_ref(), short, long)]
     output: plugin::resources::utils::OutputFormat,
@@ -35,6 +39,12 @@ struct CliArgs {
     /// Timeout for the REST operations.
     #[clap(long, short, default_value = "10s")]
     timeout: humantime::Duration,
+
+    /// Endpoint of upgrade operator service, if left empty then it will try to parse endpoint
+    /// from upgrade operator service(K8s service resource), if the tool is unable to parse
+    /// from service then logs will be collected using Kube-apiserver
+    #[clap(global = true, short, long)]
+    upgrade_operator_endpoint: Option<String>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -116,5 +126,13 @@ async fn execute(cli_args: CliArgs) {
                 node::Node::uncordon(id, label, &cli_args.output).await
             }
         },
+        // Operations::Upgrade(resource) => match resource {
+        //     GetUpgradeResources::Install => upgrade::Upgrades::install().await,
+        //     GetUpgradeResources::Apply => upgrade::Upgrades::apply(cli_args.kube_config_path,
+        // cli_args.timeout, cli_args.upgrade_operator_endpoint).await,
+        //     GetUpgradeResources::Get => upgrade::Upgrades::get(cli_args.kube_config_path,
+        // cli_args.timeout, cli_args.upgrade_operator_endpoint).await,
+        //     GetUpgradeResources::Uninstall => upgrade::Upgrades::uninstall().await,
+        // },
     };
 }

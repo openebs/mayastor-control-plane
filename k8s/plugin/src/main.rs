@@ -10,10 +10,11 @@ use plugin::{
     },
     rest_wrapper::RestClient,
 };
+
 use std::{env, path::PathBuf};
 
 mod resources;
-use resources::Operations;
+use resources::{GetUpgradeResources, Operations};
 
 #[derive(Parser, Debug)]
 #[clap(name = utils::package_description!(), version = utils::version_info_str!())]
@@ -45,6 +46,12 @@ struct CliArgs {
     /// Kubernetes namespace of mayastor service, defaults to mayastor
     #[clap(global = true, long, short = 'n', default_value = "mayastor")]
     namespace: String,
+
+    /// Endpoint of upgrade operator service, if left empty then it will try to parse endpoint
+    /// from upgrade operator service(K8s service resource), if the tool is unable to parse
+    /// from service then logs will be collected using Kube-apiserver
+    #[clap(global = true, short, long)]
+    upgrade_operator_endpoint: Option<String>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -129,6 +136,26 @@ async fn execute(cli_args: CliArgs) {
                 CordonResources::Node { id, label } => {
                     node::Node::uncordon(&id, &label, &cli_args.output).await
                 }
+            },
+            Operations::Upgrade(resource) => match resource {
+                GetUpgradeResources::Install => resources::upgrade::Upgrades::install().await,
+                GetUpgradeResources::Apply => {
+                    resources::upgrade::Upgrades::apply(
+                        cli_args.kube_config_path,
+                        cli_args.timeout,
+                        cli_args.upgrade_operator_endpoint,
+                    )
+                    .await
+                }
+                GetUpgradeResources::Get => {
+                    resources::upgrade::Upgrades::get(
+                        cli_args.kube_config_path,
+                        cli_args.timeout,
+                        cli_args.upgrade_operator_endpoint,
+                    )
+                    .await
+                }
+                GetUpgradeResources::Uninstall => resources::upgrade::Upgrades::uninstall().await,
             },
             Operations::Dump(resources) => {
                 let _ignore = resources

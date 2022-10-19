@@ -35,7 +35,8 @@ pub struct ApiRest {}
 pub struct Etcd {}
 /// Internal for type-state.
 pub struct Loki {}
-
+/// Internal for type-state.
+pub struct Upgrade {}
 /// The scheme component of the URI.
 pub enum Scheme {
     /// HTTP.
@@ -123,6 +124,25 @@ impl Default for ConfigBuilder<Loki> {
         }
     }
 }
+impl Default for ConfigBuilder<Upgrade> {
+    fn default() -> Self {
+        Self {
+            kube_config: None,
+            target: kube_forward::Target::new(
+                kube_forward::TargetSelector::ServiceLabel(
+                    utils::UPGRADE_OPERATOR_LABEL.to_string(),
+                ),
+                utils::UPGRADE_OPERATOR_HTTP_PORT,
+                utils::DEFAULT_NAMESPACE,
+            ),
+            timeout: Some(std::time::Duration::from_secs(5)),
+            jwt: None,
+            method: ForwardingProxy::HTTP,
+            scheme: Scheme::HTTP,
+            builder_target: Default::default(),
+        }
+    }
+}
 
 impl ConfigBuilder<ApiRest> {
     /// Returns a `Self` with sane defaults for the api-rest.
@@ -142,7 +162,12 @@ impl ConfigBuilder<Loki> {
         ConfigBuilder::<Loki>::default()
     }
 }
-
+impl ConfigBuilder<Upgrade> {
+    /// Returns a `Self` with sane defaults for the etcd.
+    pub fn default_upgrade() -> ConfigBuilder<Upgrade> {
+        ConfigBuilder::<Upgrade>::default()
+    }
+}
 impl<T> ConfigBuilder<T> {
     /// Move self with the following kube_config_path.
     pub fn with_kube_config(mut self, kube_config_path: Option<PathBuf>) -> Self {
@@ -281,6 +306,86 @@ impl ConfigBuilder<Loki> {
     }
     /// Tries to build a TCP `Configuration` from the current self.
     async fn build_tcp(self) -> anyhow::Result<(Uri, LokiClient)> {
+        let pf = kube_forward::PortForward::new(self.target, None).await?;
+
+        let (port, _handle) = pf.port_forward().await?;
+
+        let keep_alive_timeout = self
+            .timeout
+            .unwrap_or_else(|| std::time::Duration::from_secs(5));
+
+        let (scheme, _certificate) = self.scheme.parts();
+        let uri = Uri::try_from(&format!("{}://localhost:{}", scheme, port))?;
+
+        let service = match self.scheme {
+            Scheme::HTTP => {
+                let mut connector = hyper::client::HttpConnector::new();
+                connector.set_connect_timeout(self.timeout);
+                let client = hyper::Client::builder()
+                    .http2_keep_alive_timeout(keep_alive_timeout)
+                    .http2_keep_alive_interval(keep_alive_timeout / 2)
+                    .build(connector);
+                tower::ServiceBuilder::new()
+                    .option_layer(self.timeout.map(tower::timeout::TimeoutLayer::new))
+                    .service(client)
+            }
+            Scheme::HTTPS(_) => {
+                unimplemented!()
+            }
+        };
+
+        Ok((uri, BoxService::new(service)))
+    }
+}
+
+/// A UpgradeOperatorClient client which is essentially a boxed `tower::Service`.
+pub type UpgradeOperatorClient =
+    BoxService<hyper::Request<body::Body>, hyper::Response<body::Body>, tower::BoxError>;
+
+impl ConfigBuilder<Upgrade> {
+    /// Move self with the following timeout.
+    pub fn with_timeout<TO: Into<Option<std::time::Duration>>>(mut self, timeout: TO) -> Self {
+        self.timeout = timeout.into();
+        self
+    }
+    /// Move self with the following forwarding method.
+    pub fn with_forwarding(mut self, method: ForwardingProxy) -> Self {
+        self.method = method;
+        self
+    }
+    /// Move self with the following connection scheme.
+    pub fn with_scheme(mut self, scheme: Scheme) -> Self {
+        self.scheme = scheme;
+        self
+    }
+
+    /// Tries to build a `UpgradeOperatorClient` from the current self.
+    /// This is simply a boxed `tower::Service` so can be used for any HTTP requests.
+    pub async fn build(self) -> anyhow::Result<(Uri, UpgradeOperatorClient)> {
+        match self.method {
+            ForwardingProxy::HTTP => self.build_http().await,
+            ForwardingProxy::TCP => self.build_tcp().await,
+        }
+    }
+    /// Tries to build an HTTP `Configuration` from the current self.
+    async fn build_http(self) -> anyhow::Result<(Uri, UpgradeOperatorClient)> {
+        println!("port forward being done here");
+        let uri = kube_forward::HttpForward::new(self.target, Some(self.scheme.into()))
+            .await?
+            .uri()
+            .await?;
+        let config = super::config_from_kubeconfig(self.kube_config).await?;
+        let client = kube::Client::try_from(config)?;
+        let proxy = kube_forward::HttpProxy::new(client);
+
+        println!(" what is the url {:?}", uri);
+        let service = tower::ServiceBuilder::new()
+            .option_layer(self.timeout.map(tower::timeout::TimeoutLayer::new))
+            .service(proxy);
+        Ok((uri, UpgradeOperatorClient::new(service)))
+    }
+    /// Tries to build a TCP `Configuration` from the current self.
+    async fn build_tcp(self) -> anyhow::Result<(Uri, UpgradeOperatorClient)> {
         let pf = kube_forward::PortForward::new(self.target, None).await?;
 
         let (port, _handle) = pf.port_forward().await?;

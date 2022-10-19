@@ -10,7 +10,7 @@ use std::{
 mod proxy;
 
 /// OpenApi client helpers.
-pub use proxy::{ConfigBuilder, ForwardingProxy, LokiClient, Scheme};
+pub use proxy::{ConfigBuilder, ForwardingProxy, LokiClient, Scheme, UpgradeOperatorClient};
 
 /// Get the `kube::Config` from the given kubeconfig file, or the default.
 pub async fn config_from_kubeconfig(

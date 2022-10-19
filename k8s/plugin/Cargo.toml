@@ -27,6 +27,16 @@ anyhow = "1.0.44"
 clap = { version = "3.1.5", features = ["color", "derive"] }
 humantime = "2.1.0"
 shutdown = { path = "../../utils/shutdown" }
+maplit = "1.0.2"
+k8s-openapi = { version = "0.15.0", features = ["v1_20"] }
+actix-rt = "2.7.0"
+tower = { version = "0.4.13", features = [ "timeout", "util" ] }
+hyper = { version = "0.14.20", features = [ "client", "http1", "http2", "tcp", "stream" ] }
+http = "0.2.6"
+async-trait = "0.1.51"
+serde = "1.0.140"
+serde_json = "1.0.82"
+
 
 # Tracing
 tracing = "0.1.35"
