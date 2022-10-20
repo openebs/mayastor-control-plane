@@ -47,6 +47,10 @@ impl ChildUri {
             Err(_) => None,
         }
     }
+    /// Check if the child is a local child or not.
+    pub fn is_local(&self) -> bool {
+        self.0.starts_with("bdev://") || self.0.starts_with("loopback://")
+    }
 }
 impl PartialEq<Child> for ChildUri {
     fn eq(&self, other: &Child) -> bool {

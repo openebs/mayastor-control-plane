@@ -76,6 +76,7 @@ trait GarbageCollect {
             self.disown_unused(context).await,
             self.destroy_deleting(context).await,
             self.destroy_orphaned(context).await,
+            self.disown_invalid(context).await,
         ])
     }
 
@@ -94,6 +95,8 @@ trait GarbageCollect {
     /// Disown resources whose owners are no longer in existence.
     /// This may happen as a result of a bug or manual edit of the persistent store (etcd).
     async fn disown_orphaned(&mut self, context: &PollContext) -> PollResult;
+    /// Disown resources which have questionable existence, for example non reservable replicas.
+    async fn disown_invalid(&mut self, context: &PollContext) -> PollResult;
 }
 
 #[async_trait::async_trait]

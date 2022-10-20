@@ -78,6 +78,11 @@ async fn hot_spare_nexus_reconcile(
     if let Some(nexus) = &volume_state.target {
         let mut nexus = context.specs().nexus(&nexus.uuid).await?;
 
+        // Since we don't want the reconcilers to work on shutdown state.
+        if !nexus.as_ref().spec_status.created() || nexus.as_ref().is_shutdown() {
+            return PollResult::Ok(PollerState::Idle);
+        }
+
         // generic nexus reconciliation (does not matter that it belongs to a volume)
         results.push(generic_nexus_reconciler(&mut nexus, context).await);
 

@@ -264,6 +264,14 @@ impl ReplicaFilters {
             None => true,
         }
     }
+
+    /// Should only allow children which are reservable.
+    pub(crate) fn reservable(request: &GetPersistedNexusChildrenCtx, item: &ChildItem) -> bool {
+        !request.shutdown_failed_nexuses().iter().any(|p| {
+            let nexus = p.lock();
+            nexus.node == item.pool().node && nexus.contains_replica(&item.spec().uuid)
+        })
+    }
 }
 
 /// Sort the nexus replicas/children by preference when creating a nexus
@@ -297,6 +305,14 @@ impl AddReplicaFilters {
     /// Should only allow children with corresponding replicas with enough size
     pub(crate) fn size(request: &VolumeReplicasForNexusCtx, item: &ChildItem) -> bool {
         item.state().size >= request.vol_spec().size
+    }
+
+    /// Should only allow children which are reservable.
+    pub(crate) fn reservable(request: &VolumeReplicasForNexusCtx, item: &ChildItem) -> bool {
+        !request.shutdown_failed_nexuses().iter().any(|p| {
+            let nexus = p.lock();
+            nexus.node == item.pool().node && nexus.contains_replica(&item.spec().uuid)
+        })
     }
 }
 

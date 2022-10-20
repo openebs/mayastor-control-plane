@@ -12,7 +12,7 @@ use crate::controller::{
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
     store::{
-        nexus::{NexusOperation, NexusSpec},
+        nexus::{NexusOperation, NexusSpec, NexusStatusInfo},
         nexus_child::NexusChild,
     },
     transport::{
@@ -264,11 +264,13 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
             None => Nexus::from(self.as_ref()),
             Some(state) => state,
         };
-        let spec_clone = self
+
+        let mut spec_clone = self
             .start_update(registry, &nexus_state, NexusOperation::Shutdown)
             .await?;
 
-        if let Err(error) = node.shutdown_nexus(request).await {
+        let result = node.shutdown_nexus(request).await;
+        if let Err(error) = result.as_ref() {
             tracing::warn!(
                 %error,
                 node.id = %node_id.as_str(),
@@ -276,6 +278,15 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
                 "Ignoring failure to complete the nexus shutdown request",
             );
         }
+        // The shutdown_failed flag denotes the shutdown was not completed and hence we
+        // need this information later to decide whether to put a local replica from the nexus
+        // or not.
+        spec_clone.status_info = result
+            .as_ref()
+            .map_or(NexusStatusInfo::new(true), |_| NexusStatusInfo::new(false));
+        // TODO: FIXME Add separate complete_op.
+        self.lock().status_info = spec_clone.status_info().clone();
+
         // Updating nexus spec state as Shutdown irrespective of shutdown result.
         self.complete_update(registry, Ok(()), spec_clone).await?;
         Ok(())

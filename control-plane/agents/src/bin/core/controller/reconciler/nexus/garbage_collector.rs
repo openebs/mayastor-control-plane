@@ -78,6 +78,10 @@ impl GarbageCollect for OperationGuardArc<NexusSpec> {
     async fn disown_orphaned(&mut self, context: &PollContext) -> PollResult {
         destroy_orphaned_nexus(self, context).await
     }
+
+    async fn disown_invalid(&mut self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
 }
 
 /// Given a control plane managed nexus

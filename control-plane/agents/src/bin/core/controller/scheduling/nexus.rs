@@ -1,5 +1,6 @@
 use crate::controller::{
     registry::Registry,
+    resources::ResourceMutex,
     scheduling::{
         resources::{ChildItem, NodeItem},
         ChildInfoFilters, ChildItemSorters, NodeFilters, NodeSorters, ReplicaFilters,
@@ -72,6 +73,7 @@ pub(crate) struct GetPersistedNexusChildrenCtx {
     request: GetPersistedNexusChildren,
     registry: Registry,
     nexus_info: Option<NexusInfo>,
+    shutdown_failed_nexuses: Vec<ResourceMutex<NexusSpec>>,
 }
 
 impl GetPersistedNexusChildrenCtx {
@@ -87,6 +89,10 @@ impl GetPersistedNexusChildrenCtx {
     pub(crate) fn nexus_info(&self) -> &Option<NexusInfo> {
         &self.nexus_info
     }
+    /// Get the pending shutdown nexuses associated with the volume.
+    pub(crate) fn shutdown_failed_nexuses(&self) -> &Vec<ResourceMutex<NexusSpec>> {
+        &self.shutdown_failed_nexuses
+    }
 }
 
 impl GetPersistedNexusChildrenCtx {
@@ -97,11 +103,21 @@ impl GetPersistedNexusChildrenCtx {
         let nexus_info = registry
             .get_nexus_info(request.volume_id(), request.nexus_info_id(), false)
             .await?;
+        let shutdown_pending_nexuses = match request.volume_id() {
+            None => Vec::new(),
+            Some(id) => {
+                registry
+                    .specs()
+                    .get_volume_failed_shutdown_nexuses(id)
+                    .await
+            }
+        };
 
         Ok(Self {
             registry: registry.clone(),
             request: request.clone(),
             nexus_info,
+            shutdown_failed_nexuses: shutdown_pending_nexuses,
         })
     }
     async fn list(&self) -> Vec<ChildItem> {
@@ -188,6 +204,7 @@ impl CreateVolumeNexus {
             .filter(ChildInfoFilters::healthy)
             .filter(ReplicaFilters::online)
             .filter(ReplicaFilters::size)
+            .filter(ReplicaFilters::reservable)
             .sort_ctx(ChildItemSorters::sort_by_locality))
     }
 }

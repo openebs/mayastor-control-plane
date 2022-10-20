@@ -96,6 +96,9 @@ pub struct NexusSpec {
     /// Nexus Nvmf Configuration.
     #[serde(default)]
     pub nvmf_config: Option<NexusNvmfConfig>,
+    #[serde(default)]
+    /// Additional information about the nexus status.
+    pub status_info: NexusStatusInfo,
 }
 impl NexusSpec {
     /// Check if the spec contains the provided replica by it's `ReplicaId`.
@@ -115,6 +118,10 @@ impl NexusSpec {
             self.spec_status,
             NexusSpecStatus::Created(NexusStatus::Shutdown)
         )
+    }
+    /// Check if the nexus has shutdown failed.
+    pub fn status_info(&self) -> &NexusStatusInfo {
+        &self.status_info
     }
 }
 
@@ -293,6 +300,7 @@ impl From<&CreateNexus> for NexusSpec {
             sequencer: OperationSequence::new(request.uuid.clone()),
             operation: None,
             nvmf_config: request.config.clone(),
+            status_info: NexusStatusInfo::new(false),
         }
     }
 }
@@ -345,5 +353,22 @@ impl From<&NexusSpec> for DestroyNexus {
     fn from(nexus: &NexusSpec) -> Self {
         let nexus = nexus.clone();
         Self::new(nexus.node, nexus.uuid)
+    }
+}
+
+/// Additional information about the nexus status.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct NexusStatusInfo {
+    pub shutdown_failed: bool,
+}
+
+impl NexusStatusInfo {
+    /// Create a new nexus status info.
+    pub fn new(shutdown_failed: bool) -> NexusStatusInfo {
+        Self { shutdown_failed }
+    }
+    /// Check the nexus had a failed shutdown or not.
+    pub fn shutdown_failed(&self) -> bool {
+        self.shutdown_failed
     }
 }
