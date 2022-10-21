@@ -82,6 +82,10 @@ impl GarbageCollect for OperationGuardArc<PoolSpec> {
     async fn disown_orphaned(&mut self, _context: &PollContext) -> PollResult {
         unimplemented!()
     }
+
+    async fn disown_invalid(&mut self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
 }
 
 #[async_trait::async_trait]

@@ -13,6 +13,7 @@ use common_lib::types::v0::{
     transport::{ChildUri, CreateVolume, VolumeState},
 };
 
+use crate::controller::resources::ResourceMutex;
 use itertools::Itertools;
 use std::{collections::HashMap, ops::Deref};
 
@@ -397,6 +398,7 @@ pub(crate) struct VolumeReplicasForNexusCtx {
     vol_spec: VolumeSpec,
     nexus_spec: NexusSpec,
     nexus_info: Option<NexusInfo>,
+    shutdown_failed_nexuses: Vec<ResourceMutex<NexusSpec>>,
 }
 
 impl VolumeReplicasForNexusCtx {
@@ -418,6 +420,10 @@ impl VolumeReplicasForNexusCtx {
     pub(crate) fn registry(&self) -> &Registry {
         &self.registry
     }
+    /// Get the list of nexuses associated to the volume, which failed shutdown.
+    pub(crate) fn shutdown_failed_nexuses(&self) -> &Vec<ResourceMutex<NexusSpec>> {
+        &self.shutdown_failed_nexuses
+    }
 }
 
 impl VolumeReplicasForNexusCtx {
@@ -430,11 +436,17 @@ impl VolumeReplicasForNexusCtx {
             .get_nexus_info(Some(&vol_spec.uuid), Some(&nx_spec.uuid), true)
             .await?;
 
+        let shutdown_pending_nexuses = registry
+            .specs()
+            .get_volume_failed_shutdown_nexuses(&vol_spec.uuid)
+            .await;
+
         Ok(Self {
             registry: registry.clone(),
             vol_spec: vol_spec.clone(),
             nexus_spec: nx_spec.clone(),
             nexus_info,
+            shutdown_failed_nexuses: shutdown_pending_nexuses,
         })
     }
     async fn list(&self) -> Vec<ChildItem> {
@@ -516,6 +528,7 @@ impl AddVolumeNexusReplicas {
             .await?
             .filter(AddReplicaFilters::online)
             .filter(AddReplicaFilters::size)
+            .filter(AddReplicaFilters::reservable)
             .sort_ctx(AddReplicaSorters::sort))
     }
 }

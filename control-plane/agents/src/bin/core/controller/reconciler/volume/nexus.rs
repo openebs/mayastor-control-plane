@@ -55,7 +55,7 @@ async fn volume_nexus_reconcile(
         .await?
     {
         Some(mut nexus) => {
-            if !nexus.as_ref().spec_status.created() {
+            if !nexus.as_ref().spec_status.created() || nexus.as_ref().is_shutdown() {
                 return PollResult::Ok(PollerState::Idle);
             }
 

@@ -12,7 +12,10 @@ use common_lib::{
     transport_api::{v0::Nexuses, ReplyError, ResourceKind},
     types::v0::{
         store::{
-            nexus::{NexusOperation, NexusOperationState, NexusSpec, NexusSpecStatus, ReplicaUri},
+            nexus::{
+                NexusOperation, NexusOperationState, NexusSpec, NexusSpecStatus, NexusStatusInfo,
+                ReplicaUri,
+            },
             nexus_child::NexusChild,
         },
         transport::{
@@ -359,6 +362,7 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
                 result: op.result,
             }),
             nvmf_config: value.nvmf_config.try_into_opt()?,
+            status_info: NexusStatusInfo::new(false),
         })
     }
 }

@@ -91,6 +91,10 @@ impl GarbageCollect for OperationGuardArc<ReplicaSpec> {
     async fn disown_orphaned(&mut self, context: &PollContext) -> PollResult {
         remove_missing_owners(self, context).await
     }
+
+    async fn disown_invalid(&mut self, _context: &PollContext) -> PollResult {
+        unimplemented!()
+    }
 }
 
 /// Remove replica owners who no longer exist.
