@@ -254,17 +254,27 @@ impl SwitchOverEngine {
     /// Instantiates worker task to asynchronously process Switchover request.
     pub fn init_worker(&self, recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>) {
         for i in 0 .. WORKER_NUM {
-            info!("Starting worker-{} of Switchover Engine", i.to_string());
+            info!("Starting worker-{} of Switchover Engine", i);
             let cloned_self = self.clone();
             let cloned_channel = recv.clone();
-            tokio::spawn(async move { cloned_self.process_request(cloned_channel).await });
+            tokio::spawn(async move { cloned_self.process_request(cloned_channel, i).await });
         }
     }
 
     /// Switchover request to be handled synchronously in each worker task.
-    async fn process_request(self, recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>) {
+    async fn process_request(
+        self,
+        recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>,
+        worker_num: u8,
+    ) {
         loop {
-            if let Some(mut q) = recv.lock().await.recv().await {
+            let mut lo = recv.lock().await;
+            if let Some(mut q) = lo.recv().await {
+                info!(
+                    "switchover for vol: {} picked by worker-{}",
+                    q.volume_id, worker_num
+                );
+                drop(lo);
                 let retry_delay_min = std::time::Duration::from_secs(1);
                 let retry_delay_max = std::time::Duration::from_secs(384);
                 let mut retry_delay = retry_delay_min;
