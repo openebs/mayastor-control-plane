@@ -8,7 +8,7 @@ devrustup_moth=${devrustup_moth:-}
 rustup_channel=${rustup_channel:-}
 
 if [ -z "$CI" ]; then
-  if ! diff -r --exclude Cargo.lock "$RUST_TOOLCHAIN_NIX" "$RUST_TOOLCHAIN_NIX" &>/dev/null; then
+  if ! diff -r --exclude Cargo.lock "$RUST_TOOLCHAIN" "$RUST_TOOLCHAIN_NIX" &>/dev/null; then
     rm -rf "$RUST_TOOLCHAIN"
     mkdir -p "$RUST_TOOLCHAIN" 2>/dev/null
     cp -r "$RUST_TOOLCHAIN_NIX"/* "$RUST_TOOLCHAIN"
