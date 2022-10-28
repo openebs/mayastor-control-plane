@@ -221,7 +221,7 @@ impl NodeAgentOperations for NodeAgentSvc {
             .lookup_controller(request.target_nqn())
             .await
             .map_err(|_| {
-                ReplyError::internal_error(
+                ReplyError::failed_precondition(
                     ResourceKind::Nexus,
                     HA_AGENT_ERR_SOURCE.to_string(),
                     "Failed to lookup controller".to_string(),

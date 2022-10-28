@@ -163,6 +163,19 @@ impl From<ReplyError> for tonic::Status {
     fn from(error: ReplyError) -> Self {
         match error.kind {
             ReplyErrorKind::InvalidArgument => tonic::Status::invalid_argument(error.full_string()),
+            ReplyErrorKind::DeadlineExceeded => {
+                tonic::Status::deadline_exceeded(error.full_string())
+            }
+            ReplyErrorKind::FailedPrecondition => {
+                tonic::Status::failed_precondition(error.full_string())
+            }
+            ReplyErrorKind::AlreadyExists => tonic::Status::already_exists(error.full_string()),
+            ReplyErrorKind::Aborted => tonic::Status::aborted(error.full_string()),
+            ReplyErrorKind::NotFound => tonic::Status::not_found(error.full_string()),
+            ReplyErrorKind::ResourceExhausted => {
+                tonic::Status::resource_exhausted(error.full_string())
+            }
+            ReplyErrorKind::Unimplemented => tonic::Status::unimplemented(error.full_string()),
             _ => tonic::Status::internal(error.full_string()),
         }
     }
@@ -189,14 +202,14 @@ impl From<JoinError> for ReplyError {
 
 impl StdError for ReplyError {}
 impl ReplyError {
-    /// extend error with source.
-    /// useful when another error wraps around a `ReplyError` and we want to
+    /// Extend error with source.
+    /// Useful when another error wraps around a `ReplyError` and we want to
     /// convert back to `ReplyError` so we can send it over the wire.
     pub fn extend(&mut self, source: &str, extra: &str) {
         self.source = format!("{}::{}", source, self.source);
         self.extra = format!("{}::{}", extra, self.extra);
     }
-    /// useful when the grpc server is dropped due to panic.
+    /// Useful when the grpc server is dropped due to panic.
     pub fn aborted_error(error: JoinError) -> Self {
         Self {
             kind: ReplyErrorKind::Aborted,
@@ -205,7 +218,7 @@ impl ReplyError {
             extra: "Failed to wait for thread".to_string(),
         }
     }
-    /// useful when the grpc server is dropped due to panic.
+    /// Useful when the grpc server is dropped due to panic.
     pub fn tonic_reply_error(kind: ReplyErrorKind, source: String, extra: String) -> Self {
         Self {
             kind,
@@ -214,7 +227,7 @@ impl ReplyError {
             extra,
         }
     }
-    /// used only for testing, not used in code.
+    /// Used only for testing, not used in code.
     pub fn invalid_reply_error(msg: String) -> Self {
         Self {
             kind: ReplyErrorKind::Aborted,
@@ -223,7 +236,7 @@ impl ReplyError {
             extra: msg,
         }
     }
-    /// used when we get an empty response from the grpc server.
+    /// Used when we get an empty response from the grpc server.
     pub fn invalid_response(resource: ResourceKind) -> Self {
         Self {
             kind: ReplyErrorKind::Aborted,
@@ -232,7 +245,7 @@ impl ReplyError {
             extra: "".to_string(),
         }
     }
-    /// used when we get an invalid argument.
+    /// Used when we get an invalid argument.
     pub fn invalid_argument(resource: ResourceKind, arg_name: &str, error: String) -> Self {
         Self {
             kind: ReplyErrorKind::InvalidArgument,
@@ -241,7 +254,7 @@ impl ReplyError {
             extra: format!("Invalid {} was provided", arg_name),
         }
     }
-    /// used when we encounter a missing argument.
+    /// Used when we encounter a missing argument.
     pub fn missing_argument(resource: ResourceKind, arg_name: &str) -> Self {
         Self {
             kind: ReplyErrorKind::InvalidArgument,
@@ -250,7 +263,7 @@ impl ReplyError {
             extra: format!("Argument {} was not provided", arg_name),
         }
     }
-    /// for errors that can occur when serializing or deserializing JSON data.
+    /// For errors that can occur when serializing or deserializing JSON data.
     pub fn serde_error(
         resource: ResourceKind,
         error_kind: ReplyErrorKind,
@@ -263,7 +276,7 @@ impl ReplyError {
             extra: "".to_string(),
         }
     }
-    /// for errors that represent unimplemented functionality.
+    /// For errors that represent unimplemented functionality.
     pub fn unimplemented(msg: String) -> Self {
         Self {
             kind: ReplyErrorKind::Unimplemented,
@@ -272,10 +285,60 @@ impl ReplyError {
             extra: msg,
         }
     }
-    /// for internal errors.
+    /// For internal errors.
     pub fn internal_error(resource: ResourceKind, source: String, extra: String) -> Self {
         Self {
             kind: ReplyErrorKind::Internal,
+            resource,
+            source,
+            extra,
+        }
+    }
+
+    /// For deadline exceeded errors.
+    pub fn deadline_exceeded(resource: ResourceKind, source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::DeadlineExceeded,
+            resource,
+            source,
+            extra,
+        }
+    }
+
+    /// For failed precondition errors.
+    pub fn failed_precondition(resource: ResourceKind, source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::FailedPrecondition,
+            resource,
+            source,
+            extra,
+        }
+    }
+
+    /// For already exist errors.
+    pub fn already_exist(resource: ResourceKind, source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::AlreadyExists,
+            resource,
+            source,
+            extra,
+        }
+    }
+
+    /// For not found errors.
+    pub fn not_found(resource: ResourceKind, source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::NotFound,
+            resource,
+            source,
+            extra,
+        }
+    }
+
+    /// For resource exhausted errors.
+    pub fn resource_exhausted(resource: ResourceKind, source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::ResourceExhausted,
             resource,
             source,
             extra,

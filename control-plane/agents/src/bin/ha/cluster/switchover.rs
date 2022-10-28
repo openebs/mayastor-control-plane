@@ -12,12 +12,13 @@ use common_lib::types::v0::{
 use grpc::operations::{ha_node::client::NodeAgentClient, volume::traits::VolumeOperations};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tracing::info;
+use tracing::{error, info};
 use utils::NVME_TARGET_NQN_PREFIX;
 
 use anyhow::anyhow;
+use common_lib::transport_api::ReplyErrorKind;
 use grpc::operations::ha_node::traits::NodeAgentOperations;
-use std::{convert::TryFrom, net::SocketAddr, sync::Arc};
+use std::{convert::TryFrom, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tonic::transport::Uri;
 
@@ -54,6 +55,8 @@ pub struct SwitchOverRequest {
     existing_nqn: String,
     // New nexus path of the volume.
     new_path: Option<String>,
+    // Number of failed attempts in the current Stage.
+    retry_count: u64,
 }
 
 impl SwitchOverRequest {
@@ -70,6 +73,7 @@ impl SwitchOverRequest {
             timestamp: Utc::now(),
             existing_nqn: existing_path,
             new_path: None,
+            retry_count: 0,
         }
     }
 
@@ -156,6 +160,10 @@ impl SwitchOverRequest {
             Some(target) => Some(target.device_uri),
             _ => None,
         };
+        if self.new_path.is_none() {
+            error!(volume.uuid=%self.volume_id, "Could not find device uri for the volume. Marking request as errored");
+            return Err(anyhow!("Couldnt find device uri for the volume"));
+        }
         self.complete_op(true, "".to_string(), etcd).await?;
         self.update_next_stage();
         Ok(())
@@ -177,10 +185,23 @@ impl SwitchOverRequest {
         Ok(())
     }
 
-    /// Deletes Switchover request from etcd.
+    /// Deletes Successful Switchover request from etcd.
     async fn delete_switchover(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
         self.start_op(Stage::Successful, etcd).await?;
         info!(volume.uuid=%self.volume_id, "Deleting Switchover request from etcd as request completed successfully");
+        match self.delete_request(etcd).await {
+            Ok(_) => Ok(()),
+            Err(_) => Err(anyhow!(
+                "Encountered error while trying to delete SwitchOverSpec from etcd for {}",
+                self.volume_id
+            )),
+        }
+    }
+
+    /// Deletes Errored Switchover request from etcd.
+    async fn errored_switchover(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
+        self.start_op(Stage::Errored, etcd).await?;
+        info!(volume.uuid=%self.volume_id, "Error occurred while processing Switchover request");
         match self.delete_request(etcd).await {
             Ok(_) => Ok(()),
             Err(_) => Err(anyhow!(
@@ -197,7 +218,6 @@ impl SwitchOverRequest {
         nodes: &NodeList,
     ) -> Result<(), anyhow::Error> {
         self.start_op(Stage::PublishPath, etcd).await?;
-
         info!(volume.uuid=%self.volume_id, "Publishing new volume target to node agent");
         if let Ok(uri) = Uri::builder()
             .scheme("http")
@@ -209,7 +229,16 @@ impl SwitchOverRequest {
             if let Some(new_path) = self.new_path.clone() {
                 let replace_request = ReplacePath::new(self.existing_nqn.clone(), new_path.clone());
                 let client = NodeAgentClient::new(uri, None).await;
-                client.replace_path(&replace_request, None).await?;
+                if let Err(e) = client.replace_path(&replace_request, None).await {
+                    return if e.kind == ReplyErrorKind::FailedPrecondition {
+                        error!(nexus.path=%self.existing_nqn, "HA Node agent could not find failed Nvme path");
+                        info!(volume.uuid=%self.volume_id, "Moving Switchover request to Errored state");
+                        self.stage = Stage::Errored;
+                        Err(anyhow!("HA Node agent could not lookup old Nvme path"))
+                    } else {
+                        Err(anyhow!("Nvme path replacement failed"))
+                    };
+                }
                 nodes
                     .remove_failed_path(format!("{}{}", NVME_TARGET_NQN_PREFIX, self.volume_id))
                     .await;
@@ -220,7 +249,9 @@ impl SwitchOverRequest {
                 Err(anyhow!("Could not to get new nexus target for the volume"))
             }
         } else {
-            Err(anyhow!("Could not get grpc address for the node"))
+            self.stage = Stage::Errored;
+            error!(volume.uuid=%self.volume_id, "Could not get grpc address of the node agent. Moving Switchover req to Errored");
+            Err(anyhow!("Could not get grpc address of the node agent"))
         }
     }
 }
@@ -235,6 +266,15 @@ pub struct SwitchOverEngine {
 
 /// Number of Switchover worker tasks to be spawned.
 const WORKER_NUM: u8 = 4;
+
+enum ReQueue {
+    /// Sleep duration during Fast requeue phase.
+    Fast = 10,
+    /// Sleep duration during Slow requeue phase.
+    Slow = 30,
+    /// Number of Fast request requeue per stage.
+    NumFast = 18,
+}
 
 impl SwitchOverEngine {
     /// Creates a new switchover engine to process Nvme path failures.
@@ -257,27 +297,21 @@ impl SwitchOverEngine {
             info!("Starting worker-{} of Switchover Engine", i);
             let cloned_self = self.clone();
             let cloned_channel = recv.clone();
-            tokio::spawn(async move { cloned_self.process_request(cloned_channel, i).await });
+            tokio::spawn(async move { cloned_self.worker(cloned_channel, i).await });
         }
     }
 
     /// Switchover request to be handled synchronously in each worker task.
-    async fn process_request(
-        self,
-        recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>,
-        worker_num: u8,
-    ) {
+    async fn worker(self, recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>, worker_num: u8) {
         loop {
             let mut lo = recv.lock().await;
             if let Some(mut q) = lo.recv().await {
-                info!(
-                    "switchover for vol: {} picked by worker-{}",
-                    q.volume_id, worker_num
-                );
                 drop(lo);
-                let retry_delay_min = std::time::Duration::from_secs(1);
-                let retry_delay_max = std::time::Duration::from_secs(384);
-                let mut retry_delay = retry_delay_min;
+                info!(
+                    volume.uuid = %q.volume_id,
+                    worker = worker_num,
+                    "Volume switchover picked by worker",
+                );
                 loop {
                     // TODO: handle error handling properly
                     let result = match q.stage {
@@ -285,20 +319,26 @@ impl SwitchOverEngine {
                         Stage::RepublishVolume => q.republish_volume(&self.etcd).await,
                         Stage::PublishPath => q.publish_path(&self.etcd, &self.nodes).await,
                         Stage::DeleteTarget => q.delete_target(&self.etcd).await,
+                        Stage::Errored => match q.errored_switchover(&self.etcd).await {
+                            Ok(_) => break,
+                            Err(e) => Err(e),
+                        },
                         Stage::Successful => match q.delete_switchover(&self.etcd).await {
                             Ok(_) => break,
                             Err(e) => Err(e),
                         },
-                        _ => break,
                     };
                     match result {
                         Ok(_) => {
-                            // reset retry delay back to the start.
-                            retry_delay = retry_delay_min;
+                            // reset retry count back to the start after successfully completing a
+                            // stage.
+                            q.retry_count = 0;
                         }
                         Err(_) => {
-                            retry_delay = (retry_delay * 3).min(retry_delay_max);
-                            tokio::time::sleep(retry_delay).await;
+                            info!(volume.uuid=%q.volume_id, "Sending failed Switchover request back to the channel");
+                            q.retry_count += 1;
+                            self.enqueue(q);
+                            break;
                         }
                     }
                 }
@@ -306,10 +346,22 @@ impl SwitchOverEngine {
         }
     }
 
-    pub fn initiate(&self, req: SwitchOverRequest) -> anyhow::Result<()> {
-        self.channel
-            .send(req)
-            .map_err(|error| anyhow::anyhow!("Failed to send switchover request: {error}"))
+    /// Sends Switchover request to the Channel after sleeping for a specified duration if
+    /// specified.
+    pub fn enqueue(&self, req: SwitchOverRequest) {
+        let errored_request = req.retry_count > 0;
+        let retry_delay = if req.retry_count < ReQueue::NumFast as u64 {
+            ReQueue::Fast as u64
+        } else {
+            ReQueue::Slow as u64
+        };
+        let tx_clone = self.channel.clone();
+        tokio::spawn(async move {
+            if errored_request {
+                tokio::time::sleep(Duration::from_secs(retry_delay)).await;
+            }
+            tx_clone.send(req)
+        });
     }
 }
 
@@ -322,7 +374,27 @@ impl From<&SwitchOverRequest> for SwitchOverSpec {
             operation: Some(op),
             timestamp: req.timestamp,
             existing_nqn: req.existing_nqn.clone(),
-            new_path: None,
+            new_path: req.new_path.clone(),
+            retry_count: req.retry_count,
+        }
+    }
+}
+
+impl From<&SwitchOverSpec> for SwitchOverRequest {
+    fn from(req: &SwitchOverSpec) -> Self {
+        let mut stage = Stage::Init;
+        if let Some(op) = req.operation() {
+            stage = op.into();
+        }
+
+        Self {
+            callback_uri: req.callback_uri,
+            volume_id: req.volume.clone(),
+            stage,
+            timestamp: req.timestamp,
+            existing_nqn: req.existing_nqn.clone(),
+            new_path: req.new_path.clone(),
+            retry_count: req.retry_count,
         }
     }
 }
@@ -349,24 +421,6 @@ impl From<Operation> for Stage {
             Operation::DeleteTarget => Stage::DeleteTarget,
             Operation::Successful => Stage::Successful,
             Operation::Errored(_) => Stage::Errored,
-        }
-    }
-}
-
-impl From<&SwitchOverSpec> for SwitchOverRequest {
-    fn from(req: &SwitchOverSpec) -> Self {
-        let mut stage = Stage::Init;
-        if let Some(op) = req.operation() {
-            stage = op.into();
-        }
-
-        Self {
-            callback_uri: req.callback_uri,
-            volume_id: req.volume.clone(),
-            stage,
-            timestamp: req.timestamp,
-            existing_nqn: req.existing_nqn.clone(),
-            new_path: None,
         }
     }
 }
