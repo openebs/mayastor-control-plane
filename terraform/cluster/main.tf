@@ -15,11 +15,13 @@ module "provider" {
   source = "./mod/libvirt"
 
   # lxd and libvirt
-  ssh_user  = local.ssh_user
-  ssh_key   = local.ssh_key_pub
-  num_nodes = var.num_nodes
-  memory    = var.memory
-  vcpu      = var.vcpu
+  ssh_user      = local.ssh_user
+  ssh_key       = local.ssh_key_pub
+  num_nodes     = var.num_nodes
+  worker_memory = var.worker_memory
+  worker_vcpu   = var.worker_vcpu
+  master_memory = var.master_memory
+  master_vcpu   = var.master_vcpu
 
   # libvirt
   image_path         = var.image_path

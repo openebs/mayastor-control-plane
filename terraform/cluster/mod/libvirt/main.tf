@@ -2,8 +2,10 @@
 
 variable "image_path" {}
 variable "num_nodes" {}
-variable "memory" {}
-variable "vcpu" {}
+variable "worker_memory" {}
+variable "worker_vcpu" {}
+variable "master_memory" {}
+variable "master_vcpu" {}
 variable "hostname_formatter" {}
 variable "ssh_user" {}
 variable "ssh_key" {}
@@ -125,8 +127,8 @@ resource "libvirt_cloudinit_disk" "commoninit" {
 resource "libvirt_domain" "ubuntu-domain" {
   count     = var.num_nodes
   name      = format(var.hostname_formatter, count.index + 1)
-  memory    = var.memory
-  vcpu      = var.vcpu
+  memory    = count.index == 0 ? var.master_memory : var.worker_memory
+  vcpu      = count.index == 0 ? var.master_vcpu : var.worker_vcpu
   autostart = true
 
   cloudinit = libvirt_cloudinit_disk.commoninit[count.index].id
