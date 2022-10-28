@@ -76,16 +76,28 @@ variable "nr_hugepages" {
   default     = "1024"
 }
 
-variable "memory" {
+variable "worker_memory" {
   type        = number
   default     = 6144
-  description = "Amount of memory (MiB) allocated to each node - only needed for libvirt provider"
+  description = "Amount of memory (MiB) allocated to each worker node - only needed for libvirt provider"
 }
 
-variable "vcpu" {
+variable "worker_vcpu" {
   type        = number
   default     = 3
-  description = "Virtual CPUs allocated to each node - only needed for libvirt provider"
+  description = "Virtual CPUs allocated to each worker node - only needed for libvirt provider"
+}
+
+variable "master_memory" {
+  type        = number
+  default     = 3192
+  description = "Amount of memory (MiB) allocated to the master node - only needed for libvirt provider"
+}
+
+variable "master_vcpu" {
+  type        = number
+  default     = 2
+  description = "Virtual CPUs allocated to the master node - only needed for libvirt provider"
 }
 
 variable "kubernetes_version" {
