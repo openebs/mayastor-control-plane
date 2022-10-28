@@ -180,6 +180,9 @@ elif [ $(echo "$IMAGES" | wc -w) == "1" ]; then
     if [ "$INCREMENTAL" == "true" ]; then
       # if we're building a single image incrementally, then build only that image
       ALL_IN_ONE="false"
+      # until https://github.com/nix-community/naersk/issues/127 is fixed we have to
+      # use singleStep as true, so no incremental builds :(
+      INCREMENTAL="false"
     fi
   fi
 fi

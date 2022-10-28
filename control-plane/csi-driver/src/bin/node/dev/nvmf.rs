@@ -9,6 +9,7 @@ use nvmeadm::{
     nvmf_discovery::{disconnect, ConnectArgsBuilder},
 };
 
+use csi_driver::PublishParams;
 use glob::glob;
 use regex::Regex;
 use tracing::debug;
@@ -35,6 +36,7 @@ pub(super) struct NvmfAttach {
     nqn: String,
     io_timeout: Option<u32>,
     nr_io_queues: Option<u32>,
+    ctrl_loss_tmo: Option<u32>,
 }
 
 impl NvmfAttach {
@@ -44,6 +46,7 @@ impl NvmfAttach {
         uuid: Uuid,
         nqn: String,
         nr_io_queues: Option<u32>,
+        ctrl_loss_tmo: Option<u32>,
     ) -> NvmfAttach {
         NvmfAttach {
             host,
@@ -52,6 +55,7 @@ impl NvmfAttach {
             nqn,
             io_timeout: None,
             nr_io_queues,
+            ctrl_loss_tmo,
         }
     }
 
@@ -105,6 +109,7 @@ impl TryFrom<&Url> for NvmfAttach {
         let port = url.port().unwrap_or(4420);
 
         let nr_io_queues = config().nvme().nr_io_queues();
+        let ctrl_loss_tmo = config().nvme().ctrl_loss_tmo();
 
         Ok(NvmfAttach::new(
             host.to_string(),
@@ -112,6 +117,7 @@ impl TryFrom<&Url> for NvmfAttach {
             uuid,
             segments[0].to_string(),
             nr_io_queues,
+            ctrl_loss_tmo,
         ))
     }
 }
@@ -122,11 +128,17 @@ impl Attach for NvmfAttach {
         &mut self,
         context: &HashMap<String, String>,
     ) -> Result<(), DeviceError> {
-        if let Some(val) = context.get("ioTimeout") {
-            self.io_timeout = Some(val.parse::<u32>().map_err(|_| {
-                DeviceError::new(&format!("Invalid io_timeout value: \"{}\"", val))
-            })?);
-        };
+        let publish_context = PublishParams::try_from(context)
+            .map_err(|error| DeviceError::new(&error.to_string()))?;
+
+        if let Some(val) = publish_context.io_timeout() {
+            self.io_timeout = Some(*val);
+        }
+        if let Some(val) = publish_context.ctrl_loss_tmo() {
+            self.ctrl_loss_tmo = Some(*val);
+        }
+
+        // todo: fold the nvme params into a node-specific publish context?
         let nvme_config = NvmeConfig::try_from(context as NvmeParseParams)?;
         if let Some(nr_io_queues) = nvme_config.nr_io_queues() {
             self.nr_io_queues = Some(nr_io_queues);
@@ -151,7 +163,7 @@ impl Attach for NvmfAttach {
             .traddr(&self.host)
             .trsvcid(self.port.to_string())
             .nqn(&self.nqn)
-            .ctrl_loss_tmo(self.io_timeout)
+            .ctrl_loss_tmo(self.ctrl_loss_tmo)
             .reconnect_delay(reconnect_delay)
             .nr_io_queues(self.nr_io_queues)
             .build()?;

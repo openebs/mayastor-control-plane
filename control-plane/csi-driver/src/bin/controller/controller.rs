@@ -7,6 +7,10 @@ use common_lib::types::v0::openapi::models::{
 use rpc::csi::{Topology as CsiTopology, *};
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
+use csi_driver::{
+    context::{CreateParams, PublishParams},
+    Parameters,
+};
 use regex::Regex;
 use std::collections::HashMap;
 use tonic::{Response, Status};
@@ -16,21 +20,9 @@ use uuid::Uuid;
 const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
-const SUPPORTED_FS_TYPES: [&str; 2] = ["ext4", "xfs"];
-
-const IO_TIMEOUT: &str = "ioTimeout";
 
 #[derive(Debug, Default)]
 pub(crate) struct CsiControllerSvc {}
-
-/// Check whether the passed fs type is supported or not,
-/// if not provided we call it valid as fsType is an optional parameter
-fn valid_fs_type(fs_type: Option<&String>) -> bool {
-    match fs_type {
-        Some(fs) => SUPPORTED_FS_TYPES.iter().any(|p| p == fs),
-        None => true,
-    }
-}
 
 /// Check whether target volume capabilities are valid. As of now, only
 /// SingleNodeWriter capability is supported.
@@ -189,40 +181,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             }
         };
 
-        // Check filesystem type.
-        if !valid_fs_type(args.parameters.get("fsType")) {
-            return Err(Status::invalid_argument("Invalid filesystem type"));
-        }
-
-        // Check storage protocol.
-        let protocol = parse_protocol(args.parameters.get("protocol"))?;
-
-        // Check I/O timeout.
-        if let Some(io_timeout) = args.parameters.get(IO_TIMEOUT) {
-            if protocol != VolumeShareProtocol::Nvmf {
-                return Err(Status::invalid_argument(
-                    "I/O timeout is valid only for nvmf protocol",
-                ));
-            }
-            if io_timeout.parse::<u64>().is_err() {
-                return Err(Status::invalid_argument("Invalid I/O timeout"));
-            }
-        }
-
-        let replica_count: u8 = match args.parameters.get("repl") {
-            Some(c) => match c.parse::<u8>() {
-                Ok(c) => {
-                    if c == 0 {
-                        return Err(Status::invalid_argument(
-                            "Replica count must be greater than zero",
-                        ));
-                    }
-                    c
-                }
-                Err(_) => return Err(Status::invalid_argument("Invalid replica count")),
-            },
-            None => 1,
-        };
+        let context = CreateParams::try_from(&args.parameters)?;
+        let replica_count = context.replica_count();
 
         let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
 
@@ -420,8 +380,16 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let mut publish_context = HashMap::new();
         publish_context.insert("uri".to_string(), uri);
 
-        if let Some(io_timeout) = args.volume_context.get(IO_TIMEOUT) {
-            publish_context.insert(IO_TIMEOUT.to_string(), io_timeout.to_string());
+        let context = PublishParams::try_from(&args.volume_context)?;
+
+        if let Some(io_timeout) = context.io_timeout() {
+            publish_context.insert(Parameters::IoTimeout.to_string(), io_timeout.to_string());
+        }
+        if let Some(ctrl_loss_tmo) = context.ctrl_loss_tmo() {
+            publish_context.insert(
+                Parameters::NvmeCtrlLossTmo.to_string(),
+                ctrl_loss_tmo.to_string(),
+            );
         }
 
         debug!(

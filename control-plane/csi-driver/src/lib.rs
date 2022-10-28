@@ -45,8 +45,14 @@ pub const CSI_NODE_TOPOLOGY_VAL: &str = "mayastor";
 /// The nodename key assigned to each node.
 pub const NODE_NAME_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 
+/// Volume Parameters parsed from context.
+pub use context::{CreateParams, Parameters, PublishParams};
+
 /// The node plugin exported components.
 pub mod node;
 
 /// The csi driver components.
 pub use rpc::csi;
+
+/// The volume contexts.
+pub mod context;
