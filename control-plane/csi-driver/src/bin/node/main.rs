@@ -145,12 +145,20 @@ async fn main_() -> anyhow::Result<()> {
                 .help("Sets the global nvme_core module io_timeout, in seconds"),
         )
         .arg(
-            Arg::with_name("nvme-nr-io-queues")
-                .long("nvme-nr-io-queues")
+            Arg::with_name(Box::leak(crate::config::nvme_nr_io_queues().into_boxed_str()))
+                .long(&crate::config::nvme_nr_io_queues())
                 .value_name("NUMBER")
                 .takes_value(true)
                 .required(false)
                 .help("Sets the nvme-nr-io-queues parameter when connecting to a volume target"),
+        )
+        .arg(
+            Arg::with_name(Box::leak(crate::config::nvme_ctrl_loss_tmo().into_boxed_str()))
+                .long(&crate::config::nvme_ctrl_loss_tmo())
+                .value_name("NUMBER")
+                .takes_value(true)
+                .required(false)
+                .help("Sets the nvme-ctrl-loss-tmo parameter when connecting to a volume target. (May be overridden through the storage class)"),
         )
         .arg(
             Arg::with_name("node-selector")

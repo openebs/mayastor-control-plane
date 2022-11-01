@@ -36,6 +36,9 @@ tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = { version = "0.1.7", features = ["net"] }
 clap = "2.33.3"
 nix = "0.22.3"
+strum = "0.21.0"
+strum_macros = "0.21.1"
+heck = "0.4.0"
 
 # Tracing
 tracing = "0.1.35"

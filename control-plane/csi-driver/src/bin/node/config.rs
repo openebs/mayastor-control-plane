@@ -1,11 +1,19 @@
 use clap::ArgMatches;
+use csi_driver::Parameters;
+use heck::ToKebabCase;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, MutexGuard},
 };
 
-/// Number of Nvme IO Queues.
-pub(crate) const NVME_NR_IO_QUEUES_NAME: &str = "nvme-nr-io-queues";
+/// Command line arg name for `Parameters::NvmeNrIoQueues`.
+pub fn nvme_nr_io_queues() -> String {
+    Parameters::NvmeNrIoQueues.as_ref().to_kebab_case()
+}
+/// Command line arg name for `Parameters::NvmeCtrlLossTmo`.
+pub fn nvme_ctrl_loss_tmo() -> String {
+    Parameters::NvmeCtrlLossTmo.as_ref().to_kebab_case()
+}
 
 /// Global configuration parameters.
 #[derive(Debug, Default)]
@@ -27,14 +35,24 @@ impl Config {
 #[derive(Debug, Default)]
 pub(crate) struct NvmeConfig {
     nr_io_queues: Option<u32>,
+    /// Default value for `ctrl_loss_tmo` when not specified via the volume parameters (sc).
+    ctrl_loss_tmo: Option<u32>,
 }
 impl NvmeConfig {
-    fn new(nr_io_queues: Option<u32>) -> Self {
-        Self { nr_io_queues }
+    fn new(nr_io_queues: Option<u32>, ctrl_loss_tmo: Option<u32>) -> Self {
+        Self {
+            nr_io_queues,
+            ctrl_loss_tmo,
+        }
     }
     /// Number of IO Queues.
     pub(crate) fn nr_io_queues(&self) -> Option<u32> {
         self.nr_io_queues
+    }
+    /// The `ctrl_loss_tmo` value.
+    /// Used to setup the max number of reconnects until the initiator gives up.
+    pub(crate) fn ctrl_loss_tmo(&self) -> Option<u32> {
+        self.ctrl_loss_tmo
     }
 }
 
@@ -46,35 +64,46 @@ pub(crate) fn config<'a>() -> MutexGuard<'a, Config> {
     CONFIG.lock().expect("not poisoned")
 }
 
-/// Nvme Arg Values taken from the command line
+/// Nvme-specific configuration values.
 #[derive(Default)]
 pub(crate) struct NvmeArgValues(HashMap<String, String>);
 impl TryFrom<NvmeArgValues> for NvmeConfig {
     type Error = anyhow::Error;
     fn try_from(src: NvmeArgValues) -> Result<Self, Self::Error> {
-        let nvme_nr_ioq = match src.0.get(NVME_NR_IO_QUEUES_NAME) {
-            None => None,
-            Some(value) => {
-                let value = value.parse::<u32>().map_err(|error| {
-                    anyhow::anyhow!(
-                        "Invalid value for {}, error = {}",
-                        NVME_NR_IO_QUEUES_NAME,
-                        error
-                    )
-                })?;
-                Some(value)
-            }
-        };
-        Ok(Self::new(nvme_nr_ioq))
+        let nvme_nr_ioq = Parameters::nr_io_queues(src.0.get(Parameters::NvmeNrIoQueues.as_ref()))
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "Invalid value for {}, error = {}",
+                    Parameters::NvmeNrIoQueues.as_ref(),
+                    error
+                )
+            })?;
+        let ctrl_loss_tmo = Parameters::ctrl_loss_tmo(
+            src.0.get(Parameters::NvmeCtrlLossTmo.as_ref()),
+        )
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Invalid value for {}, error = {}",
+                Parameters::NvmeCtrlLossTmo.as_ref(),
+                error
+            )
+        })?;
+        Ok(Self::new(nvme_nr_ioq, ctrl_loss_tmo))
     }
 }
-/// Nvme Arguments taken from the CSI volume calls (storage class parameters)
+/// Nvme Arguments taken from the CSI volume calls (storage class parameters).
 pub(crate) type NvmeParseParams<'a> = &'a HashMap<String, String>;
 impl TryFrom<NvmeParseParams<'_>> for NvmeArgValues {
     type Error = anyhow::Error;
-    fn try_from(_value: NvmeParseParams) -> Result<Self, Self::Error> {
-        // nothing parsed for now
-        Ok(Default::default())
+    fn try_from(value: NvmeParseParams) -> Result<Self, Self::Error> {
+        fn add_param(from: &NvmeParseParams, to: &mut NvmeArgValues, name: &str) {
+            if let Some(value) = from.get(name) {
+                to.0.insert(name.to_string(), value.to_string());
+            }
+        }
+        let mut us = Self::default();
+        add_param(&value, &mut us, Parameters::NvmeCtrlLossTmo.as_ref());
+        Ok(us)
     }
 }
 impl TryFrom<NvmeParseParams<'_>> for NvmeConfig {
@@ -87,9 +116,14 @@ impl TryFrom<&ArgMatches<'_>> for NvmeArgValues {
     type Error = anyhow::Error;
     fn try_from(matches: &ArgMatches<'_>) -> Result<Self, Self::Error> {
         let mut map = NvmeArgValues::default();
-        if let Some(value) = matches.value_of(NVME_NR_IO_QUEUES_NAME) {
+        if let Some(value) = matches.value_of(nvme_nr_io_queues()) {
             map.0
-                .insert(NVME_NR_IO_QUEUES_NAME.into(), value.to_string());
+                .insert(Parameters::NvmeNrIoQueues.to_string(), value.to_string());
+        }
+
+        if let Some(value) = matches.value_of(nvme_ctrl_loss_tmo()) {
+            map.0
+                .insert(Parameters::NvmeCtrlLossTmo.to_string(), value.to_string());
         }
         Ok(map)
     }
