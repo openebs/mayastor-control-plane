@@ -118,11 +118,37 @@ fn drain_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
 impl Cordoning for Node {
     type ID = NodeId;
     async fn cordon(id: &Self::ID, label: &str, output: &OutputFormat) {
-        match RestClient::client()
-            .nodes_api()
-            .put_node_cordon(id, label)
-            .await
-        {
+        // is node already cordoned with the label?
+        let already_has_cordon_label: bool =
+            match RestClient::client().nodes_api().get_node(id).await {
+                Ok(node) => {
+                    let node_body = &node.into_body();
+                    match &node_body.spec {
+                        Some(spec) => match &spec.cordondrainstate {
+                            Some(ds) => cordon_labels_from_state(ds).contains(&label.to_string()),
+                            None => false,
+                        },
+                        None => {
+                            println!("Node {} is not registered", id);
+                            return;
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("Failed to get node {}. Error {}", id, e);
+                    return;
+                }
+            };
+        let result = match already_has_cordon_label {
+            false => {
+                RestClient::client()
+                    .nodes_api()
+                    .put_node_cordon(id, label)
+                    .await
+            }
+            true => RestClient::client().nodes_api().get_node(id).await,
+        };
+        match result {
             Ok(node) => match output {
                 OutputFormat::Yaml | OutputFormat::Json => {
                     // Print json or yaml based on output format.
@@ -378,19 +404,44 @@ impl Drain for Node {
         if let Some(dt) = drain_timeout {
             timeout_instant = time::Instant::now().checked_add(dt.into());
         }
-        match RestClient::client()
-            .nodes_api()
-            .put_node_drain(id, &label)
-            .await
-        {
-            Ok(_node) => {
-                // loop this call until no longer draining
-                loop {
-                    match RestClient::client().nodes_api().get_node(id).await {
-                        Ok(node) => {
-                            let node_body = &node.clone().into_body();
-
-                            match &node_body.spec.as_ref().unwrap().cordondrainstate {
+        let already_has_drain_label: bool =
+            match RestClient::client().nodes_api().get_node(id).await {
+                Ok(node) => {
+                    let node_body = &node.into_body();
+                    match &node_body.spec {
+                        Some(spec) => match &spec.cordondrainstate {
+                            Some(ds) => drain_labels_from_state(ds).contains(&label),
+                            None => false,
+                        },
+                        None => {
+                            println!("Node {} is not registered", id);
+                            return;
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("Failed to get node {}. Error {}", id, e);
+                    return;
+                }
+            };
+        if !already_has_drain_label {
+            if let Err(error) = RestClient::client()
+                .nodes_api()
+                .put_node_drain(id, &label)
+                .await
+            {
+                println!("Failed to put node drain {}. Error {}", id, error);
+                return;
+            }
+        }
+        // loop this call until no longer draining
+        loop {
+            match RestClient::client().nodes_api().get_node(id).await {
+                Ok(node) => {
+                    let node_body = &node.clone().into_body();
+                    match &node_body.spec {
+                        Some(spec) => {
+                            match &spec.cordondrainstate {
                                 Some(ds) => match ds {
                                     CordonDrainState::cordonedstate(_) => {
                                         match output {
@@ -432,23 +483,23 @@ impl Drain for Node {
                                 }
                             }
                         }
-                        Err(e) => {
-                            println!("Failed to get node {}. Error {}", id, e);
+                        None => {
+                            println!("Node {} is not registered", id);
                             break;
                         }
                     }
-                    if timeout_instant.is_some() && time::Instant::now() > timeout_instant.unwrap()
-                    {
-                        println!("Node {} drain command timed out", id);
-                        break;
-                    }
-                    let sleep = Duration::from_secs(1);
-                    tokio::time::sleep(sleep).await;
+                }
+                Err(e) => {
+                    println!("Failed to get node {}. Error {}", id, e);
+                    break;
                 }
             }
-            Err(e) => {
-                println!("Failed to get node {}. Error {}", id, e)
+            if timeout_instant.is_some() && time::Instant::now() > timeout_instant.unwrap() {
+                println!("Node {} drain command timed out", id);
+                break;
             }
+            let sleep = Duration::from_secs(2);
+            tokio::time::sleep(sleep).await;
         }
     }
 }
