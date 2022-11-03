@@ -420,7 +420,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let older_nexus_id = older_nexus.uuid().clone();
         // shutdown the older nexus before newer nexus creation.
         let result = older_nexus
-            .shutdown(registry, &ShutdownNexus::new(older_nexus_id))
+            .shutdown(registry, &ShutdownNexus::new(older_nexus_id, true))
             .await;
         self.validate_update_step(registry, result, &spec_clone)
             .await?;

@@ -259,21 +259,33 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
         request: &Self::Shutdown,
     ) -> Result<(), SvcError> {
         let node_id = self.as_ref().node.clone();
-        let node = registry.get_node_wrapper(&node_id).await?;
-        let nexus_state = match node.nexus(self.uuid()).await {
-            None => Nexus::from(self.as_ref()),
-            Some(state) => state,
+        let node = match registry.get_node_wrapper(&node_id).await {
+            Err(error) if !request.lazy() => Err(error),
+            other => Ok(other),
+        }?;
+
+        let nexus_state = match &node {
+            Ok(node) => match node.nexus(self.uuid()).await {
+                None => Nexus::from(self.as_ref()),
+                Some(state) => state,
+            },
+            _ => Nexus::from(self.as_ref()),
         };
 
         let mut spec_clone = self
             .start_update(registry, &nexus_state, NexusOperation::Shutdown)
             .await?;
 
-        let result = node.shutdown_nexus(request).await;
+        let result = match node {
+            Ok(node) => node.shutdown_nexus(request).await,
+            _ => Err(SvcError::NodeNotOnline {
+                node: node_id.to_owned(),
+            }),
+        };
         if let Err(error) = result.as_ref() {
             tracing::warn!(
                 %error,
-                node.id = %node_id.as_str(),
+                node.id = %node_id,
                 nexus.uuid = %self.uuid().as_str(),
                 "Ignoring failure to complete the nexus shutdown request",
             );
