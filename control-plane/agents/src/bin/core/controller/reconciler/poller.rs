@@ -2,8 +2,8 @@ use crate::controller::{
     reconciler::{nexus, persistent_store::PersistentStoreReconciler, pool, replica, volume},
     registry::Registry,
     task_poller::{
-        squash_results, PollContext, PollEvent, PollResult, PollTriggerEvent, PollerState,
-        TaskPoller,
+        squash_results, PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent,
+        PollerState, TaskPoller,
     },
 };
 
@@ -104,5 +104,9 @@ impl ReconcilerWorker {
         }
         tracing::trace!("Leaving the reconcile loop...");
         squash_results(results)
+    }
+
+    pub(crate) fn garbage_collection_period() -> PollTimer {
+        PollTimer::from(5)
     }
 }

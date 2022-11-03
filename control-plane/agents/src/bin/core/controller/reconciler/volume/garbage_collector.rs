@@ -8,7 +8,10 @@ use crate::controller::{
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 
-use crate::controller::resources::{operations::ResourceOwnerUpdate, ResourceMutex, ResourceUid};
+use crate::controller::{
+    reconciler::poller::ReconcilerWorker,
+    resources::{operations::ResourceOwnerUpdate, ResourceMutex, ResourceUid},
+};
 use agents::errors::SvcError;
 use common_lib::types::v0::{
     store::{
@@ -27,7 +30,7 @@ impl GarbageCollector {
     /// Return a new `Self`.
     pub(super) fn new() -> Self {
         Self {
-            counter: PollTimer::from(5),
+            counter: ReconcilerWorker::garbage_collection_period(),
         }
     }
 }

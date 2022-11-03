@@ -218,6 +218,20 @@ pub enum SvcError {
     InvalidApiVersion { api_version: Option<ApiVersion> },
 }
 
+impl SvcError {
+    /// Get comparable `tonic::Code`.
+    /// todo: use existing conversion Self->ReplyError->tonic instead.
+    pub fn tonic_code(&self) -> tonic::Code {
+        match self {
+            Self::NotFound { .. } => tonic::Code::NotFound,
+            Self::AlreadyExists { .. } => tonic::Code::AlreadyExists,
+            Self::GrpcRequestError { source, .. } => source.code(),
+            Self::Internal { .. } => tonic::Code::Internal,
+            _ => tonic::Code::Internal,
+        }
+    }
+}
+
 impl From<StoreError> for SvcError {
     fn from(source: StoreError) -> Self {
         match source {

@@ -82,18 +82,26 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<NexusSpec>> {
         registry: &Registry,
         request: &Self::Destroy,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = match registry.get_node_wrapper(&request.node).await {
+            Err(error) if !request.lazy() => Err(error),
+            other => Ok(other),
+        }?;
 
         if let Some(nexus) = self {
             nexus
                 .start_destroy_by(registry, request.disowners())
                 .await?;
 
-            let result = node.destroy_nexus(request).await;
+            let result = match node {
+                Ok(node) => node.destroy_nexus(request).await,
+                _ => Err(SvcError::NodeNotOnline {
+                    node: request.node.to_owned(),
+                }),
+            };
             registry.specs().on_delete_disown_replicas(nexus);
             nexus.complete_destroy(result, registry).await
         } else {
-            node.destroy_nexus(request).await
+            node?.destroy_nexus(request).await
         }
     }
 }

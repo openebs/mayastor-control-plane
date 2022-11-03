@@ -4,6 +4,7 @@ mod capacity;
 mod garbage_collection;
 mod helpers;
 mod hotspare;
+mod switchover;
 
 use common_lib::{
     store::etcd::Etcd,
