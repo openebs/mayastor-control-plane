@@ -188,6 +188,8 @@ message RepublishVolumeRequest {
   optional string target_node = 2;
   // share protocol
   VolumeShareProtocol share = 3;
+  // Republish without reusing older nexus.
+  bool force = 4;
 }
 
 // Unpublish a volume from any node where it may be published

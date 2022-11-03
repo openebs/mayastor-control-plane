@@ -156,6 +156,7 @@ impl apis::actix_server::Volumes for RestApi {
                             uuid: volume_id.into(),
                             target_node: node.map(|id| id.into()),
                             share: protocol.into(),
+                            force: false,
                         },
                         None,
                     )

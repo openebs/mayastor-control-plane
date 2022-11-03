@@ -25,10 +25,13 @@ use common_lib::{
 use garbage_collector::GarbageCollector;
 
 use crate::controller::{
-    reconciler::{ReCreate, Reconciler},
+    reconciler::{PollTriggerEvent, ReCreate, Reconciler},
+    registry::Registry,
     resources::{operations::ResourceSharing, OperationGuardArc, TraceSpan, TraceStrLog},
+    task_poller::PollEvent,
     wrapper::NodeWrapper,
 };
+use agents::errors::SvcError;
 use common_lib::types::v0::transport::{FaultNexusChild, NexusStatus};
 use std::{convert::TryFrom, sync::Arc};
 use tokio::sync::RwLock;
@@ -274,6 +277,21 @@ pub(super) async fn missing_children_remover(
     }
 
     result
+}
+
+/// Recreate the given nexus on its associated node.
+pub(crate) async fn nexus_recreate(
+    registry: &Registry,
+    nexus: &mut OperationGuardArc<NexusSpec>,
+) -> Result<(), SvcError> {
+    let poll_context = PollContext::from(
+        &PollEvent::Triggered(PollTriggerEvent::VolumeRepublish),
+        registry,
+    );
+    match missing_nexus_recreate(nexus, &poll_context).await {
+        Ok(_) => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 /// Recreate the given nexus on its associated node

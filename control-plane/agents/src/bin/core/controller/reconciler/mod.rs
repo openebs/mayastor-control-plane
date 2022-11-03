@@ -1,4 +1,4 @@
-mod nexus;
+pub(crate) mod nexus;
 mod persistent_store;
 pub(crate) mod poller;
 mod pool;

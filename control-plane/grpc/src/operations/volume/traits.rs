@@ -1078,6 +1078,8 @@ pub trait RepublishVolumeInfo: Send + Sync + std::fmt::Debug {
     fn target_node(&self) -> Option<NodeId>;
     /// The protocol over which volume be published
     fn share(&self) -> VolumeShareProtocol;
+    /// Republish without reusing older nexus.
+    fn force(&self) -> bool;
 }
 
 impl RepublishVolumeInfo for RepublishVolume {
@@ -1092,6 +1094,10 @@ impl RepublishVolumeInfo for RepublishVolume {
     fn share(&self) -> VolumeShareProtocol {
         self.share
     }
+
+    fn force(&self) -> bool {
+        self.force
+    }
 }
 
 impl From<&dyn RepublishVolumeInfo> for RepublishVolume {
@@ -1100,6 +1106,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolume {
             uuid: data.uuid(),
             target_node: data.target_node(),
             share: data.share(),
+            force: data.force(),
         }
     }
 }
@@ -1111,6 +1118,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolumeRequest {
             uuid: Some(data.uuid().to_string()),
             target_node: data.target_node().map(|node_id| node_id.to_string()),
             share: protocol as i32,
+            force: data.force(),
         }
     }
 }
@@ -1137,6 +1145,10 @@ impl RepublishVolumeInfo for ValidatedRepublishVolumeRequest {
 
     fn share(&self) -> VolumeShareProtocol {
         self.share
+    }
+
+    fn force(&self) -> bool {
+        self.inner.force
     }
 }
 

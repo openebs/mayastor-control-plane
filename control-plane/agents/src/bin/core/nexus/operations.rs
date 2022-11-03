@@ -290,6 +290,9 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
                 node: node_id.to_owned(),
             }),
         };
+
+        let mut shutdown_failed: bool = false;
+
         if let Err(error) = result.as_ref() {
             tracing::warn!(
                 %error,
@@ -297,13 +300,20 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
                 nexus.uuid = %self.uuid().as_str(),
                 "Ignoring failure to complete the nexus shutdown request",
             );
+            match error {
+                SvcError::NexusNotFound { .. } => {
+                    shutdown_failed = false;
+                }
+                _ => {
+                    shutdown_failed = true;
+                }
+            }
         }
+
         // The shutdown_failed flag denotes the shutdown was not completed and hence we
         // need this information later to decide whether to put a local replica from the nexus
         // or not.
-        spec_clone.status_info = result
-            .as_ref()
-            .map_or(NexusStatusInfo::new(true), |_| NexusStatusInfo::new(false));
+        spec_clone.status_info = NexusStatusInfo::new(shutdown_failed);
         // TODO: FIXME Add separate complete_op.
         self.lock().status_info = spec_clone.status_info().clone();
 
