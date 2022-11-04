@@ -1043,18 +1043,14 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         self.update_nexus_states(ctx.deref_mut()).await?;
         match result {
             Ok(()) => Ok(()),
-            Err(error) => {
-                // return Ok if nexus with the requested uuid already doesn't exists
-                if self.read().await.nexus(&request.uuid).is_none() {
-                    tracing::warn!(
-                        "Trying to destroy nexus '{}' which is already destroyed.Ok",
-                        request.uuid,
-                    );
-                    Ok(())
-                } else {
-                    Err(error)
-                }
+            Err(error) if error.tonic_code() == tonic::Code::NotFound => {
+                tracing::warn!(
+                    nexus.uuid = %request.uuid,
+                    "Trying to destroy nexus which is already destroyed",
+                );
+                Ok(())
             }
+            Err(error) => Err(error),
         }
     }
 

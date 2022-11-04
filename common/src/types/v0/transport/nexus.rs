@@ -401,6 +401,9 @@ pub struct DestroyNexus {
     pub uuid: NexusId,
     /// Nexus disowners.
     disowners: NexusOwners,
+    /// Sets the nexus spec to deleting even if the node is offline.
+    /// The reconcilers will pick up the slack.
+    lazy: bool,
 }
 impl DestroyNexus {
     /// Create new `Self` from the given node and nexus id's.
@@ -409,7 +412,17 @@ impl DestroyNexus {
             node,
             uuid,
             disowners: NexusOwners::None,
+            lazy: false,
         }
+    }
+    /// With lazy deletion.
+    pub fn with_lazy(mut self, lazy: bool) -> Self {
+        self.lazy = lazy;
+        self
+    }
+    /// Get the lazy flag.
+    pub fn lazy(&self) -> bool {
+        self.lazy
     }
     /// Disown all owners.
     pub fn with_disown_all(mut self) -> Self {
@@ -433,16 +446,28 @@ impl DestroyNexus {
 pub struct ShutdownNexus {
     /// The uuid of the nexus.
     uuid: NexusId,
+    /// Shutdown the nexus spec even if the node is offline.
+    /// The reconcilers will pick up the slack.
+    lazy: bool,
 }
 
 impl ShutdownNexus {
     /// Create a new `ShutdownNexus` using `uuid`.
-    pub fn new(uuid: NexusId) -> Self {
-        Self { uuid }
+    pub fn new(uuid: NexusId, lazy: bool) -> Self {
+        Self { uuid, lazy }
     }
     /// Get uuid of the nexus.
     pub fn uuid(&self) -> NexusId {
         self.uuid.clone()
+    }
+    /// With lazy shutdown.
+    pub fn with_lazy(mut self, lazy: bool) -> Self {
+        self.lazy = lazy;
+        self
+    }
+    /// Get the lazy flag.
+    pub fn lazy(&self) -> bool {
+        self.lazy
     }
 }
 

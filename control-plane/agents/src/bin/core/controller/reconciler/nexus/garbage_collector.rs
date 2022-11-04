@@ -1,5 +1,5 @@
 use crate::controller::{
-    reconciler::{GarbageCollect, PollContext, TaskPoller},
+    reconciler::{poller::ReconcilerWorker, GarbageCollect, PollContext, TaskPoller},
     resources::{
         operations::ResourceLifecycle,
         operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
@@ -19,7 +19,7 @@ impl GarbageCollector {
     /// Return a new `Self`
     pub(super) fn new() -> Self {
         Self {
-            counter: PollTimer::from(5),
+            counter: ReconcilerWorker::garbage_collection_period(),
         }
     }
 }
@@ -58,8 +58,8 @@ impl GarbageCollect for OperationGuardArc<NexusSpec> {
     async fn garbage_collect(&mut self, context: &PollContext) -> PollResult {
         GarbageCollector::squash_results(vec![
             self.disown_orphaned(context).await,
-            self.destroy_deleting(context).await,
             self.destroy_orphaned(context).await,
+            self.destroy_deleting(context).await,
         ])
     }
 

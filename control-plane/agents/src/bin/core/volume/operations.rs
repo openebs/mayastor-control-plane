@@ -420,7 +420,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let older_nexus_id = older_nexus.uuid().clone();
         // shutdown the older nexus before newer nexus creation.
         let result = older_nexus
-            .shutdown(registry, &ShutdownNexus::new(older_nexus_id))
+            .shutdown(registry, &ShutdownNexus::new(older_nexus_id, true))
             .await;
         self.validate_update_step(registry, result, &spec_clone)
             .await?;
@@ -522,7 +522,9 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
             match nexus_res.operation_guard_wait().await {
                 Ok(mut guard) => {
                     let nexus_spec = guard.as_ref().clone();
-                    let destroy_req = DestroyNexus::from(nexus_spec).with_disown(&request.uuid);
+                    let destroy_req = DestroyNexus::from(nexus_spec)
+                        .with_disown(&request.uuid)
+                        .with_lazy(true);
                     match guard.destroy(registry, &destroy_req).await {
                         Ok(_) => {
                             if self.as_ref().health_info_id() != Some(guard.uuid()) {
@@ -544,9 +546,7 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
                                 );
                                 // if we're not at least marked for deletion then we'll have to
                                 // get the cluster agent to retry..
-                                if !(guard.as_ref().status().deleting()
-                                    || guard.as_ref().status().deleted())
-                                {
+                                if !guard.lock().status().deleting_or_deleted() {
                                     result = Err(error);
                                 }
                             }

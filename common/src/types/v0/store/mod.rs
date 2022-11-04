@@ -45,17 +45,25 @@ impl<T> From<SpecStatus<T>> for models::SpecStatus {
 }
 
 impl<T: std::cmp::PartialEq> SpecStatus<T> {
+    /// Check if resource is being created.
     pub fn creating(&self) -> bool {
         self == &Self::Creating
     }
+    /// Check if resource is created.
     pub fn created(&self) -> bool {
         matches!(self, &Self::Created(_))
     }
+    /// Check if resource is being deleted.
     pub fn deleting(&self) -> bool {
         self == &Self::Deleting
     }
+    /// Check if resource is deleted.
     pub fn deleted(&self) -> bool {
         self == &Self::Deleted
+    }
+    /// Check if resource is being deleted or is deleted.
+    pub fn deleting_or_deleted(&self) -> bool {
+        self.deleting() || self.deleted()
     }
 }
 
