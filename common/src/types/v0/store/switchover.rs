@@ -58,6 +58,8 @@ pub struct SwitchOverSpec {
     pub existing_nqn: String,
     /// New nexus path.
     pub new_path: Option<String>,
+    /// Number of failed attempts in the current Stage.
+    pub retry_count: u64,
 }
 
 impl SwitchOverSpec {

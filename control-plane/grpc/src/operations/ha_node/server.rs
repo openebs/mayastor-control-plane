@@ -37,10 +37,7 @@ impl HaNodeRpc for NodeAgentServer {
 
         match self.service.replace_path(&msg, None).await {
             Ok(_) => Ok(Response::new(())),
-            Err(err) => Err(Status::internal(format!(
-                "Failed to replace failed NVMe path: {:?}",
-                err
-            ))),
+            Err(err) => Err(err.into()),
         }
     }
 }

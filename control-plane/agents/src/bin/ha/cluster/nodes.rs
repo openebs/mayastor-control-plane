@@ -61,7 +61,6 @@ impl NodeList {
         info!(node.id=%node, %path, "Sending switchover for path");
 
         if let Some(socket) = uri {
-            info!(node.id=%node, %path, "Sending switchover for path");
             mover.switchover(socket, path.clone()).await?;
             failed_path.insert(path, socket);
             Ok(())
