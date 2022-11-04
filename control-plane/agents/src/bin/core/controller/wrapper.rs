@@ -1142,9 +1142,18 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
     async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let _ = dataplane.shutdown_nexus(request).await?;
+        let result = dataplane.shutdown_nexus(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await
+        self.update_nexus_states(ctx.deref_mut()).await?;
+        match result {
+            Ok(()) => Ok(()),
+            Err(error) if error.tonic_code() == tonic::Code::NotFound => {
+                Err(SvcError::NexusNotFound {
+                    nexus_id: request.uuid().to_string(),
+                })
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 

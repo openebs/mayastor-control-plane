@@ -1078,8 +1078,8 @@ pub trait RepublishVolumeInfo: Send + Sync + std::fmt::Debug {
     fn target_node(&self) -> Option<NodeId>;
     /// The protocol over which volume be published
     fn share(&self) -> VolumeShareProtocol;
-    /// Republish without reusing older nexus.
-    fn force(&self) -> bool;
+    /// Republish reusing current target.
+    fn reuse_existing(&self) -> bool;
 }
 
 impl RepublishVolumeInfo for RepublishVolume {
@@ -1095,8 +1095,8 @@ impl RepublishVolumeInfo for RepublishVolume {
         self.share
     }
 
-    fn force(&self) -> bool {
-        self.force
+    fn reuse_existing(&self) -> bool {
+        self.reuse_existing
     }
 }
 
@@ -1106,7 +1106,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolume {
             uuid: data.uuid(),
             target_node: data.target_node(),
             share: data.share(),
-            force: data.force(),
+            reuse_existing: data.reuse_existing(),
         }
     }
 }
@@ -1118,7 +1118,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolumeRequest {
             uuid: Some(data.uuid().to_string()),
             target_node: data.target_node().map(|node_id| node_id.to_string()),
             share: protocol as i32,
-            force: data.force(),
+            reuse_existing: data.reuse_existing(),
         }
     }
 }
@@ -1147,8 +1147,8 @@ impl RepublishVolumeInfo for ValidatedRepublishVolumeRequest {
         self.share
     }
 
-    fn force(&self) -> bool {
-        self.inner.force
+    fn reuse_existing(&self) -> bool {
+        self.inner.reuse_existing
     }
 }
 

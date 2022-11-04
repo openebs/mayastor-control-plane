@@ -286,7 +286,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             &volume.state.uuid,
             models::VolumeShareProtocol::Nvmf,
             Some(io_engine1.as_str()),
-            Some(false),
+            None,
+            None,
         )
         .await
         .unwrap();

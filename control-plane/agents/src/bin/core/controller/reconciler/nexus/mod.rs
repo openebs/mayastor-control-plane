@@ -97,7 +97,7 @@ impl Reconciler for OperationGuardArc<NexusSpec> {
 #[async_trait::async_trait]
 impl ReCreate for OperationGuardArc<NexusSpec> {
     async fn recreate_state(&mut self, context: &PollContext) -> PollResult {
-        missing_nexus_recreate(self, context).await
+        missing_nexus_recreate(self, context, false).await
     }
 }
 
@@ -283,15 +283,14 @@ pub(super) async fn missing_children_remover(
 pub(crate) async fn nexus_recreate(
     registry: &Registry,
     nexus: &mut OperationGuardArc<NexusSpec>,
+    ignore_cache: bool,
 ) -> Result<(), SvcError> {
     let poll_context = PollContext::from(
         &PollEvent::Triggered(PollTriggerEvent::VolumeRepublish),
         registry,
     );
-    match missing_nexus_recreate(nexus, &poll_context).await {
-        Ok(_) => Ok(()),
-        Err(error) => Err(error),
-    }
+    missing_nexus_recreate(nexus, &poll_context, ignore_cache).await?;
+    Ok(())
 }
 
 /// Recreate the given nexus on its associated node
@@ -299,10 +298,11 @@ pub(crate) async fn nexus_recreate(
 pub(super) async fn missing_nexus_recreate(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
+    ignore_cache: bool,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
 
-    if context.registry().get_nexus(nexus_uuid).await.is_ok() {
+    if !ignore_cache && context.registry().get_nexus(nexus_uuid).await.is_ok() {
         return PollResult::Ok(PollerState::Idle);
     }
 

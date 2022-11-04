@@ -425,8 +425,8 @@ pub struct RepublishVolume {
     pub target_node: Option<NodeId>,
     /// Share protocol.
     pub share: VolumeShareProtocol,
-    /// Republish without reusing older nexus.
-    pub force: bool,
+    /// Allows reusing of the current target.
+    pub reuse_existing: bool,
 }
 impl RepublishVolume {
     /// Create new `RepublishVolume` based on the provided arguments.
@@ -434,13 +434,13 @@ impl RepublishVolume {
         uuid: VolumeId,
         target_node: Option<NodeId>,
         share: VolumeShareProtocol,
-        force: bool,
+        reuse_existing: bool,
     ) -> Self {
         Self {
             uuid,
             target_node,
             share,
-            force,
+            reuse_existing,
         }
     }
 }

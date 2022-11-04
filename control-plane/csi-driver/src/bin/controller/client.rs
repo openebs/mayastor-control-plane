@@ -283,12 +283,11 @@ impl IoEngineApiClient {
         volume_id: &uuid::Uuid,
         node: Option<&str>,
         protocol: VolumeShareProtocol,
-        republish: bool,
     ) -> Result<Volume, ApiClientError> {
         let volume = self
             .rest_client
             .volumes_api()
-            .put_volume_target(volume_id, protocol, node, Some(republish))
+            .put_volume_target(volume_id, protocol, node, None, None)
             .await?;
         Ok(volume.into_body())
     }
