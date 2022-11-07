@@ -1,5 +1,5 @@
 use crate::controller::{
-    reconciler::{nexus, persistent_store::PersistentStoreReconciler, pool, replica, volume},
+    reconciler::{nexus, node, persistent_store::PersistentStoreReconciler, pool, replica, volume},
     registry::Registry,
     task_poller::{
         squash_results, PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent,
@@ -32,6 +32,7 @@ impl ReconcilerWorker {
             Box::new(volume::VolumeReconciler::new()),
             Box::new(PersistentStoreReconciler::new()),
             Box::new(replica::ReplicaReconciler::new()),
+            Box::new(node::NodeReconciler::new()),
         ];
 
         // if events are sent before the worker is started they may fill up the buffer

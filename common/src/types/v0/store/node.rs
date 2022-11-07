@@ -112,6 +112,14 @@ impl CordonDrainState {
             CordonDrainState::Drained(_) => false,
         }
     }
+    /// Returns whether the state corresponds to drained.
+    pub fn is_drained(&self) -> bool {
+        match self {
+            CordonDrainState::Cordoned(_) => false,
+            CordonDrainState::Draining(_) => false,
+            CordonDrainState::Drained(_) => true,
+        }
+    }
 }
 
 /// Node information.
@@ -194,10 +202,39 @@ impl NodeSpec {
         self.endpoint = endpoint;
     }
 
+    /// Ensure the state is consistent with the labels.
+    pub fn resolve(&mut self) {
+        match &mut self.cordon_drain_state {
+            Some(ds) => match ds {
+                CordonDrainState::Cordoned(state) => {
+                    if state.cordonlabels.is_empty() {
+                        self.cordon_drain_state = None;
+                    }
+                }
+                CordonDrainState::Draining(state) | CordonDrainState::Drained(state) => {
+                    // the drain labels should not be empty, if not - fix the state
+                    if state.drainlabels.is_empty() {
+                        if state.cordonlabels.is_empty() {
+                            self.cordon_drain_state = None;
+                        } else {
+                            self.cordon_drain_state = Some(CordonDrainState::Cordoned(
+                                CordonedState::new(state.cordonlabels.clone()),
+                            ));
+                        }
+                    }
+                }
+            },
+            None => {}
+        }
+    }
+
     /// Cordon node by applying the label.
     pub fn cordon(&mut self, label: String) {
         match &mut self.cordon_drain_state {
-            Some(ds) => ds.add_cordon_label(&label),
+            Some(ds) => {
+                ds.add_cordon_label(&label);
+                self.resolve();
+            }
             None => {
                 //add the label and set the state to cordoned
                 self.cordon_drain_state = Some(CordonDrainState::cordon(&label));
@@ -235,36 +272,34 @@ impl NodeSpec {
             }
         }
     }
+
+    /// Move state from Draining to Drained, no change to the labels.
+    pub fn set_drained(&mut self) {
+        if let Some(CordonDrainState::Draining(state)) = &mut self.cordon_drain_state {
+            self.cordon_drain_state = Some(CordonDrainState::Drained(DrainState::new(
+                state.cordonlabels.clone(),
+                state.drainlabels.clone(),
+            )));
+            self.resolve();
+        }
+    }
+
     /// Uncordon node by removing the corresponding label.
     pub fn uncordon(&mut self, label: String) {
         match &mut self.cordon_drain_state {
             Some(ds) => match ds {
                 CordonDrainState::Cordoned(state) => {
-                    // remove the cordon label
-                    // if none left set ds to none
                     state.remove_label(&label);
-                    if state.cordonlabels.is_empty() {
-                        self.cordon_drain_state = None;
-                    }
                 }
                 CordonDrainState::Draining(state) | CordonDrainState::Drained(state) => {
-                    // if no drain labels left, set to cordoned or none
                     state.remove_label(&label);
-                    if state.drainlabels.is_empty() {
-                        if state.cordonlabels.is_empty() {
-                            self.cordon_drain_state = None;
-                        } else {
-                            self.cordon_drain_state = Some(CordonDrainState::Cordoned(
-                                CordonedState::new(state.cordonlabels.clone()),
-                            ));
-                        }
-                    }
                 }
             },
             None => {
                 // should not be possible
             }
         }
+        self.resolve();
     }
 
     /// Returns whether or not the node is cordoned.
@@ -297,6 +332,13 @@ impl NodeSpec {
     pub fn is_draining(&self) -> bool {
         match &self.cordon_drain_state {
             Some(ds) => ds.is_draining(),
+            None => false,
+        }
+    }
+    /// Returns true if the node is in the drained state.
+    pub fn is_drained(&self) -> bool {
+        match &self.cordon_drain_state {
+            Some(ds) => ds.is_drained(),
             None => false,
         }
     }
