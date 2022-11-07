@@ -142,6 +142,7 @@ async fn detach(uuid: &Uuid, errheader: String) -> Result<(), Status> {
     })? {
         let device_path = device.devname();
         debug!("Detaching device {}", device_path);
+
         if let Err(error) = device.detach().await {
             return Err(failure!(
                 Code::Internal,
