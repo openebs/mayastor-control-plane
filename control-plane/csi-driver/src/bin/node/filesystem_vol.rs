@@ -59,15 +59,21 @@ pub(crate) async fn stage_fs_volume(
         }
     };
 
-    if mount::find_mount(Some(device_path), Some(fs_staging_path)).is_some() {
+    if let Some(existing) = mount::find_mount(Some(device_path), Some(fs_staging_path)) {
         debug!(
             "Device {} is already mounted onto {}",
             device_path, fs_staging_path
         );
         info!(
-            "Volume {} is already staged to {}",
-            volume_id, fs_staging_path
+            %existing,
+            "Volume {} is already staged to {}", volume_id, fs_staging_path
         );
+
+        // todo: validate other flags?
+        if mnt.mount_flags.readonly() != existing.options.readonly() {
+            mount::remount(fs_staging_path, mnt.mount_flags.readonly())?;
+        }
+
         return Ok(());
     }
 
@@ -131,6 +137,32 @@ pub(crate) async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<
             "Unstaging filesystem volume {}, unmounting device {:?} from {}",
             volume_id, mount.source, fs_staging_path
         );
+        let device = mount.source.to_string_lossy().to_string();
+        let mounts = mount::find_src_mounts(&device, Some(fs_staging_path));
+        if let Some(unkown_mount) = mounts.first().cloned() {
+            for mount in mounts {
+                tracing::error!(
+                    volume.uuid = %volume_id,
+                    "Found unknown bind mount {} for device {:?}",
+                    device,
+                    mount.dest,
+                );
+            }
+
+            return Err(failure!(
+                Code::Internal,
+                "Failed to unstage volume {}: existing unknown bind mount {:?} for device {:?}",
+                volume_id,
+                unkown_mount.dest,
+                unkown_mount.source
+            ));
+        }
+
+        // Sometimes after/during disconnect we get some page write errors, triggered by a journal
+        // update by the JBD2 worker task. We don't really know how we can "flush" these
+        // tasks so at the moment the best solution we have is to remount the staging path
+        // as RO before we umount it for good, which seems to help.
+        mount::remount(fs_staging_path, true)?;
         if let Err(error) = mount::filesystem_unmount(fs_staging_path) {
             return Err(failure!(
                 Code::Internal,

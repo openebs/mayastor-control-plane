@@ -142,6 +142,7 @@ async fn detach(uuid: &Uuid, errheader: String) -> Result<(), Status> {
     })? {
         let device_path = device.devname();
         debug!("Detaching device {}", device_path);
+
         if let Err(error) = device.detach().await {
             return Err(failure!(
                 Code::Internal,
@@ -608,6 +609,12 @@ impl node_server::Node for Node {
         // at the staging directory and umounts if any are
         // found.
         unstage_fs_volume(&msg).await?;
+
+        // Sometimes when disconnecting we see page read errors due to ENXIO.
+        // There seems to be some race in the kernel when removing a device with queued IOs.
+        // While this is not strictly an issue, it may confuse or hide other problems.
+        // Sleeping between umount and disconnect seems to alleviate this.
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         // unmounts (if any) are complete.
         // If the device is attached, detach the device.

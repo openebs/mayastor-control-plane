@@ -51,6 +51,22 @@ pub(crate) fn find_mount(source: Option<&str>, target: Option<&str>) -> Option<M
     found.map(MountInfo::from)
 }
 
+/// Return all mounts for a matching source.
+/// Optionally ignore the given destination path.
+pub(crate) fn find_src_mounts(source: &str, dest_ignore: Option<&str>) -> Vec<MountInfo> {
+    MountIter::new()
+        .unwrap()
+        .flatten()
+        .filter(|mount| {
+            mount.source.to_string_lossy() == source
+                && match dest_ignore {
+                    None => true,
+                    Some(ignore) => ignore != mount.dest.to_string_lossy(),
+                }
+        })
+        .collect()
+}
+
 /// Check if options in "first" are also present in "second",
 /// but exclude values "ro" and "rw" from the comparison.
 pub(super) fn subset(first: &[String], second: &[String]) -> bool {
@@ -227,6 +243,22 @@ pub(crate) fn bind_unmount(target: &str) -> Result<(), Error> {
     debug!("Target {} bind unmounted", target);
 
     Ok(())
+}
+
+/// Remount existing mount as read only or read write.
+pub(crate) fn remount(target: &str, ro: bool) -> Result<Mount, Error> {
+    let mut flags = MountFlags::empty();
+    flags.insert(MountFlags::REMOUNT);
+
+    if ro {
+        flags.insert(MountFlags::RDONLY);
+    }
+
+    let mount = Mount::new("", target, FilesystemType::Manual("none"), flags, None)?;
+
+    debug!("Target {} remounted with {:?}", target, flags);
+
+    Ok(mount)
 }
 
 /// Mount a block device
