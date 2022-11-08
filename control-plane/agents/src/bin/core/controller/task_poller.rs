@@ -24,6 +24,9 @@ pub(crate) enum PollTriggerEvent {
     VolumeDegraded,
     /// The Agent is starting up
     Start,
+    /// A volume has been republished and the older nexus
+    /// needs to be reused.
+    VolumeRepublish,
 }
 
 /// State of a poller

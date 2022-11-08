@@ -1445,6 +1445,14 @@ paths:
           required: false
           schema:
             type: boolean
+        - in: query
+          name: reuse_existing
+          x-api-scope: internal
+          description: |-
+            Allows reusing of the current target.
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: OK

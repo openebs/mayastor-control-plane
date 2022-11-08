@@ -32,8 +32,8 @@ use common_lib::{
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
-            DestroyPool, DestroyReplica, FaultNexusChild, MessageIdVs, Nexus, NexusId, NexusStatus,
-            NodeId, NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
+            DestroyPool, DestroyReplica, FaultNexusChild, MessageIdVs, Nexus, NexusId, NodeId,
+            NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
             RemoveNexusChild, Replica, ReplicaId, ReplicaName, ShareNexus, ShareReplica,
             ShutdownNexus, UnshareNexus, UnshareReplica,
         },
@@ -1142,20 +1142,17 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
     async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let nexus = self.read().await.nexus(&request.uuid());
-        if let Some(nexus) = nexus {
-            if nexus.status == NexusStatus::Shutdown {
-                Ok(())
-            } else {
-                let result = dataplane.shutdown_nexus(request).await;
-                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-                self.update_nexus_states(ctx.deref_mut()).await?;
-                result
+        let result = dataplane.shutdown_nexus(request).await;
+        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
+        match result {
+            Ok(()) => Ok(()),
+            Err(error) if error.tonic_code() == tonic::Code::NotFound => {
+                Err(SvcError::NexusNotFound {
+                    nexus_id: request.uuid().to_string(),
+                })
             }
-        } else {
-            Err(SvcError::NexusNotFound {
-                nexus_id: request.uuid().to_string(),
-            })
+            Err(error) => Err(error),
         }
     }
 }

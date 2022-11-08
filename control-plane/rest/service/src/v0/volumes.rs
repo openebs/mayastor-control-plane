@@ -142,9 +142,10 @@ impl apis::actix_server::Volumes for RestApi {
 
     async fn put_volume_target(
         Path(volume_id): Path<Uuid>,
-        Query((node, protocol, republish)): Query<(
+        Query((node, protocol, republish, reuse_existing)): Query<(
             Option<String>,
             VolumeShareProtocol,
+            Option<bool>,
             Option<bool>,
         )>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
@@ -156,6 +157,7 @@ impl apis::actix_server::Volumes for RestApi {
                             uuid: volume_id.into(),
                             target_node: node.map(|id| id.into()),
                             share: protocol.into(),
+                            reuse_existing: reuse_existing.unwrap_or(true),
                         },
                         None,
                     )

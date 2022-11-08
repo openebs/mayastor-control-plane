@@ -154,6 +154,7 @@ impl SwitchOverRequest {
             uuid: self.volume_id.clone(),
             target_node: None,
             share: VolumeShareProtocol::Nvmf,
+            reuse_existing: false,
         };
         let vol = client().republish(&republish_req, None).await?;
         self.new_path = match vol.state().target {

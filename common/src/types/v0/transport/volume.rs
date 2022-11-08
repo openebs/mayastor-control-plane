@@ -425,14 +425,22 @@ pub struct RepublishVolume {
     pub target_node: Option<NodeId>,
     /// Share protocol.
     pub share: VolumeShareProtocol,
+    /// Allows reusing of the current target.
+    pub reuse_existing: bool,
 }
 impl RepublishVolume {
     /// Create new `RepublishVolume` based on the provided arguments.
-    pub fn new(uuid: VolumeId, target_node: Option<NodeId>, share: VolumeShareProtocol) -> Self {
+    pub fn new(
+        uuid: VolumeId,
+        target_node: Option<NodeId>,
+        share: VolumeShareProtocol,
+        reuse_existing: bool,
+    ) -> Self {
         Self {
             uuid,
             target_node,
             share,
+            reuse_existing,
         }
     }
 }

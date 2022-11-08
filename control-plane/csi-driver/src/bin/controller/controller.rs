@@ -356,7 +356,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                 // Volume is not published.
                 let v = IoEngineApiClient::get_client()
-                    .publish_volume(&volume_id, target_node, protocol, false)
+                    .publish_volume(&volume_id, target_node, protocol)
                     .await?;
 
                 if let Some((node, uri)) = get_volume_share_location(&v) {

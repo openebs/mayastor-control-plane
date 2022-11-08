@@ -1,6 +1,6 @@
 use crate::{
     controller::{
-        reconciler::PollTriggerEvent,
+        reconciler::{nexus::nexus_recreate, PollTriggerEvent},
         registry::Registry,
         resources::{
             operations::{
@@ -14,7 +14,9 @@ use crate::{
             OperationGuardArc, TraceSpan, TraceStrLog,
         },
     },
-    volume::specs::{get_create_volume_replicas, get_volume_target_node},
+    volume::specs::{
+        get_create_volume_replicas, get_healthy_volume_replicas, get_volume_target_node,
+    },
 };
 use agents::errors::SvcError;
 use common_lib::{
@@ -38,6 +40,7 @@ use common_lib::{
     },
 };
 use std::ops::Deref;
+use tracing::info;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
@@ -393,7 +396,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let spec = self.as_ref().clone();
         let state = registry.get_volume_state(&request.uuid).await?;
         // If the volume is not published then it should issue publish call rather than republish.
-        let volume_target = match spec.target {
+        let volume_target = match &spec.target {
             None => {
                 return Err(SvcError::VolumeNotPublished {
                     vol_id: request.uuid.to_string(),
@@ -401,6 +404,37 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             }
             Some(target) => target,
         };
+
+        let mut older_nexus = specs.nexus(volume_target.nexus()).await?;
+
+        let mut move_nexus = true;
+
+        match get_healthy_volume_replicas(&spec, &older_nexus.as_ref().node, registry).await {
+            Ok(_) => {
+                if request.reuse_existing
+                    && !older_nexus.as_ref().is_shutdown()
+                    && nexus_recreate(registry, &mut older_nexus, true)
+                        .await
+                        .is_ok()
+                {
+                    move_nexus = false;
+                }
+            }
+            Err(error) => {
+                if !older_nexus.as_ref().is_shutdown() {
+                    return Err(error);
+                }
+            }
+        }
+
+        if !move_nexus {
+            // older nexus is back again, so completing republish without modifications.
+            info!(nexus.uuid=%older_nexus.as_ref().uuid, "Current target is back online, not moving nexus");
+            let volume = registry.get_volume(&request.uuid).await?;
+            return Ok(volume);
+        }
+
+        // get the newer target node for new nexus creation
         let nexus_node = get_volume_target_node(registry, &state, request, true).await?;
         let target_cfg = self
             .next_target_config(&nexus_node, &Some(request.share))
@@ -411,13 +445,11 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             request.share,
             target_cfg.config().clone(),
         ));
+
         let spec_clone = self.start_update(registry, &state, operation).await?;
-        let result = specs.nexus(volume_target.nexus()).await;
-        let mut older_nexus = self
-            .validate_update_step(registry, result, &spec_clone)
-            .await?;
 
         let older_nexus_id = older_nexus.uuid().clone();
+
         // shutdown the older nexus before newer nexus creation.
         let result = older_nexus
             .shutdown(registry, &ShutdownNexus::new(older_nexus_id, true))

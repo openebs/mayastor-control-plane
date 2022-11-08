@@ -224,6 +224,7 @@ impl SvcError {
     pub fn tonic_code(&self) -> tonic::Code {
         match self {
             Self::NotFound { .. } => tonic::Code::NotFound,
+            Self::NexusNotFound { .. } => tonic::Code::NotFound,
             Self::AlreadyExists { .. } => tonic::Code::AlreadyExists,
             Self::GrpcRequestError { source, .. } => source.code(),
             Self::Internal { .. } => tonic::Code::Internal,
