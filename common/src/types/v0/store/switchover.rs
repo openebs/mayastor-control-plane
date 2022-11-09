@@ -16,8 +16,8 @@ pub enum Operation {
     Init,
     /// Shutdown original/old volume target. Create new nexus for existing vol obj.
     RepublishVolume,
-    /// Publish updated path of volume to node-agent.
-    PublishPath,
+    /// Send updated path of volume to node-agent.
+    ReplacePath,
     /// Delete original/old volume target.
     DeleteTarget,
     /// Marks switchover process as Complete.
@@ -76,7 +76,7 @@ impl SwitchOverSpec {
         if let Some(op) = &self.operation {
             match op.operation {
                 Operation::Errored(_) => true,
-                Operation::PublishPath => matches!(op.result.unwrap_or(false), true),
+                Operation::ReplacePath => matches!(op.result.unwrap_or(false), true),
                 _ => false,
             }
         } else {
@@ -134,8 +134,8 @@ impl SpecTransaction<Operation> for SwitchOverSpec {
         let next_op = if let Some(op) = self.operation.clone() {
             match op.operation {
                 Operation::Init => Some(Operation::RepublishVolume),
-                Operation::RepublishVolume => Some(Operation::PublishPath),
-                Operation::PublishPath => Some(Operation::DeleteTarget),
+                Operation::RepublishVolume => Some(Operation::ReplacePath),
+                Operation::ReplacePath => Some(Operation::DeleteTarget),
                 Operation::DeleteTarget => Some(Operation::Successful),
                 Operation::Successful => None,
                 Operation::Errored(_) => None,

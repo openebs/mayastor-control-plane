@@ -33,8 +33,8 @@ pub enum Stage {
     Init,
     /// Shutdown original/old volume target. Create new nexus for existing vol obj.
     RepublishVolume,
-    /// Publish updated path of volume to node-agent.
-    PublishPath,
+    /// Send updated path of volume to node-agent.
+    ReplacePath,
     /// Delete original/old volume target.
     DeleteTarget,
     /// Marks switchover process as Complete.
@@ -94,8 +94,8 @@ impl SwitchOverRequest {
     pub fn update_next_stage(&mut self) {
         self.stage = match self.stage {
             Stage::Init => Stage::RepublishVolume,
-            Stage::RepublishVolume => Stage::PublishPath,
-            Stage::PublishPath => Stage::DeleteTarget,
+            Stage::RepublishVolume => Stage::ReplacePath,
+            Stage::ReplacePath => Stage::DeleteTarget,
             Stage::DeleteTarget => Stage::Successful,
             // Successful and Errored stage mark request as complete, so no need to update
             Stage::Successful => Stage::Successful,
@@ -213,13 +213,13 @@ impl SwitchOverRequest {
     }
 
     /// Publish updated path for the volume to node-agent.
-    async fn publish_path(
+    async fn replace_path(
         &mut self,
         etcd: &EtcdStore,
         nodes: &NodeList,
     ) -> Result<(), anyhow::Error> {
-        self.start_op(Stage::PublishPath, etcd).await?;
-        info!(volume.uuid=%self.volume_id, "Publishing new volume target to node agent");
+        self.start_op(Stage::ReplacePath, etcd).await?;
+        info!(volume.uuid=%self.volume_id, "Sending new volume target to node agent");
         if let Ok(uri) = Uri::builder()
             .scheme("http")
             .authority(self.callback_uri.to_string())
@@ -318,7 +318,7 @@ impl SwitchOverEngine {
                     let result = match q.stage {
                         Stage::Init => q.initialize(&self.etcd).await,
                         Stage::RepublishVolume => q.republish_volume(&self.etcd).await,
-                        Stage::PublishPath => q.publish_path(&self.etcd, &self.nodes).await,
+                        Stage::ReplacePath => q.replace_path(&self.etcd, &self.nodes).await,
                         Stage::DeleteTarget => q.delete_target(&self.etcd).await,
                         Stage::Errored => match q.errored_switchover(&self.etcd).await {
                             Ok(_) => break,
@@ -405,7 +405,7 @@ impl From<Stage> for Operation {
         match stage {
             Stage::Init => Operation::Init,
             Stage::RepublishVolume => Operation::RepublishVolume,
-            Stage::PublishPath => Operation::PublishPath,
+            Stage::ReplacePath => Operation::ReplacePath,
             Stage::DeleteTarget => Operation::DeleteTarget,
             Stage::Successful => Operation::Successful,
             Stage::Errored => Operation::Errored("".to_string()),
@@ -418,7 +418,7 @@ impl From<Operation> for Stage {
         match op {
             Operation::Init => Stage::Init,
             Operation::RepublishVolume => Stage::RepublishVolume,
-            Operation::PublishPath => Stage::PublishPath,
+            Operation::ReplacePath => Stage::ReplacePath,
             Operation::DeleteTarget => Stage::DeleteTarget,
             Operation::Successful => Stage::Successful,
             Operation::Errored(_) => Stage::Errored,
