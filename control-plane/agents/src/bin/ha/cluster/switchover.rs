@@ -1,26 +1,31 @@
 use crate::{core_grpc, etcd::EtcdStore, nodes::NodeList};
+use anyhow::anyhow;
 use chrono::Utc;
-use common_lib::types::v0::{
-    store::{
-        switchover::{Operation, OperationState, SwitchOverSpec, SwitchOverTime},
-        SpecTransaction,
-    },
-    transport::{
-        DestroyShutdownTargets, ReplacePath, RepublishVolume, VolumeId, VolumeShareProtocol,
+use common_lib::{
+    transport_api::ReplyErrorKind,
+    types::v0::{
+        store::{
+            switchover::{Operation, OperationState, SwitchOverSpec, SwitchOverTime},
+            SpecTransaction,
+        },
+        transport::{
+            DestroyShutdownTargets, ReplacePath, RepublishVolume, VolumeId, VolumeShareProtocol,
+        },
     },
 };
-use grpc::operations::{ha_node::client::NodeAgentClient, volume::traits::VolumeOperations};
+use grpc::operations::{
+    ha_node::{client::NodeAgentClient, traits::NodeAgentOperations},
+    volume::traits::VolumeOperations,
+};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use std::{convert::TryFrom, net::SocketAddr, sync::Arc, time::Duration};
+use tokio::sync::{
+    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
+use tonic::transport::Uri;
 use tracing::{error, info};
 use utils::NVME_TARGET_NQN_PREFIX;
-
-use anyhow::anyhow;
-use common_lib::transport_api::ReplyErrorKind;
-use grpc::operations::ha_node::traits::NodeAgentOperations;
-use std::{convert::TryFrom, net::SocketAddr, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
-use tonic::transport::Uri;
 
 fn client() -> impl VolumeOperations {
     core_grpc().volume()
@@ -57,6 +62,8 @@ pub struct SwitchOverRequest {
     new_path: Option<String>,
     // Number of failed attempts in the current Stage.
     retry_count: u64,
+    // Reuse existing target.
+    reuse_existing: bool,
 }
 
 impl SwitchOverRequest {
@@ -74,11 +81,16 @@ impl SwitchOverRequest {
             existing_nqn: existing_path,
             new_path: None,
             retry_count: 0,
+            reuse_existing: true,
         }
     }
 
     pub fn with_stage(&mut self, stage: Stage) {
         self.stage = stage;
+    }
+
+    pub fn with_reuse_existing(&mut self, reuse_existing: bool) {
+        self.reuse_existing = reuse_existing;
     }
 
     pub fn stage(&self) -> Stage {
@@ -154,7 +166,7 @@ impl SwitchOverRequest {
             uuid: self.volume_id.clone(),
             target_node: None,
             share: VolumeShareProtocol::Nvmf,
-            reuse_existing: false,
+            reuse_existing: self.reuse_existing,
         };
         let vol = client().republish(&republish_req, None).await?;
         self.new_path = match vol.state().target {
@@ -230,12 +242,23 @@ impl SwitchOverRequest {
             if let Some(new_path) = self.new_path.clone() {
                 let replace_request = ReplacePath::new(self.existing_nqn.clone(), new_path.clone());
                 let client = NodeAgentClient::new(uri, None).await;
+
                 if let Err(e) = client.replace_path(&replace_request, None).await {
                     return if e.kind == ReplyErrorKind::FailedPrecondition {
                         error!(nexus.path=%self.existing_nqn, "HA Node agent could not find failed Nvme path");
                         info!(volume.uuid=%self.volume_id, "Moving Switchover request to Errored state");
                         self.stage = Stage::Errored;
                         Err(anyhow!("HA Node agent could not lookup old Nvme path"))
+                    } else if matches!(
+                        e.kind,
+                        ReplyErrorKind::Aborted
+                            | ReplyErrorKind::Timeout
+                            | ReplyErrorKind::NotFound
+                    ) {
+                        info!("Retrying Republish without older target reuse");
+                        self.with_reuse_existing(false);
+                        self.stage = Stage::RepublishVolume;
+                        Err(anyhow!("Nvme path replacement failed with older target"))
                     } else {
                         Err(anyhow!("Nvme path replacement failed"))
                     };
@@ -377,6 +400,7 @@ impl From<&SwitchOverRequest> for SwitchOverSpec {
             existing_nqn: req.existing_nqn.clone(),
             new_path: req.new_path.clone(),
             retry_count: req.retry_count,
+            reuse_existing: req.reuse_existing,
         }
     }
 }
@@ -396,6 +420,7 @@ impl From<&SwitchOverSpec> for SwitchOverRequest {
             existing_nqn: req.existing_nqn.clone(),
             new_path: req.new_path.clone(),
             retry_count: req.retry_count,
+            reuse_existing: req.reuse_existing,
         }
     }
 }
