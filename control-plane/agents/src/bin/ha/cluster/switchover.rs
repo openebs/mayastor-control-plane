@@ -18,7 +18,7 @@ use grpc::operations::{
     volume::traits::VolumeOperations,
 };
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, net::SocketAddr, sync::Arc, time::Duration};
+use std::{cmp::Ordering, convert::TryFrom, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     Mutex,
@@ -32,7 +32,7 @@ fn client() -> impl VolumeOperations {
 }
 
 /// Stage represents the steps for switchover request.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Ord, PartialOrd)]
 pub enum Stage {
     /// Initialize switchover request.
     Init,
@@ -64,6 +64,21 @@ pub struct SwitchOverRequest {
     retry_count: u64,
     // Reuse existing target.
     reuse_existing: bool,
+}
+
+impl Ord for SwitchOverRequest {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.stage.cmp(&other.stage) {
+            Ordering::Equal => self.timestamp.cmp(&other.timestamp),
+            other => other,
+        }
+    }
+}
+
+impl PartialOrd for SwitchOverRequest {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl SwitchOverRequest {
@@ -449,4 +464,39 @@ impl From<Operation> for Stage {
             Operation::Errored(_) => Stage::Errored,
         }
     }
+}
+
+#[test]
+fn switchover_ord() {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    let sock1: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+    let vol1 = VolumeId::try_from("ec4e66fd-3b33-4439-b504-d49aba53da26").unwrap();
+    let sw1 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
+    let mut sw2 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
+    sw2.stage = Stage::Errored;
+    let mut sw3 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
+    sw3.stage = Stage::Successful;
+    let mut sw4 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
+    sw4.stage = Stage::RepublishVolume;
+    let mut sw5 = SwitchOverRequest::new(sock1, vol1, "nw".to_string());
+    sw5.stage = Stage::RepublishVolume;
+    let mut test_vec = vec![
+        sw3.clone(),
+        sw2.clone(),
+        sw1.clone(),
+        sw5.clone(),
+        sw4.clone(),
+    ];
+    assert_eq!(
+        test_vec,
+        vec![
+            sw3.clone(),
+            sw2.clone(),
+            sw1.clone(),
+            sw5.clone(),
+            sw4.clone(),
+        ]
+    );
+    test_vec.sort();
+    assert_eq!(test_vec, vec![sw1, sw4, sw5, sw3, sw2]);
 }
