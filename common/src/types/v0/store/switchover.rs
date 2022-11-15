@@ -60,6 +60,8 @@ pub struct SwitchOverSpec {
     pub new_path: Option<String>,
     /// Number of failed attempts in the current Stage.
     pub retry_count: u64,
+    /// Reuse the existing target.
+    pub reuse_existing: bool,
 }
 
 impl SwitchOverSpec {

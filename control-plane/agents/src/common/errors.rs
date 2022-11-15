@@ -216,6 +216,8 @@ pub enum SvcError {
     MaxRebuilds { max_rebuilds: u32 },
     #[snafu(display("The api version: {:?} is not valid", api_version))]
     InvalidApiVersion { api_version: Option<ApiVersion> },
+    #[snafu(display("The subsystem with nqn: {} is not found", nqn))]
+    SubsystemNotFound { nqn: String },
 }
 
 impl SvcError {
@@ -614,6 +616,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::InvalidApiVersion { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::SubsystemNotFound { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),
