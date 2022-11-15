@@ -338,21 +338,12 @@ impl NexusTargetNode {
                 spec: request.spec.clone(),
             },
             list: {
-                let current_target = request.spec.target;
                 let nodes = registry.get_node_wrappers().await;
                 let mut node_items = Vec::with_capacity(nodes.len());
                 for node in nodes {
                     let node = node.read().await;
+
                     node_items.push(NodeItem::new(node.clone()));
-                }
-                // exclude the current target node from the list of candidates
-                if current_target.is_some() {
-                    node_items = node_items
-                        .into_iter()
-                        .filter(|node| {
-                            node.node_wrapper().id() != current_target.as_ref().unwrap().node()
-                        })
-                        .collect();
                 }
                 node_items
             },
@@ -371,6 +362,7 @@ impl NexusTargetNode {
             .await
             .filter(NodeFilters::online)
             .filter(NodeFilters::cordoned)
+            .filter(NodeFilters::current_target)
             .sort(NodeSorters::number_targets)
     }
 }

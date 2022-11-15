@@ -63,7 +63,7 @@ async fn volume_nexus_reconcile(
 
             if volume_state.status != VolumeStatus::Online {
                 faulted_nexus_remover(&mut nexus, context).await?;
-                missing_nexus_recreate(&mut nexus, context, false).await?;
+                missing_nexus_recreate(&mut nexus, context).await?;
                 enospc_children_faulter(&mut nexus, context).await?;
             }
             fixup_nexus_protocol(&mut nexus, context).await
