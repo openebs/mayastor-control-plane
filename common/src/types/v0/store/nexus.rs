@@ -134,7 +134,7 @@ impl From<&NexusSpec> for CreateNexus {
             &spec.children,
             spec.managed,
             spec.owner.as_ref(),
-            None,
+            spec.nvmf_config.clone(),
         )
     }
 }

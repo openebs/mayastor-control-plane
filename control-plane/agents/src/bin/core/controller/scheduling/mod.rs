@@ -83,6 +83,15 @@ impl NodeFilters {
             .into_iter()
             .any(|node_spec| node_spec.id() == item.node_wrapper().id())
     }
+
+    /// Should only attempt to use node where current target is not present.
+    pub(crate) fn current_target(request: &GetSuitableNodesContext, item: &NodeItem) -> bool {
+        if let Some(target) = &request.target {
+            target.node() != item.node_wrapper().id()
+        } else {
+            true
+        }
+    }
 }
 
 /// Filter pools used for replica creation.

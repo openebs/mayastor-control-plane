@@ -14,7 +14,7 @@ use grpc::{
 use http::Uri;
 use nvmeadm::{
     nvmf_discovery::{ConnectArgs, ConnectArgsBuilder},
-    nvmf_subsystem::Subsystem,
+    nvmf_subsystem::{NvmeSubsystems, Subsystem},
 };
 use std::{net::SocketAddr, sync::Arc};
 use tokio::time::{sleep, Duration};
@@ -65,24 +65,34 @@ impl NodeAgentSvc {
 }
 
 /// Disconnect cached NVMe controller.
-fn disconnect_controller(ctrlr: &NvmeController) -> Result<(), SvcError> {
+fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(), SvcError> {
+    let parsed_path = parse_uri(new_path.as_str())?;
+
     match get_nvme_path_buf(&ctrlr.path) {
         Some(pbuf) => {
             let subsystem = Subsystem::new(pbuf.as_path()).map_err(|_| SvcError::Internal {
                 details: "Failed to get NVMe subsystem for controller".to_string(),
             })?;
 
-            tracing::info!(
+            if subsystem.address == SubsystemAddr::new(parsed_path.host(), parsed_path.port()) {
+                tracing::info!(
                 path=%ctrlr.path,
-                "Disconnecting NVMe controller"
-            );
+                "Not disconnecting same NVMe controller");
 
-            subsystem.disconnect().map_err(|e| SvcError::Internal {
-                details: format!(
-                    "Failed to disconnect NVMe controller {}: {:?}",
-                    ctrlr.path, e,
-                ),
-            })
+                Ok(())
+            } else {
+                tracing::info!(
+                    path=%ctrlr.path,
+                    "Disconnecting NVMe controller"
+                );
+
+                subsystem.disconnect().map_err(|e| SvcError::Internal {
+                    details: format!(
+                        "Failed to disconnect NVMe controller {}: {:?}",
+                        ctrlr.path, e,
+                    ),
+                })
+            }
         }
         None => {
             tracing::error!(
@@ -100,21 +110,17 @@ fn disconnect_controller(ctrlr: &NvmeController) -> Result<(), SvcError> {
 impl NodeAgentSvc {
     /// Translate new path URI into connection arguments for Subsystem connect API.
     fn get_nvmf_connection_args(&self, new_path: &str) -> Option<ConnectArgs> {
-        let uri = new_path.parse::<Uri>().ok()?;
-
-        let host = uri.host()?;
-        let port = uri.port()?.to_string();
-        let nqn = &uri.path()[1 ..];
+        let parsed_path = parse_uri(new_path).ok()?;
 
         // Check NQN of the subsystem to make sure it belongs to the product.
-        if !nqn.starts_with(NVME_TARGET_NQN_PREFIX) {
+        if !parsed_path.nqn().starts_with(NVME_TARGET_NQN_PREFIX) {
             return None;
         }
 
         ConnectArgsBuilder::default()
-            .traddr(host)
-            .trsvcid(port)
-            .nqn(nqn)
+            .traddr(parsed_path.host())
+            .trsvcid(parsed_path.port())
+            .nqn(parsed_path.nqn())
             .ctrl_loss_tmo(Some(5))
             .reconnect_delay(Some(10))
             .build()
@@ -122,7 +128,7 @@ impl NodeAgentSvc {
     }
 
     /// Connect NVMe controller. Wait till the controller is fully connected.
-    async fn connect_controller(&self, new_path: String, old_path: String) -> Result<(), SvcError> {
+    async fn connect_controller(&self, new_path: String, nqn: String) -> Result<(), SvcError> {
         let connect_args = match self.get_nvmf_connection_args(&new_path) {
             Some(ca) => ca,
             None => return Err(SvcError::InvalidArguments {}),
@@ -132,26 +138,31 @@ impl NodeAgentSvc {
 
         // Open connection to the new nexus: ANA will automatically create
         // the second path and add it as an alternative for the first broken one,
-        // which immediately resumes all stalled I/O.
-        let mut subsystem = match connect_args.connect() {
-            Ok(c) => {
-                tracing::info!(new_path, "Successfully connected to NVMe target");
-                c
-            }
-            Err(error) => {
-                tracing::error!(
-                    new_path,
-                    error=%error,
-                    "Failed to connect to new NVMe target"
-                );
-                let nvme_err = format!(
-                    "Failed to connect to new NVMe target: {}, new path: {}, old path: {}",
-                    error.full_string(),
-                    new_path,
-                    old_path
-                );
-                return Err(SvcError::Internal { details: nvme_err });
-            }
+        // which immediately resumes all stalled I/O
+
+        let parsed_uri = parse_uri(new_path.as_str())?;
+        let mut subsystem = match get_subsystem(&parsed_uri) {
+            Ok(subsystem) => subsystem,
+            Err(_) => match connect_args.connect() {
+                Ok(subsystem) => {
+                    tracing::info!(new_path, "Successfully connected to NVMe target");
+                    subsystem
+                }
+                Err(error) => {
+                    tracing::error!(
+                        new_path,
+                        error=%error,
+                        "Failed to connect to new NVMe target"
+                    );
+                    let nvme_err = format!(
+                        "Failed to connect to new NVMe target: {}, new path: {}, nqn: {}",
+                        error.full_string(),
+                        new_path,
+                        nqn
+                    );
+                    return Err(SvcError::Internal { details: nvme_err });
+                }
+            },
         };
 
         // Wait till new controller is fully connected before completing the call.
@@ -239,13 +250,92 @@ impl NodeAgentOperations for NodeAgentSvc {
         // path has been successfully created, so having the first failed path in addition
         // to the second healthy one is OK: just display a warning and proceed as if
         // the call has completed successfully.
-        disconnect_controller(&ctrlr).or_else(|e| {
+        if let Err(error) = disconnect_controller(&ctrlr, request.new_path()) {
             tracing::warn!(
                 uri=%request.new_path(),
-                error=%e,
+                error=%error,
                 "Failed to disconnect failed path"
             );
-            Ok(())
-        })
+        };
+        Ok(())
+    }
+}
+
+// Returns the host, port, nqn respectively from the path after parsing.
+fn parse_uri(new_path: &str) -> Result<ParsedUri, SvcError> {
+    let uri = new_path
+        .parse::<Uri>()
+        .map_err(|_| SvcError::InvalidArguments {})?;
+
+    let host = uri.host().ok_or(SvcError::InvalidArguments {})?;
+    let port = uri.port().ok_or(SvcError::InvalidArguments {})?;
+    let nqn = &uri.path()[1 ..];
+    Ok(ParsedUri::new(
+        host.to_string(),
+        port.to_string(),
+        nqn.to_string(),
+    ))
+}
+
+// Returns the particular subsystem based on the nqn and address.
+fn get_subsystem(parsed_uri: &ParsedUri) -> Result<Subsystem, SvcError> {
+    let nvme_subsystems = NvmeSubsystems::new().map_err(|_| SvcError::SubsystemNotFound {
+        nqn: parsed_uri.nqn(),
+    })?;
+    for subsys in nvme_subsystems.flatten() {
+        if subsys.nqn == parsed_uri.nqn()
+            && subsys.address == SubsystemAddr::new(parsed_uri.host(), parsed_uri.port())
+        {
+            return Ok(subsys);
+        }
+    }
+    Err(SvcError::SubsystemNotFound {
+        nqn: parsed_uri.nqn(),
+    })
+}
+
+struct SubsystemAddr(String);
+
+impl SubsystemAddr {
+    fn new(host: String, port: String) -> SubsystemAddr {
+        SubsystemAddr(format!("traddr={},trsvcid={}", host, port))
+    }
+    fn string_value(&self) -> String {
+        self.0.clone()
+    }
+}
+
+// For SubsystemAddr == String comparisons
+impl PartialEq<String> for SubsystemAddr {
+    fn eq(&self, other: &String) -> bool {
+        self.string_value() == *other
+    }
+}
+
+// For String == SubsystemAddr comparisons
+impl PartialEq<SubsystemAddr> for String {
+    fn eq(&self, other: &SubsystemAddr) -> bool {
+        *self == other.string_value()
+    }
+}
+
+struct ParsedUri {
+    host: String,
+    port: String,
+    nqn: String,
+}
+
+impl ParsedUri {
+    fn new(host: String, port: String, nqn: String) -> ParsedUri {
+        Self { host, port, nqn }
+    }
+    fn host(&self) -> String {
+        self.host.clone()
+    }
+    fn port(&self) -> String {
+        self.port.clone()
+    }
+    fn nqn(&self) -> String {
+        self.nqn.clone()
     }
 }

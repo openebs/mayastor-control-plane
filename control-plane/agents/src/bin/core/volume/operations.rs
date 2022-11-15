@@ -1,6 +1,6 @@
 use crate::{
     controller::{
-        reconciler::{nexus::nexus_recreate, PollTriggerEvent},
+        reconciler::PollTriggerEvent,
         registry::Registry,
         resources::{
             operations::{
@@ -413,9 +413,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             Ok(_) => {
                 if request.reuse_existing
                     && !older_nexus.as_ref().is_shutdown()
-                    && nexus_recreate(registry, &mut older_nexus, true)
-                        .await
-                        .is_ok()
+                    && older_nexus.missing_nexus_recreate(registry).await.is_ok()
                 {
                     move_nexus = false;
                 }

@@ -1,24 +1,28 @@
-use crate::controller::{
-    registry::Registry,
-    resources::{
-        operations::{
-            ResourceLifecycle, ResourceOffspring, ResourceSharing, ResourceShutdownOperations,
+use crate::{
+    controller::{
+        registry::Registry,
+        resources::{
+            operations::{
+                ResourceLifecycle, ResourceOffspring, ResourceSharing, ResourceShutdownOperations,
+            },
+            operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+            OperationGuardArc, TraceSpan,
         },
-        operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
-        OperationGuardArc,
+        scheduling::resources::HealthyChildItems,
+        wrapper::{ClientOps, GetterOps},
     },
-    wrapper::{ClientOps, GetterOps},
+    nexus::scheduling::get_healthy_nexus_children,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
     store::{
-        nexus::{NexusOperation, NexusSpec, NexusStatusInfo},
+        nexus::{NexusOperation, NexusSpec, NexusStatusInfo, ReplicaUri},
         nexus_child::NexusChild,
     },
     transport::{
         child::Child,
         nexus::{CreateNexus, DestroyNexus, Nexus, ShareNexus, UnshareNexus},
-        AddNexusChild, RemoveNexusChild, ShutdownNexus,
+        AddNexusChild, NodeStatus, RemoveNexusChild, ShutdownNexus,
     },
 };
 
@@ -329,5 +333,96 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
     ) -> Result<(), SvcError> {
         // Not applicable for nexus
         unimplemented!()
+    }
+}
+
+impl OperationGuardArc<NexusSpec> {
+    /// Recreate the nexus as a part of the republish call.
+    pub(crate) async fn missing_nexus_recreate(
+        &mut self,
+        registry: &Registry,
+    ) -> Result<(), SvcError> {
+        let mut nexus = self.lock().clone();
+
+        let warn_missing = |nexus_spec: &NexusSpec, node_status: NodeStatus| {
+            nexus_spec.debug_span(|| {
+                tracing::debug!(
+                    node.id = %nexus_spec.node,
+                    node.status = %node_status.to_string(),
+                    "Attempted to recreate missing nexus, but the node is not online"
+                )
+            });
+        };
+
+        let node = match registry.get_node_wrapper(&nexus.node).await {
+            Ok(node) if !node.read().await.is_online() => {
+                let node_status = node.read().await.status();
+                warn_missing(&nexus, node_status);
+                return Err(SvcError::NodeNotOnline { node: nexus.node });
+            }
+            Err(_) => {
+                warn_missing(&nexus, NodeStatus::Unknown);
+                return Err(SvcError::NodeNotOnline { node: nexus.node });
+            }
+            Ok(node) => node,
+        };
+
+        nexus.warn_span(|| tracing::warn!("Attempting to recreate missing nexus"));
+
+        let children = get_healthy_nexus_children(&nexus, registry).await?;
+
+        let mut nexus_replicas = vec![];
+        for item in children.candidates() {
+            // just in case the replica gets somehow shared/unshared?
+            match registry
+                .specs()
+                .make_replica_accessible(registry, item.state(), &nexus.node)
+                .await
+            {
+                Ok(uri) => {
+                    nexus_replicas.push(NexusChild::Replica(ReplicaUri::new(
+                        &item.spec().uuid,
+                        &uri,
+                    )));
+                }
+                Err(error) => {
+                    nexus.error_span(|| {
+                        tracing::error!(nexus.node=%nexus.node, replica.uuid = %item.spec().uuid, error=%error, "Failed to make the replica available on the nexus node");
+                    });
+                }
+            }
+        }
+
+        nexus.children = match children {
+            HealthyChildItems::One(_, _) => nexus_replicas.first().into_iter().cloned().collect(),
+            HealthyChildItems::All(_, _) => nexus_replicas,
+        };
+
+        if nexus.children.is_empty() {
+            if let Some(info) = children.nexus_info() {
+                if info.no_healthy_replicas() {
+                    nexus.error_span(|| {
+                        tracing::error!("No healthy replicas found - manual intervention required")
+                    });
+                    return Err(SvcError::NoOnlineReplicas { id: nexus.name });
+                }
+            }
+
+            nexus.warn_span(|| {
+                tracing::warn!("No nexus children are available. Will retry later...")
+            });
+            return Err(SvcError::NoOnlineReplicas { id: nexus.name });
+        }
+
+        match node.create_nexus(&CreateNexus::from(&nexus)).await {
+            Ok(_) => {
+                nexus.info_span(|| tracing::info!("Nexus successfully recreated"));
+                Ok(())
+            }
+            Err(error) => {
+                nexus.error_span(|| tracing::error!(error=%error, "Failed to recreate the nexus"));
+                Err(error)
+            }
+        }
     }
 }
