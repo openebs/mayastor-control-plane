@@ -168,6 +168,7 @@ async fn create_nexus_replicas() {
             cluster.node(1).as_str(),
             cluster.pool(1, 0).as_str(),
             &(Cluster::replica(1, 0, 0).into()),
+            None,
         )
         .await
         .unwrap();
@@ -209,7 +210,11 @@ async fn create_nexus_replica_not_available() {
     let remote = cluster
         .rest_v00()
         .replicas_api()
-        .put_pool_replica_share(cluster.pool(1, 0).as_str(), &Cluster::replica(1, 0, 0))
+        .put_pool_replica_share(
+            cluster.pool(1, 0).as_str(),
+            &Cluster::replica(1, 0, 0),
+            None,
+        )
         .await
         .unwrap();
     cluster

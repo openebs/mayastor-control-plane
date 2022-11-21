@@ -160,6 +160,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
              * create it like so */
             models::CreateReplicaBody::new_all(
                 models::ReplicaShareProtocol::Nvmf,
+                None::<Vec<String>>,
                 12582912u64,
                 false,
             ),

@@ -118,7 +118,8 @@ impl From<Replica> for models::Replica {
             src.status,
             src.thin,
             src.uri,
-            apis::Uuid::try_from(src.uuid).unwrap(),
+            *src.uuid.uuid(),
+            None::<Vec<String>>,
         )
     }
 }
