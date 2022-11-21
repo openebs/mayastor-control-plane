@@ -100,7 +100,8 @@ async fn pool() {
             size: 12582912,
             share: Protocol::None,
             uri,
-            status: ReplicaStatus::Online
+            status: ReplicaStatus::Online,
+            allowed_hosts: vec![]
         }
     );
 

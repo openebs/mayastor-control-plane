@@ -48,6 +48,8 @@ pub enum NvmeNqn {
     /// The following is an example of an NVMe Qualified Name using the UUID-based format:
     /// • The string “nqn.2014-08.org.nvmexpress:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6“.
     Unique { uuid: uuid::Uuid },
+    /// Invalid Nqn Format, may be useful as a temporary placeholder.
+    Invalid { nqn: String },
 }
 impl Default for NvmeNqn {
     fn default() -> Self {
@@ -61,6 +63,7 @@ impl ToString for NvmeNqn {
         match self {
             NvmeNqn::Unique { uuid } => format!("{NVME_NQN_UUID_PRE}{uuid}"),
             NvmeNqn::Org { date, domain, name } => format!("nqn.{date}.{domain}:{name}"),
+            NvmeNqn::Invalid { nqn } => nqn.to_string(),
         }
     }
 }

@@ -118,6 +118,7 @@ impl TryFrom<replica::Replica> for Replica {
                     ))
                 }
             },
+            allowed_hosts: vec![],
         })
     }
 }
@@ -1026,7 +1027,7 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                 operation: ReplicaOperation::Create,
                 result: op.result,
             }),
-            allowed_hosts: None,
+            allowed_hosts: vec![],
         })
     }
 }

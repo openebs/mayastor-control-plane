@@ -101,7 +101,7 @@ impl IoEngineToAgent for v0_rpc::Pool {
 impl TryIoEngineToAgent for v0_rpc::ReplicaV2 {
     type AgentMessage = transport::Replica;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
-        Ok(Self::AgentMessage {
+        Ok(transport::Replica {
             node: Default::default(),
             name: self.name.clone().into(),
             uuid: ReplicaId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
@@ -115,6 +115,15 @@ impl TryIoEngineToAgent for v0_rpc::ReplicaV2 {
             share: self.share.into(),
             uri: self.uri.clone(),
             status: ReplicaStatus::Online,
+            allowed_hosts: self
+                .allowed_hosts
+                .iter()
+                .map(|n| {
+                    // should we allow for invalid here since it comes directly from the dataplane?
+                    transport::HostNqn::try_from(n)
+                        .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
+                })
+                .collect(),
         })
     }
 }

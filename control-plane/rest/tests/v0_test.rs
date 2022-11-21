@@ -182,6 +182,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             uri,
             state: models::ReplicaState::Online,
             pool_uuid: replica.pool_uuid,
+            allowed_hosts: None,
         }
     );
     assert_eq!(

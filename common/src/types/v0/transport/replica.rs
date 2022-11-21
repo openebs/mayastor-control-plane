@@ -45,6 +45,8 @@ pub struct Replica {
     pub uri: String,
     /// status of the replica
     pub status: ReplicaStatus,
+    /// Host nqn's allowed to connect to the target.
+    pub allowed_hosts: Vec<HostNqn>,
 }
 impl Replica {
     /// check if the replica is online
