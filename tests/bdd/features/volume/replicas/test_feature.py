@@ -74,9 +74,7 @@ def init_resources():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {},
-            Protocol("nvmf"),
-            node=NODE_1_NAME,
+            {}, Protocol("nvmf"), node=NODE_1_NAME, frontend_node=""
         ),
     )
     assert hasattr(volume.spec, "target")

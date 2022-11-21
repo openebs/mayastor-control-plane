@@ -294,6 +294,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 Some(io_engine1.to_string()),
                 models::VolumeShareProtocol::Nvmf,
                 None,
+                "".to_string(),
             ),
         )
         .await

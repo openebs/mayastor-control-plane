@@ -50,6 +50,7 @@ async fn lazy_delete_shutdown_targets() {
                 share: None,
                 target_node: Some(cluster.node(0)),
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -179,6 +180,7 @@ async fn volume_republish_nexus_recreation() {
                 share: Some(VolumeShareProtocol::Nvmf),
                 target_node: Some(replica_node.into()),
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )

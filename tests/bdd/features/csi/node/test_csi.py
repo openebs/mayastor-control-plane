@@ -150,9 +150,7 @@ def published_nexus(volumes, share_type, volume_id):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {},
-            Protocol("nvmf"),
-            node=NODE1,
+            {}, Protocol("nvmf"), node=NODE1, frontend_node=""
         ),
     )
     yield volume.state["target"]

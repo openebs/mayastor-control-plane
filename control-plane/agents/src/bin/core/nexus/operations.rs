@@ -151,9 +151,12 @@ impl ResourceSharing for Option<&mut OperationGuardArc<NexusSpec>> {
         if let Some(nexus) = self {
             let status = registry.get_nexus(&request.uuid).await?;
             let spec_clone = nexus
-                .start_update(registry, &status, NexusOperation::Share(request.protocol))
+                .start_update(
+                    registry,
+                    &status,
+                    NexusOperation::Share(request.protocol, request.allowed_hosts.clone()),
+                )
                 .await?;
-
             let result = node.share_nexus(request).await;
             nexus.complete_update(registry, result, spec_clone).await
         } else {

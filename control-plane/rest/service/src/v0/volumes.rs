@@ -127,12 +127,17 @@ impl apis::actix_server::Volumes for RestApi {
 
     async fn put_volume_share(
         Path((volume_id, protocol)): Path<(Uuid, models::VolumeShareProtocol)>,
+        Query(frontend_host): Query<Option<String>>,
     ) -> Result<String, RestError<RestJsonError>> {
         let share_uri = client()
             .share(
                 &ShareVolume {
                     uuid: volume_id.into(),
                     protocol: protocol.into(),
+                    frontend_hosts: match frontend_host {
+                        Some(host) => vec![host],
+                        None => vec![],
+                    },
                 },
                 None,
             )
@@ -166,6 +171,11 @@ impl apis::actix_server::Volumes for RestApi {
                             target_node: publish_volume_body.node.map(|id| id.into()),
                             share: Some(publish_volume_body.protocol.into()),
                             publish_context: publish_volume_body.publish_context,
+                            frontend_nodes: if !publish_volume_body.frontend_node.is_empty() {
+                                vec![publish_volume_body.frontend_node]
+                            } else {
+                                vec![]
+                            },
                         },
                         None,
                     )

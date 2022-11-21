@@ -64,6 +64,7 @@ async fn deleting_volume_reconcile(cluster: &Cluster) {
                 share: None,
                 target_node: None,
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -160,6 +161,7 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
                 Some(free_node.clone()),
                 models::VolumeShareProtocol::Nvmf,
                 None,
+                "".to_string(),
             ),
         )
         .await
@@ -227,6 +229,7 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
                 Some(cluster.node(0).to_string()),
                 models::VolumeShareProtocol::Nvmf,
                 None,
+                "".to_string(),
             ),
         )
         .await
@@ -313,6 +316,7 @@ async fn unused_reconcile(cluster: &Cluster) {
                 Some(nexus_node.id.to_string()),
                 models::VolumeShareProtocol::Nvmf,
                 None,
+                cluster.csi_node(0).to_string(),
             ),
         )
         .await
@@ -336,6 +340,7 @@ async fn unused_reconcile(cluster: &Cluster) {
                 Some(unused_node.id.to_string()),
                 models::VolumeShareProtocol::Nvmf,
                 None,
+                "".to_string(),
             ),
         )
         .await
@@ -426,6 +431,7 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
                 Some(cluster.node(0).to_string()),
                 models::VolumeShareProtocol::Nvmf,
                 None,
+                cluster.csi_node(0).to_string(),
             ),
         )
         .await

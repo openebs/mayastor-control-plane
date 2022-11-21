@@ -391,7 +391,6 @@ pub(super) async fn fixup_nexus_protocol(
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
-
     if let Ok(nexus_state) = context.registry().get_nexus(nexus_uuid).await {
         let nexus_spec = nexus.lock().clone();
         if nexus_spec.share != nexus_state.share {
@@ -414,10 +413,11 @@ pub(super) async fn fixup_nexus_protocol(
             if nexus_spec.share.shared() {
                 match NexusShareProtocol::try_from(nexus_spec.share) {
                     Ok(protocol) => {
+                        let allowed_host = nexus.lock().allowed_hosts.clone();
                         nexus
                             .share(
                                 context.registry(),
-                                &ShareNexus::from((&nexus_state, None, protocol)),
+                                &ShareNexus::new(&nexus_state, protocol, allowed_host),
                             )
                             .await?;
                         nexus_spec

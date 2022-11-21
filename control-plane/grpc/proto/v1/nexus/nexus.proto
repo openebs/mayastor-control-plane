@@ -106,6 +106,8 @@ message NexusSpec {
   optional common.SpecOperation operation = 10;
   // Nexus Nvmf Configuration
   optional NexusNvmfConfig nvmf_config = 11;
+  // Hosts allowed to access nexus
+  repeated string allowed_hosts = 12;
 }
 
 // Nexus children (replica or "raw" URI)
@@ -233,6 +235,8 @@ message ShareNexusRequest {
   optional string key = 3;
   // share protocol
   NexusShareProtocol protocol = 4;
+  // Allowed hosts to access nexus
+  repeated string allowed_hosts = 5;
 }
 
 // Reply type for a ShareNexusRequest

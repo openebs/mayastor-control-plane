@@ -1526,6 +1526,14 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/VolumeShareProtocol'
+        - in: query
+          name: frontend_host
+          x-api-scope: internal
+          description: |-
+            Host if specified, is allowed to connect the target.
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -2100,9 +2108,13 @@ components:
           description: |-
             Allows republishing the volume on the node by shutting down the existing target first.
           type: boolean
+        frontend_node:
+          description: The Node id from where the volume target will be accessed.
+          type: string
       required:
         - publish_context
         - protocol
+        - frontend_node
     JsonGeneric:
       description: 'Generic JSON value eg: { "size": 1024 }'
       type: object

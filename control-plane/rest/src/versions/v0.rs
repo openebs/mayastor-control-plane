@@ -11,10 +11,11 @@ pub use common_lib::{
         transport::{
             AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
             CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-            GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, Node, NodeId, Pool, PoolDeviceUri,
-            PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId, ReplicaShareProtocol,
-            ShareNexus, ShareReplica, Specs, Topology, UnshareNexus, UnshareReplica, VolumeId,
-            VolumeLabels, VolumePolicy, Watch, WatchCallback, WatchResourceId,
+            GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, NexusShareProtocol, Node, NodeId,
+            Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId,
+            ReplicaShareProtocol, ShareNexus, ShareReplica, Specs, Topology, UnshareNexus,
+            UnshareReplica, VolumeId, VolumeLabels, VolumePolicy, Watch, WatchCallback,
+            WatchResourceId,
         },
     },
 };
@@ -101,6 +102,7 @@ impl CreatePoolBody {
         }
     }
 }
+
 impl From<CreateReplica> for CreateReplicaBody {
     fn from(create: CreateReplica) -> Self {
         CreateReplicaBody {

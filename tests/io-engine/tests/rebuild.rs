@@ -55,6 +55,7 @@ async fn concurrent_rebuilds() {
                     Some(cluster.node(i).to_string()),
                     models::VolumeShareProtocol::Nvmf,
                     None,
+                    "".to_string(),
                 ),
             )
             .await

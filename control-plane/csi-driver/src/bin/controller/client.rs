@@ -284,6 +284,7 @@ impl IoEngineApiClient {
         volume_id: &uuid::Uuid,
         node: Option<&str>,
         protocol: VolumeShareProtocol,
+        frontend_node: String,
         publish_context: &HashMap<String, String>,
     ) -> Result<Volume, ApiClientError> {
         let publish_volume_body = PublishVolumeBody::new_all(
@@ -292,6 +293,7 @@ impl IoEngineApiClient {
             node.map(|node| node.to_string()),
             protocol,
             None,
+            frontend_node,
         );
         let volume = self
             .rest_client

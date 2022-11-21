@@ -57,9 +57,7 @@ def a_published_volume():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {},
-            Protocol("nvmf"),
-            node=NODE_NAME,
+            {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
         ),
     )
     assert hasattr(volume.spec, "target")
@@ -85,9 +83,7 @@ def publishing_the_volume_should_return_an_already_published_error():
         ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID,
             publish_volume_body=PublishVolumeBody(
-                {},
-                Protocol("nvmf"),
-                node=NODE_NAME,
+                {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
             ),
         )
     except Exception as e:
@@ -104,9 +100,7 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {},
-            Protocol("nvmf"),
-            node=NODE_NAME,
+            {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
         ),
     )
     assert hasattr(volume.spec, "target")

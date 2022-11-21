@@ -71,6 +71,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
                 Some(cluster.node(0)),
                 None,
                 HashMap::new(),
+                vec![],
             ),
             None,
         )
@@ -139,6 +140,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
                 Some(cluster.node(0)),
                 None,
                 HashMap::new(),
+                vec![],
             ),
             None,
         )
@@ -212,6 +214,7 @@ async fn hotspare_missing_children(cluster: &Cluster) {
                 Some(cluster.node(0)),
                 None,
                 HashMap::new(),
+                vec![],
             ),
             None,
         )
@@ -439,6 +442,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
                 Some(cluster.node(0)),
                 None,
                 HashMap::new(),
+                vec![],
             ),
             None,
         )

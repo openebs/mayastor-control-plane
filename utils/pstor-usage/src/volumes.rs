@@ -90,6 +90,7 @@ impl ResourceUpdates for Vec<models::Volume> {
                         Some(node_id.to_string()),
                         models::VolumeShareProtocol::Nvmf,
                         None,
+                        "".to_string(),
                     ),
                 )
                 .await?;

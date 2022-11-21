@@ -152,7 +152,7 @@ async fn reservation() {
         )
         .await
         .unwrap();
-    let share = v0::ShareNexus::from((&nexus1, None, v0::NexusShareProtocol::Nvmf));
+    let share = v0::ShareNexus::new(&nexus1, v0::NexusShareProtocol::Nvmf, vec![]);
     let _nexus1_uri = nexus_client.share(&share, None).await.unwrap();
 
     let nexus_1_ip = cluster.composer().container_ip(cluster.node(0).as_str());
@@ -204,7 +204,7 @@ async fn reservation() {
         )
         .await
         .unwrap();
-    let share = v0::ShareNexus::from((&nexus2, None, v0::NexusShareProtocol::Nvmf));
+    let share = v0::ShareNexus::new(&nexus2, v0::NexusShareProtocol::Nvmf, vec![]);
     let _nexus2_uri = nexus_client.share(&share, None).await.unwrap();
 
     let nexus_2_ip = cluster.composer().container_ip(cluster.node(1).as_str());
