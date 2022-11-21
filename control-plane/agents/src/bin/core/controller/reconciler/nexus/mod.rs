@@ -29,6 +29,7 @@ use crate::controller::{
     resources::{operations::ResourceSharing, OperationGuardArc, TraceSpan, TraceStrLog},
     wrapper::NodeWrapper,
 };
+use agents::errors::SvcError;
 use common_lib::types::v0::transport::{FaultNexusChild, NexusStatus};
 use std::{convert::TryFrom, sync::Arc};
 use tokio::sync::RwLock;
@@ -61,8 +62,7 @@ impl TaskPoller for NexusReconciler {
         for nexus in context.specs().get_nexuses() {
             let skip = {
                 let nexus = nexus.lock();
-                // at the moment, nexuses owned by a volume are only reconciled by the volume
-                !nexus.managed || nexus.owned() || nexus.dirty()
+                nexus.owned() || nexus.dirty()
             };
             if skip {
                 continue;
@@ -71,7 +71,10 @@ impl TaskPoller for NexusReconciler {
                 Ok(guard) => guard,
                 Err(_) => continue,
             };
-            results.push(nexus_reconciler(&mut nexus, context).await);
+            if !nexus.as_ref().managed {
+                results.push(nexus.recreate_state(context).await);
+            }
+            results.push(nexus.reconcile(context).await);
         }
         for target in &mut self.poll_targets {
             results.push(target.try_poll(context).await);
@@ -108,13 +111,16 @@ async fn nexus_reconciler(
     };
 
     if reconcile {
-        squash_results(vec![
+        match squash_results(vec![
             faulted_children_remover(nexus, context).await,
             unknown_children_remover(nexus, context).await,
             missing_children_remover(nexus, context).await,
             fixup_nexus_protocol(nexus, context).await,
             enospc_children_faulter(nexus, context).await,
-        ])
+        ]) {
+            Err(SvcError::NexusNotFound { .. }) => PollResult::Ok(PollerState::Idle),
+            other => other,
+        }
     } else {
         PollResult::Ok(PollerState::Idle)
     }
