@@ -15,6 +15,8 @@ impl ComponentAction for IoEngine {
             let io_engine_socket =
                 format!("{}:10124", cfg.next_ip_for_name(&Self::name(i, options))?);
             let name = Self::name(i, options);
+            let ptpl_dir = format!("{}/{}", Self::ptpl().1, name);
+
             let bin = utils::DATA_PLANE_BINARY;
             let binary = options.io_engine_bin.clone().or_else(|| Self::binary(bin));
 
@@ -36,7 +38,9 @@ impl ComponentAction for IoEngine {
                 "-r",
                 format!("/host/tmp/{}.sock", Self::name(i, options)).as_str(),
             ])
+            .with_args(vec!["--ptpl-dir", &ptpl_dir])
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
+            .with_env("HOSTNQN", Self::nqn(i, options).as_str())
             .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
             .with_env("NEXUS_NVMF_ANA_ENABLE", "1")
             .with_bind("/tmp", "/host/tmp");
@@ -88,6 +92,14 @@ impl ComponentAction for IoEngine {
         }
         for i in 0 .. options.io_engines {
             let name = Self::name(i, options);
+            if i == 0 {
+                let rm = match options.io_engine_bin.is_some() {
+                    true => Binary::which("rm").unwrap(),
+                    false => "rm".to_string(),
+                };
+                cfg.exec(&name, vec![rm.as_str(), "-rf", Self::ptpl().1])
+                    .await?;
+            }
             super::CoreAgent::wait_node_online(cfg, &name).await;
         }
         Ok(())
@@ -95,8 +107,16 @@ impl ComponentAction for IoEngine {
 }
 
 impl IoEngine {
+    /// Get the `IoEngine` container and node name.
     pub fn name(i: u32, _options: &StartOptions) -> String {
         format!("io-engine-{}", i + 1)
+    }
+    pub fn nqn(i: u32, options: &StartOptions) -> String {
+        format!("nqn.2019-05.io.openebs:{}", Self::name(i, options))
+    }
+    /// Get the persistent reservation base path for host and container.
+    pub fn ptpl() -> (&'static str, &'static str) {
+        ("/tmp/ptpl", "/host/tmp/ptpl")
     }
     fn binary(path: &str) -> Option<String> {
         match std::env::var_os(&path) {

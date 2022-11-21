@@ -172,6 +172,7 @@ pub(crate) async fn get_volume_replica_candidates(
                 share: Protocol::None,
                 managed: true,
                 owners: ReplicaOwners::from_volume(&request.uuid),
+                allowed_hosts: vec![],
             }
         })
         .collect::<Vec<_>>())

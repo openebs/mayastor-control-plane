@@ -162,6 +162,8 @@ pub struct CreateReplica {
     pub managed: bool,
     /// Owners of the resource
     pub owners: ReplicaOwners,
+    /// Host nqn's allowed to connect to the target.
+    pub allowed_hosts: Vec<HostNqn>,
 }
 
 /// Replica owners which is a volume or none and a list of nexuses
@@ -338,6 +340,8 @@ pub struct ShareReplica {
     pub name: Option<ReplicaName>,
     /// protocol used for exposing the replica
     pub protocol: ReplicaShareProtocol,
+    /// Nqn of hosts allowed to connect to the replica.
+    pub allowed_hosts: Vec<HostNqn>,
 }
 
 impl From<ShareReplica> for UnshareReplica {
@@ -360,6 +364,7 @@ impl From<&Replica> for ShareReplica {
             uuid: from.uuid.clone(),
             name: from.name.clone().into(),
             protocol: ReplicaShareProtocol::Nvmf,
+            allowed_hosts: vec![],
         }
     }
 }
@@ -384,6 +389,7 @@ impl From<UnshareReplica> for ShareReplica {
             uuid: share.uuid,
             name: share.name,
             protocol: ReplicaShareProtocol::Nvmf,
+            allowed_hosts: vec![],
         }
     }
 }

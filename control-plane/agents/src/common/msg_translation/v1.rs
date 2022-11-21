@@ -8,8 +8,8 @@ use common_lib::{
         openapi::apis::IntoVec,
         transport::{
             self, Child, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
-            NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol, Replica,
-            ReplicaId, ReplicaName, ReplicaStatus,
+            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
+            Replica, ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
@@ -114,13 +114,14 @@ impl AgentToIoEngine for transport::CreateReplica {
             uuid: self.uuid.clone().into(),
             pooluuid: match self.pool_uuid.clone() {
                 Some(uuid) => uuid.into(),
-                // TODO implement a getter function to fetch the uuid of the pool from the given
-                //      name
+                // TODO: implement a getter function to fetch the uuid of the pool from the given
+                //       name
                 None => self.pool_id.clone().into(),
             },
             thin: self.thin,
             size: self.size,
             share: self.share as i32,
+            allowed_hosts: self.allowed_hosts.clone().into_vec(),
         }
     }
 }
@@ -131,6 +132,7 @@ impl AgentToIoEngine for transport::ShareReplica {
         Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             share: self.protocol as i32,
+            allowed_hosts: self.allowed_hosts.clone().into_vec(),
         }
     }
 }
@@ -242,7 +244,10 @@ impl IoEngineToAgent for v1_rpc::nexus::Child {
 impl AgentToIoEngine for transport::CreateNexus {
     type IoEngineMessage = v1_rpc::nexus::CreateNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        let nexus_config = self.config.clone().unwrap_or_default();
+        let nexus_config = self
+            .config
+            .clone()
+            .unwrap_or_else(|| NexusNvmfConfig::default().with_no_resv());
         Self::IoEngineMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
@@ -279,6 +284,7 @@ impl AgentToIoEngine for transport::ShareNexus {
             uuid: self.uuid.clone().into(),
             key: self.key.clone().unwrap_or_default(),
             share: self.protocol as i32,
+            ..Default::default()
         }
     }
 }

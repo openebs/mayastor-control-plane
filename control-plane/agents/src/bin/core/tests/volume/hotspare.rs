@@ -385,6 +385,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
                 share: Default::default(),
                 managed: true,
                 owners: ReplicaOwners::from_volume(volume.uuid()),
+                allowed_hosts: vec![],
             },
             None,
         )

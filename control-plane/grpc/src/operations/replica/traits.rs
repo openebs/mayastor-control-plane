@@ -16,10 +16,11 @@ use common_lib::{
         },
         transport,
         transport::{
-            CreateReplica, DestroyReplica, Filter, NexusId, NodeId, PoolId, PoolUuid, Replica,
-            ReplicaId, ReplicaName, ReplicaOwners, ShareReplica, UnshareReplica, VolumeId,
+            CreateReplica, DestroyReplica, Filter, HostNqn, NexusId, NodeId, PoolId, PoolUuid,
+            Replica, ReplicaId, ReplicaName, ReplicaOwners, ShareReplica, UnshareReplica, VolumeId,
         },
     },
+    IntoVec,
 };
 use std::convert::TryFrom;
 
@@ -246,6 +247,8 @@ pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
     fn managed(&self) -> bool;
     /// Owners of the resource
     fn owners(&self) -> ReplicaOwners;
+    /// List of host nqn allowed to connect to the target.
+    fn allowed_hosts(&self) -> Vec<HostNqn>;
 }
 
 impl CreateReplicaInfo for CreateReplica {
@@ -288,6 +291,10 @@ impl CreateReplicaInfo for CreateReplica {
     fn owners(&self) -> ReplicaOwners {
         self.owners.clone()
     }
+
+    fn allowed_hosts(&self) -> Vec<HostNqn> {
+        self.allowed_hosts.clone()
+    }
 }
 
 /// Intermediate structure that validates the conversion to CreateVolumeRequest type
@@ -298,6 +305,7 @@ pub struct ValidatedCreateReplicaRequest {
     share: transport::Protocol,
     owners: ReplicaOwners,
     pool_uuid: Option<PoolUuid>,
+    allowed_hosts: Vec<HostNqn>,
 }
 
 impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
@@ -340,6 +348,10 @@ impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
     fn owners(&self) -> ReplicaOwners {
         self.owners.clone()
     }
+
+    fn allowed_hosts(&self) -> Vec<HostNqn> {
+        self.allowed_hosts.clone()
+    }
 }
 
 impl ValidateRequestTypes for CreateReplicaRequest {
@@ -379,6 +391,11 @@ impl ValidateRequestTypes for CreateReplicaRequest {
                 }),
                 None => None,
             },
+            allowed_hosts: self
+                .allowed_hosts
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
             inner: self,
         })
     }
@@ -509,6 +526,8 @@ pub trait ShareReplicaInfo: Send + Sync + std::fmt::Debug {
     fn uuid(&self) -> ReplicaId;
     /// Protocol used for exposing the replica
     fn protocol(&self) -> transport::ReplicaShareProtocol;
+    /// List of host nqn allowed to connect to the target.
+    fn allowed_hosts(&self) -> Vec<HostNqn>;
 }
 
 impl ShareReplicaInfo for ShareReplica {
@@ -535,15 +554,20 @@ impl ShareReplicaInfo for ShareReplica {
     fn protocol(&self) -> transport::ReplicaShareProtocol {
         self.protocol
     }
+
+    fn allowed_hosts(&self) -> Vec<HostNqn> {
+        self.allowed_hosts.clone()
+    }
 }
 
-/// Intermediate structure that validates the conversion to ShareVolumeRequest type
+/// Intermediate structure that validates the conversion to ShareVolumeRequest type.
 #[derive(Debug)]
 pub struct ValidatedShareReplicaRequest {
     inner: ShareReplicaRequest,
     uuid: ReplicaId,
     protocol: transport::ReplicaShareProtocol,
     pool_uuid: Option<PoolUuid>,
+    allowed_hosts: Vec<HostNqn>,
 }
 
 impl ShareReplicaInfo for ValidatedShareReplicaRequest {
@@ -569,6 +593,10 @@ impl ShareReplicaInfo for ValidatedShareReplicaRequest {
 
     fn protocol(&self) -> transport::ReplicaShareProtocol {
         self.protocol
+    }
+
+    fn allowed_hosts(&self) -> Vec<HostNqn> {
+        self.allowed_hosts.clone()
     }
 }
 
@@ -600,6 +628,11 @@ impl ValidateRequestTypes for ShareReplicaRequest {
                 }),
                 None => None,
             },
+            allowed_hosts: self
+                .allowed_hosts
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
             inner: self,
         })
     }
@@ -709,6 +742,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
             share: share as i32,
             managed: data.managed(),
             owners: Some(data.owners().into()),
+            allowed_hosts: data.allowed_hosts().into_vec(),
         }
     }
 }
@@ -726,6 +760,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplica {
             share: data.share(),
             managed: data.managed(),
             owners: data.owners(),
+            allowed_hosts: data.allowed_hosts(),
         }
     }
 }
@@ -766,6 +801,7 @@ impl From<&dyn ShareReplicaInfo> for ShareReplicaRequest {
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
             protocol: protocol as i32,
+            allowed_hosts: data.allowed_hosts().into_vec(),
         }
     }
 }
@@ -779,6 +815,7 @@ impl From<&dyn ShareReplicaInfo> for ShareReplica {
             uuid: data.uuid(),
             name: data.name(),
             protocol: data.protocol(),
+            allowed_hosts: data.allowed_hosts(),
         }
     }
 }
@@ -989,6 +1026,7 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                 operation: ReplicaOperation::Create,
                 result: op.result,
             }),
+            allowed_hosts: None,
         })
     }
 }

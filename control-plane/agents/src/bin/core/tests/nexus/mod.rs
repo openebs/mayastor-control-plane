@@ -84,6 +84,7 @@ async fn nexus() {
                 uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
                 key: None,
                 protocol: NexusShareProtocol::Nvmf,
+                allowed_hosts: vec![],
             },
             None,
         )
