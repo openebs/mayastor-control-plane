@@ -19,6 +19,9 @@ pub(crate) const POOL_OPERATOR_SERVICE: &str = "operator-diskpool";
 /// Defines the name of the rest service
 pub(crate) const REST_SERVICE: &str = "api-rest";
 
+/// Defines the name of agent-ha-node
+pub(crate) const AGENT_HA_NODE: &str = "agent-ha-node";
+
 /// Defines the name of the csi node daemon service
 pub(crate) const CSI_NODE_SERVICE: &str = "csi-node";
 
@@ -49,6 +52,7 @@ lazy_static! {
             (REST_SERVICE, true),
             (CSI_NODE_SERVICE, true),
             (ETCD_SERVICE, true),
+            (AGENT_HA_NODE, true),
         ]);
 
     /// List of resources fall under data plane services
