@@ -305,6 +305,21 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             .get_volume(&volume_id)
             .await?;
 
+        // Prepare the context for the IoEngine Node CSI plugin.
+        let mut publish_context = HashMap::new();
+
+        let context = PublishParams::try_from(&args.volume_context)?;
+
+        if let Some(io_timeout) = context.io_timeout() {
+            publish_context.insert(Parameters::IoTimeout.to_string(), io_timeout.to_string());
+        }
+        if let Some(ctrl_loss_tmo) = context.ctrl_loss_tmo() {
+            publish_context.insert(
+                Parameters::NvmeCtrlLossTmo.to_string(),
+                ctrl_loss_tmo.to_string(),
+            );
+        }
+
         let uri =
             // Volume is already published, make sure the protocol matches and get URI.
             match &volume.spec.target {
@@ -356,7 +371,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                 // Volume is not published.
                 let v = IoEngineApiClient::get_client()
-                    .publish_volume(&volume_id, target_node, protocol)
+                    .publish_volume(&volume_id, target_node, protocol, &publish_context)
                     .await?;
 
                 if let Some((node, uri)) = get_volume_share_location(&v) {
@@ -376,21 +391,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             }
         };
 
-        // Prepare the context for the IoEngine Node CSI plugin.
-        let mut publish_context = HashMap::new();
         publish_context.insert("uri".to_string(), uri);
-
-        let context = PublishParams::try_from(&args.volume_context)?;
-
-        if let Some(io_timeout) = context.io_timeout() {
-            publish_context.insert(Parameters::IoTimeout.to_string(), io_timeout.to_string());
-        }
-        if let Some(ctrl_loss_tmo) = context.ctrl_loss_tmo() {
-            publish_context.insert(
-                Parameters::NvmeCtrlLossTmo.to_string(),
-                ctrl_loss_tmo.to_string(),
-            );
-        }
 
         debug!(
             "Publish context for volume {}: {:?}",

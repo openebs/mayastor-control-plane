@@ -106,6 +106,9 @@ pub struct VolumeSpec {
     /// Last used Target Configuration.
     #[serde(default)]
     pub target_config: Option<TargetConfig>,
+    /// The publish context of the volume.
+    #[serde(default)]
+    pub publish_context: HashMap<String, String>,
 }
 
 /// The volume's Nvmf Configuration.
@@ -427,6 +430,7 @@ impl From<&CreateVolume> for VolumeSpec {
             operation: None,
             thin: request.thin,
             target_config: None,
+            publish_context: HashMap::new(),
         }
     }
 }

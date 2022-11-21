@@ -16,6 +16,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_policy import VolumePolicy
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -54,7 +55,10 @@ def test_unpublish_an_already_unpublished_volume():
 def a_published_volume():
     """a published volume."""
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_NAME
+        VOLUME_UUID,
+        Protocol("nvmf"),
+        node=NODE_NAME,
+        publish_volume_body=PublishVolumeBody(publish_context={}),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))

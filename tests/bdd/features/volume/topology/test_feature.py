@@ -24,6 +24,7 @@ from openapi.model.volume_spec import VolumeSpec
 from openapi.model.topology import Topology
 from openapi.model.pool_topology import PoolTopology
 from openapi.model.labelled_topology import LabelledTopology
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -218,7 +219,10 @@ def an_existing_published_volume_without_pool_topology():
     )
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_1_NAME
+        VOLUME_UUID,
+        Protocol("nvmf"),
+        node=NODE_1_NAME,
+        publish_volume_body=PublishVolumeBody(publish_context={}),
     )
 
 
@@ -252,7 +256,10 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
     )
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_1_NAME
+        VOLUME_UUID,
+        Protocol("nvmf"),
+        node=NODE_1_NAME,
+        publish_volume_body=PublishVolumeBody(publish_context={}),
     )
 
 
@@ -278,7 +285,10 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
     )
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_1_NAME
+        VOLUME_UUID,
+        Protocol("nvmf"),
+        node=NODE_1_NAME,
+        publish_volume_body=PublishVolumeBody(publish_context={}),
     )
 
 

@@ -1,7 +1,8 @@
 use crate::resources::{
     FormatSamples, ResourceDelete, ResourceMgr, ResourceSample, ResourceUpdates,
 };
-use openapi::{apis::Uuid, clients::tower::direct::ApiClient, models};
+use openapi::{apis::Uuid, clients::tower::direct::ApiClient, models, models::PublishVolumeBody};
+use std::collections::HashMap;
 
 /// Resource manager for volumes.
 #[derive(Default)]
@@ -84,6 +85,7 @@ impl ResourceUpdates for Vec<models::Volume> {
                 .put_volume_target(
                     &volume.spec.uuid,
                     models::VolumeShareProtocol::Nvmf,
+                    PublishVolumeBody::new(HashMap::new()),
                     Some(node_id.as_str()),
                     None,
                     None,

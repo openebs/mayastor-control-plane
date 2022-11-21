@@ -29,6 +29,7 @@ use grpc::operations::{
     replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
 };
 use std::{
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     str::FromStr,
     time::Duration,
@@ -125,6 +126,7 @@ async fn nexus_persistence_test_iteration(
                 // publish it on the remote first, to complicate things
                 target_node: Some(remote.clone()),
                 share: None,
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -201,6 +203,7 @@ async fn nexus_persistence_test_iteration(
                 uuid: volume_state.uuid.clone(),
                 target_node: Some(local.clone()),
                 share: None,
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -296,6 +299,7 @@ async fn publishing_test(cluster: &Cluster) {
                 uuid: volume.spec().uuid.clone(),
                 target_node: None,
                 share: None,
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -359,6 +363,7 @@ async fn publishing_test(cluster: &Cluster) {
                 uuid: volume_state.uuid.clone(),
                 target_node: None,
                 share: None,
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -376,6 +381,7 @@ async fn publishing_test(cluster: &Cluster) {
                 uuid: volume_state.uuid.clone(),
                 target_node: Some(cluster.node(0)),
                 share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -409,6 +415,7 @@ async fn publishing_test(cluster: &Cluster) {
                 uuid: volume_state.uuid.clone(),
                 target_node: None,
                 share: Some(VolumeShareProtocol::Iscsi),
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -421,6 +428,7 @@ async fn publishing_test(cluster: &Cluster) {
                 uuid: volume_state.uuid.clone(),
                 target_node: None,
                 share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -438,6 +446,7 @@ async fn publishing_test(cluster: &Cluster) {
                 uuid: volume_state.uuid.clone(),
                 target_node: Some(cluster.node(1)),
                 share: None,
+                publish_context: HashMap::new(),
             },
             None,
         )

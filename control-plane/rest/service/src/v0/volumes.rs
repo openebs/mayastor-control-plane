@@ -148,6 +148,7 @@ impl apis::actix_server::Volumes for RestApi {
             Option<bool>,
             Option<bool>,
         )>,
+        Body(publish_volume_body): Body<models::PublishVolumeBody>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
         let volume = match republish.unwrap_or(false) {
             true => {
@@ -170,6 +171,7 @@ impl apis::actix_server::Volumes for RestApi {
                             uuid: volume_id.into(),
                             target_node: node.map(|id| id.into()),
                             share: Some(protocol.into()),
+                            publish_context: publish_volume_body.publish_context,
                         },
                         None,
                     )

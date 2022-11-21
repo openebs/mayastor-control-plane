@@ -5,6 +5,7 @@ use common_lib::types::v0::{
     openapi::{
         apis::{StatusCode, Uuid},
         models,
+        models::PublishVolumeBody,
         tower::client::Error,
     },
     transport::{
@@ -15,7 +16,7 @@ use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     nexus::traits::NexusOperations, node::traits::NodeOperations, volume::traits::VolumeOperations,
 };
-use std::{convert::TryInto, time::Duration};
+use std::{collections::HashMap, convert::TryInto, time::Duration};
 
 #[tokio::test]
 async fn garbage_collection() {
@@ -62,6 +63,7 @@ async fn deleting_volume_reconcile(cluster: &Cluster) {
                 uuid: volume.uuid().clone(),
                 share: None,
                 target_node: None,
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -153,6 +155,7 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
         .put_volume_target(
             &volume.spec.uuid,
             models::VolumeShareProtocol::Nvmf,
+            PublishVolumeBody::new(HashMap::new()),
             Some(&free_node),
             None,
             None,
@@ -217,6 +220,7 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
         .put_volume_target(
             &volume.spec.uuid,
             models::VolumeShareProtocol::Nvmf,
+            PublishVolumeBody::new(HashMap::new()),
             Some(cluster.node(0).as_str()),
             None,
             None,
@@ -300,6 +304,7 @@ async fn unused_reconcile(cluster: &Cluster) {
         .put_volume_target(
             &volume.spec.uuid,
             models::VolumeShareProtocol::Nvmf,
+            PublishVolumeBody::new(HashMap::new()),
             Some(nexus_node.id.as_str()),
             None,
             None,
@@ -320,6 +325,7 @@ async fn unused_reconcile(cluster: &Cluster) {
         .put_volume_target(
             &volume.spec.uuid,
             models::VolumeShareProtocol::Nvmf,
+            PublishVolumeBody::new(HashMap::new()),
             Some(unused_node.id.as_str()),
             None,
             None,
@@ -407,6 +413,7 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
         .put_volume_target(
             &volume.spec().uuid,
             models::VolumeShareProtocol::Nvmf,
+            PublishVolumeBody::new(HashMap::new()),
             Some(cluster.node(0).as_str()),
             None,
             None,

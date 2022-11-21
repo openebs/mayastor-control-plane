@@ -1469,6 +1469,12 @@ paths:
           required: false
           schema:
             type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishVolumeBody'
+        required: true
       responses:
         '200':
           description: OK
@@ -2089,6 +2095,21 @@ components:
         - replicas
         - size
         - thin
+    PublishVolumeBody:
+      example:
+        publish_context:
+          io_timeout: "30"
+          ctrl_loss_timeout: "1980"
+      description: Publish Volume Body JSON
+      type: object
+      properties:
+        publish_context:
+          description: Controller Volume Publish context
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - publish_context
     JsonGeneric:
       description: 'Generic JSON value eg: { "size": 1024 }'
       type: object

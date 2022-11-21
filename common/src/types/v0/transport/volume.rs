@@ -398,6 +398,8 @@ pub struct PublishVolume {
     pub target_node: Option<NodeId>,
     /// share protocol
     pub share: Option<VolumeShareProtocol>,
+    /// Publish Context.
+    pub publish_context: HashMap<String, String>,
 }
 impl PublishVolume {
     /// Create new `PublishVolume` based on the provided arguments
@@ -405,11 +407,13 @@ impl PublishVolume {
         uuid: VolumeId,
         target_node: Option<NodeId>,
         share: Option<VolumeShareProtocol>,
+        publish_context: HashMap<String, String>,
     ) -> Self {
         Self {
             uuid,
             target_node,
             share,
+            publish_context,
         }
     }
 }

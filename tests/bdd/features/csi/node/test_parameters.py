@@ -13,6 +13,7 @@ from common.deployer import Deployer
 from common.nvme import nvme_find_device
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_policy import VolumePolicy
 
@@ -78,7 +79,10 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, 10241024, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
-        volume.spec.uuid, Protocol("nvmf"), node=NODE1
+        volume.spec.uuid,
+        Protocol("nvmf"),
+        node=NODE1,
+        publish_volume_body=PublishVolumeBody(publish_context={}),
     )
     device_uri = volume.state["target"]["deviceUri"]
     print(device_uri)

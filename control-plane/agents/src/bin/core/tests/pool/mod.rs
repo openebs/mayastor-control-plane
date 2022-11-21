@@ -6,7 +6,10 @@ use common_lib::{
             apis::StatusCode,
             clients::tower::Error,
             models,
-            models::{CreateReplicaBody, CreateVolumeBody, Pool, PoolState, VolumePolicy},
+            models::{
+                CreateReplicaBody, CreateVolumeBody, Pool, PoolState, PublishVolumeBody,
+                VolumePolicy,
+            },
         },
         store::{
             definitions::Store,
@@ -28,7 +31,7 @@ use grpc::{
     },
 };
 use itertools::Itertools;
-use std::{convert::TryFrom, thread::sleep, time::Duration};
+use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
 
 #[tokio::test]
 async fn pool() {
@@ -781,6 +784,7 @@ async fn disown_unused_replicas() {
         .put_volume_target(
             &volume.spec.uuid,
             models::VolumeShareProtocol::Nvmf,
+            PublishVolumeBody::new(HashMap::new()),
             Some(&node),
             None,
             None,

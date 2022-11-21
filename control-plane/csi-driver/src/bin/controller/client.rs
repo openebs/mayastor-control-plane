@@ -3,10 +3,11 @@ use common_lib::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
     models::{
-        CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology, RestJsonError, Topology, Volume,
-        VolumePolicy, VolumeShareProtocol, Volumes,
+        CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology, PublishVolumeBody, RestJsonError,
+        Topology, Volume, VolumePolicy, VolumeShareProtocol, Volumes,
     },
 };
+use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
@@ -283,11 +284,13 @@ impl IoEngineApiClient {
         volume_id: &uuid::Uuid,
         node: Option<&str>,
         protocol: VolumeShareProtocol,
+        publish_context: &HashMap<String, String>,
     ) -> Result<Volume, ApiClientError> {
+        let publish_volume_body = PublishVolumeBody::new(publish_context.clone());
         let volume = self
             .rest_client
             .volumes_api()
-            .put_volume_target(volume_id, protocol, node, None, None)
+            .put_volume_target(volume_id, protocol, publish_volume_body, node, None, None)
             .await?;
         Ok(volume.into_body())
     }

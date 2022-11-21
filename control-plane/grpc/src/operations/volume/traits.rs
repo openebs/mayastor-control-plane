@@ -116,6 +116,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
                 target_config: volume_spec.target_config.into_opt(),
+                publish_context: volume_spec.publish_context,
             }),
         }
     }
@@ -232,6 +233,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             operation: None,
             thin: volume_spec.thin,
             target_config: None,
+            publish_context: volume_meta.publish_context,
         };
         Ok(volume_spec)
     }
@@ -965,6 +967,8 @@ pub trait PublishVolumeInfo: Send + Sync + std::fmt::Debug {
     fn target_node(&self) -> Option<NodeId>;
     /// The protocol over which volume be published
     fn share(&self) -> Option<VolumeShareProtocol>;
+    /// The Publish context
+    fn publish_context(&self) -> HashMap<String, String>;
 }
 
 impl PublishVolumeInfo for PublishVolume {
@@ -979,6 +983,10 @@ impl PublishVolumeInfo for PublishVolume {
     fn share(&self) -> Option<VolumeShareProtocol> {
         self.share
     }
+
+    fn publish_context(&self) -> HashMap<String, String> {
+        self.publish_context.clone()
+    }
 }
 
 impl PublishVolumeInfo for RepublishVolume {
@@ -992,6 +1000,10 @@ impl PublishVolumeInfo for RepublishVolume {
 
     fn share(&self) -> Option<VolumeShareProtocol> {
         Some(self.share)
+    }
+
+    fn publish_context(&self) -> HashMap<String, String> {
+        unimplemented!()
     }
 }
 
@@ -1017,6 +1029,10 @@ impl PublishVolumeInfo for ValidatedPublishVolumeRequest {
 
     fn share(&self) -> Option<VolumeShareProtocol> {
         self.share
+    }
+
+    fn publish_context(&self) -> HashMap<String, String> {
+        self.inner.publish_context.clone()
     }
 }
 
@@ -1049,6 +1065,7 @@ impl From<&dyn PublishVolumeInfo> for PublishVolume {
             uuid: data.uuid(),
             target_node: data.target_node(),
             share: data.share(),
+            publish_context: data.publish_context(),
         }
     }
 }
@@ -1066,6 +1083,7 @@ impl From<&dyn PublishVolumeInfo> for PublishVolumeRequest {
             uuid: Some(data.uuid().to_string()),
             target_node: data.target_node().map(|node_id| node_id.to_string()),
             share,
+            publish_context: data.publish_context(),
         }
     }
 }

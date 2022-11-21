@@ -20,7 +20,7 @@ use grpc::operations::{
     node::traits::NodeOperations, registry::traits::RegistryOperations,
     replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
 };
-use std::{convert::TryInto, time::Duration};
+use std::{collections::HashMap, convert::TryInto, time::Duration};
 
 #[tokio::test]
 async fn hotspare() {
@@ -66,7 +66,12 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
 
     let volume = volume_client
         .publish(
-            &PublishVolume::new(volume.spec().uuid.clone(), Some(cluster.node(0)), None),
+            &PublishVolume::new(
+                volume.spec().uuid.clone(),
+                Some(cluster.node(0)),
+                None,
+                HashMap::new(),
+            ),
             None,
         )
         .await
@@ -129,7 +134,12 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
 
     let volume = volume_client
         .publish(
-            &PublishVolume::new(volume.spec().uuid.clone(), Some(cluster.node(0)), None),
+            &PublishVolume::new(
+                volume.spec().uuid.clone(),
+                Some(cluster.node(0)),
+                None,
+                HashMap::new(),
+            ),
             None,
         )
         .await
@@ -197,7 +207,12 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 
     let volume = volume_client
         .publish(
-            &PublishVolume::new(volume.spec().uuid.clone(), Some(cluster.node(0)), None),
+            &PublishVolume::new(
+                volume.spec().uuid.clone(),
+                Some(cluster.node(0)),
+                None,
+                HashMap::new(),
+            ),
             None,
         )
         .await
@@ -419,7 +434,12 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
 
     let volume = volume_client
         .publish(
-            &PublishVolume::new(volume.spec().uuid.clone(), Some(cluster.node(0)), None),
+            &PublishVolume::new(
+                volume.spec().uuid.clone(),
+                Some(cluster.node(0)),
+                None,
+                HashMap::new(),
+            ),
             None,
         )
         .await

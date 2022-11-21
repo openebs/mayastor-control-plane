@@ -22,6 +22,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_policy import VolumePolicy
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_UUID_1 = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_UUID_2 = "22e1d15f-4dfd-4bf5-a98f-74e4aebf9e62"
@@ -110,7 +111,10 @@ def a_published_volume_with_two_replicas():
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_NAME_1
+        VOLUME_UUID,
+        Protocol("nvmf"),
+        node=NODE_NAME_1,
+        publish_volume_body=PublishVolumeBody(publish_context={}),
     )
     pytest.older_nexus_uri = volume["state"]["target"]["deviceUri"]
 
@@ -177,6 +181,7 @@ def the_volume_republish_and_the_destroy_shutdown_target_call_has_succeeded_for_
                 Protocol("nvmf"),
                 republish="true",
                 reuse_existing=pytest.reuse_existing,
+                publish_volume_body=PublishVolumeBody(publish_context={}),
             )
         except grpc.RpcError:
             pytest.fail("Volume republish call failed")
@@ -197,6 +202,7 @@ def the_volume_republish_on_another_node_has_succeeded():
             node=NODE_NAME_2,
             republish="true",
             reuse_existing=pytest.reuse_existing,
+            publish_volume_body=PublishVolumeBody(publish_context={}),
         )
     except grpc.RpcError:
         pytest.fail("Volume Republish Failed")

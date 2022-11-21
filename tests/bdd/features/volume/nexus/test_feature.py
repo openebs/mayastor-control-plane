@@ -19,6 +19,7 @@ from openapi.model.nexus_state import NexusState
 from openapi.model.topology import Topology
 from openapi.model.pool_topology import PoolTopology
 from openapi.model.labelled_topology import LabelledTopology
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 
 @scenario("feature.feature", "the target nexus is faulted")
@@ -47,7 +48,10 @@ def a_published_selfhealing_volume():
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=IO_ENGINE_1
+        VOLUME_UUID,
+        Protocol("nvmf"),
+        node=IO_ENGINE_1,
+        publish_volume_body=PublishVolumeBody(publish_context={}),
     )
 
 

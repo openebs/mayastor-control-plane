@@ -12,7 +12,7 @@ use grpc::operations::{
     pool::traits::PoolOperations, registry::traits::RegistryOperations,
     replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
 };
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -49,6 +49,7 @@ async fn lazy_delete_shutdown_targets() {
                 uuid: volume.uuid().clone(),
                 share: None,
                 target_node: Some(cluster.node(0)),
+                publish_context: HashMap::new(),
             },
             None,
         )
@@ -177,6 +178,7 @@ async fn volume_republish_nexus_recreation() {
                 uuid: VOLUME_UUID.try_into().unwrap(),
                 share: Some(VolumeShareProtocol::Nvmf),
                 target_node: Some(replica_node.into()),
+                publish_context: HashMap::new(),
             },
             None,
         )
