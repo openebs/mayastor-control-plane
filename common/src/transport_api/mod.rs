@@ -10,7 +10,7 @@ pub mod v0;
 
 pub use macros::*;
 
-use crate::types::v0::transport::{MessageIdVs, VERSION};
+use crate::types::v0::transport::{HostNqnParseError, MessageIdVs, VERSION};
 use async_trait::async_trait;
 use dyn_clonable::clonable;
 
@@ -151,6 +151,16 @@ pub struct ReplyError {
     pub source: String,
     /// extra information.
     pub extra: String,
+}
+
+impl From<HostNqnParseError> for ReplyError {
+    fn from(error: HostNqnParseError) -> Self {
+        Self::invalid_argument(
+            ResourceKind::Unknown,
+            "allowed_host",
+            format!("{:?}", error),
+        )
+    }
 }
 
 impl From<tonic::Status> for ReplyError {
