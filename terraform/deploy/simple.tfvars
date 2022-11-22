@@ -9,7 +9,7 @@ io_engine_memory        = "1Gi"
 io_engine_cpu_list      = "1"
 
 # global registry and tag options
-registry = "kvmhost:5000/mayadata"
+registry = "kvmhost:5000/openebs"
 #tag      = "latest"
 
 # control plane configuration
