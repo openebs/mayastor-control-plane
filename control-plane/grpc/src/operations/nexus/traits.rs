@@ -912,6 +912,7 @@ impl From<&dyn ShareNexusInfo> for ShareNexus {
             uuid: data.uuid(),
             key: data.key(),
             protocol: data.protocol(),
+            allowed_hosts: vec![],
         }
     }
 }

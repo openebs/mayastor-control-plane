@@ -120,14 +120,26 @@ impl SpecOperationsHelper for ReplicaSpec {
         op: Self::UpdateOp,
     ) -> Result<(), SvcError> {
         match op {
-            ReplicaOperation::Share(_) if self.share.shared() && state.share.shared() => {
+            ReplicaOperation::Share(proto, _) if proto != self.share && self.share.shared() => {
                 Err(SvcError::AlreadyShared {
                     kind: self.kind(),
                     id: self.uuid_str(),
                     share: state.share.to_string(),
                 })
             }
-            ReplicaOperation::Share(_) => Ok(()),
+            ReplicaOperation::Share(_, _) if !self.share.shared() => Ok(()),
+            ReplicaOperation::Share(_, ref allowed_hosts) => {
+                if allowed_hosts == &self.allowed_hosts && self.allowed_hosts == state.allowed_hosts
+                {
+                    Err(SvcError::AlreadyShared {
+                        kind: self.kind(),
+                        id: self.uuid_str(),
+                        share: state.share.to_string(),
+                    })
+                } else {
+                    Ok(())
+                }
+            }
             ReplicaOperation::Unshare if !self.share.shared() && !state.share.shared() => {
                 Err(SvcError::NotShared {
                     kind: self.kind(),

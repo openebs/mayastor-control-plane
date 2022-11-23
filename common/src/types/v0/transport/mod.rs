@@ -5,6 +5,7 @@ pub mod jsongrpc;
 pub mod misc;
 pub mod nexus;
 pub mod node;
+pub mod nvme_nqn;
 pub mod pool;
 pub mod replica;
 pub mod spec;
@@ -19,6 +20,7 @@ pub use jsongrpc::*;
 pub use misc::*;
 pub use nexus::*;
 pub use node::*;
+pub use nvme_nqn::{NvmeNqn as HostNqn, NvmeNqnParseError as HostNqnParseError, *};
 pub use pool::*;
 pub use replica::*;
 pub use spec::*;
@@ -26,15 +28,15 @@ pub use state::*;
 pub use volume::*;
 pub use watch::*;
 
-use crate::types::v0::openapi::*;
-use std::fmt::Debug;
-use strum_macros::{EnumString, ToString};
-
-use crate::transport_api::MessageId;
 pub use crate::{
     rpc_impl_string_id, rpc_impl_string_id_inner, rpc_impl_string_id_percent_decoding,
     rpc_impl_string_uuid, rpc_impl_string_uuid_inner,
 };
+
+use crate::{transport_api::MessageId, types::v0::openapi::*};
+
+use std::fmt::Debug;
+use strum_macros::{EnumString, ToString};
 
 pub const VERSION: &str = "v0";
 

@@ -14,6 +14,7 @@ use common_lib::{
 };
 
 use crate::msg_translation::{IoEngineToAgent, TryIoEngineToAgent};
+use common_lib::types::v0::transport::NexusNvmfConfig;
 use rpc::io_engine as v0_rpc;
 use std::convert::TryFrom;
 
@@ -100,7 +101,7 @@ impl IoEngineToAgent for v0_rpc::Pool {
 impl TryIoEngineToAgent for v0_rpc::ReplicaV2 {
     type AgentMessage = transport::Replica;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
-        Ok(Self::AgentMessage {
+        Ok(transport::Replica {
             node: Default::default(),
             name: self.name.clone().into(),
             uuid: ReplicaId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
@@ -114,6 +115,15 @@ impl TryIoEngineToAgent for v0_rpc::ReplicaV2 {
             share: self.share.into(),
             uri: self.uri.clone(),
             status: ReplicaStatus::Online,
+            allowed_hosts: self
+                .allowed_hosts
+                .iter()
+                .map(|n| {
+                    // should we allow for invalid here since it comes directly from the dataplane?
+                    transport::HostNqn::try_from(n)
+                        .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
+                })
+                .collect(),
         })
     }
 }
@@ -223,6 +233,7 @@ impl AgentToIoEngine for transport::CreateReplica {
             thin: self.thin,
             size: self.size,
             share: self.share as i32,
+            allowed_hosts: self.allowed_hosts.clone().into_vec(),
         }
     }
 }
@@ -234,6 +245,7 @@ impl AgentToIoEngine for transport::ShareReplica {
             // todo: CAS-1107
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             share: self.protocol as i32,
+            allowed_hosts: self.allowed_hosts.clone().into_vec(),
         }
     }
 }
@@ -244,6 +256,7 @@ impl AgentToIoEngine for transport::UnshareReplica {
         Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             share: Protocol::None as i32,
+            ..Default::default()
         }
     }
 }
@@ -281,7 +294,10 @@ impl AgentToIoEngine for transport::DestroyPool {
 impl AgentToIoEngine for transport::CreateNexus {
     type IoEngineMessage = v0_rpc::CreateNexusV2Request;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        let nexus_config = self.config.clone().unwrap_or_default();
+        let nexus_config = self
+            .config
+            .clone()
+            .unwrap_or_else(|| NexusNvmfConfig::default().with_no_resv());
         Self::IoEngineMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
@@ -309,6 +325,7 @@ impl AgentToIoEngine for transport::ShareNexus {
             uuid: self.uuid.clone().into(),
             key: self.key.clone().unwrap_or_default(),
             share: self.protocol as i32,
+            ..Default::default()
         }
     }
 }

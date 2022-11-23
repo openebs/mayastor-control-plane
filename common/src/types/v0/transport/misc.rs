@@ -6,38 +6,38 @@ use std::{convert::TryFrom, fmt::Debug};
 use std::str::FromStr;
 use strum_macros::{EnumString, ToString};
 
-/// Filter Objects based on one of the following criteria
+/// Filter Objects based on one of the following criteria.
 /// # Example:
 /// // Get all nexuses from the node `node_id`
 /// let nexuses =
 ///     client.get_nexuses(Filter::Node(node_id)).await.unwrap();
 #[derive(Serialize, Deserialize, Debug, Clone, strum_macros::ToString)] // likely this ToString does not do the right thing...
 pub enum Filter {
-    /// All objects
+    /// All objects.
     None,
-    /// Filter by Node id
+    /// Filter by Node id.
     Node(NodeId),
-    /// Pool filters
+    /// Pool filters.
     ///
-    /// Filter by Pool id
+    /// Filter by Pool id.
     Pool(PoolId),
-    /// Filter by Node and Pool id
+    /// Filter by Node and Pool id.
     NodePool(NodeId, PoolId),
-    /// Filter by Node and Replica id
+    /// Filter by Node and Replica id.
     NodeReplica(NodeId, ReplicaId),
-    /// Filter by Node, Pool and Replica id
+    /// Filter by Node, Pool and Replica id.
     NodePoolReplica(NodeId, PoolId, ReplicaId),
-    /// Filter by Pool and Replica id
+    /// Filter by Pool and Replica id.
     PoolReplica(PoolId, ReplicaId),
-    /// Filter by Replica id
+    /// Filter by Replica id.
     Replica(ReplicaId),
-    /// Volume filters
+    /// Volume filters.
     ///
-    /// Filter by Node and Nexus
+    /// Filter by Node and Nexus.
     NodeNexus(NodeId, NexusId),
-    /// Filter by Nexus
+    /// Filter by Nexus.
     Nexus(NexusId),
-    /// Filter by Volume
+    /// Filter by Volume.
     Volume(VolumeId),
 }
 impl Default for Filter {
@@ -60,7 +60,7 @@ macro_rules! rpc_impl_string_id_inner {
         }
 
         impl $Name {
-            /// Build Self from a string trait id
+            /// Build Self from a string trait id.
             pub fn as_str<'a>(&'a self) -> &'a str {
                 self.0.as_str()
             }
@@ -101,17 +101,17 @@ macro_rules! rpc_impl_string_id {
     ($Name:ident, $Doc:literal) => {
         rpc_impl_string_id_inner!($Name, $Doc);
         impl Default for $Name {
-            /// Generates new blank identifier
+            /// Generates new blank identifier.
             fn default() -> Self {
                 $Name(uuid::Uuid::default().to_string())
             }
         }
         impl $Name {
-            /// Build Self from a string trait id
+            /// Build Self from a string trait id.
             pub fn from<T: Into<String>>(id: T) -> Self {
                 $Name(id.into())
             }
-            /// Generates new random identifier
+            /// Generates new random identifier.
             pub fn new() -> Self {
                 $Name(uuid::Uuid::new_v4().to_string())
             }
@@ -160,9 +160,13 @@ macro_rules! rpc_impl_string_uuid_inner {
         }
 
         impl $Name {
-            /// Build Self from a string trait id
+            /// Build Self from a string trait id.
             pub fn as_str<'a>(&'a self) -> &'a str {
                 self.1.as_str()
+            }
+            /// Get a reference to a `uuid::Uuid` container.
+            pub fn uuid(&self) -> &uuid::Uuid {
+                &self.0
             }
         }
 
@@ -224,14 +228,14 @@ macro_rules! rpc_impl_string_uuid {
     ($Name:ident, $Doc:literal) => {
         rpc_impl_string_uuid_inner!($Name, $Doc);
         impl Default for $Name {
-            /// Generates new blank identifier
+            /// Generates new blank identifier.
             fn default() -> Self {
                 let uuid = uuid::Uuid::default();
                 $Name(uuid.clone(), uuid.to_string())
             }
         }
         impl $Name {
-            /// Generates new random identifier
+            /// Generates new random identifier.
             pub fn new() -> Self {
                 let uuid = uuid::Uuid::new_v4();
                 $Name(uuid.clone(), uuid.to_string())
@@ -250,7 +254,7 @@ macro_rules! rpc_impl_string_id_percent_decoding {
             }
         }
         impl $Name {
-            /// Build Self from a string trait id
+            /// Build Self from a string trait id.
             pub fn from<T: Into<String>>(id: T) -> Self {
                 let src: String = id.into();
                 let decoded_src = percent_decode_str(src.clone().as_str())
@@ -263,23 +267,23 @@ macro_rules! rpc_impl_string_id_percent_decoding {
     };
 }
 
-/// Indicates what protocol the bdev is shared as
+/// Indicates what protocol the bdev is shared as.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, EnumString, ToString, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum Protocol {
-    /// not shared by any of the variants
+    /// Not shared by any of the variants.
     None = 0,
-    /// shared as NVMe-oF TCP
+    /// Shared as NVMe-oF TCP.
     Nvmf = 1,
-    /// shared as iSCSI
+    /// Shared as iSCSI.
     Iscsi = 2,
-    /// shared as NBD
+    /// Shared as NBD.
     Nbd = 3,
 }
 
 impl Protocol {
-    /// Is the protocol set to be shared
+    /// Is the protocol set to be shared.
     pub fn shared(&self) -> bool {
         self != &Self::None
     }
@@ -300,9 +304,9 @@ impl From<i32> for Protocol {
     }
 }
 
-/// Convert a device URI to a share Protocol
-/// Uses the URI scheme to determine the protocol
-/// Temporary WA until the share is added to the io-engine RPC
+/// Convert a device URI to a share Protocol.
+/// Uses the URI scheme to determine the protocol.
+/// Temporary WA until the share is added to the io-engine RPC.
 impl TryFrom<&str> for Protocol {
     type Error = String;
 
@@ -337,6 +341,6 @@ impl From<Protocol> for models::Protocol {
     }
 }
 
-/// Liveness Probe
+/// Liveness Probe.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Liveness {}

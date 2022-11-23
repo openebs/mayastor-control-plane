@@ -953,6 +953,14 @@ paths:
           schema:
             type: string
             format: uuid
+        - in: query
+          name: allowed-hosts
+          description: NQNs of hosts allowed to connect to this replica
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/HostNqn'
       responses:
         '200':
           description: OK
@@ -1199,6 +1207,14 @@ paths:
           schema:
             type: string
             format: uuid
+        - in: query
+          name: allowed-hosts
+          required: false
+          description: NQNs of hosts allowed to connect to this replica
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/HostNqn'
       responses:
         '200':
           description: OK
@@ -1885,6 +1901,12 @@ components:
             type: string
       required:
         - disks
+    HostNqn:
+      example: nqn.2014-08.org.nvmexpress:uuid:804b1e8c-b42d-4d15-92b4-7c4e4d0f507
+      description: |-
+        NVMe Qualified Names (NQNs) are used to uniquely describe a host or NVM subsystem for the purposes
+        of identification and authentication
+      type: string
     CreateReplicaBody:
       example:
         size: 80241024
@@ -1894,6 +1916,10 @@ components:
       properties:
         share:
           $ref: '#/components/schemas/ReplicaShareProtocol'
+        allowed-hosts:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostNqn'
         size:
           description: size of the replica in bytes
           type: integer
@@ -2289,6 +2315,11 @@ components:
           description: uuid of the replica
           type: string
           format: uuid
+        allowed-hosts:
+          description: NQNs of hosts allowed to connect to this replica
+          type: array
+          items:
+            $ref: '#/components/schemas/HostNqn'
       required:
         - node
         - pool

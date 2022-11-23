@@ -8,11 +8,11 @@ use crate::{
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
-            self, CreateReplica, NodeId, PoolId, PoolUuid, Protocol, ReplicaId, ReplicaName,
-            ReplicaOwners, ReplicaShareProtocol,
+            self, CreateReplica, HostNqn, NodeId, PoolId, PoolUuid, Protocol, ReplicaId,
+            ReplicaName, ReplicaOwners, ReplicaShareProtocol,
         },
     },
-    IntoOption,
+    IntoOption, IntoVec,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -86,6 +86,9 @@ pub struct ReplicaSpec {
     pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<ReplicaOperationState>,
+    /// List of host nqn's allowed to connect to the shared replica target.
+    #[serde(default)]
+    pub allowed_hosts: Vec<HostNqn>,
 }
 
 /// Reference of a pool.
@@ -151,6 +154,7 @@ mod tests_deserializer {
                     ),
                     sequencer: Default::default(),
                     operation: None,
+                    allowed_hosts: vec![],
                 },
             },
             Test {
@@ -173,6 +177,7 @@ mod tests_deserializer {
                     ),
                     sequencer: Default::default(),
                     operation: None,
+                    allowed_hosts: vec![],
                 },
             },
         ];
@@ -233,8 +238,9 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
                 ReplicaOperation::Destroy => {
                     self.status = SpecStatus::Deleted;
                 }
-                ReplicaOperation::Share(share) => {
+                ReplicaOperation::Share(share, nqns) => {
                     self.share = share.into();
+                    self.allowed_hosts = nqns;
                 }
                 ReplicaOperation::Unshare => {
                     self.share = Protocol::None;
@@ -270,7 +276,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
 pub enum ReplicaOperation {
     Create,
     Destroy,
-    Share(ReplicaShareProtocol),
+    Share(ReplicaShareProtocol, Vec<HostNqn>),
     Unshare,
     OwnerUpdate(ReplicaOwners),
 }
@@ -315,6 +321,7 @@ impl From<&ReplicaSpec> for transport::Replica {
             share: replica.share,
             uri: "".to_string(),
             status: transport::ReplicaStatus::Unknown,
+            allowed_hosts: replica.allowed_hosts.clone().into_vec(),
         }
     }
 }
@@ -339,6 +346,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             owners: request.owners.clone(),
             sequencer: OperationSequence::new(request.uuid.clone()),
             operation: None,
+            allowed_hosts: request.allowed_hosts.clone(),
         }
     }
 }

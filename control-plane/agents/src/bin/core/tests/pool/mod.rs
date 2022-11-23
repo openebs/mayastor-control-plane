@@ -100,7 +100,8 @@ async fn pool() {
             size: 12582912,
             share: Protocol::None,
             uri,
-            status: ReplicaStatus::Online
+            status: ReplicaStatus::Online,
+            allowed_hosts: vec![]
         }
     );
 
@@ -113,6 +114,7 @@ async fn pool() {
                 pool_uuid: None,
                 protocol: ReplicaShareProtocol::Nvmf,
                 name: None,
+                allowed_hosts: vec![],
             },
             None,
         )
@@ -838,6 +840,7 @@ async fn test_disown_missing_replica_owners() {
                 share: None,
                 size: 5242880,
                 thin: false,
+                allowed_hosts: None,
             },
         )
         .await

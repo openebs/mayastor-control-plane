@@ -2,6 +2,7 @@ use super::*;
 use crate::v0::pools::pool;
 use common_lib::{transport_api::ReplyError, types::v0::openapi::apis::Uuid};
 use grpc::operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations};
+use std::convert::{TryFrom, TryInto};
 use transport_api::{ReplyErrorKind, ResourceKind};
 
 fn pool_client() -> impl PoolOperations {
@@ -81,7 +82,15 @@ async fn destroy_replica(filter: Filter) -> Result<(), RestError<RestJsonError>>
 async fn share_replica(
     filter: Filter,
     protocol: ReplicaShareProtocol,
+    allowed_hosts: Option<Vec<String>>,
 ) -> Result<String, RestError<RestJsonError>> {
+    let conv_hosts = |h: Option<Vec<String>>| {
+        h.unwrap_or_default()
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()
+            .map_err(ReplyError::from)
+    };
     let share = match filter.clone() {
         Filter::NodePoolReplica(node_id, pool_id, replica_id) => ShareReplica {
             node: node_id,
@@ -90,6 +99,7 @@ async fn share_replica(
             name: None,
             uuid: replica_id,
             protocol,
+            allowed_hosts: conv_hosts(allowed_hosts)?,
         },
         Filter::PoolReplica(pool_id, replica_id) => {
             let node_id = match replica_client().get(filter, None).await {
@@ -104,6 +114,7 @@ async fn share_replica(
                 name: None,
                 uuid: replica_id,
                 protocol,
+                allowed_hosts: conv_hosts(allowed_hosts)?,
             }
         }
         _ => {
@@ -249,17 +260,19 @@ impl apis::actix_server::Replicas for RestApi {
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         put_replica(
             Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
-            CreateReplicaBody::from(create_replica_body),
+            CreateReplicaBody::try_from(create_replica_body)?,
         )
         .await
     }
 
     async fn put_node_pool_replica_share(
         Path((node_id, pool_id, replica_id)): Path<(String, String, Uuid)>,
+        Query(allowed_hosts): Query<Option<Vec<String>>>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
             Filter::NodePoolReplica(node_id.into(), pool_id.into(), replica_id.into()),
             ReplicaShareProtocol::Nvmf,
+            allowed_hosts,
         )
         .await
     }
@@ -270,17 +283,19 @@ impl apis::actix_server::Replicas for RestApi {
     ) -> Result<models::Replica, RestError<RestJsonError>> {
         put_replica(
             Filter::PoolReplica(pool_id.into(), replica_id.into()),
-            CreateReplicaBody::from(create_replica_body),
+            CreateReplicaBody::try_from(create_replica_body)?,
         )
         .await
     }
 
     async fn put_pool_replica_share(
         Path((pool_id, replica_id)): Path<(String, Uuid)>,
+        Query(allowed_hosts): Query<Option<Vec<String>>>,
     ) -> Result<String, RestError<RestJsonError>> {
         share_replica(
             Filter::PoolReplica(pool_id.into(), replica_id.into()),
             ReplicaShareProtocol::Nvmf,
+            allowed_hosts,
         )
         .await
     }

@@ -6,7 +6,7 @@ import "google/protobuf/wrappers.proto";
 package v1.replica;
 
 // Replica information
-message Replica{
+message Replica {
   // id of the io-engine instance
   string node_id = 1;
   // name of the replica
@@ -47,7 +47,7 @@ enum ReplicaStatus {
 }
 
 // Create Replica Request
-message CreateReplicaRequest{
+message CreateReplicaRequest {
   // id of the io-engine instance
   string node_id = 1;
   // name of the replica
@@ -68,6 +68,8 @@ message CreateReplicaRequest{
   ReplicaOwners owners = 9;
   // uuid of the pool
   optional google.protobuf.StringValue pool_uuid = 10;
+  // host (nqn's) which are allowed to connect to the target
+  repeated string allowed_hosts = 11;
 }
 
 // Replica owners which is a volume or none and a list of nexuses
@@ -77,7 +79,7 @@ message ReplicaOwners {
 }
 
 // Destroy Replica Request
-message DestroyReplicaRequest{
+message DestroyReplicaRequest {
   // id of the io-engine instance
   string node_id = 1;
   // name of the replica
@@ -105,10 +107,12 @@ message ShareReplicaRequest {
   ReplicaShareProtocol protocol = 5;
   // uuid of the pool
   optional google.protobuf.StringValue pool_uuid = 6;
+  // host (nqn's) which are allowed to connect to the target
+  repeated string allowed_hosts = 7;
 }
 
 // The protocol used to share the replica.
-enum ReplicaShareProtocol{
+enum ReplicaShareProtocol {
   NvmfProtocol = 0;
 }
 
@@ -176,7 +180,7 @@ message GetReplicasRequest {
 }
 
 // Replica information
-message ReplicaSpec{
+message ReplicaSpec {
   // name of the replica
   string name = 1;
   // uuid of the replica

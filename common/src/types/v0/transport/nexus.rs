@@ -5,6 +5,7 @@ use crate::{
     types::v0::store::{
         definitions::ObjectKey, nexus_child::NexusChild, nexus_persistence::NexusInfoKey,
     },
+    IntoVec,
 };
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, ops::RangeInclusive};
@@ -341,6 +342,14 @@ impl NexusNvmfConfig {
     pub fn controller_id_range(&self) -> NvmfControllerIdRange {
         self.controller_id_range.clone()
     }
+
+    /// Disable reservations, mostly useful for testing only.
+    pub fn with_no_resv(mut self) -> Self {
+        self.reservation_key = 0;
+        self.preempt_policy = NexusNvmePreemption::ArgKey(None);
+        self.reservation_type = NvmeReservation::Reserved;
+        self
+    }
 }
 
 impl Default for NexusNvmfConfig {
@@ -528,8 +537,21 @@ pub struct ShareNexus {
     pub key: Option<String>,
     /// share protocol
     pub protocol: NexusShareProtocol,
+    /// host nqn's allowed to connect to the target.
+    pub allowed_hosts: Vec<HostNqn>,
 }
-
+impl ShareNexus {
+    /// Return new `Self` from the given parameters.
+    pub fn new(nexus: &Nexus, protocol: NexusShareProtocol, nqns: Vec<HostNqn>) -> Self {
+        Self {
+            node: nexus.node.clone(),
+            uuid: nexus.uuid.clone(),
+            protocol,
+            allowed_hosts: nqns.into_vec(),
+            ..Default::default()
+        }
+    }
+}
 impl From<(&Nexus, Option<String>, NexusShareProtocol)> for ShareNexus {
     fn from((nexus, key, protocol): (&Nexus, Option<String>, NexusShareProtocol)) -> Self {
         Self {
@@ -537,6 +559,7 @@ impl From<(&Nexus, Option<String>, NexusShareProtocol)> for ShareNexus {
             uuid: nexus.uuid.clone(),
             key,
             protocol,
+            ..Default::default()
         }
     }
 }

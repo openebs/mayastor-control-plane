@@ -225,9 +225,14 @@ impl Cluster {
             .unwrap();
     }
 
-    /// node id for `index`
+    /// The node id for `index`.
     pub fn node(&self, index: u32) -> transport::NodeId {
         IoEngine::name(index, &self.builder.opts).into()
+    }
+
+    /// The io-engine node nqn for `index`.
+    pub fn node_nqn(&self, index: u32) -> transport::HostNqn {
+        IoEngine::nqn(index, &self.builder.opts).try_into().unwrap()
     }
 
     /// The node id for `index`.
@@ -864,7 +869,7 @@ impl ClusterBuilder {
                         thin: false,
                         share: self.replicas.share,
                         managed: false,
-                        owners: Default::default(),
+                        ..Default::default()
                     });
                 }
                 pools.push(pool);

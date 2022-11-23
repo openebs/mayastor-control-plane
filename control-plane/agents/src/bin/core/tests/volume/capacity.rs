@@ -53,6 +53,7 @@ async fn fault_enospc_child() {
                 share: None,
                 size: 85u64 * 1024 * 1024,
                 thin: false,
+                allowed_hosts: None,
             },
         )
         .await

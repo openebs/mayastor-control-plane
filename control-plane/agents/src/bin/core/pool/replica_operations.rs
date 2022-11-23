@@ -127,9 +127,8 @@ impl ResourceSharing for Option<&mut OperationGuardArc<ReplicaSpec>> {
 
         if let Some(replica) = self {
             let status = registry.get_replica(&request.uuid).await?;
-            let spec_clone = replica
-                .start_update(registry, &status, ReplicaOperation::Share(request.protocol))
-                .await?;
+            let update = ReplicaOperation::Share(request.protocol, request.allowed_hosts.clone());
+            let spec_clone = replica.start_update(registry, &status, update).await?;
 
             let result = node.share_replica(request).await;
             replica.complete_update(registry, result, spec_clone).await

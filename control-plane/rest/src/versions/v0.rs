@@ -1,5 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
+
 use super::super::RestClient;
+use std::convert::{TryFrom, TryInto};
 
 pub use common_lib::{
     transport_api,
@@ -20,29 +22,47 @@ pub use common_lib::{
 use common_lib::{IntoOption, IntoVec};
 pub use models::rest_json_error::Kind as RestJsonErrorKind;
 
+use common_lib::{
+    transport_api::ReplyError,
+    types::v0::{
+        openapi::models::RestJsonError,
+        transport::{HostNqn, HostNqnParseError},
+    },
+};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-/// Create Replica Body JSON
+/// Create Replica Body JSON.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CreateReplicaBody {
-    /// size of the replica in bytes
+    /// Size of the replica in bytes.
     pub size: u64,
-    /// thin provisioning
+    /// Thin provisioning.
     pub thin: bool,
-    /// protocol to expose the replica over
+    /// Protocol to expose the replica over.
     pub share: Protocol,
+    /// Host nqn's allowed to connect to the target.
+    pub allowed_hosts: Vec<HostNqn>,
 }
-impl From<models::CreateReplicaBody> for CreateReplicaBody {
-    fn from(src: models::CreateReplicaBody) -> Self {
-        Self {
+
+impl TryFrom<models::CreateReplicaBody> for CreateReplicaBody {
+    type Error = RestError<RestJsonError>;
+    fn try_from(src: models::CreateReplicaBody) -> Result<Self, Self::Error> {
+        Ok(Self {
             size: src.size as u64,
             thin: src.thin,
             share: match src.share {
                 None => Protocol::None,
                 Some(models::ReplicaShareProtocol::Nvmf) => Protocol::Nvmf,
             },
-        }
+            allowed_hosts: src
+                .allowed_hosts
+                .unwrap_or_default()
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, HostNqnParseError>>()
+                .map_err(ReplyError::from)?,
+        })
     }
 }
 
@@ -87,12 +107,13 @@ impl From<CreateReplica> for CreateReplicaBody {
             size: create.size,
             thin: create.thin,
             share: create.share,
+            allowed_hosts: create.allowed_hosts.into_vec(),
         }
     }
 }
 impl CreateReplicaBody {
     /// Convert into rpc request type.
-    pub fn to_request(&self, node_id: NodeId, pool_id: PoolId, uuid: ReplicaId) -> CreateReplica {
+    pub fn to_request(self, node_id: NodeId, pool_id: PoolId, uuid: ReplicaId) -> CreateReplica {
         CreateReplica {
             node: node_id,
             name: None,
@@ -104,6 +125,7 @@ impl CreateReplicaBody {
             share: self.share,
             managed: false,
             owners: Default::default(),
+            allowed_hosts: self.allowed_hosts,
         }
     }
 }

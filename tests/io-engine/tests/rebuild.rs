@@ -201,6 +201,7 @@ async fn loopback_nvmf() {
             cluster.node(0).as_str(),
             cluster.pool(0, 0).as_str(),
             &replica.uuid,
+            None,
         )
         .await
         .unwrap();
