@@ -1,12 +1,12 @@
 variable "registry" {
   type        = string
   description = "The docker registry to pull from"
-  default     = "mayadata"
+  default     = "openebs"
 }
 
 variable "tag" {
   type        = string
-  description = "The default docker image tag to use when pulling images, this applies to mayadata images only"
+  description = "The default docker image tag to use when pulling images, this applies to openebs images."
   default     = "develop"
 }
 

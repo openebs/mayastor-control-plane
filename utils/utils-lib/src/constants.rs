@@ -15,10 +15,10 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
 /// Fio Spdk image.
-pub const FIO_SPDK_IMAGE: &str = "mayadata/mayastor-fio-spdk:develop";
+pub const FIO_SPDK_IMAGE: &str = "openebs/mayastor-fio-spdk:develop";
 
 /// Io-Engine container image used for testing.
-pub const IO_ENGINE_IMAGE: &str = "mayadata/mayastor-io-engine:develop";
+pub const IO_ENGINE_IMAGE: &str = "openebs/mayastor-io-engine:develop";
 
 /// Environment variable that points to an io-engine binary.
 /// This must be in sync with shell.nix.
