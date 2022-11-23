@@ -48,8 +48,7 @@ impl VolumeMover {
         &self,
         mut req: Vec<SwitchOverRequest>,
     ) -> Result<(), anyhow::Error> {
-        req.sort_by_key(|r| r.timestamp());
-
+        req.sort();
         for entry in req {
             entry.start_op(entry.stage(), &self.etcd).await?;
             self.engine.enqueue(entry);

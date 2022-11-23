@@ -11,7 +11,7 @@ use common_lib::{
 use futures::lock::Mutex;
 use http::Uri;
 use std::{convert::TryFrom, sync::Arc, time::Duration};
-use tracing::debug;
+use tracing::{debug, error};
 
 /// Represent object to access Etcd.
 #[derive(Debug, Clone)]
@@ -32,10 +32,13 @@ impl EtcdStore {
                     timeout,
                 })
             }
-            Err(_) => Err(StoreError::Timeout {
-                operation: "connect".to_string(),
-                timeout,
-            }),
+            Err(error) => {
+                error!(%error, "Failed to create persistent store client");
+                Err(StoreError::Timeout {
+                    operation: "connect".to_string(),
+                    timeout,
+                })
+            }
         }
     }
 
@@ -44,11 +47,14 @@ impl EtcdStore {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(self.timeout, async move { store.put_obj(object).await }).await {
             Ok(result) => result.map_err(Into::into),
-            Err(_) => Err(StoreError::Timeout {
-                operation: "Put".to_string(),
-                timeout: self.timeout,
+            Err(error) => {
+                error!(%error, "Failed to write to persistent store");
+                Err(StoreError::Timeout {
+                    operation: "Put".to_string(),
+                    timeout: self.timeout,
+                }
+                .into())
             }
-            .into()),
         }
     }
 
@@ -61,11 +67,14 @@ impl EtcdStore {
         .await
         {
             Ok(_) => Ok(()),
-            Err(_) => Err(StoreError::Timeout {
-                operation: "Delete".to_string(),
-                timeout: self.timeout,
+            Err(error) => {
+                error!(%error, "Failed to delete from persistent store");
+                Err(StoreError::Timeout {
+                    operation: "Delete".to_string(),
+                    timeout: self.timeout,
+                }
+                .into())
             }
-            .into()),
         }
     }
 
@@ -86,10 +95,8 @@ impl EtcdStore {
 
         let mut partial_entries = vec![];
         for spec in entries {
-            if !spec.is_completed() {
-                let req = SwitchOverRequest::try_from(&spec)?;
-                partial_entries.push(req)
-            }
+            let req = SwitchOverRequest::try_from(&spec)?;
+            partial_entries.push(req)
         }
 
         Ok(partial_entries)
