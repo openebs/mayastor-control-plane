@@ -49,11 +49,13 @@ async fn concurrent_rebuilds() {
         let volume = vol_cli
             .put_volume_target(
                 &volume.spec.uuid,
-                models::VolumeShareProtocol::Nvmf,
-                PublishVolumeBody::new(HashMap::new()),
-                Some(cluster.node(i).as_str()),
-                None,
-                None,
+                PublishVolumeBody::new_all(
+                    HashMap::new(),
+                    None,
+                    Some(cluster.node(i).to_string()),
+                    models::VolumeShareProtocol::Nvmf,
+                    None,
+                ),
             )
             .await
             .unwrap();

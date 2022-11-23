@@ -1,6 +1,6 @@
 use super::*;
 use common_lib::types::v0::{
-    openapi::{apis::Uuid, models::VolumeShareProtocol},
+    openapi::apis::Uuid,
     transport::{
         DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume, RepublishVolume,
         SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
@@ -142,23 +142,17 @@ impl apis::actix_server::Volumes for RestApi {
 
     async fn put_volume_target(
         Path(volume_id): Path<Uuid>,
-        Query((node, protocol, republish, reuse_existing)): Query<(
-            Option<String>,
-            VolumeShareProtocol,
-            Option<bool>,
-            Option<bool>,
-        )>,
         Body(publish_volume_body): Body<models::PublishVolumeBody>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
-        let volume = match republish.unwrap_or(false) {
+        let volume = match publish_volume_body.republish.unwrap_or(false) {
             true => {
                 client()
                     .republish(
                         &RepublishVolume {
                             uuid: volume_id.into(),
-                            target_node: node.map(|id| id.into()),
-                            share: protocol.into(),
-                            reuse_existing: reuse_existing.unwrap_or(true),
+                            target_node: publish_volume_body.node.map(|id| id.into()),
+                            share: publish_volume_body.protocol.into(),
+                            reuse_existing: publish_volume_body.reuse_existing.unwrap_or(true),
                         },
                         None,
                     )
@@ -169,8 +163,8 @@ impl apis::actix_server::Volumes for RestApi {
                     .publish(
                         &PublishVolume {
                             uuid: volume_id.into(),
-                            target_node: node.map(|id| id.into()),
-                            share: Some(protocol.into()),
+                            target_node: publish_volume_body.node.map(|id| id.into()),
+                            share: Some(publish_volume_body.protocol.into()),
                             publish_context: publish_volume_body.publish_context,
                         },
                         None,

@@ -119,9 +119,11 @@ def background():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=TARGET_NODE_1,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=TARGET_NODE_1,
+        ),
     )
     yield volume
     Deployer.stop()
@@ -172,9 +174,7 @@ def publish_to_node_2(background):
     ApiClient.volumes_api().del_volume_target(VOLUME_UUID, force="true")
     volume_updated = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=TARGET_NODE_2,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=TARGET_NODE_2),
     )
     device_uri_2 = volume_updated.state["target"]["deviceUri"]
     assert device_uri != device_uri_2

@@ -154,11 +154,13 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(&free_node),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(free_node.clone()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();
@@ -219,11 +221,13 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(cluster.node(0).as_str()),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(cluster.node(0).to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();
@@ -303,11 +307,13 @@ async fn unused_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(nexus_node.id.as_str()),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(nexus_node.id.to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();
@@ -324,11 +330,13 @@ async fn unused_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(unused_node.id.as_str()),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(unused_node.id.to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();
@@ -412,11 +420,13 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec().uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(cluster.node(0).as_str()),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(cluster.node(0).to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();

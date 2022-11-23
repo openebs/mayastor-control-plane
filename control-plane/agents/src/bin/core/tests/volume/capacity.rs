@@ -38,11 +38,13 @@ async fn fault_enospc_child() {
     volume_1 = volumes_api
         .put_volume_target(
             &volume_1.spec.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(cluster.node(0).as_str()),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(cluster.node(0).to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();

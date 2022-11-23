@@ -98,7 +98,7 @@ def a_control_plane_two_ioengine_instances_two_pools():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_2, POOL_UUID_2, CreatePoolBody(["malloc:///disk2?size_mb=200"])
     )
-    pytest.reuse_existing = "false"
+    pytest.reuse_existing = False
     yield
     cleanup_iptable_rules(IO_ENGINE_1_IP)
     Deployer.stop()
@@ -112,9 +112,11 @@ def a_published_volume_with_two_replicas():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE_NAME_1,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_NAME_1,
+        ),
     )
     pytest.older_nexus_uri = volume["state"]["target"]["deviceUri"]
 
@@ -155,7 +157,7 @@ def the_node_hosting_the_older_nexus_has_iopath_established():
 @when("the node hosting the nexus is killed")
 def the_node_hosting_the_nexus_is_killed():
     """the node hosting the nexus is killed."""
-    pytest.reuse_existing = "true"
+    pytest.reuse_existing = True
     kill_docker_container(NODE_NAME_1)
 
 
@@ -178,10 +180,12 @@ def the_volume_republish_and_the_destroy_shutdown_target_call_has_succeeded_for_
         try:
             ApiClient.volumes_api().put_volume_target(
                 VOLUME_UUID,
-                Protocol("nvmf"),
-                republish="true",
-                reuse_existing=pytest.reuse_existing,
-                publish_volume_body=PublishVolumeBody(publish_context={}),
+                publish_volume_body=PublishVolumeBody(
+                    {},
+                    Protocol("nvmf"),
+                    republish=True,
+                    reuse_existing=pytest.reuse_existing,
+                ),
             )
         except grpc.RpcError:
             pytest.fail("Volume republish call failed")
@@ -194,15 +198,16 @@ def the_volume_republish_and_the_destroy_shutdown_target_call_has_succeeded_for_
 @when("the volume republish on another node has succeeded")
 def the_volume_republish_on_another_node_has_succeeded():
     """the volume republish on another node has succeeded."""
-    print(pytest.reuse_existing)
     try:
         ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID,
-            Protocol("nvmf"),
-            node=NODE_NAME_2,
-            republish="true",
-            reuse_existing=pytest.reuse_existing,
-            publish_volume_body=PublishVolumeBody(publish_context={}),
+            publish_volume_body=PublishVolumeBody(
+                {},
+                Protocol("nvmf"),
+                reuse_existing=pytest.reuse_existing,
+                node=NODE_NAME_2,
+                republish=True,
+            ),
         )
     except grpc.RpcError:
         pytest.fail("Volume Republish Failed")

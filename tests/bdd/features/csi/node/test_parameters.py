@@ -19,6 +19,7 @@ from openapi.model.volume_policy import VolumePolicy
 
 from common.csi import CsiHandle
 
+
 VOLUME_UUID = "f04e4756-999f-446f-8610-fbf879aff2a7"
 NODE1 = "io-engine-1"
 
@@ -80,9 +81,11 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
-        Protocol("nvmf"),
-        node=NODE1,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE1,
+        ),
     )
     device_uri = volume.state["target"]["deviceUri"]
     print(device_uri)

@@ -39,7 +39,7 @@ use common_lib::{
         },
     },
 };
-use std::{collections::HashMap, ops::Deref};
+use std::ops::Deref;
 use tracing::info;
 
 #[async_trait::async_trait]
@@ -290,8 +290,9 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             target_cfg.uuid().clone(),
             request.share,
             Some(target_cfg.config().clone()),
+            request.publish_context.clone(),
         ));
-        let mut spec_clone = self.start_update(registry, &state, operation).await?;
+        let spec_clone = self.start_update(registry, &state, operation).await?;
 
         // Create a Nexus on the requested or auto-selected node
         let result = specs
@@ -322,9 +323,6 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             }
         }
 
-        spec_clone.publish_context = request.publish_context.clone();
-        self.lock().publish_context = request.publish_context.clone();
-
         self.complete_update(registry, result, spec_clone).await?;
 
         // If there was a previous nexus we should delete the persisted NexusInfo structure.
@@ -352,7 +350,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         let state = registry.get_volume_state(&request.uuid).await?;
 
-        let mut spec_clone = self
+        let spec_clone = self
             .start_update(registry, &state, VolumeOperation::Unpublish)
             .await?;
 
@@ -386,9 +384,6 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                 }
             }
         };
-
-        spec_clone.publish_context = HashMap::new();
-        self.lock().publish_context = HashMap::new();
 
         self.complete_update(registry, result, spec_clone).await
     }

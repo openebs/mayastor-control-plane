@@ -94,9 +94,7 @@ def a_volume_that_is_sharedpublished():
     """a volume that is shared/published."""
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE1_NAME,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE1_NAME),
     )
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
 

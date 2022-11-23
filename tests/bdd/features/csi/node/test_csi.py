@@ -16,6 +16,7 @@ from common.operations import Pool as PoolOps
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
+from openapi.model.protocol import Protocol
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
@@ -148,9 +149,11 @@ def published_nexus(volumes, share_type, volume_id):
     uuid = volume_id
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
-        Protocol("nvmf"),
-        node=NODE1,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE1,
+        ),
     )
     yield volume.state["target"]
     ApiClient.volumes_api().del_volume_target(volume.spec.uuid)

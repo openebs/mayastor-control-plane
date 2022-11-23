@@ -286,11 +286,17 @@ impl IoEngineApiClient {
         protocol: VolumeShareProtocol,
         publish_context: &HashMap<String, String>,
     ) -> Result<Volume, ApiClientError> {
-        let publish_volume_body = PublishVolumeBody::new(publish_context.clone());
+        let publish_volume_body = PublishVolumeBody::new_all(
+            publish_context.clone(),
+            None,
+            node.map(|node| node.to_string()),
+            protocol,
+            None,
+        );
         let volume = self
             .rest_client
             .volumes_api()
-            .put_volume_target(volume_id, protocol, publish_volume_body, node, None, None)
+            .put_volume_target(volume_id, publish_volume_body)
             .await?;
         Ok(volume.into_body())
     }

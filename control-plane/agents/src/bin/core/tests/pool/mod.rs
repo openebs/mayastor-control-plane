@@ -783,11 +783,13 @@ async fn disown_unused_replicas() {
     let volume = volumes_api
         .put_volume_target(
             &volume.spec.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(&node),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(node.clone()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();

@@ -288,11 +288,13 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .volumes_api()
         .put_volume_target(
             &volume.state.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            PublishVolumeBody::new(HashMap::new()),
-            Some(io_engine1.as_str()),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(io_engine1.to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();

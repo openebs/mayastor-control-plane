@@ -56,9 +56,11 @@ def a_published_volume():
     """a published volume."""
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE_NAME,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_NAME,
+        ),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
@@ -82,9 +84,11 @@ def publishing_the_volume_should_return_an_already_published_error():
     try:
         ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID,
-            Protocol("nvmf"),
-            node=NODE_NAME,
-            publish_volume_body=PublishVolumeBody(publish_context={}),
+            publish_volume_body=PublishVolumeBody(
+                {},
+                Protocol("nvmf"),
+                node=NODE_NAME,
+            ),
         )
     except Exception as e:
         exception_info = e.__dict__
@@ -99,9 +103,11 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
     """publishing the volume should succeed with a returned volume object containing the share URI."""
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE_NAME,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_NAME,
+        ),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))

@@ -73,9 +73,11 @@ def init_resources():
     # Publish volume so that there is a nexus to add a replica to.
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE_1_NAME,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_1_NAME,
+        ),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))

@@ -84,11 +84,13 @@ impl ResourceUpdates for Vec<models::Volume> {
                 .volumes_api()
                 .put_volume_target(
                     &volume.spec.uuid,
-                    models::VolumeShareProtocol::Nvmf,
-                    PublishVolumeBody::new(HashMap::new()),
-                    Some(node_id.as_str()),
-                    None,
-                    None,
+                    PublishVolumeBody::new_all(
+                        HashMap::new(),
+                        None,
+                        Some(node_id.to_string()),
+                        models::VolumeShareProtocol::Nvmf,
+                        None,
+                    ),
                 )
                 .await?;
             node_index = (node_index + 1) % node_ids.len();

@@ -220,9 +220,11 @@ def an_existing_published_volume_without_pool_topology():
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE_1_NAME,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_1_NAME,
+        ),
     )
 
 
@@ -257,9 +259,11 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE_1_NAME,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_1_NAME,
+        ),
     )
 
 
@@ -286,9 +290,11 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        Protocol("nvmf"),
-        node=NODE_1_NAME,
-        publish_volume_body=PublishVolumeBody(publish_context={}),
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_1_NAME,
+        ),
     )
 
 
