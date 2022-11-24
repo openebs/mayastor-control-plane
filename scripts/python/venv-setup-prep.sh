@@ -113,7 +113,7 @@ if [ -n "$HA_PROTO" ]; then
     exit 1
   fi
   mkdir -p "$HA_OUT"
-  python -m grpc_tools.protoc --proto_path="$HA_PROTO" --grpc_python_out="$HA_OUT" --python_out="$HA_OUT" cluster_agent.proto
+  python -m grpc_tools.protoc --proto_path="$HA_PROTO" --grpc_python_out="$HA_OUT" --python_out="$HA_OUT" cluster_agent.proto node_agent.proto
 fi
 
 # Setup the python config files (similar to extending the PYTHONPATH env, but within venv)

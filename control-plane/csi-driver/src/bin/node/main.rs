@@ -36,6 +36,7 @@ mod match_dev;
 mod mount;
 mod node;
 mod nodeplugin_grpc;
+mod nodeplugin_nvme;
 mod nodeplugin_svc;
 
 /// Shutdown event which lets the plugin know it needs to stop processing new events and

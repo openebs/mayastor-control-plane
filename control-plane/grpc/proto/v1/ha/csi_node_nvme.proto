@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package v1.csi_node_nvme;
+
+message NvmeConnectRequest {
+  string uri = 1;
+  map<string,string> publish_context = 2;
+}
+
+message NvmeConnectResponse {
+
+}
+
+service NvmeOperations {
+  rpc NvmeConnect(NvmeConnectRequest) returns (NvmeConnectResponse) {}
+}

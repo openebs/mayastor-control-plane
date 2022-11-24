@@ -5,7 +5,7 @@ import "google/protobuf/empty.proto";
 package v1.ha_cluster_agent;
 
 // Service for managing cluster-agent rpc calls
-service HaRpc {
+service HaClusterRpc {
   rpc RegisterNodeAgent (HaNodeInfo) returns (google.protobuf.Empty) {}
   rpc ReportFailedNvmePaths (ReportFailedNvmePathsRequest) returns (google.protobuf.Empty) {}
 }
@@ -30,18 +30,4 @@ message ReportFailedNvmePathsRequest {
   string endpoint = 2;
   // List of failed
   repeated FailedNvmePath failed_paths = 3;
-}
-
-// Service for managing node-agent rpc calls
-service HaNodeRpc {
-  rpc ReplacePath (ReplacePathRequest) returns (google.protobuf.Empty) {}
-}
-
-// Path replacement message.
-message ReplacePathRequest {
-  // NQN of the target
-  string target_nqn = 1;
-
-  // URI of the new path
-  string new_path = 2;
 }

@@ -138,9 +138,7 @@ fn findmnt(params: Filter) -> Result<Vec<HashMap<String, String>>, DeviceError> 
         filter_findmnt(&json, &params, &mut results);
         Ok(results)
     } else {
-        Err(DeviceError {
-            message: String::from_utf8(output.stderr)?,
-        })
+        Err(DeviceError::new(String::from_utf8(output.stderr)?.as_str()))
     }
 }
 
@@ -160,9 +158,7 @@ pub(crate) fn get_devicepath(mount_path: &str) -> Result<Option<String>, DeviceE
                 if let Some(devicepath) = sources[0].get(SOURCE_KEY) {
                     Ok(Some(devicepath.to_string()))
                 } else {
-                    Err(DeviceError {
-                        message: "missing source field".to_string(),
-                    })
+                    Err(DeviceError::new("missing source field"))
                 }
             }
             _ => {
@@ -171,9 +167,9 @@ pub(crate) fn get_devicepath(mount_path: &str) -> Result<Option<String>, DeviceE
                     "multiple sources mounted on target {:?}->{}",
                     sources, mount_path
                 );
-                Err(DeviceError {
-                    message: format!("multiple devices mounted at {}", mount_path),
-                })
+                Err(DeviceError::new(
+                    format!("multiple devices mounted at {}", mount_path).as_str(),
+                ))
             }
         }
     }

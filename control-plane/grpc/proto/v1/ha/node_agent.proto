@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package v1.ha_node_agent;
+
+
+// Service for managing node-agent rpc calls
+service HaNodeRpc {
+  rpc ReplacePath (ReplacePathRequest) returns (google.protobuf.Empty) {}
+}
+
+// Path replacement message.
+message ReplacePathRequest {
+  // NQN of the target
+  string target_nqn = 1;
+
+  // URI of the new path
+  string new_path = 2;
+}

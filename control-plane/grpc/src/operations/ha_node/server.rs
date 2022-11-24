@@ -2,9 +2,12 @@ use tonic::{Response, Status};
 
 use crate::{
     ha_cluster_agent::{
+        ha_cluster_rpc_server::{HaClusterRpc, HaClusterRpcServer},
+        HaNodeInfo, ReportFailedNvmePathsRequest,
+    },
+    ha_node_agent::{
         ha_node_rpc_server::{HaNodeRpc, HaNodeRpcServer},
-        ha_rpc_server::{HaRpc, HaRpcServer},
-        HaNodeInfo, ReplacePathRequest, ReportFailedNvmePathsRequest,
+        ReplacePathRequest,
     },
     operations::ha_node::traits::{ClusterAgentOperations, NodeAgentOperations, NodeInfoConv},
 };
@@ -54,13 +57,13 @@ impl ClusterAgentServer {
     }
 
     /// converts the cluster-agent server to corresponding grpc server type
-    pub fn into_grpc_server(self) -> HaRpcServer<Self> {
-        HaRpcServer::new(self)
+    pub fn into_grpc_server(self) -> HaClusterRpcServer<Self> {
+        HaClusterRpcServer::new(self)
     }
 }
 
 #[tonic::async_trait]
-impl HaRpc for ClusterAgentServer {
+impl HaClusterRpc for ClusterAgentServer {
     async fn register_node_agent(
         &self,
         request: tonic::Request<HaNodeInfo>,
