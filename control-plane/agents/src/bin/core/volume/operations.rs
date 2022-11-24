@@ -32,7 +32,7 @@ use common_lib::{
         },
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
-            NexusId, NexusNvmePreemption, NexusNvmfConfig, NodeId, NvmeReservation,
+            HostNqn, NexusId, NexusNvmePreemption, NexusNvmfConfig, NodeId, NvmeReservation,
             NvmfControllerIdRange, Protocol, PublishVolume, Replica, ReplicaOwners,
             RepublishVolume, SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus,
             UnpublishVolume, UnshareNexus, UnshareVolume, Volume, VolumeShareProtocol,
@@ -316,8 +316,15 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let mut result = Ok(());
         // TODO: use hostnqn from PublishVolume.
         if let Some(share) = request.share {
+            let allowed_hosts = match std::env::var("VOLUME_ALLOWED_HOSTS") {
+                Ok(_) => vec![HostNqn::from(*nexus_state.uuid.uuid())],
+                Err(_) => vec![],
+            };
             result = match nexus
-                .share(registry, &ShareNexus::new(&nexus_state, share, vec![]))
+                .share(
+                    registry,
+                    &ShareNexus::new(&nexus_state, share, allowed_hosts),
+                )
                 .await
             {
                 Ok(_) => Ok(()),

@@ -112,8 +112,6 @@ def background():
         node_agent=True,
         cluster_agent=True,
         cache_period="1s",
-        io_engine_env="NEXUS_NVMF_ANA_ENABLE=1,NEXUS_NVMF_RESV_ENABLE=1",
-        agents_env="TEST_NEXUS_NVMF_ANA_ENABLE=1",
     )
 
     ApiClient.pools_api().put_node_pool(

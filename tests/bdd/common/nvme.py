@@ -1,13 +1,8 @@
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, ParseResult
 import subprocess
 import time
 import json
 from common.command import run_cmd_async_at
-
-
-async def nvme_remote_connect_all(remote, host, port):
-    command = f"sudo nvme connect-all -t tcp -s {port} -a {host}"
-    await run_cmd_async_at(remote, command)
 
 
 async def nvme_remote_connect(remote, uri):
@@ -16,8 +11,9 @@ async def nvme_remote_connect(remote, uri):
     port = u.port
     host = u.hostname
     nqn = u.path[1:]
+    hostnqn = nvme_hostnqn_arg(u)
 
-    command = "sudo nvme connect -t tcp -s {0} -a {1} -n {2}".format(port, host, nqn)
+    command = f"sudo nvme connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
 
     await run_cmd_async_at(remote, command)
     time.sleep(1)
@@ -49,11 +45,20 @@ async def nvme_remote_discover(remote, uri):
     u = urlparse(uri)
     port = u.port
     host = u.hostname
+    hostnqn = nvme_hostnqn_arg(u)
 
-    command = "sudo nvme discover -t tcp -s {0} -a {1}".format(port, host)
+    command = f"sudo nvme discover -t tcp -s {port} -a {host} {hostnqn}"
     output = await run_cmd_async_at(remote, command).stdout
     if not u.path[1:] in str(output.stdout):
         raise ValueError("uri {} is not discovered".format(u.path[1:]))
+
+
+def nvme_hostnqn_arg(uri: ParseResult):
+    uri_query = parse_qs(uri.query)
+    if uri_query.keys().__contains__("hostnqn"):
+        return "-q {}".format(uri_query["hostnqn"][0])
+    else:
+        return ""
 
 
 def nvme_connect(uri):
@@ -61,8 +66,9 @@ def nvme_connect(uri):
     port = u.port
     host = u.hostname
     nqn = u.path[1:]
+    hostnqn = nvme_hostnqn_arg(u)
 
-    command = "sudo nvme connect -t tcp -s {0} -a {1} -n {2}".format(port, host, nqn)
+    command = f"sudo nvme connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
     subprocess.run(command, check=True, shell=True, capture_output=False)
     time.sleep(1)
     command = "sudo nvme list -v -o json"
@@ -114,8 +120,9 @@ def nvme_discover(uri):
     u = urlparse(uri)
     port = u.port
     host = u.hostname
+    hostnqn = nvme_hostnqn_arg(u)
 
-    command = "sudo nvme discover -t tcp -s {0} -a {1}".format(port, host)
+    command = f"sudo nvme discover -t tcp -s {port} -a {host} {hostnqn}"
     output = subprocess.run(
         command, check=True, shell=True, capture_output=True, encoding="utf-8"
     )

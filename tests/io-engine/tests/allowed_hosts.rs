@@ -10,7 +10,6 @@ async fn allowed_hosts() {
     let cluster = ClusterBuilder::builder()
         .with_io_engines(3)
         .with_tmpfs_pool(size * 4)
-        .with_options(|o| o.with_io_engine_hostnqn(true))
         .build()
         .await
         .unwrap();
@@ -145,6 +144,7 @@ async fn volume_allowed_host() {
                 Some(cluster.node(0).to_string()),
                 models::VolumeShareProtocol::Nvmf,
                 None,
+                cluster.csi_node(0),
             ),
         )
         .await

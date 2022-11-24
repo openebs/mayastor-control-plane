@@ -75,16 +75,10 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
             })?;
 
             if subsystem.address == SubsystemAddr::new(parsed_path.host(), parsed_path.port()) {
-                tracing::info!(
-                path=%ctrlr.path,
-                "Not disconnecting same NVMe controller");
-
+                tracing::info!(path=%ctrlr.path, "Not disconnecting same NVMe controller");
                 Ok(())
             } else {
-                tracing::info!(
-                    path=%ctrlr.path,
-                    "Disconnecting NVMe controller"
-                );
+                tracing::info!(path=%ctrlr.path, "Disconnecting NVMe controller");
 
                 subsystem.disconnect().map_err(|e| SvcError::Internal {
                     details: format!(
@@ -95,10 +89,7 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
             }
         }
         None => {
-            tracing::error!(
-                path=%ctrlr.path,
-                "Failed to get system path for controller"
-            );
+            tracing::error!(path=%ctrlr.path, "Failed to get system path for controller");
 
             Err(SvcError::Internal {
                 details: "Failed to get system path for controller".to_string(),
@@ -123,6 +114,7 @@ impl NodeAgentSvc {
             .nqn(parsed_path.nqn())
             .ctrl_loss_tmo(Some(5))
             .reconnect_delay(Some(10))
+            .hostnqn(parsed_path.hostnqn)
             .build()
             .ok()
     }
@@ -267,14 +259,7 @@ fn parse_uri(new_path: &str) -> Result<ParsedUri, SvcError> {
         .parse::<Uri>()
         .map_err(|_| SvcError::InvalidArguments {})?;
 
-    let host = uri.host().ok_or(SvcError::InvalidArguments {})?;
-    let port = uri.port().ok_or(SvcError::InvalidArguments {})?;
-    let nqn = &uri.path()[1 ..];
-    Ok(ParsedUri::new(
-        host.to_string(),
-        port.to_string(),
-        nqn.to_string(),
-    ))
+    ParsedUri::new(uri)
 }
 
 // Returns the particular subsystem based on the nqn and address.
@@ -323,11 +308,30 @@ struct ParsedUri {
     host: String,
     port: String,
     nqn: String,
+    hostnqn: Option<String>,
 }
 
 impl ParsedUri {
-    fn new(host: String, port: String, nqn: String) -> ParsedUri {
-        Self { host, port, nqn }
+    fn new(uri: Uri) -> Result<ParsedUri, SvcError> {
+        let host = uri.host().ok_or(SvcError::InvalidArguments {})?.to_string();
+        let port = uri.port().ok_or(SvcError::InvalidArguments {})?.to_string();
+        let nqn = uri.path()[1 ..].to_string();
+        let mut q_split = uri.query().unwrap_or("").split('&');
+        let hostnqn = q_split.find_map(|q| {
+            q.strip_prefix("hostnqn=").and_then(|q| {
+                q.split(',')
+                    .collect::<Vec<_>>()
+                    .first()
+                    .map(ToString::to_string)
+            })
+        });
+
+        Ok(Self {
+            host,
+            port,
+            nqn,
+            hostnqn,
+        })
     }
     fn host(&self) -> String {
         self.host.clone()

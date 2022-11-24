@@ -13,7 +13,7 @@ import grpc
 from time import sleep
 import subprocess
 
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import json
 
 from common.apiclient import ApiClient
@@ -738,8 +738,9 @@ def check_nvmf_target(uri):
     port = u.port
     host = u.hostname
     nqn = u.path[1:]
+    hostnqn = parse_qs(u.query)["hostnqn"][0]
 
-    command = "sudo nvme discover -t tcp -s {0} -a {1} -o json".format(port, host)
+    command = f"sudo nvme discover -t tcp -s {port} -a {host} -q {hostnqn} -o json"
     status = subprocess.run(
         command, shell=True, check=True, text=True, capture_output=True
     )

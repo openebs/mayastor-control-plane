@@ -1,7 +1,6 @@
 """Target Switchover test feature tests."""
 import os
 import subprocess
-from time import sleep
 from urllib.parse import urlparse
 
 import grpc
@@ -116,7 +115,7 @@ def a_published_volume_with_two_replicas():
             {}, Protocol("nvmf"), node=NODE_NAME_1, frontend_node=""
         ),
     )
-    pytest.older_nexus_uri = volume["state"]["target"]["deviceUri"]
+    pytest.older_target_uri = volume["state"]["target"]["deviceUri"]
 
 
 @when("the destroy shutdown target call has succeeded")
@@ -216,43 +215,39 @@ def the_volume_republish_on_another_node_has_succeeded():
 @then("the newer target should have R/W access to the replicas")
 def the_newer_target_should_have_rw_access_to_the_replicas():
     """the newer target should have R/W access to the replicas."""
-    newer_nexus = get_newer_nexus()
-    u = parse_uri(newer_nexus["device_uri"])
+    newer_target = get_newer_target()
+    uri = urlparse(newer_target["deviceUri"])
 
-    fio = Fio(
-        name="job", rw="randrw", traddr=u.hostname, subnqn=u.path[1:]
-    ).build_for_userspace()
+    fio = Fio(name="job", rw="randrw", uri=uri).build_for_userspace()
 
     try:
         subprocess.run(fio, shell=True, check=True)
     except subprocess.CalledProcessError:
+        remove_stale_files_on_error(uri.hostname, uri.path[1:])
         assert False, "FIO is not expected to be errored out"
 
 
 @then("the older target should not have R/W access the replicas")
 def the_older_target_should_not_have_rw_access_the_replicas():
     """the older target should not have R/W access the replicas."""
-    u = parse_uri(pytest.older_nexus_uri)
+    uri = urlparse(pytest.older_target_uri)
 
-    fio = Fio(
-        name="job", rw="randrw", traddr=u.hostname, subnqn=u.path[1:]
-    ).build_for_userspace()
+    fio = Fio(name="job", rw="randrw", uri=uri).build_for_userspace()
 
     try:
         code = subprocess.run(fio, shell=True, check=True).returncode
         assert code != 0, "Fio is not expected to execute successfully"
     except subprocess.CalledProcessError:
-        remove_stale_files_on_error(u.hostname, u.path[1:])
+        remove_stale_files_on_error(uri.hostname, uri.path[1:])
         assert True, "FIO is not expected to be errored out"
 
 
 # HELPER FUNCTIONS
 
 
-def get_newer_nexus():
+def get_newer_target():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    nexus = ApiClient.nexuses_api().get_nexus(volume["state"]["target"]["uuid"])
-    return nexus
+    return volume.state["target"]
 
 
 def kill_docker_container(name):
@@ -307,11 +302,6 @@ def cleanup_iptable_rules(io_engine_ip):
             subprocess.run(command, shell=True, check=True)
         except subprocess.CalledProcessError:
             break
-
-
-def parse_uri(uri):
-    u = urlparse(uri)
-    return u
 
 
 def remove_stale_files_on_error(ip, nqn):

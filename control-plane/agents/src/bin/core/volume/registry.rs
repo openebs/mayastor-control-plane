@@ -1,7 +1,7 @@
 use crate::controller::registry::Registry;
 use agents::errors::SvcError;
 use common_lib::types::v0::transport::{
-    NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
+    uri_with_hostnqn, NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 
 use crate::controller::reconciler::PollTriggerEvent;
@@ -52,7 +52,13 @@ impl Registry {
             );
         }
 
-        Ok(if let Some(nexus_state) = nexus_state {
+        Ok(if let Some(mut nexus_state) = nexus_state {
+            let nqns = nexus_state
+                .allowed_hosts
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>();
+            nexus_state.device_uri = uri_with_hostnqn(&nexus_state.device_uri, &nqns);
             VolumeState {
                 uuid: volume_spec.uuid.to_owned(),
                 size: nexus_state.size,

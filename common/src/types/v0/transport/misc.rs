@@ -374,7 +374,7 @@ pub fn strip_queries(base: String, name: &str) -> String {
         .filter(|(n, _)| n != name)
         .map(|(n, v)| (n.to_string(), v.to_string()))
         .collect::<Vec<_>>();
-    url.query_pairs_mut().clear();
+    url.set_query(None);
     for (n, v) in qp {
         url.query_pairs_mut().append_pair(&n, &v);
     }

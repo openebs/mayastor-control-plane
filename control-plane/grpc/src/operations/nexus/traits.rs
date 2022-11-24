@@ -117,6 +117,7 @@ impl TryFrom<nexus::Nexus> for Nexus {
                     ))
                 }
             },
+            allowed_hosts: vec![],
         };
         Ok(nexus)
     }

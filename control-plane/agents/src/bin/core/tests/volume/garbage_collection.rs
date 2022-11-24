@@ -9,7 +9,8 @@ use common_lib::types::v0::{
         tower::client::Error,
     },
     transport::{
-        CreateNexus, CreateVolume, DestroyVolume, Filter, NexusId, PublishVolume, VolumeId,
+        strip_queries, CreateNexus, CreateVolume, DestroyVolume, Filter, NexusId, PublishVolume,
+        VolumeId,
     },
 };
 use deployer_cluster::{Cluster, ClusterBuilder};
@@ -439,7 +440,8 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
 
     tracing::info!("Volume: {:?}", volume);
     let volume_state = volume.state;
-    let nexus = volume_state.target.unwrap();
+    let mut nexus = volume_state.target.unwrap();
+    nexus.device_uri = strip_queries(nexus.device_uri, "hostnqn");
 
     cluster.composer().stop(nexus.node.as_str()).await.unwrap();
     let curr_nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;
