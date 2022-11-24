@@ -143,6 +143,17 @@ async fn detach(uuid: &Uuid, errheader: String) -> Result<(), Status> {
         let device_path = device.devname();
         debug!("Detaching device {}", device_path);
 
+        let mounts = crate::mount::find_src_mounts(&device_path, None);
+        if !mounts.is_empty() {
+            return Err(failure!(
+                Code::FailedPrecondition,
+                "{} device is still mounted {}: {:?}",
+                errheader,
+                device_path,
+                mounts
+            ));
+        }
+
         if let Err(error) = device.detach().await {
             return Err(failure!(
                 Code::Internal,
@@ -550,14 +561,18 @@ impl node_server::Node for Node {
                 if let Err(fsmount_error) =
                     stage_fs_volume(&msg, &device_path, mnt, &self.filesystems).await
                 {
-                    detach(
-                        &uuid,
-                        format!(
-                            "Failed to stage volume {}: {};",
-                            &msg.volume_id, fsmount_error
-                        ),
-                    )
-                    .await?;
+                    let mounts = crate::mount::find_src_mounts(&device_path, None);
+                    // If the device is mounted elsewhere, don't detach it!
+                    if mounts.is_empty() {
+                        detach(
+                            &uuid,
+                            format!(
+                                "Failed to stage volume {}: {};",
+                                &msg.volume_id, fsmount_error
+                            ),
+                        )
+                        .await?;
+                    }
                     return Err(fsmount_error);
                 }
             }
