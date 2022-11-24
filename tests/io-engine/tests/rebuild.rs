@@ -2,7 +2,9 @@ use deployer_cluster::{Cluster, ClusterBuilder};
 use openapi::{
     apis::{volumes_api, Url, Uuid},
     models,
+    models::PublishVolumeBody,
 };
+use std::collections::HashMap;
 
 #[tokio::test]
 async fn concurrent_rebuilds() {
@@ -47,10 +49,13 @@ async fn concurrent_rebuilds() {
         let volume = vol_cli
             .put_volume_target(
                 &volume.spec.uuid,
-                models::VolumeShareProtocol::Nvmf,
-                Some(cluster.node(i).as_str()),
-                None,
-                None,
+                PublishVolumeBody::new_all(
+                    HashMap::new(),
+                    None,
+                    Some(cluster.node(i).to_string()),
+                    models::VolumeShareProtocol::Nvmf,
+                    None,
+                ),
             )
             .await
             .unwrap();

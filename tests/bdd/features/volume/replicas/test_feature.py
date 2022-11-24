@@ -19,6 +19,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_policy import VolumePolicy
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
@@ -71,7 +72,12 @@ def init_resources():
     )
     # Publish volume so that there is a nexus to add a replica to.
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_1_NAME
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_1_NAME,
+        ),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))

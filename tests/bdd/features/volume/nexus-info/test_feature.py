@@ -18,6 +18,7 @@ from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_policy import VolumePolicy
 from openapi.exceptions import NotFoundException
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -156,7 +157,8 @@ def an_existing_volume():
 # Publish the volume
 def publish_volume():
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_NAME
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_NAME),
     )
     assert hasattr(volume.state, "target")
     return volume

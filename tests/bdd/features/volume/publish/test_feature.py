@@ -16,6 +16,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_policy import VolumePolicy
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -54,7 +55,12 @@ def test_sharepublish_an_already_sharedpublished_volume():
 def a_published_volume():
     """a published volume."""
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_NAME
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_NAME,
+        ),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
@@ -77,7 +83,12 @@ def publishing_the_volume_should_return_an_already_published_error():
     """publishing the volume should return an already published error."""
     try:
         ApiClient.volumes_api().put_volume_target(
-            VOLUME_UUID, Protocol("nvmf"), node=NODE_NAME
+            VOLUME_UUID,
+            publish_volume_body=PublishVolumeBody(
+                {},
+                Protocol("nvmf"),
+                node=NODE_NAME,
+            ),
         )
     except Exception as e:
         exception_info = e.__dict__
@@ -91,7 +102,12 @@ def publishing_the_volume_should_return_an_already_published_error():
 def publishing_the_volume_should_succeed_with_a_returned_volume_object_containing_the_share_uri():
     """publishing the volume should succeed with a returned volume object containing the share URI."""
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_NAME
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody(
+            {},
+            Protocol("nvmf"),
+            node=NODE_NAME,
+        ),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))

@@ -17,6 +17,7 @@ from common.docker import Docker
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.node_status import NodeStatus
@@ -92,7 +93,8 @@ def a_volume_that_is_not_sharedpublished(volume_ctx):
 def a_volume_that_is_sharedpublished():
     """a volume that is shared/published."""
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE1_NAME
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE1_NAME),
     )
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
 

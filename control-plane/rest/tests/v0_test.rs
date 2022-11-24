@@ -5,6 +5,7 @@ use common_lib::types::v0::{
 
 use rest_client::RestClient;
 
+use crate::models::PublishVolumeBody;
 use common_lib::types::v0::{
     openapi::{
         client::direct::ApiClient,
@@ -14,6 +15,7 @@ use common_lib::types::v0::{
 };
 use deployer_cluster::{Cluster, ClusterBuilder};
 use std::{
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     str::FromStr,
     time::Duration,
@@ -286,10 +288,13 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .volumes_api()
         .put_volume_target(
             &volume.state.uuid,
-            models::VolumeShareProtocol::Nvmf,
-            Some(io_engine1.as_str()),
-            None,
-            None,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(io_engine1.to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
         )
         .await
         .unwrap();

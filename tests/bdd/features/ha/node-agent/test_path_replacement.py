@@ -25,6 +25,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
+from openapi.model.publish_volume_body import PublishVolumeBody
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1123"
 VOLUME_SIZE = 10485761
@@ -122,7 +123,8 @@ def background():
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=TARGET_NODE_1
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=TARGET_NODE_1),
     )
     yield volume
     Deployer.stop()

@@ -11,6 +11,7 @@ from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
 from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.publish_volume_body import PublishVolumeBody
 from common.operations import Volume as VolumeOps
 from common.operations import Pool as PoolOps
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -284,7 +285,8 @@ def published_nexuses(setup, volumes):
 def publish_nexus(setup, volumes, published_nexuses):
     def publish(uuid, protocol):
         volume = ApiClient.volumes_api().put_volume_target(
-            uuid, Protocol("nvmf"), node=NODE1
+            uuid,
+            publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE1),
         )
         nexus = Nexus(uuid, protocol, volume.state["target"]["deviceUri"])
         published_nexuses[uuid] = nexus

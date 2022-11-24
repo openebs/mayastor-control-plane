@@ -290,6 +290,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             target_cfg.uuid().clone(),
             request.share,
             Some(target_cfg.config().clone()),
+            request.publish_context.clone(),
         ));
         let spec_clone = self.start_update(registry, &state, operation).await?;
 

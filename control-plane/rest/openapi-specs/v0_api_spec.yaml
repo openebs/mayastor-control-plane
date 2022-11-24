@@ -1440,35 +1440,12 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/VolumeId'
-        - in: query
-          description: |-
-            The node where the front-end workload resides.
-            If the workload moves then the volume must be republished.
-          name: node
-          schema:
-            $ref: '#/components/schemas/NodeId'
-        - in: query
-          description: The protocol used to connect to the front-end node.
-          name: protocol
-          required: true
-          schema:
-            $ref: '#/components/schemas/VolumeShareProtocol'
-        - in: query
-          name: republish
-          x-api-scope: internal
-          description: |-
-            Allows republishing the volume on the node by shutting down the existing target first.
-          required: false
-          schema:
-            type: boolean
-        - in: query
-          name: reuse_existing
-          x-api-scope: internal
-          description: |-
-            Allows reusing of the current target.
-          required: false
-          schema:
-            type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishVolumeBody'
+        required: true
       responses:
         '200':
           description: OK
@@ -1857,7 +1834,7 @@ components:
         children:
           - 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:37d83441-e8ef-4e17-a29e-25169d91cb96'
         size: 80241024
-      description: Create Nexus Body JSON
+      description: Create Nexus Body
       type: object
       properties:
         children:
@@ -1881,7 +1858,7 @@ components:
       example:
         disks:
           - 'malloc:///disk?size_mb=100'
-      description: Create Pool Body JSON
+      description: Create Pool Body
       type: object
       properties:
         disks:
@@ -1911,7 +1888,7 @@ components:
       example:
         size: 80241024
         thin: false
-      description: Create Replica Body JSON
+      description: Create Replica Body
       type: object
       properties:
         share:
@@ -2058,7 +2035,7 @@ components:
         size: 10485761
         thin: false
         topology: null
-      description: Create Volume Body JSON
+      description: Create Volume Body
       type: object
       properties:
         policy:
@@ -2089,6 +2066,43 @@ components:
         - replicas
         - size
         - thin
+    PublishVolumeBody:
+      example:
+        node: "io-engine-1"
+        protocol: "nvmf"
+        publish_context:
+          io_timeout: "30"
+          ctrl_loss_timeout: "1980"
+        republish: false
+        reuse_existing: true
+      description: Publish Volume Body
+      type: object
+      properties:
+        publish_context:
+          description: Controller Volume Publish context
+          type: object
+          additionalProperties:
+            type: string
+        reuse_existing:
+          description: Allows reusing of the current target.
+          type: boolean
+        node:
+          description: |-
+            The node where the front-end workload resides.
+            If the workload moves then the volume must be republished.
+          allOf:
+            - $ref: '#/components/schemas/NodeId'
+        protocol:
+          description: The protocol used to connect to the front-end node.
+          allOf:
+            - $ref: '#/components/schemas/VolumeShareProtocol'
+        republish:
+          description: |-
+            Allows republishing the volume on the node by shutting down the existing target first.
+          type: boolean
+      required:
+        - publish_context
+        - protocol
     JsonGeneric:
       description: 'Generic JSON value eg: { "size": 1024 }'
       type: object

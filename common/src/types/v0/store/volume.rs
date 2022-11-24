@@ -106,6 +106,9 @@ pub struct VolumeSpec {
     /// Last used Target Configuration.
     #[serde(default)]
     pub target_config: Option<TargetConfig>,
+    /// The publish context of the volume.
+    #[serde(default)]
+    pub publish_context: HashMap<String, String>,
 }
 
 /// The volume's Nvmf Configuration.
@@ -294,6 +297,7 @@ fn volume_op_deserializer() {
             "4ffe7e43-46dd-4912-9d0f-6c9844fa7c6e".try_into().unwrap(),
             None,
             None,
+            HashMap::new(),
         )),
     }];
 
@@ -312,6 +316,8 @@ pub struct PublishOperation {
     protocol: Option<VolumeShareProtocol>,
     #[serde(default)]
     config: Option<NexusNvmfConfig>,
+    #[serde(default)]
+    publish_context: HashMap<String, String>,
 }
 impl PublishOperation {
     /// Return new `Self` from the given parameters.
@@ -320,17 +326,23 @@ impl PublishOperation {
         nexus: NexusId,
         protocol: Option<VolumeShareProtocol>,
         config: Option<NexusNvmfConfig>,
+        publish_context: HashMap<String, String>,
     ) -> Self {
         Self {
             node,
             nexus,
             protocol,
             config,
+            publish_context,
         }
     }
     /// Get the share protocol.
     pub fn protocol(&self) -> Option<VolumeShareProtocol> {
         self.protocol
+    }
+    /// Get the publish context.
+    pub fn publish_context(&self) -> HashMap<String, String> {
+        self.publish_context.clone()
     }
 }
 
@@ -427,6 +439,7 @@ impl From<&CreateVolume> for VolumeSpec {
             operation: None,
             thin: request.thin,
             target_config: None,
+            publish_context: HashMap::new(),
         }
     }
 }

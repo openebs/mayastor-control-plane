@@ -60,6 +60,8 @@ message Metadata {
   common.SpecStatus spec_status = 1;
   // Persistent Configuration of the target (current/last)
   TargetConfig target_config = 2;
+  // Publish Context of the volme.
+  map<string,string> publish_context = 3;
 }
 
 message TargetConfig {
@@ -178,6 +180,8 @@ message PublishVolumeRequest {
   optional string target_node = 2;
   // share protocol
   optional VolumeShareProtocol share = 3;
+  // publish context
+  map<string, string> publish_context = 4;
 }
 
 // Republish a volume on a node by shutting down existing target

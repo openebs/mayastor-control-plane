@@ -18,6 +18,7 @@ from common.docker import Docker
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.exceptions import ApiException
 from openapi.model.volume_status import VolumeStatus
@@ -87,7 +88,8 @@ def an_existing_published_volume():
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
-        VOLUME_UUID, Protocol("nvmf"), node=NODE_1_NAME
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
     )
 
     # Now the volume has been created, create the additional pool.
