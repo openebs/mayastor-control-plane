@@ -1,7 +1,8 @@
-use common_lib::types::v0::transport as v0;
+use common_lib::types::v0::{transport as v0, transport::strip_queries};
 use deployer_cluster::{Cluster, ClusterBuilder};
+use std::collections::HashMap;
 
-use openapi::models;
+use openapi::{models, models::PublishVolumeBody};
 
 #[tokio::test]
 async fn allowed_hosts() {
@@ -9,6 +10,7 @@ async fn allowed_hosts() {
     let cluster = ClusterBuilder::builder()
         .with_io_engines(3)
         .with_tmpfs_pool(size * 4)
+        .with_options(|o| o.with_io_engine_hostnqn(true))
         .build()
         .await
         .unwrap();
@@ -29,7 +31,10 @@ async fn allowed_hosts() {
         )
         .await
         .unwrap();
-    let replica1_uri = replica.uri.to_string();
+
+    let replica1_uri = strip_queries(replica.uri.to_string(), "hostnqn");
+    tracing::debug!("ReplicaUri: {}", replica1_uri);
+
     let _nexus1 = nexus_client
         .put_node_nexus(
             cluster.node(1).as_str(),
@@ -109,4 +114,41 @@ async fn allowed_hosts() {
         )
         .await
         .expect("Node 2 is now an allowed host!");
+}
+
+#[tokio::test]
+async fn volume_allowed_host() {
+    let size = 20 * 1024 * 1024;
+    let cluster = ClusterBuilder::builder()
+        .with_io_engines(3)
+        .with_tmpfs_pool(size * 4)
+        .build()
+        .await
+        .unwrap();
+    let rest = cluster.rest_v00();
+    let volumes_api = rest.volumes_api();
+
+    let volume_1_size = 10u64 * 1024 * 1024;
+    let mut volume_1 = volumes_api
+        .put_volume(
+            &"ec4e66fd-3b33-4439-b504-d49aba53da26".parse().unwrap(),
+            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 2, volume_1_size, true),
+        )
+        .await
+        .unwrap();
+    volume_1 = volumes_api
+        .put_volume_target(
+            &volume_1.spec.uuid,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                Some(cluster.node(0).to_string()),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+            ),
+        )
+        .await
+        .unwrap();
+
+    let _ = volume_1;
 }

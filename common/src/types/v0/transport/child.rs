@@ -51,6 +51,12 @@ impl ChildUri {
     pub fn is_local(&self) -> bool {
         self.0.starts_with("bdev://") || self.0.starts_with("loopback://")
     }
+
+    /// Add query parameter to the Uri.
+    #[must_use]
+    pub fn with_query(self, name: &str, value: &str) -> Self {
+        add_query(self.0, name, value).into()
+    }
 }
 impl PartialEq<Child> for ChildUri {
     fn eq(&self, other: &Child) -> bool {

@@ -347,6 +347,14 @@ pub struct ShareReplica {
     pub allowed_hosts: Vec<HostNqn>,
 }
 
+impl ShareReplica {
+    /// Get `Self` with the provided allowed_hosts.
+    pub fn with_hosts(mut self, hosts: Vec<HostNqn>) -> Self {
+        self.allowed_hosts = hosts;
+        self
+    }
+}
+
 impl From<ShareReplica> for UnshareReplica {
     fn from(share: ShareReplica) -> Self {
         Self {

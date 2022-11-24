@@ -89,6 +89,8 @@ pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
 pub const DEFAULT_NAMESPACE: &str = "mayastor";
 /// NQN prefix for NVMe targets created by the product.
 pub const NVME_TARGET_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:";
+/// NQN prefix for NVMe HOSTNQN used by the product.
+pub const NVME_INITIATOR_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:node-name:";
 
 /// NVMe path check period.
 pub const NVME_PATH_CHECK_PERIOD: &str = "3s";

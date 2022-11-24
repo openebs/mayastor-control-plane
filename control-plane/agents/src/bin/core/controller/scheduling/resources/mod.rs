@@ -98,6 +98,7 @@ impl ReplicaItem {
         self.replica_state.as_ref()
     }
     /// Get a reference to the child spec.
+    #[allow(dead_code)]
     pub(crate) fn uri(&self) -> &Option<ChildUri> {
         &self.child_uri
     }

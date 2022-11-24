@@ -165,6 +165,10 @@ pub struct StartOptions {
     #[structopt(long)]
     pub io_engine_isolate: bool,
 
+    /// Setup a unique hostnqn for each io-engine.
+    #[structopt(long)]
+    pub io_engine_host_nqn: bool,
+
     /// Add the following environment variables to the io_engine containers.
     #[structopt(long, env = "IO_ENGINE_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
     pub io_engine_env: Option<Vec<KeyValue>>,
@@ -414,6 +418,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_hostnqn(mut self, yes: bool) -> Self {
+        self.io_engine_host_nqn = yes;
         self
     }
     #[must_use]

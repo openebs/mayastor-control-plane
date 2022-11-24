@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
+use uuid::Uuid;
 
 const NVME_NQN_UUID_PRE: &str = "nqn.2014-08.org.nvmexpress:uuid:";
 const NVME_NQN_MIN_LEN: usize = 11;
@@ -58,13 +62,14 @@ impl Default for NvmeNqn {
     }
 }
 
-impl ToString for NvmeNqn {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for NvmeNqn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let nqn_str = match self {
             NvmeNqn::Unique { uuid } => format!("{NVME_NQN_UUID_PRE}{uuid}"),
             NvmeNqn::Org { date, domain, name } => format!("nqn.{date}.{domain}:{name}"),
             NvmeNqn::Invalid { nqn } => nqn.to_string(),
-        }
+        };
+        f.write_str(&nqn_str)
     }
 }
 
@@ -73,6 +78,14 @@ impl NvmeNqn {
     pub fn new() -> Self {
         let uuid = uuid::Uuid::new_v4();
         Self::Unique { uuid }
+    }
+    /// Generate a Mayastor type name.
+    pub fn new_prod_name(name: &str) -> Self {
+        Self::Org {
+            date: "2019-05".to_string(),
+            domain: "io.openebs".to_string(),
+            name: format!("node-name:{name}"),
+        }
     }
     fn parse_nqn_date(date: &str) -> Result<String, NvmeNqnParseError> {
         match date.split("").collect::<Vec<_>>()[..] {
@@ -125,6 +138,11 @@ pub enum NvmeNqnParseError {
     NoDomain,
 }
 
+impl From<uuid::Uuid> for NvmeNqn {
+    fn from(uuid: Uuid) -> Self {
+        Self::Unique { uuid }
+    }
+}
 impl From<NvmeNqn> for String {
     fn from(nqn: NvmeNqn) -> Self {
         nqn.to_string()
