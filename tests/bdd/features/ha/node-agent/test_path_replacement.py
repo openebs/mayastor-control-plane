@@ -12,7 +12,7 @@ from time import sleep
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
-from common.ha import HaNodeHandle
+from common.node_agent import HaNodeHandle
 from common.fio import Fio
 from common.nvme import (
     nvme_connect,

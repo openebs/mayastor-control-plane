@@ -1,6 +1,7 @@
 use crate::{
     context::{Client, Context, TracedChannel},
-    ha_cluster_agent::{ha_node_rpc_client::HaNodeRpcClient, ha_rpc_client::HaRpcClient},
+    ha_cluster_agent::ha_cluster_rpc_client::HaClusterRpcClient,
+    ha_node_agent::ha_node_rpc_client::HaNodeRpcClient,
     operations::ha_node::traits::{
         ClusterAgentOperations, NodeAgentOperations, NodeInfo, ReplacePathInfo,
         ReportFailedPathsInfo,
@@ -15,19 +16,19 @@ use tonic::transport::Uri;
 
 /// Cluster-Agent RPC client
 pub struct ClusterAgentClient {
-    inner: Client<HaRpcClient<TracedChannel>>,
+    inner: Client<HaClusterRpcClient<TracedChannel>>,
 }
 
 impl ClusterAgentClient {
     /// creates a new base tonic endpoint with the timeout options and the address
     pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {
-        let client = Client::new(addr, opts, HaRpcClient::new).await;
+        let client = Client::new(addr, opts, HaClusterRpcClient::new).await;
         Self { inner: client }
     }
 }
 
 impl Deref for ClusterAgentClient {
-    type Target = Client<HaRpcClient<TracedChannel>>;
+    type Target = Client<HaClusterRpcClient<TracedChannel>>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }

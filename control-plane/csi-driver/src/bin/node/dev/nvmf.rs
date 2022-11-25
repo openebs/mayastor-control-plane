@@ -169,7 +169,7 @@ impl Attach for NvmfAttach {
             .build()?;
         match ca.connect() {
             Err(NvmeError::ConnectInProgress) => Ok(()),
-            Err(err) => Err(format!("connect failed: {}", err).into()),
+            Err(err) => Err(err.into()),
             Ok(_) => Ok(()),
         }
     }

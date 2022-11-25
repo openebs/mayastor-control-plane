@@ -1,8 +1,7 @@
 use crate::{
     context::Context,
-    ha_cluster_agent::{
-        FailedNvmePath, HaNodeInfo, ReplacePathRequest, ReportFailedNvmePathsRequest,
-    },
+    ha_cluster_agent::{FailedNvmePath, HaNodeInfo, ReportFailedNvmePathsRequest},
+    ha_node_agent::ReplacePathRequest,
 };
 use common_lib::{
     transport_api::{ReplyError, ResourceKind},

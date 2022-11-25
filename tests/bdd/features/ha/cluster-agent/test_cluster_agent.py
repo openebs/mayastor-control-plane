@@ -7,11 +7,9 @@ from pytest_bdd import (
     when,
 )
 
-from time import sleep
 import pytest
 import cluster_agent_pb2 as pb
 import grpc
-from google.protobuf import empty_pb2
 from common.deployer import Deployer
 from common.cluster_agent import ClusterAgentHandle
 

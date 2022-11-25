@@ -919,6 +919,7 @@ dependencies = [
  "devinfo",
  "futures",
  "glob",
+ "grpc",
  "heck 0.4.0",
  "humantime",
  "k8s-openapi",

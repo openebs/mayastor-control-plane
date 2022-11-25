@@ -13,6 +13,8 @@ fn main() {
                 "proto/v1/jsongrpc/jsongrpc.proto",
                 "proto/v1/watch/watch.proto",
                 "proto/v1/ha/cluster_agent.proto",
+                "proto/v1/ha/node_agent.proto",
+                "proto/v1/ha/csi_node_nvme.proto",
             ],
             &["proto/"],
         )
