@@ -325,7 +325,12 @@ impl AgentToIoEngine for transport::ShareNexus {
             uuid: self.uuid.clone().into(),
             key: self.key.clone().unwrap_or_default(),
             share: self.protocol as i32,
-            ..Default::default()
+            allowed_hosts: self
+                .allowed_hosts
+                .clone()
+                .into_iter()
+                .map(|host_nqn| host_nqn.to_string())
+                .collect(),
         }
     }
 }

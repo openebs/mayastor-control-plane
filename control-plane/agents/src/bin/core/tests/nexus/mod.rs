@@ -168,7 +168,7 @@ async fn nexus_share_transaction() {
         .await
         .unwrap();
 
-    let share = ShareNexus::from((&nexus, None, NexusShareProtocol::Nvmf));
+    let share = ShareNexus::new(&nexus, NexusShareProtocol::Nvmf, vec![]);
 
     async fn check_share_operation(
         nexus: &Nexus,
@@ -374,7 +374,7 @@ async fn nexus_share_transaction_store() {
         .unwrap();
 
     // test the share operation
-    let share = ShareNexus::from((&nexus, None, NexusShareProtocol::Nvmf));
+    let share = ShareNexus::new(&nexus, NexusShareProtocol::Nvmf, vec![]);
 
     nexus_child_op_transaction_store(
         &nexus,

@@ -20,7 +20,7 @@ use common_lib::{
         },
         transport::{
             AddNexusChild, Child, ChildState, ChildStateReason, ChildUri, CreateNexus,
-            DestroyNexus, Filter, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
+            DestroyNexus, Filter, HostNqn, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
             NexusShareProtocol, NexusStatus, NodeId, NvmeReservation, NvmfControllerIdRange,
             RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
         },
@@ -363,6 +363,12 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
             }),
             nvmf_config: value.nvmf_config.try_into_opt()?,
             status_info: NexusStatusInfo::new(false),
+            allowed_hosts: value
+                .allowed_hosts
+                .clone()
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -389,6 +395,15 @@ impl From<NexusSpec> for nexus::NexusSpec {
                 result: operation.result,
             }),
             nvmf_config: value.nvmf_config.into_opt(),
+            allowed_hosts: match value
+                .allowed_hosts
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()
+            {
+                Ok(host_nqn) => host_nqn,
+                Err(_) => vec![],
+            },
         }
     }
 }
@@ -809,6 +824,8 @@ pub trait ShareNexusInfo: Send + Sync + std::fmt::Debug {
     fn key(&self) -> Option<String>;
     /// Protocol used for exposing the nexus
     fn protocol(&self) -> NexusShareProtocol;
+    /// Allowed hosts to access nexus.
+    fn allowed_hosts(&self) -> Vec<HostNqn>;
 }
 
 impl ShareNexusInfo for ShareNexus {
@@ -826,6 +843,10 @@ impl ShareNexusInfo for ShareNexus {
 
     fn protocol(&self) -> NexusShareProtocol {
         self.protocol
+    }
+
+    fn allowed_hosts(&self) -> Vec<HostNqn> {
+        self.allowed_hosts.clone()
     }
 }
 
@@ -853,6 +874,7 @@ pub struct ValidatedShareNexusRequest {
     inner: ShareNexusRequest,
     uuid: NexusId,
     protocol: NexusShareProtocol,
+    allowed_hosts: Vec<HostNqn>,
 }
 
 impl ShareNexusInfo for ValidatedShareNexusRequest {
@@ -871,6 +893,10 @@ impl ShareNexusInfo for ValidatedShareNexusRequest {
     fn uuid(&self) -> NexusId {
         self.uuid.clone()
     }
+
+    fn allowed_hosts(&self) -> Vec<HostNqn> {
+        self.allowed_hosts.clone()
+    }
 }
 
 impl ValidateRequestTypes for ShareNexusRequest {
@@ -888,7 +914,12 @@ impl ValidateRequestTypes for ShareNexusRequest {
                     ))
                 }
             },
-            inner: self,
+            inner: self.clone(),
+            allowed_hosts: self
+                .allowed_hosts
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -901,6 +932,11 @@ impl From<&dyn ShareNexusInfo> for ShareNexusRequest {
             nexus_id: Some(data.uuid().to_string()),
             protocol: protocol as i32,
             key: data.key(),
+            allowed_hosts: data
+                .allowed_hosts()
+                .into_iter()
+                .map(|nqn| nqn.to_string())
+                .collect(),
         }
     }
 }
@@ -912,7 +948,7 @@ impl From<&dyn ShareNexusInfo> for ShareNexus {
             uuid: data.uuid(),
             key: data.key(),
             protocol: data.protocol(),
-            allowed_hosts: vec![],
+            allowed_hosts: data.allowed_hosts(),
         }
     }
 }

@@ -400,6 +400,8 @@ pub struct PublishVolume {
     pub share: Option<VolumeShareProtocol>,
     /// Publish Context.
     pub publish_context: HashMap<String, String>,
+    /// Hosts allowed to access nexus
+    pub frontend_nodes: Vec<String>,
 }
 impl PublishVolume {
     /// Create new `PublishVolume` based on the provided arguments
@@ -408,12 +410,14 @@ impl PublishVolume {
         target_node: Option<NodeId>,
         share: Option<VolumeShareProtocol>,
         publish_context: HashMap<String, String>,
+        frontend_nodes: Vec<String>,
     ) -> Self {
         Self {
             uuid,
             target_node,
             share,
             publish_context,
+            frontend_nodes,
         }
     }
 }
@@ -483,11 +487,17 @@ pub struct ShareVolume {
     pub uuid: VolumeId,
     /// share protocol
     pub protocol: VolumeShareProtocol,
+    /// Hosts allowed to connect nexus.
+    pub frontend_hosts: Vec<String>,
 }
 impl ShareVolume {
     /// Create a new `ShareVolume` request.
-    pub fn new(uuid: VolumeId, protocol: VolumeShareProtocol) -> Self {
-        Self { uuid, protocol }
+    pub fn new(uuid: VolumeId, protocol: VolumeShareProtocol, frontend_hosts: Vec<String>) -> Self {
+        Self {
+            uuid,
+            protocol,
+            frontend_hosts,
+        }
     }
 }
 

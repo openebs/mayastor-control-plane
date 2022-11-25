@@ -127,6 +127,7 @@ async fn nexus_persistence_test_iteration(
                 target_node: Some(remote.clone()),
                 share: None,
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -204,6 +205,7 @@ async fn nexus_persistence_test_iteration(
                 target_node: Some(local.clone()),
                 share: None,
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -300,6 +302,7 @@ async fn publishing_test(cluster: &Cluster) {
                 target_node: None,
                 share: None,
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -318,6 +321,7 @@ async fn publishing_test(cluster: &Cluster) {
             &ShareVolume {
                 uuid: volume_state.uuid.clone(),
                 protocol: Default::default(),
+                frontend_hosts: vec![],
             },
             None,
         )
@@ -331,6 +335,7 @@ async fn publishing_test(cluster: &Cluster) {
             &ShareVolume {
                 uuid: volume_state.uuid.clone(),
                 protocol: Default::default(),
+                frontend_hosts: vec![],
             },
             None,
         )
@@ -364,6 +369,7 @@ async fn publishing_test(cluster: &Cluster) {
                 target_node: None,
                 share: None,
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -382,6 +388,7 @@ async fn publishing_test(cluster: &Cluster) {
                 target_node: Some(cluster.node(0)),
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -416,6 +423,7 @@ async fn publishing_test(cluster: &Cluster) {
                 target_node: None,
                 share: Some(VolumeShareProtocol::Iscsi),
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -429,6 +437,7 @@ async fn publishing_test(cluster: &Cluster) {
                 target_node: None,
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )
@@ -447,6 +456,7 @@ async fn publishing_test(cluster: &Cluster) {
                 target_node: Some(cluster.node(1)),
                 share: None,
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
             },
             None,
         )

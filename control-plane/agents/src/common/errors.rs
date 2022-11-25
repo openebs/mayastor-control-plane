@@ -2,7 +2,9 @@ use common_lib::{
     transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         store::definitions::StoreError,
-        transport::{pool::PoolDeviceUri, ApiVersion, Filter, NodeId, PoolId, ReplicaId},
+        transport::{
+            pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolId, ReplicaId,
+        },
     },
 };
 use snafu::{Error, Snafu};
@@ -218,6 +220,8 @@ pub enum SvcError {
     InvalidApiVersion { api_version: Option<ApiVersion> },
     #[snafu(display("The subsystem with nqn: {} is not found", nqn))]
     SubsystemNotFound { nqn: String },
+    #[snafu(display("The nqn couldnt be parsed"))]
+    NvmeParseError {},
 }
 
 impl SvcError {
@@ -241,6 +245,12 @@ impl From<StoreError> for SvcError {
             StoreError::MissingEntry { key } => SvcError::StoreMissingEntry { key },
             _ => SvcError::Store { source },
         }
+    }
+}
+
+impl From<NvmeNqnParseError> for SvcError {
+    fn from(_: NvmeNqnParseError) -> Self {
+        Self::NvmeParseError {}
     }
 }
 
@@ -622,6 +632,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::SubsystemNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::NvmeParseError { .. } => ReplyError {
+                kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),

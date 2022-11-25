@@ -158,7 +158,9 @@ def an_existing_volume():
 def publish_volume():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_NAME),
+        publish_volume_body=PublishVolumeBody(
+            {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
+        ),
     )
     assert hasattr(volume.state, "target")
     return volume

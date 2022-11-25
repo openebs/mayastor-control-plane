@@ -1,7 +1,7 @@
 use super::*;
 use common_lib::types::v0::{
     openapi::apis::Uuid,
-    transport::{DestroyNexus, Filter, ShareNexus, UnshareNexus},
+    transport::{DestroyNexus, Filter, UnshareNexus},
 };
 use grpc::operations::nexus::traits::NexusOperations;
 use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};

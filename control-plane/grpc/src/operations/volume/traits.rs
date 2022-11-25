@@ -845,6 +845,8 @@ pub trait ShareVolumeInfo: Send + Sync + std::fmt::Debug {
     fn uuid(&self) -> VolumeId;
     /// Protocol over which the volume be shared
     fn share(&self) -> VolumeShareProtocol;
+    /// Hosts allowed to access nexus.
+    fn frontend_hosts(&self) -> Vec<String>;
 }
 
 impl ShareVolumeInfo for ShareVolume {
@@ -855,6 +857,10 @@ impl ShareVolumeInfo for ShareVolume {
     fn share(&self) -> VolumeShareProtocol {
         self.protocol
     }
+
+    fn frontend_hosts(&self) -> Vec<String> {
+        self.frontend_hosts.clone()
+    }
 }
 
 /// Intermediate structure that validates the conversion to ShareVolumeRequest type.
@@ -862,6 +868,7 @@ impl ShareVolumeInfo for ShareVolume {
 pub struct ValidatedShareVolumeRequest {
     uuid: VolumeId,
     share: VolumeShareProtocol,
+    frontend_hosts: Vec<String>,
 }
 
 impl ShareVolumeInfo for ValidatedShareVolumeRequest {
@@ -871,6 +878,10 @@ impl ShareVolumeInfo for ValidatedShareVolumeRequest {
 
     fn share(&self) -> VolumeShareProtocol {
         self.share
+    }
+
+    fn frontend_hosts(&self) -> Vec<String> {
+        self.frontend_hosts.clone()
     }
 }
 
@@ -889,6 +900,7 @@ impl ValidateRequestTypes for ShareVolumeRequest {
                     ))
                 }
             },
+            frontend_hosts: self.frontend_hosts,
         })
     }
 }
@@ -898,6 +910,7 @@ impl From<&dyn ShareVolumeInfo> for ShareVolume {
         Self {
             uuid: data.uuid(),
             protocol: data.share(),
+            frontend_hosts: data.frontend_hosts(),
         }
     }
 }
@@ -908,6 +921,7 @@ impl From<&dyn ShareVolumeInfo> for ShareVolumeRequest {
         Self {
             uuid: Some(data.uuid().to_string()),
             share: share as i32,
+            frontend_hosts: data.frontend_hosts(),
         }
     }
 }
@@ -969,6 +983,8 @@ pub trait PublishVolumeInfo: Send + Sync + std::fmt::Debug {
     fn share(&self) -> Option<VolumeShareProtocol>;
     /// The Publish context
     fn publish_context(&self) -> HashMap<String, String>;
+    /// Hosts allowed to access the nexus.
+    fn frontend_nodes(&self) -> Vec<String>;
 }
 
 impl PublishVolumeInfo for PublishVolume {
@@ -986,6 +1002,10 @@ impl PublishVolumeInfo for PublishVolume {
 
     fn publish_context(&self) -> HashMap<String, String> {
         self.publish_context.clone()
+    }
+
+    fn frontend_nodes(&self) -> Vec<String> {
+        self.frontend_nodes.clone()
     }
 }
 
@@ -1005,6 +1025,10 @@ impl PublishVolumeInfo for RepublishVolume {
     fn publish_context(&self) -> HashMap<String, String> {
         unimplemented!()
     }
+
+    fn frontend_nodes(&self) -> Vec<String> {
+        unimplemented!()
+    }
 }
 
 /// Intermediate structure that validates the conversion to PublishVolumeRequest type.
@@ -1013,6 +1037,7 @@ pub struct ValidatedPublishVolumeRequest {
     inner: PublishVolumeRequest,
     uuid: VolumeId,
     share: Option<VolumeShareProtocol>,
+    frontend_nodes: Vec<String>,
 }
 
 impl PublishVolumeInfo for ValidatedPublishVolumeRequest {
@@ -1034,6 +1059,10 @@ impl PublishVolumeInfo for ValidatedPublishVolumeRequest {
     fn publish_context(&self) -> HashMap<String, String> {
         self.inner.publish_context.clone()
     }
+
+    fn frontend_nodes(&self) -> Vec<String> {
+        self.frontend_nodes.clone()
+    }
 }
 
 impl ValidateRequestTypes for PublishVolumeRequest {
@@ -1054,7 +1083,8 @@ impl ValidateRequestTypes for PublishVolumeRequest {
                 },
                 None => None,
             },
-            inner: self,
+            inner: self.clone(),
+            frontend_nodes: self.frontend_nodes,
         })
     }
 }
@@ -1066,6 +1096,7 @@ impl From<&dyn PublishVolumeInfo> for PublishVolume {
             target_node: data.target_node(),
             share: data.share(),
             publish_context: data.publish_context(),
+            frontend_nodes: data.frontend_nodes(),
         }
     }
 }
@@ -1084,6 +1115,7 @@ impl From<&dyn PublishVolumeInfo> for PublishVolumeRequest {
             target_node: data.target_node().map(|node_id| node_id.to_string()),
             share,
             publish_context: data.publish_context(),
+            frontend_nodes: data.frontend_nodes(),
         }
     }
 }

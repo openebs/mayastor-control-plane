@@ -270,7 +270,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<ControllerPublishVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
         tracing::trace!(volume.uuid = %args.volume_id, request = ?args);
-
         if args.readonly {
             return Err(Status::invalid_argument(
                 "Read-only volumes are not supported",
@@ -282,7 +281,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         if args.node_id.is_empty() {
             return Err(Status::invalid_argument("Node ID must not be empty"));
         }
-        let node_id = args.node_id;
+        let node_id = args.node_id.clone();
 
         if args.volume_id.is_empty() {
             return Err(Status::invalid_argument("Volume ID must not be empty"));
@@ -371,7 +370,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                 // Volume is not published.
                 let v = IoEngineApiClient::get_client()
-                    .publish_volume(&volume_id, target_node, protocol, &publish_context)
+                    .publish_volume(&volume_id, target_node, protocol, args.node_id.clone(), &publish_context)
                     .await?;
 
                 if let Some((node, uri)) = get_volume_share_location(&v) {

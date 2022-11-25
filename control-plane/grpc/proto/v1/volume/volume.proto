@@ -182,6 +182,8 @@ message PublishVolumeRequest {
   optional VolumeShareProtocol share = 3;
   // publish context
   map<string, string> publish_context = 4;
+  /// Hosts allowed to access target.
+  repeated string frontend_nodes = 5;
 }
 
 // Republish a volume on a node by shutting down existing target
@@ -213,6 +215,8 @@ message ShareVolumeRequest {
   google.protobuf.StringValue uuid = 1;
   // share protocol
   VolumeShareProtocol share = 3;
+  /// Hosts allowed to access target.
+  repeated string frontend_hosts = 4;
 }
 
 // Unshare Volume request

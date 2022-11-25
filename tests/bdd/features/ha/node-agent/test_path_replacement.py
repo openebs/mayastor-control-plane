@@ -124,7 +124,9 @@ def background():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=TARGET_NODE_1),
+        publish_volume_body=PublishVolumeBody(
+            {}, Protocol("nvmf"), node=TARGET_NODE_1, frontend_node=""
+        ),
     )
     yield volume
     Deployer.stop()

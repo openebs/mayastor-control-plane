@@ -8,7 +8,7 @@ use crate::types::v0::{
         AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
     },
     transport::{
-        self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, NexusId,
+        self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, HostNqn, NexusId,
         NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId, VolumeId,
     },
 };
@@ -99,6 +99,9 @@ pub struct NexusSpec {
     #[serde(default)]
     /// Additional information about the nexus status.
     pub status_info: NexusStatusInfo,
+    #[serde(default)]
+    /// Hosts allowed to access the nexus.
+    pub allowed_hosts: Vec<HostNqn>,
 }
 impl NexusSpec {
     /// Check if the spec contains the provided replica by it's `ReplicaId`.
@@ -212,8 +215,9 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                 NexusOperation::Create => {
                     self.spec_status = SpecStatus::Created(transport::NexusStatus::Online);
                 }
-                NexusOperation::Share(share) => {
+                NexusOperation::Share(share, host_nqn) => {
                     self.share = share.into();
+                    self.allowed_hosts = host_nqn;
                 }
                 NexusOperation::Unshare => {
                     self.share = Protocol::None;
@@ -252,7 +256,7 @@ pub enum NexusOperation {
     Create,
     Destroy,
     Shutdown,
-    Share(NexusShareProtocol),
+    Share(NexusShareProtocol, Vec<HostNqn>),
     Unshare,
     AddChild(NexusChild),
     RemoveChild(NexusChild),
@@ -301,6 +305,7 @@ impl From<&CreateNexus> for NexusSpec {
             operation: None,
             nvmf_config: request.config.clone(),
             status_info: NexusStatusInfo::new(false),
+            allowed_hosts: vec![],
         }
     }
 }

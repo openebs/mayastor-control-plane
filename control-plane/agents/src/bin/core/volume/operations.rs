@@ -235,7 +235,16 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
                 nexus
                     .share(
                         registry,
-                        &ShareNexus::from((&target, None, request.protocol)),
+                        &ShareNexus::new(
+                            &target,
+                            request.protocol,
+                            request
+                                .frontend_hosts
+                                .clone()
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<_, _>>()?,
+                        ),
                     )
                     .await
             }
@@ -305,9 +314,10 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         // Share the Nexus if it was requested
         let mut result = Ok(());
+        // TODO: use hostnqn from PublishVolume.
         if let Some(share) = request.share {
             result = match nexus
-                .share(registry, &ShareNexus::from((&nexus_state, None, share)))
+                .share(registry, &ShareNexus::new(&nexus_state, share, vec![]))
                 .await
             {
                 Ok(_) => Ok(()),
@@ -463,12 +473,12 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let (mut nexus, nexus_state) = self
             .validate_update_step(registry, result, &spec_clone)
             .await?;
-
+        let allowed_host = older_nexus.lock().allowed_hosts.clone();
         // Share the Nexus
         let result = match nexus
             .share(
                 registry,
-                &ShareNexus::from((&nexus_state, None, request.share)),
+                &ShareNexus::new(&nexus_state, request.share, allowed_host.clone()),
             )
             .await
         {
