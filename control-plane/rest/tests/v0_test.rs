@@ -291,10 +291,10 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(io_engine1.to_string()),
+                io_engine1.to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                "".to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await

@@ -139,6 +139,16 @@ impl NodeWrapper {
                         node_state.instance_uuid()
                     );
                 }
+
+                // todo: what to do if this ever happens?
+                if self.node_state().node_nqn != node_state.node_nqn {
+                    tracing::error!(
+                        node.id=%node_state.id,
+                        "Node hostnqn changed from {:?} to {:?}",
+                        self.node_state().node_nqn,
+                        node_state.node_nqn
+                    );
+                }
             }
             self.node_state = node_state;
             true

@@ -65,10 +65,7 @@ impl ComponentAction for CoreAgent {
             binary = binary.with_args(vec!["--max-rebuilds", &max_rebuilds.to_string()]);
         }
         Ok(cfg.add_container_spec(
-            ContainerSpec::from_binary(name, binary)
-                .with_portmap("50051", "50051")
-                .with_env("VOLUME_ALLOWED_HOSTS", "yes")
-                .with_env("REPLICA_ALLOWED_HOSTS", "yes"),
+            ContainerSpec::from_binary(name, binary).with_portmap("50051", "50051"),
         ))
     }
     async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {

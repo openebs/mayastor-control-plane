@@ -786,10 +786,10 @@ async fn disown_unused_replicas() {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(node.clone()),
+                node.clone().to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                "".to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await

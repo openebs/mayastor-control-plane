@@ -360,9 +360,9 @@ pub fn add_query(mut base: String, name: &str, value: &str) -> String {
 
 /// Update the Uri with the given allowed_host's nqn's.
 /// # Warning: Should be called only once.
-pub fn uri_with_hostnqn(base_uri: &str, hostnqns: &[String]) -> String {
+pub fn uri_with_hostnqn(base_uri: &str, hostnqns: &[HostNqn]) -> String {
     hostnqns.iter().fold(base_uri.to_string(), |acc, nqn| {
-        add_query(acc, "hostnqn", nqn)
+        add_query(acc, "hostnqn", &nqn.to_string())
     })
 }
 

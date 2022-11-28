@@ -360,6 +360,7 @@ impl GrpcClient {
                     grpc_endpoint: self.context.endpoint(),
                     api_versions: Some(vec![ApiVersion::V0]),
                     instance_uuid: None,
+                    node_nqn: None,
                 })
             }
             ApiVersion::V1 => {
@@ -408,6 +409,7 @@ impl GrpcClient {
                     instance_uuid: registration_info
                         .instance_uuid
                         .and_then(|u| uuid::Uuid::parse_str(&u).ok()),
+                    node_nqn: registration_info.hostnqn.and_then(|h| h.try_into().ok()),
                 })
             }
         }

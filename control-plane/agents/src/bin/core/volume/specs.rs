@@ -54,7 +54,7 @@ use std::collections::HashMap;
 use crate::controller::resources::operations::ResourceOwnerUpdate;
 use common_lib::types::v0::{
     store::{replica::PoolRef, volume::TargetConfig},
-    transport::{HostNqn, ShareReplica},
+    transport::ShareReplica,
 };
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use snafu::OptionExt;
@@ -733,8 +733,8 @@ impl ResourceSpecsLocked {
         } else {
             // on a different node, so connect via an nvmf target
             let mut replica = self.replica(&replica_state.uuid).await?;
-            let host_nqn = HostNqn::new_prod_name(nexus_node.as_str());
-            let request = ShareReplica::from(replica_state).with_hosts(vec![host_nqn.clone()]);
+            let allowed_hosts = registry.node_nqn(nexus_node).await?;
+            let request = ShareReplica::from(replica_state).with_hosts(allowed_hosts);
             match replica.share(registry, &request).await {
                 Ok(uri) => Ok(ChildUri::from(uri)),
                 Err(SvcError::AlreadyShared { .. }) => Ok(replica_state.uri.clone().into()),

@@ -27,8 +27,9 @@ use common_lib::{
             definitions::{StorableObject, Store, StoreError, StoreKey},
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
         },
-        transport::NodeId,
+        transport::{HostNqn, NodeId},
     },
+    HostAccessControl,
 };
 use std::{
     collections::HashMap,
@@ -77,12 +78,16 @@ pub(crate) struct RegistryInner<S: Store> {
     config: CoreRegistryConfig,
     /// system-wide maximum number of concurrent rebuilds allowed.
     max_rebuilds: Option<NumRebuilds>,
+    /// Enablement of host access control.
+    host_acl: Vec<HostAccessControl>,
 }
 
 impl Registry {
     /// Create a new registry with the `cache_period` to reload the cache, the
     /// `store_url` to connect to, a `store_timeout` for store operations
     /// and a `reconcile_period` for reconcile operations.
+    /// todo: move cmdline args into it's own config container.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         cache_period: std::time::Duration,
         store_url: String,
@@ -91,6 +96,7 @@ impl Registry {
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
         max_rebuilds: Option<NumRebuilds>,
+        host_acl: Vec<HostAccessControl>,
     ) -> Self {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -114,6 +120,7 @@ impl Registry {
                 reconciler: ReconcilerControl::new(),
                 config: Self::get_config_or_panic(store).await,
                 max_rebuilds,
+                host_acl,
             }),
         };
         registry.init().await;
@@ -317,5 +324,28 @@ impl Registry {
     /// Returns whether or not the node with the given ID is cordoned.
     pub(crate) fn node_cordoned(&self, node_id: &NodeId) -> Result<bool, SvcError> {
         Ok(self.specs.get_node(node_id)?.cordoned())
+    }
+
+    /// Get the allowed host nqn for the given dataplane node.
+    pub(crate) async fn node_nqn(&self, node_id: &NodeId) -> Result<Vec<HostNqn>, SvcError> {
+        Ok(match self.host_acl.contains(&HostAccessControl::Replicas) {
+            true => {
+                let node = self.get_node_state(node_id).await?.node_nqn;
+                node.into_iter().collect::<Vec<_>>()
+            }
+            false => vec![],
+        })
+    }
+
+    /// Get the allowed nqn's for the given request, if enabled.
+    pub(crate) fn host_acl_nodename(
+        &self,
+        req: HostAccessControl,
+        nodes: &[String],
+    ) -> Vec<HostNqn> {
+        match self.host_acl.contains(&req) {
+            true => HostNqn::from_nodenames(nodes),
+            false => vec![],
+        }
     }
 }

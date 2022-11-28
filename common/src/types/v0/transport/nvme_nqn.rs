@@ -80,12 +80,19 @@ impl NvmeNqn {
         Self::Unique { uuid }
     }
     /// Generate a Mayastor type name.
-    pub fn new_prod_name(name: &str) -> Self {
+    pub fn from_nodename(name: &String) -> Self {
         Self::Org {
             date: "2019-05".to_string(),
             domain: "io.openebs".to_string(),
             name: format!("node-name:{name}"),
         }
+    }
+    /// Generate a Mayastor type name.
+    pub fn from_nodenames(nodenames: &[String]) -> Vec<Self> {
+        nodenames
+            .iter()
+            .map(Self::from_nodename)
+            .collect::<Vec<_>>()
     }
     fn parse_nqn_date(date: &str) -> Result<String, NvmeNqnParseError> {
         match date.split("").collect::<Vec<_>>()[..] {

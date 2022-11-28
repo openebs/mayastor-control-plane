@@ -32,12 +32,13 @@ use common_lib::{
         },
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
-            HostNqn, NexusId, NexusNvmePreemption, NexusNvmfConfig, NodeId, NvmeReservation,
+            NexusId, NexusNvmePreemption, NexusNvmfConfig, NodeId, NvmeReservation,
             NvmfControllerIdRange, Protocol, PublishVolume, Replica, ReplicaOwners,
             RepublishVolume, SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus,
             UnpublishVolume, UnshareNexus, UnshareVolume, Volume, VolumeShareProtocol,
         },
     },
+    HostAccessControl,
 };
 use std::ops::Deref;
 use tracing::info;
@@ -314,12 +315,9 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         // Share the Nexus if it was requested
         let mut result = Ok(());
-        // TODO: use hostnqn from PublishVolume.
         if let Some(share) = request.share {
-            let allowed_hosts = match std::env::var("VOLUME_ALLOWED_HOSTS") {
-                Ok(_) => vec![HostNqn::from(*nexus_state.uuid.uuid())],
-                Err(_) => vec![],
-            };
+            let allowed_hosts =
+                registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
             result = match nexus
                 .share(
                     registry,

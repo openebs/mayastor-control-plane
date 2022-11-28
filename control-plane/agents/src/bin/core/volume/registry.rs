@@ -35,11 +35,11 @@ impl Registry {
             .collect::<Vec<_>>();
 
         let nexus_spec = self.specs().get_volume_target_nexus(volume_spec);
-        let nexus_state = match nexus_spec {
+        let nexus = match nexus_spec {
             None => None,
             Some(spec) => {
                 let nexus_id = spec.lock().uuid.clone();
-                self.get_nexus(&nexus_id).await.ok()
+                self.get_nexus(&nexus_id).await.ok().map(|s| (spec, s))
             }
         };
 
@@ -52,13 +52,9 @@ impl Registry {
             );
         }
 
-        Ok(if let Some(mut nexus_state) = nexus_state {
-            let nqns = nexus_state
-                .allowed_hosts
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>();
-            nexus_state.device_uri = uri_with_hostnqn(&nexus_state.device_uri, &nqns);
+        Ok(if let Some((nexus, mut nexus_state)) = nexus {
+            let ah = nexus.lock().allowed_hosts.clone();
+            nexus_state.device_uri = uri_with_hostnqn(&nexus_state.device_uri, &ah);
             VolumeState {
                 uuid: volume_spec.uuid.to_owned(),
                 size: nexus_state.size,
