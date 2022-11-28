@@ -116,7 +116,9 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
                 target_config: volume_spec.target_config.into_opt(),
-                publish_context: volume_spec.publish_context,
+                publish_context: volume_spec
+                    .publish_context
+                    .map(|map| common::MapWrapper { map }),
             }),
         }
     }
@@ -233,7 +235,9 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             operation: None,
             thin: volume_spec.thin,
             target_config: None,
-            publish_context: volume_meta.publish_context,
+            publish_context: volume_meta
+                .publish_context
+                .map(|map_wrapper| map_wrapper.map),
         };
         Ok(volume_spec)
     }

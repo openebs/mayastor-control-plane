@@ -49,7 +49,6 @@ use common_lib::{
     },
 };
 use grpc::operations::{PaginatedResult, Pagination};
-use std::collections::HashMap;
 
 use crate::controller::resources::operations::ResourceOwnerUpdate;
 use common_lib::types::v0::{
@@ -1285,7 +1284,7 @@ impl SpecOperationsHelper for VolumeSpec {
                                 protocol: format!("{:?}", target.protocol()),
                             })
                         } else {
-                            self.publish_context = args.publish_context();
+                            self.publish_context = Some(args.publish_context());
                             Ok(())
                         }
                     }
@@ -1310,7 +1309,7 @@ impl SpecOperationsHelper for VolumeSpec {
                 })
             }
             VolumeOperation::Unpublish => {
-                self.publish_context = HashMap::new();
+                self.publish_context = None;
                 Ok(())
             }
 

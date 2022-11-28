@@ -18,7 +18,10 @@ use grpc::operations::{
     volume::traits::VolumeOperations,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, convert::TryFrom, net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    cmp::Ordering, collections::HashMap, convert::TryFrom, net::SocketAddr, sync::Arc,
+    time::Duration,
+};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     Mutex,
@@ -64,6 +67,8 @@ pub struct SwitchOverRequest {
     retry_count: u64,
     // Reuse existing target.
     reuse_existing: bool,
+    /// Publish context.
+    publish_context: Option<HashMap<String, String>>,
 }
 
 impl Ord for SwitchOverRequest {
@@ -97,6 +102,7 @@ impl SwitchOverRequest {
             new_path: None,
             retry_count: 0,
             reuse_existing: true,
+            publish_context: None,
         }
     }
 
@@ -184,6 +190,7 @@ impl SwitchOverRequest {
             reuse_existing: self.reuse_existing,
         };
         let vol = client().republish(&republish_req, None).await?;
+        self.publish_context = vol.spec().publish_context;
         self.new_path = match vol.state().target {
             Some(target) => Some(target.device_uri),
             _ => None,
@@ -255,7 +262,11 @@ impl SwitchOverRequest {
         {
             info!(uri=%uri, "Creating node agent client using callback uri");
             if let Some(new_path) = self.new_path.clone() {
-                let replace_request = ReplacePath::new(self.existing_nqn.clone(), new_path.clone());
+                let replace_request = ReplacePath::new(
+                    self.existing_nqn.clone(),
+                    new_path.clone(),
+                    self.publish_context.clone(),
+                );
                 let client = NodeAgentClient::new(uri, None).await;
 
                 if let Err(e) = client.replace_path(&replace_request, None).await {
@@ -416,6 +427,7 @@ impl From<&SwitchOverRequest> for SwitchOverSpec {
             new_path: req.new_path.clone(),
             retry_count: req.retry_count,
             reuse_existing: req.reuse_existing,
+            publish_context: req.publish_context.clone(),
         }
     }
 }
@@ -436,6 +448,7 @@ impl From<&SwitchOverSpec> for SwitchOverRequest {
             new_path: req.new_path.clone(),
             retry_count: req.retry_count,
             reuse_existing: req.reuse_existing,
+            publish_context: req.publish_context.clone(),
         }
     }
 }

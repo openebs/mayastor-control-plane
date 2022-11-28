@@ -7,7 +7,9 @@ use crate::{identity::Identity, mount::probe_filesystems, node::Node, shutdown_e
 use clap::{App, Arg};
 use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
+use grpc::csi_node_nvme::nvme_operations_server::NvmeOperationsServer;
 use nodeplugin_grpc::NodePluginGrpcServer;
+use nodeplugin_nvme::NvmeOperationsSvc;
 use std::{
     env, fs,
     future::Future,
@@ -262,6 +264,7 @@ impl CsiServer {
             Server::builder()
                 .add_service(NodeServer::new(node))
                 .add_service(IdentityServer::new(Identity {}))
+                .add_service(NvmeOperationsServer::new(NvmeOperationsSvc {}))
                 .serve_with_incoming_shutdown(incoming, Shutdown::wait())
                 .await
                 .map_err(|error| {

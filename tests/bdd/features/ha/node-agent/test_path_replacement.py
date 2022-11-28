@@ -111,6 +111,7 @@ def background():
         3,
         node_agent=True,
         cluster_agent=True,
+        csi_node=True,
         cache_period="1s",
     )
 

@@ -1,16 +1,24 @@
-use common_lib::types::v0::transport::cluster_agent::NodeAgentInfo;
-use grpc::operations::ha_node::{client::ClusterAgentClient, traits::ClusterAgentOperations};
+use agents::errors::SvcError;
+use common_lib::{
+    transport_api::TimeoutOptions, types::v0::transport::cluster_agent::NodeAgentInfo,
+};
+use grpc::{
+    csi_node_nvme::nvme_operations_client::NvmeOperationsClient,
+    operations::ha_node::{client::ClusterAgentClient, traits::ClusterAgentOperations},
+};
 use http::Uri;
 use once_cell::sync::OnceCell;
 use opentelemetry::KeyValue;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 use structopt::StructOpt;
+use tokio::net::UnixStream;
+use tonic::transport::{Channel, Endpoint};
+use tower::service_fn;
 use utils::{
     package_description, version_info_str, DEFAULT_CLUSTER_AGENT_CLIENT_ADDR,
     DEFAULT_NODE_AGENT_SERVER_ADDR, NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD,
     NVME_PATH_RETRANSMISSION_PERIOD,
 };
-
 mod detector;
 mod path_provider;
 mod reporter;
@@ -54,14 +62,26 @@ struct Cli {
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
     #[structopt(long, short)]
     jaeger: Option<String>,
+
+    /// The csi-node socket file for grpc over uds.
+    #[structopt(long)]
+    csi_socket: String,
 }
 
 static CLUSTER_AGENT_CLIENT: OnceCell<ClusterAgentClient> = OnceCell::new();
+
+static CSI_NODE_NVME_CLIENT: OnceCell<NvmeOperationsClient<Channel>> = OnceCell::new();
 
 pub fn cluster_agent_client() -> &'static ClusterAgentClient {
     CLUSTER_AGENT_CLIENT
         .get()
         .expect("HA Cluster-Agent client should have been initialized")
+}
+
+pub fn csi_node_nvme_client() -> &'static NvmeOperationsClient<Channel> {
+    CSI_NODE_NVME_CLIENT
+        .get()
+        .expect("Csi node nvme client should have been initialized")
 }
 
 impl Cli {
@@ -85,6 +105,16 @@ async fn main() {
     CLUSTER_AGENT_CLIENT
         .set(ClusterAgentClient::new(cli_args.cluster_agent.clone(), None).await)
         .ok()
+        .expect("Expect to be initialized only once");
+
+    CSI_NODE_NVME_CLIENT
+        .set(
+            get_nvme_connection_client(
+                cli_args.csi_socket.as_str(),
+                TimeoutOptions::new().with_connect_timeout(Duration::from_millis(500)),
+            )
+            .expect("Expect to get the csi node client"),
+        )
         .expect("Expect to be initialized only once");
 
     if let Err(error) = cluster_agent_client()
@@ -118,4 +148,19 @@ async fn main() {
             tracing::info!("gRPC server stopped.");
         },
     }
+}
+
+// helper function to connect to csi-node nvme operations svc over uds.
+fn get_nvme_connection_client(
+    socket_path: &str,
+    timeout_options: TimeoutOptions,
+) -> Result<NvmeOperationsClient<Channel>, SvcError> {
+    let socket_path_cp = socket_path.to_string();
+    let channel = Endpoint::try_from("http://[::]:50051")
+        .map_err(|_| SvcError::InvalidArguments {})?
+        .connect_timeout(timeout_options.connect_timeout())
+        .connect_with_connector_lazy(service_fn(move |_: Uri| {
+            UnixStream::connect(socket_path_cp.to_string())
+        }));
+    Ok(NvmeOperationsClient::new(channel))
 }

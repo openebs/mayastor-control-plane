@@ -170,3 +170,8 @@ message Pagination {
 message SpecOperation {
   optional bool result = 1;
 }
+
+// Useful for optional maps.
+message MapWrapper {
+  map<string, string> map = 1;
+}

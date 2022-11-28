@@ -1,4 +1,5 @@
 use crate::{
+    common,
     context::Context,
     ha_cluster_agent::{FailedNvmePath, HaNodeInfo, ReportFailedNvmePathsRequest},
     ha_node_agent::ReplacePathRequest,
@@ -10,7 +11,7 @@ use common_lib::{
     },
     IntoVec,
 };
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr};
 
 /// NodeAgentOperations trait implemented by client which supports cluster-agent operations
 #[tonic::async_trait]
@@ -30,6 +31,8 @@ pub trait ReplacePathInfo: Send + Sync + std::fmt::Debug {
     fn target_nqn(&self) -> String;
     /// URI of the new path
     fn new_path(&self) -> String;
+    /// Publish context of the volume
+    fn publish_context(&self) -> Option<HashMap<String, String>>;
 }
 
 impl ReplacePathInfo for ReplacePath {
@@ -40,6 +43,10 @@ impl ReplacePathInfo for ReplacePath {
     fn new_path(&self) -> String {
         self.new_path().to_string()
     }
+
+    fn publish_context(&self) -> Option<HashMap<String, String>> {
+        self.publish_context()
+    }
 }
 
 impl ReplacePathInfo for ReplacePathRequest {
@@ -49,6 +56,12 @@ impl ReplacePathInfo for ReplacePathRequest {
     fn new_path(&self) -> String {
         self.new_path.clone()
     }
+
+    fn publish_context(&self) -> Option<HashMap<String, String>> {
+        self.publish_context
+            .clone()
+            .map(|map_wrapper| map_wrapper.map)
+    }
 }
 
 impl From<&dyn ReplacePathInfo> for ReplacePathRequest {
@@ -56,6 +69,7 @@ impl From<&dyn ReplacePathInfo> for ReplacePathRequest {
         Self {
             target_nqn: src.target_nqn(),
             new_path: src.new_path(),
+            publish_context: src.publish_context().map(|map| common::MapWrapper { map }),
         }
     }
 }
