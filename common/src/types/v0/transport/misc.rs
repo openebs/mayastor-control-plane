@@ -1,7 +1,10 @@
 use super::*;
 
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Debug};
+use std::{
+    convert::TryFrom,
+    fmt::{Debug, Write},
+};
 
 use std::str::FromStr;
 use strum_macros::{EnumString, ToString};
@@ -344,3 +347,36 @@ impl From<Protocol> for models::Protocol {
 /// Liveness Probe.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Liveness {}
+
+/// Add query parameter to a Uri.
+pub fn add_query(mut base: String, name: &str, value: &str) -> String {
+    if base.contains('?') {
+        let _ = write!(base, "&{name}={value}");
+    } else {
+        let _ = write!(base, "?{name}={value}");
+    }
+    base
+}
+
+/// Update the Uri with the given allowed_host's nqn's.
+/// # Warning: Should be called only once.
+pub fn uri_with_hostnqn(base_uri: &str, hostnqns: &[HostNqn]) -> String {
+    hostnqns.iter().fold(base_uri.to_string(), |acc, nqn| {
+        add_query(acc, "hostnqn", &nqn.to_string())
+    })
+}
+
+/// Strip all query parameters from the given `String`.
+pub fn strip_queries(base: String, name: &str) -> String {
+    let mut url = url::Url::from_str(&base).unwrap();
+    let qp = url
+        .query_pairs()
+        .filter(|(n, _)| n != name)
+        .map(|(n, v)| (n.to_string(), v.to_string()))
+        .collect::<Vec<_>>();
+    url.set_query(None);
+    for (n, v) in qp {
+        url.query_pairs_mut().append_pair(&n, &v);
+    }
+    url.to_string()
+}

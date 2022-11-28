@@ -148,6 +148,15 @@ impl TryIoEngineToAgent for v0_rpc::NexusV2 {
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
             share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::None),
+            allowed_hosts: self
+                .allowed_hosts
+                .iter()
+                .map(|n| {
+                    // should we allow for invalid here since it comes directly from the dataplane?
+                    transport::HostNqn::try_from(n)
+                        .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
+                })
+                .collect(),
         })
     }
 }
@@ -168,6 +177,15 @@ impl TryIoEngineToAgent for v0_rpc::Nexus {
             rebuilds: self.rebuilds,
             // todo: do we need an "other" Protocol variant in case we don't recognise it?
             share: Protocol::try_from(self.device_uri.as_str()).unwrap_or(Protocol::None),
+            allowed_hosts: self
+                .allowed_hosts
+                .iter()
+                .map(|n| {
+                    // should we allow for invalid here since it comes directly from the dataplane?
+                    transport::HostNqn::try_from(n)
+                        .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
+                })
+                .collect(),
         })
     }
 }
@@ -325,12 +343,7 @@ impl AgentToIoEngine for transport::ShareNexus {
             uuid: self.uuid.clone().into(),
             key: self.key.clone().unwrap_or_default(),
             share: self.protocol as i32,
-            allowed_hosts: self
-                .allowed_hosts
-                .clone()
-                .into_iter()
-                .map(|host_nqn| host_nqn.to_string())
-                .collect(),
+            allowed_hosts: self.allowed_hosts.clone().into_vec(),
         }
     }
 }

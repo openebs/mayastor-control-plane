@@ -38,6 +38,7 @@ use common_lib::{
             UnpublishVolume, UnshareNexus, UnshareVolume, Volume, VolumeShareProtocol,
         },
     },
+    HostAccessControl,
 };
 use std::ops::Deref;
 use tracing::info;
@@ -314,10 +315,14 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         // Share the Nexus if it was requested
         let mut result = Ok(());
-        // TODO: use hostnqn from PublishVolume.
         if let Some(share) = request.share {
+            let allowed_hosts =
+                registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
             result = match nexus
-                .share(registry, &ShareNexus::new(&nexus_state, share, vec![]))
+                .share(
+                    registry,
+                    &ShareNexus::new(&nexus_state, share, allowed_hosts),
+                )
                 .await
             {
                 Ok(_) => Ok(()),

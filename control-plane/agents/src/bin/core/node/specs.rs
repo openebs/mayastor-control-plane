@@ -21,14 +21,21 @@ impl ResourceSpecsLocked {
             match specs.nodes.get(&node.id) {
                 Some(node_spec) => {
                     let mut node_spec = node_spec.lock();
-                    let changed = node_spec.endpoint() != node.grpc_endpoint;
+                    let changed = node_spec.endpoint() != node.grpc_endpoint
+                        || node_spec.node_nqn() != &node.node_nqn;
 
                     node_spec.set_endpoint(node.grpc_endpoint);
+                    node_spec.set_nqn(node.node_nqn.clone());
                     (changed, node_spec.clone())
                 }
                 None => {
-                    let node =
-                        NodeSpec::new(node.id.clone(), node.grpc_endpoint, NodeLabels::new(), None);
+                    let node = NodeSpec::new(
+                        node.id.clone(),
+                        node.grpc_endpoint,
+                        NodeLabels::new(),
+                        None,
+                        node.node_nqn.clone(),
+                    );
                     specs.nodes.insert(node.clone());
                     (true, node)
                 }

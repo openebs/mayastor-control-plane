@@ -62,7 +62,7 @@ async fn preservation() {
         )
         .await
         .unwrap();
-    let share = v0::ShareNexus::from((&nexus1, None, v0::NexusShareProtocol::Nvmf));
+    let share = v0::ShareNexus::new(&nexus1, v0::NexusShareProtocol::Nvmf, vec![]);
     let _nexus1_uri = nexus_client.share(&share, None).await.unwrap();
 
     nexus_client

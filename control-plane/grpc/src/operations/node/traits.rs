@@ -78,6 +78,7 @@ impl TryFrom<node::Node> for Node {
                     },
                     None => None,
                 },
+                None,
             )),
             None => None,
         };
@@ -102,6 +103,7 @@ impl TryFrom<node::Node> for Node {
                         )
                     })?,
                     status,
+                    None,
                     None,
                 ))
             }

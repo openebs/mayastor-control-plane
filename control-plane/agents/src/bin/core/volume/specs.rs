@@ -52,7 +52,10 @@ use grpc::operations::{PaginatedResult, Pagination};
 use std::collections::HashMap;
 
 use crate::controller::resources::operations::ResourceOwnerUpdate;
-use common_lib::types::v0::store::{replica::PoolRef, volume::TargetConfig};
+use common_lib::types::v0::{
+    store::{replica::PoolRef, volume::TargetConfig},
+    transport::ShareReplica,
+};
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use snafu::OptionExt;
 use std::convert::From;
@@ -635,30 +638,32 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         remove: &ReplicaItem,
     ) -> Result<(), SvcError> {
-        if let Some(child_uri) = remove.uri() {
-            // if the nexus is up, first remove the child from the nexus before deleting the replica
-            let mut nexus = self.get_volume_target_nexus_guard(spec_clone).await?;
-            let nexus = nexus
-                .iter_mut()
-                .find(|n| n.lock().children.iter().any(|c| &c.uri() == child_uri));
-            match nexus {
-                None => Ok(()),
-                Some(nexus) => {
-                    let nexus_spec = nexus.lock().clone();
-                    self.remove_nexus_replica(
-                        Some(nexus),
-                        registry,
-                        &RemoveNexusReplica {
-                            node: nexus_spec.node,
-                            nexus: nexus_spec.uuid,
-                            replica: ReplicaUri::new(&remove.spec().uuid, child_uri),
-                        },
-                    )
-                    .await
-                }
+        // if the nexus is up, first remove the child from the nexus before deleting the replica
+        let mut nexus = self.get_volume_target_nexus_guard(spec_clone).await?;
+        let nexus = nexus.iter_mut().find_map(|n| {
+            let found = n
+                .lock()
+                .children
+                .iter()
+                .flat_map(|c| c.as_replica())
+                .find(|r| r.uuid() == &remove.spec().uuid);
+            found.map(|r| (n, r))
+        });
+        match nexus {
+            None => Ok(()),
+            Some((nexus, replica)) => {
+                let nexus_spec = nexus.lock().clone();
+                self.remove_nexus_replica(
+                    Some(nexus),
+                    registry,
+                    &RemoveNexusReplica {
+                        node: nexus_spec.node,
+                        nexus: nexus_spec.uuid,
+                        replica: ReplicaUri::new(&remove.spec().uuid, replica.uri()),
+                    },
+                )
+                .await
             }
-        } else {
-            Ok(())
         }
     }
 
@@ -728,8 +733,10 @@ impl ResourceSpecsLocked {
         } else {
             // on a different node, so connect via an nvmf target
             let mut replica = self.replica(&replica_state.uuid).await?;
-            match replica.share(registry, &replica_state.into()).await {
-                Ok(uri) => Ok(uri.into()),
+            let allowed_hosts = registry.node_nqn(nexus_node).await?;
+            let request = ShareReplica::from(replica_state).with_hosts(allowed_hosts);
+            match replica.share(registry, &request).await {
+                Ok(uri) => Ok(ChildUri::from(uri)),
                 Err(SvcError::AlreadyShared { .. }) => Ok(replica_state.uri.clone().into()),
                 Err(error) => Err(error),
             }

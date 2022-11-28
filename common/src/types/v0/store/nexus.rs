@@ -345,6 +345,7 @@ impl From<&NexusSpec> for transport::Nexus {
             device_uri: "".to_string(),
             rebuilds: 0,
             share: nexus.share,
+            allowed_hosts: vec![],
         }
     }
 }

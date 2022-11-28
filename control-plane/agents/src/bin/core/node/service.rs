@@ -146,6 +146,7 @@ impl Service {
                         grpc_endpoint: node.endpoint(),
                         api_versions: None,
                         instance_uuid: None,
+                        node_nqn: node.node_nqn().clone(),
                     },
                     true,
                 )

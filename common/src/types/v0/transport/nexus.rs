@@ -43,11 +43,18 @@ pub struct Nexus {
     pub rebuilds: u32,
     /// protocol used for exposing the nexus
     pub share: Protocol,
+    /// host nqn's allowed to connect to the target.
+    pub allowed_hosts: Vec<HostNqn>,
 }
 impl Nexus {
     /// Check if the nexus contains the provided `ChildUri`
     pub fn contains_child(&self, uri: &ChildUri) -> bool {
         self.children.iter().any(|c| &c.uri == uri)
+    }
+    /// Add query parameter to the Uri.
+    pub fn with_query(mut self, name: &str, value: &str) -> Self {
+        self.device_uri = add_query(self.device_uri, name, value);
+        self
     }
 }
 
@@ -548,17 +555,6 @@ impl ShareNexus {
             uuid: nexus.uuid.clone(),
             protocol,
             allowed_hosts: nqns.into_vec(),
-            ..Default::default()
-        }
-    }
-}
-impl From<(&Nexus, Option<String>, NexusShareProtocol)> for ShareNexus {
-    fn from((nexus, key, protocol): (&Nexus, Option<String>, NexusShareProtocol)) -> Self {
-        Self {
-            node: nexus.node.clone(),
-            uuid: nexus.uuid.clone(),
-            key,
-            protocol,
             ..Default::default()
         }
     }

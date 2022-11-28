@@ -9,7 +9,8 @@ use common_lib::types::v0::{
         tower::client::Error,
     },
     transport::{
-        CreateNexus, CreateVolume, DestroyVolume, Filter, NexusId, PublishVolume, VolumeId,
+        strip_queries, CreateNexus, CreateVolume, DestroyVolume, Filter, NexusId, PublishVolume,
+        VolumeId,
     },
 };
 use deployer_cluster::{Cluster, ClusterBuilder};
@@ -158,10 +159,10 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(free_node.clone()),
+                free_node.clone().to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                "".to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await
@@ -226,10 +227,10 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(cluster.node(0).to_string()),
+                cluster.node(0).to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                "".to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await
@@ -313,10 +314,10 @@ async fn unused_reconcile(cluster: &Cluster) {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(nexus_node.id.to_string()),
+                nexus_node.id.to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                cluster.csi_node(0).to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await
@@ -337,10 +338,10 @@ async fn unused_reconcile(cluster: &Cluster) {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(unused_node.id.to_string()),
+                unused_node.id.to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                "".to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await
@@ -428,10 +429,10 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(cluster.node(0).to_string()),
+                cluster.node(0).to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                cluster.csi_node(0).to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await
@@ -439,7 +440,8 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
 
     tracing::info!("Volume: {:?}", volume);
     let volume_state = volume.state;
-    let nexus = volume_state.target.unwrap();
+    let mut nexus = volume_state.target.unwrap();
+    nexus.device_uri = strip_queries(nexus.device_uri, "hostnqn");
 
     cluster.composer().stop(nexus.node.as_str()).await.unwrap();
     let curr_nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;

@@ -1,6 +1,6 @@
 use common_lib::{
     transport_api::{ReplyError, ResourceKind},
-    types::v0::transport::{node, Deregister, NodeId, Register},
+    types::v0::transport::{node, Deregister, HostNqn, NodeId, Register},
 };
 use rpc::{
     v1::registration::{DeregisterRequest, RegisterRequest},
@@ -32,6 +32,8 @@ pub trait RegisterInfo: Send + Sync {
     fn api_version(&self) -> Option<Vec<node::ApiVersion>>;
     /// Used to identify dataplane process restarts.
     fn instance_uuid(&self) -> Option<uuid::Uuid>;
+    /// Used to identify dataplane nvme hostnqn.
+    fn node_nqn(&self) -> Option<HostNqn>;
 }
 
 /// Trait to be implemented for Register operation.
@@ -55,6 +57,10 @@ impl RegisterInfo for Register {
 
     fn instance_uuid(&self) -> Option<uuid::Uuid> {
         self.instance_uuid
+    }
+
+    fn node_nqn(&self) -> Option<HostNqn> {
+        self.node_nqn.clone()
     }
 }
 
@@ -85,6 +91,10 @@ impl RegisterInfo for RegisterRequest {
             .as_ref()
             .and_then(|u| uuid::Uuid::parse_str(u).ok())
     }
+
+    fn node_nqn(&self) -> Option<HostNqn> {
+        self.hostnqn.as_ref().and_then(|h| h.try_into().ok())
+    }
 }
 
 impl RegisterInfo for V1AlphaRegisterRequest {
@@ -102,6 +112,10 @@ impl RegisterInfo for V1AlphaRegisterRequest {
     }
 
     fn instance_uuid(&self) -> Option<uuid::Uuid> {
+        None
+    }
+
+    fn node_nqn(&self) -> Option<HostNqn> {
         None
     }
 }
@@ -140,6 +154,7 @@ impl TryFrom<&dyn RegisterInfo> for Register {
             )?,
             api_versions: register.api_version(),
             instance_uuid: register.instance_uuid(),
+            node_nqn: register.node_nqn(),
         })
     }
 }

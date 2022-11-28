@@ -16,8 +16,14 @@ fn new_node(
     let endpoint = std::str::FromStr::from_str(&endpoint).unwrap();
     Node::new(
         id.clone(),
-        Some(NodeSpec::new(id.clone(), endpoint, NodeLabels::new(), None)),
-        Some(NodeState::new(id, endpoint, status, api_versions)),
+        Some(NodeSpec::new(
+            id.clone(),
+            endpoint,
+            NodeLabels::new(),
+            None,
+            None,
+        )),
+        Some(NodeState::new(id, endpoint, status, api_versions, None)),
     )
 }
 

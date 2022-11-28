@@ -41,10 +41,10 @@ async fn fault_enospc_child() {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                Some(cluster.node(0).to_string()),
+                cluster.node(0).to_string(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
-                "".to_string(),
+                cluster.csi_node(0),
             ),
         )
         .await

@@ -40,7 +40,6 @@ impl ComponentAction for IoEngine {
             ])
             .with_args(vec!["--ptpl-dir", &ptpl_dir])
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
-            .with_env("HOSTNQN", Self::nqn(i, options).as_str())
             .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
             .with_env("NEXUS_NVMF_ANA_ENABLE", "1")
             .with_bind("/tmp", "/host/tmp");
@@ -112,7 +111,11 @@ impl IoEngine {
         format!("io-engine-{}", i + 1)
     }
     pub fn nqn(i: u32, options: &StartOptions) -> String {
-        format!("nqn.2019-05.io.openebs:{}", Self::name(i, options))
+        format!(
+            "{}{}",
+            utils::constants::NVME_INITIATOR_NQN_PREFIX,
+            Self::name(i, options)
+        )
     }
     /// Get the persistent reservation base path for host and container.
     pub fn ptpl() -> (&'static str, &'static str) {

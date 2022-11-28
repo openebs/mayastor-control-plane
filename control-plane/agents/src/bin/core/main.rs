@@ -20,6 +20,7 @@ use controller::registry::NumRebuilds;
 use std::net::SocketAddr;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
+use common_lib::HostAccessControl;
 use opentelemetry::{trace::TracerProvider, KeyValue};
 use structopt::StructOpt;
 
@@ -64,6 +65,10 @@ pub(crate) struct CliArgs {
     /// The default timeout for node request timeouts (gRPC).
     #[structopt(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
     pub(crate) request_timeout: humantime::Duration,
+
+    /// Control hosts access control via their NQN's.
+    #[structopt(long, short, use_delimiter = true, default_value = utils::DEFAULT_HOST_ACCESS_CONTROL)]
+    pub(crate) hosts_acl: Vec<HostAccessControl>,
 
     /// Add process service tags to the traces.
     #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
@@ -113,6 +118,11 @@ async fn server(cli_args: CliArgs) {
         cli_args.reconcile_period.into(),
         cli_args.reconcile_idle_period.into(),
         cli_args.max_rebuilds,
+        if cli_args.hosts_acl.contains(&HostAccessControl::None) {
+            vec![]
+        } else {
+            cli_args.hosts_acl
+        },
     )
     .await;
 

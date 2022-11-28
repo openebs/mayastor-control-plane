@@ -3,7 +3,7 @@ use crate::{
     types::v0::{
         openapi::models,
         store::definitions::{ObjectKey, StorableObject, StorableObjectType},
-        transport::{self, NodeId},
+        transport::{self, HostNqn, NodeId},
     },
     IntoOption,
 };
@@ -142,6 +142,9 @@ pub struct NodeSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     cordon_drain_state: Option<CordonDrainState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
+    node_nqn: Option<HostNqn>,
 }
 
 impl NodeSpec {
@@ -151,13 +154,19 @@ impl NodeSpec {
         endpoint: std::net::SocketAddr,
         labels: NodeLabels,
         cordon_drain_state: Option<CordonDrainState>,
+        node_nqn: Option<HostNqn>,
     ) -> Self {
         Self {
             id,
             endpoint,
             labels,
             cordon_drain_state,
+            node_nqn,
         }
+    }
+    /// Node Nvme HOSTNQN.
+    pub fn node_nqn(&self) -> &Option<HostNqn> {
+        &self.node_nqn
     }
     /// Node identification.
     pub fn id(&self) -> &NodeId {
@@ -177,8 +186,12 @@ impl NodeSpec {
     }
 
     /// Node gRPC endpoint.
+    pub fn set_nqn(&mut self, nqn: Option<HostNqn>) {
+        self.node_nqn = nqn;
+    }
+    /// Node gRPC endpoint.
     pub fn set_endpoint(&mut self, endpoint: std::net::SocketAddr) {
-        self.endpoint = endpoint
+        self.endpoint = endpoint;
     }
 
     /// Cordon node by applying the label.

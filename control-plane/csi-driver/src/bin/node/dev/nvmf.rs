@@ -37,6 +37,7 @@ pub(super) struct NvmfAttach {
     io_timeout: Option<u32>,
     nr_io_queues: Option<u32>,
     ctrl_loss_tmo: Option<u32>,
+    hostnqn: Option<String>,
 }
 
 impl NvmfAttach {
@@ -47,6 +48,7 @@ impl NvmfAttach {
         nqn: String,
         nr_io_queues: Option<u32>,
         ctrl_loss_tmo: Option<u32>,
+        hostnqn: Option<String>,
     ) -> NvmfAttach {
         NvmfAttach {
             host,
@@ -56,6 +58,7 @@ impl NvmfAttach {
             io_timeout: None,
             nr_io_queues,
             ctrl_loss_tmo,
+            hostnqn,
         }
     }
 
@@ -111,6 +114,9 @@ impl TryFrom<&Url> for NvmfAttach {
         let nr_io_queues = config().nvme().nr_io_queues();
         let ctrl_loss_tmo = config().nvme().ctrl_loss_tmo();
 
+        let hash_query: HashMap<_, _> = url.query_pairs().collect();
+        let hostnqn = hash_query.get("hostnqn").map(ToString::to_string);
+
         Ok(NvmfAttach::new(
             host.to_string(),
             port,
@@ -118,6 +124,7 @@ impl TryFrom<&Url> for NvmfAttach {
             segments[0].to_string(),
             nr_io_queues,
             ctrl_loss_tmo,
+            hostnqn,
         ))
     }
 }
@@ -166,6 +173,7 @@ impl Attach for NvmfAttach {
             .ctrl_loss_tmo(self.ctrl_loss_tmo)
             .reconnect_delay(reconnect_delay)
             .nr_io_queues(self.nr_io_queues)
+            .hostnqn(self.hostnqn.clone())
             .build()?;
         match ca.connect() {
             Err(NvmeError::ConnectInProgress) => Ok(()),

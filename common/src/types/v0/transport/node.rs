@@ -20,6 +20,8 @@ pub struct Register {
     pub api_versions: Option<Vec<ApiVersion>>,
     /// Used to identify dataplane process restarts.
     pub instance_uuid: Option<uuid::Uuid>,
+    /// Used to identify dataplane nvme hostnqn.
+    pub node_nqn: Option<HostNqn>,
 }
 
 /// Deregister message payload
@@ -125,6 +127,8 @@ pub struct NodeState {
     pub api_versions: Option<Vec<ApiVersion>>,
     /// Used to identify dataplane process restarts.
     instance_uuid: Option<uuid::Uuid>,
+    /// Used to identify dataplane nvme hostnqn.
+    pub node_nqn: Option<HostNqn>,
 }
 
 impl NodeState {
@@ -134,6 +138,7 @@ impl NodeState {
         grpc_endpoint: std::net::SocketAddr,
         status: NodeStatus,
         api_versions: Option<Vec<ApiVersion>>,
+        node_nqn: Option<HostNqn>,
     ) -> Self {
         Self {
             id,
@@ -141,6 +146,7 @@ impl NodeState {
             status,
             api_versions,
             instance_uuid: None,
+            node_nqn,
         }
     }
     /// Get the node identification.
@@ -169,6 +175,7 @@ impl From<Register> for NodeState {
             status: NodeStatus::Online,
             api_versions: src.api_versions,
             instance_uuid: src.instance_uuid,
+            node_nqn: src.node_nqn,
         }
     }
 }
