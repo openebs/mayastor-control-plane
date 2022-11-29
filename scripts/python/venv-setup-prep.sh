@@ -13,7 +13,7 @@ VENV_DIR=
 VENV_PTH=
 BUILD_RS_BINS=
 BUILD_PY_OPENAPI=
-HA_PROTO=
+HA_PROTO_PARENT_DIR=
 HA_OUT=
 
 missing_arg() {
@@ -66,7 +66,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --ha)
-      HA_PROTO="$2"
+      HA_PROTO_PARENT_DIR="$2"
       shift || missing_arg "<ha-proto-dir>"
       HA_OUT="$2"
       shift 2 || missing_arg "<ha-out-dir>"
@@ -106,14 +106,14 @@ if [ -n "$CSI_PROTO" ]; then
 fi
 
 # generate the ha python client
-if [ -n "$HA_PROTO" ]; then
+if [ -n "$HA_PROTO_PARENT_DIR" ]; then
   if [ -z "$HA_OUT" ]; then
     echo "--ha <ha-out-dir> is empty"
     help
     exit 1
   fi
   mkdir -p "$HA_OUT"
-  python -m grpc_tools.protoc --proto_path="$HA_PROTO" --grpc_python_out="$HA_OUT" --python_out="$HA_OUT" cluster_agent.proto node_agent.proto
+  python -m grpc_tools.protoc --proto_path="$HA_PROTO_PARENT_DIR" --grpc_python_out="$HA_OUT" --python_out="$HA_OUT" v1/misc/common.proto v1/ha/cluster_agent.proto v1/ha/node_agent.proto
 fi
 
 # Setup the python config files (similar to extending the PYTHONPATH env, but within venv)

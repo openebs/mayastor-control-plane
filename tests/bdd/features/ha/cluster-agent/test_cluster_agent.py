@@ -8,7 +8,7 @@ from pytest_bdd import (
 )
 
 import pytest
-import cluster_agent_pb2 as pb
+import v1.ha.cluster_agent_pb2 as pb
 import grpc
 from common.deployer import Deployer
 from common.cluster_agent import ClusterAgentHandle
