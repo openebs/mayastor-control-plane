@@ -184,7 +184,12 @@ rpc_impl_string_id!(NodeId, "ID of a node");
 
 impl From<NodeState> for models::NodeState {
     fn from(src: NodeState) -> Self {
-        Self::new(src.grpc_endpoint.to_string(), src.id, src.status)
+        Self::new_all(
+            src.grpc_endpoint.to_string(),
+            src.id,
+            src.status,
+            src.node_nqn.map(|nqn| nqn.to_string()),
+        )
     }
 }
 impl From<&NodeState> for models::NodeState {

@@ -97,6 +97,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
             cordondrainstate: None,
+
+            node_nqn: None,
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),
@@ -105,6 +107,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
             status: models::NodeStatus::Online,
+            node_nqn: None,
         }),
     };
     assert_eq!(listed_node.unwrap(), node);

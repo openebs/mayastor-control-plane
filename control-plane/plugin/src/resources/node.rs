@@ -43,6 +43,7 @@ impl CreateRows for openapi::models::Node {
             id: spec.id,
             grpc_endpoint: spec.grpc_endpoint,
             status: openapi::models::NodeStatus::Unknown,
+            node_nqn: spec.node_nqn,
         });
         let rows = vec![row![
             self.id,

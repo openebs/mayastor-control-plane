@@ -308,6 +308,7 @@ impl From<NodeSpec> for models::NodeSpec {
             src.endpoint.to_string(),
             src.id,
             src.cordon_drain_state.into_opt(),
+            src.node_nqn.map(|nqn| nqn.to_string()),
         )
     }
 }
