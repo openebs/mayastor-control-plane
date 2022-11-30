@@ -295,16 +295,14 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         let last_target = self.as_ref().health_info_id().cloned();
         let target_cfg = self.next_target_config(&nexus_node, &request.share).await;
+
         let operation = VolumeOperation::Publish(PublishOperation::new(
-            nexus_node.clone(),
-            target_cfg.uuid().clone(),
-            request.share,
-            Some(target_cfg.config().clone()),
+            target_cfg.clone(),
             request.publish_context.clone(),
         ));
         let spec_clone = self.start_update(registry, &state, operation).await?;
 
-        // Create a Nexus on the requested or auto-selected node
+        // Create a Nexus on the requested or auto-selected node.
         let result = specs
             .volume_create_nexus(registry, &target_cfg, &spec_clone)
             .await;
@@ -313,7 +311,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             .validate_update_step(registry, result, &spec_clone)
             .await?;
 
-        // Share the Nexus if it was requested
+        // Share the Nexus if it was requested.
         let mut result = Ok(());
         if let Some(share) = request.share {
             let allowed_hosts =
@@ -369,7 +367,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             .start_update(registry, &state, VolumeOperation::Unpublish)
             .await?;
 
-        let volume_target = spec_clone.target.as_ref().expect("already validated");
+        let volume_target = spec_clone.target().expect("already validated");
         let result = match specs.nexus_opt(volume_target.nexus()).await? {
             None => Ok(()),
             Some(mut nexus) => {
@@ -389,7 +387,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                         };
                         if !node_online {
                             nexus_clone.warn_span(|| {
-                                tracing::warn!("Force unpublish. Forgetting about the target nexus because the node is not online and it was requested")
+                                tracing::warn!("Force unpublish. Forgetting about the target nexus because the node is not online and it was requested");
                             });
                             Ok(())
                         } else {
@@ -412,7 +410,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let spec = self.as_ref().clone();
         let state = registry.get_volume_state(&request.uuid).await?;
         // If the volume is not published then it should issue publish call rather than republish.
-        let volume_target = match &spec.target {
+        let volume_target = match spec.target() {
             None => {
                 return Err(SvcError::VolumeNotPublished {
                     vol_id: request.uuid.to_string(),
@@ -422,7 +420,6 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         };
 
         let mut older_nexus = specs.nexus(volume_target.nexus()).await?;
-
         let mut move_nexus = true;
 
         match get_healthy_volume_replicas(&spec, &older_nexus.as_ref().node, registry).await {
@@ -442,36 +439,31 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         }
 
         if !move_nexus {
-            // older nexus is back again, so completing republish without modifications.
+            // The older nexus is back again, so completing republish without modifications.
             info!(nexus.uuid=%older_nexus.as_ref().uuid, "Current target is back online, not moving nexus");
             let volume = registry.get_volume(&request.uuid).await?;
             return Ok(volume);
         }
 
-        // get the newer target node for new nexus creation
+        // Get the newer target node for the new nexus creation.
         let nexus_node = get_volume_target_node(registry, &state, request, true).await?;
         let target_cfg = self
             .next_target_config(&nexus_node, &Some(request.share))
             .await;
-        let operation = VolumeOperation::Republish(RepublishOperation::new(
-            nexus_node.clone(),
-            target_cfg.uuid().clone(),
-            request.share,
-            target_cfg.config().clone(),
-        ));
+        let operation = VolumeOperation::Republish(RepublishOperation::new(target_cfg.clone()));
 
         let spec_clone = self.start_update(registry, &state, operation).await?;
 
         let older_nexus_id = older_nexus.uuid().clone();
 
-        // shutdown the older nexus before newer nexus creation.
+        // Shutdown the older nexus before newer nexus creation.
         let result = older_nexus
             .shutdown(registry, &ShutdownNexus::new(older_nexus_id, true))
             .await;
         self.validate_update_step(registry, result, &spec_clone)
             .await?;
 
-        // Create a Nexus on the requested or auto-selected node
+        // Create a Nexus on the requested or auto-selected node.
         let result = specs
             .volume_create_nexus(registry, &target_cfg, &spec_clone)
             .await;
@@ -479,7 +471,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             .validate_update_step(registry, result, &spec_clone)
             .await?;
         let allowed_host = older_nexus.lock().allowed_hosts.clone();
-        // Share the Nexus
+        // Share the Nexus.
         let result = match nexus
             .share(
                 registry,
@@ -610,7 +602,7 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
 
 impl OperationGuardArc<VolumeSpec> {
     fn published(&self) -> bool {
-        self.as_ref().target.is_some()
+        self.as_ref().target().is_some()
     }
     /// Make the next target config.
     /// This essentially bumps up the controller id by 1 as otherwise the initiator cannot tell

@@ -86,7 +86,7 @@ impl NodeFilters {
 
     /// Should only attempt to use node where current target is not present.
     pub(crate) fn current_target(request: &GetSuitableNodesContext, item: &NodeItem) -> bool {
-        if let Some(target) = &request.target {
+        if let Some(target) = request.target() {
             target.node() != item.node_wrapper().id()
         } else {
             true

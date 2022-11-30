@@ -8,7 +8,7 @@ rpc_impl_string_uuid!(VolumeId, "UUID of a volume");
 
 /// Volumes
 ///
-/// Volume information
+/// Volume information.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Volume {
@@ -55,15 +55,15 @@ impl From<Volume> for models::Volume {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeState {
-    /// name of the volume
+    /// Name of the volume.
     pub uuid: VolumeId,
-    /// size of the volume in bytes
+    /// Size of the volume in bytes.
     pub size: u64,
-    /// current status of the volume
+    /// The current status of the volume.
     pub status: VolumeStatus,
-    /// target nexus that connects to the children
+    /// The target nexus that connects to the children.
     pub target: Option<Nexus>,
-    /// replica topology information
+    /// The replica topology information.
     pub replica_topology: HashMap<ReplicaId, ReplicaTopology>,
 }
 
@@ -84,12 +84,12 @@ impl From<VolumeState> for models::VolumeState {
 }
 
 impl VolumeState {
-    /// Get the target node if the volume is published
+    /// Get the target node if the volume is published.
     pub fn target_node(&self) -> Option<Option<NodeId>> {
         self.target.as_ref()?;
         Some(self.target.clone().map(|n| n.node))
     }
-    /// Get the target protocol if the volume is published
+    /// Get the target protocol if the volume is published.
     pub fn target_protocol(&self) -> Option<VolumeShareProtocol> {
         match &self.target {
             None => None,
@@ -100,8 +100,8 @@ impl VolumeState {
     }
 }
 
-/// The protocol used to share the volume
-/// Currently it's the same as the nexus
+/// The protocol used to share the volume.
+/// Currently it's the same as the nexus.
 pub type VolumeShareProtocol = NexusShareProtocol;
 impl From<NexusShareProtocol> for models::VolumeShareProtocol {
     fn from(src: NexusShareProtocol) -> Self {
@@ -120,8 +120,8 @@ impl From<models::VolumeShareProtocol> for NexusShareProtocol {
     }
 }
 
-/// Volume State information
-/// Currently it's the same as the nexus
+/// Volume State information.
+/// Currently it's the same as the nexus.
 pub type VolumeStatus = NexusStatus;
 
 impl From<VolumeStatus> for models::VolumeStatus {
@@ -136,13 +136,13 @@ impl From<VolumeStatus> for models::VolumeStatus {
     }
 }
 
-/// Volume placement topology using resource labels
+/// Volume placement topology using resource labels.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct LabelledTopology {
-    /// exclusive labels
+    /// Exclusive labels.
     #[serde(default)]
     pub exclusion: ::std::collections::HashMap<String, String>,
-    /// inclusive labels
+    /// Inclusive labels.
     #[serde(default)]
     pub inclusion: ::std::collections::HashMap<String, String>,
 }
@@ -161,11 +161,13 @@ impl From<LabelledTopology> for models::LabelledTopology {
     }
 }
 
-/// Volume topology used to determine how to place/distribute the data
+/// Volume topology used to determine how to place/distribute the data.
 /// If no topology is used then the control plane will select from all available resources.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Topology {
+    /// The node topology.
     pub node: Option<NodeTopology>,
+    /// The pool topology.
     pub pool: Option<PoolTopology>,
 }
 impl Topology {
@@ -206,17 +208,17 @@ pub type ExclusiveLabel = String;
 /// inclusive label key value in the form "NAME: VALUE"
 pub type InclusiveLabel = String;
 
-/// Node topology for volumes
+/// Node topology for volumes.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum NodeTopology {
-    /// using topology labels
+    /// Using topology labels.
     Labelled(LabelledTopology),
-    /// explicitly selected
+    /// Explicitly selected.
     Explicit(ExplicitNodeTopology),
 }
 
 impl NodeTopology {
-    /// Get a reference to the explicit topology
+    /// Get a reference to the explicit topology.
     pub fn explicit(&self) -> Option<&ExplicitNodeTopology> {
         match self {
             Self::Labelled(_) => None,
@@ -242,7 +244,7 @@ impl From<models::NodeTopology> for NodeTopology {
     }
 }
 
-/// Placement pool topology used by volume operations
+/// Placement pool topology used by volume operations.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum PoolTopology {
     Labelled(LabelledTopology),
@@ -262,13 +264,13 @@ impl From<PoolTopology> for models::PoolTopology {
     }
 }
 
-/// Explicit node placement Selection for a volume
+/// Explicit node placement Selection for a volume.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 pub struct ExplicitNodeTopology {
-    /// replicas can only be placed on these nodes
+    /// Replicas can only be placed on these nodes.
     #[serde(default)]
     pub allowed_nodes: Vec<NodeId>,
-    /// preferred nodes to place the replicas
+    /// Preferred nodes to place the replicas.
     #[serde(default)]
     pub preferred_nodes: Vec<NodeId>,
 }
@@ -287,11 +289,11 @@ impl From<ExplicitNodeTopology> for models::ExplicitNodeTopology {
     }
 }
 
-/// Volume policy used to determine if and how to replace a replica
+/// Volume policy used to determine if and how to replace a replica.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct VolumePolicy {
-    /// the server will attempt to heal the volume by itself
-    /// the client should not attempt to do the same if this is enabled
+    /// The server will attempt to heal the volume by itself.
+    /// The client should not attempt to do the same if this is enabled.
     pub self_heal: bool,
 }
 
@@ -314,15 +316,15 @@ impl From<VolumePolicy> for models::VolumePolicy {
     }
 }
 
-/// Get volumes
+/// Get volumes request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetVolumes {
-    /// filter volumes
+    /// Filter volumes.
     pub filter: Filter,
 }
 impl GetVolumes {
-    /// Return new `Self` to retrieve the specified volume
+    /// Return new `Self` to retrieve the specified volume.
     pub fn new(volume: &VolumeId) -> Self {
         Self {
             filter: Filter::Volume(volume.clone()),
@@ -330,31 +332,31 @@ impl GetVolumes {
     }
 }
 
-/// Create volume
+/// Create volume request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateVolume {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
-    /// size of the volume in bytes
+    /// The size of the volume in bytes.
     pub size: u64,
-    /// number of storage replicas
+    /// The number of storage replicas.
     pub replicas: u64,
-    /// volume policy
+    /// The volume policy.
     pub policy: VolumePolicy,
-    /// initial replica placement topology
+    /// The initial replica placement topology.
     pub topology: Option<Topology>,
-    /// volume labels
+    /// The volume labels.
     pub labels: Option<VolumeLabels>,
-    /// flag indicating whether the volume should be thin provisioned
+    /// The flag indicating whether the volume should be thin provisioned.
     pub thin: bool,
 }
 
-/// Volume label information
+/// Volume label information.
 pub type VolumeLabels = HashMap<String, String>;
 
 impl CreateVolume {
-    /// explicitly selected allowed_nodes
+    /// Explicitly selected allowed_nodes.
     pub fn allowed_nodes(&self) -> Vec<NodeId> {
         match &self.topology {
             None => vec![],
@@ -366,45 +368,44 @@ impl CreateVolume {
     }
 }
 
-/// Add ANA Nexus to volume
+/// Add ANA Nexus to volume.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AddVolumeNexus {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
-    /// preferred node id for the nexus
+    /// The preferred node id for the nexus.
     pub preferred_node: Option<NodeId>,
 }
 
-/// Add ANA Nexus to volume
+/// Add ANA Nexus to volume.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveVolumeNexus {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
-    /// id of the node where the nexus lives
+    /// The id of the node where the nexus lives.
     pub node: Option<NodeId>,
 }
 
-/// Publish a volume on a node
-/// Unpublishes the nexus if it's published somewhere else and creates a nexus on the given node.
-/// Then, share the nexus via the provided share protocol.
+/// Publish a volume on a target node.
+/// If requested, it'll also share the nexus via the provided share protocol.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishVolume {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
-    /// the node where front-end IO will be sent to
+    /// The node where front-end IO will be sent to.
     pub target_node: Option<NodeId>,
-    /// share protocol
+    /// Share protocol.
     pub share: Option<VolumeShareProtocol>,
-    /// Publish Context.
+    /// Opaque publish Context.
     pub publish_context: HashMap<String, String>,
-    /// Hosts allowed to access nexus
+    /// Hosts allowed to access nexus.
     pub frontend_nodes: Vec<String>,
 }
 impl PublishVolume {
-    /// Create new `PublishVolume` based on the provided arguments
+    /// Create new `PublishVolume` based on the provided arguments.
     pub fn new(
         uuid: VolumeId,
         target_node: Option<NodeId>,
@@ -422,8 +423,9 @@ impl PublishVolume {
     }
 }
 
-/// Republishes the nexus on a new node decided by the control-plane,
-/// by shutting down the older nexus.
+/// Republishes the target on a new node (pre-selected or determined by the control-plane).
+/// If online, the previous target nexus is first shutdown which may gives us enough time for the
+/// switchover as it'd be prevent from failing any IO outright.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RepublishVolume {
@@ -453,39 +455,39 @@ impl RepublishVolume {
     }
 }
 
-/// Unpublish a volume from any node where it may be published
+/// Unpublish a volume from any node where it may be published.
 /// Unshares the children nexuses from the volume and destroys them.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UnpublishVolume {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
-    /// if the node where the nexus lives is offline then we can force unpublish, forgetting about
+    /// If the node where the nexus lives is offline then we can force unpublish, forgetting about
     /// the nexus. Note: this option should be used only when we know the node will not become
     /// accessible again and it is safe to do so.
     force: bool,
 }
 impl UnpublishVolume {
-    /// Create a new `UnpublishVolume` for the given uuid
+    /// Create a new `UnpublishVolume` for the given uuid.
     pub fn new(uuid: &VolumeId, force: bool) -> Self {
         Self {
             uuid: uuid.clone(),
             force,
         }
     }
-    /// It's a force `Self`
+    /// It's a force `Self`.
     pub fn force(&self) -> bool {
         self.force
     }
 }
 
-/// Share Volume request
+/// Share Volume request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareVolume {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
-    /// share protocol
+    /// Share protocol.
     pub protocol: VolumeShareProtocol,
     /// Hosts allowed to connect nexus.
     pub frontend_hosts: Vec<String>,
@@ -501,50 +503,50 @@ impl ShareVolume {
     }
 }
 
-/// Unshare Volume request
+/// Unshare Volume request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UnshareVolume {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
 }
 impl UnshareVolume {
-    /// Create a new `UnshareVolume` request
+    /// Create a new `UnshareVolume` request.
     pub fn new(uuid: VolumeId) -> Self {
         Self { uuid }
     }
 }
-/// Set the volume replica count
+/// Set the volume replica count.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SetVolumeReplica {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
-    /// replica count
+    /// The replica count.
     pub replicas: u8,
 }
 impl SetVolumeReplica {
-    /// Create new `Self` based on the provided arguments
+    /// Create new `Self` based on the provided arguments.
     pub fn new(uuid: VolumeId, replicas: u8) -> Self {
         Self { uuid, replicas }
     }
 }
 
-/// Delete volume
+/// Delete volume request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DestroyVolume {
-    /// uuid of the volume
+    /// The uuid of the volume.
     pub uuid: VolumeId,
 }
 impl DestroyVolume {
-    /// Create new `Self` to destroy the specified volume
+    /// Create new `Self` to destroy the specified volume.
     pub fn new(volume: &VolumeId) -> Self {
         Self {
             uuid: volume.clone(),
         }
     }
-    /// Get the volume's identification
+    /// Get the volume's identification.
     pub fn uuid(&self) -> &VolumeId {
         &self.uuid
     }
@@ -554,11 +556,11 @@ impl DestroyVolume {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplicaTopology {
-    /// id of the io-engine instance
+    /// The id of the io-engine instance.
     node: Option<NodeId>,
-    /// id of the pool
+    /// The id of the pool.
     pool: Option<PoolId>,
-    /// status of the replica
+    /// The status of the replica.
     status: ReplicaStatus,
 }
 

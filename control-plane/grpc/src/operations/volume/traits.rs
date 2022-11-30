@@ -17,10 +17,10 @@ use common_lib::{
         store::volume::{TargetConfig, VolumeSpec, VolumeTarget},
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, ExplicitNodeTopology, Filter,
-            LabelledTopology, Nexus, NexusId, NodeId, NodeTopology, PoolTopology, PublishVolume,
-            ReplicaId, ReplicaStatus, ReplicaTopology, RepublishVolume, SetVolumeReplica,
-            ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeLabels,
-            VolumePolicy, VolumeShareProtocol, VolumeState,
+            LabelledTopology, Nexus, NexusId, NexusNvmfConfig, NodeId, NodeTopology, PoolTopology,
+            PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, RepublishVolume,
+            SetVolumeReplica, ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume,
+            VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState,
         },
     },
     IntoOption,
@@ -98,6 +98,8 @@ pub trait VolumeOperations: Send + Sync {
 impl From<VolumeSpec> for volume::VolumeDefinition {
     fn from(volume_spec: VolumeSpec) -> Self {
         let nexus_id = volume_spec.health_info_id().cloned();
+        let target = volume_spec.target().cloned();
+        let target_config = volume_spec.config().clone().into_opt();
         let spec_status: common::SpecStatus = volume_spec.status.into();
         Self {
             spec: Some(volume::VolumeSpec {
@@ -107,7 +109,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                     .labels
                     .map(|labels| crate::common::StringMapValue { value: labels }),
                 num_replicas: volume_spec.num_replicas.into(),
-                target: volume_spec.target.map(|target| target.into()),
+                target: target.map(|target| target.into()),
                 policy: Some(volume_spec.policy.into()),
                 topology: volume_spec.topology.map(|topology| topology.into()),
                 last_nexus_id: nexus_id.map(|id| id.to_string()),
@@ -115,7 +117,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
-                target_config: volume_spec.target_config.into_opt(),
+                target_config,
                 publish_context: volume_spec
                     .publish_context
                     .map(|map| common::MapWrapper { map }),
@@ -183,17 +185,17 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             },
             num_replicas: volume_spec.num_replicas as u8,
             status: volume_spec_status,
-            target: match volume_spec.target {
-                Some(target) => match VolumeTarget::try_from(target) {
-                    Ok(target) => Some(target),
-                    Err(err) => {
-                        return Err(ReplyError::invalid_argument(
+            target_config: match volume_spec.target {
+                Some(target) => {
+                    let target = VolumeTarget::try_from(target).map_err(|err| {
+                        ReplyError::invalid_argument(
                             ResourceKind::Volume,
                             "volume.definition.spec.target",
                             err.to_string(),
-                        ))
-                    }
-                },
+                        )
+                    })?;
+                    Some(TargetConfig::new(target, NexusNvmfConfig::default()))
+                }
                 None => None,
             },
             policy: match volume_spec.policy {
@@ -234,7 +236,6 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             },
             operation: None,
             thin: volume_spec.thin,
-            target_config: None,
             publish_context: volume_meta
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
@@ -1126,9 +1127,9 @@ impl From<&dyn PublishVolumeInfo> for PublishVolumeRequest {
 
 /// Trait to be implemented for Republish operation.
 pub trait RepublishVolumeInfo: Send + Sync + std::fmt::Debug {
-    /// Uuid of the volume to be published
+    /// Uuid of the volume to be published.
     fn uuid(&self) -> VolumeId;
-    /// The node where front-end IO will be sent to
+    /// The node where front-end IO will be sent to.
     fn target_node(&self) -> Option<NodeId>;
     /// The protocol over which volume be published
     fn share(&self) -> VolumeShareProtocol;

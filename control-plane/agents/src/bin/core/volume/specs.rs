@@ -438,7 +438,7 @@ impl ResourceSpecsLocked {
         &self,
         volume: &VolumeSpec,
     ) -> Option<ResourceMutex<NexusSpec>> {
-        match &volume.target {
+        match volume.target() {
             None => None,
             Some(target) => self.get_nexus(target.nexus()),
         }
@@ -448,7 +448,7 @@ impl ResourceSpecsLocked {
         &self,
         volume: &VolumeSpec,
     ) -> Result<Option<OperationGuardArc<NexusSpec>>, SvcError> {
-        Ok(match &volume.target {
+        Ok(match volume.target() {
             None => None,
             Some(target) => self.nexus_opt(target.nexus()).await?,
         })
@@ -1233,7 +1233,7 @@ impl SpecOperationsHelper for VolumeSpec {
                 | VolumeOperation::Republish(..)
         ) {
             // don't attempt to modify the volume parameters if the nexus target is not "stable"
-            if self.target.is_some() != state.target.is_some() {
+            if self.target().is_some() != state.target.is_some() {
                 return Err(SvcError::NotReady {
                     kind: self.kind(),
                     id: self.uuid_str(),
@@ -1243,7 +1243,7 @@ impl SpecOperationsHelper for VolumeSpec {
 
         match &operation {
             VolumeOperation::Share(protocol) => match protocol {
-                VolumeShareProtocol::Nvmf => match &self.target {
+                VolumeShareProtocol::Nvmf => match &self.target() {
                     None => Err(SvcError::VolumeNotPublished {
                         vol_id: self.uuid_str(),
                     }),
@@ -1262,7 +1262,7 @@ impl SpecOperationsHelper for VolumeSpec {
                     share: format!("{:?}", protocol),
                 }),
             },
-            VolumeOperation::Unshare => match &self.target {
+            VolumeOperation::Unshare => match self.target() {
                 None => Err(SvcError::NotShared {
                     kind: self.kind(),
                     id: self.uuid_str(),
@@ -1273,11 +1273,12 @@ impl SpecOperationsHelper for VolumeSpec {
                 }),
                 _ => Ok(()),
             },
+            VolumeOperation::PublishOld(_) => Err(SvcError::InvalidArguments {}),
             VolumeOperation::Publish(args) => match args.protocol() {
                 None => Ok(()),
                 Some(protocol) => match protocol {
                     VolumeShareProtocol::Nvmf => {
-                        if let Some(target) = &self.target {
+                        if let Some(target) = self.target() {
                             Err(SvcError::VolumeAlreadyPublished {
                                 vol_id: self.uuid_str(),
                                 node: target.node().to_string(),
@@ -1303,7 +1304,7 @@ impl SpecOperationsHelper for VolumeSpec {
                     share: format!("{:?}", args.protocol()),
                 }),
             },
-            VolumeOperation::Unpublish if self.target.is_none() => {
+            VolumeOperation::Unpublish if self.target().is_none() => {
                 Err(SvcError::VolumeNotPublished {
                     vol_id: self.uuid_str(),
                 })
