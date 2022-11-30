@@ -2208,9 +2208,7 @@ components:
           allOf:
             - $ref: '#/components/schemas/CordonDrainState'
         node_nqn:
-          description: hosts allowed to connect the target
-          allOf:
-            - $ref: '#/components/schemas/HostNqn'
+          $ref: '#/components/schemas/HostNqn'
       additionalProperties: false
       required:
         - grpcEndpoint
@@ -2231,9 +2229,7 @@ components:
         status:
           $ref: '#/components/schemas/NodeStatus'
         node_nqn:
-          description: hosts allowed to connect the target
-          allOf:
-            - $ref: '#/components/schemas/HostNqn'
+          $ref: '#/components/schemas/HostNqn'
       required:
         - grpcEndpoint
         - id

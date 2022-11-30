@@ -97,7 +97,6 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
             cordondrainstate: None,
-
             node_nqn: None,
         }),
         state: Some(models::NodeState {
