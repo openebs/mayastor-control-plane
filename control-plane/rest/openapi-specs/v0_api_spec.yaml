@@ -2207,6 +2207,8 @@ components:
           description: the drain state
           allOf:
             - $ref: '#/components/schemas/CordonDrainState'
+        node_nqn:
+          $ref: '#/components/schemas/HostNqn'
       additionalProperties: false
       required:
         - grpcEndpoint
@@ -2226,6 +2228,8 @@ components:
           $ref: '#/components/schemas/NodeId'
         status:
           $ref: '#/components/schemas/NodeStatus'
+        node_nqn:
+          $ref: '#/components/schemas/HostNqn'
       required:
         - grpcEndpoint
         - id

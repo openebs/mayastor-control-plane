@@ -3,7 +3,7 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, str::FromStr};
 
-use crate::types::v0::store::node::NodeSpec;
+use crate::{types::v0::store::node::NodeSpec, IntoOption};
 use strum_macros::{EnumString, ToString};
 
 /// Registration
@@ -184,7 +184,12 @@ rpc_impl_string_id!(NodeId, "ID of a node");
 
 impl From<NodeState> for models::NodeState {
     fn from(src: NodeState) -> Self {
-        Self::new(src.grpc_endpoint.to_string(), src.id, src.status)
+        Self::new_all(
+            src.grpc_endpoint.to_string(),
+            src.id,
+            src.status,
+            src.node_nqn.into_opt(),
+        )
     }
 }
 impl From<&NodeState> for models::NodeState {
