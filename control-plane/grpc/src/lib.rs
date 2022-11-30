@@ -6,7 +6,7 @@ pub mod operations;
 pub mod tracing;
 
 /// Common module for all the misc operations
-pub(crate) mod common {
+pub mod common {
     #![allow(clippy::derive_partial_eq_without_eq)]
     tonic::include_proto!("v1.common");
 }

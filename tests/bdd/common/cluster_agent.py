@@ -1,5 +1,5 @@
 import grpc
-import cluster_agent_pb2_grpc as rpc
+import v1.ha.cluster_agent_pb2_grpc as rpc
 
 
 class ClusterAgentHandle(object):

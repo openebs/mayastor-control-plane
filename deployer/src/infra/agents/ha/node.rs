@@ -15,8 +15,13 @@ impl ComponentAction for HaNodeAgent {
             "agent-ha-node",
             Binary::from_dbg("agent-ha-node")
                 .with_arg(format!("-n{}", CsiNode::name(0)).as_str())
-                .with_arg(socket.as_str()),
+                .with_arg(socket.as_str())
+                // Hardcoding the csi-socket file for now as we can launch only one instance
+                // of ha node agent. TODO: Map csi-node with ha-node.
+                .with_args(vec!["--csi-socket", "/var/tmp/csi-app-node-1.sock"]),
         )
+        .with_bypass_default_mounts(true)
+        .with_bind("/var/tmp", "/var/tmp")
         .with_bind("/run/udev", "/run/udev:ro")
         .with_bind("/dev", "/dev:ro")
         .with_privileged(Some(true))

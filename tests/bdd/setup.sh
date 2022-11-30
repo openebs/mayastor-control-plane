@@ -10,7 +10,7 @@ VENV_DIR="$BDD_DIR/venv"
 CSI_OUT="$DIR_NAME/autogen"
 CSI_PROTO="$DIR_NAME"/../../rpc/api/protobuf/
 HA_OUT="$DIR_NAME/autogen"
-HA_PROTO="$DIR_NAME"/../../control-plane/grpc/proto/v1/ha
+HA_PROTO_PARENT_DIR="$DIR_NAME"/../../control-plane/grpc/proto/
 
 virtualenv --no-setuptools "$VENV_DIR"
 
@@ -19,7 +19,7 @@ SETUP_ARGS=(--venv-pth "$VENV_DIR" "$VENV_PTH")
 
 # if FAST is set then we do not regenerate the python csi, the python openapi and the rust component binaries
 if [ -z "$FAST" ]; then
-  SETUP_ARGS=("${SETUP_ARGS[@]}" --csi "$CSI_PROTO" "$CSI_OUT" --build-bins --build-openapi --ha "$HA_PROTO" "$HA_OUT")
+  SETUP_ARGS=("${SETUP_ARGS[@]}" --csi "$CSI_PROTO" "$CSI_OUT" --build-bins --build-openapi --ha "$HA_PROTO_PARENT_DIR" "$HA_OUT")
 fi
 
 sh "$ROOT_DIR"/scripts/python/venv-setup-prep.sh "${SETUP_ARGS[@]}"

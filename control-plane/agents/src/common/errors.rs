@@ -73,6 +73,11 @@ pub enum SvcError {
         request: String,
         source: tonic::Status,
     },
+    #[snafu(display("Failed to connect to grpc sever via uds socket path '{}'", path))]
+    GrpcUdsConnect {
+        path: String,
+        source: tonic::transport::Error,
+    },
     #[snafu(display("Node '{}' not found", node_id))]
     NodeNotFound { node_id: NodeId },
     #[snafu(display("Pool '{}' not found", pool_id))]
@@ -222,6 +227,8 @@ pub enum SvcError {
     SubsystemNotFound { nqn: String },
     #[snafu(display("The nqn couldnt be parsed"))]
     NvmeParseError {},
+    #[snafu(display("Nvme connect failed : {}", details))]
+    NvmeConnectError { details: String },
 }
 
 impl SvcError {
@@ -638,6 +645,18 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::NvmeParseError { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::GrpcUdsConnect { .. } => ReplyError {
+                kind: ReplyErrorKind::Unavailable,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::NvmeConnectError { .. } => ReplyError {
+                kind: ReplyErrorKind::Aborted,
                 resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error.full_string(),

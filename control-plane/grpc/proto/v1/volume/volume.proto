@@ -61,7 +61,7 @@ message Metadata {
   // Persistent Configuration of the target (current/last)
   TargetConfig target_config = 2;
   // Publish Context of the volme.
-  map<string,string> publish_context = 3;
+  optional common.MapWrapper publish_context = 3;
 }
 
 message TargetConfig {

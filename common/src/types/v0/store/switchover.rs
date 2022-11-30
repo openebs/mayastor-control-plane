@@ -7,7 +7,7 @@ use crate::types::v0::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr};
 
 /// Defines operation for SwitchOverSpec.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -62,6 +62,8 @@ pub struct SwitchOverSpec {
     pub retry_count: u64,
     /// Reuse the existing target.
     pub reuse_existing: bool,
+    /// Publish context of the volume.
+    pub publish_context: Option<HashMap<String, String>>,
 }
 
 impl SwitchOverSpec {

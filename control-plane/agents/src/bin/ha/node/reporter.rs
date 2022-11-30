@@ -55,13 +55,8 @@ impl PathReporter {
         tokio::spawn(async move {
             let mut aggregator = RequestAggregator::new(path_receiver, aggregation_period);
 
-            loop {
-                // Phase 1: wait till a path batch is available.
-                let batch = aggregator
-                    .receive_batch()
-                    .await
-                    .expect("Failed to receive aggregated paths");
-
+            // Phase 1: wait till a path batch is available.
+            while let Ok(batch) = aggregator.receive_batch().await {
                 // Phase 2: send all aggregated paths in one shot.
                 let failed_paths = batch
                     .paths()

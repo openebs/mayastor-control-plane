@@ -3,7 +3,7 @@ Wrapper around gRPC handle to communicate with HA node agents.
 """
 
 import grpc
-import node_agent_pb2_grpc as rpc
+import v1.ha.node_agent_pb2_grpc as rpc
 
 
 class HaNodeHandle(object):

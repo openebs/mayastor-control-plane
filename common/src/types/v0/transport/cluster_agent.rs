@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr};
 
 use super::*;
 
@@ -87,15 +87,21 @@ impl ReportFailedPaths {
 pub struct ReplacePath {
     target_nqn: String,
     new_path: String,
+    publish_context: Option<HashMap<String, String>>,
 }
 
 impl ReplacePath {
     /// Creates an instance containing failed and new nexus path to be reported back to node agent
     /// for Nvme connect.
-    pub fn new(target_nqn: String, new_path: String) -> Self {
+    pub fn new(
+        target_nqn: String,
+        new_path: String,
+        publish_context: Option<HashMap<String, String>>,
+    ) -> Self {
         Self {
             target_nqn,
             new_path,
+            publish_context,
         }
     }
 
@@ -107,5 +113,10 @@ impl ReplacePath {
     /// Get newly published nexus path.
     pub fn new_path(&self) -> &str {
         &self.new_path
+    }
+
+    /// Get the publish context.
+    pub fn publish_context(&self) -> Option<HashMap<String, String>> {
+        self.publish_context.clone()
     }
 }

@@ -1,22 +1,23 @@
 use crate::{
+    csi_node_nvme_client,
     detector::{NvmeController, NvmePathCache},
     path_provider::get_nvme_path_buf,
 };
 use agents::errors::SvcError;
 use common_lib::transport_api::{ErrorChain, ReplyError, ResourceKind};
 use grpc::{
+    common::MapWrapper,
     context::Context,
+    csi_node_nvme::NvmeConnectRequest,
     operations::ha_node::{
         server::NodeAgentServer,
         traits::{NodeAgentOperations, ReplacePathInfo},
     },
 };
+
 use http::Uri;
-use nvmeadm::{
-    nvmf_discovery::{ConnectArgs, ConnectArgsBuilder},
-    nvmf_subsystem::{NvmeSubsystems, Subsystem},
-};
-use std::{net::SocketAddr, sync::Arc};
+use nvmeadm::nvmf_subsystem::{NvmeSubsystems, Subsystem};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::time::{sleep, Duration};
 use utils::NVME_TARGET_NQN_PREFIX;
 
@@ -99,62 +100,54 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
 }
 
 impl NodeAgentSvc {
-    /// Translate new path URI into connection arguments for Subsystem connect API.
-    fn get_nvmf_connection_args(&self, new_path: &str) -> Option<ConnectArgs> {
-        let parsed_path = parse_uri(new_path).ok()?;
-
-        // Check NQN of the subsystem to make sure it belongs to the product.
-        if !parsed_path.nqn().starts_with(NVME_TARGET_NQN_PREFIX) {
-            return None;
+    /// Connect NVMe controller. Wait till the controller is fully connected.
+    async fn connect_controller(
+        &self,
+        new_path: String,
+        nqn: String,
+        publish_context: Option<HashMap<String, String>>,
+    ) -> Result<(), SvcError> {
+        let parsed_uri = parse_uri(new_path.as_str())?;
+        if !parsed_uri.nqn().starts_with(NVME_TARGET_NQN_PREFIX) {
+            return Err(SvcError::InvalidArguments {});
         }
 
-        ConnectArgsBuilder::default()
-            .traddr(parsed_path.host())
-            .trsvcid(parsed_path.port())
-            .nqn(parsed_path.nqn())
-            .ctrl_loss_tmo(Some(5))
-            .reconnect_delay(Some(10))
-            .hostnqn(parsed_path.hostnqn)
-            .build()
-            .ok()
-    }
-
-    /// Connect NVMe controller. Wait till the controller is fully connected.
-    async fn connect_controller(&self, new_path: String, nqn: String) -> Result<(), SvcError> {
-        let connect_args = match self.get_nvmf_connection_args(&new_path) {
-            Some(ca) => ca,
-            None => return Err(SvcError::InvalidArguments {}),
-        };
+        // Get the client to the nvme operations service running in csi-node.
+        let mut client = csi_node_nvme_client().clone();
 
         tracing::info!(new_path, "Connecting to NVMe target");
 
         // Open connection to the new nexus: ANA will automatically create
         // the second path and add it as an alternative for the first broken one,
         // which immediately resumes all stalled I/O
-
-        let parsed_uri = parse_uri(new_path.as_str())?;
-        let mut subsystem = match get_subsystem(&parsed_uri) {
-            Ok(subsystem) => subsystem,
-            Err(_) => match connect_args.connect() {
+        let mut subsystem = match client
+            .nvme_connect(NvmeConnectRequest {
+                uri: new_path.clone(),
+                publish_context: publish_context.map(|map| MapWrapper { map }),
+            })
+            .await
+        {
+            Ok(_) => match get_subsystem(&parsed_uri) {
                 Ok(subsystem) => {
                     tracing::info!(new_path, "Successfully connected to NVMe target");
                     subsystem
                 }
-                Err(error) => {
-                    tracing::error!(
-                        new_path,
-                        error=%error,
-                        "Failed to connect to new NVMe target"
-                    );
-                    let nvme_err = format!(
-                        "Failed to connect to new NVMe target: {}, new path: {}, nqn: {}",
-                        error.full_string(),
-                        new_path,
-                        nqn
-                    );
-                    return Err(SvcError::Internal { details: nvme_err });
-                }
+                Err(error) => return Err(error),
             },
+            Err(error) => {
+                tracing::error!(
+                    new_path,
+                    error=%error,
+                    "Failed to connect to new NVMe target"
+                );
+                let nvme_err = format!(
+                    "Failed to connect to new NVMe target: {}, new path: {}, nqn: {}",
+                    error.full_string(),
+                    new_path,
+                    nqn
+                );
+                return Err(SvcError::NvmeConnectError { details: nvme_err });
+            }
         };
 
         // Wait till new controller is fully connected before completing the call.
@@ -234,8 +227,12 @@ impl NodeAgentOperations for NodeAgentSvc {
         // Step 1: populate an additional healthy path to target NQN in addition to
         // existing failed path. Once this additional path is created, client I/O
         // automatically resumes.
-        self.connect_controller(request.new_path(), request.target_nqn())
-            .await?;
+        self.connect_controller(
+            request.new_path(),
+            request.target_nqn(),
+            request.publish_context(),
+        )
+        .await?;
 
         // Step 2: disconnect broken path to leave the only new healthy path.
         // Note that errors under disconnection are not critical, since the second I/O
@@ -308,7 +305,6 @@ struct ParsedUri {
     host: String,
     port: String,
     nqn: String,
-    hostnqn: Option<String>,
 }
 
 impl ParsedUri {
@@ -316,22 +312,8 @@ impl ParsedUri {
         let host = uri.host().ok_or(SvcError::InvalidArguments {})?.to_string();
         let port = uri.port().ok_or(SvcError::InvalidArguments {})?.to_string();
         let nqn = uri.path()[1 ..].to_string();
-        let mut q_split = uri.query().unwrap_or("").split('&');
-        let hostnqn = q_split.find_map(|q| {
-            q.strip_prefix("hostnqn=").and_then(|q| {
-                q.split(',')
-                    .collect::<Vec<_>>()
-                    .first()
-                    .map(ToString::to_string)
-            })
-        });
 
-        Ok(Self {
-            host,
-            port,
-            nqn,
-            hostnqn,
-        })
+        Ok(Self { host, port, nqn })
     }
     fn host(&self) -> String {
         self.host.clone()

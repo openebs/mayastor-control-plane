@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
+import "v1/misc/common.proto";
 
 package v1.ha_node_agent;
 
@@ -17,4 +18,7 @@ message ReplacePathRequest {
 
   // URI of the new path
   string new_path = 2;
+
+  // Pubish context of the volume
+  common.MapWrapper publish_context = 3;
 }
