@@ -112,7 +112,7 @@ def a_published_volume_with_two_replicas():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_NAME_1, frontend_node=""
+            {}, Protocol("nvmf"), node=NODE_NAME_1, frontend_node="app-node-1"
         ),
     )
     pytest.older_target_uri = volume["state"]["target"]["deviceUri"]
@@ -182,7 +182,7 @@ def the_volume_republish_and_the_destroy_shutdown_target_call_has_succeeded_for_
                     Protocol("nvmf"),
                     republish=True,
                     reuse_existing=pytest.reuse_existing,
-                    frontend_node="",
+                    frontend_node="app-node-1",
                 ),
             )
         except grpc.RpcError:
@@ -205,7 +205,7 @@ def the_volume_republish_on_another_node_has_succeeded():
                 reuse_existing=pytest.reuse_existing,
                 node=NODE_NAME_2,
                 republish=True,
-                frontend_node="",
+                frontend_node="app-node-1",
             ),
         )
     except grpc.RpcError:

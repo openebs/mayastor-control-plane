@@ -3,7 +3,7 @@ use crate::{
     nodes::NodeList,
     switchover::{Stage, SwitchOverEngine, SwitchOverRequest},
 };
-use common_lib::types::v0::transport::VolumeId;
+use common_lib::types::v0::transport::{NodeId, VolumeId};
 use std::{convert::TryFrom, net::SocketAddr};
 use utils::NVME_TARGET_NQN_PREFIX;
 
@@ -23,7 +23,12 @@ impl VolumeMover {
 
     /// Switchover build the switchover request for the given nqn and send it to SwitchOverEngine.
     #[tracing::instrument(level = "info", skip(self), err)]
-    pub async fn switchover(&self, uri: SocketAddr, nqn: String) -> Result<(), anyhow::Error> {
+    pub async fn switchover(
+        &self,
+        node: NodeId,
+        uri: SocketAddr,
+        nqn: String,
+    ) -> Result<(), anyhow::Error> {
         if !nqn.starts_with(NVME_TARGET_NQN_PREFIX) {
             return Err(anyhow::anyhow!("Invalid nqn"));
         }
@@ -34,7 +39,7 @@ impl VolumeMover {
 
         let volume_uuid = VolumeId::try_from(volume)?;
 
-        let req = SwitchOverRequest::new(uri, volume_uuid, nqn);
+        let req = SwitchOverRequest::new(uri, volume_uuid, node, nqn);
 
         // calling start_op here to store the request in etcd
         req.start_op(Stage::Init, &self.etcd).await?;

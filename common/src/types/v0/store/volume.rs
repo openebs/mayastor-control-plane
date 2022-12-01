@@ -8,8 +8,8 @@ use crate::{
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
-            self, CreateVolume, NexusId, NexusNvmfConfig, NodeId, ReplicaId, Topology, VolumeId,
-            VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeStatus,
+            self, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId, ReplicaId, Topology,
+            VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeStatus,
         },
     },
     IntoOption,
@@ -33,6 +33,56 @@ impl ObjectKey for VolumeStateKey {
 
     fn key_uuid(&self) -> String {
         self.0.to_string()
+    }
+}
+
+/// Frontend nodes configuration.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct FrontendConfig {
+    host_acl: Vec<InitiatorAC>,
+}
+impl FrontendConfig {
+    /// Create new `Self` based on the host access list.
+    pub fn from_acls(host_acl: Vec<InitiatorAC>) -> Self {
+        Self { host_acl }
+    }
+    /// Check if the nodename is allowed.
+    pub fn nodename_allowed(&self, nodename: &str) -> bool {
+        self.host_acl.is_empty() || self.host_acl.iter().any(|n| n.node_name() == nodename)
+    }
+    /// Get the node names of the acl.
+    pub fn node_names(&self) -> Vec<String> {
+        self.host_acl.iter().map(|h| h.node_name.clone()).collect()
+    }
+    /// Get the hostnqn's for the acl.
+    pub fn node_nqns(&self) -> Vec<HostNqn> {
+        self.host_acl.iter().map(|h| h.node_nqn.clone()).collect()
+    }
+}
+
+/// Volume Frontend
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct InitiatorAC {
+    /// The nodename where front-end IO will be sent from.
+    node_name: String,
+    /// The nvme nqn of the front-end node.
+    node_nqn: HostNqn,
+}
+impl InitiatorAC {
+    /// Get a new `Self` with the given parameters.
+    pub fn new(node_name: String, node_nqn: HostNqn) -> Self {
+        Self {
+            node_name,
+            node_nqn,
+        }
+    }
+    /// Get the nodename of the front-end initiator.
+    pub fn node_name(&self) -> &str {
+        &self.node_name
+    }
+    /// Get the hostnqn of the front-end initiator.
+    pub fn node_nqn(&self) -> &HostNqn {
+        &self.node_nqn
     }
 }
 
@@ -121,19 +171,34 @@ pub struct TargetConfig {
     active: bool,
     /// The nexus nvmf configuration.
     config: NexusNvmfConfig,
+    /// Config of frontend-nodes where IO will be sent from.
+    frontend: FrontendConfig,
 }
 impl TargetConfig {
     /// Get the uuid of the target.
-    pub fn new(target: VolumeTarget, config: NexusNvmfConfig) -> Self {
+    pub fn new(target: VolumeTarget, config: NexusNvmfConfig, frontend: FrontendConfig) -> Self {
         Self {
             target,
             active: true,
             config,
+            frontend,
         }
     }
-    /// Get the target.
+    /// Get the last target configuration.
+    /// # Note: It may or may not the the current active target.
     pub fn target(&self) -> &VolumeTarget {
         &self.target
+    }
+    /// Get the active target.
+    pub fn active_target(&self) -> Option<&VolumeTarget> {
+        match self.active {
+            true => Some(&self.target),
+            false => None,
+        }
+    }
+    /// Get the initiators.
+    pub fn frontend(&self) -> &FrontendConfig {
+        &self.frontend
     }
     /// Get the uuid of the target.
     pub fn uuid(&self) -> &NexusId {
@@ -190,9 +255,13 @@ impl VolumeSpec {
     }
     /// Get the last known target configuration.
     /// # Warning: the target may no longer be active.
-    /// To get the current active target use `VolumeSpec::target`.
+    /// To get the current active target configuration use `VolumeSpec::active_config`.
     pub fn config(&self) -> &Option<TargetConfig> {
         &self.target_config
+    }
+    /// Get the current target configuration.
+    pub fn active_config(&self) -> Option<&TargetConfig> {
+        self.target_config.as_ref().filter(|t| t.active)
     }
     /// Deactivate the current target but keep it's information around.
     pub fn deactivate_target(&mut self) {
@@ -257,6 +326,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.target_config = Some(TargetConfig::new(
                         target,
                         NexusNvmfConfig::default().with_no_resv(),
+                        Default::default(),
                     ));
                 }
                 VolumeOperation::Publish(args) => {

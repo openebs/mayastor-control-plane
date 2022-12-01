@@ -158,6 +158,7 @@ impl apis::actix_server::Volumes for RestApi {
                             target_node: publish_volume_body.node.map(|id| id.into()),
                             share: publish_volume_body.protocol.into(),
                             reuse_existing: publish_volume_body.reuse_existing.unwrap_or(true),
+                            frontend_node: publish_volume_body.frontend_node.unwrap().into(),
                         },
                         None,
                     )
@@ -171,11 +172,7 @@ impl apis::actix_server::Volumes for RestApi {
                             target_node: publish_volume_body.node.map(|id| id.into()),
                             share: Some(publish_volume_body.protocol.into()),
                             publish_context: publish_volume_body.publish_context,
-                            frontend_nodes: if !publish_volume_body.frontend_node.is_empty() {
-                                vec![publish_volume_body.frontend_node]
-                            } else {
-                                vec![]
-                            },
+                            frontend_nodes: publish_volume_body.frontend_node.into_iter().collect(),
                         },
                         None,
                     )

@@ -26,8 +26,8 @@ use common_lib::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{
-                PublishOperation, RepublishOperation, TargetConfig, VolumeOperation, VolumeSpec,
-                VolumeTarget,
+                FrontendConfig, PublishOperation, RepublishOperation, TargetConfig,
+                VolumeOperation, VolumeSpec, VolumeTarget,
             },
         },
         transport::{
@@ -294,7 +294,10 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let nexus_node = get_volume_target_node(registry, &state, request, false).await?;
 
         let last_target = self.as_ref().health_info_id().cloned();
-        let target_cfg = self.next_target_config(&nexus_node, &request.share).await;
+        let frontend_nodes = &request.frontend_nodes;
+        let target_cfg = self
+            .next_target_config(registry, &nexus_node, &request.share, frontend_nodes)
+            .await;
 
         let operation = VolumeOperation::Publish(PublishOperation::new(
             target_cfg.clone(),
@@ -314,8 +317,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         // Share the Nexus if it was requested.
         let mut result = Ok(());
         if let Some(share) = request.share {
-            let allowed_hosts =
-                registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
+            let allowed_hosts = target_cfg.frontend().node_nqns();
             result = match nexus
                 .share(
                     registry,
@@ -410,16 +412,24 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let spec = self.as_ref().clone();
         let state = registry.get_volume_state(&request.uuid).await?;
         // If the volume is not published then it should issue publish call rather than republish.
-        let volume_target = match spec.target() {
-            None => {
-                return Err(SvcError::VolumeNotPublished {
+        let target_cfg = match spec.active_config() {
+            Some(cfg)
+                if !cfg
+                    .frontend()
+                    .nodename_allowed(request.frontend_node.as_str()) =>
+            {
+                Err(SvcError::FrontendNodeNotAllowed {
+                    node: request.frontend_node.to_string(),
                     vol_id: request.uuid.to_string(),
                 })
             }
-            Some(target) => target,
-        };
+            Some(config) => Ok(config),
+            None => Err(SvcError::VolumeNotPublished {
+                vol_id: request.uuid.to_string(),
+            }),
+        }?;
 
-        let mut older_nexus = specs.nexus(volume_target.nexus()).await?;
+        let mut older_nexus = specs.nexus(target_cfg.target().nexus()).await?;
         let mut move_nexus = true;
 
         match get_healthy_volume_replicas(&spec, &older_nexus.as_ref().node, registry).await {
@@ -447,8 +457,9 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         // Get the newer target node for the new nexus creation.
         let nexus_node = get_volume_target_node(registry, &state, request, true).await?;
+        let nodes = target_cfg.frontend().node_names();
         let target_cfg = self
-            .next_target_config(&nexus_node, &Some(request.share))
+            .next_target_config(registry, &nexus_node, &Some(request.share), &nodes)
             .await;
         let operation = VolumeOperation::Republish(RepublishOperation::new(target_cfg.clone()));
 
@@ -470,12 +481,12 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let (mut nexus, nexus_state) = self
             .validate_update_step(registry, result, &spec_clone)
             .await?;
-        let allowed_host = older_nexus.lock().allowed_hosts.clone();
+        let allowed_host = target_cfg.frontend().node_nqns();
         // Share the Nexus.
         let result = match nexus
             .share(
                 registry,
-                &ShareNexus::new(&nexus_state, request.share, allowed_host.clone()),
+                &ShareNexus::new(&nexus_state, request.share, allowed_host),
             )
             .await
         {
@@ -610,8 +621,10 @@ impl OperationGuardArc<VolumeSpec> {
     /// Also sets the reservation key based off the nexus uuid.
     async fn next_target_config(
         &self,
+        registry: &Registry,
         node: &NodeId,
         share: &Option<VolumeShareProtocol>,
+        frontend_nodes: &[String],
     ) -> TargetConfig {
         let nexus = NexusId::new();
         let resv_key = nexus.as_u128() as u64;
@@ -630,6 +643,8 @@ impl OperationGuardArc<VolumeSpec> {
                 }
             }
         };
+        let host_acl = registry.host_acl_nodename(HostAccessControl::Nexuses, frontend_nodes);
+        let frontend = FrontendConfig::from_acls(host_acl);
         TargetConfig::new(
             VolumeTarget::new(node.clone(), nexus, *share),
             NexusNvmfConfig::new(
@@ -638,6 +653,7 @@ impl OperationGuardArc<VolumeSpec> {
                 NvmeReservation::ExclusiveAccess,
                 NexusNvmePreemption::Holder,
             ),
+            frontend,
         )
     }
 }

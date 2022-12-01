@@ -100,6 +100,8 @@ pub enum SvcError {
     VolumeNotFound { vol_id: String },
     #[snafu(display("Volume '{}' not published", vol_id))]
     VolumeNotPublished { vol_id: String },
+    #[snafu(display("Node '{}' not allowed to access target for volume '{}'", node, vol_id))]
+    FrontendNodeNotAllowed { node: String, vol_id: String },
     #[snafu(display("{} {} cannot be shared over invalid protocol '{}'", kind.to_string(), id, share))]
     InvalidShareProtocol {
         kind: ResourceKind,
@@ -525,6 +527,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::VolumeAlreadyPublished { .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyPublished,
+                resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::FrontendNodeNotAllowed { .. } => ReplyError {
+                kind: ReplyErrorKind::PermissionDenied,
                 resource: ResourceKind::Volume,
                 source: desc.to_string(),
                 extra: error.full_string(),

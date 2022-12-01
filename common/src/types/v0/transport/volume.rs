@@ -433,6 +433,8 @@ pub struct RepublishVolume {
     pub uuid: VolumeId,
     /// The node where front-end IO will be sent to.
     pub target_node: Option<NodeId>,
+    /// The node where front-end IO will be sent from.
+    pub frontend_node: NodeId,
     /// Share protocol.
     pub share: VolumeShareProtocol,
     /// Allows reusing of the current target.
@@ -443,12 +445,14 @@ impl RepublishVolume {
     pub fn new(
         uuid: VolumeId,
         target_node: Option<NodeId>,
+        frontend_node: NodeId,
         share: VolumeShareProtocol,
         reuse_existing: bool,
     ) -> Self {
         Self {
             uuid,
             target_node,
+            frontend_node,
             share,
             reuse_existing,
         }

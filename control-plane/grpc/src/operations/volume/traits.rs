@@ -14,7 +14,7 @@ use crate::{
 use common_lib::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
-        store::volume::{TargetConfig, VolumeSpec, VolumeTarget},
+        store::volume::{FrontendConfig, TargetConfig, VolumeSpec, VolumeTarget},
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, ExplicitNodeTopology, Filter,
             LabelledTopology, Nexus, NexusId, NexusNvmfConfig, NodeId, NodeTopology, PoolTopology,
@@ -194,7 +194,11 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                             err.to_string(),
                         )
                     })?;
-                    Some(TargetConfig::new(target, NexusNvmfConfig::default()))
+                    Some(TargetConfig::new(
+                        target,
+                        NexusNvmfConfig::default(),
+                        Default::default(),
+                    ))
                 }
                 None => None,
             },
@@ -611,6 +615,7 @@ impl TryFrom<volume::TargetConfig> for TargetConfig {
                     "target_config.config",
                 )),
             }?,
+            FrontendConfig::default(),
         ))
     }
 }
@@ -1131,7 +1136,9 @@ pub trait RepublishVolumeInfo: Send + Sync + std::fmt::Debug {
     fn uuid(&self) -> VolumeId;
     /// The node where front-end IO will be sent to.
     fn target_node(&self) -> Option<NodeId>;
-    /// The protocol over which volume be published
+    /// The nodename where front-end IO will be sent from.
+    fn frontend_node(&self) -> NodeId;
+    /// The protocol over which volume be published.
     fn share(&self) -> VolumeShareProtocol;
     /// Republish reusing current target.
     fn reuse_existing(&self) -> bool;
@@ -1144,6 +1151,10 @@ impl RepublishVolumeInfo for RepublishVolume {
 
     fn target_node(&self) -> Option<NodeId> {
         self.target_node.clone()
+    }
+
+    fn frontend_node(&self) -> NodeId {
+        self.frontend_node.clone()
     }
 
     fn share(&self) -> VolumeShareProtocol {
@@ -1160,6 +1171,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolume {
         Self {
             uuid: data.uuid(),
             target_node: data.target_node(),
+            frontend_node: data.frontend_node(),
             share: data.share(),
             reuse_existing: data.reuse_existing(),
         }
@@ -1174,6 +1186,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolumeRequest {
             target_node: data.target_node().map(|node_id| node_id.to_string()),
             share: protocol as i32,
             reuse_existing: data.reuse_existing(),
+            frontend_node: data.frontend_node().to_string(),
         }
     }
 }
@@ -1196,6 +1209,10 @@ impl RepublishVolumeInfo for ValidatedRepublishVolumeRequest {
             .target_node
             .clone()
             .map(|target_node| target_node.into())
+    }
+
+    fn frontend_node(&self) -> NodeId {
+        NodeId::from(&self.inner.frontend_node)
     }
 
     fn share(&self) -> VolumeShareProtocol {

@@ -3,7 +3,7 @@ use crate::types::v0::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         SpecTransaction,
     },
-    transport::VolumeId,
+    transport::{NodeId, VolumeId},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -48,6 +48,8 @@ pub type SwitchOverTime = DateTime<Utc>;
 pub struct SwitchOverSpec {
     /// Uri of node-agent to report new path.
     pub callback_uri: SocketAddr,
+    /// The nodename of the node-agent node.
+    pub node_name: NodeId,
     /// Volume for which switchover needs to be executed.
     pub volume: VolumeId,
     /// Operation represent current running operation on SwitchOverSpec.

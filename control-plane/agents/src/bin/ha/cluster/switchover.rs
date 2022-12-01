@@ -9,7 +9,8 @@ use common_lib::{
             SpecTransaction,
         },
         transport::{
-            DestroyShutdownTargets, ReplacePath, RepublishVolume, VolumeId, VolumeShareProtocol,
+            DestroyShutdownTargets, NodeId, ReplacePath, RepublishVolume, VolumeId,
+            VolumeShareProtocol,
         },
     },
 };
@@ -57,15 +58,17 @@ pub struct SwitchOverRequest {
     callback_uri: SocketAddr,
     pub volume_id: VolumeId,
     stage: Stage,
-    // Timestamp when switchover request was initialized.
+    /// The nodename of the request's originator node.
+    node_name: NodeId,
+    /// Timestamp when switchover request was initialized.
     timestamp: SwitchOverTime,
-    // Failed nexus path of the volume.
+    /// Failed nexus path of the volume.
     existing_nqn: String,
-    // New nexus path of the volume.
+    /// New nexus path of the volume.
     new_path: Option<String>,
-    // Number of failed attempts in the current Stage.
+    /// Number of failed attempts in the current Stage.
     retry_count: u64,
-    // Reuse existing target.
+    /// Reuse existing target.
     reuse_existing: bool,
     /// Publish context.
     publish_context: Option<HashMap<String, String>>,
@@ -91,12 +94,14 @@ impl SwitchOverRequest {
     pub fn new(
         callback_uri: SocketAddr,
         volume: VolumeId,
+        node_name: NodeId,
         existing_path: String,
     ) -> SwitchOverRequest {
         SwitchOverRequest {
             callback_uri,
             volume_id: volume,
             stage: Stage::Init,
+            node_name,
             timestamp: Utc::now(),
             existing_nqn: existing_path,
             new_path: None,
@@ -182,12 +187,13 @@ impl SwitchOverRequest {
 
     async fn republish_volume(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
         self.start_op(Stage::RepublishVolume, etcd).await?;
-        info!(volume.uuid=%self.volume_id, "Republishing");
+        info!(volume.uuid=%self.volume_id, frontend_node=self.node_name.as_str(), "Republishing");
         let republish_req = RepublishVolume {
             uuid: self.volume_id.clone(),
             target_node: None,
             share: VolumeShareProtocol::Nvmf,
             reuse_existing: self.reuse_existing,
+            frontend_node: self.node_name.clone(),
         };
         let vol = client().republish(&republish_req, None).await?;
         self.publish_context = vol.spec().publish_context;
@@ -260,7 +266,7 @@ impl SwitchOverRequest {
             .path_and_query("")
             .build()
         {
-            info!(uri=%uri, "Creating node agent client using callback uri");
+            info!(%uri, "Creating node agent client using callback uri");
             if let Some(new_path) = self.new_path.clone() {
                 let replace_request = ReplacePath::new(
                     self.existing_nqn.clone(),
@@ -344,7 +350,7 @@ impl SwitchOverEngine {
     /// Instantiates worker task to asynchronously process Switchover request.
     pub fn init_worker(&self, recv: Arc<Mutex<UnboundedReceiver<SwitchOverRequest>>>) {
         for i in 0 .. WORKER_NUM {
-            info!("Starting worker-{} of Switchover Engine", i);
+            info!(worker = i, "Starting Switchover Engine worker");
             let cloned_self = self.clone();
             let cloned_channel = recv.clone();
             tokio::spawn(async move { cloned_self.worker(cloned_channel, i).await });
@@ -420,6 +426,7 @@ impl From<&SwitchOverRequest> for SwitchOverSpec {
         let op = OperationState::new(req.stage.clone().into(), None);
         Self {
             callback_uri: req.callback_uri,
+            node_name: req.node_name.clone(),
             volume: req.volume_id.clone(),
             operation: Some(op),
             timestamp: req.timestamp,
@@ -443,6 +450,7 @@ impl From<&SwitchOverSpec> for SwitchOverRequest {
             callback_uri: req.callback_uri,
             volume_id: req.volume.clone(),
             stage,
+            node_name: req.node_name.clone(),
             timestamp: req.timestamp,
             existing_nqn: req.existing_nqn.clone(),
             new_path: req.new_path.clone(),
@@ -484,14 +492,14 @@ fn switchover_ord() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     let sock1: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
     let vol1 = VolumeId::try_from("ec4e66fd-3b33-4439-b504-d49aba53da26").unwrap();
-    let sw1 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
-    let mut sw2 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
+    let sw1 = SwitchOverRequest::new(sock1, vol1.clone(), "nn".into(), "nw".to_string());
+    let mut sw2 = SwitchOverRequest::new(sock1, vol1.clone(), "nn".into(), "nw".to_string());
     sw2.stage = Stage::Errored;
-    let mut sw3 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
+    let mut sw3 = SwitchOverRequest::new(sock1, vol1.clone(), "nn".into(), "nw".to_string());
     sw3.stage = Stage::Successful;
-    let mut sw4 = SwitchOverRequest::new(sock1, vol1.clone(), "nw".to_string());
+    let mut sw4 = SwitchOverRequest::new(sock1, vol1.clone(), "nn".into(), "nw".to_string());
     sw4.stage = Stage::RepublishVolume;
-    let mut sw5 = SwitchOverRequest::new(sock1, vol1, "nw".to_string());
+    let mut sw5 = SwitchOverRequest::new(sock1, vol1, "nn".into(), "nw".to_string());
     sw5.stage = Stage::RepublishVolume;
     let mut test_vec = vec![
         sw3.clone(),
