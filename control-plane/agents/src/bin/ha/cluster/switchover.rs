@@ -183,7 +183,22 @@ impl SwitchOverRequest {
             reuse_existing: self.reuse_existing,
             frontend_node: self.node_name.clone(),
         };
-        let vol = client().republish(&republish_req, None).await?;
+        let vol = match client().republish(&republish_req, None).await {
+            Ok(vol) => Ok(vol),
+            Err(error)
+                if matches!(
+                    error.kind,
+                    ReplyErrorKind::PermissionDenied
+                        | ReplyErrorKind::NotPublished
+                        | ReplyErrorKind::NotFound
+                ) =>
+            {
+                error!(volume.uuid=%self.volume_id, %error, "Cancelling switchover");
+                self.stage = Stage::Errored;
+                Err(error)
+            }
+            Err(error) => Err(error),
+        }?;
         self.publish_context = vol.spec().publish_context;
         self.new_path = match vol.state().target {
             Some(target) => Some(target.device_uri),
