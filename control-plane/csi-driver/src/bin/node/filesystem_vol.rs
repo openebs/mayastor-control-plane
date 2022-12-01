@@ -158,11 +158,6 @@ pub(crate) async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<
             ));
         }
 
-        // Sometimes after/during disconnect we get some page write errors, triggered by a journal
-        // update by the JBD2 worker task. We don't really know how we can "flush" these
-        // tasks so at the moment the best solution we have is to remount the staging path
-        // as RO before we umount it for good, which seems to help.
-        mount::remount(fs_staging_path, true)?;
         if let Err(error) = mount::filesystem_unmount(fs_staging_path) {
             return Err(failure!(
                 Code::Internal,
@@ -173,6 +168,8 @@ pub(crate) async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<
                 error
             ));
         }
+
+        mount::wait_fs_shutdown(&device, Some(mount.fstype)).await?;
     }
 
     Ok(())

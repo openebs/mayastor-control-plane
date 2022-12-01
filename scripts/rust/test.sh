@@ -12,6 +12,7 @@ cleanup_handler() {
 }
 
 trap cleanup_handler ERR INT QUIT TERM HUP
+sudo nvme disconnect-all
 
 set -euxo pipefail
 # test dependencies
