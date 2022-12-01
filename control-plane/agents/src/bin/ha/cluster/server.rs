@@ -26,10 +26,10 @@ impl ClusterAgent {
         }
     }
     /// Runs this server as a future until a shutdown signal is received.
-    pub(crate) async fn run(&self) -> Result<(), agents::ServiceError> {
+    pub(crate) async fn run(self) -> Result<(), agents::ServiceError> {
         let r = ClusterAgentServer::new(Arc::new(ClusterAgentSvc {
-            nodes: self.nodes.clone(),
-            mover: self.mover.clone(),
+            nodes: self.nodes,
+            mover: self.mover,
         }));
         agents::Service::builder()
             .with_service(r.into_grpc_server())

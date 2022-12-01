@@ -10,7 +10,7 @@ use common_lib::{
 };
 use futures::lock::Mutex;
 use http::Uri;
-use std::{convert::TryFrom, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tracing::{debug, error};
 
 /// Represent object to access Etcd.
@@ -66,7 +66,11 @@ impl EtcdStore {
         })
         .await
         {
-            Ok(_) => Ok(()),
+            Ok(result) => match result {
+                Ok(_) => Ok(()),
+                Err(StoreError::MissingEntry { .. }) => Ok(()),
+                Err(error) => Err(error.into()),
+            },
             Err(error) => {
                 error!(%error, "Failed to delete from persistent store");
                 Err(StoreError::Timeout {
@@ -85,20 +89,14 @@ impl EtcdStore {
         let key = key_prefix_obj(StorableObjectType::SwitchOver);
         let store_entries = store.get_values_prefix(&key).await?;
 
-        debug!("fetched entries from etcd");
+        debug!(count = store_entries.len(), "fetched entries from etcd");
 
         let entries = store_entries
             .into_iter()
-            .map(|v| v.1)
+            .map(|(_, v)| v)
             .map(serde_json::from_value)
             .collect::<Result<Vec<SwitchOverSpec>, serde_json::Error>>()?;
 
-        let mut partial_entries = vec![];
-        for spec in entries {
-            let req = SwitchOverRequest::try_from(&spec)?;
-            partial_entries.push(req)
-        }
-
-        Ok(partial_entries)
+        Ok(entries.iter().map(Into::into).collect())
     }
 }

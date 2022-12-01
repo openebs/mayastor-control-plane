@@ -60,7 +60,7 @@ impl PathRecord {
         self.epoch = epoch;
     }
 
-    // Trigger state transition based on 'connecting' state of the underlying NVMe controller.
+    /// Trigger state transition based on 'connecting' state of the underlying NVMe controller.
     fn report_connecting(&mut self) {
         match self.state {
             PathState::Good => {
@@ -136,14 +136,14 @@ enum NvmePathCacheCommandResponse {
     CachedNvmeController(NvmeController),
 }
 
-/// Messsage sent to NVMe cache from a cache client: client passes a channel
+/// Message sent to NVMe cache from a cache client: client passes a channel
 /// to receive a response from the cache.
 type NvmeCacheMessage = (NvmePathCacheCommand, Sender<NvmePathCacheCommandResponse>);
 
 /// Path failure detector for NVMe paths.
 /// All known NVMe paths on system are periodically checked for liveness and get classified
 /// as:
-///  Good  - path is fully functional.
+///  Good - path is fully functional.
 ///  Suspected - path experiences connectivity problems for the first time.
 ///  Failed - path has experienced connectivity problems two times in a row.
 /// Once a path is classified as Failed, it's reported to PathReporter and gets sent to
@@ -159,7 +159,8 @@ pub struct PathFailureDetector {
 }
 
 impl PathFailureDetector {
-    pub(crate) fn new(args: &Cli) -> anyhow::Result<Self> {
+    /// Return a new `Self`.
+    pub(crate) fn new(args: &Cli) -> Self {
         let reporter = PathReporter::new(
             args.node_name.clone(),
             *args.retransmission_period,
@@ -168,14 +169,14 @@ impl PathFailureDetector {
 
         let (tx, rx) = channel(64);
 
-        Ok(Self {
+        Self {
             epoch: 0,
             detection_period: *args.detection_period,
             suspected_paths: HashMap::new(),
             reporter: Rc::new(reporter),
             cache_channel_tx: Arc::new(tx),
             cache_channel_rx: rx,
-        })
+        }
     }
 
     fn rescan_paths(&mut self, path_collection: &mut NvmePathNameCollection) {
@@ -312,6 +313,7 @@ impl PathFailureDetector {
 }
 
 impl NvmePathCache {
+    /// Lookup a controller by its NVMe NQN.
     pub(crate) async fn lookup_controller(&self, nqn: String) -> anyhow::Result<NvmeController> {
         let (tx, mut rx) = channel(1);
 

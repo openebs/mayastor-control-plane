@@ -65,10 +65,8 @@ impl ClusterAgentOperations for ClusterAgentClient {
         context: Option<Context>,
     ) -> Result<(), ReplyError> {
         let req = self.request(request, context, MessageIdVs::ReportFailedPaths);
-        match self.client().report_failed_nvme_paths(req).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
+        self.client().report_failed_nvme_paths(req).await?;
+        Ok(())
     }
 }
 

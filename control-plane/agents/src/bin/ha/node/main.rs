@@ -1,4 +1,3 @@
-use agents::errors::SvcError;
 use common_lib::{
     transport_api::TimeoutOptions, types::v0::transport::cluster_agent::NodeAgentInfo,
 };
@@ -65,7 +64,7 @@ struct Cli {
 
     /// The csi-node socket file for grpc over uds.
     #[structopt(long)]
-    csi_socket: String,
+    csi_socket: std::path::PathBuf,
 }
 
 static CLUSTER_AGENT_CLIENT: OnceCell<ClusterAgentClient> = OnceCell::new();
@@ -108,13 +107,10 @@ async fn main() {
         .expect("Expect to be initialized only once");
 
     CSI_NODE_NVME_CLIENT
-        .set(
-            get_nvme_connection_client(
-                cli_args.csi_socket.as_str(),
-                TimeoutOptions::new().with_connect_timeout(Duration::from_millis(500)),
-            )
-            .expect("Expect to get the csi node client"),
-        )
+        .set(get_nvme_connection_client(
+            &cli_args.csi_socket,
+            TimeoutOptions::new().with_connect_timeout(Duration::from_millis(500)),
+        ))
         .expect("Expect to be initialized only once");
 
     if let Err(error) = cluster_agent_client()
@@ -131,8 +127,7 @@ async fn main() {
     }
 
     // Instantiate path failure detector along with Nvme cache object.
-    let detector =
-        PathFailureDetector::new(&cli_args).expect("Failed to initialize path failure detector");
+    let detector = PathFailureDetector::new(&cli_args);
 
     let cache = detector.get_cache();
 
@@ -142,25 +137,25 @@ async fn main() {
     // Start gRPC server and path failure detection loop.
     tokio::select! {
         _ = detector.start() => {
-            tracing::info!("Path failure detector stopped.")
+            tracing::info!("Path failure detector stopped")
         },
         _ = server.serve() => {
-            tracing::info!("gRPC server stopped.");
+            tracing::info!("gRPC server stopped");
         },
     }
 }
 
 // helper function to connect to csi-node nvme operations svc over uds.
 fn get_nvme_connection_client(
-    socket_path: &str,
+    socket_path: &std::path::Path,
     timeout_options: TimeoutOptions,
-) -> Result<NvmeOperationsClient<Channel>, SvcError> {
-    let socket_path_cp = socket_path.to_string();
+) -> NvmeOperationsClient<Channel> {
+    let socket_path_cp = socket_path.to_path_buf();
     let channel = Endpoint::try_from("http://[::]:50051")
-        .map_err(|_| SvcError::InvalidArguments {})?
+        .expect("local endpoint should be valid")
         .connect_timeout(timeout_options.connect_timeout())
         .connect_with_connector_lazy(service_fn(move |_: Uri| {
-            UnixStream::connect(socket_path_cp.to_string())
+            UnixStream::connect(socket_path_cp.clone())
         }));
-    Ok(NvmeOperationsClient::new(channel))
+    NvmeOperationsClient::new(channel)
 }

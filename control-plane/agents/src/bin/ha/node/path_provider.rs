@@ -26,11 +26,13 @@ impl NvmePath {
         Self { path_buffer, nqn }
     }
 
+    /// Get the NVMe path reference.
     #[inline]
     pub fn path(&self) -> &Path {
         self.path_buffer.as_path()
     }
 
+    /// Get the NVMe nqn reference.
     #[inline]
     pub fn nqn(&self) -> &String {
         &self.nqn
@@ -106,16 +108,16 @@ impl CachedNvmePathProvider {
 
                 // Make sure we have a valid UNICODE path.
                 match event.device().syspath().to_str() {
-                    Some(p) => {
+                    Some(path) => {
                         // Handle UDEV path addition/removal events.
                         let e = match event.event_type() {
                             EventType::Add => {
-                                tracing::debug!("New NVMe path added: {}", p);
-                                Some(CacheOp::Add(p.to_owned()))
+                                tracing::debug!(path, "New NVMe path added");
+                                Some(CacheOp::Add(path.to_owned()))
                             }
                             EventType::Remove => {
-                                tracing::debug!("NVMe path removed: {}", p);
-                                Some(CacheOp::Remove(p.to_owned()))
+                                tracing::debug!(path, "NVMe path removed");
+                                Some(CacheOp::Remove(path.to_owned()))
                             }
                             _ => None,
                         };
@@ -126,8 +128,8 @@ impl CachedNvmePathProvider {
                     }
                     None => {
                         tracing::error!(
-                            "Device path is not a valid UNICODE path: {}",
-                            event.device().syspath().display()
+                            path = %event.device().syspath().display(),
+                            "Device path is not a valid UNICODE",
                         );
                     }
                 }
@@ -170,11 +172,7 @@ impl NvmePathNameCollection {
 
     fn add_cache_entry(&mut self, path: String) {
         if let Some(pb) = get_nvme_path_entry(&path) {
-            tracing::info!(
-                path,
-                nqn=%pb.nqn,
-                "Adding new NVMe path entry to cache"
-            );
+            tracing::info!(path, nqn = pb.nqn, "Adding new NVMe path entry to cache");
             self.entries.insert(path, pb);
         }
     }
@@ -183,12 +181,12 @@ impl NvmePathNameCollection {
     fn invalidate_cache(&mut self) {
         self.entries.clear();
 
-        let subsystems = NvmeSubsystems::new().expect("Failed to intialize NVMe subsystems");
+        let subsystems = NvmeSubsystems::new().expect("Failed to initialise NVMe subsystems");
 
         for e in subsystems {
             match e {
                 Ok(s) => self.add_cache_entry(format!("{SYSFS_PREFIX}{}", s.name)),
-                Err(e) => tracing::error!("Failed to read NVMe subsystem: {:?}", e),
+                Err(error) => tracing::error!(?error, "Failed to read NVMe subsystem"),
             };
         }
 
@@ -208,9 +206,9 @@ impl NvmePathNameCollection {
                     CacheOp::Add(p) => {
                         self.add_cache_entry(p);
                     }
-                    CacheOp::Remove(p) => match self.entries.remove(&p) {
-                        Some(_) => tracing::info!("NVMe path removed from the cache: {}", p),
-                        None => tracing::warn!("NVMe path not in cache, skipping removal: {}", p),
+                    CacheOp::Remove(path) => match self.entries.remove(&path) {
+                        Some(_) => tracing::info!(path, "NVMe path removed from the cache"),
+                        None => tracing::warn!(path, "NVMe path not in cache, skipping removal"),
                     },
                     CacheOp::InvalidateCache => {
                         self.invalidate_cache();

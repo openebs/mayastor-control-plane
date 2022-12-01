@@ -84,10 +84,10 @@ async fn main() -> anyhow::Result<()> {
     let store = etcd::EtcdStore::new(cli.store, cli.store_timeout.into()).await?;
     let node_list = nodes::NodeList::new();
 
-    // Node list has ref counted list internally.
-    let mover = volume::VolumeMover::new(store.clone(), node_list.clone());
-
     let entries = store.fetch_incomplete_requests().await?;
+
+    // Node list has ref counted list internally.
+    let mover = volume::VolumeMover::new(store, node_list.clone());
     mover.send_switchover_req(entries).await?;
 
     info!("starting cluster-agent server");
