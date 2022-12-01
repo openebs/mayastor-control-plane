@@ -1,7 +1,7 @@
 use crate::{
     csi_node_nvme_client,
     detector::{NvmeController, NvmePathCache},
-    path_provider::get_nvme_path_buf,
+    path_provider::get_nvme_path_entry,
 };
 use agents::errors::SvcError;
 use common_lib::transport_api::{ErrorChain, ReplyError, ResourceKind};
@@ -69,9 +69,9 @@ impl NodeAgentSvc {
 fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(), SvcError> {
     let parsed_path = parse_uri(new_path.as_str())?;
 
-    match get_nvme_path_buf(&ctrlr.path) {
+    match get_nvme_path_entry(&ctrlr.path) {
         Some(pbuf) => {
-            let subsystem = Subsystem::new(pbuf.as_path()).map_err(|_| SvcError::Internal {
+            let subsystem = Subsystem::new(pbuf.path()).map_err(|_| SvcError::Internal {
                 details: "Failed to get NVMe subsystem for controller".to_string(),
             })?;
 
