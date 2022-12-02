@@ -18,27 +18,33 @@ const CACHE_EVENTS_BATCH_SIZE: usize = 128;
 #[derive(Debug, Clone)]
 pub struct NvmePath {
     path_buffer: PathBuf,
+    nqn: String,
 }
 
 impl NvmePath {
-    fn new(path_buffer: PathBuf) -> Self {
-        Self { path_buffer }
+    fn new(path_buffer: PathBuf, nqn: String) -> Self {
+        Self { path_buffer, nqn }
     }
 
     #[inline]
     pub fn path(&self) -> &Path {
         self.path_buffer.as_path()
     }
+
+    #[inline]
+    pub fn nqn(&self) -> &String {
+        &self.nqn
+    }
 }
 
 /// Check that NVMe path represents a target created by our product and
 /// obtain a Path object that represents a system path for this NVMe device.
-pub fn get_nvme_path_buf(path: &String) -> Option<PathBuf> {
+pub fn get_nvme_path_entry(path: &String) -> Option<NvmePath> {
     Path::new(path).canonicalize().ok().and_then(|pb| {
         Subsystem::new(pb.as_path()).ok().and_then(|s| {
             // Check NQN of the subsystem to make sure it belongs to the product.
             if s.nqn.starts_with(NVME_TARGET_NQN_PREFIX) {
-                Some(pb)
+                Some(NvmePath::new(pb, s.nqn))
             } else {
                 None
             }
@@ -104,11 +110,11 @@ impl CachedNvmePathProvider {
                         // Handle UDEV path addition/removal events.
                         let e = match event.event_type() {
                             EventType::Add => {
-                                tracing::info!("New NVMe path added: {}", p);
+                                tracing::debug!("New NVMe path added: {}", p);
                                 Some(CacheOp::Add(p.to_owned()))
                             }
                             EventType::Remove => {
-                                tracing::info!("NVMe path removed: {}", p);
+                                tracing::debug!("NVMe path removed: {}", p);
                                 Some(CacheOp::Remove(p.to_owned()))
                             }
                             _ => None,
@@ -163,9 +169,13 @@ impl NvmePathNameCollection {
     }
 
     fn add_cache_entry(&mut self, path: String) {
-        if let Some(pb) = get_nvme_path_buf(&path) {
-            tracing::debug!("Adding new NVMe path to cache: {}", path);
-            self.entries.insert(path, NvmePath::new(pb));
+        if let Some(pb) = get_nvme_path_entry(&path) {
+            tracing::info!(
+                path,
+                nqn=%pb.nqn,
+                "Adding new NVMe path entry to cache"
+            );
+            self.entries.insert(path, pb);
         }
     }
 

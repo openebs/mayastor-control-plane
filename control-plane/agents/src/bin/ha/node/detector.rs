@@ -197,7 +197,7 @@ impl PathFailureDetector {
                             self.suspected_paths.insert(
                                 subsystem.nqn.clone(),
                                 PathRecord::new(
-                                    subsystem.nqn.clone(),
+                                    ctrlr.nqn().to_owned(),
                                     self.epoch,
                                     path,
                                     self.reporter.clone(),
