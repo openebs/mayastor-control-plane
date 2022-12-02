@@ -26,6 +26,7 @@ fi
 . "$ROOT_DIR"/tests/bdd/setup.sh
 
 trap cleanup_handler ERR INT QUIT TERM HUP
+cleanup_handler
 
 # Extra arguments will be provided directly to pytest, otherwise the bdd folder will be tested with default arguments
 if [ $# -eq 0 ]; then
