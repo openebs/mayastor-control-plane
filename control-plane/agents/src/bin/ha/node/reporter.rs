@@ -22,6 +22,7 @@ pub struct PathReporter {
 }
 
 impl PathReporter {
+    /// Get a new `Self` with the given parameters.
     pub fn new(
         node_name: String,
         retransmission_period: Duration,
@@ -47,9 +48,9 @@ impl PathReporter {
         let aggregation_period = self.aggregation_period;
 
         tracing::info!(
-            "Starting path reporter (retransmission period: {:?}, aggregation period: {:?})",
-            retransmission_period,
-            aggregation_period,
+            ?retransmission_period,
+            ?aggregation_period,
+            "Starting path reporter"
         );
 
         tokio::spawn(async move {
@@ -59,9 +60,9 @@ impl PathReporter {
             while let Ok(batch) = aggregator.receive_batch().await {
                 // Phase 2: send all aggregated paths in one shot.
                 let failed_paths = batch
-                    .paths()
-                    .iter()
-                    .map(|p| FailedPath::new(p.to_string()))
+                    .into_paths()
+                    .into_iter()
+                    .map(FailedPath::new)
                     .collect::<Vec<FailedPath>>();
                 let node_ep = Cli::args().grpc_endpoint;
                 let req = ReportFailedPaths::new(node_name.clone(), failed_paths, node_ep);
@@ -70,11 +71,13 @@ impl PathReporter {
                 tokio::spawn(async move {
                     let client = cluster_agent_client();
 
+                    // todo: should we check if we still ought to report failed paths after error?
+                    //       otherwise when we finally report it could be very outdated?
                     loop {
                         match client.report_failed_nvme_paths(&req, None).await {
                             Ok(_) => break,
-                            Err(e) => {
-                                tracing::error!("Failed to report failed NVMe paths: {}", e);
+                            Err(error) => {
+                                tracing::error!(%error, "Failed to report failed NVMe paths");
                                 sleep(retransmission_period).await;
                             }
                         }
@@ -84,30 +87,31 @@ impl PathReporter {
         });
     }
 
+    /// Reports the given NVMe NQN as a failed path.
     pub fn report_failed_path(&self, nqn: String) {
-        self.channel
-            .send(nqn)
-            .expect("Reporter channel disappeared");
+        self.channel.send(nqn).ok();
     }
 }
 
 #[derive(Debug)]
 struct PathBatch {
-    pub paths: Vec<String>,
+    paths: Vec<String>,
 }
 
 impl PathBatch {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             paths: Vec::with_capacity(DEFAULT_BATCH_SIZE),
         }
     }
 
-    pub fn paths(&self) -> &Vec<String> {
-        &self.paths
+    /// Convert `Self` into its paths.
+    fn into_paths(self) -> Vec<String> {
+        self.paths
     }
 
-    pub fn add_path(&mut self, path: String) {
+    /// Add a new path to the list.
+    fn add_path(&mut self, path: String) {
         self.paths.push(path)
     }
 }
@@ -121,7 +125,7 @@ struct RequestAggregator {
 }
 
 impl RequestAggregator {
-    pub fn new(path_receiver: UnboundedReceiver<String>, aggregation_period: Duration) -> Self {
+    fn new(path_receiver: UnboundedReceiver<String>, aggregation_period: Duration) -> Self {
         let (tx, rx) = unbounded_channel();
 
         let receiver = Self {

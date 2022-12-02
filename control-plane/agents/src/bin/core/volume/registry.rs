@@ -73,7 +73,7 @@ impl Registry {
             VolumeState {
                 uuid: volume_spec.uuid.to_owned(),
                 size: volume_spec.size,
-                status: if volume_spec.target.is_none() {
+                status: if volume_spec.target().is_none() {
                     if replica_specs.len() >= volume_spec.num_replicas as usize {
                         VolumeStatus::Online
                     } else if replica_specs.is_empty() {

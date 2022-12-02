@@ -76,10 +76,10 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
             })?;
 
             if subsystem.address == SubsystemAddr::new(parsed_path.host(), parsed_path.port()) {
-                tracing::info!(path=%ctrlr.path, "Not disconnecting same NVMe controller");
+                tracing::info!(path = ctrlr.path, "Not disconnecting same NVMe controller");
                 Ok(())
             } else {
-                tracing::info!(path=%ctrlr.path, "Disconnecting NVMe controller");
+                tracing::info!(path = ctrlr.path, "Disconnecting NVMe controller");
 
                 subsystem.disconnect().map_err(|e| SvcError::Internal {
                     details: format!(
@@ -90,7 +90,10 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
             }
         }
         None => {
-            tracing::error!(path=%ctrlr.path, "Failed to get system path for controller");
+            tracing::error!(
+                path = ctrlr.path,
+                "Failed to get system path for controller"
+            );
 
             Err(SvcError::Internal {
                 details: "Failed to get system path for controller".to_string(),
@@ -100,7 +103,8 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
 }
 
 impl NodeAgentSvc {
-    /// Connect NVMe controller. Wait till the controller is fully connected.
+    /// Connect to the NVMe controller.
+    /// Waits until the controller is fully connected.
     async fn connect_controller(
         &self,
         new_path: String,
@@ -137,7 +141,7 @@ impl NodeAgentSvc {
             Err(error) => {
                 tracing::error!(
                     new_path,
-                    error=%error,
+                    %error,
                     "Failed to connect to new NVMe target"
                 );
                 let nvme_err = format!(
@@ -161,7 +165,7 @@ impl NodeAgentSvc {
             if let Err(error) = subsystem.sync() {
                 tracing::error!(
                     new_path,
-                    error=%error,
+                    %error,
                     "Failed to synchronize NVMe subsystem state"
                 );
                 // Just log error and exit, since such a situation can take
@@ -170,13 +174,13 @@ impl NodeAgentSvc {
             }
 
             // TODO: consider max retries to prevent controller from
-            // not reaching 'live' state.
+            //  not reaching 'live' state.
             match subsystem.state.as_str() {
                 "connecting" | "new" => {
                     tracing::info!(
                         new_path,
                         state = "connecting",
-                        "New NVMe path is not ready to serve I/O, waiting."
+                        "New NVMe path is not ready to serve I/O, waiting"
                     );
                 }
                 "live" => {
@@ -242,7 +246,7 @@ impl NodeAgentOperations for NodeAgentSvc {
         if let Err(error) = disconnect_controller(&ctrlr, request.new_path()) {
             tracing::warn!(
                 uri=%request.new_path(),
-                error=%error,
+                %error,
                 "Failed to disconnect failed path"
             );
         };
@@ -261,19 +265,19 @@ fn parse_uri(new_path: &str) -> Result<ParsedUri, SvcError> {
 
 // Returns the particular subsystem based on the nqn and address.
 fn get_subsystem(parsed_uri: &ParsedUri) -> Result<Subsystem, SvcError> {
+    let address = SubsystemAddr::new(parsed_uri.host(), parsed_uri.port());
+    let nqn = parsed_uri.nqn();
+
     let nvme_subsystems = NvmeSubsystems::new().map_err(|_| SvcError::SubsystemNotFound {
-        nqn: parsed_uri.nqn(),
+        nqn: nqn.to_owned(),
     })?;
+
     for subsys in nvme_subsystems.flatten() {
-        if subsys.nqn == parsed_uri.nqn()
-            && subsys.address == SubsystemAddr::new(parsed_uri.host(), parsed_uri.port())
-        {
+        if subsys.nqn == nqn && subsys.address == address {
             return Ok(subsys);
         }
     }
-    Err(SvcError::SubsystemNotFound {
-        nqn: parsed_uri.nqn(),
-    })
+    Err(SvcError::SubsystemNotFound { nqn })
 }
 
 struct SubsystemAddr(String);
@@ -282,22 +286,22 @@ impl SubsystemAddr {
     fn new(host: String, port: String) -> SubsystemAddr {
         SubsystemAddr(format!("traddr={},trsvcid={}", host, port))
     }
-    fn string_value(&self) -> String {
-        self.0.clone()
+    fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
 // For SubsystemAddr == String comparisons
 impl PartialEq<String> for SubsystemAddr {
     fn eq(&self, other: &String) -> bool {
-        self.string_value() == *other
+        self.as_str() == other
     }
 }
 
 // For String == SubsystemAddr comparisons
 impl PartialEq<SubsystemAddr> for String {
     fn eq(&self, other: &SubsystemAddr) -> bool {
-        *self == other.string_value()
+        self == other.as_str()
     }
 }
 

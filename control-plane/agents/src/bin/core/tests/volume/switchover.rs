@@ -50,7 +50,7 @@ async fn lazy_delete_shutdown_targets() {
                 share: None,
                 target_node: Some(cluster.node(0)),
                 publish_context: HashMap::new(),
-                frontend_nodes: vec![],
+                frontend_nodes: vec![cluster.node(1).to_string()],
             },
             None,
         )
@@ -71,6 +71,21 @@ async fn lazy_delete_shutdown_targets() {
                 target_node: Some(cluster.node(1)),
                 share: VolumeShareProtocol::Nvmf,
                 reuse_existing: true,
+                frontend_node: cluster.node(0),
+            },
+            None,
+        )
+        .await
+        .expect_err("Wrong frontend node");
+
+    vol_cli
+        .republish(
+            &RepublishVolume {
+                uuid: volume.uuid().clone(),
+                target_node: Some(cluster.node(1)),
+                share: VolumeShareProtocol::Nvmf,
+                reuse_existing: true,
+                frontend_node: cluster.node(1),
             },
             None,
         )
@@ -180,7 +195,7 @@ async fn volume_republish_nexus_recreation() {
                 share: Some(VolumeShareProtocol::Nvmf),
                 target_node: Some(replica_node.into()),
                 publish_context: HashMap::new(),
-                frontend_nodes: vec![],
+                frontend_nodes: vec![cluster.node(1).to_string()],
             },
             None,
         )
@@ -222,6 +237,7 @@ async fn volume_republish_nexus_recreation() {
                 share: VolumeShareProtocol::Nvmf,
                 target_node: None,
                 reuse_existing: true,
+                frontend_node: cluster.node(1),
             },
             None,
         )

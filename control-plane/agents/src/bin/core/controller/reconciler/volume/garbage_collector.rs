@@ -152,7 +152,7 @@ async fn disown_unused_nexuses(
     for nexus in context.specs().get_volume_nexuses(volume.uuid()) {
         let nexus_clone = nexus.lock().clone();
 
-        match &volume.as_ref().target {
+        match volume.as_ref().target() {
             Some(target) if target.nexus() == nexus.uid() || nexus_clone.is_shutdown() => continue,
             _ => {}
         };

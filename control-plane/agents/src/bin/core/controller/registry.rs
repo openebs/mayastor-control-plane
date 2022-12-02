@@ -26,6 +26,7 @@ use common_lib::{
         store::{
             definitions::{StorableObject, Store, StoreError, StoreKey},
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
+            volume::InitiatorAC,
         },
         transport::{HostNqn, NodeId},
     },
@@ -342,9 +343,14 @@ impl Registry {
         &self,
         req: HostAccessControl,
         nodes: &[String],
-    ) -> Vec<HostNqn> {
+    ) -> Vec<InitiatorAC> {
         match self.host_acl.contains(&req) {
-            true => HostNqn::from_nodenames(nodes),
+            true => nodes
+                .iter()
+                .map(|nodename| {
+                    InitiatorAC::new(nodename.clone(), HostNqn::from_nodename(nodename))
+                })
+                .collect(),
             false => vec![],
         }
     }

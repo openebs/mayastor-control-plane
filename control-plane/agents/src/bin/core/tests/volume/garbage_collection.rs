@@ -314,7 +314,7 @@ async fn unused_reconcile(cluster: &Cluster) {
             PublishVolumeBody::new_all(
                 HashMap::new(),
                 None,
-                nexus_node.id.to_string(),
+                nexus_node.id.clone(),
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),

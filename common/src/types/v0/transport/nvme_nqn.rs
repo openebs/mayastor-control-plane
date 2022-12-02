@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
-use uuid::Uuid;
 
 const NVME_NQN_UUID_PRE: &str = "nqn.2014-08.org.nvmexpress:uuid:";
 const NVME_NQN_MIN_LEN: usize = 11;
@@ -18,7 +17,7 @@ const DOMAIN_LABEL_MAX_LEN: usize = 63;
 /// For more information please refer to the NVMe SPEC, eg:
 /// https://nvmexpress.org/wp-content/uploads/NVMe-NVM-Express-2.0a-2021.07.26-Ratified.pdf
 /// Chapter 4.5.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NvmeNqn {
     /// This naming format 1 may be used to create a human interpretable string to describe
     /// the host or NVM subsystem. This format consists of:
@@ -61,6 +60,23 @@ impl Default for NvmeNqn {
         Self::Unique { uuid }
     }
 }
+impl Serialize for NvmeNqn {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+impl<'de> Deserialize<'de> for NvmeNqn {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::try_from(s).map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+    }
+}
 
 impl Display for NvmeNqn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -79,20 +95,13 @@ impl NvmeNqn {
         let uuid = uuid::Uuid::new_v4();
         Self::Unique { uuid }
     }
-    /// Generate a Mayastor type name.
+    /// Generate a product type name.
     pub fn from_nodename(name: &String) -> Self {
         Self::Org {
             date: "2019-05".to_string(),
             domain: "io.openebs".to_string(),
             name: format!("node-name:{name}"),
         }
-    }
-    /// Generate a Mayastor type name.
-    pub fn from_nodenames(nodenames: &[String]) -> Vec<Self> {
-        nodenames
-            .iter()
-            .map(Self::from_nodename)
-            .collect::<Vec<_>>()
     }
     fn parse_nqn_date(date: &str) -> Result<String, NvmeNqnParseError> {
         match date.split("").collect::<Vec<_>>()[..] {
@@ -146,7 +155,7 @@ pub enum NvmeNqnParseError {
 }
 
 impl From<uuid::Uuid> for NvmeNqn {
-    fn from(uuid: Uuid) -> Self {
+    fn from(uuid: uuid::Uuid) -> Self {
         Self::Unique { uuid }
     }
 }

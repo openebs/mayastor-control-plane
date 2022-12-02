@@ -2096,8 +2096,8 @@ components:
           type: boolean
         node:
           description: |-
-            The node where the front-end workload resides.
-            If the workload moves then the volume must be republished.
+            The node where the target will reside in.
+            It may be moved elsewhere during volume republish.
           allOf:
             - $ref: '#/components/schemas/NodeId'
         protocol:
@@ -2109,12 +2109,13 @@ components:
             Allows republishing the volume on the node by shutting down the existing target first.
           type: boolean
         frontend_node:
-          description: The Node id from where the volume target will be accessed.
+          description: |-
+            The node where the front-end workload resides.
+            If the workload moves then the volume must be republished.
           type: string
       required:
         - publish_context
         - protocol
-        - frontend_node
     JsonGeneric:
       description: 'Generic JSON value eg: { "size": 1024 }'
       type: object

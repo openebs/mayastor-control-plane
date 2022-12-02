@@ -3,7 +3,7 @@ use crate::types::v0::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         SpecTransaction,
     },
-    transport::VolumeId,
+    transport::{NodeId, VolumeId},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -34,13 +34,13 @@ pub struct OperationState {
 }
 
 impl OperationState {
-    /// Create a new OperationState.
+    /// Create a new `OperationState`.
     pub fn new(operation: Operation, result: Option<bool>) -> Self {
         Self { operation, result }
     }
 }
 
-/// Defines timestamp for switchoverspec.
+/// Defines timestamp for the `SwitchOverSpec`.
 pub type SwitchOverTime = DateTime<Utc>;
 
 /// Represent switchover spec.
@@ -48,6 +48,8 @@ pub type SwitchOverTime = DateTime<Utc>;
 pub struct SwitchOverSpec {
     /// Uri of node-agent to report new path.
     pub callback_uri: SocketAddr,
+    /// The nodename of the node-agent node.
+    pub node_name: NodeId,
     /// Volume for which switchover needs to be executed.
     pub volume: VolumeId,
     /// Operation represent current running operation on SwitchOverSpec.
@@ -75,7 +77,7 @@ impl SwitchOverSpec {
         })
     }
 
-    /// If switchoverspec is marked as completed or not.
+    /// If `Self` is marked as completed or not.
     pub fn is_completed(&self) -> bool {
         if let Some(op) = &self.operation {
             match op.operation {
@@ -97,12 +99,13 @@ impl SwitchOverSpec {
         }
     }
 
-    /// Returns current Operation for SwitchOverSpec.
+    /// Returns current `Operation` for `SwitchOverSpec`.
     pub fn operation(&self) -> Option<Operation> {
         self.operation.as_ref().map(|op| op.operation.clone())
     }
 }
 
+/// Persistent Store key for `SwitchOverSpec`.
 pub struct SwitchOverSpecKey(VolumeId);
 
 impl StorableObject for SwitchOverSpec {
@@ -154,7 +157,6 @@ impl SpecTransaction<Operation> for SwitchOverSpec {
     }
 
     fn clear_op(&mut self) {
-        println!("TODO clear_op");
         self.operation = None;
     }
 

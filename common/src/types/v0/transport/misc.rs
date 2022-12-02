@@ -86,6 +86,11 @@ macro_rules! rpc_impl_string_id_inner {
             }
         }
 
+        impl From<$Name> for Option<String> {
+            fn from(id: $Name) -> Option<String> {
+                Some(id.to_string())
+            }
+        }
         impl From<$Name> for String {
             fn from(id: $Name) -> String {
                 id.to_string()
