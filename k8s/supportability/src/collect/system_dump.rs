@@ -249,6 +249,7 @@ impl SystemDumper {
             ));
             errors.push(Error::EtcdDumpError(e));
         });
+        log("Completed collection of system dump information".to_string());
 
         Ok(())
     }
