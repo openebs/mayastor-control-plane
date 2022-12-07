@@ -217,7 +217,6 @@ impl ResourceDumper {
             errors.push(Error::EtcdDumpError(e));
         });
         log("Completed collection of mayastor specific resources from Etcd service".to_string());
-        log("Completed collection of dump information".to_string());
 
         let _ = self
             .archive
