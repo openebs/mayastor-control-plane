@@ -14,6 +14,7 @@ use common_lib::{
             Partition,
         },
     },
+    TryIntoOption,
 };
 use std::{convert::TryFrom, str::FromStr};
 
@@ -78,7 +79,7 @@ impl TryFrom<node::Node> for Node {
                     },
                     None => None,
                 },
-                None,
+                spec.node_nqn.try_into_opt()?,
             )),
             None => None,
         };
@@ -104,7 +105,7 @@ impl TryFrom<node::Node> for Node {
                     })?,
                     status,
                     None,
-                    None,
+                    state.node_nqn.try_into_opt()?,
                 ))
             }
             None => None,
@@ -161,6 +162,7 @@ impl From<Node> for node::Node {
                 }
                 None => None,
             },
+            node_nqn: types_v0_spec.node_nqn().as_ref().map(|nqn| nqn.to_string()),
         });
         let grpc_node_state = match types_v0_node.state() {
             None => None,
@@ -170,6 +172,7 @@ impl From<Node> for node::Node {
                     node_id: types_v0_state.id.to_string(),
                     endpoint: types_v0_state.grpc_endpoint.to_string(),
                     status: grpc_node_status as i32,
+                    node_nqn: types_v0_state.node_nqn.as_ref().map(|nqn| nqn.to_string()),
                 })
             }
         };
