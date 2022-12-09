@@ -17,4 +17,10 @@
 /openapi/*
 !/openapi/Cargo.toml
 !/openapi/build.rs
-/tests/bdd/common/__pycache__
+/.rust-toolchain
+/rust-toolchain.toml
+/terraform
+/rpc/api
+/utils
+/tests/bdd/autogen
+__pycache__
