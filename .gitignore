@@ -20,3 +20,5 @@ __pycache__
 /terraform/cluster/ansible-hosts
 /terraform/cluster/current_user.txt
 /rust-toolchain.toml
+/.rust-toolchain
+/rpc/mayastor-api
