@@ -2,6 +2,5 @@
 self: super: {
   images = super.callPackage ./pkgs/images { inherit img_tag; };
   control-plane = super.callPackage ./pkgs/control-plane { inherit allInOne incremental; };
-  utils = super.callPackage ./pkgs/utils { inherit incremental; };
   openapi-generator = super.callPackage ./pkgs/openapi-generator { };
 }
