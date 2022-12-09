@@ -887,6 +887,7 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize) {
             .replicas
             .iter()
             .filter(|r| r.owners.owned_by(volume))
+            .filter(|r| r.status.created())
             .collect::<Vec<_>>();
 
         if replica_specs.len() == replicas {

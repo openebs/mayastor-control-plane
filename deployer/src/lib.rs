@@ -43,7 +43,7 @@ pub struct ListOptions {
     pub no_docker: bool,
 
     /// Format the docker output
-    #[structopt(short, long, conflicts_with = "no_docker")]
+    #[structopt(short, long, conflicts_with = "no-docker")]
     pub format: Option<String>,
 
     /// Label for the cluster

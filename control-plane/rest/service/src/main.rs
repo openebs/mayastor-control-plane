@@ -61,11 +61,26 @@ pub(crate) struct CliArgs {
     /// Don't use minimum timeouts for specific requests
     #[structopt(long)]
     no_min_timeouts: bool,
+
+    /// Set number of workers to start.
+    /// The value 0 means the number of available physical CPUs is used.
+    #[structopt(long, short, default_value = physical())]
+    workers: usize,
+
+    /// Set the max number of workers to start.
+    /// The value 0 means the number of available physical CPUs is used.
+    #[structopt(long, short, default_value = common_lib::DEFAULT_REST_MAX_WORKER_THREADS)]
+    max_workers: usize,
 }
 impl CliArgs {
     fn args() -> Self {
         CliArgs::from_args()
     }
+}
+
+/// Return the number of physical cpus.
+fn physical() -> &'static str {
+    Box::leak(num_cpus::get_physical().to_string().into_boxed_str())
 }
 
 /// default timeout options for every bus request
@@ -201,6 +216,20 @@ fn get_jwk_path() -> Option<String> {
     }
 }
 
+fn workers(args: &CliArgs) -> usize {
+    let max_workers = match args.max_workers {
+        0 => num_cpus::get_physical(),
+        max => max,
+    };
+
+    let workers = match args.workers {
+        0 => num_cpus::get_physical(),
+        workers => workers,
+    };
+
+    workers.clamp(1, max_workers)
+}
+
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     // need to keep the jaeger pipeline tracer alive, if enabled
@@ -226,6 +255,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         server
     }
+    .workers(workers(&CliArgs::args()))
     .run()
     .await
     .map_err(|e| e.into());
