@@ -44,7 +44,7 @@ spec:
             requests:
               cpu: 50m
               memory: 16Mi
-          image: mayadata/mcp-msp-operator:v1.0.4
+          image: mayadata/mcp-msp-operator:v1.0.5
           imagePullPolicy: IfNotPresent
           args:
             - "-e http://rest:8081"
