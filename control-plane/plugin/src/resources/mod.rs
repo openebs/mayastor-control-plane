@@ -43,6 +43,8 @@ pub enum GetResources {
     /// Currently disks having blobstore pools not created by control-plane are also shown as
     /// usable.
     BlockDevices(BlockDeviceArgs),
+    /// Get the status of upgrade.
+    UpgradeStatus,
 }
 
 /// The types of resources that support the 'scale' operation.
@@ -93,3 +95,9 @@ pub enum GetDrainArgs {
 /// Tabular Output Tests
 #[cfg(test)]
 mod tests;
+
+#[derive(clap::Subcommand, Debug)]
+pub enum UpgradeStatus {
+    /// Get the upgrade status.
+    UpgradeStatus,
+}
