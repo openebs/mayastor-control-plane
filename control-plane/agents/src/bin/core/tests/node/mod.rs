@@ -1,6 +1,6 @@
 use common_lib::types::v0::{
     store::node::{NodeLabels, NodeSpec},
-    transport::{ApiVersion, Filter, Node, NodeId, NodeState, NodeStatus},
+    transport::{ApiVersion, Filter, HostNqn, Node, NodeId, NodeState, NodeStatus},
 };
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::node::traits::NodeOperations;
@@ -12,6 +12,7 @@ fn new_node(
     endpoint: String,
     status: NodeStatus,
     api_versions: Option<Vec<ApiVersion>>,
+    node_nqn: Option<HostNqn>,
 ) -> Node {
     let endpoint = std::str::FromStr::from_str(&endpoint).unwrap();
     Node::new(
@@ -21,9 +22,9 @@ fn new_node(
             endpoint,
             NodeLabels::new(),
             None,
-            None,
+            node_nqn.clone(),
         )),
-        Some(NodeState::new(id, endpoint, status, api_versions, None)),
+        Some(NodeState::new(id, endpoint, status, api_versions, node_nqn)),
     )
 }
 
@@ -49,7 +50,13 @@ async fn node() {
     assert_eq!(nodes.0.len(), 1);
     assert_eq!(
         nodes.0.first().unwrap(),
-        &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online, None)
+        &new_node(
+            maya_name.clone(),
+            grpc.clone(),
+            NodeStatus::Online,
+            None,
+            Some(HostNqn::from_nodename(&maya_name.to_string()))
+        )
     );
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     let nodes = node_client.get(Filter::None, None).await.unwrap();
@@ -58,7 +65,13 @@ async fn node() {
     // still Online because the node is reachable via gRPC!
     assert_eq!(
         nodes.0.first().unwrap(),
-        &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online, None)
+        &new_node(
+            maya_name.clone(),
+            grpc.clone(),
+            NodeStatus::Online,
+            None,
+            Some(HostNqn::from_nodename(&maya_name.to_string()))
+        )
     );
 
     cluster.composer().kill(maya_name.as_str()).await.unwrap();
@@ -68,7 +81,13 @@ async fn node() {
     assert_eq!(nodes.0.len(), 1);
     assert_eq!(
         nodes.0.first().unwrap(),
-        &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Offline, None)
+        &new_node(
+            maya_name.clone(),
+            grpc.clone(),
+            NodeStatus::Offline,
+            None,
+            Some(HostNqn::from_nodename(&maya_name.to_string()))
+        )
     );
     cluster.composer().start(maya_name.as_str()).await.unwrap();
 
@@ -84,7 +103,13 @@ async fn node() {
     assert_eq!(nodes.0.len(), 1);
     assert_eq!(
         nodes.0.first().unwrap(),
-        &new_node(maya_name.clone(), grpc.clone(), NodeStatus::Online, None)
+        &new_node(
+            maya_name.clone(),
+            grpc.clone(),
+            NodeStatus::Online,
+            None,
+            Some(HostNqn::from_nodename(&maya_name.to_string()))
+        )
     );
 
     cluster.composer().stop(maya_name.as_str()).await.unwrap();

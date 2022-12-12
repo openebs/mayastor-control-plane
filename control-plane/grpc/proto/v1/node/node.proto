@@ -26,6 +26,8 @@ message NodeSpec {
   common.StringMapValue labels = 3;
   // Drain state
   optional CordonDrainState cordon_drain_state = 4;
+  // the host nqn
+  optional string node_nqn = 5;
 }
 
 message NodeState {
@@ -35,6 +37,8 @@ message NodeState {
   string endpoint = 2;
   // deemed status of the node
   NodeStatus status = 3;
+  // the host nqn
+  optional string node_nqn = 4;
 }
 
 // Multiple nodes

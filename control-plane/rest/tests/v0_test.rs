@@ -11,7 +11,7 @@ use common_lib::types::v0::{
         client::direct::ApiClient,
         clients::tower::{Error, ResponseError},
     },
-    transport::{NexusId, NodeId, ReplicaId, VolumeId},
+    transport::{HostNqn, NexusId, NodeId, ReplicaId, VolumeId},
 };
 use deployer_cluster::{Cluster, ClusterBuilder};
 use std::{
@@ -97,7 +97,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
             cordondrainstate: None,
-            node_nqn: None,
+            node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),
@@ -106,7 +106,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 cluster.composer().container_ip(cluster.node(0).as_str())
             ),
             status: models::NodeStatus::Online,
-            node_nqn: None,
+            node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
         }),
     };
     assert_eq!(listed_node.unwrap(), node);
