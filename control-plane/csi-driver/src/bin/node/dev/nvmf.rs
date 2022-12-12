@@ -37,10 +37,12 @@ pub(super) struct NvmfAttach {
     io_timeout: Option<u32>,
     nr_io_queues: Option<u32>,
     ctrl_loss_tmo: Option<u32>,
+    keep_alive_tmo: Option<u32>,
     hostnqn: Option<String>,
 }
 
 impl NvmfAttach {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         host: String,
         port: u16,
@@ -48,6 +50,7 @@ impl NvmfAttach {
         nqn: String,
         nr_io_queues: Option<u32>,
         ctrl_loss_tmo: Option<u32>,
+        keep_alive_tmo: Option<u32>,
         hostnqn: Option<String>,
     ) -> NvmfAttach {
         NvmfAttach {
@@ -58,6 +61,7 @@ impl NvmfAttach {
             io_timeout: None,
             nr_io_queues,
             ctrl_loss_tmo,
+            keep_alive_tmo,
             hostnqn,
         }
     }
@@ -113,6 +117,7 @@ impl TryFrom<&Url> for NvmfAttach {
 
         let nr_io_queues = config().nvme().nr_io_queues();
         let ctrl_loss_tmo = config().nvme().ctrl_loss_tmo();
+        let keep_alive_tmo = config().nvme().keep_alive_tmo();
 
         let hash_query: HashMap<_, _> = url.query_pairs().collect();
         let hostnqn = hash_query.get("hostnqn").map(ToString::to_string);
@@ -124,6 +129,7 @@ impl TryFrom<&Url> for NvmfAttach {
             segments[0].to_string(),
             nr_io_queues,
             ctrl_loss_tmo,
+            keep_alive_tmo,
             hostnqn,
         ))
     }
@@ -147,8 +153,12 @@ impl Attach for NvmfAttach {
 
         // todo: fold the nvme params into a node-specific publish context?
         let nvme_config = NvmeConfig::try_from(context as NvmeParseParams)?;
+
         if let Some(nr_io_queues) = nvme_config.nr_io_queues() {
             self.nr_io_queues = Some(nr_io_queues);
+        }
+        if let Some(keep_alive_tmo) = nvme_config.keep_alive_tmo() {
+            self.keep_alive_tmo = Some(keep_alive_tmo);
         }
         Ok(())
     }
@@ -174,6 +184,7 @@ impl Attach for NvmfAttach {
             .reconnect_delay(reconnect_delay)
             .nr_io_queues(self.nr_io_queues)
             .hostnqn(self.hostnqn.clone())
+            .keep_alive_tmo(self.keep_alive_tmo)
             .build()?;
         match ca.connect() {
             Err(NvmeError::ConnectInProgress) => Ok(()),

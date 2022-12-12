@@ -27,6 +27,7 @@ pub enum Parameters {
     IoTimeout,
     NvmeNrIoQueues,
     NvmeCtrlLossTmo,
+    NvmeKeepAliveTmo,
     #[strum(serialize = "repl")]
     ReplicaCount,
     #[strum(serialize = "fsType")]
@@ -49,6 +50,10 @@ impl Parameters {
     pub fn nr_io_queues(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
     }
+    /// Parse the value for `Self::NvmeKeepAliveTmo`.
+    pub fn keep_alive_tmo(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
+        Self::parse_u32(value)
+    }
     /// Parse the value for `Self::IoTimeout`.
     pub fn io_timeout(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
@@ -60,6 +65,7 @@ impl Parameters {
 pub struct PublishParams {
     io_timeout: Option<u32>,
     ctrl_loss_tmo: Option<u32>,
+    keep_alive_tmo: Option<u32>,
     fs_type: Option<FileSystem>,
 }
 impl PublishParams {
@@ -67,9 +73,29 @@ impl PublishParams {
     pub fn io_timeout(&self) -> &Option<u32> {
         &self.io_timeout
     }
-    /// Get the `Parameters::CtrlLossTmo` value.
+    /// Get the `Parameters::NvmeCtrlLossTmo` value.
     pub fn ctrl_loss_tmo(&self) -> &Option<u32> {
         &self.ctrl_loss_tmo
+    }
+    /// Get the `Parameters::NvmeKeepAliveTmo` value.
+    pub fn nvme_keep_alive_tmo(&self) -> &Option<u32> {
+        &self.keep_alive_tmo
+    }
+    /// Convert `Self` into a publish context.
+    pub fn into_context(self) -> HashMap<String, String> {
+        let mut publish_context = HashMap::new();
+
+        if let Some(io_timeout) = self.io_timeout() {
+            publish_context.insert(Parameters::IoTimeout.to_string(), io_timeout.to_string());
+        }
+        if let Some(ctrl_loss_tmo) = self.ctrl_loss_tmo() {
+            publish_context.insert(
+                Parameters::NvmeCtrlLossTmo.to_string(),
+                ctrl_loss_tmo.to_string(),
+            );
+        }
+
+        publish_context
     }
 }
 impl TryFrom<&HashMap<String, String>> for PublishParams {
@@ -88,10 +114,14 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         let ctrl_loss_tmo =
             Parameters::ctrl_loss_tmo(args.get(Parameters::NvmeCtrlLossTmo.as_ref()))
                 .map_err(|_| tonic::Status::invalid_argument("Invalid ctrl_loss_tmo"))?;
+        let keep_alive_tmo =
+            Parameters::keep_alive_tmo(args.get(Parameters::NvmeKeepAliveTmo.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid keep_alive_tmo"))?;
 
         Ok(Self {
             io_timeout,
             ctrl_loss_tmo,
+            keep_alive_tmo,
             fs_type,
         })
     }

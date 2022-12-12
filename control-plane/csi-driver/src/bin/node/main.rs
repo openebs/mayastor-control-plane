@@ -164,6 +164,14 @@ async fn main_() -> anyhow::Result<()> {
                 .help("Sets the nvme-ctrl-loss-tmo parameter when connecting to a volume target. (May be overridden through the storage class)"),
         )
         .arg(
+            Arg::with_name(Box::leak(crate::config::nvme_keep_alive_tmo().into_boxed_str()))
+                .long(&crate::config::nvme_keep_alive_tmo())
+                .value_name("NUMBER")
+                .takes_value(true)
+                .required(false)
+                .help("Sets the nvme-keep-alive-tmo parameter when connecting to a volume target"),
+        )
+        .arg(
             Arg::with_name("node-selector")
                 .long("node-selector")
                 .multiple(true)
