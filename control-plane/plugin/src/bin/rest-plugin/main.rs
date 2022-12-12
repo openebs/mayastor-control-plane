@@ -100,6 +100,7 @@ async fn execute(cli_args: CliArgs) {
                 )
                 .await
             }
+            GetResources::UpgradeStatus => {}
         },
         Operations::Scale(resource) => match resource {
             ScaleResources::Volume { id, replica_count } => {
