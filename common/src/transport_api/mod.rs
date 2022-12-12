@@ -108,7 +108,7 @@ pub trait Message {
 }
 
 /// All the different variants of Resources
-#[derive(Serialize, Deserialize, Debug, Clone, AsRefStr, ToString)]
+#[derive(Serialize, Deserialize, Debug, Clone, AsRefStr, ToString, Eq, PartialEq)]
 pub enum ResourceKind {
     /// Unknown or unspecified resource
     Unknown,

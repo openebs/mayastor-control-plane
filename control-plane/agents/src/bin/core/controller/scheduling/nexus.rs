@@ -363,6 +363,7 @@ impl NexusTargetNode {
             .filter(NodeFilters::online)
             .filter(NodeFilters::cordoned)
             .filter(NodeFilters::current_target)
+            .filter(NodeFilters::no_targets)
             .sort(NodeSorters::number_targets)
     }
 }

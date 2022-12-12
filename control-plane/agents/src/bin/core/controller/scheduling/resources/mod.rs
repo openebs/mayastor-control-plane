@@ -215,7 +215,11 @@ impl NodeItem {
         Self { node_wrapper }
     }
     /// Get the internal `node_wrapper` from `NodeItem`.
-    pub(crate) fn node_wrapper(&self) -> NodeWrapper {
-        self.node_wrapper.clone()
+    pub(crate) fn node_wrapper(&self) -> &NodeWrapper {
+        &self.node_wrapper
+    }
+    /// Convert into internal `node_wrapper` from `NodeItem`.
+    pub(crate) fn into_node_wrapper(self) -> NodeWrapper {
+        self.node_wrapper
     }
 }
