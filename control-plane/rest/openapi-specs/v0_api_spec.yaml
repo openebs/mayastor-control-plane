@@ -1298,6 +1298,14 @@ paths:
       operationId: get_volumes
       parameters:
         - in: query
+          name: volume_id
+          description: |-
+            The uuid of a volume to retrieve.
+            This can be used to "bypass" the 404 error when a volume does not exist.
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+          required: false
+        - in: query
           name: max_entries
           description: the maximum number of results to return
           schema:

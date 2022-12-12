@@ -108,7 +108,7 @@ async fn wait_till_volume_deleted(cluster: &Cluster) {
     let client = cluster.grpc_client().volume();
     let start = std::time::Instant::now();
     loop {
-        let volumes = client.get(Filter::None, None, None).await.unwrap();
+        let volumes = client.get(Filter::None, false, None, None).await.unwrap();
         if volumes.entries.is_empty() {
             return;
         }

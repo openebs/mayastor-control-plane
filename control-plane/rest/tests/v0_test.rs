@@ -367,7 +367,11 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     client.volumes_api().del_volume(&volume_uuid).await.unwrap();
 
-    let volumes = client.volumes_api().get_volumes(0, None).await.unwrap();
+    let volumes = client
+        .volumes_api()
+        .get_volumes(0, None, None)
+        .await
+        .unwrap();
     assert!(volumes.entries.is_empty());
 
     client

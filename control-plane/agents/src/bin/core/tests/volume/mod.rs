@@ -251,7 +251,7 @@ async fn nexus_persistence_test_iteration(
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None, None)
+        .get(GetVolumes::default().filter, false, None, None)
         .await
         .unwrap()
         .entries
@@ -288,7 +288,7 @@ async fn publishing_test(cluster: &Cluster) {
         .await
         .unwrap();
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None, None)
+        .get(GetVolumes::default().filter, false, None, None)
         .await
         .unwrap()
         .entries;
@@ -402,7 +402,7 @@ async fn publishing_test(cluster: &Cluster) {
     tracing::info!("Published on '{}' with share '{}'", nx.node, nx.device_uri);
 
     let volumes = volume_client
-        .get(Filter::Volume(volume_state.uuid.clone()), None, None)
+        .get(Filter::Volume(volume_state.uuid.clone()), false, None, None)
         .await
         .unwrap();
 
@@ -470,7 +470,7 @@ async fn publishing_test(cluster: &Cluster) {
     );
 
     let volumes = volume_client
-        .get(Filter::Volume(volume_state.uuid.clone()), None, None)
+        .get(Filter::Volume(volume_state.uuid.clone()), false, None, None)
         .await
         .unwrap();
 
@@ -516,7 +516,7 @@ async fn publishing_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None, None)
+        .get(GetVolumes::default().filter, false, None, None)
         .await
         .unwrap()
         .entries
@@ -537,7 +537,7 @@ async fn publishing_test(cluster: &Cluster) {
 
 async fn get_volume(volume: &VolumeState, client: &dyn VolumeOperations) -> Volume {
     let request = client
-        .get(Filter::Volume(volume.uuid.clone()), None, None)
+        .get(Filter::Volume(volume.uuid.clone()), false, None, None)
         .await
         .unwrap();
     request.entries.first().cloned().unwrap()
@@ -601,7 +601,7 @@ async fn replica_count_test(cluster: &Cluster) {
         .unwrap();
 
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None, None)
+        .get(GetVolumes::default().filter, false, None, None)
         .await
         .unwrap()
         .entries;
@@ -771,7 +771,7 @@ async fn replica_count_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None, None)
+        .get(GetVolumes::default().filter, false, None, None)
         .await
         .unwrap()
         .entries
@@ -803,7 +803,7 @@ async fn smoke_test(cluster: &Cluster) {
 
     let volume = volume_client.create(&create_volume, None).await.unwrap();
     let volumes = volume_client
-        .get(GetVolumes::default().filter, None, None)
+        .get(GetVolumes::default().filter, false, None, None)
         .await
         .unwrap()
         .entries;
@@ -822,7 +822,7 @@ async fn smoke_test(cluster: &Cluster) {
         .expect("Should be able to destroy the volume");
 
     assert!(volume_client
-        .get(GetVolumes::default().filter, None, None)
+        .get(GetVolumes::default().filter, false, None, None)
         .await
         .unwrap()
         .entries

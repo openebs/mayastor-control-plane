@@ -69,6 +69,7 @@ impl VolumeOperations for VolumeClient {
     async fn get(
         &self,
         filter: Filter,
+        ignore_notfound: bool,
         pagination: Option<Pagination>,
         ctx: Option<Context>,
     ) -> Result<Volumes, ReplyError> {
@@ -78,10 +79,12 @@ impl VolumeOperations for VolumeClient {
                     volume_id: volume_id.to_string(),
                 })),
                 pagination: pagination.map(|p| p.into()),
+                ignore_notfound,
             },
             _ => GetVolumesRequest {
                 filter: None,
                 pagination: pagination.map(|p| p.into()),
+                ignore_notfound,
             },
         };
         let req = self.request(req, ctx, MessageIdVs::GetVolumes);

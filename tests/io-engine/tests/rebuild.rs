@@ -109,7 +109,7 @@ async fn concurrent_rebuilds() {
         let mut added_slack = false;
         let check_interval = std::time::Duration::from_secs(5);
         loop {
-            let curr_volumes = vol_cli.get_volumes(0, None).await.unwrap().entries;
+            let curr_volumes = vol_cli.get_volumes(0, None, None).await.unwrap().entries;
             assert_eq!(volumes.len(), curr_volumes.len());
             // volumes should either be online or degraded (while rebuilding)
             let not_expected = curr_volumes

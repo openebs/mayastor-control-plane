@@ -40,6 +40,7 @@ pub trait VolumeOperations: Send + Sync {
     async fn get(
         &self,
         filter: Filter,
+        ignore_notfound: bool,
         pagination: Option<Pagination>,
         ctx: Option<Context>,
     ) -> Result<Volumes, ReplyError>;
@@ -314,7 +315,7 @@ impl TryFrom<volume::Volume> for Volume {
 impl TryFrom<volume::Volumes> for Volumes {
     type Error = ReplyError;
     fn try_from(grpc_volumes: volume::Volumes) -> Result<Self, Self::Error> {
-        let mut volumes: Vec<Volume> = vec![];
+        let mut volumes: Vec<Volume> = Vec::with_capacity(grpc_volumes.entries.len());
         for volume in grpc_volumes.entries {
             volumes.push(Volume::try_from(volume)?)
         }
