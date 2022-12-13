@@ -10,6 +10,10 @@ use std::{
 pub fn nvme_nr_io_queues() -> String {
     Parameters::NvmeNrIoQueues.as_ref().to_kebab_case()
 }
+/// Command line arg name for `Parameters::NvmeKeepAliveTmo`.
+pub fn nvme_keep_alive_tmo() -> String {
+    Parameters::NvmeKeepAliveTmo.as_ref().to_kebab_case()
+}
 /// Command line arg name for `Parameters::NvmeCtrlLossTmo`.
 pub fn nvme_ctrl_loss_tmo() -> String {
     Parameters::NvmeCtrlLossTmo.as_ref().to_kebab_case()
@@ -37,12 +41,18 @@ pub(crate) struct NvmeConfig {
     nr_io_queues: Option<u32>,
     /// Default value for `ctrl_loss_tmo` when not specified via the volume parameters (sc).
     ctrl_loss_tmo: Option<u32>,
+    keep_alive_tmo: Option<u32>,
 }
 impl NvmeConfig {
-    fn new(nr_io_queues: Option<u32>, ctrl_loss_tmo: Option<u32>) -> Self {
+    fn new(
+        nr_io_queues: Option<u32>,
+        ctrl_loss_tmo: Option<u32>,
+        keep_alive_tmo: Option<u32>,
+    ) -> Self {
         Self {
             nr_io_queues,
             ctrl_loss_tmo,
+            keep_alive_tmo,
         }
     }
     /// Number of IO Queues.
@@ -53,6 +63,10 @@ impl NvmeConfig {
     /// Used to setup the max number of reconnects until the initiator gives up.
     pub(crate) fn ctrl_loss_tmo(&self) -> Option<u32> {
         self.ctrl_loss_tmo
+    }
+    /// The keep-alive timeout.
+    pub(crate) fn keep_alive_tmo(&self) -> Option<u32> {
+        self.keep_alive_tmo
     }
 }
 
@@ -88,7 +102,17 @@ impl TryFrom<NvmeArgValues> for NvmeConfig {
                 error
             )
         })?;
-        Ok(Self::new(nvme_nr_ioq, ctrl_loss_tmo))
+        let keep_alive_tmo = Parameters::keep_alive_tmo(
+            src.0.get(Parameters::NvmeKeepAliveTmo.as_ref()),
+        )
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Invalid value for {}, error = {}",
+                Parameters::NvmeKeepAliveTmo.as_ref(),
+                error
+            )
+        })?;
+        Ok(Self::new(nvme_nr_ioq, ctrl_loss_tmo, keep_alive_tmo))
     }
 }
 /// Nvme Arguments taken from the CSI volume calls (storage class parameters).
@@ -103,6 +127,7 @@ impl TryFrom<NvmeParseParams<'_>> for NvmeArgValues {
         }
         let mut us = Self::default();
         add_param(&value, &mut us, Parameters::NvmeCtrlLossTmo.as_ref());
+        add_param(&value, &mut us, Parameters::NvmeKeepAliveTmo.as_ref());
         Ok(us)
     }
 }
@@ -124,6 +149,11 @@ impl TryFrom<&ArgMatches<'_>> for NvmeArgValues {
         if let Some(value) = matches.value_of(nvme_ctrl_loss_tmo()) {
             map.0
                 .insert(Parameters::NvmeCtrlLossTmo.to_string(), value.to_string());
+        }
+
+        if let Some(value) = matches.value_of(nvme_keep_alive_tmo()) {
+            map.0
+                .insert(Parameters::NvmeKeepAliveTmo.to_string(), value.to_string());
         }
         Ok(map)
     }

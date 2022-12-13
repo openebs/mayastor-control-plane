@@ -197,7 +197,6 @@ impl Service {
             },
             Filter::Volume(volume_id) => {
                 tracing::Span::current().record("volume.uuid", &volume_id.as_str());
-                tracing::error!("I: {}", ignore_notfound);
                 match self.registry.get_volume(&volume_id).await {
                     Ok(volume) => Ok(vec![volume]),
                     Err(SvcError::VolumeNotFound { .. }) if ignore_notfound => Ok(vec![]),
