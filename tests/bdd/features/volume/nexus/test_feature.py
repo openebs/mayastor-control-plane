@@ -135,7 +135,8 @@ def init(create_pool_disk_images):
 @retry(wait_fixed=200, stop_max_delay=5000)
 def check_target_faulted():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert NexusState(volume.state.target["state"]) == NexusState("Faulted")
+    if hasattr(volume.state, "target"):
+        assert NexusState(volume.state.target["state"]) == NexusState("Faulted")
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=30)
