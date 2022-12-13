@@ -126,7 +126,7 @@ impl CsiNode {
 
         let path = format!(
             "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{}",
-            env!("PATH")
+            std::env::var("PATH").unwrap()
         );
 
         cfg.add_container_spec(
