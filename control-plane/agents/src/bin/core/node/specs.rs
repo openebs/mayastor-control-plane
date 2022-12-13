@@ -1,13 +1,14 @@
-use crate::controller::{
-    registry::Registry,
-    resources::{operations_helper::ResourceSpecsLocked, ResourceMutex},
-};
 use agents::errors::{NodeNotFound, SvcError};
 use common_lib::types::v0::{
     store::node::{NodeLabels, NodeSpec},
     transport::{NodeId, Register},
 };
 use snafu::OptionExt;
+
+use crate::controller::{
+    registry::Registry,
+    resources::{operations_helper::ResourceSpecsLocked, ResourceMutex},
+};
 
 impl ResourceSpecsLocked {
     /// Create a node spec for the register request
@@ -164,6 +165,22 @@ impl ResourceSpecsLocked {
                 });
             }
             locked_node.set_drain(label);
+            locked_node.clone()
+        };
+        registry.store_obj(&drained_node_spec).await?;
+        Ok(drained_node_spec)
+    }
+
+    /// Set the NodeSpec to the drained state.
+    pub(crate) async fn set_node_drained(
+        &self,
+        registry: &Registry,
+        node_id: &NodeId,
+    ) -> Result<NodeSpec, SvcError> {
+        let node = self.get_locked_node(node_id)?;
+        let drained_node_spec = {
+            let mut locked_node = node.lock();
+            locked_node.set_drained();
             locked_node.clone()
         };
         registry.store_obj(&drained_node_spec).await?;

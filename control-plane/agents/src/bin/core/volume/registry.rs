@@ -102,8 +102,8 @@ impl Registry {
         }
     }
 
-    /// Get all volumes
-    pub(super) async fn get_volumes(&self) -> Vec<Volume> {
+    /// Get all volumes.
+    pub(crate) async fn get_volumes(&self) -> Vec<Volume> {
         let volume_specs = self.specs().get_volumes();
         let replicas = self.specs().get_cloned_replicas();
         let mut volumes = Vec::with_capacity(volume_specs.len());
@@ -115,7 +115,7 @@ impl Registry {
         volumes
     }
 
-    /// Get a paginated subset of volumes
+    /// Get a paginated subset of volumes.
     pub(super) async fn get_paginated_volume(
         &self,
         pagination: &Pagination,
@@ -139,7 +139,7 @@ impl Registry {
         ))
     }
 
-    /// Notify the reconcilers if the volume is degraded
+    /// Notify the reconcilers if the volume is degraded.
     pub(crate) async fn notify_if_degraded(&self, volume: &Volume, event: PollTriggerEvent) {
         if volume.status() == Some(VolumeStatus::Degraded) {
             self.notify(event).await;
