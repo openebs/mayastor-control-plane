@@ -78,7 +78,7 @@ impl PublishParams {
         &self.ctrl_loss_tmo
     }
     /// Get the `Parameters::NvmeKeepAliveTmo` value.
-    pub fn nvme_keep_alive_tmo(&self) -> &Option<u32> {
+    pub fn keep_alive_tmo(&self) -> &Option<u32> {
         &self.keep_alive_tmo
     }
     /// Convert `Self` into a publish context.
@@ -92,6 +92,12 @@ impl PublishParams {
             publish_context.insert(
                 Parameters::NvmeCtrlLossTmo.to_string(),
                 ctrl_loss_tmo.to_string(),
+            );
+        }
+        if let Some(keep_alive_tmo) = self.keep_alive_tmo() {
+            publish_context.insert(
+                Parameters::NvmeKeepAliveTmo.to_string(),
+                keep_alive_tmo.to_string(),
             );
         }
 
@@ -130,9 +136,7 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
 /// Volume Creation parameters.
 #[allow(dead_code)]
 pub struct CreateParams {
-    io_timeout: Option<u32>,
-    ctrl_loss_tmo: Option<u32>,
-    fs_type: Option<FileSystem>,
+    publish_params: PublishParams,
     share_protocol: VolumeShareProtocol,
     replica_count: u8,
 }
@@ -150,21 +154,10 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
     type Error = tonic::Status;
 
     fn try_from(args: &HashMap<String, String>) -> Result<Self, Self::Error> {
-        let fs_type = match args.get(Parameters::FileSystem.as_ref()) {
-            Some(fs) => FileSystem::from_str(fs.as_str())
-                .map(Some)
-                .map_err(|_| tonic::Status::invalid_argument("Invalid filesystem type"))?,
-            None => None,
-        };
+        let publish_params = PublishParams::try_from(args)?;
 
         // Check storage protocol.
         let share_protocol = parse_protocol(args.get(Parameters::ShareProtocol.as_ref()))?;
-
-        let io_timeout = Parameters::io_timeout(args.get(Parameters::IoTimeout.as_ref()))
-            .map_err(|_| tonic::Status::invalid_argument("Invalid I/O timeout"))?;
-        let ctrl_loss_tmo =
-            Parameters::ctrl_loss_tmo(args.get(Parameters::NvmeCtrlLossTmo.as_ref()))
-                .map_err(|_| tonic::Status::invalid_argument("Invalid ctrl_loss_tmo"))?;
 
         let replica_count = match args.get(Parameters::ReplicaCount.as_ref()) {
             Some(c) => match c.parse::<u8>() {
@@ -182,9 +175,7 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
         };
 
         Ok(Self {
-            io_timeout,
-            ctrl_loss_tmo,
-            fs_type,
+            publish_params,
             share_protocol,
             replica_count,
         })
