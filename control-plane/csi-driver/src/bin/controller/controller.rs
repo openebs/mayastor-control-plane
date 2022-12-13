@@ -200,7 +200,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         };
 
         // First check if the volume already exists.
-        match IoEngineApiClient::get_client().get_volume(&u).await {
+        match IoEngineApiClient::get_client()
+            .get_volume_for_create(&u)
+            .await
+        {
             Ok(volume) => {
                 check_existing_volume(&volume, replica_count, size, thin)?;
                 debug!(

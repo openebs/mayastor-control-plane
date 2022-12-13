@@ -92,6 +92,13 @@ impl NodeFilters {
             true
         }
     }
+    /// Should only attempt to use node where there are no targets for the current volume.
+    pub(crate) fn no_targets(request: &GetSuitableNodesContext, item: &NodeItem) -> bool {
+        let volume_targets = request.registry().specs().get_volume_nexuses(&request.uuid);
+        !volume_targets
+            .into_iter()
+            .any(|n| &n.lock().node == item.node_wrapper().id())
+    }
 }
 
 /// Filter pools used for replica creation.

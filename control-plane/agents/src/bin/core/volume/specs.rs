@@ -1178,7 +1178,7 @@ pub(crate) async fn get_volume_target_node(
             // determine a suitable node for the same.
             let volume_spec = registry.specs().get_volume(&status.uuid)?;
             let candidate = get_target_node_candidate(&volume_spec, registry).await?;
-            tracing::debug!(node.id=%candidate.id(), "node selected for volume publish by control-plane");
+            tracing::debug!(node.id=%candidate.id(), "Node selected for volume publish by the core-agent");
             Ok(candidate.id().clone())
         }
         Some(node) => {

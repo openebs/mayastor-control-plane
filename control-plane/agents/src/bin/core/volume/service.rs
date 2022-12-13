@@ -15,7 +15,7 @@ use common_lib::{
     types::v0::{
         store::volume::VolumeSpec,
         transport::{
-            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, GetVolumes, PublishVolume,
+            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume,
             RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
         },
     },
@@ -54,11 +54,13 @@ impl VolumeOperations for Service {
     async fn get(
         &self,
         filter: Filter,
+        ignore_notfound: bool,
         pagination: Option<Pagination>,
         _ctx: Option<Context>,
     ) -> Result<Volumes, ReplyError> {
-        let req = GetVolumes { filter };
-        let volumes = self.get_volumes(&req, pagination).await?;
+        let volumes = self
+            .get_volumes(filter, ignore_notfound, pagination)
+            .await?;
         Ok(volumes)
     }
 
@@ -176,14 +178,15 @@ impl Service {
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid))]
     pub(super) async fn get_volumes(
         &self,
-        request: &GetVolumes,
+        filter: Filter,
+        ignore_notfound: bool,
         pagination: Option<Pagination>,
     ) -> Result<Volumes, SvcError> {
         // The last result can only ever be false if using pagination.
         let mut last_result = true;
 
         // The filter criteria is matched against a volume state.
-        let filtered_volumes = match &request.filter {
+        let filtered_volumes = match filter {
             Filter::None => match &pagination {
                 Some(p) => {
                     let paginated_volumes = self.registry.get_paginated_volume(p).await;
@@ -194,13 +197,14 @@ impl Service {
             },
             Filter::Volume(volume_id) => {
                 tracing::Span::current().record("volume.uuid", &volume_id.as_str());
-                vec![self.registry.get_volume(volume_id).await?]
+                tracing::error!("I: {}", ignore_notfound);
+                match self.registry.get_volume(&volume_id).await {
+                    Ok(volume) => Ok(vec![volume]),
+                    Err(SvcError::VolumeNotFound { .. }) if ignore_notfound => Ok(vec![]),
+                    Err(error) => Err(error),
+                }?
             }
-            filter => {
-                return Err(SvcError::InvalidFilter {
-                    filter: filter.clone(),
-                })
-            }
+            filter => return Err(SvcError::InvalidFilter { filter }),
         };
 
         Ok(Volumes {

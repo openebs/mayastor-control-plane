@@ -74,7 +74,7 @@ async fn get_volumes() {
         .await
         .rest_v00()
         .volumes_api()
-        .get_volumes(0, None)
+        .get_volumes(0, None, None)
         .await
         .unwrap();
     let volume_state = volumes.entries[0].state.clone();
@@ -116,7 +116,7 @@ async fn get_volumes_paginated() {
         .await
         .rest_v00()
         .volumes_api()
-        .get_volumes(0, None)
+        .get_volumes(0, None, None)
         .await
         .unwrap()
         .entries
@@ -133,7 +133,7 @@ async fn get_volumes_paginated() {
             .await
             .rest_v00()
             .volumes_api()
-            .get_volumes(max_entries, starting_token)
+            .get_volumes(max_entries, None, starting_token)
             .await
             .unwrap();
         // The number of returned volumes should be equal to the number of specified max entries.

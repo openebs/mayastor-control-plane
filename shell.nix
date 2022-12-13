@@ -59,7 +59,7 @@ mkShell {
   USE_NIX_RUST = "${toString (!norust)}";
   # copy the rust toolchain to a writable directory, see: https://github.com/rust-lang/cargo/issues/10096
   # the whole toolchain is copied to allow the src to be retrievable through "rustc --print sysroot"
-  RUST_TOOLCHAIN = "/tmp/rust-toolchain/${rust.version}";
+  RUST_TOOLCHAIN = ".rust-toolchain/${rust.version}";
   RUST_TOOLCHAIN_NIX = "${rust}";
 
   NODE_PATH = "${nodePackages."@commitlint/config-conventional"}/lib/node_modules";

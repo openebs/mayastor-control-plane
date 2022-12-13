@@ -167,7 +167,7 @@ impl IoEngineApiClient {
         let response = self
             .rest_client
             .volumes_api()
-            .get_volumes(max_entries, Some(starting_token))
+            .get_volumes(max_entries, None, Some(starting_token))
             .await?;
         Ok(response.into_body())
     }
@@ -257,6 +257,24 @@ impl IoEngineApiClient {
     ) -> Result<Volume, ApiClientError> {
         let volume = self.rest_client.volumes_api().get_volume(volume_id).await?;
         Ok(volume.into_body())
+    }
+
+    /// Get specific volume.
+    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    pub(crate) async fn get_volume_for_create(
+        &self,
+        volume_id: &uuid::Uuid,
+    ) -> Result<Volume, ApiClientError> {
+        let response = self
+            .rest_client
+            .volumes_api()
+            .get_volumes(1, Some(volume_id), None)
+            .await?;
+        let mut entries = response.into_body().entries;
+        match entries.pop() {
+            Some(volume) => Ok(volume),
+            None => Err(ApiClientError::ResourceNotExists("Volume Not Found".into())),
+        }
     }
 
     /// Unpublish volume (i.e. destroy a target which exposes the volume).

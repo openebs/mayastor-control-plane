@@ -96,7 +96,11 @@ impl VolumeGrpc for VolumeServer {
         };
 
         let pagination: Option<Pagination> = req.pagination.map(|p| p.into());
-        match self.service.get(filter, pagination, None).await {
+        match self
+            .service
+            .get(filter, req.ignore_notfound, pagination, None)
+            .await
+        {
             Ok(volumes) => Ok(Response::new(GetVolumesReply {
                 reply: Some(get_volumes_reply::Reply::Volumes(volumes.into())),
             })),

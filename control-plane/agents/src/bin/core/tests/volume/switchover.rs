@@ -1,10 +1,13 @@
 #![cfg(test)]
 
-use common_lib::types::v0::{
-    store::nexus::NexusSpec,
-    transport::{
-        CreateVolume, DestroyShutdownTargets, Filter, GetSpecs, Nexus, PublishVolume,
-        RepublishVolume, VolumeShareProtocol,
+use common_lib::{
+    transport_api::{ReplyErrorKind, ResourceKind},
+    types::v0::{
+        store::nexus::NexusSpec,
+        transport::{
+            CreateVolume, DestroyShutdownTargets, Filter, GetSpecs, Nexus, PublishVolume,
+            RepublishVolume, VolumeShareProtocol,
+        },
     },
 };
 use deployer_cluster::{Cluster, ClusterBuilder};
@@ -268,4 +271,92 @@ async fn pool_recreated(cluster: &Cluster, max_tries: i32) -> bool {
         sleep(Duration::from_millis(500)).await;
     }
     false
+}
+
+#[tokio::test]
+async fn node_exhaustion() {
+    let cluster = ClusterBuilder::builder()
+        .with_agents(vec!["core"])
+        .with_io_engines(3)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .build()
+        .await
+        .unwrap();
+
+    let client = cluster.grpc_client().volume();
+
+    client
+        .create(
+            &CreateVolume {
+                uuid: VOLUME_UUID.try_into().unwrap(),
+                size: 5242880,
+                replicas: 3,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let _volume = client
+        .publish(
+            &PublishVolume {
+                uuid: VOLUME_UUID.try_into().unwrap(),
+                share: Some(VolumeShareProtocol::Nvmf),
+                target_node: None,
+                publish_context: HashMap::new(),
+                frontend_nodes: vec![cluster.node(1).to_string()],
+            },
+            None,
+        )
+        .await
+        .expect("Volume publish should have succeeded.");
+
+    // Republishing volume after node restart.
+    let _volume = client
+        .republish(
+            &RepublishVolume {
+                uuid: VOLUME_UUID.try_into().unwrap(),
+                share: VolumeShareProtocol::Nvmf,
+                target_node: None,
+                reuse_existing: false,
+                frontend_node: cluster.node(1),
+            },
+            None,
+        )
+        .await
+        .expect("Volume republish should have succeeded.");
+
+    // Republishing volume after node restart.
+    let _volume = client
+        .republish(
+            &RepublishVolume {
+                uuid: VOLUME_UUID.try_into().unwrap(),
+                share: VolumeShareProtocol::Nvmf,
+                target_node: None,
+                reuse_existing: false,
+                frontend_node: cluster.node(1),
+            },
+            None,
+        )
+        .await
+        .expect("Volume republish should have succeeded.");
+
+    // Republishing volume after node restart.
+    let error = client
+        .republish(
+            &RepublishVolume {
+                uuid: VOLUME_UUID.try_into().unwrap(),
+                share: VolumeShareProtocol::Nvmf,
+                target_node: None,
+                reuse_existing: false,
+                frontend_node: cluster.node(1),
+            },
+            None,
+        )
+        .await
+        .expect_err("Exhausted all nodes");
+
+    assert_eq!(error.kind, ReplyErrorKind::ResourceExhausted);
+    assert_eq!(error.resource, ResourceKind::Node);
 }

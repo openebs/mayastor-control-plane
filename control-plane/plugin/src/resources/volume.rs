@@ -73,7 +73,7 @@ async fn get_paginated_volumes() -> Option<Vec<openapi::models::Volume>> {
     while starting_token.is_some() {
         match RestClient::client()
             .volumes_api()
-            .get_volumes(max_entries, starting_token)
+            .get_volumes(max_entries, None, starting_token)
             .await
         {
             Ok(vols) => {

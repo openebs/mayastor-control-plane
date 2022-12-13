@@ -16,7 +16,7 @@ pub(crate) async fn wait_till_volume_nexus(
     let start = std::time::Instant::now();
     loop {
         let volume = volume_client
-            .get(GetVolumes::new(volume).filter, None, None)
+            .get(GetVolumes::new(volume).filter, false, None, None)
             .await
             .unwrap();
         let volume_state = volume.entries.clone().first().unwrap().state();
@@ -46,7 +46,7 @@ pub(crate) async fn volume_children(
     client: &dyn VolumeOperations,
 ) -> Vec<Child> {
     let volume = client
-        .get(GetVolumes::new(volume).filter, None, None)
+        .get(GetVolumes::new(volume).filter, false, None, None)
         .await
         .unwrap();
     let volume_state = volume.entries.first().unwrap().state();
@@ -89,7 +89,7 @@ pub(crate) async fn wait_till_volume(
 /// Return the number of replicas that exist and have a state.
 async fn existing_replicas(volume_id: &VolumeId, client: &dyn VolumeOperations) -> usize {
     let volumes = client
-        .get(GetVolumes::new(volume_id).filter, None, None)
+        .get(GetVolumes::new(volume_id).filter, false, None, None)
         .await
         .unwrap();
 
@@ -123,7 +123,7 @@ pub(crate) async fn wait_till_volume_children(
     let start = std::time::Instant::now();
     loop {
         let volume = volume_client
-            .get(GetVolumes::new(volume).filter, None, None)
+            .get(GetVolumes::new(volume).filter, false, None, None)
             .await
             .unwrap();
         let volume_state = volume.entries.clone().first().unwrap().state();

@@ -150,6 +150,8 @@ message GetVolumesRequest {
   }
   // pagination to allow for multiple requests to get all volumes
   common.Pagination pagination = 2;
+  // ignore 404 not found errors
+  bool ignore_notfound = 3;
 }
 
 // volume creation request

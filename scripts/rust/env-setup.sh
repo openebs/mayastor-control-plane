@@ -42,6 +42,8 @@ EOF
       # priority: https://github.com/rust-lang/cargo/pull/11023
       export PATH=$RUST_TOOLCHAIN/bin:$PATH:~/.cargo/bin
     else
+      # Expose this we can fmt files out of tree, eg: when we rustfmt the openapi in /tmp
+      export RUSTUP_TOOLCHAIN="$rustup_channel"
       cat <<EOF >rust-toolchain.toml
 [toolchain]
 channel = "$rustup_channel"

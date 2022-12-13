@@ -60,7 +60,7 @@ pub(crate) async fn get_target_node_candidate(
             .await
             .collect()
             .into_iter()
-            .map(|i| i.node_wrapper())
+            .map(|i| i.into_node_wrapper())
             .collect();
     match candidates.first() {
         None => Err(SvcError::NotEnoughResources {

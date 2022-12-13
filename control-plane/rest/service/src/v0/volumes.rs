@@ -71,7 +71,7 @@ impl apis::actix_server::Volumes for RestApi {
         let volume = volume(
             volume_id.to_string(),
             client()
-                .get(Filter::Volume(volume_id.into()), None, None)
+                .get(Filter::Volume(volume_id.into()), false, None, None)
                 .await?
                 .entries
                 .get(0),
@@ -80,7 +80,11 @@ impl apis::actix_server::Volumes for RestApi {
     }
 
     async fn get_volumes(
-        Query((max_entries, starting_token)): Query<(isize, Option<isize>)>,
+        Query((volume_id, max_entries, starting_token)): Query<(
+            Option<Uuid>,
+            isize,
+            Option<isize>,
+        )>,
     ) -> Result<models::Volumes, RestError<RestJsonError>> {
         let starting_token = starting_token.unwrap_or_default();
 
@@ -94,7 +98,15 @@ impl apis::actix_server::Volumes for RestApi {
         } else {
             None
         };
-        let volumes = client().get(Filter::None, pagination, None).await?;
+        let volumes = match volume_id {
+            Some(volume_id) => {
+                client()
+                    .get(Filter::Volume(volume_id.into()), true, pagination, None)
+                    .await?
+            }
+            None => client().get(Filter::None, false, pagination, None).await?,
+        };
+
         Ok(models::Volumes {
             entries: volumes.entries.into_iter().map(|e| e.into()).collect(),
             next_token: volumes.next_token.map(|t| t as isize),

@@ -88,7 +88,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [[ $check_spec = "yes" ]]; then
-  ( cd "$ROOTDIR"; git diff --cached --exit-code "$REAL_SPEC" 1>/dev/null && exit 0 )
+  ( cd "$ROOTDIR"; set +e; git diff --cached --exit-code "$REAL_SPEC" 1>/dev/null && exit 0; set -e )
 fi
 
 tmpd=$(mktemp -d /tmp/openapi-gen-XXXXXXX)
