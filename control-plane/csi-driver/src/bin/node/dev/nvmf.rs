@@ -11,6 +11,7 @@ use nvmeadm::{
 
 use csi_driver::PublishParams;
 use glob::glob;
+use nvmeadm::nvmf_subsystem::Subsystem;
 use regex::Regex;
 use tracing::debug;
 use udev::{Device, Enumerator};
@@ -164,32 +165,39 @@ impl Attach for NvmfAttach {
     }
 
     async fn attach(&self) -> Result<(), DeviceError> {
-        // The default reconnect delay in linux kernel is set to 10s. Use the
-        // same default value unless the timeout is less or equal to 10.
-        let reconnect_delay = match self.io_timeout {
-            Some(io_timeout) => {
-                if io_timeout <= 10 {
-                    Some(1)
-                } else {
-                    Some(10)
-                }
-            }
-            None => None,
-        };
-        let ca = ConnectArgsBuilder::default()
-            .traddr(&self.host)
-            .trsvcid(self.port.to_string())
-            .nqn(&self.nqn)
-            .ctrl_loss_tmo(self.ctrl_loss_tmo)
-            .reconnect_delay(reconnect_delay)
-            .nr_io_queues(self.nr_io_queues)
-            .hostnqn(self.hostnqn.clone())
-            .keep_alive_tmo(self.keep_alive_tmo)
-            .build()?;
-        match ca.connect() {
-            Err(NvmeError::ConnectInProgress) => Ok(()),
-            Err(err) => Err(err.into()),
+        // Get the subsystem, if not found issue a connect.
+        match Subsystem::get(self.host.as_str(), &self.port, self.nqn.as_str()) {
             Ok(_) => Ok(()),
+            Err(NvmeError::SubsystemNotFound { .. }) => {
+                // The default reconnect delay in linux kernel is set to 10s. Use the
+                // same default value unless the timeout is less or equal to 10.
+                let reconnect_delay = match self.io_timeout {
+                    Some(io_timeout) => {
+                        if io_timeout <= 10 {
+                            Some(1)
+                        } else {
+                            Some(10)
+                        }
+                    }
+                    None => None,
+                };
+                let ca = ConnectArgsBuilder::default()
+                    .traddr(&self.host)
+                    .trsvcid(self.port.to_string())
+                    .nqn(&self.nqn)
+                    .ctrl_loss_tmo(self.ctrl_loss_tmo)
+                    .reconnect_delay(reconnect_delay)
+                    .nr_io_queues(self.nr_io_queues)
+                    .hostnqn(self.hostnqn.clone())
+                    .build()?;
+                return match ca.connect() {
+                    // Should we remove this arm?
+                    Err(NvmeError::ConnectInProgress) => Ok(()),
+                    Err(err) => Err(err.into()),
+                    Ok(_) => Ok(()),
+                };
+            }
+            Err(err) => Err(err.into()),
         }
     }
 
