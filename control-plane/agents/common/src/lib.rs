@@ -50,12 +50,20 @@ pub enum ServiceError {
     GetMessageId { channel: Channel, source: Error },
     #[snafu(display("Failed to find subscription '{}' on Channel '{}'", id.to_string(), channel.to_string()))]
     FindSubscription { channel: Channel, id: MessageId },
+    #[snafu(display("Subscription Semaphore closed"))]
+    SubscriptionClosed {},
     #[snafu(display("Failed to handle message id '{}' on Channel '{}', details: {}", id.to_string(), channel.to_string(), details))]
     HandleMessage {
         channel: Channel,
         id: MessageId,
         details: String,
     },
+}
+
+impl From<tokio::sync::AcquireError> for ServiceError {
+    fn from(_: tokio::sync::AcquireError) -> Self {
+        Self::SubscriptionClosed {}
+    }
 }
 
 /// Runnable service with N subscriptions which listen on a given
@@ -323,10 +331,14 @@ impl Service {
 
         // Gated access to a subscription. This means we can concurrently handle CreateVolume and
         // GetVolume but we handle CreateVolume one at a time.
+        let concurrency: usize = std::env::var("MAX_CONCURRENT_RPC")
+            .ok()
+            .and_then(|i| i.parse().ok())
+            .unwrap_or(3usize);
         let gated_subs = Arc::new(
             subscriptions
                 .into_iter()
-                .map(tokio::sync::Mutex::new)
+                .map(|i| (tokio::sync::Semaphore::new(concurrency), i))
                 .collect::<Vec<_>>(),
         );
 
@@ -391,7 +403,7 @@ impl Service {
 
     async fn process_message(
         arguments: Arguments<'_>,
-        subscriptions: &Arc<Vec<tokio::sync::Mutex<Box<dyn ServiceSubscriber>>>>,
+        subscriptions: &Arc<Vec<(tokio::sync::Semaphore, Box<dyn ServiceSubscriber>)>>,
     ) -> Result<(), ServiceError> {
         let channel = arguments.request.channel();
         let id = &arguments.request.id().context(GetMessageId {
@@ -403,18 +415,18 @@ impl Service {
             id: id.clone(),
         });
         for sub in subscriptions.iter() {
-            let sub_inner = sub.lock().await;
-            if sub_inner.filter().iter().any(|find_id| find_id == id) {
+            if sub.1.filter().iter().any(|find_id| find_id == id) {
                 subscription = Ok(sub);
                 break;
             }
         }
+        let subscription = subscription?;
+        let _guard = subscription.0.acquire().await?;
 
-        match subscription?
-            .lock()
-            .with_context(arguments.request.context())
-            .await
+        match subscription
+            .1
             .handler(arguments.clone())
+            .with_context(arguments.request.context())
             .await
         {
             Ok(_) => Ok(()),

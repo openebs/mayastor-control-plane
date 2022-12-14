@@ -106,14 +106,24 @@ impl MayastorApiClient {
 
         let url = clients::tower::Url::parse(endpoint)
             .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
-        let tower =
-            clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration, Error: '{:?}'",
-                        error
-                    )
-                })?;
+        let concurrency: usize = std::env::var("MAX_CONCURRENT_RPC")
+            .ok()
+            .and_then(|i| i.parse().ok())
+            .unwrap_or(10usize);
+        let tower = clients::tower::Configuration::new(
+            url,
+            Duration::from_secs(5),
+            None,
+            None,
+            true,
+            Some(concurrency),
+        )
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Failed to create openapi configuration, Error: '{:?}'",
+                error
+            )
+        })?;
 
         REST_CLIENT.get_or_init(|| Self {
             rest_client: clients::tower::ApiClient::new(tower),

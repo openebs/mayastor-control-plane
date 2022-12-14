@@ -46,7 +46,7 @@ fi
 tmpd=$(mktemp -d /tmp/openapi-gen-XXXXXXX)
 
 # Generate a new openapi crate
-openapi-generator-cli generate -i "$SPEC" -g rust-mayastor -o "$tmpd" --additional-properties actixWebVersion="4.0.0-beta.8" --additional-properties actixWebTelemetryVersion='"0.11.0-beta.4"'
+openapi-generator-cli generate -i "$SPEC" -g rust-mayastor -o "$tmpd" --additional-properties actixWeb4Beta="True"
 
 if [[ $default_toml = "no" ]]; then
   cp "$CARGO_TOML" "$tmpd"

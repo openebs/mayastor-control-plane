@@ -912,13 +912,14 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
     let msp: Api<MayastorPool> = Api::namespaced(k8s.clone(), namespace);
     let lp = ListParams::default();
     let url = Url::parse(args.value_of("endpoint").unwrap()).expect("endpoint is not a valid URL");
-    let cfg = clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true)
-        .map_err(|error| {
-            anyhow::anyhow!(
-                "Failed to create openapi configuration, Error: '{:?}'",
-                error
-            )
-        })?;
+    let cfg =
+        clients::tower::Configuration::new(url, Duration::from_secs(5), None, None, true, None)
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to create openapi configuration, Error: '{:?}'",
+                    error
+                )
+            })?;
 
     let context = Context::new(OperatorContext {
         k8s,
