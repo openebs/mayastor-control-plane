@@ -1,7 +1,7 @@
 use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 
 use common_lib::types::v0::openapi::models::{
-    LabelledTopology, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
+    LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
     VolumeShareProtocol,
 };
 use rpc::csi::{Topology as CsiTopology, *};
@@ -345,14 +345,23 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     }
                 },
             _ => {
+
+                // Check for node being cordoned.
+                fn cordon_check(spec: Option<&NodeSpec>) -> bool {
+                    if let Some(spec) = spec {
+                        return spec.cordondrainstate.is_some()
+                    }
+                    false
+                }
+
                 // if the csi-node happens to be a data-plane node, use that for nexus creation, otherwise
                 // let the control-plane select the target node.
                 let target_node = match IoEngineApiClient::get_client().get_node(&node_id).await {
                     Err(ApiClientError::ResourceNotExists(_)) => Ok(None),
                     Err(error) => Err(error),
                     // When nodes are not online for any reason (eg: io-engine no longer runs) on said node,
-                    // then let the control-plane decide where to place the target.
-                    Ok(node) if node.state.as_ref().map(|n| n.status).unwrap_or(NodeStatus::Unknown) != NodeStatus::Online => {
+                    // then let the control-plane decide where to place the target. Node should not be cordoned.
+                    Ok(node) if node.state.as_ref().map(|n| n.status).unwrap_or(NodeStatus::Unknown) != NodeStatus::Online || cordon_check(node.spec.as_ref()) => {
                         Ok(None)
                     },
                     Ok(_) => Ok(Some(node_id.as_str()))
