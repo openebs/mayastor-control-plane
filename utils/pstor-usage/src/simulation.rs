@@ -149,11 +149,12 @@ impl Simulation {
                 (cluster.rest_v00(), Some(cluster))
             }
             Some(rest_url) => {
-                let openapi_client_config =
-                    Configuration::new(rest_url.clone(), Duration::from_secs(5), None, None, true)
-                        .map_err(|e| {
-                            anyhow::anyhow!("Failed to create rest client config: '{:?}'", e)
-                        })?;
+                let openapi_client_config = Configuration::builder()
+                    .with_timeout(Duration::from_secs(5))
+                    .build_url(rest_url.clone())
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to create rest client config: '{:?}'", e)
+                    })?;
                 let client = ApiClient::new(openapi_client_config);
                 (client, None)
             }

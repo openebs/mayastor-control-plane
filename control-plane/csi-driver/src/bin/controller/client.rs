@@ -101,7 +101,14 @@ impl IoEngineApiClient {
 
         let url = clients::tower::Url::parse(endpoint)
             .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
-        let tower = clients::tower::Configuration::new(url, cfg.io_timeout(), None, None, true)
+        let concurrency_limit: usize = std::env::var("MAX_CONCURRENT_RPC")
+            .ok()
+            .and_then(|i| i.parse().ok())
+            .unwrap_or(10usize);
+        let tower = clients::tower::Configuration::builder()
+            .with_timeout(cfg.io_timeout())
+            .with_concurrency_limit(Some(concurrency_limit))
+            .build_url(url)
             .map_err(|error| {
                 anyhow::anyhow!(
                     "Failed to create openapi configuration, Error: '{:?}'",
