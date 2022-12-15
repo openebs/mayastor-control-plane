@@ -15,8 +15,9 @@ use grpc::{
     },
 };
 
+use agents::errors::SvcError::SubsystemNotFound;
 use http::Uri;
-use nvmeadm::nvmf_subsystem::{NvmeSubsystems, Subsystem};
+use nvmeadm::nvmf_subsystem::{Subsystem, SubsystemAddr};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::time::{sleep, Duration};
 use utils::NVME_TARGET_NQN_PREFIX;
@@ -131,12 +132,21 @@ impl NodeAgentSvc {
             })
             .await
         {
-            Ok(_) => match get_subsystem(&parsed_uri) {
+            Ok(_) => match Subsystem::get(
+                parsed_uri.host().as_str(),
+                &parsed_uri.port(),
+                parsed_uri.nqn().as_str(),
+            ) {
                 Ok(subsystem) => {
                     tracing::info!(new_path, "Successfully connected to NVMe target");
                     subsystem
                 }
-                Err(error) => return Err(error),
+                Err(error) => {
+                    return Err(SubsystemNotFound {
+                        nqn,
+                        details: error.to_string(),
+                    })
+                }
             },
             Err(error) => {
                 tracing::error!(
@@ -263,58 +273,16 @@ fn parse_uri(new_path: &str) -> Result<ParsedUri, SvcError> {
     ParsedUri::new(uri)
 }
 
-// Returns the particular subsystem based on the nqn and address.
-fn get_subsystem(parsed_uri: &ParsedUri) -> Result<Subsystem, SvcError> {
-    let address = SubsystemAddr::new(parsed_uri.host(), parsed_uri.port());
-    let nqn = parsed_uri.nqn();
-
-    let nvme_subsystems = NvmeSubsystems::new().map_err(|_| SvcError::SubsystemNotFound {
-        nqn: nqn.to_owned(),
-    })?;
-
-    for subsys in nvme_subsystems.flatten() {
-        if subsys.nqn == nqn && subsys.address == address {
-            return Ok(subsys);
-        }
-    }
-    Err(SvcError::SubsystemNotFound { nqn })
-}
-
-struct SubsystemAddr(String);
-
-impl SubsystemAddr {
-    fn new(host: String, port: String) -> SubsystemAddr {
-        SubsystemAddr(format!("traddr={},trsvcid={}", host, port))
-    }
-    fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-// For SubsystemAddr == String comparisons
-impl PartialEq<String> for SubsystemAddr {
-    fn eq(&self, other: &String) -> bool {
-        self.as_str() == other
-    }
-}
-
-// For String == SubsystemAddr comparisons
-impl PartialEq<SubsystemAddr> for String {
-    fn eq(&self, other: &SubsystemAddr) -> bool {
-        self == other.as_str()
-    }
-}
-
 struct ParsedUri {
     host: String,
-    port: String,
+    port: u16,
     nqn: String,
 }
 
 impl ParsedUri {
     fn new(uri: Uri) -> Result<ParsedUri, SvcError> {
         let host = uri.host().ok_or(SvcError::InvalidArguments {})?.to_string();
-        let port = uri.port().ok_or(SvcError::InvalidArguments {})?.to_string();
+        let port = uri.port().ok_or(SvcError::InvalidArguments {})?.as_u16();
         let nqn = uri.path()[1 ..].to_string();
 
         Ok(Self { host, port, nqn })
@@ -322,8 +290,8 @@ impl ParsedUri {
     fn host(&self) -> String {
         self.host.clone()
     }
-    fn port(&self) -> String {
-        self.port.clone()
+    fn port(&self) -> u16 {
+        self.port
     }
     fn nqn(&self) -> String {
         self.nqn.clone()

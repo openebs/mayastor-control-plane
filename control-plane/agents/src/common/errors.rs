@@ -225,8 +225,8 @@ pub enum SvcError {
     MaxRebuilds { max_rebuilds: u32 },
     #[snafu(display("The api version: {:?} is not valid", api_version))]
     InvalidApiVersion { api_version: Option<ApiVersion> },
-    #[snafu(display("The subsystem with nqn: {} is not found", nqn))]
-    SubsystemNotFound { nqn: String },
+    #[snafu(display("The subsystem with nqn: {} is not found, {}", nqn, details))]
+    SubsystemNotFound { nqn: String, details: String },
     #[snafu(display("The nqn couldnt be parsed"))]
     NvmeParseError {},
     #[snafu(display("Nvme connect failed : {}", details))]
