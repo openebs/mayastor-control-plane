@@ -11,6 +11,7 @@ use nvmeadm::{
 
 use csi_driver::PublishParams;
 use glob::glob;
+use nvmeadm::nvmf_subsystem::Subsystem;
 use regex::Regex;
 use tracing::debug;
 use udev::{Device, Enumerator};
@@ -96,22 +97,7 @@ impl TryFrom<&Url> for NvmfAttach {
             .ok_or_else(|| DeviceError::new("no path segment"))?
             .collect();
 
-        if segments.is_empty() || (segments.len() == 1 && segments[0].is_empty()) {
-            return Err(DeviceError::new("no path segment"));
-        }
-
-        if segments.len() > 1 {
-            return Err(DeviceError::new("too many path segments"));
-        }
-
-        let components: Vec<&str> = segments[0].split(':').collect();
-
-        if components.len() != 2 {
-            return Err(DeviceError::new("invalid NQN"));
-        }
-
-        let uuid = extract_uuid(components[1])
-            .map_err(|error| DeviceError::from(format!("invalid UUID: {}", error)))?;
+        let uuid = get_volume_uuid_from_uri(url)?;
 
         let port = url.port().unwrap_or(4420);
 
@@ -164,32 +150,40 @@ impl Attach for NvmfAttach {
     }
 
     async fn attach(&self) -> Result<(), DeviceError> {
-        // The default reconnect delay in linux kernel is set to 10s. Use the
-        // same default value unless the timeout is less or equal to 10.
-        let reconnect_delay = match self.io_timeout {
-            Some(io_timeout) => {
-                if io_timeout <= 10 {
-                    Some(1)
-                } else {
-                    Some(10)
-                }
-            }
-            None => None,
-        };
-        let ca = ConnectArgsBuilder::default()
-            .traddr(&self.host)
-            .trsvcid(self.port.to_string())
-            .nqn(&self.nqn)
-            .ctrl_loss_tmo(self.ctrl_loss_tmo)
-            .reconnect_delay(reconnect_delay)
-            .nr_io_queues(self.nr_io_queues)
-            .hostnqn(self.hostnqn.clone())
-            .keep_alive_tmo(self.keep_alive_tmo)
-            .build()?;
-        match ca.connect() {
-            Err(NvmeError::ConnectInProgress) => Ok(()),
-            Err(err) => Err(err.into()),
+        // Get the subsystem, if not found issue a connect.
+        match Subsystem::get(self.host.as_str(), &self.port, self.nqn.as_str()) {
             Ok(_) => Ok(()),
+            Err(NvmeError::SubsystemNotFound { .. }) => {
+                // The default reconnect delay in linux kernel is set to 10s. Use the
+                // same default value unless the timeout is less or equal to 10.
+                let reconnect_delay = match self.io_timeout {
+                    Some(io_timeout) => {
+                        if io_timeout <= 10 {
+                            Some(1)
+                        } else {
+                            Some(10)
+                        }
+                    }
+                    None => None,
+                };
+                let ca = ConnectArgsBuilder::default()
+                    .traddr(&self.host)
+                    .trsvcid(self.port.to_string())
+                    .nqn(&self.nqn)
+                    .ctrl_loss_tmo(self.ctrl_loss_tmo)
+                    .reconnect_delay(reconnect_delay)
+                    .nr_io_queues(self.nr_io_queues)
+                    .hostnqn(self.hostnqn.clone())
+                    .keep_alive_tmo(self.keep_alive_tmo)
+                    .build()?;
+                return match ca.connect() {
+                    // Should we remove this arm?
+                    Err(NvmeError::ConnectInProgress) => Ok(()),
+                    Err(err) => Err(err.into()),
+                    Ok(_) => Ok(()),
+                };
+            }
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -289,4 +283,29 @@ pub(crate) fn set_nvmecore_iotimeout(io_timeout_secs: u32) -> Result<(), std::io
     );
     sysfs::write_value(path, "io_timeout", io_timeout_secs)?;
     Ok(())
+}
+
+/// Extract uuid from Url.
+pub(crate) fn get_volume_uuid_from_uri(url: &Url) -> Result<Uuid, DeviceError> {
+    let segments: Vec<&str> = url
+        .path_segments()
+        .ok_or_else(|| DeviceError::new("no path segment"))?
+        .collect();
+
+    if segments.is_empty() || (segments.len() == 1 && segments[0].is_empty()) {
+        return Err(DeviceError::new("no path segment"));
+    }
+
+    if segments.len() > 1 {
+        return Err(DeviceError::new("too many path segments"));
+    }
+
+    let components: Vec<&str> = segments[0].split(':').collect();
+
+    if components.len() != 2 {
+        return Err(DeviceError::new("invalid NQN"));
+    }
+
+    extract_uuid(components[1])
+        .map_err(|error| DeviceError::from(format!("invalid UUID: {}", error)))
 }
