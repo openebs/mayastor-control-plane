@@ -188,6 +188,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let u = Uuid::parse_str(&volume_uuid).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", volume_uuid))
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(u)?;
 
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
@@ -250,6 +251,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_uuid)?;
         IoEngineApiClient::get_client()
             .delete_volume(&volume_uuid)
             .await
@@ -289,6 +291,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume_id = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_id)?;
 
         match args.volume_capability {
             Some(c) => {
@@ -411,6 +414,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_uuid)?;
         // Check if target volume exists.
         let volume = match IoEngineApiClient::get_client()
             .get_volume(&volume_uuid)
@@ -460,6 +464,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_uuid)?;
         let _volume = IoEngineApiClient::get_client()
             .get_volume(&volume_uuid)
             .await

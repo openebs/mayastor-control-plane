@@ -27,12 +27,15 @@ impl RestClient {
     pub fn new(url: Url, timeout: std::time::Duration) -> Result<RestClient> {
         // TODO: Support HTTPS Certificates
         let uri = url.as_str().parse()?;
-        let cfg = Configuration::new(url, timeout, None, None, true).map_err(|error| {
-            anyhow::anyhow!(
-                "Failed to create openapi configuration, Error: '{:?}'",
-                error
-            )
-        })?;
+        let cfg = Configuration::builder()
+            .with_timeout(timeout)
+            .build_url(url)
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to create openapi configuration, Error: '{:?}'",
+                    error
+                )
+            })?;
         Ok(Self {
             uri,
             client: ApiClient::new(cfg),

@@ -1,9 +1,9 @@
-use crate::{dev::Device, volume_serializer::VolumeOpGuard};
+use crate::dev::{nvmf::volume_uuid_from_url_str, Device};
+use csi_driver::limiter::VolumeOpGuard;
 use grpc::csi_node_nvme::{
     nvme_operations_server::NvmeOperations, NvmeConnectRequest, NvmeConnectResponse,
 };
 use std::collections::HashMap;
-use tonic::Response;
 use tracing::{info, warn};
 
 #[derive(Debug, Default)]
@@ -16,12 +16,13 @@ impl NvmeOperations for NvmeOperationsSvc {
         request: tonic::Request<NvmeConnectRequest>,
     ) -> Result<tonic::Response<NvmeConnectResponse>, tonic::Status> {
         let req = request.into_inner();
-        info!(request=?req, "Nvme connection request for replace path");
+        info!(request=?req, "Nvme connection request to replace path");
 
         let uri: &str = req.uri.as_str();
+        let uuid = volume_uuid_from_url_str(uri)?;
 
         // Create a new Volume Operation Guard.
-        let _guard = VolumeOpGuard::new(uri)?;
+        let _guard = VolumeOpGuard::new(uuid)?;
 
         let publish_context: HashMap<String, String> = match req.publish_context {
             Some(map_wrapper) => map_wrapper.map,
@@ -41,6 +42,6 @@ impl NvmeOperations for NvmeOperationsSvc {
             .await
             .map_err(|error| warn!(error=%error, "Failed to do fixup after connect"));
 
-        Ok(Response::new(NvmeConnectResponse {}))
+        Ok(tonic::Response::new(NvmeConnectResponse {}))
     }
 }

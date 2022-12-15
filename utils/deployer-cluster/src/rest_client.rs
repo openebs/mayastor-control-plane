@@ -39,9 +39,13 @@ impl RestClient {
     ) -> anyhow::Result<Self> {
         let cert_file = &std::include_bytes!("../../../control-plane/rest/certs/rsa/ca.cert")[..];
 
-        let openapi_client_config =
-            client::Configuration::new(url, timeout, bearer_token, Some(cert_file), trace)
-                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
+        let openapi_client_config = client::Configuration::builder()
+            .with_timeout(timeout)
+            .with_bearer_token(bearer_token)
+            .with_certificate(cert_file)
+            .with_tracing(trace)
+            .build_url(url)
+            .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
         let openapi_client = client::direct::ApiClient::new(openapi_client_config);
 
         Ok(Self {
@@ -55,9 +59,12 @@ impl RestClient {
         bearer_token: Option<String>,
         trace: bool,
     ) -> anyhow::Result<Self> {
-        let openapi_client_config =
-            client::Configuration::new(url, timeout, bearer_token, None, trace)
-                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
+        let openapi_client_config = client::Configuration::builder()
+            .with_timeout(timeout)
+            .with_bearer_token(bearer_token)
+            .with_tracing(trace)
+            .build_url(url)
+            .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
         let openapi_client = client::direct::ApiClient::new(openapi_client_config);
         Ok(Self {
             openapi_client_v0: openapi_client,

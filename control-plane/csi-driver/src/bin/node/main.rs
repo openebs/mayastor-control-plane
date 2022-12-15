@@ -3,10 +3,7 @@
 //! Implementation of gRPC methods from the CSI spec. This includes mounting
 //! of volumes using iscsi/nvmf protocols on the node.
 
-use crate::{
-    identity::Identity, mount::probe_filesystems, node::Node, shutdown_event::Shutdown,
-    volume_serializer::volume_serializer,
-};
+use crate::{identity::Identity, mount::probe_filesystems, node::Node, shutdown_event::Shutdown};
 use clap::{App, Arg};
 use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
@@ -43,7 +40,6 @@ mod node;
 mod nodeplugin_grpc;
 mod nodeplugin_nvme;
 mod nodeplugin_svc;
-mod volume_serializer;
 
 /// Shutdown event which lets the plugin know it needs to stop processing new events and
 /// complete any existing ones before shutting down.
@@ -270,9 +266,6 @@ impl CsiServer {
                 }
             }
         };
-
-        // Initialize the volume serializer once cell.
-        volume_serializer();
 
         let node = Node::new(node_name.into(), node_selector, probe_filesystems());
         Ok(async move {

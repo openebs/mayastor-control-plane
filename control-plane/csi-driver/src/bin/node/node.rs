@@ -243,6 +243,7 @@ impl node_server::Node for Node {
                 "Failed to publish volume: missing volume id"
             ));
         }
+        let _guard = csi_driver::limiter::VolumeOpGuard::new_str(&msg.volume_id)?;
 
         if msg.target_path.is_empty() {
             return Err(failure!(
@@ -324,6 +325,7 @@ impl node_server::Node for Node {
                 "Failed to unpublish volume: missing volume id"
             ));
         }
+        let _guard = csi_driver::limiter::VolumeOpGuard::new_str(&msg.volume_id)?;
 
         if msg.target_path.is_empty() {
             return Err(failure!(
@@ -361,7 +363,7 @@ impl node_server::Node for Node {
         Ok(Response::new(NodeUnpublishVolumeResponse {}))
     }
 
-    /// Get volume stats method evaluates and returns capacity metrics
+    /// Get volume stats method evaluates and returns capacity metrics.
     async fn node_get_volume_stats(
         &self,
         request: Request<NodeGetVolumeStatsRequest>,
@@ -380,6 +382,7 @@ impl node_server::Node for Node {
                 "Failed to stage volume: missing volume path"
             ));
         }
+        let _guard = csi_driver::limiter::VolumeOpGuard::new_str(&msg.volume_id)?;
         match sys::statfs::statfs(&*msg.volume_path) {
             Ok(info) => Ok(Response::new(NodeGetVolumeStatsResponse {
                 usage: vec![
@@ -481,6 +484,7 @@ impl node_server::Node for Node {
                 error
             )
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(uuid)?;
 
         // Note checking existence of staging_target_path, is delegated to
         // code handling those volume types where it is relevant.
@@ -619,6 +623,7 @@ impl node_server::Node for Node {
                 error
             )
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(uuid)?;
 
         // All checks complete, stage unmount if required.
 

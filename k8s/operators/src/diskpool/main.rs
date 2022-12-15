@@ -734,13 +734,14 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
         .expect("timeout value is invalid")
         .into();
 
-    let cfg =
-        clients::tower::Configuration::new(url, timeout, None, None, true).map_err(|error| {
+    let cfg = clients::tower::Configuration::new(url, timeout, None, None, true, None).map_err(
+        |error| {
             anyhow::anyhow!(
                 "Failed to create openapi configuration, Error: '{:?}'",
                 error
             )
-        })?;
+        },
+    )?;
 
     let context = OperatorContext {
         k8s,
