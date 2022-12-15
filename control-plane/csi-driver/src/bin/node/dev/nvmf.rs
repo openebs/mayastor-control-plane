@@ -97,7 +97,7 @@ impl TryFrom<&Url> for NvmfAttach {
             .ok_or_else(|| DeviceError::new("no path segment"))?
             .collect();
 
-        let uuid = get_volume_uuid_from_uri(url)?;
+        let uuid = volume_uuid_from_url(url)?;
 
         let port = url.port().unwrap_or(4420);
 
@@ -285,8 +285,13 @@ pub(crate) fn set_nvmecore_iotimeout(io_timeout_secs: u32) -> Result<(), std::io
     Ok(())
 }
 
+/// Extract uuid from Url string.
+pub(crate) fn volume_uuid_from_url_str(url: &str) -> Result<Uuid, DeviceError> {
+    let url = Url::parse(url).map_err(|error| error.to_string())?;
+    volume_uuid_from_url(&url)
+}
 /// Extract uuid from Url.
-pub(crate) fn get_volume_uuid_from_uri(url: &Url) -> Result<Uuid, DeviceError> {
+pub(crate) fn volume_uuid_from_url(url: &Url) -> Result<Uuid, DeviceError> {
     let segments: Vec<&str> = url
         .path_segments()
         .ok_or_else(|| DeviceError::new("no path segment"))?
