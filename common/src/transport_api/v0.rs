@@ -30,6 +30,8 @@ impl_message!(DestroyPool);
 impl_vector_request!(Pools, Pool);
 impl_message!(GetPools);
 
+impl_vector_request!(NvmeSubsystems, NvmeSubsystem);
+
 impl_vector_request!(Replicas, Replica);
 impl_message!(GetReplicas);
 impl_message!(CreateReplica);

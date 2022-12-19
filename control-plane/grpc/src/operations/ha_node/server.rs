@@ -1,4 +1,4 @@
-use tonic::{Response, Status};
+use tonic::{Request, Response, Status};
 
 use crate::{
     ha_cluster_agent::{
@@ -6,8 +6,9 @@ use crate::{
         HaNodeInfo, ReportFailedNvmePathsRequest,
     },
     ha_node_agent::{
+        get_nvme_controller_response,
         ha_node_rpc_server::{HaNodeRpc, HaNodeRpcServer},
-        ReplacePathRequest,
+        GetNvmeControllerRequest, GetNvmeControllerResponse, ReplacePathRequest,
     },
     operations::ha_node::traits::{ClusterAgentOperations, NodeAgentOperations, NodeInfoConv},
 };
@@ -40,6 +41,21 @@ impl HaNodeRpc for NodeAgentServer {
 
         match self.service.replace_path(&msg, None).await {
             Ok(_) => Ok(Response::new(())),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    async fn get_nvme_controller(
+        &self,
+        request: Request<GetNvmeControllerRequest>,
+    ) -> Result<Response<GetNvmeControllerResponse>, Status> {
+        let msg = request.into_inner();
+        match self.service.get_nvme_controller(&msg, None).await {
+            Ok(val) => Ok(Response::new(GetNvmeControllerResponse {
+                reply: Some(get_nvme_controller_response::Reply::NvmeControllers(
+                    val.into(),
+                )),
+            })),
             Err(err) => Err(err.into()),
         }
     }

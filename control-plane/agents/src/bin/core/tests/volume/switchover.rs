@@ -101,14 +101,9 @@ async fn lazy_delete_shutdown_targets() {
         .node_service_liveness(None)
         .await
         .expect("Should have restarted by now");
-
+    let request = DestroyShutdownTargets::new(volume.uuid().clone(), None);
     vol_cli
-        .destroy_shutdown_target(
-            &DestroyShutdownTargets {
-                uuid: volume.uuid().clone(),
-            },
-            None,
-        )
+        .destroy_shutdown_target(&request, None)
         .await
         .expect("Should destroy old target even though the node is offline!");
 

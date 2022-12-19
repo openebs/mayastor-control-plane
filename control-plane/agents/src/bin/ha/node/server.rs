@@ -3,7 +3,7 @@ use crate::{
     detector::{NvmeController, NvmePathCache},
     path_provider::get_nvme_path_entry,
 };
-use agents::errors::SvcError;
+use agents::errors::{SvcError, SvcError::SubsystemNotFound};
 use common_lib::transport_api::{ErrorChain, ReplyError, ResourceKind};
 use grpc::{
     common::MapWrapper,
@@ -15,9 +15,15 @@ use grpc::{
     },
 };
 
-use agents::errors::SvcError::SubsystemNotFound;
+use common_lib::{
+    transport_api::v0::NvmeSubsystems as NvmeSubsys,
+    types::v0::transport::NvmeSubsystem as NvmeCtrller,
+};
+use grpc::operations::ha_node::traits::GetControllerInfo;
+use nvmeadm::nvmf_subsystem::SubsystemAddr;
+
 use http::Uri;
-use nvmeadm::nvmf_subsystem::{Subsystem, SubsystemAddr};
+use nvmeadm::nvmf_subsystem::Subsystem;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::time::{sleep, Duration};
 use utils::NVME_TARGET_NQN_PREFIX;
@@ -261,6 +267,35 @@ impl NodeAgentOperations for NodeAgentSvc {
             );
         };
         Ok(())
+    }
+
+    async fn get_nvme_controller(
+        &self,
+        request: &dyn GetControllerInfo,
+        _context: Option<Context>,
+    ) -> Result<NvmeSubsys, ReplyError> {
+        let uri = request
+            .nvme_path()
+            .parse::<Uri>()
+            .map_err(|_| SvcError::InvalidArguments {})?;
+        let nqn = uri.path()[1 ..].to_string();
+        match Subsystem::try_from_nqn(nqn.as_str()) {
+            Ok(subsys_list) => {
+                let controller_list = subsys_list
+                    .iter()
+                    .filter(|controller| {
+                        controller.state == "live" && controller.state == "connecting"
+                    })
+                    .map(|controller| NvmeCtrller::new(controller.clone().address))
+                    .collect();
+                Ok(NvmeSubsys(controller_list))
+            }
+            Err(_) => Err(ReplyError::not_found(
+                ResourceKind::Unknown,
+                "Node agent".to_string(),
+                "Could not find any subsystems for the supplied nqn".to_string(),
+            )),
+        }
     }
 }
 

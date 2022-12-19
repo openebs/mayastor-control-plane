@@ -1,6 +1,6 @@
-use std::{collections::HashMap, net::SocketAddr};
-
 use super::*;
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, net::SocketAddr};
 
 #[derive(Debug)]
 pub struct NodeAgentInfo {
@@ -80,6 +80,44 @@ impl ReportFailedPaths {
     /// Get list of all failed paths in the request.
     pub fn failed_paths(&self) -> &Vec<FailedPath> {
         &self.failed_paths
+    }
+}
+
+/// Request struct to get Nvme subsystems registered for a given nqn.
+#[derive(Debug)]
+pub struct GetController {
+    /// nvme_path is the device uri of the target associated with volume.
+    nvme_path: String,
+}
+
+impl GetController {
+    /// Constructor to create instance of the struct.
+    pub fn new(nvme_path: String) -> Self {
+        Self { nvme_path }
+    }
+    /// Get nvme path.
+    pub fn nvme_path(&self) -> String {
+        self.nvme_path.clone()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Represents targets address of Nvme Subsystem.
+pub struct NvmeSubsystem {
+    /// Address is the IP address of the Nvme Subsystem.
+    address: String,
+}
+
+impl NvmeSubsystem {
+    /// Creates an instance of this struct.
+    pub fn new(target_addr: String) -> Self {
+        Self {
+            address: target_addr,
+        }
+    }
+    /// Get IP address of the Nvme Subsystem.
+    pub fn address(&self) -> &str {
+        self.address.as_str()
     }
 }
 
