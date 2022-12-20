@@ -383,31 +383,47 @@ impl node_server::Node for Node {
             ));
         }
         let _guard = csi_driver::limiter::VolumeOpGuard::new_str(&msg.volume_id)?;
-        match sys::statfs::statfs(&*msg.volume_path) {
-            Ok(info) => Ok(Response::new(NodeGetVolumeStatsResponse {
-                usage: vec![
-                    csi::VolumeUsage {
-                        total: info.blocks() as i64 * info.block_size(),
-                        unit: csi::volume_usage::Unit::Bytes as i32,
-                        available: info.blocks_available() as i64 * info.block_size(),
-                        used: (info.blocks() - info.blocks_free()) as i64 * info.block_size(),
+
+        let volume_path = Path::new(&msg.volume_path);
+        if volume_path.exists() {
+            // Check if its a filesystem.
+            if volume_path.is_dir() {
+                trace!("Getting statfs metrics for : {:?}", volume_path);
+                match sys::statfs::statfs(&*msg.volume_path) {
+                    Ok(info) => Ok(Response::new(NodeGetVolumeStatsResponse {
+                        usage: vec![
+                            csi::VolumeUsage {
+                                total: info.blocks() as i64 * info.block_size(),
+                                unit: csi::volume_usage::Unit::Bytes as i32,
+                                available: info.blocks_available() as i64 * info.block_size(),
+                                used: (info.blocks() - info.blocks_free()) as i64
+                                    * info.block_size(),
+                            },
+                            csi::VolumeUsage {
+                                total: info.files() as i64,
+                                unit: csi::volume_usage::Unit::Inodes as i32,
+                                available: info.files_free() as i64,
+                                used: (info.files() - info.files_free()) as i64,
+                            },
+                        ],
+                        volume_condition: None,
+                    })),
+                    Err(err) => match err {
+                        Errno::ENOENT => Err(Status::new(Code::NotFound, err.to_string())),
+                        Errno::EIO => Err(Status::new(Code::Internal, err.to_string())),
+                        Errno::ENOSYS => Err(Status::new(Code::Unavailable, err.to_string())),
+                        Errno::ENOTDIR => Err(Status::new(Code::Internal, err.to_string())),
+                        _ => Err(Status::new(Code::InvalidArgument, err.to_string())),
                     },
-                    csi::VolumeUsage {
-                        total: info.files() as i64,
-                        unit: csi::volume_usage::Unit::Inodes as i32,
-                        available: info.files_free() as i64,
-                        used: (info.files() - info.files_free()) as i64,
-                    },
-                ],
-                volume_condition: None,
-            })),
-            Err(err) => match err {
-                Errno::ENOENT => Err(Status::new(Code::NotFound, err.to_string())),
-                Errno::EIO => Err(Status::new(Code::Internal, err.to_string())),
-                Errno::ENOSYS => Err(Status::new(Code::Unavailable, err.to_string())),
-                Errno::ENOTDIR => Err(Status::new(Code::FailedPrecondition, err.to_string())),
-                _ => Err(Status::new(Code::InvalidArgument, err.to_string())),
-            },
+                }
+            } else {
+                Ok(Response::new(NodeGetVolumeStatsResponse {
+                    usage: vec![],
+                    volume_condition: None,
+                }))
+            }
+        } else {
+            Err(Status::new(Code::NotFound, "volume path doesn't exist"))
         }
     }
 
