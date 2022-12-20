@@ -14,6 +14,7 @@ if [ -z "$CI" ]; then
     cp -r "$RUST_TOOLCHAIN_NIX"/* "$RUST_TOOLCHAIN"
     chmod -R +w "$RUST_TOOLCHAIN"
   fi
+  export RUST_TOOLCHAIN="$(realpath "$RUST_TOOLCHAIN")"
   if [ "$dev_rustup" == "1" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
     cowsay "$devrustup_moth"
     unset dev_rustup
