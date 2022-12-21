@@ -152,7 +152,10 @@ impl Attach for NvmfAttach {
     async fn attach(&self) -> Result<(), DeviceError> {
         // Get the subsystem, if not found issue a connect.
         match Subsystem::get(self.host.as_str(), &self.port, self.nqn.as_str()) {
-            Ok(_) => Ok(()),
+            Ok(subsystem) => {
+                tracing::debug!(?subsystem, "Subsystem already present, skipping connect");
+                Ok(())
+            }
             Err(NvmeError::SubsystemNotFound { .. }) => {
                 // The default reconnect delay in linux kernel is set to 10s. Use the
                 // same default value unless the timeout is less or equal to 10.
@@ -176,12 +179,12 @@ impl Attach for NvmfAttach {
                     .hostnqn(self.hostnqn.clone())
                     .keep_alive_tmo(self.keep_alive_tmo)
                     .build()?;
-                return match ca.connect() {
+                match ca.connect() {
                     // Should we remove this arm?
                     Err(NvmeError::ConnectInProgress) => Ok(()),
                     Err(err) => Err(err.into()),
                     Ok(_) => Ok(()),
-                };
+                }
             }
             Err(err) => Err(err.into()),
         }

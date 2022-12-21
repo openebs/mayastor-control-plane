@@ -42,7 +42,7 @@ mkShell {
     utillinux
     which
   ] ++ pkgs.lib.optional (!norust) rust
-  ++ pkgs.lib.optional (system != "aarch64-darwin") [
+  ++ pkgs.lib.optionals (system != "aarch64-darwin") [
     e2fsprogs
     libxfs
     nvme-cli
