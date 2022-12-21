@@ -1,12 +1,16 @@
 use crossbeam_queue::SegQueue;
-use futures_util::{future::ready, stream::StreamExt};
+use futures_util::future::ready;
+#[cfg(target_os = "linux")]
+use futures_util::stream::StreamExt;
 use nvmeadm::nvmf_subsystem::{NvmeSubsystems, Subsystem};
+#[cfg(target_os = "linux")]
+use std::convert::TryInto;
 use std::{
     collections::HashMap,
-    convert::TryInto,
     path::{Path, PathBuf},
     sync::Arc,
 };
+#[cfg(target_os = "linux")]
 use tokio_udev::{AsyncMonitorSocket, EventType, MonitorBuilder};
 use utils::NVME_TARGET_NQN_PREFIX;
 
@@ -56,6 +60,7 @@ pub fn get_nvme_path_entry(path: &String) -> Option<NvmePath> {
 
 /// UDEV-driven cache synchronization messages.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 enum CacheOp {
     Add(String),
     Remove(String),
@@ -76,12 +81,19 @@ enum CacheOp {
 /// To eliminate locking/contention, backend communicates with frontend via a lockless queue.
 #[derive(Debug)]
 pub struct CachedNvmePathProvider {
+    #[cfg(target_os = "linux")]
     udev_queue: Arc<SegQueue<CacheOp>>,
     frontend: Option<NvmePathNameCollection>,
 }
 
 impl CachedNvmePathProvider {
+    /// Fake start UDEV monitoring loop.
+    #[cfg(not(target_os = "linux"))]
+    pub fn start(&mut self) -> anyhow::Result<impl std::future::Future<Output = ()> + '_> {
+        Ok(ready(()))
+    }
     /// Start UDEV monitoring loop.
+    #[cfg(target_os = "linux")]
     pub fn start(&mut self) -> anyhow::Result<impl std::future::Future<Output = ()> + '_> {
         let builder = MonitorBuilder::new()?.match_subsystem("nvme")?;
 
@@ -150,6 +162,7 @@ impl CachedNvmePathProvider {
 
         Self {
             frontend: Some(NvmePathNameCollection::new(Arc::clone(&q))),
+            #[cfg(target_os = "linux")]
             udev_queue: q,
         }
     }

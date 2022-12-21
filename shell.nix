@@ -28,25 +28,29 @@ mkShell {
     commitlint
     cowsay
     docker
-    e2fsprogs
     etcd
     fio
     git
     jq
-    libxfs
     llvmPackages.libclang
-    nvme-cli
+    nixpkgs-fmt
     openapi-generator
     openssl
     pkg-config
     pre-commit
-    pytest_inputs
     python3
-    tini
-    udev
     utillinux
     which
-  ] ++ pkgs.lib.optional (!norust) rust;
+  ] ++ pkgs.lib.optional (!norust) rust
+  ++ pkgs.lib.optional (system != "aarch64-darwin") [
+    e2fsprogs
+    libxfs
+    nvme-cli
+    # python3.9-pyopenssl-22.0.0 marked as broken but fixed on master..
+    pytest_inputs
+    tini
+    udev
+  ] ++ pkgs.lib.optional (system == "aarch64-darwin") darwin.apple_sdk.frameworks.Security;
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
