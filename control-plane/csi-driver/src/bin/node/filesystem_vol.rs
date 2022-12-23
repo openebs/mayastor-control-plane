@@ -322,11 +322,16 @@ pub(crate) fn unpublish_fs_volume(msg: &NodeUnpublishVolumeRequest) -> Result<()
     if mount::find_mount(None, Some(target_path)).is_none() {
         // No mount found for target_path.
         // The idempotency requirement means this is not an error.
-        // Just clean up as best we can and claim success.
-
+        // Just clean up as best we can
         if let Err(error) = fs::remove_dir(PathBuf::from(target_path)) {
             if error.kind() != ErrorKind::NotFound {
-                error!("Failed to remove directory {}: {}", target_path, error);
+                // Return error so that kubelet can retry
+                return Err(failure!(
+                    Code::Internal,
+                    "Failed to remove directory {}: {}",
+                    target_path,
+                    error
+                ));
             }
         }
 
@@ -354,7 +359,12 @@ pub(crate) fn unpublish_fs_volume(msg: &NodeUnpublishVolumeRequest) -> Result<()
 
     if let Err(error) = fs::remove_dir(PathBuf::from(target_path)) {
         if error.kind() != ErrorKind::NotFound {
-            error!("Failed to remove directory {}: {}", target_path, error);
+            return Err(failure!(
+                Code::Internal,
+                "Failed to remove directory {}: {}",
+                target_path,
+                error
+            ));
         }
     }
 
