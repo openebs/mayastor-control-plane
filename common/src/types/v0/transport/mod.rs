@@ -141,6 +141,8 @@ pub enum MessageIdVs {
     ShutdownNexus,
     /// Replace Path
     ReplacePathInfo,
+    /// Get Nvme Subsystems.
+    GetNvmeSubsystems,
 }
 
 impl From<MessageIdVs> for MessageId {

@@ -9,6 +9,7 @@ package v1.ha_node_agent;
 // Service for managing node-agent rpc calls
 service HaNodeRpc {
   rpc ReplacePath (ReplacePathRequest) returns (google.protobuf.Empty) {}
+  rpc GetNvmeController (GetNvmeControllerRequest) returns (GetNvmeControllerResponse){}
 }
 
 // Path replacement message.
@@ -21,4 +22,26 @@ message ReplacePathRequest {
 
   // Pubish context of the volume
   common.MapWrapper publish_context = 3;
+}
+
+// Get Controller request message.
+message GetNvmeControllerRequest {
+  // Nvme path containing nqn for the volume.
+  string nvme_path = 1;
+}
+
+// Get Controller response message.
+message GetNvmeControllerResponse {
+  oneof reply {
+    // List of target address registered as Nvme Subsystem.
+    NvmeControllers nvme_controllers = 1;
+    // Error incase No subsystem found.
+    common.ReplyError error = 2;
+  }
+}
+
+// Message to represent target's address in the rpc response.
+message NvmeControllers {
+ // Target address registered as Nvme Subsystem.
+  repeated string target_address = 1;
 }

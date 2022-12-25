@@ -231,12 +231,12 @@ impl Service {
     }
 
     /// Destroy the shutdown targets associate with the volume.
-    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid()))]
     pub(super) async fn destroy_shutdown_target(
         &self,
         request: &DestroyShutdownTargets,
     ) -> Result<(), SvcError> {
-        let mut volume = self.specs().volume(&request.uuid).await?;
+        let mut volume = self.specs().volume(request.uuid()).await?;
         volume
             .remove_shutdown_targets(&self.registry, request)
             .await

@@ -7,7 +7,7 @@ use crate::{
     replica, volume,
     volume::{
         get_volumes_request, CreateVolumeRequest, DestroyShutdownTargetRequest,
-        DestroyVolumeRequest, PublishVolumeRequest, RepublishVolumeRequest,
+        DestroyVolumeRequest, PublishVolumeRequest, RegisteredTargets, RepublishVolumeRequest,
         SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
@@ -25,7 +25,7 @@ use common_lib::{
     },
     IntoOption,
 };
-use std::{collections::HashMap, convert::TryFrom};
+use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]
@@ -1424,12 +1424,17 @@ impl TryFrom<StringValue> for VolumeId {
 /// which want to use this operation.
 pub trait DestroyShutdownTargetsInfo: Send + Sync + std::fmt::Debug {
     /// uuid of the volume, i.e the owner
-    fn uuid(&self) -> VolumeId;
+    fn uuid(&self) -> &VolumeId;
+    /// List of all targets registered in the Application node for the volume.
+    fn registered_targets(&self) -> Option<Vec<String>>;
 }
 
 impl DestroyShutdownTargetsInfo for DestroyShutdownTargets {
-    fn uuid(&self) -> VolumeId {
-        self.uuid.clone()
+    fn uuid(&self) -> &VolumeId {
+        self.uuid()
+    }
+    fn registered_targets(&self) -> Option<Vec<String>> {
+        self.registered_targets()
     }
 }
 
@@ -1437,11 +1442,15 @@ impl DestroyShutdownTargetsInfo for DestroyShutdownTargets {
 #[derive(Debug)]
 pub struct ValidatedDestroyShutdownTargetRequest {
     uuid: VolumeId,
+    registered_targets: Option<Vec<String>>,
 }
 
 impl DestroyShutdownTargetsInfo for ValidatedDestroyShutdownTargetRequest {
-    fn uuid(&self) -> VolumeId {
-        self.uuid.clone()
+    fn uuid(&self) -> &VolumeId {
+        self.uuid.borrow()
+    }
+    fn registered_targets(&self) -> Option<Vec<String>> {
+        self.registered_targets.clone()
     }
 }
 
@@ -1450,6 +1459,10 @@ impl ValidateRequestTypes for DestroyShutdownTargetRequest {
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedDestroyShutdownTargetRequest {
             uuid: VolumeId::try_from(StringValue(self.volume_id))?,
+            registered_targets: match self.registered_targets {
+                Some(val) => Some(val.target_list),
+                None => None,
+            },
         })
     }
 }
@@ -1458,12 +1471,15 @@ impl From<&dyn DestroyShutdownTargetsInfo> for DestroyShutdownTargetRequest {
     fn from(data: &dyn DestroyShutdownTargetsInfo) -> Self {
         Self {
             volume_id: Some(data.uuid().to_string()),
+            registered_targets: data
+                .registered_targets()
+                .map(|val| RegisteredTargets { target_list: val }),
         }
     }
 }
 
 impl From<&dyn DestroyShutdownTargetsInfo> for DestroyShutdownTargets {
     fn from(data: &dyn DestroyShutdownTargetsInfo) -> Self {
-        Self::new(data.uuid())
+        Self::new(data.uuid().clone(), data.registered_targets())
     }
 }

@@ -9,7 +9,7 @@ use common_lib::{
             SpecTransaction,
         },
         transport::{
-            DestroyShutdownTargets, NodeId, ReplacePath, RepublishVolume, VolumeId,
+            DestroyShutdownTargets, GetController, NodeId, ReplacePath, RepublishVolume, VolumeId,
             VolumeShareProtocol,
         },
     },
@@ -195,9 +195,66 @@ impl SwitchOverRequest {
             {
                 error!(volume.uuid=%self.volume_id, %error, "Cancelling switchover");
                 self.stage = Stage::Errored;
-                Err(error)
+                Err(error.into())
             }
-            Err(error) => Err(error),
+            Err(err) if err.kind == ReplyErrorKind::ResourceExhausted => {
+                // Cleanup volume targets that are not registered as Nvme Subsystems in the Node.
+                if let Some(new_path) = self.new_path.clone() {
+                    if let Ok(uri) = Uri::builder()
+                        .scheme("http")
+                        .authority(self.callback_uri.to_string())
+                        .path_and_query("")
+                        .build()
+                    {
+                        let node_client = NodeAgentClient::new(uri, None).await;
+                        let request = GetController::new(new_path);
+                        match node_client.get_nvme_controller(&request, None).await {
+                            Ok(target_address) => {
+                                let request = DestroyShutdownTargets::new(
+                                    self.volume_id.clone(),
+                                    Some(
+                                        target_address
+                                            .0
+                                            .iter()
+                                            .map(|addr| addr.address().to_string())
+                                            .collect(),
+                                    ),
+                                );
+                                client()
+                                    .destroy_shutdown_target(&request, None)
+                                    .await
+                                    .map_err(|err| anyhow!(err.to_string()))?;
+                                info!("Retrying Republish after cleaning up targets");
+                                return Ok(());
+                            }
+                            Err(err) if matches!(err.kind, ReplyErrorKind::NotFound) => {
+                                let request =
+                                    DestroyShutdownTargets::new(self.volume_id.clone(), None);
+                                client()
+                                    .destroy_shutdown_target(&request, None)
+                                    .await
+                                    .map_err(|err| anyhow!(err.to_string()))?;
+                                info!("Retrying Republish after cleaning up targets");
+                                return Ok(());
+                            }
+                            _ => {
+                                let err =
+                                    "Failed to list Nvme subsystems for the volume".to_string();
+                                Err(anyhow!(err))
+                            }
+                        }
+                    } else {
+                        self.stage = Stage::Errored;
+                        Err(anyhow!(
+                            "Could not convert node grpc address to required format"
+                        ))
+                    }
+                } else {
+                    self.stage = Stage::Errored;
+                    Err(anyhow!("Could not get the last published nvme path"))
+                }
+            }
+            Err(error) => Err(anyhow!(error.to_string())),
         }?;
         self.publish_context = vol.spec().publish_context;
         self.new_path = match vol.state().target {
@@ -218,9 +275,7 @@ impl SwitchOverRequest {
         self.start_op(etcd).await?;
 
         info!(volume.uuid=%self.volume_id, "Deleting volume target");
-        let destroy_request = DestroyShutdownTargets {
-            uuid: self.volume_id.clone(),
-        };
+        let destroy_request = DestroyShutdownTargets::new(self.volume_id.clone(), None);
         client()
             .destroy_shutdown_target(&destroy_request, None)
             .await?;

@@ -2,12 +2,13 @@ use crate::{
     common,
     context::Context,
     ha_cluster_agent::{FailedNvmePath, HaNodeInfo, ReportFailedNvmePathsRequest},
-    ha_node_agent::ReplacePathRequest,
+    ha_node_agent::{GetNvmeControllerRequest, NvmeControllers, ReplacePathRequest},
 };
 use common_lib::{
-    transport_api::{ReplyError, ResourceKind},
+    transport_api::{v0::NvmeSubsystems, ReplyError, ResourceKind},
     types::v0::transport::{
-        cluster_agent::NodeAgentInfo, FailedPath, ReplacePath, ReportFailedPaths,
+        cluster_agent::NodeAgentInfo, FailedPath, GetController, NvmeSubsystem, ReplacePath,
+        ReportFailedPaths,
     },
     IntoVec,
 };
@@ -22,6 +23,61 @@ pub trait NodeAgentOperations: Send + Sync {
         request: &dyn ReplacePathInfo,
         context: Option<Context>,
     ) -> Result<(), ReplyError>;
+    /// Get all nvme controllers registered for the volume.
+    async fn get_nvme_controller(
+        &self,
+        request: &dyn GetControllerInfo,
+        context: Option<Context>,
+    ) -> Result<NvmeSubsystems, ReplyError>;
+}
+
+/// GetControllerInfo is for the request struct to get list of Nvme Controllers for the volume.
+pub trait GetControllerInfo: Send + Sync + std::fmt::Debug {
+    /// Path to access the target.
+    fn nvme_path(&self) -> String;
+}
+
+impl GetControllerInfo for GetController {
+    fn nvme_path(&self) -> String {
+        self.nvme_path()
+    }
+}
+
+impl GetControllerInfo for GetNvmeControllerRequest {
+    fn nvme_path(&self) -> String {
+        self.nvme_path.clone()
+    }
+}
+
+impl From<&dyn GetControllerInfo> for GetNvmeControllerRequest {
+    fn from(src: &dyn GetControllerInfo) -> Self {
+        Self {
+            nvme_path: src.nvme_path(),
+        }
+    }
+}
+
+impl From<NvmeSubsystems> for NvmeControllers {
+    fn from(subsystems: NvmeSubsystems) -> Self {
+        Self {
+            target_address: subsystems
+                .into_inner()
+                .iter()
+                .map(|subsystem| subsystem.address().to_string())
+                .collect(),
+        }
+    }
+}
+
+impl From<NvmeControllers> for NvmeSubsystems {
+    fn from(grpc_type_subsys: NvmeControllers) -> Self {
+        let controllers = grpc_type_subsys
+            .target_address
+            .into_iter()
+            .map(NvmeSubsystem::new)
+            .collect();
+        Self(controllers)
+    }
 }
 
 /// ReplacePathInfo trait for the failed path replacement to be implemented by entities

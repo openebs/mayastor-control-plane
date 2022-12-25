@@ -1,14 +1,14 @@
 use crate::{
     context::{Client, Context, TracedChannel},
     ha_cluster_agent::ha_cluster_rpc_client::HaClusterRpcClient,
-    ha_node_agent::ha_node_rpc_client::HaNodeRpcClient,
+    ha_node_agent::{get_nvme_controller_response::Reply, ha_node_rpc_client::HaNodeRpcClient},
     operations::ha_node::traits::{
-        ClusterAgentOperations, NodeAgentOperations, NodeInfo, ReplacePathInfo,
+        ClusterAgentOperations, GetControllerInfo, NodeAgentOperations, NodeInfo, ReplacePathInfo,
         ReportFailedPathsInfo,
     },
 };
 use common_lib::{
-    transport_api::{ReplyError, TimeoutOptions},
+    transport_api::{v0::NvmeSubsystems, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::MessageIdVs,
 };
 use std::ops::Deref;
@@ -107,6 +107,29 @@ impl NodeAgentOperations for NodeAgentClient {
         match self.client().replace_path(req).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
+        }
+    }
+    #[tracing::instrument(
+        name = "NodeAgentClient::get_nvme_controller",
+        level = "debug",
+        skip(self),
+        err
+    )]
+    async fn get_nvme_controller(
+        &self,
+        request: &dyn GetControllerInfo,
+        context: Option<Context>,
+    ) -> Result<NvmeSubsystems, ReplyError> {
+        let req = self.request(request, context, MessageIdVs::GetNvmeSubsystems);
+        match self.client().get_nvme_controller(req).await {
+            Ok(get_nvme_controller_response) => {
+                match get_nvme_controller_response.into_inner().reply {
+                    Some(Reply::NvmeControllers(controllers)) => Ok(controllers.into()),
+                    Some(Reply::Error(err)) => Err(err.into()),
+                    _ => Err(ReplyError::invalid_response(ResourceKind::Unknown)),
+                }
+            }
+            Err(_) => Err(ReplyError::invalid_response(ResourceKind::Unknown)),
         }
     }
 }

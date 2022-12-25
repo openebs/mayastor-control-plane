@@ -41,14 +41,8 @@ impl apis::actix_server::Volumes for RestApi {
     async fn del_volume_shutdown_targets(
         Path(volume_id): Path<Uuid>,
     ) -> Result<(), RestError<RestJsonError>> {
-        client()
-            .destroy_shutdown_target(
-                &DestroyShutdownTargets {
-                    uuid: volume_id.into(),
-                },
-                None,
-            )
-            .await?;
+        let destroy = DestroyShutdownTargets::new(volume_id.into(), None);
+        client().destroy_shutdown_target(&destroy, None).await?;
         Ok(())
     }
 
