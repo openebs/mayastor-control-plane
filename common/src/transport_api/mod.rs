@@ -138,6 +138,10 @@ pub enum ResourceKind {
     Spec,
     /// State
     State,
+    /// Nvme Subsystem
+    NvmeSubsystem,
+    /// Nvme Controller Path
+    NvmePath,
 }
 
 /// Error type which is returned over the transport for any operation.

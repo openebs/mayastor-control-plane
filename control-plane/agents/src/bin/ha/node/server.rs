@@ -78,9 +78,19 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
 
     match get_nvme_path_entry(&ctrlr.path) {
         Some(pbuf) => {
-            let subsystem = Subsystem::new(pbuf.path()).map_err(|_| SvcError::Internal {
-                details: "Failed to get NVMe subsystem for controller".to_string(),
+            let subsystem = Subsystem::new(pbuf.path()).map_err(|_| SvcError::NotFound {
+                kind: ResourceKind::NvmeSubsystem,
+                id: ctrlr.path.to_owned(),
             })?;
+
+            // sanity check to make sure this information is still up to date!
+            if subsystem.nqn != parsed_path.nqn {
+                return Err(SvcError::UnexpectedSubsystemNqn {
+                    nqn: subsystem.nqn,
+                    expected_nqn: parsed_path.nqn,
+                    path: subsystem.name,
+                });
+            }
 
             if subsystem.address == SubsystemAddr::new(parsed_path.host(), parsed_path.port()) {
                 tracing::info!(path = ctrlr.path, "Not disconnecting same NVMe controller");
@@ -88,6 +98,7 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
             } else {
                 tracing::info!(path = ctrlr.path, "Disconnecting NVMe controller");
 
+                // clarification: we're not disconnecting the subsystem, but rather the controller
                 subsystem.disconnect().map_err(|e| SvcError::Internal {
                     details: format!(
                         "Failed to disconnect NVMe controller {}: {:?}",
@@ -102,8 +113,9 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
                 "Failed to get system path for controller"
             );
 
-            Err(SvcError::Internal {
-                details: "Failed to get system path for controller".to_string(),
+            Err(SvcError::NotFound {
+                kind: ResourceKind::NvmePath,
+                id: ctrlr.path.to_owned(),
             })
         }
     }

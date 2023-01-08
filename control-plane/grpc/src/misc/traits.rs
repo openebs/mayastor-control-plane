@@ -26,6 +26,8 @@ impl From<ResourceKind> for common::ResourceKind {
             ResourceKind::Watch => Self::Watch,
             ResourceKind::Spec => Self::Spec,
             ResourceKind::State => Self::State,
+            ResourceKind::NvmeSubsystem => Self::NvmeSubsystem,
+            ResourceKind::NvmePath => Self::NvmePath,
         }
     }
 }
@@ -47,6 +49,8 @@ impl From<common::ResourceKind> for ResourceKind {
             common::ResourceKind::Watch => Self::Watch,
             common::ResourceKind::Spec => Self::Spec,
             common::ResourceKind::State => Self::State,
+            common::ResourceKind::NvmeSubsystem => Self::NvmeSubsystem,
+            common::ResourceKind::NvmePath => Self::NvmePath,
         }
     }
 }
