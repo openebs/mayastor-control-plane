@@ -213,7 +213,11 @@ for name in $IMAGES; do
   image_basename=$($NIX_EVAL -f . images.$BUILD_TYPE.$name.imageName | xargs)
   image=$image_basename
   if [ -n "$REGISTRY" ]; then
-    image="${REGISTRY}/${image}"
+    if [[ "${REGISTRY}" =~ '/' ]]; then
+      image="${REGISTRY}/$(echo ${image} | cut -d'/' -f2)"
+    else
+      image="${REGISTRY}/${image}"
+    fi
   fi
   # If we're skipping the build, then we just want to upload
   # the images we already have locally.
