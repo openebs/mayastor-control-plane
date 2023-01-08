@@ -246,7 +246,7 @@ impl NodeAgentOperations for NodeAgentSvc {
         // Lookup NVMe controller whose path has failed.
         let ctrlr = self
             .path_cache
-            .lookup_controller(request.target_nqn())
+            .lookup_controllers(request.target_nqn())
             .await
             .map_err(|_| {
                 ReplyError::failed_precondition(
@@ -271,13 +271,16 @@ impl NodeAgentOperations for NodeAgentSvc {
         // path has been successfully created, so having the first failed path in addition
         // to the second healthy one is OK: just display a warning and proceed as if
         // the call has completed successfully.
-        if let Err(error) = disconnect_controller(&ctrlr, request.new_path()) {
-            tracing::warn!(
-                uri=%request.new_path(),
-                %error,
-                "Failed to disconnect failed path"
-            );
-        };
+        for ctrl in ctrlr {
+            if let Err(error) = disconnect_controller(&ctrl, request.new_path()) {
+                tracing::warn!(
+                    uri=%request.new_path(),
+                    %error,
+                    "Failed to disconnect failed path"
+                );
+            }
+        }
+
         Ok(())
     }
 
