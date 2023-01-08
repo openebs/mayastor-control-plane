@@ -91,7 +91,6 @@ let
         # don't run during the dependency build phase
         if [ ! -f build.rs ]; then
           patchShebangs ./scripts/rust/generate-openapi-bindings.sh
-          ./scripts/rust/generate-openapi-bindings.sh
         fi
         # remove the tests lib dependency since we don't run tests during this build
         find . -name \*.toml | xargs -I% sed -i '/^io-engine-tests.*=/d' %
