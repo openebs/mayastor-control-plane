@@ -64,6 +64,7 @@ let
     "openapi/build.rs"
     "rpc"
     "scripts/rust/generate-openapi-bindings.sh"
+    "scripts/rust/branch_ancestor.sh"
     "tests/io-engine"
     "utils"
   ];
@@ -90,7 +91,7 @@ let
       preBuild = ''
         # don't run during the dependency build phase
         if [ ! -f build.rs ]; then
-          patchShebangs ./scripts/rust/generate-openapi-bindings.sh
+          patchShebangs ./scripts/rust
         fi
         # remove the tests lib dependency since we don't run tests during this build
         find . -name \*.toml | xargs -I% sed -i '/^io-engine-tests.*=/d' %
@@ -102,7 +103,7 @@ let
     rustPlatform.buildRustPackage (buildProps // {
       inherit buildType cargoBuildFlags;
 
-      preBuild = "patchShebangs ./scripts/rust/generate-openapi-bindings.sh";
+      preBuild = "patchShebangs ./scripts/rust";
 
       cargoLock = {
         lockFile = ../../../Cargo.lock;
