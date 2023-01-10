@@ -8,7 +8,7 @@ impl ComponentAction for FioSpdk {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         Ok(if options.fio_spdk {
             cfg.add_container_spec(
-                ContainerSpec::from_image("fio-spdk", utils::FIO_SPDK_IMAGE)
+                ContainerSpec::from_image("fio-spdk", &utils::fio_spdk_image())
                     .with_entrypoint("sleep")
                     .with_bind("/var/run/dpdk", "/var/run/dpdk")
                     .with_bind("/dev/vfio/vfio", "/dev/vfio/vfio")

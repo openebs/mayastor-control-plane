@@ -147,7 +147,7 @@ pub struct StartOptions {
     pub io_engines: u32,
 
     /// Use the following docker image for the io_engine instances.
-    #[structopt(long, env = "IO_ENGINE_IMAGE", default_value = utils::IO_ENGINE_IMAGE)]
+    #[structopt(long, env = "IO_ENGINE_IMAGE", default_value = Box::leak(utils::io_engine_image().into_boxed_str()))]
     pub io_engine_image: String,
 
     /// Use the following runnable binary for the io_engine instances.

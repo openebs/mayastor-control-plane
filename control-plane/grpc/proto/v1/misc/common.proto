@@ -99,6 +99,10 @@ enum ResourceKind {
   Spec = 13;
   // State
   State = 14;
+  // Nvme Subsystem
+  NvmeSubsystem = 15;
+  // Nvme Path
+  NvmePath = 16;
 }
 
 // Filter by Node and Replica id

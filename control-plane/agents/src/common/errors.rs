@@ -227,6 +227,17 @@ pub enum SvcError {
     InvalidApiVersion { api_version: Option<ApiVersion> },
     #[snafu(display("The subsystem with nqn: {} is not found, {}", nqn, details))]
     SubsystemNotFound { nqn: String, details: String },
+    #[snafu(display(
+        "The subsystem {} has unexpected Nqn ({}), expected ({})",
+        path,
+        nqn,
+        expected_nqn
+    ))]
+    UnexpectedSubsystemNqn {
+        nqn: String,
+        expected_nqn: String,
+        path: String,
+    },
     #[snafu(display("The nqn couldnt be parsed"))]
     NvmeParseError {},
     #[snafu(display("Nvme connect failed : {}", details))]
@@ -648,6 +659,12 @@ impl From<SvcError> for ReplyError {
             SvcError::SubsystemNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::UnexpectedSubsystemNqn { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::NvmeSubsystem,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

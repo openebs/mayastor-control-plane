@@ -24,23 +24,25 @@ let
   components = { buildType, builder }: rec {
     agents = rec {
       recurseForDerivations = true;
-      agents_builder = { buildType, builder }: builder.build { inherit buildType; cargoBuildFlags = [ "-p agents" ]; };
-      agent_installer = { name, src }: installer { inherit name src; };
+      agent_installer = { name }: installer {
+        inherit name;
+        src =
+          if allInOne then
+            builder.build { inherit buildType; cargoBuildFlags = [ "-p agents" ]; }
+          else
+            builder.build { inherit buildType; cargoBuildFlags = [ "--bin ${name}" ]; };
+      };
       jsongrpc = agent_installer {
-        src = agents_builder { inherit buildType builder; };
         name = "jsongrpc";
       };
       core = agent_installer {
-        src = agents_builder { inherit buildType builder; };
         name = "core";
       };
       ha = {
         node = agent_installer {
-          src = agents_builder { inherit buildType builder; };
           name = "agent-ha-node";
         };
         cluster = agent_installer {
-          src = agents_builder { inherit buildType builder; };
           name = "agent-ha-cluster";
         };
       };

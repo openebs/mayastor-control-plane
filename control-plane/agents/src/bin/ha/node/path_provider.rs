@@ -221,7 +221,9 @@ impl NvmePathNameCollection {
                     }
                     CacheOp::Remove(path) => match self.entries.remove(&path) {
                         Some(_) => tracing::info!(path, "NVMe path removed from the cache"),
-                        None => tracing::warn!(path, "NVMe path not in cache, skipping removal"),
+                        None => {
+                            tracing::warn!(path, "NVMe path not in cache, skipping removal")
+                        }
                     },
                     CacheOp::InvalidateCache => {
                         self.invalidate_cache();
