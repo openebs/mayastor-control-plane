@@ -100,7 +100,7 @@ function repeatBatchingUntilStableResults() {
     shift
     local -a CANDIDATES
     if [[ -z "${1+x}" ]]; then
-        CANDIDATES=( $(git rev-parse --symbolic --branches) )
+        CANDIDATES=( $(git rev-parse --symbolic --branches --remotes=origin) )
     else
         CANDIDATES=("$@")
     fi
@@ -153,7 +153,7 @@ function expandUniqGitBranches() {
     local -A BSET[$1]=1
     shift
 
-    local ALL_BRANCHES=$(git rev-parse --symbolic --branches)
+    local ALL_BRANCHES=$(git rev-parse --symbolic --branches --remotes=origin)
     for regex in "$@"; do
         for branch in $ALL_BRANCHES; do
             ## RE: -z ${BSET[$branch]+x ...  ; presumes ENV 'x' is not defined

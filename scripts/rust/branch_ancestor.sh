@@ -23,7 +23,12 @@ if [[ "$BRANCH" =~ ^release/.* ]] || [ "$BRANCH" = "develop" ]; then
 else
   source "$ROOTDIR/scripts/git/branch_ancestor.sh"
 
-  BRANCH="$(findBranchesSharingFirstCommonCommit . develop release)"
+  BRANCH="$(findBranchesSharingFirstCommonCommit . origin/develop origin/release)"
+  BRANCH=${BRANCH##origin/}
+
+  if [ "$BRANCH" == "" ]; then
+    BRANCH="develop"
+  fi
 fi
 
 CONTENT=$(cat <<EOF
