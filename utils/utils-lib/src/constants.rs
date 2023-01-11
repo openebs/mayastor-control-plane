@@ -18,14 +18,18 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 /// The lease lock ttl for the persistent store after which we'll lose the exclusive access.
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
+fn target_tag() -> String {
+    TARGET_BRANCH.replace('/', "-")
+}
+
 /// Fio Spdk image.
 pub fn fio_spdk_image() -> String {
-    format!("{TARGET_REGISTRY}/mayastor-fio-spdk:{TARGET_BRANCH}")
+    format!("{TARGET_REGISTRY}/mayastor-fio-spdk:{}", target_tag())
 }
 
 /// Io-Engine container image used for testing.
 pub fn io_engine_image() -> String {
-    format!("{TARGET_REGISTRY}/mayastor-io-engine:{TARGET_BRANCH}")
+    format!("{TARGET_REGISTRY}/mayastor-io-engine:{}", target_tag())
 }
 
 /// Environment variable that points to an io-engine binary.
