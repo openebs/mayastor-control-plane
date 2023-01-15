@@ -58,7 +58,7 @@ String cron_schedule = mainBranches() ? "0 2 * * *" : ""
 pipeline {
   agent none
   options {
-    timeout(time: 1, unit: 'HOURS')
+    timeout(time: 2, unit: 'HOURS')
   }
   parameters {
     booleanParam(defaultValue: false, name: 'build_images')
