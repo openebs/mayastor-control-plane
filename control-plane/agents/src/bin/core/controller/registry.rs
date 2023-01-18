@@ -34,6 +34,7 @@ use common_lib::{
 };
 use std::{
     collections::HashMap,
+    future::Future,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -178,11 +179,13 @@ impl Registry {
 
     /// Serialized write to the persistent store.
     pub(crate) async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
-        let mut store = self.store.lock().await;
-        match tokio::time::timeout(
-            self.store_timeout,
-            async move { store.put_obj(object).await },
-        )
+        let store = self.store.clone();
+        match tokio::time::timeout(self.store_timeout, async move {
+            // todo: is it still necessary to sync updates to the store?
+            //  otherwise should make methods immutable
+            let mut store = store.lock().await;
+            Self::op_with_threshold(async move { store.put_obj(object).await }).await
+        })
         .await
         {
             Ok(result) => result.map_err(Into::into),
@@ -196,9 +199,12 @@ impl Registry {
 
     /// Serialized read from the persistent store.
     pub(crate) async fn load_obj<O: StorableObject>(&self, key: &O::Key) -> Result<O, SvcError> {
-        let mut store = self.store.lock().await;
-        match tokio::time::timeout(self.store_timeout, async move { store.get_obj(key).await })
-            .await
+        let store = self.store.clone();
+        match tokio::time::timeout(self.store_timeout, async move {
+            let mut store = store.lock().await;
+            Self::op_with_threshold(async move { store.get_obj(key).await }).await
+        })
+        .await
         {
             Ok(obj) => Ok(obj?),
             Err(_) => Err(StoreError::Timeout {
@@ -211,11 +217,11 @@ impl Registry {
 
     /// Serialized delete to the persistent store.
     pub(crate) async fn delete_kv<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
-        let mut store = self.store.lock().await;
-        match tokio::time::timeout(
-            self.store_timeout,
-            async move { store.delete_kv(key).await },
-        )
+        let store = self.store.clone();
+        match tokio::time::timeout(self.store_timeout, async move {
+            let mut store = store.lock().await;
+            Self::op_with_threshold(async move { store.delete_kv(key).await }).await
+        })
         .await
         {
             Ok(result) => match result {
@@ -234,6 +240,20 @@ impl Registry {
         }
     }
 
+    async fn op_with_threshold<F, O>(future: F) -> O
+    where
+        F: Future<Output = O>,
+    {
+        let start = std::time::Instant::now();
+        let result = future.await;
+        let warn_threshold = std::time::Duration::from_secs(1);
+        if start.elapsed() > warn_threshold {
+            // todo: ratelimit this warning?
+            tracing::warn!("Store operation took longer than {:?}", warn_threshold);
+        }
+        result
+    }
+
     /// Get a reference to the persistent store
     pub(crate) fn store(&self) -> &Arc<Mutex<Etcd>> {
         &self.store
@@ -241,10 +261,12 @@ impl Registry {
 
     /// Check if the persistent store is currently online.
     pub(crate) async fn store_online(&self) -> bool {
-        let mut store = self.store.lock().await;
-        tokio::time::timeout(self.store_timeout, async move { store.online().await })
-            .await
-            .unwrap_or(false)
+        let store = self.store.clone();
+        tokio::time::timeout(self.store_timeout, async move {
+            store.lock().await.online().await
+        })
+        .await
+        .unwrap_or(false)
     }
 
     /// Start the worker thread which updates the registry.
