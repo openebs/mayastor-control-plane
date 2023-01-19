@@ -36,7 +36,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             });
         }
 
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
         let pool = specs
             .get_or_create_pool(request)
             .operation_guard_wait()
@@ -57,7 +57,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
     ) -> Result<(), SvcError> {
         // what if the node is never coming back?
         // do we need a way to forcefully "delete" things?
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         self.start_destroy(registry).await?;
 
@@ -89,7 +89,7 @@ impl ResourceLifecycle for Option<OperationGuardArc<PoolSpec>> {
         } else {
             // what if the node is never coming back?
             // do we need a way to forcefully "delete" things?
-            let node = registry.get_node_wrapper(&request.node).await?;
+            let node = registry.node_wrapper(&request.node).await?;
 
             node.destroy_pool(request).await
         }

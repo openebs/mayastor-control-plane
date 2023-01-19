@@ -752,8 +752,8 @@ impl ResourceSpecsLocked {
         }
 
         // patch up the missing replica nexus owners
-        let nexuses = self.get_nexuses();
-        for replica in self.get_replicas() {
+        let nexuses = self.nexuses();
+        for replica in self.replicas() {
             let replica_uuid = replica.lock().uuid.clone();
 
             nexuses

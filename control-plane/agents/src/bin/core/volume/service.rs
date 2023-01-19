@@ -189,15 +189,15 @@ impl Service {
         let filtered_volumes = match filter {
             Filter::None => match &pagination {
                 Some(p) => {
-                    let paginated_volumes = self.registry.get_paginated_volume(p).await;
+                    let paginated_volumes = self.registry.paginated_volumes(p).await;
                     last_result = paginated_volumes.last();
                     paginated_volumes.result()
                 }
-                None => self.registry.get_volumes().await,
+                None => self.registry.volumes().await,
             },
             Filter::Volume(volume_id) => {
                 tracing::Span::current().record("volume.uuid", &volume_id.as_str());
-                match self.registry.get_volume(&volume_id).await {
+                match self.registry.volume(&volume_id).await {
                     Ok(volume) => Ok(vec![volume]),
                     Err(SvcError::VolumeNotFound { .. }) if ignore_notfound => Ok(vec![]),
                     Err(error) => Err(error),
@@ -219,7 +219,7 @@ impl Service {
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
         OperationGuardArc::<VolumeSpec>::create(&self.registry, request).await?;
-        self.registry.get_volume(&request.uuid).await
+        self.registry.volume(&request.uuid).await
     }
 
     /// Destroy a volume using the given parameters.
@@ -281,7 +281,7 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.unpublish(&self.registry, request).await?;
-        self.registry.get_volume(&request.uuid).await
+        self.registry.volume(&request.uuid).await
     }
 
     /// Set volume replica
@@ -292,6 +292,6 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.set_replica(&self.registry, request).await?;
-        self.registry.get_volume(&request.uuid).await
+        self.registry.volume(&request.uuid).await
     }
 }

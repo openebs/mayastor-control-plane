@@ -39,7 +39,7 @@ impl GarbageCollector {
 impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
-        for volume in context.specs().get_locked_volumes() {
+        for volume in context.specs().volumes_rsc() {
             let mut volume = match volume.operation_guard() {
                 Ok(guard) => guard,
                 Err(_) => continue,
@@ -149,7 +149,7 @@ async fn disown_unused_nexuses(
 ) -> PollResult {
     let mut results = vec![];
 
-    for nexus in context.specs().get_volume_nexuses(volume.uuid()) {
+    for nexus in context.specs().volume_nexuses(volume.uuid()) {
         let nexus_clone = nexus.lock().clone();
 
         match volume.as_ref().target() {
@@ -185,7 +185,7 @@ async fn disown_unused_replicas(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let target = match context.specs().get_volume_target_nexus(volume.as_ref()) {
+    let target = match context.specs().volume_target_nexus_rsc(volume.as_ref()) {
         Some(target) => target.operation_guard()?,
         None => {
             // if the volume is not published, then leave the replicas around as they might
@@ -198,7 +198,7 @@ async fn disown_unused_replicas(
         return PollResult::Ok(PollerState::Busy);
     }
 
-    let volume_state = context.registry().get_volume_state(volume.uuid()).await?;
+    let volume_state = context.registry().volume_state(volume.uuid()).await?;
     if matches!(
         volume_state.status,
         VolumeStatus::Faulted | VolumeStatus::Unknown
@@ -210,7 +210,7 @@ async fn disown_unused_replicas(
     let mut nexus_info = None; // defer reading from the persistent store unless we find a candidate
     let mut results = vec![];
 
-    for replica in context.specs().get_volume_replicas(volume.uuid()) {
+    for replica in context.specs().volume_replicas(volume.uuid()) {
         let mut replica = match replica.operation_guard() {
             Ok(guard) => guard,
             Err(_) => continue,
@@ -258,7 +258,7 @@ async fn disown_non_reservable_replicas(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let target = match context.specs().get_volume_target_nexus(volume.as_ref()) {
+    let target = match context.specs().volume_target_nexus_rsc(volume.as_ref()) {
         Some(target) => target.operation_guard()?,
         None => {
             // if the volume is not published, then leave the replicas around as they might
@@ -274,7 +274,7 @@ async fn disown_non_reservable_replicas(
         return PollResult::Ok(PollerState::Idle);
     }
 
-    let volume_state = context.registry().get_volume_state(volume.uuid()).await?;
+    let volume_state = context.registry().volume_state(volume.uuid()).await?;
     if matches!(
         volume_state.status,
         VolumeStatus::Faulted | VolumeStatus::Unknown
@@ -290,7 +290,7 @@ async fn disown_non_reservable_replicas(
     let shutdown_failed_nexuses: Vec<ResourceMutex<NexusSpec>> = context
         .registry()
         .specs()
-        .get_volume_failed_shutdown_nexuses(volume.uuid())
+        .volume_failed_shutdown_nexuses(volume.uuid())
         .await;
 
     // Remove the local child from the shutdown pending nexuses as they are
@@ -361,7 +361,7 @@ async fn is_replica_healthy(
         None => {
             *nexus_info = context
                 .registry()
-                .get_nexus_info(Some(&volume_spec.uuid), volume_spec.health_info_id(), true)
+                .nexus_info(Some(&volume_spec.uuid), volume_spec.health_info_id(), true)
                 .await?;
             match nexus_info {
                 Some(info) => info,

@@ -37,7 +37,7 @@ impl PoolReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for PoolReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let pools = context.specs().get_locked_pools();
+        let pools = context.specs().pools_rsc();
         let mut results = Vec::with_capacity(pools.len());
         for pool in pools {
             if pool.lock().dirty() {
@@ -125,7 +125,7 @@ async fn missing_pool_state_reconciler(
                 )
             });
         };
-        let node = match context.registry().get_node_wrapper(&pool_spec.node).await {
+        let node = match context.registry().node_wrapper(&pool_spec.node).await {
             Ok(node) if !node.read().await.is_online() => {
                 let node_status = node.read().await.status();
                 warn_missing(&pool_spec, node_status);
@@ -176,11 +176,7 @@ async fn deleting_pool_spec_reconciler(
         return PollResult::Ok(PollerState::Idle);
     }
 
-    match context
-        .registry()
-        .get_node_wrapper(&pool.as_ref().node)
-        .await
-    {
+    match context.registry().node_wrapper(&pool.as_ref().node).await {
         Ok(node) => {
             if !node.read().await.is_online() {
                 return PollResult::Ok(PollerState::Idle);

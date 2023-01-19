@@ -28,7 +28,7 @@ impl VolumeNexusReconciler {
 impl TaskPoller for VolumeNexusReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
-        let volumes = context.specs().get_locked_volumes();
+        let volumes = context.specs().volumes_rsc();
         for mut volume in volumes {
             results.push(volume_nexus_reconcile(&mut volume, context).await);
         }
@@ -49,17 +49,13 @@ async fn volume_nexus_reconcile(
         return PollResult::Ok(PollerState::Idle);
     }
 
-    match context
-        .specs()
-        .get_volume_target_nexus_guard(volume.as_ref())
-        .await?
-    {
+    match context.specs().volume_target_nexus(volume.as_ref()).await? {
         Some(mut nexus) => {
             if !nexus.as_ref().spec_status.created() || nexus.as_ref().is_shutdown() {
                 return PollResult::Ok(PollerState::Idle);
             }
 
-            let volume_state = context.registry().get_volume_state(volume.uuid()).await?;
+            let volume_state = context.registry().volume_state(volume.uuid()).await?;
 
             if volume_state.status != VolumeStatus::Online {
                 faulted_nexus_remover(&mut nexus, context).await?;

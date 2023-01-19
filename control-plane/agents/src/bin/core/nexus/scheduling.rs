@@ -15,7 +15,7 @@ use common_lib::types::v0::store::nexus::NexusSpec;
 /// Return healthy replicas for volume/nexus
 /// The persistent store has the latest information from io-engine, which tells us if any replica
 /// has been faulted and therefore cannot be used by the nexus.
-async fn get_healthy_children(
+async fn healthy_children(
     request: &GetPersistedNexusChildren,
     registry: &Registry,
 ) -> Result<HealthyChildItems, SvcError> {
@@ -34,11 +34,11 @@ async fn get_healthy_children(
 /// (only children which are ReplicaSpec's are returned).
 /// The persistent store has the latest information from io-engine, which tells us if any replica
 /// has been faulted and therefore cannot be used by the nexus.
-pub(crate) async fn get_healthy_nexus_children(
+pub(crate) async fn healthy_nexus_children(
     nexus_spec: &NexusSpec,
     registry: &Registry,
 ) -> Result<HealthyChildItems, SvcError> {
-    let children = get_healthy_children(
+    let children = healthy_children(
         &GetPersistedNexusChildren::new_recreate(nexus_spec),
         registry,
     )
@@ -51,7 +51,7 @@ pub(crate) async fn get_healthy_nexus_children(
 
 /// Return the suitable node target to publish the volume for nexus placement on
 /// volume publish or nexus failover.
-pub(crate) async fn get_target_node_candidate(
+pub(crate) async fn target_node_candidate(
     request: impl Into<GetSuitableNodes>,
     registry: &Registry,
 ) -> Result<NodeWrapper, SvcError> {

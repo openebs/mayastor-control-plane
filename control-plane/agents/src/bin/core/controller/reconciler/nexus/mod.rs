@@ -10,7 +10,7 @@ use crate::{
         },
         wrapper::ClientOps,
     },
-    nexus::scheduling::get_healthy_nexus_children,
+    nexus::scheduling::healthy_nexus_children,
 };
 use common_lib::{
     transport_api::ErrorChain,
@@ -59,7 +59,7 @@ impl NexusReconciler {
 impl TaskPoller for NexusReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
-        for nexus in context.specs().get_nexuses() {
+        for nexus in context.specs().nexuses() {
             let skip = {
                 let nexus = nexus.lock();
                 nexus.owned() || nexus.dirty()
@@ -134,7 +134,7 @@ pub(super) async fn faulted_children_remover(
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
-    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
+    let nexus_state = context.registry().nexus(nexus_uuid).await?;
     let child_count = nexus_state.children.len();
 
     // Remove faulted children only from a degraded nexus with other healthy children left
@@ -188,7 +188,7 @@ pub(super) async fn unknown_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_state = context.registry().get_nexus(nexus.uuid()).await?;
+    let nexus_state = context.registry().nexus(nexus.uuid()).await?;
     let state_children = nexus_state.children.iter();
     let spec_children = nexus.lock().children.clone();
 
@@ -244,7 +244,7 @@ pub(super) async fn missing_children_remover(
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
-    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
+    let nexus_state = context.registry().nexus(nexus_uuid).await?;
     let spec_children = nexus.lock().children.clone().into_iter();
 
     let mut result = PollResult::Ok(PollerState::Idle);
@@ -290,7 +290,7 @@ pub(super) async fn missing_nexus_recreate(
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
 
-    if context.registry().get_nexus(nexus_uuid).await.is_ok() {
+    if context.registry().nexus(nexus_uuid).await.is_ok() {
         return PollResult::Ok(PollerState::Idle);
     }
 
@@ -306,7 +306,7 @@ pub(super) async fn missing_nexus_recreate(
             });
         };
 
-        let node = match context.registry().get_node_wrapper(&nexus.node).await {
+        let node = match context.registry().node_wrapper(&nexus.node).await {
             Ok(node) if !node.read().await.is_online() => {
                 let node_status = node.read().await.status();
                 warn_missing(&nexus, node_status);
@@ -321,7 +321,7 @@ pub(super) async fn missing_nexus_recreate(
 
         nexus.warn_span(|| tracing::warn!("Attempting to recreate missing nexus"));
 
-        let children = get_healthy_nexus_children(&nexus, context.registry()).await?;
+        let children = healthy_nexus_children(&nexus, context.registry()).await?;
 
         let mut nexus_replicas = vec![];
         for item in children.candidates() {
@@ -391,7 +391,7 @@ pub(super) async fn fixup_nexus_protocol(
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
-    if let Ok(nexus_state) = context.registry().get_nexus(nexus_uuid).await {
+    if let Ok(nexus_state) = context.registry().nexus(nexus_uuid).await {
         let nexus_spec = nexus.lock().clone();
         if nexus_spec.share != nexus_state.share {
             nexus_spec.warn_span(|| {
@@ -446,11 +446,11 @@ pub(super) async fn faulted_nexus_remover(
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
 
-    if let Ok(nexus_state) = context.registry().get_nexus(nexus_uuid).await {
+    if let Ok(nexus_state) = context.registry().nexus(nexus_uuid).await {
         if nexus_state.status == NexusStatus::Faulted {
             let nexus = nexus.lock().clone();
-            let healthy_children = get_healthy_nexus_children(&nexus, context.registry()).await?;
-            let node = context.registry().get_node_wrapper(&nexus.node).await?;
+            let healthy_children = healthy_nexus_children(&nexus, context.registry()).await?;
+            let node = context.registry().node_wrapper(&nexus.node).await?;
 
             #[tracing::instrument(skip(nexus, node), fields(nexus.uuid = %nexus.uuid, request.reconcile = true))]
             async fn faulted_nexus_remover(
@@ -494,7 +494,7 @@ pub(super) async fn enospc_children_faulter(
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
-    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
+    let nexus_state = context.registry().nexus(nexus_uuid).await?;
     let child_count = nexus_state.children.len();
 
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
@@ -502,10 +502,7 @@ pub(super) async fn enospc_children_faulter(
             nexus.warn_span(|| {
                 tracing::info!(child.uri = child.uri.as_str(), "Found child with enospc")
             });
-            let node = context
-                .registry()
-                .get_node_wrapper(&nexus_state.node)
-                .await?;
+            let node = context.registry().node_wrapper(&nexus_state.node).await?;
             node.fault_child(&FaultNexusChild {
                 node: nexus_state.node.clone(),
                 nexus: nexus_state.uuid.clone(),

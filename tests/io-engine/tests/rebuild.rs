@@ -20,6 +20,7 @@ async fn concurrent_rebuilds() {
             o.with_io_engines(io_engines as u32)
                 .with_isolated_io_engine(true)
                 .with_io_engine_env("NVME_QPAIR_CONNECT_ASYNC", "true")
+                .with_max_rebuilds(Some(nr_volumes))
         })
         .with_cache_period("10s")
         .with_tmpfs_pool(pool_size_bytes)

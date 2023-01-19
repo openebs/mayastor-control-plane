@@ -183,7 +183,7 @@ impl Service {
             Filter::None => Ok(self.registry.get_replicas().await),
             Filter::Node(node_id) => self.registry.get_node_replicas(&node_id).await,
             Filter::NodePool(node_id, pool_id) => {
-                let node = self.registry.get_node_wrapper(&node_id).await?;
+                let node = self.registry.node_wrapper(&node_id).await?;
                 let pool_wrapper = node
                     .pool_wrapper(&pool_id)
                     .await
@@ -195,7 +195,7 @@ impl Service {
                 Ok(pool_wrapper.replicas())
             }
             Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
-                let node = self.registry.get_node_wrapper(&node_id).await?;
+                let node = self.registry.node_wrapper(&node_id).await?;
                 let pool_wrapper = node
                     .pool_wrapper(&pool_id)
                     .await
@@ -206,7 +206,7 @@ impl Service {
                 Ok(vec![replica.clone()])
             }
             Filter::NodeReplica(node_id, replica_id) => {
-                let node = self.registry.get_node_wrapper(&node_id).await?;
+                let node = self.registry.node_wrapper(&node_id).await?;
                 let replica = node
                     .replica(&replica_id)
                     .await
@@ -225,11 +225,11 @@ impl Service {
                 Ok(vec![replica])
             }
             Filter::Volume(volume_id) => {
-                let volume = self.registry.get_volume_state(&volume_id).await?;
+                let volume = self.registry.volume_state(&volume_id).await?;
                 let replicas = self.registry.get_replicas().await.into_iter();
                 let replicas = replicas
                     .filter(|r| {
-                        if let Some(spec) = self.specs().get_replica(&r.uuid) {
+                        if let Some(spec) = self.specs().replica_rsc(&r.uuid) {
                             let spec = spec.lock().clone();
                             spec.owners.owned_by(&volume.uuid)
                         } else {
@@ -244,9 +244,9 @@ impl Service {
         .map(Replicas)
     }
 
-    /// Get the protected PoolSpec for the given pool `id`, if any exists.
+    /// Get the resourced PoolSpec for the given pool `id`, if any exists.
     pub(crate) fn locked_pool(&self, pool: &PoolId) -> Option<ResourceMutex<PoolSpec>> {
-        self.specs().get_locked_pool(pool)
+        self.specs().pool_rsc(pool)
     }
     /// Get the guarded PoolSpec for the given pool `id`, if any exists.
     pub(crate) async fn pool_opt(

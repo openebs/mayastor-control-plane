@@ -27,7 +27,7 @@ impl GarbageCollector {
 #[async_trait::async_trait]
 impl TaskPoller for GarbageCollector {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let nexuses = context.specs().get_nexuses();
+        let nexuses = context.specs().nexuses();
         for nexus in nexuses {
             let mut nexus = match nexus.operation_guard() {
                 Ok(guard) => guard,
@@ -105,7 +105,7 @@ async fn destroy_orphaned_nexus(
     };
 
     if let Some((owner, nexus_clone)) = owner {
-        if context.specs().get_volume(&owner).is_err() {
+        if context.specs().volume_clone(&owner).is_err() {
             nexus_clone.warn_span(|| tracing::warn!("Attempting to disown orphaned nexus"));
             context
                 .specs()
@@ -161,7 +161,7 @@ async fn destroy_nexus(
     context: &PollContext,
 ) -> PollResult {
     let node = nexus.lock().node.clone();
-    let node_online = matches!(context.registry().get_node_wrapper(&node).await, Ok(node) if node.read().await.is_online());
+    let node_online = matches!(context.registry().node_wrapper(&node).await, Ok(node) if node.read().await.is_online());
     if node_online {
         let nexus_clone = nexus.lock().clone();
         nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy nexus"));

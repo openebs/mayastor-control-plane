@@ -54,17 +54,17 @@ impl ResourceStates {
     }
 
     /// Returns a vector of cloned nexus states.
-    pub(crate) fn get_cloned_nexus_states(&self) -> Vec<NexusState> {
+    pub(crate) fn nexus_states_cloned(&self) -> Vec<NexusState> {
         Self::cloned_inner_states(self.nexuses.values())
     }
 
     /// Returns an iterator of nexus states.
-    pub(crate) fn get_nexus_states(&self) -> Values<NexusId, ResourceMutex<NexusState>> {
+    pub(crate) fn nexus_states(&self) -> Values<NexusId, ResourceMutex<NexusState>> {
         self.nexuses.values()
     }
 
     /// Returns the nexus state for the nexus with the given ID.
-    pub(crate) fn get_nexus_state(&self, id: &NexusId) -> Option<NexusState> {
+    pub(crate) fn nexus_state(&self, id: &NexusId) -> Option<NexusState> {
         self.nexuses.get(id).map(|state| state.lock().clone())
     }
 
@@ -75,17 +75,17 @@ impl ResourceStates {
     }
 
     /// Returns a vector of cloned pool states.
-    pub(crate) fn get_cloned_pool_states(&self) -> Vec<PoolState> {
+    pub(crate) fn pool_states_cloned(&self) -> Vec<PoolState> {
         Self::cloned_inner_states(self.pools.values())
     }
 
     /// Returns an iterator of pool states.
-    pub(crate) fn get_pool_states(&self) -> Values<PoolId, ResourceMutex<PoolState>> {
+    pub(crate) fn pool_states(&self) -> Values<PoolId, ResourceMutex<PoolState>> {
         self.pools.values()
     }
 
     /// Get a pool with the given ID.
-    pub(crate) fn get_pool_state(&self, id: &PoolId) -> Option<PoolState> {
+    pub(crate) fn pool_state(&self, id: &PoolId) -> Option<PoolState> {
         let pool_state = self.pools.get(id)?;
         Some(pool_state.lock().clone())
     }
@@ -97,17 +97,17 @@ impl ResourceStates {
     }
 
     /// Returns a vector of cloned replica states.
-    pub(crate) fn get_cloned_replica_states(&self) -> Vec<ReplicaState> {
+    pub(crate) fn replica_states_cloned(&self) -> Vec<ReplicaState> {
         Self::cloned_inner_states(self.replicas.values())
     }
 
     /// Returns an iterator of replica states.
-    pub(crate) fn get_replica_states(&self) -> Values<ReplicaId, ResourceMutex<ReplicaState>> {
+    pub(crate) fn replica_states(&self) -> Values<ReplicaId, ResourceMutex<ReplicaState>> {
         self.replicas.values()
     }
 
     /// Get a replica with the given ID.
-    pub(crate) fn get_replica_state(&self, id: &ReplicaId) -> Option<&ResourceMutex<ReplicaState>> {
+    pub(crate) fn replica_state(&self, id: &ReplicaId) -> Option<&ResourceMutex<ReplicaState>> {
         self.replicas.get(id)
     }
 
@@ -118,7 +118,7 @@ impl ResourceStates {
         self.replicas.clear();
     }
 
-    /// Takes an iterator of resources protected by an 'Arc' and 'Mutex' and returns a vector of
+    /// Takes an iterator of resources resourced by an 'Arc' and 'Mutex' and returns a vector of
     /// unprotected resources.
     fn cloned_inner_states<I, S>(locked_states: Values<I, ResourceMutex<S>>) -> Vec<S>
     where
