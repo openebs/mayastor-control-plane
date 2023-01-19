@@ -69,9 +69,9 @@ impl Service {
         let nodes = self.registry.nodes().read().await;
         for (_node_id, locked_node_wrapper) in nodes.iter() {
             let node_wrapper = locked_node_wrapper.read().await;
-            nexuses.extend(node_wrapper.nexus_states());
-            pools.extend(node_wrapper.pool_states());
-            replicas.extend(node_wrapper.replica_states());
+            nexuses.extend(node_wrapper.nexus_states_cloned());
+            pools.extend(node_wrapper.pool_states_cloned());
+            replicas.extend(node_wrapper.replica_states_cloned());
         }
 
         Ok(States {

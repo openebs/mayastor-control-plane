@@ -369,8 +369,7 @@ impl NodeSorters {
     /// The lesser the number of active nexus on a node, the more would be its selection priority.
     pub(crate) fn number_targets(a: &NodeItem, b: &NodeItem) -> std::cmp::Ordering {
         a.node_wrapper()
-            .nexus_states()
-            .len()
-            .cmp(&b.node_wrapper().nexus_states().len())
+            .nexus_count()
+            .cmp(&b.node_wrapper().nexus_count())
     }
 }
