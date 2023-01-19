@@ -33,7 +33,7 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
             });
         }
 
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         let replica = specs
             .get_or_create_replica(request)
@@ -72,7 +72,7 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
         registry: &Registry,
         request: &Self::Destroy,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(replica) = self {
             replica
@@ -123,7 +123,7 @@ impl ResourceSharing for Option<&mut OperationGuardArc<ReplicaSpec>> {
         registry: &Registry,
         request: &Self::Share,
     ) -> Result<Self::ShareOutput, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(replica) = self {
             let status = registry.get_replica(&request.uuid).await?;
@@ -142,7 +142,7 @@ impl ResourceSharing for Option<&mut OperationGuardArc<ReplicaSpec>> {
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(replica) = self {
             let status = registry.get_replica(&request.uuid).await?;

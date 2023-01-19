@@ -194,8 +194,8 @@ impl SpecOperationsHelper for ReplicaSpec {
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
 /// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
-    /// Gets list of protected ReplicaSpec's for a given pool `id`
-    fn get_pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
+    /// Gets list of resourced ReplicaSpec's for a given pool `id`
+    fn pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
         let mut replicas = vec![];
         for replica in self.replicas.to_vec() {
             let pool_id = replica.lock().pool.pool_name().clone();
@@ -206,7 +206,7 @@ impl ResourceSpecs {
         replicas
     }
     /// Gets all ReplicaSpec's
-    pub(crate) fn get_replicas(&self) -> Vec<ReplicaSpec> {
+    pub(crate) fn replicas(&self) -> Vec<ReplicaSpec> {
         let mut vector = vec![];
         for object in self.replicas.to_vec() {
             let object = object.lock();
@@ -216,7 +216,7 @@ impl ResourceSpecs {
     }
 
     /// Get all PoolSpecs
-    pub(crate) fn get_pools(&self) -> Vec<PoolSpec> {
+    pub(crate) fn pools(&self) -> Vec<PoolSpec> {
         let mut specs = vec![];
         for pool_spec in self.pools.to_vec() {
             specs.push(pool_spec.lock().clone());
@@ -231,7 +231,7 @@ impl ResourceSpecsLocked {
         &self,
         replica: &ReplicaId,
     ) -> Result<Option<OperationGuardArc<ReplicaSpec>>, SvcError> {
-        Ok(match self.get_replica(replica) {
+        Ok(match self.replica_rsc(replica) {
             None => None,
             Some(replica) => Some(replica.operation_guard_wait().await?),
         })
@@ -241,7 +241,7 @@ impl ResourceSpecsLocked {
         &self,
         replica: &ReplicaId,
     ) -> Result<OperationGuardArc<ReplicaSpec>, SvcError> {
-        match self.get_replica(replica) {
+        match self.replica_rsc(replica) {
             None => Err(SvcError::ReplicaNotFound {
                 replica_id: replica.clone(),
             }),
@@ -255,7 +255,7 @@ impl ResourceSpecsLocked {
         replica_spec: &ReplicaSpec,
         destroy_by: ReplicaOwners,
     ) -> Result<(), SvcError> {
-        match Self::get_replica_node(registry, replica_spec).await {
+        match Self::replica_node(registry, replica_spec).await {
             // Should never happen, but just in case...
             None => Err(SvcError::Internal {
                 details: "Failed to find the node where a replica lives".to_string(),
@@ -272,7 +272,7 @@ impl ResourceSpecsLocked {
         }
     }
 
-    /// Get or Create the protected ReplicaSpec for the given request
+    /// Get or Create the resourced ReplicaSpec for the given request
     pub(crate) fn get_or_create_replica(
         &self,
         request: &CreateReplica,
@@ -284,13 +284,13 @@ impl ResourceSpecsLocked {
             specs.replicas.insert(ReplicaSpec::from(request))
         }
     }
-    /// Get a protected ReplicaSpec for the given replica `id`, if it exists
-    pub(crate) fn get_replica(&self, id: &ReplicaId) -> Option<ResourceMutex<ReplicaSpec>> {
+    /// Get a resourced ReplicaSpec for the given replica `id`, if it exists
+    pub(crate) fn replica_rsc(&self, id: &ReplicaId) -> Option<ResourceMutex<ReplicaSpec>> {
         let specs = self.read();
         specs.replicas.get(id).cloned()
     }
 
-    /// Get or Create the protected PoolSpec for the given request
+    /// Get or Create the resourced PoolSpec for the given request
     pub(crate) fn get_or_create_pool(&self, request: &CreatePool) -> ResourceMutex<PoolSpec> {
         let mut specs = self.write();
         if let Some(pool) = specs.pools.get(&request.id) {
@@ -299,13 +299,13 @@ impl ResourceSpecsLocked {
             specs.pools.insert(PoolSpec::from(request))
         }
     }
-    /// Get a protected PoolSpec for the given pool `id`, if it exists
-    pub(crate) fn get_locked_pool(&self, id: &PoolId) -> Option<ResourceMutex<PoolSpec>> {
+    /// Get a resourced PoolSpec for the given pool `id`, if it exists
+    pub(crate) fn pool_rsc(&self, id: &PoolId) -> Option<ResourceMutex<PoolSpec>> {
         let specs = self.read();
         specs.pools.get(id).cloned()
     }
     /// Get a PoolSpec for the given pool `id`, if it exists
-    pub(crate) fn get_pool(&self, id: &PoolId) -> Result<PoolSpec, SvcError> {
+    pub(crate) fn pool(&self, id: &PoolId) -> Result<PoolSpec, SvcError> {
         let specs = self.read();
         specs
             .pools
@@ -315,20 +315,20 @@ impl ResourceSpecsLocked {
                 pool_id: id.to_owned(),
             })
     }
-    /// Get a vector of protected PoolSpec's
-    pub(crate) fn get_locked_pools(&self) -> Vec<ResourceMutex<PoolSpec>> {
+    /// Get a vector of resourced PoolSpec's
+    pub(crate) fn pools_rsc(&self) -> Vec<ResourceMutex<PoolSpec>> {
         let specs = self.read();
         specs.pools.to_vec()
     }
     /// Get a vector of PoolSpec's
-    pub(crate) fn get_pools(&self) -> Vec<PoolSpec> {
-        let pools = self.get_locked_pools();
+    pub(crate) fn pools(&self) -> Vec<PoolSpec> {
+        let pools = self.pools_rsc();
         pools.into_iter().map(|p| p.lock().clone()).collect()
     }
     /// Check if the given pool `id` has any replicas
     fn pool_has_replicas(&self, id: &PoolId) -> bool {
         let specs = self.read();
-        !specs.get_pool_replicas(id).is_empty()
+        !specs.pool_replicas(id).is_empty()
     }
     /// Remove the replica `id` from the spec list
     fn remove_replica(&self, id: &ReplicaId) {
@@ -341,14 +341,14 @@ impl ResourceSpecsLocked {
         specs.pools.remove(id);
     }
 
-    /// Get a vector of protected ReplicaSpec's
-    pub(crate) fn get_replicas(&self) -> Vec<ResourceMutex<ReplicaSpec>> {
+    /// Get a vector of resourced ReplicaSpec's
+    pub(crate) fn replicas(&self) -> Vec<ResourceMutex<ReplicaSpec>> {
         let specs = self.read();
         specs.replicas.to_vec()
     }
 
     /// Get a vector of ReplicaSpec's
-    pub(crate) fn get_cloned_replicas(&self) -> Vec<ReplicaSpec> {
+    pub(crate) fn replicas_cloned(&self) -> Vec<ReplicaSpec> {
         let specs = self.read();
         specs
             .replicas
@@ -364,7 +364,7 @@ impl ResourceSpecsLocked {
     pub(crate) async fn reconcile_dirty_pools(&self, registry: &Registry) -> bool {
         let mut pending_ops = false;
 
-        let pools = self.get_locked_pools();
+        let pools = self.pools_rsc();
         for pool in pools {
             if let Ok(mut guard) = pool.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
@@ -382,7 +382,7 @@ impl ResourceSpecsLocked {
     pub(crate) async fn reconcile_dirty_replicas(&self, registry: &Registry) -> bool {
         let mut pending_ops = false;
 
-        let replicas = self.get_replicas();
+        let replicas = self.replicas();
         for replica in replicas {
             if let Ok(mut guard) = replica.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {

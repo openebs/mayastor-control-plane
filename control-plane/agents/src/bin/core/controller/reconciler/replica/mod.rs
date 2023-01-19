@@ -29,7 +29,7 @@ impl ReplicaReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for ReplicaReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let replicas = context.specs().get_replicas();
+        let replicas = context.specs().replicas();
         let mut results = Vec::with_capacity(replicas.len());
 
         for replica in replicas {
@@ -111,7 +111,7 @@ async fn remove_missing_owners(
         let replica_uuid = &replica.immutable_arc().uuid;
         let mut remove_owners = ReplicaOwners::default();
         if let Some(volume) = replica.as_ref().owners.volume() {
-            if specs.get_volume(volume).is_err() {
+            if specs.volume_clone(volume).is_err() {
                 // The volume no longer exists. Remove it as an owner.
                 remove_owners.add_volume(volume.clone());
                 tracing::info!(replica.uuid=%replica_uuid, volume.uuid=%volume, "Removing volume as replica owner");
@@ -119,7 +119,7 @@ async fn remove_missing_owners(
         }
 
         replica.as_ref().owners.nexuses().iter().for_each(|nexus| {
-            if specs.get_nexus(nexus).is_none() {
+            if specs.nexus_rsc(nexus).is_none() {
                 remove_owners.add_owner(nexus);
                 tracing::info!(replica.uuid=%replica_uuid, nexus.uuid=%nexus, "Removing nexus as replica owner");
             }
@@ -177,7 +177,7 @@ async fn destroy_replica(
     context: &PollContext,
 ) -> PollResult {
     let pool_ref = replica.as_ref().pool.pool_name();
-    if let Some(node) = ResourceSpecsLocked::get_pool_node(context.registry(), pool_ref).await {
+    if let Some(node) = ResourceSpecsLocked::pool_node(context.registry(), pool_ref).await {
         let replica_spec = replica.lock().clone();
         match replica
             .destroy(

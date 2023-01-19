@@ -138,7 +138,7 @@ impl Service {
             comms_timeouts: NodeCommsTimeout::new(connect, request, no_min),
         };
         // attempt to reload the node state based on the specification
-        for node in service.registry.specs().get_nodes() {
+        for node in service.registry.specs().nodes() {
             service
                 .register_state(
                     &Register {
@@ -264,8 +264,8 @@ impl Service {
     pub(crate) async fn get_nodes(&self, request: &GetNodes) -> Result<Nodes, SvcError> {
         match request.filter() {
             Filter::None => {
-                let node_states = self.registry.get_node_states().await;
-                let node_specs = self.specs().get_nodes();
+                let node_states = self.registry.node_states().await;
+                let node_specs = self.specs().nodes();
                 let mut nodes = HashMap::new();
 
                 node_states.into_iter().for_each(|state| {
@@ -287,8 +287,8 @@ impl Service {
                 Ok(Nodes(nodes.values().cloned().collect()))
             }
             Filter::Node(node_id) => {
-                let node_state = self.registry.get_node_state(node_id).await.ok();
-                let node_spec = self.specs().get_node(node_id).ok();
+                let node_state = self.registry.node_state(node_id).await.ok();
+                let node_spec = self.specs().node(node_id).ok();
                 if node_state.is_none() && node_spec.is_none() {
                     Err(SvcError::NodeNotFound {
                         node_id: node_id.to_owned(),
@@ -312,7 +312,7 @@ impl Service {
         &self,
         request: &GetBlockDevices,
     ) -> Result<BlockDevices, SvcError> {
-        let node = self.registry.get_node_wrapper(&request.node).await?;
+        let node = self.registry.node_wrapper(&request.node).await?;
 
         let grpc = node.read().await.grpc_context()?;
         let client = grpc.connect().await?;
@@ -325,7 +325,7 @@ impl Service {
             .specs()
             .cordon_node(&self.registry, &id, label)
             .await?;
-        let state = self.registry.get_node_state(&id).await.ok();
+        let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
     }
 
@@ -335,7 +335,7 @@ impl Service {
             .specs()
             .uncordon_node(&self.registry, &id, label)
             .await?;
-        let state = self.registry.get_node_state(&id).await.ok();
+        let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
     }
 
@@ -345,7 +345,7 @@ impl Service {
             .specs()
             .drain_node(&self.registry, &id, label)
             .await?;
-        let state = self.registry.get_node_state(&id).await.ok();
+        let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
     }
 }

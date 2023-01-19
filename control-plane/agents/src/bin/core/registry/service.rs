@@ -52,10 +52,10 @@ impl Service {
     pub(crate) async fn get_specs(&self, _request: &GetSpecs) -> Result<Specs, SvcError> {
         let specs = self.specs().write();
         Ok(Specs {
-            volumes: specs.get_volumes(),
-            nexuses: specs.get_nexuses(),
-            replicas: specs.get_replicas(),
-            pools: specs.get_pools(),
+            volumes: specs.volumes(),
+            nexuses: specs.nexuses(),
+            replicas: specs.replicas(),
+            pools: specs.pools(),
         })
     }
 

@@ -198,7 +198,7 @@ impl std::fmt::Debug for GetChildForRemovalContext {
 impl GetChildForRemovalContext {
     async fn new(registry: &Registry, request: &GetChildForRemoval) -> Result<Self, SvcError> {
         let nexus_info = registry
-            .get_nexus_info(
+            .nexus_info(
                 Some(&request.spec.uuid),
                 request.spec.health_info_id(),
                 true,
@@ -215,8 +215,8 @@ impl GetChildForRemovalContext {
     }
 
     async fn list(&self) -> Vec<ReplicaItem> {
-        let replicas = self.registry.specs().get_volume_replicas(&self.spec.uuid);
-        let nexus = self.registry.specs().get_volume_target_nexus(&self.spec);
+        let replicas = self.registry.specs().volume_replicas(&self.spec.uuid);
+        let nexus = self.registry.specs().volume_target_nexus_rsc(&self.spec);
         let replicas = replicas.iter().map(|r| r.lock().clone());
 
         let replica_states = self.registry.get_replicas().await;
@@ -433,12 +433,12 @@ impl VolumeReplicasForNexusCtx {
         nx_spec: &NexusSpec,
     ) -> Result<Self, SvcError> {
         let nexus_info = registry
-            .get_nexus_info(Some(&vol_spec.uuid), Some(&nx_spec.uuid), true)
+            .nexus_info(Some(&vol_spec.uuid), Some(&nx_spec.uuid), true)
             .await?;
 
         let shutdown_pending_nexuses = registry
             .specs()
-            .get_volume_failed_shutdown_nexuses(&vol_spec.uuid)
+            .volume_failed_shutdown_nexuses(&vol_spec.uuid)
             .await;
 
         Ok(Self {
@@ -456,7 +456,7 @@ impl VolumeReplicasForNexusCtx {
         let spec_replicas = self
             .registry
             .specs()
-            .get_volume_replicas(&self.vol_spec.uuid)
+            .volume_replicas(&self.vol_spec.uuid)
             .into_iter()
             .filter(|r| !self.nexus_spec.contains_replica(&r.lock().uuid));
         let pool_wrappers = self.registry.get_pool_wrappers().await;

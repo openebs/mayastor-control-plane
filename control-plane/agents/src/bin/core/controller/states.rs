@@ -118,7 +118,7 @@ impl ResourceStates {
         self.replicas.clear();
     }
 
-    /// Takes an iterator of resources protected by an 'Arc' and 'Mutex' and returns a vector of
+    /// Takes an iterator of resources resourced by an 'Arc' and 'Mutex' and returns a vector of
     /// unprotected resources.
     fn cloned_inner_states<I, S>(locked_states: Values<I, ResourceMutex<S>>) -> Vec<S>
     where

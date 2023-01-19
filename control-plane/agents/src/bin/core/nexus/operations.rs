@@ -11,7 +11,7 @@ use crate::{
         scheduling::resources::HealthyChildItems,
         wrapper::{ClientOps, GetterOps},
     },
-    nexus::scheduling::get_healthy_nexus_children,
+    nexus::scheduling::healthy_nexus_children,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
@@ -44,7 +44,7 @@ impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
             });
         }
 
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         let nexus = specs
             .get_or_create_nexus(request)
@@ -86,7 +86,7 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<NexusSpec>> {
         registry: &Registry,
         request: &Self::Destroy,
     ) -> Result<(), SvcError> {
-        let node = match registry.get_node_wrapper(&request.node).await {
+        let node = match registry.node_wrapper(&request.node).await {
             Err(error) if !request.lazy() => Err(error),
             other => Ok(other),
         }?;
@@ -146,10 +146,10 @@ impl ResourceSharing for Option<&mut OperationGuardArc<NexusSpec>> {
         registry: &Registry,
         request: &Self::Share,
     ) -> Result<Self::ShareOutput, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self {
-            let status = registry.get_nexus(&request.uuid).await?;
+            let status = registry.nexus(&request.uuid).await?;
             let spec_clone = nexus
                 .start_update(
                     registry,
@@ -169,10 +169,10 @@ impl ResourceSharing for Option<&mut OperationGuardArc<NexusSpec>> {
         registry: &Registry,
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self {
-            let status = registry.get_nexus(&request.uuid).await?;
+            let status = registry.nexus(&request.uuid).await?;
             let spec_clone = nexus
                 .start_update(registry, &status, NexusOperation::Unshare)
                 .await?;
@@ -219,10 +219,10 @@ impl ResourceOffspring for Option<&mut OperationGuardArc<NexusSpec>> {
         registry: &Registry,
         request: &Self::Add,
     ) -> Result<Self::AddOutput, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self {
-            let status = registry.get_nexus(&request.nexus).await?;
+            let status = registry.nexus(&request.nexus).await?;
             let spec_clone = nexus
                 .start_update(
                     registry,
@@ -243,10 +243,10 @@ impl ResourceOffspring for Option<&mut OperationGuardArc<NexusSpec>> {
         registry: &Registry,
         request: &Self::Remove,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(nexus) = self {
-            let status = registry.get_nexus(&request.nexus).await?;
+            let status = registry.nexus(&request.nexus).await?;
             let spec_clone = nexus
                 .start_update(
                     registry,
@@ -274,7 +274,7 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
         request: &Self::Shutdown,
     ) -> Result<(), SvcError> {
         let node_id = self.as_ref().node.clone();
-        let node = match registry.get_node_wrapper(&node_id).await {
+        let node = match registry.node_wrapper(&node_id).await {
             Err(error) if !request.lazy() => Err(error),
             other => Ok(other),
         }?;
@@ -357,7 +357,7 @@ impl OperationGuardArc<NexusSpec> {
             });
         };
 
-        let node = match registry.get_node_wrapper(&nexus.node).await {
+        let node = match registry.node_wrapper(&nexus.node).await {
             Ok(node) if !node.read().await.is_online() => {
                 let node_status = node.read().await.status();
                 warn_missing(&nexus, node_status);
@@ -372,7 +372,7 @@ impl OperationGuardArc<NexusSpec> {
 
         nexus.warn_span(|| tracing::warn!("Attempting to recreate missing nexus"));
 
-        let children = get_healthy_nexus_children(&nexus, registry).await?;
+        let children = healthy_nexus_children(&nexus, registry).await?;
 
         let mut nexus_replicas = vec![];
         for item in children.candidates() {

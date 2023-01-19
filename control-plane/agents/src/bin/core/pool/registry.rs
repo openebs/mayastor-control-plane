@@ -16,17 +16,16 @@ impl Registry {
         match node_id {
             None => {
                 let mut pools = vec![];
-                let pools_from_state =
-                    self.get_pool_states_inner().await.into_iter().map(|state| {
-                        let spec = self.specs().get_pool(&state.id).ok();
-                        Pool::from_state(state, spec)
-                    });
+                let pools_from_state = self.pool_states_inner().await.into_iter().map(|state| {
+                    let spec = self.specs().pool(&state.id).ok();
+                    Pool::from_state(state, spec)
+                });
 
                 pools.extend(pools_from_state);
 
                 let pools_from_spec = self
                     .specs()
-                    .get_pools()
+                    .pools()
                     .into_iter()
                     .filter(|p| !pools.iter().any(|i| i.id() == &p.id))
                     .map(Pool::from_spec)
@@ -43,7 +42,7 @@ impl Registry {
                     .unwrap_or_default()
                     .into_iter()
                     .map(|state| {
-                        let spec = self.specs().get_pool(&state.id).ok();
+                        let spec = self.specs().pool(&state.id).ok();
                         Pool::from_state(state, spec)
                     });
 
@@ -51,7 +50,7 @@ impl Registry {
 
                 let pools_from_spec = self
                     .specs()
-                    .get_pools()
+                    .pools()
                     .into_iter()
                     .filter(|p| p.node == node_id)
                     .filter(|p| !pools.iter().any(|i| i.id() == &p.id))
@@ -69,7 +68,7 @@ impl Registry {
         &self,
         pool_id: PoolId,
     ) -> Result<PoolWrapper, SvcError> {
-        let nodes = self.get_node_wrappers().await;
+        let nodes = self.node_wrappers().await;
         for node in nodes {
             if let Some(pool) = node.pool_wrapper(&pool_id).await {
                 return Ok(pool);
@@ -79,8 +78,8 @@ impl Registry {
     }
 
     /// Get all pools
-    pub(crate) async fn get_pool_states_inner(&self) -> Vec<PoolState> {
-        let nodes = self.get_node_wrappers().await;
+    pub(crate) async fn pool_states_inner(&self) -> Vec<PoolState> {
+        let nodes = self.node_wrappers().await;
         let mut pools = Vec::with_capacity(nodes.len());
         for node in nodes {
             pools.append(&mut node.pools().await)
@@ -90,7 +89,7 @@ impl Registry {
 
     /// Get all pool wrappers
     pub(crate) async fn get_pool_wrappers(&self) -> Vec<PoolWrapper> {
-        let nodes = self.get_node_wrappers().await;
+        let nodes = self.node_wrappers().await;
         let mut pools = Vec::with_capacity(nodes.len());
         for node in nodes {
             pools.append(&mut node.pool_wrappers().await)
@@ -103,7 +102,7 @@ impl Registry {
         &self,
         node_id: &NodeId,
     ) -> Result<Vec<PoolState>, SvcError> {
-        let node = self.get_node_wrapper(node_id).await?;
+        let node = self.node_wrapper(node_id).await?;
         Ok(node.pools().await)
     }
 
@@ -121,7 +120,7 @@ impl Registry {
     /// Get the pool object corresponding to the id.
     pub(crate) async fn get_pool(&self, id: &PoolId) -> Result<Pool, SvcError> {
         Pool::try_new(
-            self.specs().get_pool(id).ok(),
+            self.specs().pool(id).ok(),
             self.get_pool_state(id).await.ok(),
         )
         .ok_or(PoolNotFound {
@@ -134,7 +133,7 @@ impl Registry {
 impl Registry {
     /// Get all replicas
     pub(crate) async fn get_replicas(&self) -> Vec<Replica> {
-        let nodes = self.get_node_wrappers().await;
+        let nodes = self.node_wrappers().await;
         let mut replicas = vec![];
         for node in nodes {
             replicas.append(&mut node.replicas().await);
@@ -144,7 +143,7 @@ impl Registry {
 
     /// Get replica `replica_id`
     pub(crate) async fn get_replica(&self, replica_id: &ReplicaId) -> Result<Replica, SvcError> {
-        let nodes = self.get_node_wrappers().await;
+        let nodes = self.node_wrappers().await;
         for node in nodes {
             if let Some(replica) = node.replica(replica_id).await {
                 return Ok(replica);
@@ -160,7 +159,7 @@ impl Registry {
         &self,
         node_id: &NodeId,
     ) -> Result<Vec<Replica>, SvcError> {
-        let node = self.get_node_wrapper(node_id).await?;
+        let node = self.node_wrapper(node_id).await?;
         Ok(node.replicas().await)
     }
 }
