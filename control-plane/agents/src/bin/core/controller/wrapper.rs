@@ -609,7 +609,8 @@ impl NodeWrapper {
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
         client: &mut GrpcClient,
     ) -> Result<(), SvcError> {
-        let nexuses = node.read().await.fetcher().fetch_nexuses(client).await?;
+        let fetcher = node.read().await.fetcher();
+        let nexuses = fetcher.fetch_nexuses(client).await?;
         node.write()
             .await
             .update_resources(ResourceType::Nexus(nexuses));
@@ -621,7 +622,8 @@ impl NodeWrapper {
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
         client: &mut GrpcClient,
     ) -> Result<(), SvcError> {
-        let pools = node.read().await.fetcher().fetch_pools(client).await?;
+        let fetcher = node.read().await.fetcher();
+        let pools = fetcher.fetch_pools(client).await?;
         node.write()
             .await
             .update_resources(ResourceType::Pool(pools));
@@ -633,7 +635,8 @@ impl NodeWrapper {
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
         client: &mut GrpcClient,
     ) -> Result<(), SvcError> {
-        let replicas = node.read().await.fetcher().fetch_replicas(client).await?;
+        let fetcher = node.read().await.fetcher();
+        let replicas = fetcher.fetch_replicas(client).await?;
         node.write()
             .await
             .update_resources(ResourceType::Replica(replicas));
