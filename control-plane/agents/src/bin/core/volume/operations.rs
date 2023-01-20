@@ -14,9 +14,7 @@ use crate::{
             OperationGuardArc, TraceSpan, TraceStrLog,
         },
     },
-    volume::specs::{
-        get_create_volume_replicas, get_healthy_volume_replicas, get_volume_target_node,
-    },
+    volume::specs::{create_volume_replicas, get_volume_target_node, healthy_volume_replicas},
 };
 use agents::errors::SvcError;
 use common_lib::{
@@ -63,7 +61,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
 
         // todo: pick nodes and pools using the Node&Pool Topology
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
-        let result = get_create_volume_replicas(registry, request).await;
+        let result = create_volume_replicas(registry, request).await;
         let create_replicas = volume.validate_create_step(registry, result).await?;
 
         let mut replicas = Vec::<Replica>::new();
@@ -139,7 +137,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         let specs = registry.specs();
         self.start_destroy(registry).await?;
 
-        let nexuses = specs.get_volume_nexuses(&request.uuid);
+        let nexuses = specs.volume_nexuses(&request.uuid);
         for nexus_arc in nexuses {
             let nexus = nexus_arc.lock().deref().clone();
             match nexus_arc.operation_guard_wait().await {
@@ -171,14 +169,13 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             }
         }
 
-        let replicas = specs.get_volume_replicas(&request.uuid);
+        let replicas = specs.volume_replicas(&request.uuid);
         for replica in replicas {
             let mut replica = match replica.operation_guard_wait().await {
                 Ok(replica) => replica,
                 Err(_) => continue,
             };
-            if let Some(node) =
-                ResourceSpecsLocked::get_replica_node(registry, replica.as_ref()).await
+            if let Some(node) = ResourceSpecsLocked::replica_node(registry, replica.as_ref()).await
             {
                 let replica_spec = replica.as_ref().clone();
                 let result = replica
@@ -225,7 +222,7 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
         request: &Self::Share,
     ) -> Result<String, SvcError> {
         let specs = registry.specs();
-        let state = registry.get_volume_state(&request.uuid).await?;
+        let state = registry.volume_state(&request.uuid).await?;
 
         let spec_clone = self
             .start_update(registry, &state, VolumeOperation::Share(request.protocol))
@@ -262,7 +259,7 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
         request: &Self::Unshare,
     ) -> Result<Self::UnshareOutput, SvcError> {
         let specs = registry.specs();
-        let state = registry.get_volume_state(&request.uuid).await?;
+        let state = registry.volume_state(&request.uuid).await?;
 
         let spec_clone = self
             .start_update(registry, &state, VolumeOperation::Unshare)
@@ -291,7 +288,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         request: &Self::Publish,
     ) -> Result<Self::PublishOutput, SvcError> {
         let specs = registry.specs();
-        let state = registry.get_volume_state(&request.uuid).await?;
+        let state = registry.volume_state(&request.uuid).await?;
         let nexus_node = get_volume_target_node(registry, &state, request, false).await?;
 
         let last_target = self.as_ref().health_info_id().cloned();
@@ -350,7 +347,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             .await;
         }
 
-        let volume = registry.get_volume(&request.uuid).await?;
+        let volume = registry.volume(&request.uuid).await?;
         registry
             .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
             .await;
@@ -364,7 +361,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         let specs = registry.specs();
 
-        let state = registry.get_volume_state(&request.uuid).await?;
+        let state = registry.volume_state(&request.uuid).await?;
 
         let spec_clone = self
             .start_update(registry, &state, VolumeOperation::Unpublish)
@@ -381,7 +378,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                     Ok(_) => Ok(()),
                     Err(error) if !request.force() => Err(error),
                     Err(error) => {
-                        let node_online = match registry.get_node_wrapper(&nexus_clone.node).await {
+                        let node_online = match registry.node_wrapper(&nexus_clone.node).await {
                             Ok(node) => {
                                 let mut node = node.write().await;
                                 node.is_online() && node.liveness_probe().await.is_ok()
@@ -411,7 +408,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     ) -> Result<Self::PublishOutput, SvcError> {
         let specs = registry.specs();
         let spec = self.as_ref().clone();
-        let state = registry.get_volume_state(&request.uuid).await?;
+        let state = registry.volume_state(&request.uuid).await?;
         // If the volume is not published then it should issue publish call rather than republish.
         let target_cfg = match spec.active_config() {
             Some(cfg)
@@ -433,7 +430,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let mut older_nexus = specs.nexus(target_cfg.target().nexus()).await?;
         let mut move_nexus = true;
 
-        match get_healthy_volume_replicas(&spec, &older_nexus.as_ref().node, registry).await {
+        match healthy_volume_replicas(&spec, &older_nexus.as_ref().node, registry).await {
             Ok(_) => {
                 if request.reuse_existing
                     && !older_nexus.as_ref().is_shutdown()
@@ -452,7 +449,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         if !move_nexus {
             // The older nexus is back again, so completing republish without modifications.
             info!(nexus.uuid=%older_nexus.as_ref().uuid, "Current target is back online, not moving nexus");
-            let volume = registry.get_volume(&request.uuid).await?;
+            let volume = registry.volume(&request.uuid).await?;
             return Ok(volume);
         }
 
@@ -505,7 +502,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         self.complete_update(registry, result, spec_clone).await?;
 
-        let volume = registry.get_volume(&request.uuid).await?;
+        let volume = registry.volume(&request.uuid).await?;
         registry
             .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
             .await;
@@ -524,7 +521,7 @@ impl ResourceReplicas for OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         let specs = registry.specs();
 
-        let state = registry.get_volume_state(&request.uuid).await?;
+        let state = registry.volume_state(&request.uuid).await?;
 
         let operation = VolumeOperation::SetReplica(request.replicas);
         let spec_clone = self.start_update(registry, &state, operation).await?;
@@ -564,14 +561,14 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         let shutdown_nexuses = registry
             .specs()
-            .get_volume_shutdown_nexuses(request.uuid())
+            .volume_shutdown_nexuses(request.uuid())
             .await;
         let mut result = Ok(());
         for nexus_res in shutdown_nexuses {
             match nexus_res.operation_guard_wait().await {
                 Ok(mut guard) => {
                     let uuid = nexus_res.lock().clone().uuid;
-                    if let Ok(nexus) = registry.get_nexus(&uuid).await {
+                    if let Ok(nexus) = registry.nexus(&uuid).await {
                         if target_registered(request.registered_targets(), nexus)? {
                             continue;
                         }

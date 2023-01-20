@@ -34,7 +34,7 @@ impl PoolItem {
 pub(crate) struct PoolItemLister {}
 impl PoolItemLister {
     async fn nodes(registry: &Registry) -> Vec<NodeWrapper> {
-        let nodes = registry.get_node_wrappers().await;
+        let nodes = registry.node_wrappers().await;
         let mut raw_nodes = vec![];
         for node in nodes {
             let node = node.read().await;
@@ -50,7 +50,7 @@ impl PoolItemLister {
             .flat_map(|n| {
                 n.pool_wrappers()
                     .iter()
-                    .filter(|p| registry.specs().get_pool(&p.id).is_ok())
+                    .filter(|p| registry.specs().pool(&p.id).is_ok())
                     .map(|p| PoolItem::new(n.clone(), p.clone()))
                     .collect::<Vec<_>>()
             })

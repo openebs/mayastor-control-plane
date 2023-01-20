@@ -11,20 +11,20 @@ use std::collections::HashMap;
 
 impl Registry {
     /// Get the volume state for the specified volume.
-    pub(crate) async fn get_volume_state(
+    pub(crate) async fn volume_state(
         &self,
         volume_uuid: &VolumeId,
     ) -> Result<VolumeState, SvcError> {
-        let volume_spec = self.specs().get_volume(volume_uuid)?;
-        let replica_specs = self.specs().get_cloned_volume_replicas(volume_uuid);
+        let volume_spec = self.specs().volume_clone(volume_uuid)?;
+        let replica_specs = self.specs().volume_replicas_cln(volume_uuid);
 
-        self.get_volume_state_with_replicas(&volume_spec, &replica_specs)
+        self.volume_state_with_replicas(&volume_spec, &replica_specs)
             .await
     }
 
     /// Get the volume state for the specified volume.
     /// replicas is a pre-fetched list of replicas from any and all volumes.
-    pub(crate) async fn get_volume_state_with_replicas(
+    pub(crate) async fn volume_state_with_replicas(
         &self,
         volume_spec: &VolumeSpec,
         replicas: &[ReplicaSpec],
@@ -34,12 +34,12 @@ impl Registry {
             .filter(|r| r.owners.owned_by(&volume_spec.uuid))
             .collect::<Vec<_>>();
 
-        let nexus_spec = self.specs().get_volume_target_nexus(volume_spec);
+        let nexus_spec = self.specs().volume_target_nexus_rsc(volume_spec);
         let nexus = match nexus_spec {
             None => None,
             Some(spec) => {
                 let nexus_id = spec.lock().uuid.clone();
-                self.get_nexus(&nexus_id).await.ok().map(|s| (spec, s))
+                self.nexus(&nexus_id).await.ok().map(|s| (spec, s))
             }
         };
 
@@ -103,12 +103,12 @@ impl Registry {
     }
 
     /// Get all volumes.
-    pub(crate) async fn get_volumes(&self) -> Vec<Volume> {
-        let volume_specs = self.specs().get_volumes();
-        let replicas = self.specs().get_cloned_replicas();
+    pub(crate) async fn volumes(&self) -> Vec<Volume> {
+        let volume_specs = self.specs().volumes();
+        let replicas = self.specs().replicas_cloned();
         let mut volumes = Vec::with_capacity(volume_specs.len());
         for spec in volume_specs {
-            if let Ok(state) = self.get_volume_state_with_replicas(&spec, &replicas).await {
+            if let Ok(state) = self.volume_state_with_replicas(&spec, &replicas).await {
                 volumes.push(Volume::new(spec, state));
             }
         }
@@ -116,15 +116,15 @@ impl Registry {
     }
 
     /// Get a paginated subset of volumes.
-    pub(super) async fn get_paginated_volume(
+    pub(super) async fn paginated_volumes(
         &self,
         pagination: &Pagination,
     ) -> PaginatedResult<Volume> {
-        let volume_specs = self.specs().get_paginated_volumes(pagination);
+        let volume_specs = self.specs().paginated_volumes(pagination);
         let mut volumes = Vec::with_capacity(volume_specs.len());
         let last = volume_specs.last();
         for spec in volume_specs.result() {
-            if let Ok(state) = self.get_volume_state(&spec.uuid).await {
+            if let Ok(state) = self.volume_state(&spec.uuid).await {
                 volumes.push(Volume::new(spec, state));
             }
         }
@@ -132,10 +132,10 @@ impl Registry {
     }
 
     /// Return a volume object corresponding to the ID.
-    pub(crate) async fn get_volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
+    pub(crate) async fn volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
         Ok(Volume::new(
-            self.specs().get_volume(id)?,
-            self.get_volume_state(id).await?,
+            self.specs().volume_clone(id)?,
+            self.volume_state(id).await?,
         ))
     }
 

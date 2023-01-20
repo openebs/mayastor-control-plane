@@ -135,7 +135,7 @@ impl SpecOperationsHelper for NexusSpec {
 /// During these calls, no other thread can add/remove elements from the list
 impl ResourceSpecs {
     /// Get all NexusSpec's
-    pub(crate) fn get_nexuses(&self) -> Vec<NexusSpec> {
+    pub(crate) fn nexuses(&self) -> Vec<NexusSpec> {
         let mut vector = vec![];
         for object in self.nexuses.to_vec() {
             let object = object.lock();
@@ -144,7 +144,7 @@ impl ResourceSpecs {
         vector
     }
     /// Get all NexusSpec's which are in a created state
-    pub(crate) fn get_created_nexuses(&self) -> Vec<NexusSpec> {
+    pub(crate) fn created_nexuses(&self) -> Vec<NexusSpec> {
         let mut nexuses = vec![];
         for nexus in self.nexuses.to_vec() {
             let nexus = nexus.lock();
@@ -159,12 +159,12 @@ impl ResourceSpecs {
 impl ResourceSpecsLocked {
     /// Get a list of created NexusSpec's
     #[allow(dead_code)]
-    pub(crate) fn get_created_nexus_specs(&self) -> Vec<NexusSpec> {
+    pub(crate) fn created_nexus_specs(&self) -> Vec<NexusSpec> {
         let specs = self.read();
-        specs.get_created_nexuses()
+        specs.created_nexuses()
     }
-    /// Get the protected NexusSpec for the given nexus `id`, if any exists
-    pub(crate) fn get_nexus(&self, id: &NexusId) -> Option<ResourceMutex<NexusSpec>> {
+    /// Get the resourced NexusSpec for the given nexus `id`, if any exists
+    pub(crate) fn nexus_rsc(&self, id: &NexusId) -> Option<ResourceMutex<NexusSpec>> {
         let specs = self.read();
         specs.nexuses.get(id).cloned()
     }
@@ -173,7 +173,7 @@ impl ResourceSpecsLocked {
         &self,
         nexus: &NexusId,
     ) -> Result<Option<OperationGuardArc<NexusSpec>>, SvcError> {
-        Ok(match self.get_nexus(nexus) {
+        Ok(match self.nexus_rsc(nexus) {
             None => None,
             Some(nexus) => Some(nexus.operation_guard_wait().await?),
         })
@@ -183,14 +183,14 @@ impl ResourceSpecsLocked {
         &self,
         nexus: &NexusId,
     ) -> Result<OperationGuardArc<NexusSpec>, SvcError> {
-        match self.get_nexus(nexus) {
+        match self.nexus_rsc(nexus) {
             None => Err(SvcError::NexusNotFound {
                 nexus_id: nexus.to_string(),
             }),
             Some(nexus) => Ok(nexus.operation_guard_wait().await?),
         }
     }
-    /// Get or Create the protected NexusSpec for the given request
+    /// Get or Create the resourced NexusSpec for the given request
     pub(crate) fn get_or_create_nexus(&self, request: &CreateNexus) -> ResourceMutex<NexusSpec> {
         let mut specs = self.write();
         if let Some(nexus) = specs.nexuses.get(&request.uuid) {
@@ -214,7 +214,7 @@ impl ResourceSpecsLocked {
                     .iter()
                     .filter_map(|r| r.as_replica())
                     .collect::<Vec<_>>();
-                let replicas = self.get_volume_replicas(uuid);
+                let replicas = self.volume_replicas(uuid);
                 replicas.into_iter().for_each(|replica_spec| {
                     let mut spec = replica_spec.lock();
                     if nexus_replicas.iter().any(|r| r.uuid() == &spec.uuid) {
@@ -230,7 +230,7 @@ impl ResourceSpecsLocked {
         let children = &nexus.children;
         let replicas = children.iter().filter_map(|r| r.as_replica());
         replicas.for_each(|replica| {
-            if let Some(replica) = self.get_replica(replica.uuid()) {
+            if let Some(replica) = self.replica_rsc(replica.uuid()) {
                 let mut replica = replica.lock();
                 replica.disown(&ReplicaOwners::new(None, vec![nexus.uuid.clone()]));
             }
@@ -243,10 +243,10 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &AddNexusReplica,
     ) -> Result<Child, SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(nexus) = nexus {
-            let status = registry.get_nexus(&request.nexus).await?;
+            let status = registry.nexus(&request.nexus).await?;
             let spec_clone = nexus
                 .start_update(
                     registry,
@@ -267,7 +267,7 @@ impl ResourceSpecsLocked {
 
     fn on_add_own_replica(&self, request: &AddNexusReplica, result: &Result<Child, SvcError>) {
         if result.is_ok() {
-            if let Some(replica) = self.get_replica(request.replica.uuid()) {
+            if let Some(replica) = self.replica_rsc(request.replica.uuid()) {
                 let mut replica = replica.lock();
                 replica.owners.add_owner(&request.nexus);
             }
@@ -280,10 +280,10 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         request: &RemoveNexusReplica,
     ) -> Result<(), SvcError> {
-        let node = registry.get_node_wrapper(&request.node).await?;
+        let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(nexus) = nexus {
-            let status = registry.get_nexus(&request.nexus).await?;
+            let status = registry.nexus(&request.nexus).await?;
             let spec_clone = nexus
                 .start_update(
                     registry,
@@ -325,13 +325,13 @@ impl ResourceSpecsLocked {
                 {
                     Ok(_) if destroy_replica => {
                         let mut replica = self
-                            .get_replica(replica.uuid())
+                            .replica_rsc(replica.uuid())
                             .ok_or(SvcError::ReplicaNotFound {
                                 replica_id: replica.uuid().clone(),
                             })?
                             .operation_guard()?;
                         let pool_ref = replica.as_ref().pool.pool_name();
-                        match Self::get_pool_node(registry, pool_ref).await {
+                        match Self::pool_node(registry, pool_ref).await {
                             Some(node) => {
                                 if let Err(error) = self
                                     .disown_and_destroy_replica(registry, &node, &mut replica)
@@ -385,7 +385,7 @@ impl ResourceSpecsLocked {
         result: &Result<(), SvcError>,
     ) {
         if result.is_ok() {
-            if let Some(replica) = self.get_replica(request.replica.uuid()) {
+            if let Some(replica) = self.replica_rsc(request.replica.uuid()) {
                 if let Ok(mut replica) = replica.operation_guard() {
                     let disowner = ReplicaOwners::new(None, vec![request.nexus.clone()]);
                     let _ = replica.remove_owners(registry, &disowner, true).await;
@@ -399,13 +399,13 @@ impl ResourceSpecsLocked {
         let mut specs = self.write();
         specs.nexuses.remove(id);
     }
-    /// Get a vector of protected NexusSpec's
-    pub(crate) fn get_nexuses(&self) -> Vec<ResourceMutex<NexusSpec>> {
+    /// Get a vector of resourced NexusSpec's
+    pub(crate) fn nexuses(&self) -> Vec<ResourceMutex<NexusSpec>> {
         let specs = self.read();
         specs.nexuses.to_vec()
     }
-    /// Get a list of protected ReplicaSpec's used by the given nexus spec
-    pub(crate) fn get_nexus_replicas(&self, nexus: &NexusSpec) -> Vec<ResourceMutex<ReplicaSpec>> {
+    /// Get a list of resourced ReplicaSpec's used by the given nexus spec
+    pub(crate) fn nexus_replicas(&self, nexus: &NexusSpec) -> Vec<ResourceMutex<ReplicaSpec>> {
         self.read()
             .replicas
             .values()
@@ -419,7 +419,7 @@ impl ResourceSpecsLocked {
     /// update the spec with the persistent store.
     pub(crate) async fn reconcile_dirty_nexuses(&self, registry: &Registry) -> bool {
         let mut pending_ops = false;
-        let nexuses = self.get_nexuses();
+        let nexuses = self.nexuses();
         for nexus in nexuses {
             if let Ok(mut guard) = nexus.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {

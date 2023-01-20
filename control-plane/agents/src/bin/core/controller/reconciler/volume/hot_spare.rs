@@ -31,7 +31,7 @@ impl HotSpareReconciler {
 impl TaskPoller for HotSpareReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let mut results = vec![];
-        let volumes = context.specs().get_locked_volumes();
+        let volumes = context.specs().volumes_rsc();
         for mut volume in volumes {
             results.push(hot_spare_reconcile(&mut volume, context).await);
         }
@@ -45,7 +45,7 @@ async fn hot_spare_reconcile(
     context: &PollContext,
 ) -> PollResult {
     let uuid = volume_spec.uuid();
-    let volume_state = context.registry().get_volume_state(uuid).await?;
+    let volume_state = context.registry().volume_state(uuid).await?;
     let mut volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
@@ -152,7 +152,7 @@ async fn nexus_replica_count_reconciler(
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
-    let nexus_state = context.registry().get_nexus(nexus_uuid).await?;
+    let nexus_state = context.registry().nexus(nexus_uuid).await?;
 
     let vol_spec_clone = volume.as_ref();
     let nexus_spec_clone = nexus.as_ref();
@@ -164,7 +164,7 @@ async fn nexus_replica_count_reconciler(
             .fold(0usize, |mut counter, child| {
                 // only account for children which are lvol replicas
                 if let Some(replica) = child.as_replica() {
-                    if context.specs().get_replica(replica.uuid()).is_some() {
+                    if context.specs().replica_rsc(replica.uuid()).is_some() {
                         counter += 1;
                     }
                 }
@@ -243,7 +243,7 @@ async fn volume_replica_count_reconciler(
 ) -> PollResult {
     let required_replica_count = volume.as_ref().num_replicas as usize;
 
-    let current_replicas = context.specs().get_volume_replicas(volume.uuid());
+    let current_replicas = context.specs().volume_replicas(volume.uuid());
     let current_replica_count = current_replicas.len();
 
     match current_replica_count.cmp(&required_replica_count) {
@@ -261,7 +261,7 @@ async fn volume_replica_count_reconciler_traced(
 ) -> PollResult {
     let required_replica_count = volume.as_ref().num_replicas as usize;
 
-    let current_replicas = context.specs().get_volume_replicas(volume.uuid());
+    let current_replicas = context.specs().volume_replicas(volume.uuid());
     let mut current_replica_count = current_replicas.len();
 
     match current_replica_count.cmp(&required_replica_count) {

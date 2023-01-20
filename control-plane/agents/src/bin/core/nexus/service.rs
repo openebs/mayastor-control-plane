@@ -120,14 +120,14 @@ impl Service {
     pub(super) async fn get_nexuses(&self, request: &GetNexuses) -> Result<Nexuses, SvcError> {
         let filter = request.filter.clone();
         let nexuses = match filter {
-            Filter::None => self.registry.get_node_opt_nexuses(None).await?,
-            Filter::Node(node_id) => self.registry.get_node_nexuses(&node_id).await?,
+            Filter::None => self.registry.node_opt_nexuses(None).await?,
+            Filter::Node(node_id) => self.registry.node_nexuses(&node_id).await?,
             Filter::NodeNexus(node_id, nexus_id) => {
-                let nexus = self.registry.get_node_nexus(&node_id, &nexus_id).await?;
+                let nexus = self.registry.node_nexus(&node_id, &nexus_id).await?;
                 vec![nexus]
             }
             Filter::Nexus(nexus_id) => {
-                let nexus = self.registry.get_nexus(&nexus_id).await?;
+                let nexus = self.registry.nexus(&nexus_id).await?;
                 vec![nexus]
             }
             _ => return Err(SvcError::InvalidFilter { filter }),

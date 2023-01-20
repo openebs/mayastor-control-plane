@@ -28,7 +28,7 @@ impl NodeNexusReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for NodeNexusReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let nodes = context.specs().get_nodes();
+        let nodes = context.specs().nodes();
         let mut results = Vec::with_capacity(nodes.len());
 
         for node in nodes {
@@ -78,7 +78,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
 
     let node_id = node_spec.id();
     tracing::trace!(node.id = node_spec.id().as_str(), "Draining node");
-    let vol_specs = context.specs().get_locked_volumes();
+    let vol_specs = context.specs().volumes_rsc();
 
     let mut move_failures = false;
 

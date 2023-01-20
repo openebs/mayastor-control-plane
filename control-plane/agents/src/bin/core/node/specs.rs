@@ -49,10 +49,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get node spec by its `NodeId`
-    pub(crate) fn get_locked_node(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<ResourceMutex<NodeSpec>, SvcError> {
+    pub(crate) fn node_rsc(&self, node_id: &NodeId) -> Result<ResourceMutex<NodeSpec>, SvcError> {
         self.read()
             .nodes
             .get(node_id)
@@ -63,18 +60,18 @@ impl ResourceSpecsLocked {
     }
 
     /// Get cloned node spec by its `NodeId`
-    pub(crate) fn get_node(&self, node_id: &NodeId) -> Result<NodeSpec, SvcError> {
-        self.get_locked_node(node_id).map(|n| n.lock().clone())
+    pub(crate) fn node(&self, node_id: &NodeId) -> Result<NodeSpec, SvcError> {
+        self.node_rsc(node_id).map(|n| n.lock().clone())
     }
 
     /// Get all locked node specs
-    fn get_locked_nodes(&self) -> Vec<ResourceMutex<NodeSpec>> {
+    fn nodes_rsc(&self) -> Vec<ResourceMutex<NodeSpec>> {
         self.read().nodes.to_vec()
     }
 
     /// Get all node specs cloned
-    pub(crate) fn get_nodes(&self) -> Vec<NodeSpec> {
-        self.get_locked_nodes()
+    pub(crate) fn nodes(&self) -> Vec<NodeSpec> {
+        self.nodes_rsc()
             .into_iter()
             .map(|n| n.lock().clone())
             .collect()
@@ -88,7 +85,7 @@ impl ResourceSpecsLocked {
         node_id: &NodeId,
         label: String,
     ) -> Result<NodeSpec, SvcError> {
-        let node = self.get_locked_node(node_id)?;
+        let node = self.node_rsc(node_id)?;
         let cordoned_node_spec = {
             let mut locked_node = node.lock();
             // Do not allow the same label to be applied more than once.
@@ -113,7 +110,7 @@ impl ResourceSpecsLocked {
         node_id: &NodeId,
         label: String,
     ) -> Result<NodeSpec, SvcError> {
-        let node = self.get_locked_node(node_id)?;
+        let node = self.node_rsc(node_id)?;
         // Return an error if the uncordon label doesn't exist.
         if !node.lock().has_cordon_label(&label) {
             return Err(SvcError::UncordonLabel {
@@ -131,7 +128,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get all cordoned nodes.
-    pub(crate) fn get_cordoned_nodes(&self) -> Vec<NodeSpec> {
+    pub(crate) fn cordoned_nodes(&self) -> Vec<NodeSpec> {
         self.read()
             .nodes
             .to_vec()
@@ -154,7 +151,7 @@ impl ResourceSpecsLocked {
         node_id: &NodeId,
         label: String,
     ) -> Result<NodeSpec, SvcError> {
-        let node = self.get_locked_node(node_id)?;
+        let node = self.node_rsc(node_id)?;
         let drained_node_spec = {
             let mut locked_node = node.lock();
             // Do not allow the same label to be applied more than once.
@@ -177,7 +174,7 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         node_id: &NodeId,
     ) -> Result<NodeSpec, SvcError> {
-        let node = self.get_locked_node(node_id)?;
+        let node = self.node_rsc(node_id)?;
         let drained_node_spec = {
             let mut locked_node = node.lock();
             locked_node.set_drained();

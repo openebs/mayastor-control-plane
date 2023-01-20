@@ -101,16 +101,11 @@ impl GetPersistedNexusChildrenCtx {
         request: &GetPersistedNexusChildren,
     ) -> Result<Self, SvcError> {
         let nexus_info = registry
-            .get_nexus_info(request.volume_id(), request.nexus_info_id(), false)
+            .nexus_info(request.volume_id(), request.nexus_info_id(), false)
             .await?;
         let shutdown_pending_nexuses = match request.volume_id() {
             None => Vec::new(),
-            Some(id) => {
-                registry
-                    .specs()
-                    .get_volume_failed_shutdown_nexuses(id)
-                    .await
-            }
+            Some(id) => registry.specs().volume_failed_shutdown_nexuses(id).await,
         };
 
         Ok(Self {
@@ -128,13 +123,13 @@ impl GetPersistedNexusChildrenCtx {
 
         let spec_replicas = match &self.request {
             GetPersistedNexusChildren::Create((vol_spec, _)) => {
-                self.registry.specs().get_volume_replicas(&vol_spec.uuid)
+                self.registry.specs().volume_replicas(&vol_spec.uuid)
             }
             GetPersistedNexusChildren::ReCreate(nexus_spec) => {
                 // replicas used by the nexus
                 // note: if the nexus was somehow created without using replicas (eg: directly using
                 // aio:// etc) then we will not recreate it with those devices...
-                self.registry.specs().get_nexus_replicas(nexus_spec)
+                self.registry.specs().nexus_replicas(nexus_spec)
             }
         };
 
@@ -338,7 +333,7 @@ impl NexusTargetNode {
                 spec: request.spec.clone(),
             },
             list: {
-                let nodes = registry.get_node_wrappers().await;
+                let nodes = registry.node_wrappers().await;
                 let mut node_items = Vec::with_capacity(nodes.len());
                 for node in nodes {
                     let node = node.read().await;

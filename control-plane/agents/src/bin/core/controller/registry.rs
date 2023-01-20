@@ -346,14 +346,14 @@ impl Registry {
 
     /// Returns whether or not the node with the given ID is cordoned.
     pub(crate) fn node_cordoned(&self, node_id: &NodeId) -> Result<bool, SvcError> {
-        Ok(self.specs.get_node(node_id)?.cordoned())
+        Ok(self.specs.node(node_id)?.cordoned())
     }
 
     /// Get the allowed host nqn for the given dataplane node.
     pub(crate) async fn node_nqn(&self, node_id: &NodeId) -> Result<Vec<HostNqn>, SvcError> {
         Ok(match self.host_acl.contains(&HostAccessControl::Replicas) {
             true => {
-                let node = self.get_node_state(node_id).await?.node_nqn;
+                let node = self.node_state(node_id).await?.node_nqn;
                 node.into_iter().collect::<Vec<_>>()
             }
             false => vec![],

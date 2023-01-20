@@ -432,19 +432,19 @@ impl NodeWrapper {
     /// Get all pools
     pub(crate) fn pools(&self) -> Vec<PoolState> {
         self.resources()
-            .get_pool_states()
+            .pool_states()
             .map(|p| p.lock().pool.clone())
             .collect()
     }
     /// Get all pool wrappers.
     pub(crate) fn pool_wrappers(&self) -> Vec<PoolWrapper> {
-        let pools = self.resources().get_cloned_pool_states();
+        let pools = self.resources().pool_states_cloned();
         let resources = self.resources();
         pools
             .into_iter()
             .map(|pool_state| {
                 let replicas = resources
-                    .get_replica_states()
+                    .replica_states()
                     .filter_map(|replica_state| {
                         let replica_state = replica_state.lock();
                         if &replica_state.replica.pool_id == pool_state.uid() {
@@ -459,20 +459,20 @@ impl NodeWrapper {
             .collect()
     }
     /// Get all pool states.
-    pub(crate) fn pool_states(&self) -> Vec<store::pool::PoolState> {
-        self.resources().get_cloned_pool_states()
+    pub(crate) fn pool_states_cloned(&self) -> Vec<store::pool::PoolState> {
+        self.resources().pool_states_cloned()
     }
     /// Get pool from `pool_id` or None.
     pub(crate) fn pool(&self, pool_id: &PoolId) -> Option<PoolState> {
-        self.resources().get_pool_state(pool_id).map(|p| p.pool)
+        self.resources().pool_state(pool_id).map(|p| p.pool)
     }
     /// Get a PoolWrapper for the pool ID.
     pub(crate) fn pool_wrapper(&self, pool_id: &PoolId) -> Option<PoolWrapper> {
-        match self.resources().get_pool_state(pool_id) {
+        match self.resources().pool_state(pool_id) {
             Some(pool_state) => {
                 let resources = self.resources();
                 let replicas = resources
-                    .get_replica_states()
+                    .replica_states()
                     .filter_map(|r| {
                         let replica = r.lock();
                         if &replica.replica.pool_id == pool_state.uid() {
@@ -490,33 +490,37 @@ impl NodeWrapper {
     /// Get all replicas.
     pub(crate) fn replicas(&self) -> Vec<Replica> {
         self.resources()
-            .get_replica_states()
+            .replica_states()
             .map(|r| r.lock().replica.clone())
             .collect()
     }
     /// Get all replica states.
-    pub(crate) fn replica_states(&self) -> Vec<ReplicaState> {
-        self.resources().get_cloned_replica_states()
+    pub(crate) fn replica_states_cloned(&self) -> Vec<ReplicaState> {
+        self.resources().replica_states_cloned()
     }
     /// Get all nexuses.
     fn nexuses(&self) -> Vec<Nexus> {
         self.resources()
-            .get_nexus_states()
+            .nexus_states()
             .map(|nexus_state| nexus_state.lock().nexus.clone())
             .collect()
     }
     /// Get all nexus states.
-    pub(crate) fn nexus_states(&self) -> Vec<NexusState> {
-        self.resources().get_cloned_nexus_states()
+    pub(crate) fn nexus_states_cloned(&self) -> Vec<NexusState> {
+        self.resources().nexus_states_cloned()
+    }
+    /// How many nexuses in the node.
+    pub(crate) fn nexus_count(&self) -> usize {
+        self.resources().nexus_states().count()
     }
     /// Get nexus.
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
-        self.resources().get_nexus_state(nexus_id).map(|s| s.nexus)
+        self.resources().nexus_state(nexus_id).map(|s| s.nexus)
     }
     /// Get replica from `replica_id`.
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
         self.resources()
-            .get_replica_state(replica_id)
+            .replica_state(replica_id)
             .map(|r| r.lock().replica.clone())
     }
     /// Is the node online.
@@ -605,7 +609,8 @@ impl NodeWrapper {
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
         client: &mut GrpcClient,
     ) -> Result<(), SvcError> {
-        let nexuses = node.read().await.fetcher().fetch_nexuses(client).await?;
+        let fetcher = node.read().await.fetcher();
+        let nexuses = fetcher.fetch_nexuses(client).await?;
         node.write()
             .await
             .update_resources(ResourceType::Nexus(nexuses));
@@ -617,7 +622,8 @@ impl NodeWrapper {
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
         client: &mut GrpcClient,
     ) -> Result<(), SvcError> {
-        let pools = node.read().await.fetcher().fetch_pools(client).await?;
+        let fetcher = node.read().await.fetcher();
+        let pools = fetcher.fetch_pools(client).await?;
         node.write()
             .await
             .update_resources(ResourceType::Pool(pools));
@@ -629,7 +635,8 @@ impl NodeWrapper {
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
         client: &mut GrpcClient,
     ) -> Result<(), SvcError> {
-        let replicas = node.read().await.fetcher().fetch_replicas(client).await?;
+        let fetcher = node.read().await.fetcher();
+        let replicas = fetcher.fetch_replicas(client).await?;
         node.write()
             .await
             .update_resources(ResourceType::Replica(replicas));
@@ -659,14 +666,22 @@ impl NodeWrapper {
 
     /// Update the number of rebuilds in progress on this node.
     fn update_num_rebuilds(&self) {
-        // Note: Each nexus returns the total number of rebuilds on the node, **NOT** the number of
-        // rebuilds per nexus. Therefore retrieve the number of rebuilds from one nexus only.
-        // If there are no nexuses, the number of rebuilds is reset.
-        let num_rebuilds = self
-            .nexus_states()
-            .first()
-            .map(|nexus_state| nexus_state.nexus.rebuilds)
-            .unwrap_or(0);
+        let num_rebuilds = match self.latest_api_version().unwrap_or(ApiVersion::V0) {
+            ApiVersion::V0 => {
+                // Note: Each nexus returns the total number of rebuilds on the node, **NOT** the
+                // number of rebuilds per nexus. Therefore retrieve the number of
+                // rebuilds from one nexus only. If there are no nexuses, the number
+                // of rebuilds is reset.
+                self.resources()
+                    .nexus_states()
+                    .take(1)
+                    .fold(0, |acc, n| acc + n.lock().nexus.rebuilds)
+            }
+            _ => self
+                .resources()
+                .nexus_states()
+                .fold(0, |acc, n| acc + n.lock().nexus.rebuilds),
+        };
         let mut rebuilds = self.num_rebuilds.write();
         *rebuilds = num_rebuilds;
     }

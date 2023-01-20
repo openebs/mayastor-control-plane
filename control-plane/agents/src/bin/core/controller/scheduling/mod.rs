@@ -56,7 +56,7 @@ impl NodeFilters {
     /// Should only attempt to use nodes not currently used by the volume.
     pub(crate) fn unused(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let registry = request.registry();
-        let used_nodes = registry.specs().get_volume_data_nodes(&request.uuid);
+        let used_nodes = registry.specs().volume_data_nodes(&request.uuid);
         !used_nodes.contains(&item.pool.node)
     }
     /// Should only attempt to use nodes which are not cordoned.
@@ -64,7 +64,7 @@ impl NodeFilters {
         let registry = request.registry();
         !registry
             .specs()
-            .get_cordoned_nodes()
+            .cordoned_nodes()
             .into_iter()
             .any(|node_spec| node_spec.id() == &item.pool.node)
     }
@@ -79,7 +79,7 @@ impl NodeFilters {
         let registry = request.registry();
         !registry
             .specs()
-            .get_cordoned_nodes()
+            .cordoned_nodes()
             .into_iter()
             .any(|node_spec| node_spec.id() == item.node_wrapper().id())
     }
@@ -94,7 +94,7 @@ impl NodeFilters {
     }
     /// Should only attempt to use node where there are no targets for the current volume.
     pub(crate) fn no_targets(request: &GetSuitableNodesContext, item: &NodeItem) -> bool {
-        let volume_targets = request.registry().specs().get_volume_nexuses(&request.uuid);
+        let volume_targets = request.registry().specs().volume_nexuses(&request.uuid);
         !volume_targets
             .into_iter()
             .any(|n| &n.lock().node == item.node_wrapper().id())
@@ -156,7 +156,7 @@ impl PoolFilters {
             },
         };
         // We will reach this part of code only if the volume has pool topology labels.
-        match request.registry().specs().get_pool(&item.pool.id) {
+        match request.registry().specs().pool(&item.pool.id) {
             Ok(spec) => match spec.labels {
                 None => false,
                 Some(label) => volume_pool_topology_labels.keys().all(|k| {
@@ -369,8 +369,7 @@ impl NodeSorters {
     /// The lesser the number of active nexus on a node, the more would be its selection priority.
     pub(crate) fn number_targets(a: &NodeItem, b: &NodeItem) -> std::cmp::Ordering {
         a.node_wrapper()
-            .nexus_states()
-            .len()
-            .cmp(&b.node_wrapper().nexus_states().len())
+            .nexus_count()
+            .cmp(&b.node_wrapper().nexus_count())
     }
 }
