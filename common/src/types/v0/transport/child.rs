@@ -86,6 +86,10 @@ impl ChildState {
     pub fn faulted(&self) -> bool {
         self == &Self::Faulted
     }
+    /// Check if the child is `Online`
+    pub fn online(&self) -> bool {
+        self == &Self::Online
+    }
 }
 impl PartialOrd for ChildState {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

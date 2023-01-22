@@ -44,8 +44,18 @@ impl ComponentAction for IoEngine {
             .with_env("NEXUS_NVMF_ANA_ENABLE", "1")
             .with_bind("/tmp", "/host/tmp");
 
-            if options.io_engine_isolate {
-                spec = spec.with_args(vec!["-l", format!("{}", i).as_str()]);
+            let core_list = match options.io_engine_isolate {
+                true => {
+                    let initial = i * options.io_engine_cores;
+                    initial .. initial + options.io_engine_cores
+                }
+                false => 0 .. options.io_engine_cores,
+            }
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+            if !core_list.is_empty() {
+                spec = spec.with_args(vec!["-l", core_list.as_str()]);
             }
 
             if let Some(env) = &options.io_engine_env {

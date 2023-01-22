@@ -22,3 +22,4 @@ __pycache__
 /rust-toolchain.toml
 /.rust-toolchain
 /rpc/mayastor-api
+/local-fio-0-verify.state

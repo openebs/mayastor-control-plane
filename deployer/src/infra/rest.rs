@@ -76,7 +76,7 @@ impl ComponentAction for Rest {
         Components::wait_url_timeouts(
             "http://localhost:8081/v0/api/spec",
             Duration::from_secs(10),
-            Duration::from_millis(100),
+            Duration::from_millis(150),
         )
         .await
     }
