@@ -56,6 +56,8 @@ pub enum PoolState {
     /// The resource is present, and the pool has been created. The schema MUST
     /// have a status and spec field.
     Online,
+    /// This state is set when we receive delete event on the dsp cr.
+    Terminating,
     /// The resource is present but the control plane did not return the pool state.
     Unknown,
     /// Trying to converge to the next state has exceeded the maximum retry
@@ -118,6 +120,21 @@ impl DiskPoolStatus {
             available: 0,
         }
     }
+
+    pub fn terminating(p: Pool) -> Self {
+        let state = p.state.unwrap_or_default();
+        let free = if state.capacity > state.used {
+            state.capacity - state.used
+        } else {
+            0
+        };
+        Self {
+            state: PoolState::Terminating,
+            capacity: state.capacity,
+            used: state.used,
+            available: free,
+        }
+    }
 }
 
 impl From<Pool> for DiskPoolStatus {
@@ -147,6 +164,7 @@ impl ToString for PoolState {
             PoolState::Online => "Online",
             PoolState::Unknown => "Unknown",
             PoolState::Error => "Error",
+            PoolState::Terminating => "Terminating",
         }
         .to_string()
     }

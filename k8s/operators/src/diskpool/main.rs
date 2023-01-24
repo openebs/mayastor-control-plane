@@ -522,7 +522,10 @@ impl ResourceContext {
     async fn set_status_or_unknown(&self, pool: Pool) -> Result<Action, Error> {
         if pool.state.is_some() {
             if let Some(status) = &self.status {
-                let new_status = DiskPoolStatus::from(pool);
+                let mut new_status = DiskPoolStatus::from(pool);
+                if self.metadata.deletion_timestamp.is_some() {
+                    new_status.state = PoolState::Terminating;
+                }
                 if status != &new_status {
                     // update the usage state such that users can see the values changes
                     // as replica's are added and/or removed.
@@ -613,13 +616,25 @@ impl ResourceContext {
             |event| async move {
                 match event {
                     finalizer::Event::Apply(dsp) => Self::put_finalizer(dsp).await,
-                    finalizer::Event::Cleanup(_dsp) => Self::delete_finalizer(self.clone()).await,
+                    finalizer::Event::Cleanup(dsp) => {
+                        if dsp.status.as_ref().unwrap().state != PoolState::Terminating {
+                            info!("set state as terminating");
+                            let pool = self
+                                .pools_api()
+                                .get_node_pool(&self.spec.node(), &self.name_any())
+                                .await?
+                                .into_body();
+                            let new_status = DiskPoolStatus::terminating(pool);
+                            let _ = self.patch_status(new_status).await?;
+                        }
+                        info!("Calling delete finalizer");
+                        Self::delete_finalizer(self.clone()).await
+                    }
                 }
             },
         )
         .await
         .map_err(|e| error!(?e));
-
         Ok(Action::await_change())
     }
 }
@@ -685,6 +700,7 @@ fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext
         when.to_rfc2822(),
         duration.as_secs()
     );
+    info!("requeue after :{:?}", duration);
     Action::requeue(duration)
 }
 
@@ -692,7 +708,6 @@ fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext
 #[tracing::instrument(fields(name = %dsp.spec.node(), status = ?dsp.status) skip(dsp, ctx))]
 async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Action, Error> {
     let dsp = ctx.upsert(ctx.clone(), dsp).await;
-
     let _ = dsp.finalizer().await;
 
     match dsp.status {
@@ -712,6 +727,10 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
         })
         | Some(DiskPoolStatus {
             state: PoolState::Unknown,
+            ..
+        })
+        | Some(DiskPoolStatus {
+            state: PoolState::Terminating,
             ..
         }) => dsp.pool_check().await,
 
