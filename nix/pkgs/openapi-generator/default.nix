@@ -1,7 +1,8 @@
 { pkgs, lib, stdenv, fetchFromGitHub, maven, jdk, jre, makeWrapper }:
+
 let
   src = fetchFromGitHub (lib.importJSON ./source.json);
-  version = "5.2.1-${src.rev}";
+  version = "6.1.0-${src.rev}";
 
   # perform fake build to make a fixed-output derivation out of the files downloaded from maven central
   deps = stdenv.mkDerivation {
@@ -19,10 +20,11 @@ let
       runHook postBuild
     '';
     # keep only *.{pom,jar,sha1,nbm} and delete all ephemeral files with lastModified timestamps inside
-    installPhase = ''find $out/.m2 -type f -regex '.+\(\.lastUpdated\|resolver-status\.properties\|_remote\.repositories\)' -delete'';
+    installPhase =
+      "find $out/.m2 -type f -regex '.+\\(\\.lastUpdated\\|resolver-status\\.properties\\|_remote\\.repositories\\)' -delete";
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = "0f30vfvqrwa4gdgid9c94kvv83yfrgpx6ii1npjxspdawqr3whrj";
+    outputHash = if stdenv.hostPlatform.isDarwin then "sha256-9Li0uSD39ZwptIRgOXeBkLeZvfy/9w69faNDm75zdws=" else "sha256-MieSA5Y8u35H1xdP27A+YDekyyQ6CThNXOjQ82ArM7U=";
   };
 in
 stdenv.mkDerivation rec {
@@ -56,7 +58,8 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with lib; {
-    description = "Allows generation of API client libraries (SDK generation), server stubs and documentation automatically given an OpenAPI Spec";
+    description =
+      "Allows generation of API client libraries (SDK generation), server stubs and documentation automatically given an OpenAPI Spec";
     homepage = "https://github.com/openebs/openapi-generator";
     license = licenses.asl20;
     maintainers = [ maintainers.tiagolobocastro ];

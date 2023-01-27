@@ -15,7 +15,7 @@ impl RestClient {
             url.set_port(Some(30011))
                 .map_err(|_| anyhow::anyhow!("Failed to set REST client port"))?;
         }
-        let cfg = Configuration::new(url, timeout, None, None, true).map_err(|error| {
+        let cfg = Configuration::new(url, timeout, None, None, true, None).map_err(|error| {
             anyhow::anyhow!(
                 "Failed to create openapi configuration, Error: '{:?}'",
                 error

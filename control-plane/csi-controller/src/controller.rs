@@ -329,29 +329,32 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
         // First check if the volume already exists.
-        if let Some(existing_volume) = MayastorApiClient::get_client()
-            .list_volumes()
-            .await?
-            .into_iter()
-            .find(|v| v.spec.uuid == u)
-        {
-            check_existing_volume(&existing_volume, replica_count, size, pinned_volume)?;
-            debug!(
-                "Volume {} already exists and is compatible with requested config",
-                volume_uuid
-            );
-        } else {
-            let volume_topology =
-                CreateVolumeTopology::new(allowed_nodes, preferred_nodes, inclusive_label_topology);
+        match MayastorApiClient::get_client().get_volume(&u).await {
+            Ok(volume) => {
+                check_existing_volume(&volume, replica_count, size, pinned_volume)?;
+                debug!(
+                    "Volume {} already exists and is compatible with requested config",
+                    volume_uuid
+                );
+            }
+            // If the volume doesn't exist, create it.
+            Err(ApiClientError::ResourceNotExists(_)) => {
+                let volume_topology = CreateVolumeTopology::new(
+                    allowed_nodes,
+                    preferred_nodes,
+                    inclusive_label_topology,
+                );
 
-            MayastorApiClient::get_client()
-                .create_volume(&u, replica_count, size, volume_topology, pinned_volume)
-                .await?;
+                MayastorApiClient::get_client()
+                    .create_volume(&u, replica_count, size, volume_topology, pinned_volume)
+                    .await?;
 
-            debug!(
-                "Volume {} successfully created, pinned volume = {}",
-                volume_uuid, pinned_volume
-            );
+                debug!(
+                    "Volume {} successfully created, pinned volume = {}",
+                    volume_uuid, pinned_volume
+                );
+            }
+            Err(e) => return Err(e.into()),
         }
 
         let volume = rpc::csi::Volume {
