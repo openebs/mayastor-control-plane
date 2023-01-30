@@ -16,7 +16,7 @@ stdenv.mkDerivation {
   buildCommand = ''
     cd $src
     export GIT_DIR=".git"
-    vers=`${git}/bin/git tag --points-at HEAD`
+    vers=$(${git}/bin/git describe --exact-match 2>/dev/null || echo "")
     if [ -z "$vers" ]; then
       vers=`${git}/bin/git rev-parse --short=12 HEAD`
     fi
