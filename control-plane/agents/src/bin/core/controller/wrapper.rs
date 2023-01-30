@@ -35,7 +35,7 @@ use common_lib::{
             DestroyPool, DestroyReplica, FaultNexusChild, MessageIdVs, Nexus, NexusId, NodeId,
             NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
             RemoveNexusChild, Replica, ReplicaId, ReplicaName, ShareNexus, ShareReplica,
-            ShutdownNexus, UnshareNexus, UnshareReplica,
+            ShutdownNexus, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -518,6 +518,13 @@ impl NodeWrapper {
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
         self.resources().nexus_state(nexus_id).map(|s| s.nexus)
     }
+    /// Get nexus for the given volume.
+    fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus> {
+        self.resources()
+            .nexus_states()
+            .find(|n| n.lock().nexus.name == volume_id.as_str())
+            .map(|n| n.lock().nexus.clone())
+    }
     /// Get replica from `replica_id`.
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
         self.resources()
@@ -827,6 +834,7 @@ pub(crate) trait GetterOps {
 
     async fn nexuses(&self) -> Vec<Nexus>;
     async fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus>;
+    async fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus>;
 }
 
 #[async_trait]
@@ -862,6 +870,10 @@ impl GetterOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
         let node = self.read().await;
         node.nexus(nexus_id)
+    }
+    async fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus> {
+        let node = self.read().await;
+        node.volume_nexus(volume_id)
     }
 }
 
@@ -1066,8 +1078,11 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
                 self.update_nexus_states(ctx.deref_mut()).await?;
                 let nexus_name = request.name();
-                let mut nexuses = self.read().await.nexuses().into_iter();
-                match nexuses.find(|nexus| nexus.uuid == request.uuid && nexus.name == nexus_name) {
+                let nexuses = self.read().await.nexuses();
+                match nexuses
+                    .iter()
+                    .find(|nexus| nexus.uuid == request.uuid && nexus.name == nexus_name)
+                {
                     Some(nexus) => {
                         tracing::warn!(
                             node.id = request.node.as_str(),
@@ -1075,7 +1090,22 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                             nexus.name = nexus_name,
                             "Trying to create a nexus which already exists"
                         );
-                        Ok(nexus)
+                        Ok(nexus.clone())
+                    }
+                    None if nexuses
+                        .iter()
+                        .any(|nexus| nexus.uuid != request.uuid && nexus.name == nexus_name) =>
+                    {
+                        tracing::error!(
+                            node.id = request.node.as_str(),
+                            nexus.uuid = request.uuid.as_str(),
+                            nexus.name = nexus_name,
+                            "Trying to create a nexus with a name which already exists"
+                        );
+                        Err(SvcError::AlreadyExists {
+                            kind: ResourceKind::Nexus,
+                            id: nexus_name,
+                        })
                     }
                     None => Err(error),
                 }

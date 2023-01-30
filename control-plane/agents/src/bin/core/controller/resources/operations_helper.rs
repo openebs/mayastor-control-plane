@@ -1,4 +1,8 @@
-use super::{super::registry::Registry, resource_map::ResourceMap};
+use super::{
+    super::registry::Registry, resource_map::ResourceMap, OperationGuardArc, ResourceMutex,
+    ResourceUid, UpdateInnerValue,
+};
+use crate::controller::task_poller::PollTriggerEvent;
 
 use agents::errors::SvcError;
 use common_lib::{
@@ -20,8 +24,6 @@ use common_lib::{
     },
 };
 
-use super::{OperationGuardArc, ResourceMutex, ResourceUid, UpdateInnerValue};
-use crate::controller::task_poller::PollTriggerEvent;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
@@ -54,6 +56,18 @@ pub(crate) enum OnCreateFail {
     SetDeleting,
     /// When there's no need to garbage collect, simply delete it.
     Delete,
+}
+impl OnCreateFail {
+    /// If result is a tonic invalid argument then delete the resource.
+    /// # Warning:
+    /// Use this only when a single operation has been attempted otherwise we might
+    /// leave existing resources around for some time.
+    pub(crate) fn eeinval_delete<O>(result: &Result<O, SvcError>) -> Self {
+        match result {
+            Err(error) if error.tonic_code() == tonic::Code::InvalidArgument => Self::Delete,
+            _ => Self::SetDeleting,
+        }
+    }
 }
 
 /// This trait is used to encapsulate common behaviour for all different types of resources,
@@ -196,9 +210,12 @@ pub(crate) trait GuardedOperationsHelper:
                 // This will ensure we'll delete previously created resources.
                 let spec = self.lock().fail_creating_to_deleting();
                 registry.store_obj(&spec).await.ok();
-                registry
-                    .notify(PollTriggerEvent::ResourceCreatingToDeleting)
-                    .await;
+                // TODO: we could use this to reconcile quicker?
+                if std::env::var("CREATING_DELETING_NOTIFY").is_ok() {
+                    registry
+                        .notify(PollTriggerEvent::ResourceCreatingToDeleting)
+                        .await;
+                }
                 error
             }
             OnCreateFail::Delete => {
@@ -313,7 +330,7 @@ pub(crate) trait GuardedOperationsHelper:
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
     async fn complete_destroy<O, R: Send>(
-        &self,
+        &mut self,
         result: Result<R, SvcError>,
         registry: &Registry,
     ) -> Result<R, SvcError>
@@ -330,13 +347,12 @@ pub(crate) trait GuardedOperationsHelper:
                 match deleted {
                     Ok(_) => {
                         self.remove_spec(registry);
-                        let mut spec = self.lock();
-                        spec.commit_op();
+                        self.complete_op();
                         Ok(val)
                     }
                     Err(error) => {
-                        let mut spec = self.lock();
-                        spec.set_op_result(true);
+                        self.lock().set_op_result(true);
+                        self.update();
                         Err(error)
                     }
                 }
@@ -622,7 +638,7 @@ pub(crate) trait SpecOperationsHelper:
         operation: Self::UpdateOp,
     ) -> Result<(), SvcError>
     where
-        Self: PartialEq<Self::State>,
+        Self: PartialEq<Self::State> + SpecTransaction<Self::UpdateOp>,
     {
         // we're busy right now, try again later
         let _ = self.busy()?;
@@ -632,16 +648,17 @@ pub(crate) trait SpecOperationsHelper:
                 id: self.uuid_str(),
                 kind: self.kind(),
             }),
+            SpecStatus::Deleted | SpecStatus::Deleting if self.allow_op_deleting(&operation) => {
+                Ok(())
+            }
             SpecStatus::Deleted | SpecStatus::Deleting => Err(SvcError::PendingDeletion {
                 id: self.uuid_str(),
                 kind: self.kind(),
             }),
-            SpecStatus::Created(_) => {
-                // start the requested operation (which also checks if it's a valid transition)
-                self.start_update_op(registry, state, operation).await?;
-                Ok(())
-            }
-        }
+            SpecStatus::Created(_) => Ok(()),
+        }?;
+        // start the requested operation (which also checks if it's a valid transition)
+        self.start_update_op(registry, state, operation).await
     }
 
     /// Check if the object is free to be modified or if it's still busy

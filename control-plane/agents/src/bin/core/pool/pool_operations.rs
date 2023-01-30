@@ -44,10 +44,9 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         let _ = pool.start_create(registry, request).await?;
 
         let result = node.create_pool(request).await;
+        let on_fail = OnCreateFail::eeinval_delete(&result);
 
-        let pool_state = pool
-            .complete_create(result, registry, OnCreateFail::SetDeleting)
-            .await?;
+        let pool_state = pool.complete_create(result, registry, on_fail).await?;
         let spec = pool.lock().clone();
         Ok(Pool::new(spec, pool_state))
     }

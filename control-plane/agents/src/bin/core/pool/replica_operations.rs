@@ -42,9 +42,9 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
         let _ = replica.start_create(registry, request).await?;
 
         let result = node.create_replica(request).await;
-        replica
-            .complete_create(result, registry, OnCreateFail::SetDeleting)
-            .await
+        let on_fail = OnCreateFail::eeinval_delete(&result);
+
+        replica.complete_create(result, registry, on_fail).await
     }
 
     async fn destroy(
