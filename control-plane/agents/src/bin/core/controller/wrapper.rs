@@ -57,7 +57,8 @@ const GETS_TIMEOUT: MessageId = MessageId::v0(MessageIdVs::Default);
 
 enum ResourceType {
     All(Vec<PoolState>, Vec<Replica>, Vec<Nexus>),
-    Nexus(Vec<Nexus>),
+    Nexuses(Vec<Nexus>),
+    Nexus(Nexus),
     Pool(Vec<PoolState>),
     Replica(Vec<Replica>),
 }
@@ -613,7 +614,18 @@ impl NodeWrapper {
         let nexuses = fetcher.fetch_nexuses(client).await?;
         node.write()
             .await
-            .update_resources(ResourceType::Nexus(nexuses));
+            .update_resources(ResourceType::Nexuses(nexuses));
+        Ok(())
+    }
+
+    /// Update the given nexus state.
+    async fn update_nexus_state(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        nexus: &Nexus,
+    ) -> Result<(), SvcError> {
+        node.write()
+            .await
+            .update_resources(ResourceType::Nexus(nexus.clone()));
         Ok(())
     }
 
@@ -651,10 +663,11 @@ impl NodeWrapper {
                 self.resources_mut().update(pools, replicas, nexuses);
                 self.update_num_rebuilds();
             }
-            ResourceType::Nexus(nexuses) => {
+            ResourceType::Nexuses(nexuses) => {
                 self.resources_mut().update_nexuses(nexuses);
                 self.update_num_rebuilds();
             }
+            ResourceType::Nexus(nexus) => self.resources_mut().update_nexus(nexus),
             ResourceType::Pool(pools) => {
                 self.resources_mut().update_pools(pools);
             }
@@ -787,6 +800,8 @@ pub(crate) trait InternalOps {
     async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>>;
     /// Update the node's nexus state information.
     async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    /// Update a node's nexus state information.
+    async fn update_nexus_state(&self, nexus: &Nexus) -> Result<(), SvcError>;
     /// Update the node's pool state information.
     async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update the node's replica state information.
@@ -858,6 +873,9 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
     async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
         NodeWrapper::update_nexus_states(self, ctx.deref_mut()).await
+    }
+    async fn update_nexus_state(&self, nexus: &Nexus) -> Result<(), SvcError> {
+        NodeWrapper::update_nexus_state(self, nexus).await
     }
 
     async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
@@ -1036,12 +1054,17 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             });
         }
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let nexus = dataplane.create_nexus(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await?;
-        match nexus {
-            Ok(nexus) => Ok(nexus),
+        match dataplane.create_nexus(request).await {
+            Ok(nexus) => {
+                self.update_nexus_state(&nexus)
+                    .await
+                    // error will be used in the future
+                    .expect("No error possible");
+                Ok(nexus)
+            }
             Err(error) => {
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_nexus_states(ctx.deref_mut()).await?;
                 let nexus_name = request.name();
                 let mut nexuses = self.read().await.nexuses().into_iter();
                 match nexuses.find(|nexus| nexus.uuid == request.uuid && nexus.name == nexus_name) {

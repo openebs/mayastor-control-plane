@@ -5,7 +5,7 @@ use crate::{
             operations::{
                 ResourceLifecycle, ResourceOffspring, ResourceSharing, ResourceShutdownOperations,
             },
-            operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+            operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
             OperationGuardArc, TraceSpan,
         },
         scheduling::resources::HealthyChildItems,
@@ -55,7 +55,9 @@ impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
         let result = node.create_nexus(request).await;
         specs.on_create_set_owners(request, &nexus, &result);
 
-        let nexus_state = nexus.complete_create(result, registry).await?;
+        let nexus_state = nexus
+            .complete_create(result, registry, OnCreateFail::SetDeleting)
+            .await?;
         Ok((nexus, nexus_state))
     }
 

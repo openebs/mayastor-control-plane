@@ -21,6 +21,7 @@ use common_lib::{
 };
 
 use super::{OperationGuardArc, ResourceMutex, ResourceUid, UpdateInnerValue};
+use crate::controller::task_poller::PollTriggerEvent;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
@@ -42,6 +43,17 @@ enum SpecError {
     /// Failed to get entries from the persistent store.
     #[snafu(display("Key does not contain UUID"))]
     KeyUuid {},
+}
+
+/// What to do when creation fails.
+pub(crate) enum OnCreateFail {
+    /// Leave object as `Creating`, could allow for frontend retries.
+    #[allow(unused)]
+    LeaveAsIs,
+    /// When frontend retries don't make sense, set it to deleting so we can clean-up.
+    SetDeleting,
+    /// When there's no need to garbage collect, simply delete it.
+    Delete,
 }
 
 /// This trait is used to encapsulate common behaviour for all different types of resources,
@@ -100,12 +112,14 @@ pub(crate) trait GuardedOperationsHelper:
     /// Completes a create operation by trying to update the spec in the persistent store.
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
-    /// todo: The state of the object is left as Creating for now. Determine whether to set it to
-    /// Deleted or let the reconciler clean it up.
+    /// # Note:
+    /// `on_err_destroy` is used to determine if the resource spec should be deleted on error.
+    /// On most cases we don't want to destroy as that will prevent garbage collection.
     async fn complete_create<O, R: Send>(
         &self,
         result: Result<R, SvcError>,
         registry: &Registry,
+        on_fail: OnCreateFail,
     ) -> Result<R, SvcError>
     where
         Self::Inner: SpecTransaction<O>,
@@ -127,17 +141,12 @@ pub(crate) trait GuardedOperationsHelper:
                     }
                 }
             }
-            Err(error) => {
-                // The create failed so delete the spec.
-                self.delete_spec(registry).await.ok();
-                Err(error)
-            }
+            Err(error) => Err(self.handle_create_failed(registry, error, on_fail).await),
         }
     }
 
     /// Validates the outcome of a create step.
-    /// In case of an error, an attempt is made to delete the spec in the persistent store and
-    /// registry.
+    /// In case of an error, the object is set to deleting.
     async fn validate_create_step<R: Send, O>(
         &self,
         registry: &Registry,
@@ -147,11 +156,54 @@ pub(crate) trait GuardedOperationsHelper:
         Self::Inner: SpecTransaction<O>,
         Self::Inner: StorableObject,
     {
+        self.validate_create_step_ext(registry, result, OnCreateFail::SetDeleting)
+            .await
+    }
+
+    /// Validates the outcome of a create step.
+    /// In case of an error, it is handled as per the `OnCreateFail` policy.
+    async fn validate_create_step_ext<R: Send, O>(
+        &self,
+        registry: &Registry,
+        result: Result<R, SvcError>,
+        on_fail: OnCreateFail,
+    ) -> Result<R, SvcError>
+    where
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
+    {
         match result {
             Ok(val) => Ok(val),
-            Err(error) => {
+            Err(error) => Err(self.handle_create_failed(registry, error, on_fail).await),
+        }
+    }
+
+    /// Handles a failed creation according to the `OnCreateFail` policy.
+    async fn handle_create_failed<O>(
+        &self,
+        registry: &Registry,
+        error: SvcError,
+        on_fail: OnCreateFail,
+    ) -> SvcError
+    where
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
+    {
+        match on_fail {
+            OnCreateFail::LeaveAsIs => error,
+            OnCreateFail::SetDeleting => {
+                // Let the garbage collector delete the spec gracefully.
+                // This will ensure we'll delete previously created resources.
+                let spec = self.lock().fail_creating_to_deleting();
+                registry.store_obj(&spec).await.ok();
+                registry
+                    .notify(PollTriggerEvent::ResourceCreatingToDeleting)
+                    .await;
+                error
+            }
+            OnCreateFail::Delete => {
                 self.delete_spec(registry).await.ok();
-                Err(error)
+                error
             }
         }
     }
@@ -423,7 +475,12 @@ pub(crate) trait GuardedOperationsHelper:
     {
         let spec_status = self.lock().status();
         match spec_status {
-            SpecStatus::Creating | SpecStatus::Deleted => {
+            SpecStatus::Creating => {
+                // Go to deleting stage to make sure we clean-up previously allocated resources.
+                self.lock().set_status(SpecStatus::Deleting);
+                true
+            }
+            SpecStatus::Deleted => {
                 self.delete_spec(registry).await.ok();
                 true
             }
@@ -626,6 +683,15 @@ pub(crate) trait SpecOperationsHelper:
     fn status(&self) -> SpecStatus<Self::Status>;
     /// Set the state of the object
     fn set_status(&mut self, state: SpecStatus<Self::Status>);
+    /// When creating fails we might want to transition spec to deleting and clear the create op.
+    fn fail_creating_to_deleting<O>(&mut self) -> Self
+    where
+        Self: SpecTransaction<O>,
+    {
+        self.set_status(SpecStatus::Deleting);
+        self.clear_op();
+        self.clone()
+    }
     /// Check if the object is owned by another
     fn owned(&self) -> bool {
         false

@@ -8,7 +8,7 @@ use crate::{
                 ResourceSharing, ResourceShutdownOperations,
             },
             operations_helper::{
-                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
+                GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
                 SpecOperationsHelper,
             },
             OperationGuardArc, TraceSpan, TraceStrLog,
@@ -121,7 +121,11 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             Ok(())
         };
 
-        volume.complete_create(result, registry).await?;
+        // we can destroy volume on error because there's no volume resource created on the nodes,
+        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
+        volume
+            .complete_create(result, registry, OnCreateFail::Delete)
+            .await?;
         Ok(volume)
     }
 

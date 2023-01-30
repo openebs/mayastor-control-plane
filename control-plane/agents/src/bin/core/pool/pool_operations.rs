@@ -2,7 +2,7 @@ use crate::controller::{
     registry::Registry,
     resources::{
         operations::ResourceLifecycle,
-        operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+        operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc,
     },
     wrapper::ClientOps,
@@ -45,7 +45,9 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
 
         let result = node.create_pool(request).await;
 
-        let pool_state = pool.complete_create(result, registry).await?;
+        let pool_state = pool
+            .complete_create(result, registry, OnCreateFail::SetDeleting)
+            .await?;
         let spec = pool.lock().clone();
         Ok(Pool::new(spec, pool_state))
     }
