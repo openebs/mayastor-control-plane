@@ -25,6 +25,7 @@ from openapi.model.volume_status import VolumeStatus
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.replica_state import ReplicaState
 from openapi.model.replica_topology import ReplicaTopology
+from retrying import retry
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -162,19 +163,18 @@ def there_are_no_available_io_engine_instances():
 def there_should_not_be_any_specs_relating_to_the_volume():
     """there should not be any specs relating to the volume."""
     # Restart the core agent so that all the specs are reloaded from the persistent store.
-    global specs
     docker_client = docker.from_env()
+    io_engine = docker_client.containers.get("io-engine-1")
+    io_engine.restart()
     core = docker_client.containers.get("core")
     core.restart()
 
-    # After restarting the core container it can take a little time to refresh the specs,
-    # so retry a number of times.
-    for i in range(5):
-        try:
-            specs = ApiClient.specs_api().get_specs()
-            break
-        except:
-            time.sleep(1)
+    check_zero_specs()
+
+
+@retry(wait_fixed=500, stop_max_attempt_number=10)
+def check_zero_specs():
+    specs = ApiClient.specs_api().get_specs()
 
     assert len(specs["volumes"]) == 0
     assert len(specs["nexuses"]) == 0

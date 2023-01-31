@@ -79,6 +79,10 @@ pub trait SpecTransaction<Operation> {
     fn start_op(&mut self, operation: Operation);
     /// Sets the result of the operation
     fn set_op_result(&mut self, result: bool);
+    /// Allow this operation while deleting a spec.
+    fn allow_op_deleting(&mut self, _operation: &Operation) -> bool {
+        false
+    }
 }
 
 /// Sequence operations for a resource without locking it

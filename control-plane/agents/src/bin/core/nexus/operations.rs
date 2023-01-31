@@ -5,11 +5,13 @@ use crate::{
             operations::{
                 ResourceLifecycle, ResourceOffspring, ResourceSharing, ResourceShutdownOperations,
             },
-            operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+            operations_helper::{
+                GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, SpecOperationsHelper,
+            },
             OperationGuardArc, TraceSpan,
         },
         scheduling::resources::HealthyChildItems,
-        wrapper::{ClientOps, GetterOps},
+        wrapper::{ClientOps, GetterOps, NodeWrapper},
     },
     nexus::scheduling::healthy_nexus_children,
 };
@@ -52,10 +54,12 @@ impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
             .await?;
         let _ = nexus.start_create(registry, request).await?;
 
-        let result = node.create_nexus(request).await;
+        let result = nexus.create_nexus(registry, node, request).await;
         specs.on_create_set_owners(request, &nexus, &result);
 
-        let nexus_state = nexus.complete_create(result, registry).await?;
+        let nexus_state = nexus
+            .complete_create(result, registry, OnCreateFail::SetDeleting)
+            .await?;
         Ok((nexus, nexus_state))
     }
 
@@ -340,6 +344,47 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
 }
 
 impl OperationGuardArc<NexusSpec> {
+    async fn create_nexus(
+        &self,
+        registry: &Registry,
+        node: std::sync::Arc<tokio::sync::RwLock<NodeWrapper>>,
+        request: &CreateNexus,
+    ) -> Result<Nexus, SvcError> {
+        let error = match node.create_nexus(request).await {
+            Err(error @ SvcError::AlreadyExists { .. }) => error,
+            other => return other,
+        };
+
+        let retry = match node.volume_nexus(&request.name_uuid().into()).await {
+            Some(existing_nexus) => match registry.specs().nexus_rsc(&existing_nexus.uuid) {
+                Some(nexus) => {
+                    tracing::error!(volume.uuid=%existing_nexus.name, nexus.uuid=%existing_nexus.uuid, "A NexusSpec already exists for the given volume");
+                    match nexus.operation_guard() {
+                        Ok(mut nexus) if nexus.lock().status().deleting() => nexus
+                            .destroy(
+                                registry,
+                                &DestroyNexus::from(existing_nexus).with_disown_all(),
+                            )
+                            .await
+                            .is_ok(),
+                        _ => false,
+                    }
+                }
+                None => {
+                    tracing::warn!(volume.uuid=%existing_nexus.name, nexus.uuid=%existing_nexus.uuid, "Removing nexus for unknown NexusSpec");
+                    // Node spec exists for this nexus, let's delete it and try once more..
+                    node.destroy_nexus(&DestroyNexus::from(existing_nexus).with_disown_all())
+                        .await
+                        .is_ok()
+                }
+            },
+            None => false,
+        };
+        match retry {
+            true => node.create_nexus(request).await,
+            false => Err(error),
+        }
+    }
     /// Recreate the nexus as a part of the republish call.
     pub(crate) async fn missing_nexus_recreate(
         &mut self,

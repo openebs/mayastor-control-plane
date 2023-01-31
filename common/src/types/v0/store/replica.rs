@@ -269,6 +269,10 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
             op.result = Some(result);
         }
     }
+
+    fn allow_op_deleting(&mut self, operation: &ReplicaOperation) -> bool {
+        matches!(operation, ReplicaOperation::OwnerUpdate(_))
+    }
 }
 
 /// Available Replica Operations

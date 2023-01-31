@@ -8,7 +8,7 @@ use crate::{
                 ResourceSharing, ResourceShutdownOperations,
             },
             operations_helper::{
-                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
+                GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
                 SpecOperationsHelper,
             },
             OperationGuardArc, TraceSpan, TraceStrLog,
@@ -62,7 +62,9 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         // todo: pick nodes and pools using the Node&Pool Topology
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
         let result = create_volume_replicas(registry, request).await;
-        let create_replicas = volume.validate_create_step(registry, result).await?;
+        let create_replicas = volume
+            .validate_create_step_ext(registry, result, OnCreateFail::Delete)
+            .await?;
 
         let mut replicas = Vec::<Replica>::new();
         for replica in &create_replicas {
@@ -121,7 +123,11 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             Ok(())
         };
 
-        volume.complete_create(result, registry).await?;
+        // we can destroy volume on error because there's no volume resource created on the nodes,
+        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
+        volume
+            .complete_create(result, registry, OnCreateFail::Delete)
+            .await?;
         Ok(volume)
     }
 

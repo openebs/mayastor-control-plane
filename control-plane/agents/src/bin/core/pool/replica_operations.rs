@@ -2,7 +2,7 @@ use crate::controller::{
     registry::Registry,
     resources::{
         operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceSharing},
-        operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
+        operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc, UpdateInnerValue,
     },
     wrapper::ClientOps,
@@ -42,7 +42,9 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
         let _ = replica.start_create(registry, request).await?;
 
         let result = node.create_replica(request).await;
-        replica.complete_create(result, registry).await
+        let on_fail = OnCreateFail::eeinval_delete(&result);
+
+        replica.complete_create(result, registry, on_fail).await
     }
 
     async fn destroy(
