@@ -53,6 +53,11 @@ impl ResourceStates {
         self.nexuses.populate(nexuses);
     }
 
+    /// Update nexus state.
+    pub(crate) fn update_nexus(&mut self, nexus: Nexus) {
+        self.nexuses.insert(nexus.into());
+    }
+
     /// Returns a vector of cloned nexus states.
     pub(crate) fn nexus_states_cloned(&self) -> Vec<NexusState> {
         Self::cloned_inner_states(self.nexuses.values())

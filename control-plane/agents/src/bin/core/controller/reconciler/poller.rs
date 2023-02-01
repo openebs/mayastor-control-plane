@@ -27,10 +27,10 @@ impl ReconcilerWorker {
     /// Create a new `Self` with the provided communication channels
     pub(super) fn new() -> Self {
         let poll_targets: Vec<Box<dyn TaskPoller>> = vec![
+            Box::new(PersistentStoreReconciler::new()),
             Box::new(pool::PoolReconciler::new()),
             Box::new(nexus::NexusReconciler::new()),
             Box::new(volume::VolumeReconciler::new()),
-            Box::new(PersistentStoreReconciler::new()),
             Box::new(replica::ReplicaReconciler::new()),
             Box::new(node::NodeReconciler::new()),
         ];

@@ -47,7 +47,9 @@ impl TaskPoller for GarbageCollector {
 
     async fn poll_event(&mut self, context: &PollContext) -> bool {
         match context.event() {
-            PollEvent::TimedRun | PollEvent::Triggered(PollTriggerEvent::Start) => true,
+            PollEvent::TimedRun
+            | PollEvent::Triggered(PollTriggerEvent::Start)
+            | PollEvent::Triggered(PollTriggerEvent::ResourceCreatingToDeleting) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
     }

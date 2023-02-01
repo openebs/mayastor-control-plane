@@ -146,7 +146,7 @@ async fn destroy_orphaned_replica(
 ) -> PollResult {
     let destroy_owned = {
         let replica = replica.as_ref();
-        replica.managed && !replica.owned()
+        replica.managed && !replica.owned() && !replica.status().deleted()
     };
 
     if destroy_owned {

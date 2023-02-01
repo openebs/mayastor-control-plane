@@ -397,6 +397,12 @@ impl CreateNexus {
         let name = self.owner.as_ref().map(|i| i.to_string());
         name.unwrap_or_else(|| self.uuid.to_string())
     }
+    /// Name of the nexus as uuid.
+    /// When part of a volume, it's set to its `VolumeId`. Otherwise it's set to its `NexusId`.
+    pub fn name_uuid(&self) -> uuid::Uuid {
+        let name = self.owner.as_ref().map(|i| *i.uuid());
+        name.unwrap_or_else(|| *self.uuid.uuid())
+    }
 
     /// Return the key that should be used by the Io-Engine to persist the NexusInfo.
     pub fn nexus_info_key(&self) -> String {

@@ -57,6 +57,7 @@ impl TaskPoller for GarbageCollector {
         match context.event() {
             PollEvent::TimedRun
             | PollEvent::Triggered(PollTriggerEvent::VolumeDegraded)
+            | PollEvent::Triggered(PollTriggerEvent::ResourceCreatingToDeleting)
             | PollEvent::Triggered(PollTriggerEvent::Start) => true,
             PollEvent::Shutdown | PollEvent::Triggered(_) => false,
         }
