@@ -1,7 +1,5 @@
-use crate::{
-    errors::SvcError,
-    msg_translation::{IoEngineToAgent, TryIoEngineToAgent},
-};
+use crate::controller::io_engine::translation::{IoEngineToAgent, TryIoEngineToAgent};
+use agents::errors::SvcError;
 use common_lib::{
     transport_api::ResourceKind,
     types::v0::{
@@ -13,11 +11,12 @@ use common_lib::{
         },
     },
 };
+
 use rpc::v1 as v1_rpc;
 use std::convert::TryFrom;
 
 /// Trait for converting agent messages to io-engine messages.
-pub trait AgentToIoEngine {
+pub(super) trait AgentToIoEngine {
     /// RpcIoEngine message type.
     type IoEngineMessage;
     /// Conversion of agent message to io-engine message.

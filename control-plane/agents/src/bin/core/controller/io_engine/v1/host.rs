@@ -1,17 +1,14 @@
+use crate::controller::io_engine::translation::IoEngineToAgent;
+use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use common_lib::{
-    transport_api::v0::BlockDevices,
+    transport_api::{v0::BlockDevices, ResourceKind},
     types::v0::transport::{GetBlockDevices, Register},
 };
+use grpc::operations::registration;
+use rpc::v1::host::ListBlockDevicesRequest;
+
 use snafu::ResultExt;
 use std::str::FromStr;
-
-use crate::controller::io_engine::V1ListBlockDevicesRequest;
-use agents::{
-    errors::{GrpcRequest as GrpcRequestError, SvcError},
-    msg_translation::IoEngineToAgent,
-};
-use common_lib::transport_api::ResourceKind;
-use grpc::operations::registration;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::HostApi for super::RpcClient {
@@ -69,7 +66,7 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
     async fn list_blockdevices(&self, request: &GetBlockDevices) -> Result<BlockDevices, SvcError> {
         let result = self
             .host()
-            .list_block_devices(V1ListBlockDevicesRequest { all: request.all })
+            .list_block_devices(ListBlockDevicesRequest { all: request.all })
             .await;
 
         let response = result

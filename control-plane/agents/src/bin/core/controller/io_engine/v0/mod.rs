@@ -2,11 +2,12 @@ mod host;
 mod nexus;
 mod pool;
 mod replica;
+mod translation;
 
 use crate::controller::io_engine::GrpcContext;
 use agents::errors::{GrpcConnect, SvcError};
-
 use rpc::io_engine::IoEngineClientV0;
+
 use snafu::ResultExt;
 use tonic::transport::Channel;
 

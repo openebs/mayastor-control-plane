@@ -1,3 +1,6 @@
+use super::translation::{rpc_nexus_to_agent, rpc_nexus_v2_to_agent, AgentToIoEngine};
+use crate::controller::io_engine::translation::IoEngineToAgent;
+use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use common_lib::{
     transport_api::ResourceKind,
     types::v0::transport::{
@@ -6,16 +9,8 @@ use common_lib::{
     },
 };
 use rpc::io_engine::Null;
-use snafu::ResultExt;
 
-use crate::controller::io_engine::v0_rpc_nexus_v2_to_agent;
-use agents::{
-    errors::{GrpcRequest as GrpcRequestError, SvcError},
-    msg_translation::{
-        v0::{rpc_nexus_to_agent as v0_rpc_nexus_to_agent, AgentToIoEngine as v0_conversion},
-        IoEngineToAgent,
-    },
-};
+use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusListApi for super::RpcClient {
@@ -32,7 +27,7 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
-            .filter_map(|n| match v0_rpc_nexus_v2_to_agent(n, id) {
+            .filter_map(|n| match rpc_nexus_v2_to_agent(n, id) {
                 Ok(n) => Some(n),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
@@ -49,13 +44,13 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         let rpc_nexus = self
             .client()
-            .create_nexus_v2(v0_conversion::to_rpc(request))
+            .create_nexus_v2(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "create_nexus",
             })?;
-        let mut nexus = v0_rpc_nexus_to_agent(&rpc_nexus.into_inner(), &request.node)?;
+        let mut nexus = rpc_nexus_to_agent(&rpc_nexus.into_inner(), &request.node)?;
         // CAS-1107 - create_nexus_v2 returns NexusV1...
         nexus.name = request.name();
         nexus.uuid = request.uuid.clone();
@@ -65,7 +60,7 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let _ = self
             .client()
-            .destroy_nexus(v0_conversion::to_rpc(request))
+            .destroy_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
@@ -77,7 +72,7 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
         let share = self
             .client()
-            .publish_nexus(v0_conversion::to_rpc(request))
+            .publish_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
@@ -90,7 +85,7 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
         let _ = self
             .client()
-            .unpublish_nexus(v0_conversion::to_rpc(request))
+            .unpublish_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
@@ -102,7 +97,7 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
         let rpc_child = self
             .client()
-            .add_child_nexus(v0_conversion::to_rpc(request))
+            .add_child_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Child,
@@ -114,7 +109,7 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
         let _ = self
             .client()
-            .remove_child_nexus(v0_conversion::to_rpc(request))
+            .remove_child_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Child,
@@ -126,7 +121,7 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
         let _ = self
             .client()
-            .fault_nexus_child(v0_conversion::to_rpc(request))
+            .fault_nexus_child(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Child,
@@ -138,7 +133,7 @@ impl crate::controller::io_engine::NexusApi for super::RpcClient {
     async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {
         let _ = self
             .client()
-            .shutdown_nexus(v0_conversion::to_rpc(request))
+            .shutdown_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,

@@ -1,11 +1,10 @@
+/// Message translation to agent types from rpc v0,v1 types.
+mod translation;
 pub(crate) mod v0;
 pub(crate) mod v1;
 
 use crate::node::service::NodeCommsTimeout;
-use agents::{
-    errors::{GrpcConnectUri, SvcError},
-    msg_translation::v0::rpc_nexus_v2_to_agent as v0_rpc_nexus_v2_to_agent,
-};
+use agents::errors::{GrpcConnectUri, SvcError};
 use async_trait::async_trait;
 use common_lib::{
     transport_api::{v0::BlockDevices, MessageId},
@@ -17,10 +16,7 @@ use common_lib::{
     },
 };
 use grpc::context::timeout_grpc;
-use rpc::{
-    io_engine::ListBlockDevicesRequest as V0ListBlockDevicesRequest,
-    v1::host::ListBlockDevicesRequest as V1ListBlockDevicesRequest,
-};
+
 use snafu::ResultExt;
 use std::{
     ops::{Deref, DerefMut},

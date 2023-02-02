@@ -1,13 +1,7 @@
-use crate::errors::SvcError;
-
-/// translate between transport types and v0 gRPC type
-pub mod v0;
-
-/// translate between transport types and v1 grpc type
-pub mod v1;
+use agents::errors::SvcError;
 
 /// Trait for converting io-engine messages to agent messages, fallibly.
-pub trait TryIoEngineToAgent {
+pub(super) trait TryIoEngineToAgent {
     /// Agents message type.
     type AgentMessage;
     /// Conversion of io-engine message to agent message.
@@ -15,7 +9,7 @@ pub trait TryIoEngineToAgent {
 }
 
 /// Trait for converting io-engine messages to agent messages.
-pub trait IoEngineToAgent {
+pub(super) trait IoEngineToAgent {
     /// Agents message type.
     type AgentMessage;
     /// Conversion of io-engine message to agent message.

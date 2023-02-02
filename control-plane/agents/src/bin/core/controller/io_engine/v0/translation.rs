@@ -1,25 +1,24 @@
 //! Converts rpc messages to rpc agent messages and vice versa.
 
-use crate::errors::SvcError;
+use crate::controller::io_engine::translation::{IoEngineToAgent, TryIoEngineToAgent};
+use agents::errors::SvcError;
 use common_lib::{
     transport_api::ResourceKind,
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption, NexusStatus,
-            NodeId, NvmeReservation, PoolState, Protocol, Replica, ReplicaId, ReplicaName,
-            ReplicaStatus,
+            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
+            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, Protocol, Replica,
+            ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
-
-use crate::msg_translation::{IoEngineToAgent, TryIoEngineToAgent};
-use common_lib::types::v0::transport::NexusNvmfConfig;
 use rpc::io_engine as v0_rpc;
+
 use std::convert::TryFrom;
 
 /// Trait for converting agent messages to io-engine messages.
-pub trait AgentToIoEngine {
+pub(super) trait AgentToIoEngine {
     /// RpcIoEngine message type.
     type IoEngineMessage;
     /// Conversion of agent message to io-engine message.

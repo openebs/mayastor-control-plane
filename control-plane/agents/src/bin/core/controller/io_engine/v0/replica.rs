@@ -1,3 +1,5 @@
+use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
+use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use common_lib::{
     transport_api::ResourceKind,
     types::v0::transport::{
@@ -5,14 +7,8 @@ use common_lib::{
     },
 };
 use rpc::io_engine::Null;
-use snafu::ResultExt;
 
-use agents::{
-    errors::{GrpcRequest as GrpcRequestError, SvcError},
-    msg_translation::v0::{
-        rpc_replica_to_agent as v0_rpc_replica_to_agent, AgentToIoEngine as v0_conversion,
-    },
-};
+use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
@@ -30,7 +26,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
 
         let replicas = rpc_replicas
             .iter()
-            .filter_map(|p| match v0_rpc_replica_to_agent(p, id) {
+            .filter_map(|p| match rpc_replica_to_agent(p, id) {
                 Ok(r) => Some(r),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc replica");
@@ -48,20 +44,20 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
     async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
         let rpc_replica = self
             .client()
-            .create_replica_v2(v0_conversion::to_rpc(request))
+            .create_replica_v2(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
                 request: "create_replica",
             })?;
-        let replica = v0_rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
+        let replica = rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
         Ok(replica)
     }
 
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let _ = self
             .client()
-            .destroy_replica(v0_conversion::to_rpc(request))
+            .destroy_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
@@ -73,7 +69,7 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {
         let uri = self
             .client()
-            .share_replica(v0_conversion::to_rpc(request))
+            .share_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
@@ -87,7 +83,7 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
     async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError> {
         let uri = self
             .client()
-            .share_replica(v0_conversion::to_rpc(request))
+            .share_replica(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
