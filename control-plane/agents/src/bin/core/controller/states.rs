@@ -34,6 +34,14 @@ pub(crate) struct ResourceStates {
     replicas: ResourceMap<ReplicaId, ReplicaState>,
 }
 
+/// Add/Update or remove resource from the registry.
+pub(crate) enum Either<R, I> {
+    /// Insert the resource `R` in the registry.
+    Insert(R),
+    /// Removes the resource `R` by it's `I`dentifier.
+    Remove(I),
+}
+
 impl ResourceStates {
     /// Update the various resource states.
     pub(crate) fn update(
@@ -54,8 +62,15 @@ impl ResourceStates {
     }
 
     /// Update nexus state.
-    pub(crate) fn update_nexus(&mut self, nexus: Nexus) {
-        self.nexuses.insert(nexus.into());
+    pub(crate) fn update_nexus(&mut self, state: Either<Nexus, NexusId>) {
+        match state {
+            Either::Insert(nexus) => {
+                self.nexuses.insert(nexus.into());
+            }
+            Either::Remove(nexus) => {
+                self.nexuses.remove(&nexus);
+            }
+        }
     }
 
     /// Returns a vector of cloned nexus states.
@@ -79,6 +94,18 @@ impl ResourceStates {
         self.pools.populate(pools);
     }
 
+    /// Update pool state.
+    pub(crate) fn update_pool(&mut self, state: Either<transport::PoolState, PoolId>) {
+        match state {
+            Either::Insert(pool) => {
+                self.pools.insert(pool.into());
+            }
+            Either::Remove(pool) => {
+                self.pools.remove(&pool);
+            }
+        }
+    }
+
     /// Returns a vector of cloned pool states.
     pub(crate) fn pool_states_cloned(&self) -> Vec<PoolState> {
         Self::cloned_inner_states(self.pools.values())
@@ -99,6 +126,18 @@ impl ResourceStates {
     pub(crate) fn update_replicas(&mut self, replicas: Vec<Replica>) {
         self.replicas.clear();
         self.replicas.populate(replicas);
+    }
+
+    /// Update replica state.
+    pub(crate) fn update_replica(&mut self, state: Either<Replica, ReplicaId>) {
+        match state {
+            Either::Insert(replica) => {
+                self.replicas.insert(replica.into());
+            }
+            Either::Remove(replica) => {
+                self.replicas.remove(&replica);
+            }
+        }
     }
 
     /// Returns a vector of cloned replica states.

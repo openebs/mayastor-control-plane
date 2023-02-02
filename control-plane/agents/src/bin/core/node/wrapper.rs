@@ -25,6 +25,7 @@ use common_lib::{
     },
 };
 
+use crate::controller::states::Either;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
@@ -38,9 +39,11 @@ const GETS_TIMEOUT: MessageId = MessageId::v0(MessageIdVs::Default);
 enum ResourceType {
     All(Vec<PoolState>, Vec<Replica>, Vec<Nexus>),
     Nexuses(Vec<Nexus>),
-    Nexus(Nexus),
-    Pool(Vec<PoolState>),
-    Replica(Vec<Replica>),
+    Nexus(Either<Nexus, NexusId>),
+    Pools(Vec<PoolState>),
+    Pool(Either<PoolState, PoolId>),
+    Replicas(Vec<Replica>),
+    Replica(Either<Replica, ReplicaId>),
 }
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
@@ -607,12 +610,11 @@ impl NodeWrapper {
     /// Update the given nexus state.
     async fn update_nexus_state(
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
-        nexus: &Nexus,
-    ) -> Result<(), SvcError> {
+        state: Either<Nexus, NexusId>,
+    ) {
         node.write()
             .await
-            .update_resources(ResourceType::Nexus(nexus.clone()));
-        Ok(())
+            .update_resources(ResourceType::Nexus(state));
     }
 
     /// Update all the pool states.
@@ -624,8 +626,18 @@ impl NodeWrapper {
         let pools = fetcher.fetch_pools(client).await?;
         node.write()
             .await
-            .update_resources(ResourceType::Pool(pools));
+            .update_resources(ResourceType::Pools(pools));
         Ok(())
+    }
+
+    /// Update the given pool state.
+    async fn update_pool_state(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        state: Either<PoolState, PoolId>,
+    ) {
+        node.write()
+            .await
+            .update_resources(ResourceType::Pool(state));
     }
 
     /// Update all the replica states.
@@ -637,8 +649,18 @@ impl NodeWrapper {
         let replicas = fetcher.fetch_replicas(client).await?;
         node.write()
             .await
-            .update_resources(ResourceType::Replica(replicas));
+            .update_resources(ResourceType::Replicas(replicas));
         Ok(())
+    }
+
+    /// Update the given replica state.
+    async fn update_replica_state(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        state: Either<Replica, ReplicaId>,
+    ) {
+        node.write()
+            .await
+            .update_resources(ResourceType::Replica(state));
     }
 
     /// Update the states of the specified resource type.
@@ -654,12 +676,14 @@ impl NodeWrapper {
                 self.update_num_rebuilds();
             }
             ResourceType::Nexus(nexus) => self.resources_mut().update_nexus(nexus),
-            ResourceType::Pool(pools) => {
+            ResourceType::Pools(pools) => {
                 self.resources_mut().update_pools(pools);
             }
-            ResourceType::Replica(replicas) => {
+            ResourceType::Pool(pool) => self.resources_mut().update_pool(pool),
+            ResourceType::Replicas(replicas) => {
                 self.resources_mut().update_replicas(replicas);
             }
+            ResourceType::Replica(replica) => self.resources_mut().update_replica(replica),
         }
     }
 
@@ -758,11 +782,15 @@ pub(crate) trait InternalOps {
     /// Update the node's nexus state information.
     async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update a node's nexus state information.
-    async fn update_nexus_state(&self, nexus: &Nexus) -> Result<(), SvcError>;
+    async fn update_nexus_state(&self, state: Either<Nexus, NexusId>);
     /// Update the node's pool state information.
     async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    /// Update a node's pool state information.
+    async fn update_pool_state(&self, state: Either<PoolState, PoolId>);
     /// Update the node's replica state information.
     async fn update_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    /// Update a node's replica state information.
+    async fn update_replica_state(&self, state: Either<Replica, ReplicaId>);
     /// Update all node state information.
     async fn update_all(&self, setting_online: bool) -> Result<(), SvcError>;
     /// OnRegister callback when a node is re-registered with the registry via its heartbeat
@@ -836,16 +864,24 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
         NodeWrapper::update_nexus_states(self, ctx.deref_mut()).await
     }
-    async fn update_nexus_state(&self, nexus: &Nexus) -> Result<(), SvcError> {
-        NodeWrapper::update_nexus_state(self, nexus).await
+    async fn update_nexus_state(&self, state: Either<Nexus, NexusId>) {
+        NodeWrapper::update_nexus_state(self, state).await;
     }
 
     async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
         NodeWrapper::update_pool_states(self, ctx.deref_mut()).await
     }
 
+    async fn update_pool_state(&self, state: Either<PoolState, PoolId>) {
+        NodeWrapper::update_pool_state(self, state).await;
+    }
+
     async fn update_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
         NodeWrapper::update_replica_states(self, ctx.deref_mut()).await
+    }
+
+    async fn update_replica_state(&self, state: Either<Replica, ReplicaId>) {
+        NodeWrapper::update_replica_state(self, state).await;
     }
 
     async fn update_all(&self, setting_online: bool) -> Result<(), SvcError> {
@@ -902,34 +938,48 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         let create_response = dataplane.create_pool(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_pool_states(ctx.deref_mut()).await?;
-        self.update_replica_states(ctx.deref_mut()).await?;
-        let pool = self.read().await.pool(&request.id);
-        match (pool, create_response) {
-            (_, Ok(pool)) => Ok(pool),
-            (Some(pool), Err(SvcError::GrpcRequestError { source, .. }))
-                if source.code() == tonic::Code::AlreadyExists =>
-            {
+
+        match create_response {
+            Ok(pool) => {
+                self.update_pool_state(Either::Insert(pool.clone())).await;
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_replica_states(ctx.deref_mut()).await?;
                 Ok(pool)
             }
-            (_, Err(error)) => Err(error),
+            Err(error) => {
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_pool_states(ctx.deref_mut()).await?;
+                self.update_replica_states(ctx.deref_mut()).await?;
+                let pool = self.read().await.pool(&request.id);
+                match (pool, &error) {
+                    (Some(pool), SvcError::GrpcRequestError { source, .. })
+                        if source.code() == tonic::Code::AlreadyExists =>
+                    {
+                        Ok(pool)
+                    }
+                    _ => Err(error),
+                }
+            }
         }
     }
     /// Destroy a pool on the node via gRPC.
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         let destroy_response = dataplane.destroy_pool(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_pool_states(ctx.deref_mut()).await?;
         match destroy_response {
             Err(SvcError::GrpcRequestError { source, .. })
                 if source.code() == tonic::Code::NotFound =>
             {
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_pool_states(ctx.deref_mut()).await?;
                 Ok(())
             }
             Err(error) => Err(error),
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                self.update_pool_state(Either::Remove(request.id.clone()))
+                    .await;
+                Ok(())
+            }
         }
     }
 }
@@ -946,22 +996,28 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         }
         let dataplane = self.grpc_client_locked(request.id()).await?;
         let replica = dataplane.create_replica(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_replica_states(ctx.deref_mut()).await?;
-        self.update_pool_states(ctx.deref_mut()).await?;
-        // check for idempotency
+
         match replica {
-            Ok(replica) => Ok(replica),
+            Ok(replica) => {
+                self.update_replica_state(Either::Insert(replica.clone()))
+                    .await;
+
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_pool_states(ctx.deref_mut()).await?;
+
+                Ok(replica)
+            }
             Err(error) => {
-                match self.read().await.replicas().iter().find(|replica| {
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_replica_states(ctx.deref_mut()).await?;
+                self.update_pool_states(ctx.deref_mut()).await?;
+
+                match self.read().await.replicas().into_iter().find(|replica| {
                     replica.uuid == request.uuid
                         || replica.name
                             == ReplicaName::from_opt_uuid(request.name.as_ref(), &request.uuid)
                 }) {
-                    Some(replica) => {
-                        // return Ok if replica with the requested uuid and name already exists
-                        Ok(replica.clone())
-                    }
+                    Some(replica) => Ok(replica),
                     None => Err(error),
                 }
             }
@@ -971,7 +1027,7 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Destroy a replica on the pool via gRPC.
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let result = dataplane.destroy_replica(request).await;
+        let _ = dataplane.destroy_replica(request).await;
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_replica_states(ctx.deref_mut()).await?;
         // todo: remove when CAS-1107 is resolved
@@ -982,18 +1038,8 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 });
             }
         }
-        self.update_pool_states(ctx.deref_mut()).await?;
-        // check for idempotency
-        match result {
-            Ok(()) => Ok(()),
-            Err(error) => {
-                // return Ok if a replica with the requested uuid doesn't exist
-                if self.read().await.replica(&request.uuid).is_none() {
-                    return Ok(());
-                }
-                return Err(error);
-            }
-        }
+        self.update_pool_states(ctx.deref_mut()).await.ok();
+        Ok(())
     }
 
     /// Share a replica on the pool via gRPC.
@@ -1027,10 +1073,7 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         match dataplane.create_nexus(request).await {
             Ok(nexus) => {
-                self.update_nexus_state(&nexus)
-                    .await
-                    // error will be used in the future
-                    .expect("No error possible");
+                self.update_nexus_state(Either::Insert(nexus.clone())).await;
                 Ok(nexus)
             }
             Err(error) => {
@@ -1075,10 +1118,7 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Destroy a nexus on the node via gRPC.
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let result = dataplane.destroy_nexus(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await?;
-        match result {
+        let result = match dataplane.destroy_nexus(request).await {
             Ok(()) => Ok(()),
             Err(error) if error.tonic_code() == tonic::Code::NotFound => {
                 tracing::warn!(
@@ -1088,6 +1128,18 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 Ok(())
             }
             Err(error) => Err(error),
+        };
+        match result {
+            Ok(()) => {
+                self.update_nexus_state(Either::Remove(request.uuid.clone()))
+                    .await;
+                Ok(())
+            }
+            Err(error) => {
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_nexus_states(ctx.deref_mut()).await?;
+                Err(error)
+            }
         }
     }
 
@@ -1118,17 +1170,21 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         match result {
             Ok(child) => Ok(child),
             Err(error) => {
-                if let Some(nexus) = self.read().await.nexus(&request.nexus) {
-                    if let Some(child) = nexus.children.into_iter().find(|c| c.uri == request.uri) {
+                let child =
+                    self.read().await.nexus(&request.nexus).and_then(|nexus| {
+                        nexus.children.into_iter().find(|c| c.uri == request.uri)
+                    });
+                match child {
+                    Some(child) => {
                         tracing::warn!(
-                            "Trying to add Child '{}' which is already part of nexus '{}'.Ok",
-                            request.uri,
-                            request.nexus
+                            child.uri=%request.uri,
+                            nexus=%request.nexus,
+                            "Child is already part of nexus"
                         );
-                        return Ok(child);
+                        Ok(child)
                     }
+                    None => Err(error),
                 }
-                Err(error)
             }
         }
     }
@@ -1141,19 +1197,17 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         self.update_nexus_states(ctx.deref_mut()).await?;
         match result {
             Ok(_) => Ok(()),
-            Err(error) => {
-                if let Some(nexus) = self.read().await.nexus(&request.nexus) {
-                    if !nexus.contains_child(&request.uri) {
-                        tracing::warn!(
-                            "Forgetting about Child '{}' which is no longer part of nexus '{}'",
-                            request.uri,
-                            request.nexus
-                        );
-                        return Ok(());
-                    }
+            Err(error) => match self.read().await.nexus(&request.nexus) {
+                Some(nexus) if nexus.contains_child(&request.uri) => {
+                    tracing::warn!(
+                        "Forgetting about Child '{}' which is no longer part of nexus '{}'",
+                        request.uri,
+                        request.nexus
+                    );
+                    Ok(())
                 }
-                Err(error)
-            }
+                _ => Err(error),
+            },
         }
     }
 
@@ -1165,14 +1219,14 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         match result {
             Ok(_) => Ok(()),
             Err(error) => {
-                if let Some(nexus) = self.read().await.nexus(&request.nexus) {
-                    if let Some(child) = nexus.children.into_iter().find(|c| c.uri == request.uri) {
-                        if child.state.faulted() {
-                            return Ok(());
-                        }
-                    }
+                let child =
+                    self.read().await.nexus(&request.nexus).and_then(|nexus| {
+                        nexus.children.into_iter().find(|c| c.uri == request.uri)
+                    });
+                match child {
+                    Some(child) if child.state.faulted() => Ok(()),
+                    _ => Err(error),
                 }
-                Err(error)
             }
         }
     }
