@@ -1,7 +1,6 @@
 //! Common modules used by the different core services
 
-/// gRPC helpers
-pub(crate) mod grpc;
+pub(crate) mod io_engine;
 /// reconciliation logic
 pub(crate) mod reconciler;
 /// registry with node and all its resources

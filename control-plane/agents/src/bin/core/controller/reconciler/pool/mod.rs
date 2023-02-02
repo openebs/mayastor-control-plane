@@ -6,9 +6,9 @@ use crate::controller::{
         OperationGuardArc, TraceSpan,
     },
     task_poller::{PollContext, PollPeriods, PollResult, PollTimer, PollerState, TaskPoller},
-    wrapper::ClientOps,
 };
 
+use crate::controller::io_engine::PoolApi;
 use common_lib::types::v0::{
     store::pool::PoolSpec,
     transport::{CreatePool, DestroyPool, NodeStatus},

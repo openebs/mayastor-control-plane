@@ -1,4 +1,5 @@
 use crate::controller::{
+    io_engine::NexusApi,
     registry::Registry,
     resources::{
         operations::{ResourceOffspring, ResourceOwnerUpdate},
@@ -8,7 +9,6 @@ use crate::controller::{
         },
         OperationGuardArc, ResourceMutex, TraceSpan,
     },
-    wrapper::ClientOps,
 };
 use agents::errors::SvcError;
 use common_lib::{

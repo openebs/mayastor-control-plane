@@ -1,5 +1,6 @@
 use crate::{
     controller::{
+        io_engine::NexusApi,
         registry::Registry,
         resources::{
             operations::{
@@ -11,7 +12,7 @@ use crate::{
             OperationGuardArc, TraceSpan,
         },
         scheduling::resources::HealthyChildItems,
-        wrapper::{ClientOps, GetterOps, NodeWrapper},
+        wrapper::{GetterOps, NodeWrapper},
     },
     nexus::scheduling::healthy_nexus_children,
 };

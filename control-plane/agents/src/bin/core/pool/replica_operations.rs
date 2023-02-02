@@ -1,11 +1,11 @@
 use crate::controller::{
+    io_engine::ReplicaApi,
     registry::Registry,
     resources::{
         operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceSharing},
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc, UpdateInnerValue,
     },
-    wrapper::ClientOps,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{
