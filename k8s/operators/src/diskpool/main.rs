@@ -107,8 +107,6 @@ pub(crate) struct OperatorContext {
     http: clients::tower::ApiClient,
     /// Interval
     interval: u64,
-    /// Retries
-    retries: u32,
     /// Disable device validation before attempting to create the pool
     disable_device_validation: bool,
 }
@@ -263,30 +261,17 @@ impl ResourceContext {
         Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
     }
 
-    /// Stop reconciliation immediately and notify k8s engine.
-    async fn stop_reconciliation(self) -> Result<Action, Error> {
-        self.k8s_notify(
-            "Failing pool creation",
-            "Creating",
-            &format!("Retry attempts ({}) exceeded", self.num_retries),
-            "Error",
-        )
-        .await; // if we fail to notify k8s of the error, we will do so when we
-                // reestablish a connection
-        self.mark_error().await?;
-        // we updated the resource as an error stop reconciliation
-        Err(Error::ReconcileError {
-            name: self.name_any(),
-        })
+    /// Patch the resource state to terminating.
+    async fn mark_terminating_when_unknown(&self) -> Result<Action, Error> {
+        self.patch_status(DiskPoolStatus::terminating_when_unknown())
+            .await?;
+        Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
     }
 
     /// Create or import the pool, on failure try again. When we reach max error
     /// count we fail the whole thing.
     #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
     pub(crate) async fn create_or_import(self) -> Result<Action, Error> {
-        if self.num_retries >= self.ctx.retries {
-            return self.stop_reconciliation().await;
-        }
         if !self.ctx.disable_device_validation {
             match self
                 .block_devices_api()
@@ -365,6 +350,15 @@ impl ResourceContext {
                 // 'Created' to reflect this.
             }
             Err(e) => {
+                if self.num_retries == 10 {
+                    self.k8s_notify(
+                        "Create or Import Failure",
+                        "Failure",
+                        format!("Unable to create or import pool {}", e).as_str(),
+                        "Critical",
+                    )
+                    .await;
+                }
                 return Err(e.into());
             }
         };
@@ -547,7 +541,11 @@ impl ResourceContext {
                     .await;
                 }
             }
-            return self.mark_unknown().await;
+            return if self.metadata.deletion_timestamp.is_some() {
+                self.mark_terminating_when_unknown().await
+            } else {
+                self.mark_unknown().await
+            };
         }
 
         // always reschedule though
@@ -647,13 +645,34 @@ impl ResourceContext {
 /// is wrong would be to consult the logs.
 async fn ensure_crd(k8s: Client) {
     let dsp: Api<k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition> = Api::all(k8s);
-    let lp = ListParams::default().fields(&format!("metadata.name={}", "diskpools.openebs.io"));
-    let crds = dsp.list(&lp).await.expect("failed to list CRDS");
 
-    // the CRD has not been installed yet, to avoid overwriting (and create upgrade issues) only
-    // install it when there is no crd with the given name
-    if crds.iter().count() == 0 {
-        let crd = DiskPool::crd();
+    // Check if there is an existing dsp crd. If yes, Replace it with new generated one.
+    // Create new if it doesnt exist.
+    let mut crd = DiskPool::crd();
+    let crd_name = crd.metadata.name.as_ref().unwrap().as_str();
+    if let Ok(exiting) = dsp.get(crd_name).await {
+        crd.metadata.resource_version = exiting.resource_version();
+        info!(
+            "Creating CRD: {}",
+            serde_json::to_string_pretty(&crd).unwrap()
+        );
+
+        let pp = PostParams::default();
+        match dsp.replace(crd_name, &pp, &crd).await {
+            Ok(o) => {
+                info!(crd = ?o.name_any(), "created");
+                // let the CRD settle this purely to avoid errors messages in the console
+                // that are harmless but can cause some confusion maybe.
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+
+            Err(e) => {
+                error!("failed to create CRD error {}", e);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                std::process::exit(1);
+            }
+        }
+    } else {
         info!(
             "Creating CRD: {}",
             serde_json::to_string_pretty(&crd).unwrap()
@@ -674,8 +693,6 @@ async fn ensure_crd(k8s: Client) {
                 std::process::exit(1);
             }
         }
-    } else {
-        info!("CRD present")
     }
 }
 
@@ -688,7 +705,7 @@ fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext
         Error::ReconcileError { .. } => {
             return Action::await_change();
         }
-        _ => 5,
+        _ => 20,
     });
 
     let when = Utc::now()
@@ -700,7 +717,6 @@ fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext
         when.to_rfc2822(),
         duration.as_secs()
     );
-    info!("requeue after :{:?}", duration);
     Action::requeue(duration)
 }
 
@@ -787,9 +803,6 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
             .parse::<humantime::Duration>()
             .expect("interval value is invalid")
             .as_secs(),
-        retries: *args
-            .get_one::<u32>("retries")
-            .expect("retries value is invalid"),
         disable_device_validation: args.get_flag("disable-device-validation"),
     };
 
