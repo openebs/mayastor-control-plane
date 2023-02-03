@@ -22,7 +22,7 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
         // V0 GetMayastorInfo Liveness call doesn't return the registration info,
         // thus fill it from context and hard-code the version as V0
         Ok(Register {
-            id: self.context.node.clone(),
+            id: self.context.node().clone(),
             grpc_endpoint: self.context.endpoint(),
             api_versions: Some(vec![ApiVersion::V0]),
             instance_uuid: None,

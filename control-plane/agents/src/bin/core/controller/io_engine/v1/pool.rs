@@ -13,10 +13,7 @@ impl crate::controller::io_engine::PoolListApi for super::RpcClient {
     async fn list_pools(&self, id: &NodeId) -> Result<Vec<PoolState>, SvcError> {
         let rpc_pools = self
             .pool()
-            .list_pools(ListPoolOptions {
-                name: None,
-                pooltype: None,
-            })
+            .list_pools(ListPoolOptions::default())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Pool,

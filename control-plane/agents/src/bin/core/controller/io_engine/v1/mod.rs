@@ -32,10 +32,14 @@ pub(crate) struct RpcClient {
 impl RpcClient {
     /// Create a new grpc client with a context.
     pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
-        let channel = context.endpoint.connect().await.context(GrpcConnect {
-            node_id: context.node.to_owned(),
-            endpoint: context.endpoint().to_string(),
-        })?;
+        let channel = context
+            .tonic_endpoint()
+            .connect()
+            .await
+            .context(GrpcConnect {
+                node_id: context.node().to_owned(),
+                endpoint: context.endpoint().to_string(),
+            })?;
 
         Ok(Self {
             host: HostClient::new(channel.clone()),
@@ -60,6 +64,12 @@ impl RpcClient {
     /// Get the v1 pool client.
     fn pool(&self) -> PoolClient {
         self.pool.clone()
+    }
+
+    async fn fetcher_client(&self) -> Result<Self, SvcError> {
+        let mut context = self.context.clone();
+        context.override_timeout(None);
+        Self::new(&context).await
     }
 }
 

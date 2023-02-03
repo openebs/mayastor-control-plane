@@ -10,7 +10,7 @@ use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::PoolListApi for super::RpcClient {
-    async fn list_pools(&self, id: &NodeId) -> Result<Vec<PoolState>, SvcError> {
+    async fn list_pools(&self, node_id: &NodeId) -> Result<Vec<PoolState>, SvcError> {
         let rpc_pools = self
             .client()
             .list_pools(Null {})
@@ -22,7 +22,10 @@ impl crate::controller::io_engine::PoolListApi for super::RpcClient {
 
         let rpc_pools = &rpc_pools.get_ref().pools;
 
-        let pools = rpc_pools.iter().map(|p| rpc_pool_to_agent(p, id)).collect();
+        let pools = rpc_pools
+            .iter()
+            .map(|p| rpc_pool_to_agent(p, node_id))
+            .collect();
 
         Ok(pools)
     }

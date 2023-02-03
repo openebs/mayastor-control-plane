@@ -30,7 +30,7 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
                 // The dataplane did not send anything in registration info, which should
                 // not happen.
                 return Err(SvcError::NodeNotOnline {
-                    node: self.context.node.clone(),
+                    node: self.context.node().clone(),
                 });
             }
         };
@@ -39,7 +39,7 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
             id: registration_info.id.into(),
             grpc_endpoint: std::net::SocketAddr::from_str(&registration_info.grpc_endpoint)
                 .map_err(|error| SvcError::NodeGrpcEndpoint {
-                    node: self.context.node.clone(),
+                    node: self.context.node().clone(),
                     socket: registration_info.grpc_endpoint,
                     error,
                 })?,

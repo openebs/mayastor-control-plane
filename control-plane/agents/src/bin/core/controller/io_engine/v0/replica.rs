@@ -12,7 +12,7 @@ use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
-    async fn list_replicas(&self, id: &NodeId) -> Result<Vec<Replica>, SvcError> {
+    async fn list_replicas(&self, node_id: &NodeId) -> Result<Vec<Replica>, SvcError> {
         let rpc_replicas =
             self.client()
                 .list_replicas_v2(Null {})
@@ -26,7 +26,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
 
         let replicas = rpc_replicas
             .iter()
-            .filter_map(|p| match rpc_replica_to_agent(p, id) {
+            .filter_map(|p| match rpc_replica_to_agent(p, node_id) {
                 Ok(r) => Some(r),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc replica");

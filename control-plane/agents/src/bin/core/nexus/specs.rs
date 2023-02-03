@@ -1,5 +1,5 @@
 use crate::controller::{
-    io_engine::NexusApi,
+    io_engine::NexusChildApi,
     registry::Registry,
     resources::{
         operations::{ResourceOffspring, ResourceOwnerUpdate},

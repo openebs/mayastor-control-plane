@@ -24,7 +24,7 @@ use common_lib::{
 use garbage_collector::GarbageCollector;
 
 use crate::controller::{
-    io_engine::NexusApi,
+    io_engine::{NexusApi, NexusChildApi},
     reconciler::{ReCreate, Reconciler},
     resources::{operations::ResourceSharing, OperationGuardArc, TraceSpan, TraceStrLog},
     wrapper::NodeWrapper,

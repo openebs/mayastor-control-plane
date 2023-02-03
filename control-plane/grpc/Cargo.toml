@@ -16,8 +16,8 @@ prost-build = "0.11.1"
 
 [dependencies]
 tonic = "0.8.0"
-prost = "0.11.0"
-prost-types = "0.11.1"
+prost = "0.11.6"
+prost-types = "0.11.6"
 
 tokio = { version = "1.20.1", features = ["full"] }
 common-lib = { path = "../../common" }

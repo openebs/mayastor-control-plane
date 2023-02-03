@@ -25,7 +25,10 @@ use common_lib::{
     },
 };
 
-use crate::controller::states::Either;
+use crate::controller::{
+    io_engine::{NexusChildApi, NexusShareApi},
+    states::Either,
+};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
@@ -760,14 +763,14 @@ impl NodeStateFetcher {
         &self,
         client: &mut GrpcClient,
     ) -> Result<Vec<Nexus>, SvcError> {
-        client.list_nexus(self.id()).await
+        client.list_nexuses(self.id()).await
     }
 }
 
 /// CRUD Operations on a locked io-engine `NodeWrapper` such as:
 /// pools, replicas, nexuses and their children.
 #[async_trait]
-pub(crate) trait ClientOps: NexusApi + PoolApi + ReplicaApi {
+pub(crate) trait ClientOps {
     /// Get the grpc lock and client pair to execute the provided `request`
     /// NOTE: Only available when the node status is online.
     async fn grpc_client_locked(&self, request: MessageId) -> Result<GrpcClientLocked, SvcError>;
@@ -1060,8 +1063,9 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         Ok(local_uri)
     }
 }
+
 #[async_trait]
-impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
+impl NexusApi<()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Create a nexus on the node via gRPC.
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         if request.uuid == NexusId::default() {
@@ -1118,116 +1122,13 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Destroy a nexus on the node via gRPC.
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let result = match dataplane.destroy_nexus(request).await {
-            Ok(()) => Ok(()),
-            Err(error) if error.tonic_code() == tonic::Code::NotFound => {
-                tracing::warn!(
-                    nexus.uuid = %request.uuid,
-                    "Trying to destroy nexus which is already destroyed",
-                );
-                Ok(())
-            }
-            Err(error) => Err(error),
-        };
-        match result {
+        match dataplane.destroy_nexus(request).await {
             Ok(()) => {
                 self.update_nexus_state(Either::Remove(request.uuid.clone()))
                     .await;
                 Ok(())
             }
-            Err(error) => {
-                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-                self.update_nexus_states(ctx.deref_mut()).await?;
-                Err(error)
-            }
-        }
-    }
-
-    /// Share a nexus on the node via gRPC.
-    async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
-        let share = dataplane.share_nexus(request).await?;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await?;
-        Ok(share)
-    }
-
-    /// Unshare a nexus on the node via gRPC.
-    async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
-        let _ = dataplane.unshare_nexus(request).await?;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await?;
-        Ok(())
-    }
-
-    /// Add a child to a nexus via gRPC.
-    async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
-        let result = dataplane.add_child(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await?;
-        match result {
-            Ok(child) => Ok(child),
-            Err(error) => {
-                let child =
-                    self.read().await.nexus(&request.nexus).and_then(|nexus| {
-                        nexus.children.into_iter().find(|c| c.uri == request.uri)
-                    });
-                match child {
-                    Some(child) => {
-                        tracing::warn!(
-                            child.uri=%request.uri,
-                            nexus=%request.nexus,
-                            "Child is already part of nexus"
-                        );
-                        Ok(child)
-                    }
-                    None => Err(error),
-                }
-            }
-        }
-    }
-
-    /// Remove a child from its parent nexus via gRPC.
-    async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
-        let result = dataplane.remove_child(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await?;
-        match result {
-            Ok(_) => Ok(()),
-            Err(error) => match self.read().await.nexus(&request.nexus) {
-                Some(nexus) if nexus.contains_child(&request.uri) => {
-                    tracing::warn!(
-                        "Forgetting about Child '{}' which is no longer part of nexus '{}'",
-                        request.uri,
-                        request.nexus
-                    );
-                    Ok(())
-                }
-                _ => Err(error),
-            },
-        }
-    }
-
-    async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
-        let result = dataplane.fault_child(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_nexus_states(ctx.deref_mut()).await?;
-        match result {
-            Ok(_) => Ok(()),
-            Err(error) => {
-                let child =
-                    self.read().await.nexus(&request.nexus).and_then(|nexus| {
-                        nexus.children.into_iter().find(|c| c.uri == request.uri)
-                    });
-                match child {
-                    Some(child) if child.state.faulted() => Ok(()),
-                    _ => Err(error),
-                }
-            }
+            Err(error) => Err(error),
         }
     }
 
@@ -1244,6 +1145,93 @@ impl NexusApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 })
             }
             Err(error) => Err(error),
+        }
+    }
+}
+
+#[async_trait]
+impl NexusShareApi<String, ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    /// Share a nexus on the node via gRPC.
+    async fn share_nexus(&self, request: &ShareNexus) -> Result<String, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        match dataplane.share_nexus(request).await {
+            Ok(nexus) => {
+                self.update_nexus_state(Either::Insert(nexus.clone())).await;
+                Ok(nexus.device_uri)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Unshare a nexus on the node via gRPC.
+    async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<(), SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        match dataplane.unshare_nexus(request).await {
+            Ok(nexus) => {
+                self.update_nexus_state(Either::Insert(nexus.clone())).await;
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+#[async_trait]
+impl NexusChildApi<Child, (), ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    /// Add a child to a nexus via gRPC.
+    async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        match dataplane.add_child(request).await {
+            Ok(nexus) => {
+                let child = nexus.children.iter().find(|c| c.uri == request.uri);
+                let result = child.cloned().ok_or(SvcError::ChildNotFound {
+                    nexus: request.nexus.to_string(),
+                    child: request.uri.to_string(),
+                });
+                self.update_nexus_state(Either::Insert(nexus)).await;
+                result
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Remove a child from its parent nexus via gRPC.
+    async fn remove_child(&self, request: &RemoveNexusChild) -> Result<(), SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        match dataplane.remove_child(request).await {
+            Ok(nexus) => {
+                let removed = !nexus.children.iter().any(|c| c.uri == request.uri);
+                self.update_nexus_state(Either::Insert(nexus)).await;
+                match removed {
+                    true => Ok(()),
+                    false => Err(SvcError::ChildNotFound {
+                        nexus: request.nexus.to_string(),
+                        child: request.uri.to_string(),
+                    }),
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let result = dataplane.fault_child(request).await;
+        // todo: v1 api should return a Nexus as well.
+        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+        self.update_nexus_states(ctx.deref_mut()).await?;
+        match result {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                let child =
+                    self.read().await.nexus(&request.nexus).and_then(|nexus| {
+                        nexus.children.into_iter().find(|c| c.uri == request.uri)
+                    });
+                match child {
+                    Some(child) if child.state.faulted() => Ok(()),
+                    _ => Err(error),
+                }
+            }
         }
     }
 }

@@ -5,14 +5,14 @@ use common_lib::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, Child, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
+            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
             NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
             Replica, ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
 
-use rpc::v1 as v1_rpc;
+use rpc::v1;
 use std::convert::TryFrom;
 
 /// Trait for converting agent messages to io-engine messages.
@@ -23,7 +23,7 @@ pub(super) trait AgentToIoEngine {
     fn to_rpc(&self) -> Self::IoEngineMessage;
 }
 
-impl IoEngineToAgent for v1_rpc::host::Partition {
+impl IoEngineToAgent for v1::host::Partition {
     type AgentMessage = transport::Partition;
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
@@ -37,7 +37,7 @@ impl IoEngineToAgent for v1_rpc::host::Partition {
     }
 }
 
-impl IoEngineToAgent for v1_rpc::host::Filesystem {
+impl IoEngineToAgent for v1::host::Filesystem {
     type AgentMessage = transport::Filesystem;
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
@@ -49,7 +49,7 @@ impl IoEngineToAgent for v1_rpc::host::Filesystem {
     }
 }
 
-impl IoEngineToAgent for v1_rpc::host::BlockDevice {
+impl IoEngineToAgent for v1::host::BlockDevice {
     type AgentMessage = transport::BlockDevice;
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
@@ -79,7 +79,7 @@ impl IoEngineToAgent for v1_rpc::host::BlockDevice {
 }
 
 /// Pool Agent Conversions
-impl TryIoEngineToAgent for v1_rpc::replica::Replica {
+impl TryIoEngineToAgent for v1::replica::Replica {
     type AgentMessage = transport::Replica;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         Ok(transport::Replica {
@@ -115,7 +115,7 @@ impl TryIoEngineToAgent for v1_rpc::replica::Replica {
 }
 
 impl AgentToIoEngine for transport::CreateReplica {
-    type IoEngineMessage = v1_rpc::replica::CreateReplicaRequest;
+    type IoEngineMessage = v1::replica::CreateReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
@@ -135,7 +135,7 @@ impl AgentToIoEngine for transport::CreateReplica {
 }
 
 impl AgentToIoEngine for transport::ShareReplica {
-    type IoEngineMessage = v1_rpc::replica::ShareReplicaRequest;
+    type IoEngineMessage = v1::replica::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
@@ -146,7 +146,7 @@ impl AgentToIoEngine for transport::ShareReplica {
 }
 
 impl AgentToIoEngine for transport::UnshareReplica {
-    type IoEngineMessage = v1_rpc::replica::UnshareReplicaRequest;
+    type IoEngineMessage = v1::replica::UnshareReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
@@ -155,7 +155,7 @@ impl AgentToIoEngine for transport::UnshareReplica {
 }
 
 impl AgentToIoEngine for transport::DestroyReplica {
-    type IoEngineMessage = v1_rpc::replica::DestroyReplicaRequest;
+    type IoEngineMessage = v1::replica::DestroyReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
@@ -164,8 +164,8 @@ impl AgentToIoEngine for transport::DestroyReplica {
 }
 
 /// convert rpc replica to a agent replica
-pub fn rpc_replica_to_agent(
-    rpc_replica: &v1_rpc::replica::Replica,
+pub(super) fn rpc_replica_to_agent(
+    rpc_replica: &v1::replica::Replica,
     id: &NodeId,
 ) -> Result<Replica, SvcError> {
     let mut replica = rpc_replica.try_to_agent()?;
@@ -175,7 +175,7 @@ pub fn rpc_replica_to_agent(
 
 /// Volume Agent conversions
 
-impl TryIoEngineToAgent for v1_rpc::nexus::Nexus {
+impl TryIoEngineToAgent for v1::nexus::Nexus {
     type AgentMessage = transport::Nexus;
 
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
@@ -209,47 +209,47 @@ impl TryIoEngineToAgent for v1_rpc::nexus::Nexus {
 /// New-type wrapper for external types.
 /// Allows us to convert from external types which would otherwise not be allowed.
 struct ExternalType<T>(T);
-impl From<ExternalType<v1_rpc::nexus::ChildState>> for ChildState {
-    fn from(src: ExternalType<v1_rpc::nexus::ChildState>) -> Self {
+impl From<ExternalType<v1::nexus::ChildState>> for ChildState {
+    fn from(src: ExternalType<v1::nexus::ChildState>) -> Self {
         match src.0 {
-            v1_rpc::nexus::ChildState::Unknown => ChildState::Unknown,
-            v1_rpc::nexus::ChildState::Online => ChildState::Online,
-            v1_rpc::nexus::ChildState::Degraded => ChildState::Degraded,
-            v1_rpc::nexus::ChildState::Faulted => ChildState::Faulted,
+            v1::nexus::ChildState::Unknown => ChildState::Unknown,
+            v1::nexus::ChildState::Online => ChildState::Online,
+            v1::nexus::ChildState::Degraded => ChildState::Degraded,
+            v1::nexus::ChildState::Faulted => ChildState::Faulted,
         }
     }
 }
-impl From<ExternalType<v1_rpc::nexus::ChildStateReason>> for ChildStateReason {
-    fn from(src: ExternalType<v1_rpc::nexus::ChildStateReason>) -> Self {
+impl From<ExternalType<v1::nexus::ChildStateReason>> for ChildStateReason {
+    fn from(src: ExternalType<v1::nexus::ChildStateReason>) -> Self {
         match src.0 {
-            v1_rpc::nexus::ChildStateReason::None => Self::Unknown,
-            v1_rpc::nexus::ChildStateReason::Init => Self::Init,
-            v1_rpc::nexus::ChildStateReason::Closed => Self::Closed,
-            v1_rpc::nexus::ChildStateReason::CannotOpen => Self::CantOpen,
-            v1_rpc::nexus::ChildStateReason::ConfigInvalid => Self::ConfigInvalid,
-            v1_rpc::nexus::ChildStateReason::RebuildFailed => Self::RebuildFailed,
-            v1_rpc::nexus::ChildStateReason::IoFailure => Self::IoError,
-            v1_rpc::nexus::ChildStateReason::ByClient => Self::ByClient,
-            v1_rpc::nexus::ChildStateReason::OutOfSync => Self::OutOfSync,
-            v1_rpc::nexus::ChildStateReason::NoSpace => Self::NoSpace,
-            v1_rpc::nexus::ChildStateReason::TimedOut => Self::TimedOut,
-            v1_rpc::nexus::ChildStateReason::AdminFailed => Self::AdminCommandFailed,
+            v1::nexus::ChildStateReason::None => Self::Unknown,
+            v1::nexus::ChildStateReason::Init => Self::Init,
+            v1::nexus::ChildStateReason::Closed => Self::Closed,
+            v1::nexus::ChildStateReason::CannotOpen => Self::CantOpen,
+            v1::nexus::ChildStateReason::ConfigInvalid => Self::ConfigInvalid,
+            v1::nexus::ChildStateReason::RebuildFailed => Self::RebuildFailed,
+            v1::nexus::ChildStateReason::IoFailure => Self::IoError,
+            v1::nexus::ChildStateReason::ByClient => Self::ByClient,
+            v1::nexus::ChildStateReason::OutOfSync => Self::OutOfSync,
+            v1::nexus::ChildStateReason::NoSpace => Self::NoSpace,
+            v1::nexus::ChildStateReason::TimedOut => Self::TimedOut,
+            v1::nexus::ChildStateReason::AdminFailed => Self::AdminCommandFailed,
         }
     }
 }
 
-impl IoEngineToAgent for v1_rpc::nexus::Child {
+impl IoEngineToAgent for v1::nexus::Child {
     type AgentMessage = transport::Child;
 
     fn to_agent(&self) -> Self::AgentMessage {
         Self::AgentMessage {
             uri: self.uri.clone().into(),
             state: ChildState::from(ExternalType(
-                v1_rpc::nexus::ChildState::from_i32(self.state)
-                    .unwrap_or(v1_rpc::nexus::ChildState::Unknown),
+                v1::nexus::ChildState::from_i32(self.state)
+                    .unwrap_or(v1::nexus::ChildState::Unknown),
             )),
             rebuild_progress: u8::try_from(self.rebuild_progress).ok(),
-            state_reason: v1_rpc::nexus::ChildStateReason::from_i32(self.state_reason)
+            state_reason: v1::nexus::ChildStateReason::from_i32(self.state_reason)
                 .map(|f| From::from(ExternalType(f)))
                 .unwrap_or(ChildStateReason::Unknown),
         }
@@ -259,7 +259,7 @@ impl IoEngineToAgent for v1_rpc::nexus::Child {
 /// Volume Agent Conversions
 
 impl AgentToIoEngine for transport::CreateNexus {
-    type IoEngineMessage = v1_rpc::nexus::CreateNexusRequest;
+    type IoEngineMessage = v1::nexus::CreateNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         let nexus_config = self
             .config
@@ -275,10 +275,10 @@ impl AgentToIoEngine for transport::CreateNexus {
             preempt_key: nexus_config.preempt_key(),
             children: self.children.clone().into_vec(),
             nexus_info_key: self.nexus_info_key(),
-            resv_type: Some(v1_rpc::nexus::NvmeReservation::from(ExternalType(
-                nexus_config.resv_type(),
-            )) as i32),
-            preempt_policy: v1_rpc::nexus::NexusNvmePreemption::from(ExternalType(
+            resv_type: Some(
+                v1::nexus::NvmeReservation::from(ExternalType(nexus_config.resv_type())) as i32,
+            ),
+            preempt_policy: v1::nexus::NexusNvmePreemption::from(ExternalType(
                 nexus_config.preempt_policy(),
             )) as i32,
         }
@@ -286,7 +286,7 @@ impl AgentToIoEngine for transport::CreateNexus {
 }
 
 impl AgentToIoEngine for transport::DestroyNexus {
-    type IoEngineMessage = v1_rpc::nexus::DestroyNexusRequest;
+    type IoEngineMessage = v1::nexus::DestroyNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
@@ -295,7 +295,7 @@ impl AgentToIoEngine for transport::DestroyNexus {
 }
 
 impl AgentToIoEngine for transport::ShareNexus {
-    type IoEngineMessage = v1_rpc::nexus::PublishNexusRequest;
+    type IoEngineMessage = v1::nexus::PublishNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
@@ -307,7 +307,7 @@ impl AgentToIoEngine for transport::ShareNexus {
 }
 
 impl AgentToIoEngine for transport::UnshareNexus {
-    type IoEngineMessage = v1_rpc::nexus::UnpublishNexusRequest;
+    type IoEngineMessage = v1::nexus::UnpublishNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.uuid.clone().into(),
@@ -316,7 +316,7 @@ impl AgentToIoEngine for transport::UnshareNexus {
 }
 
 impl AgentToIoEngine for transport::AddNexusChild {
-    type IoEngineMessage = v1_rpc::nexus::AddChildNexusRequest;
+    type IoEngineMessage = v1::nexus::AddChildNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.nexus.clone().into(),
@@ -327,7 +327,7 @@ impl AgentToIoEngine for transport::AddNexusChild {
 }
 
 impl AgentToIoEngine for transport::RemoveNexusChild {
-    type IoEngineMessage = v1_rpc::nexus::RemoveChildNexusRequest;
+    type IoEngineMessage = v1::nexus::RemoveChildNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.nexus.clone().into(),
@@ -337,7 +337,7 @@ impl AgentToIoEngine for transport::RemoveNexusChild {
 }
 
 impl AgentToIoEngine for transport::FaultNexusChild {
-    type IoEngineMessage = v1_rpc::nexus::FaultNexusChildRequest;
+    type IoEngineMessage = v1::nexus::FaultNexusChildRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.nexus.clone().into(),
@@ -347,7 +347,7 @@ impl AgentToIoEngine for transport::FaultNexusChild {
 }
 
 impl AgentToIoEngine for transport::ShutdownNexus {
-    type IoEngineMessage = v1_rpc::nexus::ShutdownNexusRequest;
+    type IoEngineMessage = v1::nexus::ShutdownNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             uuid: self.uuid().into(),
@@ -356,8 +356,8 @@ impl AgentToIoEngine for transport::ShutdownNexus {
 }
 
 /// convert rpc nexus to a agent nexus
-pub fn rpc_nexus_to_agent(
-    rpc_nexus: &v1_rpc::nexus::Nexus,
+pub(super) fn rpc_nexus_to_agent(
+    rpc_nexus: &v1::nexus::Nexus,
     id: &NodeId,
 ) -> Result<Nexus, SvcError> {
     let mut nexus = rpc_nexus.try_to_agent()?;
@@ -365,24 +365,7 @@ pub fn rpc_nexus_to_agent(
     Ok(nexus)
 }
 
-/// convert rpc nexus to a agent child
-pub fn rpc_nexus_to_child_agent(
-    rpc_nexus: &v1_rpc::nexus::Nexus,
-    child_uri: String,
-) -> Result<Child, SvcError> {
-    for child in &rpc_nexus.children {
-        if child.uri == child_uri {
-            return Ok(child.to_agent());
-        }
-    }
-    // This error will ideally not occur
-    Err(SvcError::NotFound {
-        kind: ResourceKind::Child,
-        id: child_uri,
-    })
-}
-
-impl IoEngineToAgent for v1_rpc::pool::Pool {
+impl IoEngineToAgent for v1::pool::Pool {
     type AgentMessage = transport::PoolState;
     /// This converts gRPC pool object into Control plane Pool state.
     fn to_agent(&self) -> Self::AgentMessage {
@@ -398,20 +381,20 @@ impl IoEngineToAgent for v1_rpc::pool::Pool {
 }
 
 impl AgentToIoEngine for transport::CreatePool {
-    type IoEngineMessage = v1_rpc::pool::CreatePoolRequest;
+    type IoEngineMessage = v1::pool::CreatePoolRequest;
     /// This converts Control plane CreatePool struct to IO Engine gRPC message.
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             name: self.id.clone().into(),
             disks: self.disks.iter().map(|d| d.to_string()).collect(),
             uuid: None,
-            pooltype: v1_rpc::pool::PoolType::Lvs as i32,
+            pooltype: v1::pool::PoolType::Lvs as i32,
         }
     }
 }
 
 impl AgentToIoEngine for transport::DestroyPool {
-    type IoEngineMessage = v1_rpc::pool::DestroyPoolRequest;
+    type IoEngineMessage = v1::pool::DestroyPoolRequest;
     /// This converts Control plane DeletePool struct to IO Engine gRPC message.
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
@@ -422,13 +405,13 @@ impl AgentToIoEngine for transport::DestroyPool {
 }
 
 /// Converts rpc pool to a agent pool.
-pub fn rpc_pool_to_agent(rpc_pool: &rpc::v1::pool::Pool, id: &NodeId) -> PoolState {
+pub(super) fn rpc_pool_to_agent(rpc_pool: &rpc::v1::pool::Pool, id: &NodeId) -> PoolState {
     let mut pool = rpc_pool.to_agent();
     pool.node = id.clone();
     pool
 }
 
-impl From<ExternalType<NvmeReservation>> for v1_rpc::nexus::NvmeReservation {
+impl From<ExternalType<NvmeReservation>> for v1::nexus::NvmeReservation {
     fn from(value: ExternalType<NvmeReservation>) -> Self {
         match value.0 {
             NvmeReservation::Reserved => Self::Reserved,
@@ -441,7 +424,7 @@ impl From<ExternalType<NvmeReservation>> for v1_rpc::nexus::NvmeReservation {
         }
     }
 }
-impl From<ExternalType<NexusNvmePreemption>> for v1_rpc::nexus::NexusNvmePreemption {
+impl From<ExternalType<NexusNvmePreemption>> for v1::nexus::NexusNvmePreemption {
     fn from(value: ExternalType<NexusNvmePreemption>) -> Self {
         match value.0 {
             NexusNvmePreemption::ArgKey(_) => Self::ArgKey,

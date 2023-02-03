@@ -17,7 +17,7 @@ Feature: Pool deletion
   Scenario: deleting an existing pool on an unreachable node that is still marked online
     Given a pool on an unreachable online node
     When the user attempts to delete the pool
-    Then the pool deletion should fail with error kind "Timeout"
+    Then the pool deletion should fail with error kind "Unavailable"
 
   Scenario: deleting an existing pool on an unreachable offline node
     Given a pool on an unreachable offline node

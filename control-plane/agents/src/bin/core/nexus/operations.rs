@@ -1,6 +1,6 @@
 use crate::{
     controller::{
-        io_engine::NexusApi,
+        io_engine::{NexusApi, NexusChildApi, NexusShareApi},
         registry::Registry,
         resources::{
             operations::{
