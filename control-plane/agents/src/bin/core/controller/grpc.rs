@@ -448,6 +448,7 @@ impl GrpcClient {
                     .list_replicas(ListReplicaOptions {
                         name: None,
                         poolname: None,
+                        uuid: None,
                     })
                     .await
                     .context(GrpcRequestError {
@@ -502,6 +503,7 @@ impl GrpcClient {
                     .list_pools(ListPoolOptions {
                         name: None,
                         pooltype: None,
+                        uuid: None,
                     })
                     .await
                     .context(GrpcRequestError {
@@ -550,7 +552,10 @@ impl GrpcClient {
                 let rpc_nexuses = self
                     .client_v1()?
                     .nexus
-                    .list_nexus(ListNexusOptions { name: None })
+                    .list_nexus(ListNexusOptions {
+                        name: None,
+                        uuid: None,
+                    })
                     .await
                     .context(GrpcRequestError {
                         resource: ResourceKind::Nexus,
