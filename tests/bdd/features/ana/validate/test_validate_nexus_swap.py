@@ -165,7 +165,7 @@ def publish_to_node_2(background):
     except ApiException as e:
         # Timeout or node not online
         assert (
-            e.status == http.HTTPStatus.REQUEST_TIMEOUT
+            e.status == http.HTTPStatus.SERVICE_UNAVAILABLE
             or e.status == http.HTTPStatus.PRECONDITION_FAILED
         )
 

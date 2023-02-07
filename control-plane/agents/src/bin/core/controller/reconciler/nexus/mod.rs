@@ -8,7 +8,6 @@ use crate::{
             squash_results, PollContext, PollPeriods, PollResult, PollTimer, PollerState,
             TaskPoller,
         },
-        wrapper::ClientOps,
     },
     nexus::scheduling::healthy_nexus_children,
 };
@@ -25,6 +24,7 @@ use common_lib::{
 use garbage_collector::GarbageCollector;
 
 use crate::controller::{
+    io_engine::{NexusApi, NexusChildApi},
     reconciler::{ReCreate, Reconciler},
     resources::{operations::ResourceSharing, OperationGuardArc, TraceSpan, TraceStrLog},
     wrapper::NodeWrapper,

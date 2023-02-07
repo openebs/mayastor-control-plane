@@ -15,8 +15,6 @@ mod common;
 
 /// Agent level errors.
 pub use common::errors;
-/// Message translation to agent types from rpc v0,v1 types.
-pub use common::msg_translation;
 
 #[derive(Debug, Snafu)]
 #[allow(missing_docs)]

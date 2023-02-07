@@ -16,7 +16,6 @@ fn main() {
 
     tonic_build::configure()
         .build_server(false)
-        .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .compile(&["api/protobuf/mayastor.proto"], &["api/protobuf"])
         .unwrap_or_else(|e| panic!("io-engine protobuf compilation failed: {}", e));
 
@@ -27,7 +26,6 @@ fn main() {
 
     tonic_build::configure()
         .build_server(true)
-        .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .compile(
             &[
                 "api/protobuf/v1/host.proto",
@@ -43,7 +41,6 @@ fn main() {
 
     tonic_build::configure()
         .build_server(true)
-        .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize, Eq)]")
         .compile(
             &["api/protobuf/v1-alpha/registration.proto"],
             &["api/protobuf/v1-alpha"],

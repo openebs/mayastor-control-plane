@@ -307,19 +307,31 @@ impl Registry {
                 // Clone the nodes so we don't hold the read lock on the nodes list while
                 // we may be busy or waiting on node information being fetched.
                 let nodes = self.nodes().read().await.clone();
-                for (_, node) in nodes.iter() {
-                    let (id, online) = {
-                        let node = node.read().await;
-                        (node.id().clone(), node.is_online())
-                    };
-                    if online {
-                        if let Err(error) = node.update_all(false).await {
-                            tracing::error!(node.id = %id, %error, "Failed to reload node");
-                        }
-                    }
-                }
+
+                let polled = nodes
+                    .into_iter()
+                    .map(|(_, node)| Self::poll_node(node))
+                    .collect::<Vec<_>>();
+
+                // Polls all nodes "concurrently".
+                // This means we still have to wait for all of them, would it be better to have
+                // a completely separate poll task for each node?
+                futures::future::join_all(polled).await;
             }
             tokio::time::sleep(self.cache_period).await;
+        }
+    }
+
+    /// Poll the given node for resource updates.
+    async fn poll_node(node: Arc<RwLock<NodeWrapper>>) {
+        let (id, online) = {
+            let node = node.read().await;
+            (node.id().clone(), node.is_online())
+        };
+        if online {
+            if let Err(error) = node.update_all(false).await {
+                tracing::error!(node.id = %id, %error, "Failed to reload node");
+            }
         }
     }
 

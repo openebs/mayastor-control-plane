@@ -1,11 +1,11 @@
 use crate::controller::{
+    io_engine::PoolApi,
     registry::Registry,
     resources::{
         operations::ResourceLifecycle,
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc,
     },
-    wrapper::ClientOps,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use common_lib::types::v0::{

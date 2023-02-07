@@ -19,9 +19,9 @@ tonic-build = "0.8.0"
 prost-build = "0.11.1"
 
 [dependencies]
-prost = "0.11.0"
-prost-derive = "0.11.0"
-prost-types = "0.11.1"
+prost = "0.11.6"
+prost-derive = "0.11.6"
+prost-types = "0.11.6"
 tonic = "0.8.0"
 
 anyhow = "1.0.44"

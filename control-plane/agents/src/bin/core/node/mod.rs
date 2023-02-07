@@ -4,6 +4,7 @@ pub(super) mod service;
 mod specs;
 /// node watchdog to keep track of a node's liveness
 pub(crate) mod watchdog;
+pub(crate) mod wrapper;
 
 use super::{controller::registry::Registry, CliArgs};
 use agents::Service;

@@ -253,6 +253,9 @@ impl SvcError {
             Self::NexusNotFound { .. } => tonic::Code::NotFound,
             Self::AlreadyExists { .. } => tonic::Code::AlreadyExists,
             Self::GrpcRequestError { source, .. } => source.code(),
+            Self::GrpcConnectTimeout { .. } => tonic::Code::DeadlineExceeded,
+            Self::GrpcConnect { .. } => tonic::Code::Unavailable,
+            Self::GrpcUdsConnect { .. } => tonic::Code::Unavailable,
             Self::Internal { .. } => tonic::Code::Internal,
             _ => tonic::Code::Internal,
         }
@@ -422,21 +425,21 @@ impl From<SvcError> for ReplyError {
 
             SvcError::GrpcConnectTimeout { .. } => ReplyError {
                 kind: ReplyErrorKind::Timeout,
-                resource: ResourceKind::Unknown,
+                resource: ResourceKind::Node,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
 
             SvcError::GrpcConnectUri { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
-                resource: ResourceKind::Unknown,
+                resource: ResourceKind::Node,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
 
             SvcError::GrpcConnect { .. } => ReplyError {
-                kind: ReplyErrorKind::Internal,
-                resource: ResourceKind::Unknown,
+                kind: ReplyErrorKind::Unavailable,
+                resource: ResourceKind::Node,
                 source: desc.to_string(),
                 extra: error_str,
             },

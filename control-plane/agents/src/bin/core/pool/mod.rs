@@ -3,6 +3,7 @@ mod registry;
 mod replica_operations;
 mod service;
 mod specs;
+pub(crate) mod wrapper;
 
 use super::controller::registry::Registry;
 use std::sync::Arc;
