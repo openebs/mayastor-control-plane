@@ -12,9 +12,9 @@ async fn get_v0_spec() -> HttpResponse {
 }
 
 pub(super) fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::resource(&super::spec_uri()).route(web::get().to(get_v0_spec)))
+    cfg.service(web::resource(super::spec_uri()).route(web::get().to(get_v0_spec)))
         .service(
-            web::resource(&format!("{}/swagger-ui", super::version()))
+            web::resource(format!("{}/swagger-ui", super::version()))
                 .route(web::get().to(GetSwaggerUi(get_swagger_html(&super::spec_uri())))),
         );
 }

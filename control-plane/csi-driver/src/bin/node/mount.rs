@@ -293,7 +293,7 @@ pub(crate) fn blockdevice_unmount(target: &str) -> Result<(), Error> {
 
     debug!("Unmounting block device {} (flags={:?}) ...", target, flags);
 
-    unmount(&target, flags)?;
+    unmount(target, flags)?;
     info!("block device at {} has been unmounted", target);
     Ok(())
 }

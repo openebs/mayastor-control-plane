@@ -99,12 +99,11 @@ fn check_access_mode(
                         if readonly {
                             return Ok(());
                         }
-                        Err(format!("volume capability: invalid combination of access mode ({:?}) and mount flag (rw)", mode))
+                        Err(format!("volume capability: invalid combination of access mode ({mode:?}) and mount flag (rw)"))
                     }
                     Mode::Unknown => Err(String::from("volume capability: unknown access mode")),
                     _ => Err(format!(
-                        "volume capability: unsupported access mode: {:?}",
-                        mode
+                        "volume capability: unsupported access mode: {mode:?}"
                     )),
                 },
                 None => Err(format!(

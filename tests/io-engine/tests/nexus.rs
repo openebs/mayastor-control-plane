@@ -38,10 +38,7 @@ async fn create_nexus_sizes() {
     for size_mb in &vec![6, 10, 100] {
         let size = size_mb * 1024 * 1024;
         let disk = || {
-            format!(
-                "malloc:///disk?size_mb={}&uuid=281b87d3-0401-459c-a594-60f76d0ce0da",
-                size_mb
-            )
+            format!("malloc:///disk?size_mb={size_mb}&uuid=281b87d3-0401-459c-a594-60f76d0ce0da")
         };
         let sizes = vec![Ok(size / 2), Ok(size), Err(size + 512)];
         for test in sizes {
@@ -76,10 +73,7 @@ async fn create_nexus_sizes() {
     for size_mb in &vec![1, 2, 4] {
         let size = size_mb * 1024 * 1024;
         let disk = || {
-            format!(
-                "malloc:///disk?size_mb={}&uuid=281b87d3-0401-459c-a594-60f76d0ce0da",
-                size_mb
-            )
+            format!("malloc:///disk?size_mb={size_mb}&uuid=281b87d3-0401-459c-a594-60f76d0ce0da")
         };
         let sizes = vec![Err(size / 2), Err(size), Err(size + 512)];
         for test in sizes {

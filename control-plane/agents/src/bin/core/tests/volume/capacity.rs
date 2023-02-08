@@ -91,7 +91,7 @@ async fn fault_enospc_child() {
         .composer()
         .exec(
             cluster.csi_container(0).as_str(),
-            vec!["dd", "if=/dev/zero", format!("of={}", device_path).as_str()],
+            vec!["dd", "if=/dev/zero", format!("of={device_path}").as_str()],
         )
         .await;
 
@@ -115,7 +115,7 @@ impl Drop for DeviceDisconnect {
     fn drop(&mut self) {
         if self.0.disconnect().is_err() {
             std::process::Command::new("sudo")
-                .args(&["nvme", "disconnect-all"])
+                .args(["nvme", "disconnect-all"])
                 .status()
                 .unwrap();
         }

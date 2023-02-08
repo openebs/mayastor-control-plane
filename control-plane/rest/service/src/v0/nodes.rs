@@ -54,7 +54,7 @@ fn node(node_id: String, node: Option<&Node>) -> Result<Node, ReplyError> {
             kind: ReplyErrorKind::NotFound,
             resource: ResourceKind::Node,
             source: "Requested node was not found".to_string(),
-            extra: format!("Node id : {}", node_id),
+            extra: format!("Node id : {node_id}"),
         }),
     }
 }

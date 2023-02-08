@@ -74,7 +74,7 @@ impl<'de> Deserialize<'de> for NvmeNqn {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Self::try_from(s).map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+        Self::try_from(s).map_err(|e| serde::de::Error::custom(format!("{e:?}")))
     }
 }
 

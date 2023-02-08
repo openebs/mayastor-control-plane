@@ -120,11 +120,7 @@ impl ResourceFilter for AddVolumeReplica {
 
     fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
         let request = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .filter(|v| filter(&request, v))
-            .collect();
+        self.list.retain(|v| filter(&request, v));
         self
     }
 
@@ -365,11 +361,7 @@ impl ResourceFilter for DecreaseVolumeReplica {
 
     fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
         let request = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .filter(|v| filter(&request, v))
-            .collect();
+        self.list.retain(|v| filter(&request, v));
         self
     }
 
@@ -540,11 +532,7 @@ impl ResourceFilter for AddVolumeNexusReplicas {
 
     fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
         let request = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .filter(|v| filter(&request, v))
-            .collect();
+        self.list.retain(|v| filter(&request, v));
         self
     }
 

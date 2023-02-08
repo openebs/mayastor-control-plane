@@ -327,7 +327,7 @@ impl TryFrom<&str> for Protocol {
                     "nvmf" => Self::Nvmf,
                     "iscsi" => Self::Iscsi,
                     "nbd" => Self::Nbd,
-                    other => return Err(format!("Invalid nexus protocol: {}", other)),
+                    other => return Err(format!("Invalid nexus protocol: {other}")),
                 },
                 Err(error) => {
                     tracing::error!("error parsing uri's ({}) protocol: {}", value, error);

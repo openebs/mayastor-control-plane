@@ -130,7 +130,7 @@ const FIND_MNT_ARGS: [&str; 3] = ["-J", "-o", "SOURCE,TARGET,FSTYPE"];
 /// Execute the Linux utility findmnt, collect the json output,
 /// invoke the filter function and return the filtered results.
 fn findmnt(params: Filter) -> Result<Vec<HashMap<String, String>>, DeviceError> {
-    let output = Command::new(FIND_MNT).args(&FIND_MNT_ARGS).output()?;
+    let output = Command::new(FIND_MNT).args(FIND_MNT_ARGS).output()?;
     if output.status.success() {
         let json_str = String::from_utf8(output.stdout)?;
         let json: Value = serde_json::from_str(&json_str)?;
@@ -168,7 +168,7 @@ pub(crate) fn get_devicepath(mount_path: &str) -> Result<Option<String>, DeviceE
                     sources, mount_path
                 );
                 Err(DeviceError::new(
-                    format!("multiple devices mounted at {}", mount_path).as_str(),
+                    format!("multiple devices mounted at {mount_path}").as_str(),
                 ))
             }
         }

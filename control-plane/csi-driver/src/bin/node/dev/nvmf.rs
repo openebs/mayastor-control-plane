@@ -216,20 +216,18 @@ impl Attach for NvmfAttach {
                 .get(1)
                 .unwrap()
                 .as_str();
-            let pattern = format!("/sys/class/nvme/nvme{}/nvme*n1/queue", major);
+            let pattern = format!("/sys/class/nvme/nvme{major}/nvme*n1/queue");
             let path = glob(&pattern)
                 .unwrap()
                 .next()
                 .ok_or_else(|| {
                     DeviceError::new(&format!(
-                        "failed to look up sysfs device directory \"{}\"",
-                        pattern,
+                        "failed to look up sysfs device directory \"{pattern}\"",
                     ))
                 })?
                 .map_err(|_| {
                     DeviceError::new(&format!(
-                        "IO error when reading device directory \"{}\"",
-                        pattern
+                        "IO error when reading device directory \"{pattern}\""
                     ))
                 })?;
             // If the timeout was higher than nexus's timeout then IOs could
@@ -314,6 +312,5 @@ pub(crate) fn volume_uuid_from_url(url: &Url) -> Result<Uuid, DeviceError> {
         return Err(DeviceError::new("invalid NQN"));
     }
 
-    extract_uuid(components[1])
-        .map_err(|error| DeviceError::from(format!("invalid UUID: {}", error)))
+    extract_uuid(components[1]).map_err(|error| DeviceError::from(format!("invalid UUID: {error}")))
 }

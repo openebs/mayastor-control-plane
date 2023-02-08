@@ -123,12 +123,12 @@ where
         OutputFormat::Yaml => {
             // Show the YAML form output if output format is YAML.
             let s = serde_yaml::to_string(&obj).unwrap();
-            println!("{}", s);
+            println!("{s}");
         }
         OutputFormat::Json => {
             // Show the JSON form output if output format is JSON.
             let s = serde_json::to_string(&obj).unwrap();
-            println!("{}", s);
+            println!("{s}");
         }
         OutputFormat::None => {
             // Show the tabular form if output format is not specified.

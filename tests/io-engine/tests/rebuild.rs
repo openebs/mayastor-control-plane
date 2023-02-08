@@ -21,7 +21,7 @@ async fn concurrent_rebuilds() {
 
     let cluster = ClusterBuilder::builder()
         .with_options(|o| {
-            o.with_io_engines(io_engines as u32)
+            o.with_io_engines(io_engines)
                 .with_isolated_io_engine(true)
                 .with_io_engine_env("NVME_QPAIR_CONNECT_ASYNC", "true")
                 .with_max_rebuilds(Some(nr_volumes))
@@ -170,8 +170,7 @@ async fn concurrent_rebuilds() {
                 assert_eq!(
                     online.len(),
                     volumes.len(),
-                    "Volumes not online within {:?}",
-                    timeout
+                    "Volumes not online within {timeout:?}"
                 );
             }
 
@@ -221,10 +220,8 @@ async fn loopback_nvmf() {
     assert_eq!(share_url.scheme(), "nvmf");
 
     let nx_api = cli.nexuses_api();
-    let malloc_uri = format!(
-        "malloc:///ch?size_mb={}&uuid=68e5fcf2-276a-4b29-8fb6-90bfa841297a",
-        repl_size_mb
-    );
+    let malloc_uri =
+        format!("malloc:///ch?size_mb={repl_size_mb}&uuid=68e5fcf2-276a-4b29-8fb6-90bfa841297a");
     let nexus = nx_api
         .put_node_nexus(
             cluster.node(0).as_str(),

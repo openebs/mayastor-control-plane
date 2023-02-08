@@ -93,7 +93,7 @@ mod tests {
                 .serve_with_shutdown("0.0.0.0:50011".parse().unwrap(), wait(shutdown_receiver))
                 .await
             {
-                panic!("gRPC server failed with error: {}", e);
+                panic!("gRPC server failed with error: {e}");
             }
         });
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -127,13 +127,13 @@ mod tests {
                 volume_id: "".to_string(),
             })
             .await;
-        println!("Second Request Status: {:?}", second_response);
+        println!("Second Request Status: {second_response:?}");
         // should fail because we've started to shutdown!
         assert_eq!(second_response.unwrap_err().code(), Code::Unknown);
 
         // 4. the initial request should complete gracefully
         let first_request_resp = first_request.await.unwrap();
-        println!("First Request Response: {:?}", first_request_resp);
+        println!("First Request Response: {first_request_resp:?}");
         assert_eq!(
             first_request_resp.unwrap().into_inner().volume_type,
             Some(VolumeType::Rawblock as i32)

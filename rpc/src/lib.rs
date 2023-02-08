@@ -396,11 +396,11 @@ pub mod io_engine {
                 }
                 attempts -= 1;
                 if attempts == 0 {
-                    return Err(format!("Failed to connect to {}/{}", name, endpoint));
+                    return Err(format!("Failed to connect to {name}/{endpoint}"));
                 }
             }
 
-            let endpoint_str = format!("http://{}", endpoint);
+            let endpoint_str = format!("http://{endpoint}");
             let channel = tonic::transport::Endpoint::new(endpoint_str)
                 .map_err(|e| e.to_string())?
                 .connect()

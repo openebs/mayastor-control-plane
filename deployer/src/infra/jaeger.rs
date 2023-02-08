@@ -26,12 +26,12 @@ impl ComponentAction for Jaeger {
                             .with_portmap("6831/udp", "6831/udp")
                             .with_portmap("6832/udp", "6832/udp");
                     if let Some(args) = tags.into_args() {
-                        image = image.with_arg(&format!("--collector.tags={}", args));
+                        image = image.with_arg(&format!("--collector.tags={args}"));
                     }
                     if collector.contains(':') {
                         image.with_args(vec!["--reporter.grpc.host-port", collector])
                     } else {
-                        image.with_arg(&format!("--reporter.grpc.host-port={}:14250", collector))
+                        image.with_arg(&format!("--reporter.grpc.host-port={collector}:14250"))
                     }
                 }
                 Some(collector) if !collector.is_empty() => {
@@ -41,12 +41,12 @@ impl ComponentAction for Jaeger {
                             .with_portmap("6831/udp", "6831/udp")
                             .with_portmap("6832/udp", "6832/udp");
                     if let Some(args) = tags.into_args() {
-                        image = image.with_arg(&format!("--agent.tags={}", args));
+                        image = image.with_arg(&format!("--agent.tags={args}"));
                     }
                     if collector.contains(':') {
                         image.with_args(vec!["--reporter.grpc.host-port", collector])
                     } else {
-                        image.with_arg(&format!("--reporter.grpc.host-port={}:14250", collector))
+                        image.with_arg(&format!("--reporter.grpc.host-port={collector}:14250"))
                     }
                 }
                 _ => {
@@ -57,7 +57,7 @@ impl ComponentAction for Jaeger {
                             .with_portmap("6831/udp", "6831/udp")
                             .with_portmap("6832/udp", "6832/udp");
                     if let Some(args) = tags.into_args() {
-                        image.with_arg(&format!("--collector.tags={}", args))
+                        image.with_arg(&format!("--collector.tags={args}"))
                     } else {
                         image
                     }

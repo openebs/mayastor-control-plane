@@ -215,7 +215,7 @@ async fn reservation() {
 
     let fio_cmd = fio_builder(&nexus_1_ip, nexus1.uuid.as_str());
     let (code, out) = cluster.composer().exec("fio-spdk", fio_cmd).await.unwrap();
-    assert_eq!(code, Some(1), "{}", out);
+    assert_eq!(code, Some(1), "{out}");
 }
 
 async fn wait_pool_state(

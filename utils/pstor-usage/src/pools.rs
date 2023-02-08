@@ -70,7 +70,7 @@ impl PoolMgr {
             file.set_len(self.size_bytes)?;
             Url::parse(&format!("aio://{}", container.to_string_lossy(),)).expect("Valid Url")
         } else {
-            Url::parse(&format!("malloc:///{}?size_mb={}", pool_id, size_mb)).expect("Valid Url")
+            Url::parse(&format!("malloc:///{pool_id}?size_mb={size_mb}")).expect("Valid Url")
         })
     }
 }

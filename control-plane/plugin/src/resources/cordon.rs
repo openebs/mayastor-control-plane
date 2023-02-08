@@ -23,7 +23,7 @@ impl Get for NodeCordon {
                 node_display_print_one(node.into_body(), output, NodeDisplayFormat::CordonLabels)
             }
             Err(e) => {
-                println!("Failed to get node {}. Error {}", id, e)
+                println!("Failed to get node {id}. Error {e}")
             }
         }
     }
@@ -53,7 +53,7 @@ impl List for NodeCordons {
                 node_display_print(filteredlist, output, NodeDisplayFormat::CordonLabels)
             }
             Err(e) => {
-                println!("Failed to list nodes. Error {}", e)
+                println!("Failed to list nodes. Error {e}")
             }
         }
     }

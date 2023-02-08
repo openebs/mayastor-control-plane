@@ -44,7 +44,7 @@ pub(crate) async fn healthy_nexus_children(
     )
     .await?;
 
-    nexus_spec.trace(&format!("Healthy nexus replicas: {:?}", children));
+    nexus_spec.trace(&format!("Healthy nexus replicas: {children:?}"));
 
     Ok(children)
 }

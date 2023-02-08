@@ -2,7 +2,7 @@ type BuildResult = Result<(), Box<dyn std::error::Error>>;
 
 fn main() -> BuildResult {
     let output = std::process::Command::new("bash")
-        .args(&["-c", "../../scripts/rust/branch_ancestor.sh"])
+        .args(["-c", "../../scripts/rust/branch_ancestor.sh"])
         .output()
         .expect("failed to execute bash command");
 

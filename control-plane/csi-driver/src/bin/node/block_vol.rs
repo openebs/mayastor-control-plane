@@ -68,11 +68,7 @@ pub(crate) async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Resu
                             return Err(Status::new(
                                 Code::Internal,
                                 format!(
-                                    "Failed to publish volume {}: found device {} mounted at {}, not {}",
-                                    volume_id,
-                                    fm_devpath,
-                                    target_path,
-                                    device_path)));
+                                    "Failed to publish volume {volume_id}: found device {fm_devpath} mounted at {target_path}, not {device_path}")));
                         }
                     }
                 }
@@ -80,8 +76,7 @@ pub(crate) async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Resu
                     return Err(Status::new(
                         Code::Internal,
                         format!(
-                            "Failed to publish volume {}: error whilst checking mount on {} : {}",
-                            volume_id, target_path, err
+                            "Failed to publish volume {volume_id}: error whilst checking mount on {target_path} : {err}"
                         ),
                     ));
                 }
@@ -89,7 +84,7 @@ pub(crate) async fn publish_block_volume(msg: &NodePublishVolumeRequest) -> Resu
         }
 
         if !path_target.exists() {
-            std::fs::File::create(&target_path)?;
+            std::fs::File::create(target_path)?;
         }
 
         if let Err(error) =
@@ -125,7 +120,7 @@ pub(crate) fn unpublish_block_volume(msg: &NodeUnpublishVolumeRequest) -> Result
             Err(err) => {
                 return Err(Status::new(
                     Code::Internal,
-                    format!("Failed to unpublish volume {}: {}", volume_id, err),
+                    format!("Failed to unpublish volume {volume_id}: {err}"),
                 ));
             }
         }

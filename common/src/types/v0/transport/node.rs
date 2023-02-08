@@ -222,7 +222,7 @@ impl FromStr for ApiVersion {
         match s.to_lowercase().as_str() {
             "v0" => Ok(Self::V0),
             "v1" => Ok(Self::V1),
-            _ => Err(format!("The api version: {} is not supported", s)),
+            _ => Err(format!("The api version: {s} is not supported")),
         }
     }
 }

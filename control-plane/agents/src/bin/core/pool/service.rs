@@ -141,11 +141,11 @@ impl Service {
             Filter::None => self.node_pools(None, None).await,
             Filter::Node(node_id) => self.node_pools(Some(node_id), None).await,
             Filter::NodePool(node_id, pool_id) => {
-                tracing::Span::current().record("pool.id", &pool_id.as_str());
+                tracing::Span::current().record("pool.id", pool_id.as_str());
                 self.node_pools(Some(node_id), Some(pool_id)).await
             }
             Filter::Pool(pool_id) => {
-                tracing::Span::current().record("pool.id", &pool_id.as_str());
+                tracing::Span::current().record("pool.id", pool_id.as_str());
                 self.node_pools(None, Some(pool_id)).await
             }
             _ => Err(SvcError::InvalidFilter { filter }),

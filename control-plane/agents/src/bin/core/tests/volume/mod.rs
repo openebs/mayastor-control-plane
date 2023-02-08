@@ -1028,7 +1028,7 @@ async fn offline_node(cluster: &Cluster) {
         .composer()
         .stop(kill_node.as_str())
         .await
-        .unwrap_or_else(|_| panic!("The {} container should stop", kill_node));
+        .unwrap_or_else(|_| panic!("The {kill_node} container should stop"));
     sleep(Duration::from_secs(2)).await;
 
     // Publish volume2
@@ -1055,7 +1055,7 @@ async fn offline_node(cluster: &Cluster) {
         .composer()
         .start(kill_node.as_str())
         .await
-        .unwrap_or_else(|_| panic!("The {} container should be starting", kill_node));
+        .unwrap_or_else(|_| panic!("The {kill_node} container should be starting"));
     sleep(Duration::from_secs(2)).await;
 
     // Unpublish volume2

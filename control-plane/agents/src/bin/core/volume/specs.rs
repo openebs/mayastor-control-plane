@@ -97,8 +97,7 @@ pub(crate) async fn volume_unused_replica_remove_candidates(
     .candidates();
 
     spec.trace(&format!(
-        "Unused Replica removal candidates for volume: {:?}",
-        candidates
+        "Unused Replica removal candidates for volume: {candidates:?}"
     ));
 
     Ok(candidates)
@@ -114,7 +113,7 @@ pub(crate) async fn nexus_child_remove_candidates(
         .await?
         .candidates();
 
-    nexus_spec.debug(&format!("Nexus Child removal candidates: {:?}", candidates));
+    nexus_spec.debug(&format!("Nexus Child removal candidates: {candidates:?}"));
 
     Ok(candidates)
 }
@@ -131,10 +130,7 @@ pub(crate) async fn nexus_attach_candidates(
         .await?
         .collect();
 
-    nexus_spec.debug(&format!(
-        "Nexus replica attach candidates: {:?}",
-        candidates
-    ));
+    nexus_spec.debug(&format!("Nexus replica attach candidates: {candidates:?}"));
 
     Ok(candidates)
 }
@@ -220,8 +216,7 @@ pub(crate) async fn healthy_volume_replicas(
     .await?;
 
     spec.trace(&format!(
-        "Healthy volume nexus replicas for volume: {:?}",
-        children
+        "Healthy volume nexus replicas for volume: {children:?}"
     ));
 
     if children.is_empty() {
@@ -244,8 +239,8 @@ impl ResourceSpecs {
     /// Get a subset of the volumes based on the pagination argument.
     pub(crate) fn paginated_volumes(&self, pagination: &Pagination) -> PaginatedResult<VolumeSpec> {
         let num_volumes = self.volumes.len() as u64;
-        let max_entries = pagination.max_entries() as u64;
-        let offset = std::cmp::min(pagination.starting_token() as u64, num_volumes);
+        let max_entries = pagination.max_entries();
+        let offset = std::cmp::min(pagination.starting_token(), num_volumes);
         let mut last_result = false;
         let length = match offset + max_entries >= num_volumes {
             true => {
@@ -1029,8 +1024,7 @@ impl ResourceSpecsLocked {
             {
                 Ok(_) => {
                     nexus_spec_clone.info(&format!(
-                        "Successfully removed child '{}' from nexus",
-                        child_uri,
+                        "Successfully removed child '{child_uri}' from nexus",
                     ));
                     nexus_replica_children -= 1;
                 }
@@ -1250,7 +1244,7 @@ impl SpecOperationsHelper for VolumeSpec {
                 VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
                     kind: ResourceKind::Volume,
                     id: self.uuid_str(),
-                    share: format!("{:?}", protocol),
+                    share: format!("{protocol:?}"),
                 }),
             },
             VolumeOperation::Unshare => match self.target() {

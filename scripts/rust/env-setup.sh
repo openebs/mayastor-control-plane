@@ -5,7 +5,8 @@
 # these are provided by the shellHook
 dev_rustup=${dev_rustup:-}
 devrustup_moth=${devrustup_moth:-}
-rustup_channel=${rustup_channel:-}
+rust_version=${rust_version:-}
+rustup_channel=${rustup_channel:-$rust_version}
 
 if [ -z "$CI" ]; then
   if ! diff -r --exclude Cargo.lock "$RUST_TOOLCHAIN" "$RUST_TOOLCHAIN_NIX" &>/dev/null; then
@@ -52,7 +53,7 @@ components = [ "rust-src" ]
 EOF
     fi
     if ! rustup toolchain list | grep "$rustup_channel" >/dev/null; then
-      rustup toolchain install "$rustup_channel"
+      rustup toolchain install "$rustup_channel" -c rust-src
     fi
   elif [ -n "$USE_NIX_RUST" ]; then
     export PATH=$RUST_TOOLCHAIN/bin:$PATH

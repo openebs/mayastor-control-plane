@@ -1,12 +1,16 @@
 { pkgs, lib, stdenv, fetchFromGitHub, maven, jdk, jre, makeWrapper }:
 
 let
-  src = fetchFromGitHub (lib.importJSON ./source.json);
+  src_json = lib.importJSON ./source.json;
+  src = fetchFromGitHub {
+    name = "${src_json.repo}-${src_json.rev}-src";
+    inherit (src_json) owner repo rev hash;
+  };
   version = "6.1.0-${src.rev}";
 
   # perform fake build to make a fixed-output derivation out of the files downloaded from maven central
   deps = stdenv.mkDerivation {
-    name = "openapi-generator-${version}-deps";
+    pname = "openapi-generator-deps";
     inherit version;
     inherit src;
     nativeBuildInputs = [ jdk maven ];

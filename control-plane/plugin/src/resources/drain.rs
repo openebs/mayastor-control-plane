@@ -21,7 +21,7 @@ impl Get for NodeDrain {
         match RestClient::client().nodes_api().get_node(id).await {
             Ok(node) => node_display_print_one(node.into_body(), output, NodeDisplayFormat::Drain),
             Err(e) => {
-                println!("Failed to get node {}. Error {}", id, e)
+                println!("Failed to get node {id}. Error {e}")
             }
         }
     }
@@ -51,7 +51,7 @@ impl List for NodeDrains {
                 node_display_print(filteredlist, output, NodeDisplayFormat::Drain);
             }
             Err(e) => {
-                println!("Failed to list nodes. Error {}", e)
+                println!("Failed to list nodes. Error {e}")
             }
         }
     }

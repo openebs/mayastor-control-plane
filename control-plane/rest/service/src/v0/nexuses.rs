@@ -137,7 +137,7 @@ pub fn nexus(nexus_id: Option<String>, nexus: Option<&Nexus>) -> Result<Nexus, R
             source: "Requested nexus was not found".to_string(),
             extra: match nexus_id {
                 None => "".to_string(),
-                Some(id) => format!("Nexus id : {}", id),
+                Some(id) => format!("Nexus id : {id}"),
             },
         }),
     }

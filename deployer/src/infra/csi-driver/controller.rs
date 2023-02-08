@@ -22,7 +22,7 @@ impl ComponentAction for CsiController {
         } else {
             if options.build {
                 std::process::Command::new("cargo")
-                    .args(&["build", "-p", "csi-driver", "--bin", "csi-controller"])
+                    .args(["build", "-p", "csi-driver", "--bin", "csi-controller"])
                     .status()?;
             }
 

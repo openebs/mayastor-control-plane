@@ -14,9 +14,9 @@ impl ComponentAction for JsonGrpcAgent {
         let name = "jsongrpc";
         if options.build {
             let status = std::process::Command::new("cargo")
-                .args(&["build", "-p", "agents", "--bin", name])
+                .args(["build", "-p", "agents", "--bin", name])
                 .status()?;
-            build_error(&format!("the {} agent", name), status.code())?;
+            build_error(&format!("the {name} agent"), status.code())?;
         }
         let mut binary = Binary::from_dbg(name);
 
@@ -37,7 +37,7 @@ impl ComponentAction for JsonGrpcAgent {
     }
     async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         let ip = cfg.container_ip("jsongrpc");
-        let uri = tonic::transport::Uri::from_str(&format!("https://{}:50052", ip)).unwrap();
+        let uri = tonic::transport::Uri::from_str(&format!("https://{ip}:50052")).unwrap();
         let timeout = grpc::context::TimeoutOptions::new()
             .with_req_timeout(std::time::Duration::from_millis(5));
         let json_grpc = JsonGrpcClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;

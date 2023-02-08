@@ -251,8 +251,7 @@ impl TryFrom<HttpTarget> for hyper::Uri {
         let scheme = value.scheme;
 
         hyper::Uri::try_from(format!(
-            "/api/v1/namespaces/{}/{}/{}:{}:{}/proxy",
-            namespace, resource, scheme, name, port
+            "/api/v1/namespaces/{namespace}/{resource}/{scheme}:{name}:{port}/proxy"
         ))
     }
 }

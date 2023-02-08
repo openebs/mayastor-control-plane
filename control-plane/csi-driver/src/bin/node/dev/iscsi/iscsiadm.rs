@@ -19,7 +19,7 @@ impl IscsiAdmin {
 
         trace!("iscsiadm {:?}", &ARGS);
 
-        let output = Command::new(iscsiadm).args(&ARGS).output()?;
+        let output = Command::new(iscsiadm).args(ARGS).output()?;
 
         if output.status.success() {
             return Ok(IscsiAdmin::find_target(portal, iqn, output.stdout));
@@ -51,14 +51,14 @@ impl IscsiAdmin {
 
         trace!("iscsiadm {:?}", &args);
 
-        let output = Command::new(iscsiadm).args(&args).output()?;
+        let output = Command::new(iscsiadm).args(args).output()?;
 
         if output.status.success() {
             if IscsiAdmin::find_target(portal, iqn, output.stdout) {
                 return Ok(());
             }
 
-            return Err(DeviceError::from(format!("no record for target {}", iqn)));
+            return Err(DeviceError::from(format!("no record for target {iqn}")));
         }
 
         Err(DeviceError::from(String::from_utf8(output.stderr).unwrap()))

@@ -46,7 +46,7 @@ fn target_protocol(target: &openapi::models::Nexus) -> Option<openapi::models::P
 // Volume.
 impl GetHeaderRow for openapi::models::Volume {
     fn get_header_row(&self) -> Row {
-        (&*utils::VOLUME_HEADERS).clone()
+        (*utils::VOLUME_HEADERS).clone()
     }
 }
 
@@ -82,7 +82,7 @@ async fn get_paginated_volumes() -> Option<Vec<openapi::models::Volume>> {
                 starting_token = v.next_token;
             }
             Err(e) => {
-                println!("Failed to list volumes. Error {}", e);
+                println!("Failed to list volumes. Error {e}");
                 return None;
             }
         }
@@ -105,7 +105,7 @@ impl Get for Volume {
                 utils::print_table(output, volume.into_body());
             }
             Err(e) => {
-                println!("Failed to get volume {}. Error {}", id, e)
+                println!("Failed to get volume {id}. Error {e}")
             }
         }
     }
@@ -127,11 +127,11 @@ impl Scale for Volume {
                 }
                 OutputFormat::None => {
                     // In case the output format is not specified, show a success message.
-                    println!("Volume {} scaled successfully 🚀", id)
+                    println!("Volume {id} scaled successfully 🚀")
                 }
             },
             Err(e) => {
-                println!("Failed to scale volume {}. Error {}", id, e)
+                println!("Failed to scale volume {id}. Error {e}")
             }
         }
     }
@@ -147,7 +147,7 @@ impl ReplicaTopology for Volume {
                 utils::print_table(output, volume.into_body().state.replica_topology);
             }
             Err(e) => {
-                println!("Failed to get volume {}. Error {}", id, e)
+                println!("Failed to get volume {id}. Error {e}")
             }
         }
     }
@@ -155,7 +155,7 @@ impl ReplicaTopology for Volume {
 
 impl GetHeaderRow for HashMap<String, openapi::models::ReplicaTopology> {
     fn get_header_row(&self) -> Row {
-        (&*utils::REPLICA_TOPOLOGY_HEADERS).clone()
+        (*utils::REPLICA_TOPOLOGY_HEADERS).clone()
     }
 }
 

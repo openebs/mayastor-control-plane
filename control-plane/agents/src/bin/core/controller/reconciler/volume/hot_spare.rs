@@ -284,9 +284,9 @@ async fn volume_replica_count_reconciler_traced(
                     current_replica_count += result.len();
                     let replicas = result.iter().fold(String::new(), |acc, replica| {
                         if acc.is_empty() {
-                            format!("{}", replica)
+                            format!("{replica}")
                         } else {
-                            format!("{},{}", acc, replica)
+                            format!("{acc},{replica}")
                         }
                     });
 

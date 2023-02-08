@@ -73,9 +73,9 @@ impl Config {
     pub(crate) fn parse_config(path: &OsStr) -> Result<Config, OsString> {
         let path = std::path::PathBuf::from(path);
         let content =
-            std::fs::read(path).map_err(|e| format!("Failed to read config file: {}", e))?;
+            std::fs::read(path).map_err(|e| format!("Failed to read config file: {e}"))?;
         Ok(serde_yaml::from_slice(&content)
-            .map_err(|e| format!("Invalid config file format: {}", e))?)
+            .map_err(|e| format!("Invalid config file format: {e}"))?)
     }
     /// Get the cluster with the provided name.
     pub(crate) fn cluster(&self, name: &ClusterName) -> Option<&ClusterConfig> {

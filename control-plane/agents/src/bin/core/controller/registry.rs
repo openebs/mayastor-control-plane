@@ -150,7 +150,7 @@ impl Registry {
                 config
             },
             Err(error) => panic!(
-                "Must be able to access the persistent store to load configuration information. Got error: '{:#?}'", error
+                "Must be able to access the persistent store to load configuration information. Got error: '{error:#?}'"
             ),
         }
     }
@@ -308,10 +308,7 @@ impl Registry {
                 // we may be busy or waiting on node information being fetched.
                 let nodes = self.nodes().read().await.clone();
 
-                let polled = nodes
-                    .into_iter()
-                    .map(|(_, node)| Self::poll_node(node))
-                    .collect::<Vec<_>>();
+                let polled = nodes.into_values().map(Self::poll_node).collect::<Vec<_>>();
 
                 // Polls all nodes "concurrently".
                 // This means we still have to wait for all of them, would it be better to have

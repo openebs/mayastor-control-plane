@@ -54,6 +54,10 @@ impl FrontendConfig {
     pub fn node_names(&self) -> Vec<String> {
         self.host_acl.iter().map(|h| h.node_name.clone()).collect()
     }
+    /// Get the first node name.
+    pub fn node_name(&self) -> Option<String> {
+        self.host_acl.first().map(|h| h.node_name.clone())
+    }
     /// Get the hostnqn's for the acl.
     pub fn node_nqns(&self) -> Vec<HostNqn> {
         self.host_acl.iter().map(|h| h.node_nqn.clone()).collect()

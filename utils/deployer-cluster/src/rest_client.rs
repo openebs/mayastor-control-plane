@@ -25,7 +25,7 @@ impl RestClient {
             "https" => Self::new_https(url, timeout, bearer_token, trace),
             "http" => Self::new_http(url, timeout, bearer_token, trace),
             invalid => {
-                let msg = format!("Invalid url scheme: {}", invalid);
+                let msg = format!("Invalid url scheme: {invalid}");
                 Err(anyhow::Error::msg(msg))
             }
         }

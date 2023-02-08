@@ -116,7 +116,7 @@ impl SpecOperationsHelper for NexusSpec {
         self.owner.is_some()
     }
     fn owners(&self) -> Option<String> {
-        self.owner.clone().map(|o| format!("{:?}", o))
+        self.owner.clone().map(|o| format!("{o:?}"))
     }
     fn disown(&mut self, owner: &Self::Owners) {
         if owner.disown_all() || self.owner.as_ref() == owner.volume() {

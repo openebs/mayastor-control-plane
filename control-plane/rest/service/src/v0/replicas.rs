@@ -309,7 +309,7 @@ fn replica(replica_id: String, replica: Option<&Replica>) -> Result<Replica, Rep
             kind: ReplyErrorKind::NotFound,
             resource: ResourceKind::Replica,
             source: "Requested replica was not found".to_string(),
-            extra: format!("Replica id : {}", replica_id),
+            extra: format!("Replica id : {replica_id}"),
         }),
     }
 }

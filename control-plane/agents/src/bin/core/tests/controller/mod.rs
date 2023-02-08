@@ -105,7 +105,7 @@ async fn store_lease_lock() {
     tracing::info!("EtcdLeaseOwnerKey: {:?}", obj);
     assert_eq!(
         obj.lease_id(),
-        format!("{:x}", lease_id),
+        format!("{lease_id:x}"),
         "Lease should be the same!"
     );
 
@@ -147,7 +147,7 @@ async fn core_agent_lease_lock() {
     tracing::info!("EtcdLeaseOwnerKey: {:?}", obj);
     assert_eq!(
         obj.lease_id(),
-        format!("{:x}", lease_id),
+        format!("{lease_id:x}"),
         "Lease should be the same!"
     );
 

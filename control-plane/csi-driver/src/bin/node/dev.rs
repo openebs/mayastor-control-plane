@@ -77,8 +77,7 @@ impl Device {
             "nvmf" => Ok(Box::new(nvmf::NvmfAttach::try_from(&url)?)),
             "nbd" => Ok(Box::new(nbd::Nbd::try_from(&url)?)),
             scheme => Err(DeviceError::from(format!(
-                "unsupported device scheme: {}",
-                scheme
+                "unsupported device scheme: {scheme}"
             ))),
         }
     }
@@ -86,7 +85,7 @@ impl Device {
     /// Lookup an existing device in udev matching the given UUID
     /// to obtain a device implementing the Detach trait.
     pub(crate) async fn lookup(uuid: &Uuid) -> Result<Option<Box<dyn Detach>>, DeviceError> {
-        let nvmf_key: String = format!("uuid.{}", uuid);
+        let nvmf_key: String = format!("uuid.{uuid}");
 
         let mut enumerator = Enumerator::new()?;
 
@@ -106,9 +105,9 @@ impl Device {
 
             if let Some(devname) = match_dev::match_nvmf_device(&device, &nvmf_key) {
                 let nqn = if std::env::var("MOAC").is_ok() {
-                    format!("{}:nexus-{}", NVME_NQN_PREFIX, uuid)
+                    format!("{NVME_NQN_PREFIX}:nexus-{uuid}")
                 } else {
-                    format!("{}:{}", NVME_NQN_PREFIX, uuid)
+                    format!("{NVME_NQN_PREFIX}:{uuid}")
                 };
                 return Ok(Some(Box::new(nvmf::NvmfDetach::new(
                     devname.to_string(),

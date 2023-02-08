@@ -8,11 +8,11 @@ fn rust_log_add_quiet_defaults(
 ) -> tracing_subscriber::EnvFilter {
     let main = match current {
         None => {
-            format!("info,{}", RUST_LOG_SILENCE_DEFAULTS)
+            format!("info,{RUST_LOG_SILENCE_DEFAULTS}")
         }
         Some(level) => match level.to_string().as_str() {
             "debug" | "trace" => {
-                format!("{},{}", level, RUST_LOG_SILENCE_DEFAULTS)
+                format!("{level},{RUST_LOG_SILENCE_DEFAULTS}")
             }
             _ => return level,
         },

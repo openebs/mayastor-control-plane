@@ -144,7 +144,7 @@ impl EtcdSingletonLock {
         )
         .await
         .map_err(|_| StoreError::Timeout {
-            operation: format!("etcd lock '{}'", lock_owner_key_prefix),
+            operation: format!("etcd lock '{lock_owner_key_prefix}'"),
             timeout: lease_ttl,
         })?
         .map_err(|e| StoreError::FailedLock {
@@ -153,7 +153,7 @@ impl EtcdSingletonLock {
 
         let lock_key =
             String::from_utf8(lock_resp.key().to_vec()).map_err(|e| StoreError::FailedLock {
-                reason: format!("Invalid etcd lock key, error: '{}'", e),
+                reason: format!("Invalid etcd lock key, error: '{e}'"),
             })?;
         let lease_id = lease_resp.id();
 
@@ -322,7 +322,7 @@ impl LeaseKeeperState {
 }
 impl std::fmt::Display for LeaseKeeperState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 #[derive(Debug)]

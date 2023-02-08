@@ -323,7 +323,7 @@ impl KeyValues {
                 if !arg_start.is_empty() {
                     arg_start.push(',');
                 }
-                let _ = write!(arg_start, "{}={}", k, v);
+                let _ = write!(arg_start, "{k}={v}");
             });
             Some(arg_start)
         } else {
@@ -438,7 +438,7 @@ impl StartOptions {
     }
     #[must_use]
     pub fn with_cluster_name(mut self, cluster_name: &str) -> Self {
-        self.cluster_label = format!(".{}", cluster_name).parse().unwrap();
+        self.cluster_label = format!(".{cluster_name}").parse().unwrap();
         self
     }
     #[must_use]
@@ -606,7 +606,7 @@ impl ListOptions {
         }
         components.sort_by_key(|a| a.0.clone());
         for (name, ip, command) in components {
-            println!("[{}] [{}] {}", name, ip, command,);
+            println!("[{name}] [{ip}] {command}",);
         }
         Ok(())
     }
@@ -665,6 +665,6 @@ impl std::fmt::Display for ClusterLabel {
 }
 impl std::fmt::Debug for ClusterLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }

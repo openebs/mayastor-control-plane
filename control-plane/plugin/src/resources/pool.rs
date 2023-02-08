@@ -53,7 +53,7 @@ impl CreateRows for openapi::models::Pool {
 // Pool.
 impl GetHeaderRow for openapi::models::Pool {
     fn get_header_row(&self) -> Row {
-        (&*utils::POOLS_HEADERS).clone()
+        (*utils::POOLS_HEADERS).clone()
     }
 }
 
@@ -66,7 +66,7 @@ impl List for Pools {
                 utils::print_table(output, pools.into_body());
             }
             Err(e) => {
-                println!("Failed to list pools. Error {}", e)
+                println!("Failed to list pools. Error {e}")
             }
         }
     }
@@ -86,7 +86,7 @@ impl Get for Pool {
                 utils::print_table(output, pool.into_body());
             }
             Err(e) => {
-                println!("Failed to get pool {}. Error {}", id, e)
+                println!("Failed to get pool {id}. Error {e}")
             }
         }
     }

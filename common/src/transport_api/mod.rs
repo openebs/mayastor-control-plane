@@ -34,10 +34,10 @@ where
     /// loops through the error chain and formats into a single string
     /// containing all the lower level errors
     fn full_string(&self) -> String {
-        let mut msg = format!("{}", self);
+        let mut msg = format!("{self}");
         let mut opt_source = self.source();
         while let Some(source) = opt_source {
-            msg = format!("{}: {}", msg, source);
+            msg = format!("{msg}: {source}");
             opt_source = source.source();
         }
         msg
@@ -71,7 +71,7 @@ impl<'de> Deserialize<'de> for MessageId {
         match string.parse() {
             Ok(id) => Ok(id),
             Err(error) => {
-                let error = format!("Failed to parse into MessageId, error: {}", error);
+                let error = format!("Failed to parse into MessageId, error: {error}");
                 Err(serde::de::Error::custom(error))
             }
         }
@@ -159,11 +159,7 @@ pub struct ReplyError {
 
 impl From<HostNqnParseError> for ReplyError {
     fn from(error: HostNqnParseError) -> Self {
-        Self::invalid_argument(
-            ResourceKind::Unknown,
-            "allowed_host",
-            format!("{:?}", error),
-        )
+        Self::invalid_argument(ResourceKind::Unknown, "allowed_host", format!("{error:?}"))
     }
 }
 
@@ -265,7 +261,7 @@ impl ReplyError {
             kind: ReplyErrorKind::InvalidArgument,
             resource,
             source: error,
-            extra: format!("Invalid {} was provided", arg_name),
+            extra: format!("Invalid {arg_name} was provided"),
         }
     }
     /// Used when we encounter a missing argument.
@@ -274,7 +270,7 @@ impl ReplyError {
             kind: ReplyErrorKind::InvalidArgument,
             resource,
             source: arg_name.to_string(),
-            extra: format!("Argument {} was not provided", arg_name),
+            extra: format!("Argument {arg_name} was not provided"),
         }
     }
     /// For errors that can occur when serializing or deserializing JSON data.

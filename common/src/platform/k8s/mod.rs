@@ -12,7 +12,7 @@ impl K8s {
     pub(super) async fn new() -> Result<Self, PlatformError> {
         let client = Client::try_default()
             .await
-            .map_err(|e| format!("Can't connect to k8s api-server: {}", e))?;
+            .map_err(|e| format!("Can't connect to k8s api-server: {e}"))?;
         let platform_uuid = Self::fetch_platform_uuid(client).await?;
         Ok(Self { platform_uuid })
     }
@@ -26,7 +26,7 @@ impl K8s {
         let ns = namespaces
             .get("kube-system")
             .await
-            .map_err(|e| format!("Failed to get kube-system namespace: {}", e))?;
+            .map_err(|e| format!("Failed to get kube-system namespace: {e}"))?;
 
         match &ns.meta().uid {
             None => Err("The kube-system namespace has no UID".to_string()),

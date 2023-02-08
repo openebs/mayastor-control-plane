@@ -59,7 +59,7 @@ impl CreateRows for openapi::models::Node {
 // Node.
 impl GetHeaderRow for openapi::models::Node {
     fn get_header_row(&self) -> Row {
-        (&*utils::NODE_HEADERS).clone()
+        (*utils::NODE_HEADERS).clone()
     }
 }
 
@@ -72,7 +72,7 @@ impl List for Nodes {
                 utils::print_table(output, nodes.into_body());
             }
             Err(e) => {
-                println!("Failed to list nodes. Error {}", e)
+                println!("Failed to list nodes. Error {e}")
             }
         }
     }
@@ -92,7 +92,7 @@ impl Get for Node {
                 utils::print_table(output, node.into_body());
             }
             Err(e) => {
-                println!("Failed to get node {}. Error {}", id, e)
+                println!("Failed to get node {id}. Error {e}")
             }
         }
     }
@@ -130,13 +130,13 @@ impl Cordoning for Node {
                             None => false,
                         },
                         None => {
-                            println!("Node {} is not registered", id);
+                            println!("Node {id} is not registered");
                             return;
                         }
                     }
                 }
                 Err(e) => {
-                    println!("Failed to get node {}. Error {}", id, e);
+                    println!("Failed to get node {id}. Error {e}");
                     return;
                 }
             };
@@ -157,11 +157,11 @@ impl Cordoning for Node {
                 }
                 OutputFormat::None => {
                     // In case the output format is not specified, show a success message.
-                    println!("Node {} cordoned successfully", id)
+                    println!("Node {id} cordoned successfully")
                 }
             },
             Err(e) => {
-                println!("Failed to cordon node {}. Error {}", id, e)
+                println!("Failed to cordon node {id}. Error {e}")
             }
         }
     }
@@ -182,28 +182,29 @@ impl Cordoning for Node {
                     let mut cordon_labels: Vec<String> = vec![];
                     let mut drain_labels: Vec<String> = vec![];
                     match node.into_body().spec {
-                        Some(spec) => match spec.cordondrainstate {
-                            Some(cds) => {
+                        Some(spec) => {
+                            if let Some(cds) = spec.cordondrainstate {
                                 cordon_labels = cordon_labels_from_state(&cds);
                                 drain_labels = drain_labels_from_state(&cds);
                             }
-                            None => {}
-                        },
-                        None => println!("Error: Node {} has no spec", id), /* shouldn't happen */
+                        }
+                        /* shouldn't happen */
+                        None => {
+                            println!("Error: Node {id} has no spec");
+                        }
                     }
                     let labels = [cordon_labels, drain_labels].concat();
                     if labels.is_empty() {
-                        println!("Node {} successfully uncordoned", id);
+                        println!("Node {id} successfully uncordoned");
                     } else {
                         println!(
-                            "Cordon label successfully removed. Remaining cordon labels {:?}",
-                            labels,
+                            "Cordon label successfully removed. Remaining cordon labels {labels:?}",
                         );
                     }
                 }
             },
             Err(e) => {
-                println!("Failed to uncordon node {}. Error {}", id, e)
+                println!("Failed to uncordon node {id}. Error {e}")
             }
         }
     }
@@ -350,7 +351,7 @@ pub(crate) fn node_display_print_one(
 // Create the header for a `NodeDisplay` object.
 impl GetHeaderRow for NodeDisplay {
     fn get_header_row(&self) -> Row {
-        let mut header = (&*utils::NODE_HEADERS).clone();
+        let mut header = (*utils::NODE_HEADERS).clone();
         match self.format {
             NodeDisplayFormat::Default => header,
             NodeDisplayFormat::CordonLabels => {
@@ -415,13 +416,13 @@ impl Drain for Node {
                             None => false,
                         },
                         None => {
-                            println!("Node {} is not registered", id);
+                            println!("Node {id} is not registered");
                             return;
                         }
                     }
                 }
                 Err(e) => {
-                    println!("Failed to get node {}. Error {}", id, e);
+                    println!("Failed to get node {id}. Error {e}");
                     return;
                 }
             };
@@ -431,7 +432,7 @@ impl Drain for Node {
                 .put_node_drain(id, &label)
                 .await
             {
-                println!("Failed to put node drain {}. Error {}", id, error);
+                println!("Failed to put node drain {id}. Error {error}");
                 return;
             }
         }
@@ -447,7 +448,7 @@ impl Drain for Node {
                                     CordonDrainState::cordonedstate(_) => {
                                         match output {
                                             OutputFormat::None => {
-                                                println!("Node {} drain has been cancelled", id);
+                                                println!("Node {id} drain has been cancelled");
                                             }
                                             _ => {
                                                 // json or yaml
@@ -460,7 +461,7 @@ impl Drain for Node {
                                     CordonDrainState::drainedstate(_) => {
                                         match output {
                                             OutputFormat::None => {
-                                                println!("Node {} successfully drained", id);
+                                                println!("Node {id} successfully drained");
                                             }
                                             _ => {
                                                 // json or yaml
@@ -473,7 +474,7 @@ impl Drain for Node {
                                 None => {
                                     match output {
                                         OutputFormat::None => {
-                                            println!("Node {} drain has been cancelled", id);
+                                            println!("Node {id} drain has been cancelled");
                                         }
                                         _ => {
                                             // json or yaml
@@ -485,18 +486,18 @@ impl Drain for Node {
                             }
                         }
                         None => {
-                            println!("Node {} is not registered", id);
+                            println!("Node {id} is not registered");
                             break;
                         }
                     }
                 }
                 Err(e) => {
-                    println!("Failed to get node {}. Error {}", id, e);
+                    println!("Failed to get node {id}. Error {e}");
                     break;
                 }
             }
             if timeout_instant.is_some() && time::Instant::now() > timeout_instant.unwrap() {
-                println!("Node {} drain command timed out", id);
+                println!("Node {id} drain command timed out");
                 break;
             }
             let sleep = Duration::from_secs(2);

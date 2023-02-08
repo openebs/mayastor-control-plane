@@ -14,8 +14,7 @@ pub fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, ton
     match proto.map(|s| s.as_str()) {
         None | Some("nvmf") => Ok(VolumeShareProtocol::Nvmf),
         _ => Err(tonic::Status::invalid_argument(format!(
-            "Invalid protocol: {:?}",
-            proto
+            "Invalid protocol: {proto:?}"
         ))),
     }
 }

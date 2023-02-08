@@ -329,13 +329,13 @@ impl From<SvcError> for ReplyError {
                 kind: ReplyErrorKind::InUse,
                 resource: kind,
                 source: desc.to_string(),
-                extra: format!("id: {}", id),
+                extra: format!("id: {id}"),
             },
             SvcError::AlreadyExists { kind, id } => ReplyError {
                 kind: ReplyErrorKind::AlreadyExists,
                 resource: kind,
                 source: desc.to_string(),
-                extra: format!("id: {}", id),
+                extra: format!("id: {id}"),
             },
             SvcError::NotReady { ref kind, .. } => ReplyError {
                 kind: ReplyErrorKind::Unavailable,
@@ -719,7 +719,7 @@ fn grpc_to_reply_error(error: SvcError) -> ReplyError {
                 Code::DataLoss => ReplyErrorKind::Internal,
                 Code::Unauthenticated => ReplyErrorKind::Unauthenticated,
             };
-            let extra = format!("{}::{}", request, source);
+            let extra = format!("{request}::{source}");
             ReplyError {
                 kind,
                 resource,

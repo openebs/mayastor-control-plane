@@ -297,8 +297,7 @@ impl PathFailureDetector {
                         )
                     }
                     None => NvmePathCacheCommandResponse::Nack(format!(
-                        "No NVMe cache record for NQN {}",
-                        nqn
+                        "No NVMe cache record for NQN {nqn}"
                     )),
                 }
             }
@@ -372,8 +371,7 @@ impl NvmePathCache {
         match rx.recv().await {
             Some(NvmePathCacheCommandResponse::CachedNvmeControllers(ctrlr)) => Ok(ctrlr),
             _ => Err(anyhow::Error::msg(format!(
-                "Can't find Nvme controller for NQN: {}",
-                nqn
+                "Can't find Nvme controller for NQN: {nqn}"
             ))),
         }
     }

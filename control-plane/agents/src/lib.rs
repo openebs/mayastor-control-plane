@@ -130,10 +130,7 @@ impl<L> Service<L> {
         let type_name = std::any::type_name::<T>();
         tracing::debug!("Adding shared type: {}", type_name);
         if !self.shared_state.set(state) {
-            panic!(
-                "Shared state for type '{}' has already been set!",
-                type_name
-            );
+            panic!("Shared state for type '{type_name}' has already been set!");
         }
         self
     }
@@ -143,10 +140,8 @@ impl<L> Service<L> {
             Some(state) => state,
             None => {
                 let type_name = std::any::type_name::<T>();
-                let error_msg = format!(
-                    "Requested data type '{}' not shared via with_shared_data",
-                    type_name
-                );
+                let error_msg =
+                    format!("Requested data type '{type_name}' not shared via with_shared_data");
                 panic!("{}", error_msg);
             }
         }

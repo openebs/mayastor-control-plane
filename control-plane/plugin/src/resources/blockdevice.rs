@@ -67,7 +67,7 @@ impl CreateRows for BlockDeviceAll {
             self.0
                 .devlinks
                 .iter()
-                .map(|s| format!("\"{}\"", s))
+                .map(|s| format!("\"{s}\""))
                 .collect::<Vec<String>>()
                 .join(", "),
         ]]
@@ -90,7 +90,7 @@ impl CreateRows for BlockDeviceUsable {
             self.0
                 .devlinks
                 .iter()
-                .map(|s| format!("\"{}\"", s))
+                .map(|s| format!("\"{s}\""))
                 .collect::<Vec<String>>()
                 .join(", "),
         ]]
@@ -108,7 +108,7 @@ fn get_partition_type(partition: &openapi::models::BlockDevicePartition) -> Stri
 // BD returned from REST call with all set to true.
 impl GetHeaderRow for BlockDeviceAll {
     fn get_header_row(&self) -> Row {
-        (&*BLOCKDEVICE_HEADERS_ALL).clone()
+        (*BLOCKDEVICE_HEADERS_ALL).clone()
     }
 }
 
@@ -116,7 +116,7 @@ impl GetHeaderRow for BlockDeviceAll {
 // BD returned from REST call with all set to false.
 impl GetHeaderRow for BlockDeviceUsable {
     fn get_header_row(&self) -> Row {
-        (&*BLOCKDEVICE_HEADERS_USABLE).clone()
+        (*BLOCKDEVICE_HEADERS_USABLE).clone()
     }
 }
 
@@ -139,7 +139,7 @@ impl GetBlockDevices for BlockDevice {
                 }
             }
             Err(e) => {
-                println!("Failed to list blockdevices for node {} . Error {}", id, e);
+                println!("Failed to list blockdevices for node {id} . Error {e}");
                 return;
             }
         }
@@ -168,7 +168,7 @@ impl GetBlockDevices for BlockDevice {
                 };
             }
             Err(e) => {
-                println!("Failed to list blockdevices for node {} . Error {}", id, e)
+                println!("Failed to list blockdevices for node {id} . Error {e}")
             }
         }
     }

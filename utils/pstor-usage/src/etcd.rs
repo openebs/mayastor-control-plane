@@ -34,15 +34,15 @@ impl Etcd {
             if kilos > 100 {
                 megas += 1;
             }
-            format!("{} MiB", megas)
+            format!("{megas} MiB")
         } else if bytes > mega {
             let megas = bytes / mega;
             let kilos = (bytes - (megas * mega)) / kilo;
-            format!("{} MiB {} KiB", megas, kilos)
+            format!("{megas} MiB {kilos} KiB")
         } else if bytes > kilo {
             format!("{} KiB", bytes / kilo)
         } else {
-            format!("{} B", bytes)
+            format!("{bytes} B")
         }
     }
 }

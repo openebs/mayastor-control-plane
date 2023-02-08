@@ -94,8 +94,7 @@ impl CsiServer {
             Err(err) => {
                 if err.kind() != ErrorKind::NotFound {
                     return Err(format!(
-                        "Error removing stale CSI socket {}: {}",
-                        csi_socket, err
+                        "Error removing stale CSI socket {csi_socket}: {err}"
                     ));
                 }
             }

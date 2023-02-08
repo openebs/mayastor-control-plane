@@ -107,7 +107,7 @@ pub fn pool(pool_id: String, pool: Option<&Pool>) -> Result<Pool, ReplyError> {
             kind: ReplyErrorKind::NotFound,
             resource: ResourceKind::Pool,
             source: "Requested pool was not found".to_string(),
-            extra: format!("Pool id : {}", pool_id),
+            extra: format!("Pool id : {pool_id}"),
         }),
     }
 }
