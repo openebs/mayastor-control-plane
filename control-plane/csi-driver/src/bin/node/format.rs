@@ -7,11 +7,11 @@ use tracing::{debug, trace};
 pub(crate) async fn prepare_device(device: &str, fstype: &str) -> Result<(), String> {
     debug!("Probing device {}", device);
 
-    let probe = Probe::new_from_filename(device)
-        .map_err(|error| format!("probe setup failed: {}", error))?;
+    let probe =
+        Probe::new_from_filename(device).map_err(|error| format!("probe setup failed: {error}"))?;
 
     if let Err(error) = probe.do_probe() {
-        return Err(format!("probe failed: {}", error));
+        return Err(format!("probe failed: {error}"));
     }
 
     if let Ok(fs) = probe.lookup_value("TYPE") {
@@ -21,11 +21,11 @@ pub(crate) async fn prepare_device(device: &str, fstype: &str) -> Result<(), Str
 
     debug!("Creating new filesystem ({}) on device {}", fstype, device);
 
-    let binary = format!("mkfs.{}", fstype);
+    let binary = format!("mkfs.{fstype}");
     let output = Command::new(&binary)
         .arg(device)
         .output()
-        .map_err(|error| format!("failed to execute {}: {}", binary, error))?;
+        .map_err(|error| format!("failed to execute {binary}: {error}"))?;
 
     trace!(
         "Output from {} command: {}",

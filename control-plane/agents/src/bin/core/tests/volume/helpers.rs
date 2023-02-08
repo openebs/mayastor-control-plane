@@ -32,8 +32,7 @@ pub(crate) async fn wait_till_volume_nexus(
         }
         if std::time::Instant::now() > (start + timeout) {
             panic!(
-                "Timeout waiting for the volume to reach the specified state (replicas: '{}', no_child: '{}')! Current: {:#?}",
-                replicas, no_child, volume_state
+                "Timeout waiting for the volume to reach the specified state (replicas: '{replicas}', no_child: '{no_child}')! Current: {volume_state:#?}"
             );
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -134,8 +133,7 @@ pub(crate) async fn wait_till_volume_children(
         }
         if std::time::Instant::now() > (start + timeout) {
             panic!(
-                "Timeout waiting for the volume to reach the specified state (children: '{}')! Current: {:#?}",
-                children, volume_state
+                "Timeout waiting for the volume to reach the specified state (children: '{children}')! Current: {volume_state:#?}"
             );
         }
         tokio::time::sleep(Duration::from_millis(250)).await;

@@ -37,7 +37,7 @@ impl Etcd {
         let _ = crate::platform::init_cluster_info()
             .await
             .map_err(|error| StoreError::NotReady {
-                reason: format!("Platform not ready: {}", error),
+                reason: format!("Platform not ready: {error}"),
             })?;
         Ok(Self::from(
             &Client::connect([endpoint], None)
@@ -63,7 +63,7 @@ impl Etcd {
         let _ = crate::platform::init_cluster_info()
             .await
             .map_err(|error| StoreError::NotReady {
-                reason: format!("Platform not ready: {}", error),
+                reason: format!("Platform not ready: {error}"),
             })?;
 
         let client = Client::connect(endpoints, None).await.context(Connect {})?;
@@ -113,8 +113,7 @@ impl Store for Etcd {
             if !resp.succeeded() {
                 return Err(StoreError::FailedLock {
                     reason: format!(
-                        "Etcd Txn Compare key '{}' to lease id '{:x}' failed",
-                        lock_key, lease_id
+                        "Etcd Txn Compare key '{lock_key}' to lease id '{lease_id:x}' failed"
                     ),
                 });
             }
@@ -163,8 +162,7 @@ impl Store for Etcd {
             if !resp.succeeded() {
                 return Err(StoreError::FailedLock {
                     reason: format!(
-                        "Etcd Txn Compare key '{}' to lease id '{:x}' failed",
-                        lock_key, lease_id
+                        "Etcd Txn Compare key '{lock_key}' to lease id '{lease_id:x}' failed"
                     ),
                 });
             }
@@ -217,8 +215,7 @@ impl Store for Etcd {
             if !resp.succeeded() {
                 return Err(StoreError::FailedLock {
                     reason: format!(
-                        "Etcd Txn Compare key '{}' to lease id '{:x}' failed",
-                        lock_key, lease_id
+                        "Etcd Txn Compare key '{lock_key}' to lease id '{lease_id:x}' failed"
                     ),
                 });
             }

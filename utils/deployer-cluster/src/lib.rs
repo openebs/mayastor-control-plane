@@ -179,7 +179,7 @@ impl Cluster {
                     .unwrap(),
             )
             .await?),
-            None => Err(format!("Container {} not found!", name)),
+            None => Err(format!("Container {name} not found!")),
         }
     }
 
@@ -207,7 +207,7 @@ impl Cluster {
             .composer()
             .container_ip(&CsiNode::container_name(index));
         let internal = csi_driver::node::internal::node_plugin_client::NodePluginClient::connect(
-            format!("http://{}:50051", csi_endpoint),
+            format!("http://{csi_endpoint}:50051"),
         )
         .await?;
 
@@ -390,12 +390,10 @@ where
         Ok(_) if expected.is_ok() => Ok(()),
         Err(_) if expected.is_err() => Ok(()),
         Err(error) => Err(ReplyError::invalid_reply_error(format!(
-            "Expected '{:#?}' but failed with '{:?}'!",
-            expected, error
+            "Expected '{expected:#?}' but failed with '{error:?}'!"
         ))),
         Ok(r) => Err(ReplyError::invalid_reply_error(format!(
-            "Expected '{:#?} {:#?}' but succeeded!",
-            expected, r
+            "Expected '{expected:#?} {r:#?}' but succeeded!"
         ))),
     }
 }
@@ -443,7 +441,7 @@ impl TmpDiskFile {
 }
 impl TmpDiskFileInner {
     fn new(name: &str, size: u64) -> Self {
-        let path = format!("/tmp/io-engine-disk-{}", name);
+        let path = format!("/tmp/io-engine-disk-{name}");
         let file = std::fs::File::create(&path).expect("to create the tmp file");
         file.set_len(size).expect("to truncate the tmp file");
         Self {
@@ -547,7 +545,7 @@ impl ClusterBuilder {
             "trace" => "trace",
             _ => return current,
         };
-        let logs = format!("{},{}", main, RUST_LOG_SILENCE_DEFAULTS);
+        let logs = format!("{main},{RUST_LOG_SILENCE_DEFAULTS}");
         tracing_subscriber::EnvFilter::new(logs)
     }
     /// Enable/Disable jaeger tracing.
@@ -918,7 +916,7 @@ impl Pool {
 }
 
 fn grpc_addr(ip: String) -> String {
-    format!("https://{}:50051", ip)
+    format!("https://{ip}:50051")
 }
 
 /// Bundles both the csi and the internal node service.

@@ -50,7 +50,7 @@ impl IscsiDevice {
 
             if scheme == "iscsi" {
                 return Ok(IscsiDevice::new(
-                    format!("{}:{}", host, port),
+                    format!("{host}:{port}"),
                     iqn.to_string(),
                     uuid,
                     lun,
@@ -59,8 +59,7 @@ impl IscsiDevice {
         }
 
         Err(DeviceError::from(format!(
-            "invalid target specification: {}",
-            path
+            "invalid target specification: {path}"
         )))
     }
 }
@@ -101,7 +100,7 @@ impl TryFrom<&Url> for IscsiDevice {
         }
 
         let uuid = extract_uuid(components[1])
-            .map_err(|error| DeviceError::from(format!("invalid UUID: {}", error)))?;
+            .map_err(|error| DeviceError::from(format!("invalid UUID: {error}")))?;
 
         let portal = format!("{}:{}", host, url.port().unwrap_or(3260));
 
@@ -128,24 +127,21 @@ impl Attach for IscsiAttach {
             }
             Err(error) => {
                 return Err(DeviceError::from(format!(
-                    "iscsiadm command (session) failed: {}",
-                    error
+                    "iscsiadm command (session) failed: {error}"
                 )));
             }
         }
 
         if let Err(error) = IscsiAdmin::discover(&self.portal, &self.iqn) {
             return Err(DeviceError::from(format!(
-                "iscsiadm command (discovery) failed: {}",
-                error
+                "iscsiadm command (discovery) failed: {error}"
             )));
         }
 
         if let Err(error) = IscsiAdmin::login(&self.portal, &self.iqn) {
             let _ = IscsiAdmin::delete(&self.portal, &self.iqn);
             return Err(DeviceError::from(format!(
-                "iscsiadm command (login) failed: {}",
-                error
+                "iscsiadm command (login) failed: {error}"
             )));
         }
 
@@ -201,15 +197,13 @@ impl Detach for IscsiDetach {
     async fn detach(&self) -> Result<(), DeviceError> {
         if let Err(error) = IscsiAdmin::logout(&self.device.portal, &self.device.iqn) {
             return Err(DeviceError::from(format!(
-                "iscsiadm command (logout) failed: {}",
-                error
+                "iscsiadm command (logout) failed: {error}"
             )));
         }
 
         if let Err(error) = IscsiAdmin::delete(&self.device.portal, &self.device.iqn) {
             return Err(DeviceError::from(format!(
-                "iscsiadm command (delete) failed: {}",
-                error
+                "iscsiadm command (delete) failed: {error}"
             )));
         }
 

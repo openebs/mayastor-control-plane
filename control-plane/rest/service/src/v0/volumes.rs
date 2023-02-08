@@ -201,7 +201,7 @@ fn volume(volume_id: String, volume: Option<&Volume>) -> Result<Volume, ReplyErr
             kind: ReplyErrorKind::NotFound,
             resource: ResourceKind::Volume,
             source: "Requested volume was not found".to_string(),
-            extra: format!("Volume id : {}", volume_id),
+            extra: format!("Volume id : {volume_id}"),
         }),
     }
 }

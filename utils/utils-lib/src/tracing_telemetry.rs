@@ -53,7 +53,7 @@ pub fn rust_log_add_quiet_defaults(
 
     tracing_subscriber::EnvFilter::try_new(match silence.is_empty() {
         true => current.to_string(),
-        false => format!("{},{}", current, silence),
+        false => format!("{current},{silence}"),
     })
     .unwrap()
 }

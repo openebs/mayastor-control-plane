@@ -93,13 +93,10 @@ impl ObjectKey for NexusInfoKey {
         let nexus_uuid = self.nexus_id.clone();
         match &self.volume_id {
             Some(volume_uuid) => {
-                format!(
-                    "{}/volume/{}/nexus/{}/info",
-                    namespace, volume_uuid, nexus_uuid
-                )
+                format!("{namespace}/volume/{volume_uuid}/nexus/{nexus_uuid}/info")
             }
             None => {
-                format!("{}/nexus/{}/info", namespace, nexus_uuid)
+                format!("{namespace}/nexus/{nexus_uuid}/info")
             }
         }
     }

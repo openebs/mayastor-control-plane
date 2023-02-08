@@ -123,12 +123,12 @@ fn build_child_uri(child_id: ChildUri, query: &str) -> ChildUri {
             if query.is_empty() {
                 child_id
             } else {
-                format!("{}?{}", child_id, query)
+                format!("{child_id}?{query}")
             }
         }
         _ => {
             // not a URL, it's probably legacy, default to AIO
-            format!("aio://{}", child_id)
+            format!("aio://{child_id}")
         }
     })
 }

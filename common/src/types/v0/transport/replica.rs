@@ -247,12 +247,7 @@ impl ReplicaOwners {
         if self.volume == disowner.volume {
             self.volume = None;
         }
-        self.nexuses = self
-            .nexuses
-            .iter()
-            .filter(|n| !disowner.owned_by_nexus(n))
-            .cloned()
-            .collect();
+        self.nexuses.retain(|n| !disowner.owned_by_nexus(n));
     }
     pub fn disown_all(&mut self) {
         self.volume.take();
@@ -444,7 +439,7 @@ impl From<i32> for ReplicaShareProtocol {
     fn from(src: i32) -> Self {
         match src {
             1 => Self::Nvmf,
-            _ => panic!("Invalid replica share protocol {}", src),
+            _ => panic!("Invalid replica share protocol {src}"),
         }
     }
 }

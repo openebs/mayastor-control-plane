@@ -13,7 +13,7 @@ impl ComponentAction for Rest {
         } else {
             if options.build {
                 std::process::Command::new("cargo")
-                    .args(&["build", "-p", "rest", "--bin", "rest"])
+                    .args(["build", "-p", "rest", "--bin", "rest"])
                     .status()?;
             }
             let binary = Binary::from_dbg("rest")

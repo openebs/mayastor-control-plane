@@ -2,7 +2,7 @@ use std::process::Command;
 
 fn main() {
     let output = Command::new("bash")
-        .args(&[
+        .args([
             "-c",
             "../scripts/rust/generate-openapi-bindings.sh --skip-md5-same --skip-git-diff",
         ])

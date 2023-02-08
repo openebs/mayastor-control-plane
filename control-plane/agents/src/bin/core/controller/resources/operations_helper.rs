@@ -307,9 +307,7 @@ pub(crate) trait GuardedOperationsHelper:
         }
 
         // resource specific validation rules
-        if let Err(error) = Self::validate_destroy(self, registry) {
-            return Err(error);
-        }
+        Self::validate_destroy(self, registry)?;
 
         let spec_clone = {
             let mut spec = self.lock();
@@ -613,8 +611,8 @@ pub(crate) trait SpecOperationsHelper:
                 Err(SvcError::ReCreateMismatch {
                     id: self.uuid_str(),
                     kind: self.kind(),
-                    resource: format!("{:?}", self),
-                    request: format!("{:?}", request),
+                    resource: format!("{self:?}"),
+                    request: format!("{request:?}"),
                 })
             } else {
                 self.start_create_op();
@@ -830,7 +828,7 @@ impl ResourceSpecsLocked {
         ];
         for spec in &spec_types {
             if let Err(e) = self.populate_specs(store, *spec).await {
-                panic!("Failed to initialise resource specs. Err {}.", e);
+                panic!("Failed to initialise resource specs. Err {e}.");
             }
         }
 

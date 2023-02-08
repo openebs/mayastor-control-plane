@@ -54,7 +54,7 @@ async fn main() {
 async fn execute(cli_args: CliArgs) {
     // Initialise the REST client.
     if let Err(e) = RestClient::init(cli_args.rest.clone(), *cli_args.timeout) {
-        println!("Failed to initialise the REST client. Error {}", e);
+        println!("Failed to initialise the REST client. Error {e}");
     }
 
     // Perform the operations based on the subcommand, with proper output format.

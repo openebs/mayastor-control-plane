@@ -36,11 +36,11 @@ pub enum TargetSelector {
 impl TargetSelector {
     /// New `Self` from the given pod label key value.
     pub fn pod_label(key: &str, val: &str) -> Self {
-        Self::PodLabel(format!("{}={}", key, val))
+        Self::PodLabel(format!("{key}={val}"))
     }
     /// New `Self` from the given service label key value.
     pub fn svc_label(key: &str, val: &str) -> Self {
-        Self::ServiceLabel(format!("{}={}", key, val))
+        Self::ServiceLabel(format!("{key}={val}"))
     }
 }
 

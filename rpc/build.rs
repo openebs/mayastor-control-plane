@@ -5,7 +5,7 @@ extern crate tonic_build;
 fn main() {
     if !Path::new("api/.git").exists() {
         let output = Command::new("git")
-            .args(&["submodule", "update", "--init"])
+            .args(["submodule", "update", "--init"])
             .output()
             .expect("failed to execute git command ");
 

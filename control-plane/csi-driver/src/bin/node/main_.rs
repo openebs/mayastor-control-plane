@@ -196,7 +196,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     let sock_addr = if endpoint.contains(':') {
         endpoint.to_string()
     } else {
-        format!("{}:{}", endpoint, GRPC_PORT)
+        format!("{endpoint}:{GRPC_PORT}")
     };
 
     *crate::config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
@@ -226,7 +226,7 @@ impl CsiServer {
             // Change permissions on CSI socket to allow non-privileged clients to access it
             // to simplify testing.
             if let Err(e) = fs::set_permissions(
-                &csi_socket,
+                csi_socket,
                 std::os::unix::fs::PermissionsExt::from_mode(0o777),
             ) {
                 error!("Failed to change permissions for CSI socket: {:?}", e);

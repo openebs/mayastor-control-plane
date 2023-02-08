@@ -220,7 +220,7 @@ impl OperationSequence {
     /// Complete the operation sequenced using the provided `OperationMode`.
     pub fn complete(&mut self, revert: OperationSequenceState) {
         if self.transition(revert).is_err() {
-            debug_assert!(false, "Invalid revert from '{:?}' to '{:?}'", self, revert);
+            debug_assert!(false, "Invalid revert from '{self:?}' to '{revert:?}'");
             self.state = OperationSequenceState::Idle;
         }
     }

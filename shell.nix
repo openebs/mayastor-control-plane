@@ -76,7 +76,7 @@ mkShell {
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo"}
 
-    rustup_channel="${lib.strings.concatMapStringsSep "-" (x: x) (lib.lists.drop 1 (lib.strings.splitString "-" rust.version))}" \
+    rust_version="${rust.version}" rustup_channel="${lib.strings.concatMapStringsSep "-" (x: x) (lib.lists.drop 1 (lib.strings.splitString "-" rust.version))}" \
     dev_rustup="${toString (devrustup)}" devrustup_moth="${devrustup_moth}" . ./scripts/rust/env-setup.sh
 
     export WORKSPACE_ROOT=`pwd`

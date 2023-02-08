@@ -301,7 +301,7 @@ async fn replica_transaction() {
         .share(&ShareReplica::from(&replica), None)
         .await
         .unwrap();
-    println!("Share uri: {}", uri);
+    println!("Share uri: {uri}");
 
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
@@ -562,8 +562,7 @@ async fn wait_till_pool_state(cluster: &Cluster, pool: (u32, u32), has_state: bo
 
         if std::time::Instant::now() > (start + timeout) {
             panic!(
-                "Timeout waiting for the pool to have 'has_state': '{}'. Pool: '{:#?}'",
-                has_state, pool
+                "Timeout waiting for the pool to have 'has_state': '{has_state}'. Pool: '{pool:#?}'"
             );
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -743,10 +742,7 @@ async fn reconciler_deleting_dirty_pool() {
             }
 
             if std::time::Instant::now() > (start + timeout) {
-                panic!(
-                    "Timeout waiting for the pool to be deleted. Actual: '{:#?}'",
-                    pools
-                );
+                panic!("Timeout waiting for the pool to be deleted. Actual: '{pools:#?}'");
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }

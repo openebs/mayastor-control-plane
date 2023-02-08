@@ -210,7 +210,7 @@ async fn nexus_share_transaction() {
     // now it should be shared successfully
     let uri = nexus_client.share(&share, None).await.unwrap();
 
-    println!("Share uri: {}", uri);
+    println!("Share uri: {uri}");
 
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
@@ -494,7 +494,7 @@ async fn nexus_child_transaction() {
         .add_nexus_child(&add_child, None)
         .await
         .unwrap();
-    println!("Share uri: {:?}", uri);
+    println!("Share uri: {uri:?}");
 
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 

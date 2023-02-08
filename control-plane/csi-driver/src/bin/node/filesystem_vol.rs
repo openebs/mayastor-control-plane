@@ -293,8 +293,7 @@ pub(crate) fn publish_fs_volume(
 
         if let Err(error) = mount::bind_remount(target_path, &options) {
             let message = format!(
-                "Failed to publish volume {}: failed to mount {} to {} as readonly: {}",
-                volume_id, fs_staging_path, target_path, error
+                "Failed to publish volume {volume_id}: failed to mount {fs_staging_path} to {target_path} as readonly: {error}"
             );
 
             error!("Failed to remount {}: {}", target_path, error);

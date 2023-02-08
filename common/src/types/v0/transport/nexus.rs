@@ -159,10 +159,10 @@ impl TryFrom<Protocol> for NexusShareProtocol {
 
     fn try_from(value: Protocol) -> Result<Self, Self::Error> {
         match value {
-            Protocol::None => Err(format!("Invalid protocol: {:?}", value)),
+            Protocol::None => Err(format!("Invalid protocol: {value:?}")),
             Protocol::Nvmf => Ok(Self::Nvmf),
             Protocol::Iscsi => Ok(Self::Iscsi),
-            Protocol::Nbd => Err(format!("Invalid protocol: {:?}", value)),
+            Protocol::Nbd => Err(format!("Invalid protocol: {value:?}")),
         }
     }
 }
@@ -254,10 +254,7 @@ impl NvmfControllerIdRange {
             Err(ReplyError::invalid_argument(
                 ResourceKind::Nexus,
                 "nvmf_controller_id_range",
-                format!(
-                    "{}, {} values don't fall in controller id range",
-                    start, end
-                ),
+                format!("{start}, {end} values don't fall in controller id range"),
             ))
         }
     }

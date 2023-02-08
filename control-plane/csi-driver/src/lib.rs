@@ -3,7 +3,7 @@ pub const CSI_PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
 
 /// The topology label used to identify a node as a csi-node.
 pub fn csi_node_selector() -> String {
-    format!("{}={}", CSI_NODE_TOPOLOGY_KEY, CSI_NODE_TOPOLOGY_VAL)
+    format!("{CSI_NODE_TOPOLOGY_KEY}={CSI_NODE_TOPOLOGY_VAL}")
 }
 
 type Selector = std::collections::HashMap<String, String>;

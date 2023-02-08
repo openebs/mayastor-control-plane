@@ -18,7 +18,7 @@ pub trait PlatformInfo: Send + Sync {
 }
 
 #[derive(Eq, PartialEq)]
-/// The various types of platforms.  
+/// The various types of platforms.
 pub enum PlatformType {
     /// As it says in the tin.
     K8s,
@@ -58,7 +58,7 @@ pub async fn init_cluster_info_or_panic() -> &'static dyn PlatformInfo {
         Err(error) => {
             let message = "Failed to collect critical information from the platform";
             tracing::error!(error=%error, message);
-            panic!("{}: {}", message, error)
+            panic!("{message}: {error}")
         }
     }
 }

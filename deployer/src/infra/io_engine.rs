@@ -85,7 +85,6 @@ impl ComponentAction for IoEngine {
     }
     async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         let io_engines = (0 .. options.io_engines)
-            .into_iter()
             .map(|i| async move { cfg.start(&Self::name(i, options)).await });
         futures::future::try_join_all(io_engines).await?;
         Ok(())
@@ -132,7 +131,7 @@ impl IoEngine {
         ("/tmp/ptpl", "/host/tmp/ptpl")
     }
     fn binary(path: &str) -> Option<String> {
-        match std::env::var_os(&path) {
+        match std::env::var_os(path) {
             None => None,
             Some(val) if val.is_empty() => None,
             Some(val) => Some(val.to_string_lossy().to_string()),

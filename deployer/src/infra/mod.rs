@@ -104,13 +104,13 @@ macro_rules! impl_ctrlp_agents {
 
 pub fn build_error(name: &str, status: Option<i32>) -> Result<(), Error> {
     let make_error = |extra: &str| {
-        let error = format!("Failed to build {}: {}", name, extra);
+        let error = format!("Failed to build {name}: {extra}");
         std::io::Error::new(std::io::ErrorKind::Other, error)
     };
     match status {
         Some(0) => Ok(()),
         Some(code) => {
-            let error = format!("exited with code {}", code);
+            let error = format!("exited with code {code}");
             Err(make_error(&error).into())
         }
         None => Err(make_error("interrupted by signal").into()),
@@ -145,7 +145,7 @@ impl Components {
                     if std::time::Instant::now() > (start_time + timeout) {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::AddrNotAvailable,
-                            format!("URL '{}' not ready yet: '{:?}'", url, error),
+                            format!("URL '{url}' not ready yet: '{error:?}'"),
                         )
                         .into());
                     }
@@ -163,7 +163,7 @@ impl Components {
         match tokio::time::timeout(timeout, self.start_wait_inner(cfg)).await {
             Ok(result) => result,
             Err(_) => {
-                let error = format!("Time out of {:?} expired", timeout);
+                let error = format!("Time out of {timeout:?} expired");
                 Err(std::io::Error::new(std::io::ErrorKind::TimedOut, error).into())
             }
         }
@@ -322,7 +322,7 @@ impl BuilderConfigure for Components {
             let path = std::path::PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
             let status = std::process::Command::new("cargo")
                 .current_dir(path.parent().expect("main workspace"))
-                .args(&["build", "--bins"])
+                .args(["build", "--bins"])
                 .status()?;
             build_error("all the workspace binaries", status.code())?;
         }
@@ -359,7 +359,7 @@ impl Components {
         match tokio::time::timeout(timeout, self.wait_on_inner(cfg)).await {
             Ok(result) => result,
             Err(_) => {
-                let error = format!("Time out of {:?} expired", timeout);
+                let error = format!("Time out of {timeout:?} expired");
                 Err(std::io::Error::new(std::io::ErrorKind::TimedOut, error).into())
             }
         }
@@ -376,7 +376,7 @@ impl Components {
         let result = join_all(futures).await;
         result.iter().for_each(|result| {
             if let Err(error) = result {
-                println!("Failed to wait for component: {:?}", error)
+                println!("Failed to wait for component: {error:?}")
             }
         });
         if let Some(Err(error)) = result.iter().find(|result| result.is_err()) {

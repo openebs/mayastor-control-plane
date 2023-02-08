@@ -114,10 +114,7 @@ async fn wait_till_volume_deleted(cluster: &Cluster) {
         }
 
         if std::time::Instant::now() > (start + timeout) {
-            panic!(
-                "Timeout waiting for the volumes to be deleted current: '{:?}'",
-                volumes
-            );
+            panic!("Timeout waiting for the volumes to be deleted current: '{volumes:?}'");
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
@@ -392,10 +389,7 @@ async fn wait_till_replica_disowned(cluster: &Cluster, replica_id: Uuid) {
         }
 
         if std::time::Instant::now() > (start + timeout) {
-            panic!(
-                "Timeout waiting for the replica to be disowned. Actual: '{:#?}'",
-                replica_spec
-            );
+            panic!("Timeout waiting for the replica to be disowned. Actual: '{replica_spec:#?}'");
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
@@ -490,8 +484,7 @@ async fn wait_till_nexus_state(
 
         if std::time::Instant::now() > (start + timeout) {
             panic!(
-                "Timeout waiting for the nexus to have state: '{:#?}'. Actual: '{:#?}'",
-                state, nexus
+                "Timeout waiting for the nexus to have state: '{state:#?}'. Actual: '{nexus:#?}'"
             );
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -510,8 +503,7 @@ async fn wait_till_volume_status(cluster: &Cluster, volume: &Uuid, status: model
 
         if std::time::Instant::now() > (start + timeout) {
             panic!(
-                "Timeout waiting for the volume to reach the specified status ('{:?}'), current: '{:?}'",
-                status, volume
+                "Timeout waiting for the volume to reach the specified status ('{status:?}'), current: '{volume:?}'"
             );
         }
         tokio::time::sleep(Duration::from_millis(500)).await;

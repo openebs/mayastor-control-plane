@@ -53,7 +53,7 @@ impl std::error::Error for DeviceError {
 impl From<std::io::Error> for DeviceError {
     fn from(error: std::io::Error) -> DeviceError {
         DeviceError {
-            message: format!("{}", error),
+            message: format!("{error}"),
             source: DeviceErrorSource::StdIoError(error),
         }
     }
@@ -62,7 +62,7 @@ impl From<std::io::Error> for DeviceError {
 impl From<std::num::ParseIntError> for DeviceError {
     fn from(error: std::num::ParseIntError) -> DeviceError {
         DeviceError {
-            message: format!("{}", error),
+            message: format!("{error}"),
             source: DeviceErrorSource::StdIntParseError(error),
         }
     }
@@ -71,7 +71,7 @@ impl From<std::num::ParseIntError> for DeviceError {
 impl From<uuid::Error> for DeviceError {
     fn from(error: uuid::Error) -> DeviceError {
         DeviceError {
-            message: format!("{}", error),
+            message: format!("{error}"),
             source: DeviceErrorSource::UuidError(error),
         }
     }
@@ -80,7 +80,7 @@ impl From<uuid::Error> for DeviceError {
 impl From<nvmf_discovery::ConnectArgsBuilderError> for DeviceError {
     fn from(error: nvmf_discovery::ConnectArgsBuilderError) -> DeviceError {
         DeviceError {
-            message: format!("{}", error),
+            message: format!("{error}"),
             source: DeviceErrorSource::NvmfConnectArgsBuilderError(error),
         }
     }
@@ -98,7 +98,7 @@ impl From<String> for DeviceError {
 impl From<serde_json::error::Error> for DeviceError {
     fn from(error: serde_json::error::Error) -> DeviceError {
         DeviceError {
-            message: format!("{}", error),
+            message: format!("{error}"),
             source: DeviceErrorSource::SerdeError(error),
         }
     }
@@ -107,7 +107,7 @@ impl From<serde_json::error::Error> for DeviceError {
 impl From<FromUtf8Error> for DeviceError {
     fn from(error: FromUtf8Error) -> DeviceError {
         DeviceError {
-            message: format!("{}", error),
+            message: format!("{error}"),
             source: DeviceErrorSource::FromUtf8Error(error),
         }
     }
@@ -116,7 +116,7 @@ impl From<FromUtf8Error> for DeviceError {
 impl From<nvmeadm::error::NvmeError> for DeviceError {
     fn from(error: nvmeadm::error::NvmeError) -> DeviceError {
         DeviceError {
-            message: format!("{}", error),
+            message: format!("{error}"),
             source: DeviceErrorSource::NvmeError(error),
         }
     }

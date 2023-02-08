@@ -23,7 +23,7 @@ impl ComponentAction for CsiNode {
         } else {
             if options.build {
                 std::process::Command::new("cargo")
-                    .args(&["build", "-p", "csi-driver", "--bin", CSI_NODE])
+                    .args(["build", "-p", "csi-driver", "--bin", CSI_NODE])
                     .status()?;
             }
 
@@ -96,11 +96,11 @@ impl CsiNode {
         format!("{}-{}", CSI_NODE, i + 1)
     }
     fn local_container_name(io_engine: &str) -> String {
-        format!("{}-{}", CSI_NODE, io_engine)
+        format!("{CSI_NODE}-{io_engine}")
     }
     /// The socket path for the csi-node plugin instance.
     pub fn socket(node_name: &str) -> String {
-        format!("/var/tmp/csi-{}.sock", node_name)
+        format!("/var/tmp/csi-{node_name}.sock")
     }
     fn with_app_node(index: u32, cfg: Builder) -> Builder {
         let container_name = Self::container_name(index);

@@ -211,11 +211,7 @@ impl ResourceFilter for CreateVolumeNexus {
 
     fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
         let request = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .filter(|v| filter(&request, v))
-            .collect();
+        self.list.retain(|v| filter(&request, v));
         self
     }
 
@@ -306,11 +302,7 @@ impl ResourceFilter for NexusTargetNode {
 
     fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
         let request = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .filter(|v| filter(&request, v))
-            .collect();
+        self.list.retain(|v| filter(&request, v));
         self
     }
 

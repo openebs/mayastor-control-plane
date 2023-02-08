@@ -60,7 +60,7 @@ async fn fsfreeze(volume_id: &str, freeze_op: &str) -> Result<(), ServiceError> 
             let dest = mnt.dest.display().to_string();
             let args = [freeze_op, &dest];
             let output = Command::new(FSFREEZE)
-                .args(&args)
+                .args(args)
                 .output()
                 .await
                 .context(Io {

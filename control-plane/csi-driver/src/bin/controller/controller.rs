@@ -42,8 +42,7 @@ fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, Status>
     match proto.map(|s| s.as_str()) {
         None | Some("nvmf") => Ok(VolumeShareProtocol::Nvmf),
         _ => Err(Status::invalid_argument(format!(
-            "Invalid protocol: {:?}",
-            proto
+            "Invalid protocol: {proto:?}"
         ))),
     }
 }
@@ -61,7 +60,7 @@ impl From<ApiClientError> for Status {
     fn from(error: ApiClientError) -> Self {
         match error {
             ApiClientError::ResourceNotExists(reason) => Status::not_found(reason),
-            error => Status::internal(format!("Operation failed: {:?}", error)),
+            error => Status::internal(format!("Operation failed: {error:?}")),
         }
     }
 }
@@ -157,7 +156,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 )))
             }
         };
-        tracing::Span::current().record("volume.uuid", &volume_uuid.as_str());
+        tracing::Span::current().record("volume.uuid", volume_uuid.as_str());
 
         check_volume_capabilities(&args.volume_capabilities)?;
 
@@ -186,7 +185,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
 
         let u = Uuid::parse_str(&volume_uuid).map_err(|_e| {
-            Status::invalid_argument(format!("Malformed volume UUID: {}", volume_uuid))
+            Status::invalid_argument(format!("Malformed volume UUID: {volume_uuid}"))
         })?;
         let _guard = csi_driver::limiter::VolumeOpGuard::new(u)?;
 
@@ -329,8 +328,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                         // Make sure volume is published at the same node.
                         if node_id != node {
                             let m = format!(
-                                "Volume {} already published on a different node: {}",
-                                volume_id, node,
+                                "Volume {volume_id} already published on a different node: {node}",
                             );
                             error!("{}", m);
                             return Err(Status::failed_precondition(m));
@@ -340,8 +338,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                         uri
                     } else {
                         let m = format!(
-                            "Volume {} reports no info about its publishing status",
-                            volume_id
+                            "Volume {volume_id} reports no info about its publishing status"
                         );
                         error!("{}", m);
                         return Err(Status::internal(m));
@@ -383,8 +380,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     uri
                 } else {
                     let m = format!(
-                        "Volume {} has been successfully published but URI is not available",
-                        volume_id
+                        "Volume {volume_id} has been successfully published but URI is not available"
                     );
                     error!("{}", m);
                     return Err(Status::internal(m));
@@ -522,7 +518,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volumes = IoEngineApiClient::get_client()
             .list_volumes(max_entries, args.starting_token)
             .await
-            .map_err(|e| Status::internal(format!("Failed to list volumes, error = {:?}", e)))?;
+            .map_err(|e| Status::internal(format!("Failed to list volumes, error = {e:?}")))?;
 
         let entries = volumes
             .entries
@@ -576,8 +572,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 .await
                 .map_err(|e| {
                     Status::internal(format!(
-                        "Failed to list pools for node {}, error = {:?}",
-                        node, e,
+                        "Failed to list pools for node {node}, error = {e:?}",
                     ))
                 })?
         } else {
@@ -586,7 +581,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 .list_pools()
                 .await
                 .map_err(|e| {
-                    Status::internal(format!("Failed to list all pools, error = {:?}", e,))
+                    Status::internal(format!("Failed to list all pools, error = {e:?}",))
                 })?
         };
 

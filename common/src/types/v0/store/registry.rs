@@ -146,7 +146,7 @@ impl StoreLeaseOwner {
     pub fn new(kind: &ControlPlaneService, lease_id: i64) -> Self {
         Self {
             kind: kind.clone(),
-            lease_id: format!("{:x}", lease_id),
+            lease_id: format!("{lease_id:x}"),
             instance_name: std::env::var("MY_POD_NAME").unwrap_or_default(),
         }
     }

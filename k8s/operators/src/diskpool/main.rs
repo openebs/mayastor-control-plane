@@ -488,7 +488,7 @@ impl ResourceContext {
                     self.k8s_notify(
                         "Missing",
                         "Check",
-                        &format!("The pool information is not available: {}", response),
+                        &format!("The pool information is not available: {response}"),
                         "Warning",
                     )
                         .await;

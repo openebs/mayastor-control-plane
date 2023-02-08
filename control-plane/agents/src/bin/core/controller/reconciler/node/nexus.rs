@@ -11,6 +11,7 @@ use common_lib::types::v0::{
     store::{node::NodeSpec, volume::VolumeSpec},
     transport::{NodeId, RepublishVolume, VolumeId, VolumeShareProtocol},
 };
+
 /// Node drain reconciler.
 #[derive(Debug)]
 pub(super) struct NodeNexusReconciler {
@@ -96,18 +97,16 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
 
                     let config = match guarded_vol_spec.as_ref().config() {
                         None => {
-                            tracing::error!("Failed to get config");
+                            tracing::error!(
+                                volume.id = vol_id.as_str(),
+                                "Failed to get volume config"
+                            );
                             move_failures = true;
                             continue;
                         }
                         Some(config) => config,
                     };
-                    let frontend_node = config
-                        .frontend()
-                        .node_names()
-                        .first()
-                        .unwrap_or(&String::default())
-                        .clone();
+                    let frontend_node = config.frontend().node_name().unwrap_or_default();
                     let frontend_node_id: NodeId = frontend_node.into();
                     // frontend_node could be "", republish will still be allowed.
                     tracing::info!(
@@ -146,17 +145,17 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
     }
     // Change the node state to "drained"
     if !move_failures {
-        if let Err(e) = context
+        if let Err(error) = context
             .specs()
             .set_node_drained(context.registry(), node_spec.id())
             .await
         {
             tracing::error!(
-                error=%e,
+                %error,
                 node.id = node_id.as_str(),
                 "Failed to set node to state drained"
             );
-            return PollResult::Err(e);
+            return PollResult::Err(error);
         }
         tracing::info!(node.id = node_id.as_str(), "Set node to state drained");
     }

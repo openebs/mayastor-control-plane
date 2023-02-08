@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
 
     let request = hyper::Request::builder()
         .method("GET")
-        .uri(&format!("{}/v0/nodes", uri))
+        .uri(&format!("{uri}/v0/nodes"))
         .body(hyper::Body::empty())
         .unwrap();
 

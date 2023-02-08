@@ -50,7 +50,7 @@ impl TryFrom<models::CreateReplicaBody> for CreateReplicaBody {
     type Error = RestError<RestJsonError>;
     fn try_from(src: models::CreateReplicaBody) -> Result<Self, Self::Error> {
         Ok(Self {
-            size: src.size as u64,
+            size: src.size,
             thin: src.thin,
             share: match src.share {
                 None => Protocol::None,
@@ -154,7 +154,7 @@ impl From<CreateNexus> for CreateNexusBody {
 impl From<models::CreateNexusBody> for CreateNexusBody {
     fn from(src: models::CreateNexusBody) -> Self {
         Self {
-            size: src.size as u64,
+            size: src.size,
             children: src.children.into_iter().map(From::from).collect(),
         }
     }
@@ -193,7 +193,7 @@ pub struct CreateVolumeBody {
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
         Self {
-            size: src.size as u64,
+            size: src.size,
             replicas: src.replicas as u64,
             policy: src.policy.into(),
             topology: src.topology.into_opt(),
