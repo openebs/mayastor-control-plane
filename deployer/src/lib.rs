@@ -161,9 +161,14 @@ pub struct StartOptions {
     #[structopt(long)]
     pub io_engine_devices: Vec<String>,
 
-    /// Run each io_engine on a separate core.
+    /// Run each io_engine on separate cores.
     #[structopt(long)]
     pub io_engine_isolate: bool,
+
+    /// Run each io_engine with these many cores.
+    /// A value of 0 means we'll rely on the default value set by the io-engine.
+    #[structopt(long, default_value = "0")]
+    pub io_engine_cores: u32,
 
     /// Add the following environment variables to the io_engine containers.
     #[structopt(long, env = "IO_ENGINE_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
@@ -414,6 +419,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_cores(mut self, cores: u32) -> Self {
+        self.io_engine_cores = cores;
         self
     }
     #[must_use]

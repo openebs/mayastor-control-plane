@@ -21,6 +21,7 @@ use common_lib::{
         transport::CreatePool,
     },
 };
+pub use composer::ImagePullPolicy;
 pub use csi_driver::node::internal::*;
 use deployer_lib::infra::CsiNode;
 pub use etcd_client;
@@ -34,7 +35,10 @@ use grpc::{
     },
 };
 use openapi::models::Volume;
-use rpc::{csi::NodeStageVolumeResponse, io_engine::RpcHandle};
+use rpc::{
+    csi::{NodeStageVolumeResponse, NodeUnstageVolumeResponse},
+    io_engine::RpcHandle,
+};
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
@@ -95,6 +99,11 @@ impl Cluster {
     /// grpc client for connection
     pub fn grpc_client(&self) -> &CoreClient {
         self.grpc_client.as_ref().unwrap()
+    }
+
+    pub async fn new_grpc_client(&self, grpc_timeout: TimeoutOptions) -> CoreClient {
+        let core_ip = self.composer.container_ip("core");
+        CoreClient::new(Uri::try_from(grpc_addr(core_ip)).unwrap(), grpc_timeout).await
     }
 
     /// volume service liveness checks whether the volume service responds to the
@@ -612,7 +621,7 @@ impl ClusterBuilder {
     }
     /// Specify the image pull policy.
     #[must_use]
-    pub fn with_pull_policy(mut self, policy: composer::ImagePullPolicy) -> Self {
+    pub fn with_pull_policy(mut self, policy: ImagePullPolicy) -> Self {
         self.opts = self.opts.with_pull_policy(policy);
         self
     }
@@ -948,7 +957,7 @@ impl CsiNodeClient {
                 );
                 context
             },
-            staging_target_path: "/tmp/staging/mount".to_string(),
+            staging_target_path: "unused".to_string(),
             volume_capability: Some(rpc::csi::VolumeCapability {
                 access_mode: Some(rpc::csi::volume_capability::AccessMode {
                     mode: rpc::csi::volume_capability::access_mode::Mode::SingleNodeWriter as i32,
@@ -961,6 +970,52 @@ impl CsiNodeClient {
             volume_context: Default::default(),
         };
         let response = self.csi.node_stage_volume(request).await?;
+        Ok(response.into_inner())
+    }
+    /// Stage the given filesystem volume.
+    pub async fn node_stage_volume_fs(
+        &mut self,
+        volume: &Volume,
+    ) -> Result<NodeStageVolumeResponse, Error> {
+        let request = rpc::csi::NodeStageVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            publish_context: {
+                let mut context = std::collections::HashMap::new();
+                context.insert(
+                    "uri".into(),
+                    volume.state.target.as_ref().unwrap().device_uri.to_string(),
+                );
+                context
+            },
+            staging_target_path: format!("/var/tmp/staging/mount/{}", volume.spec.uuid),
+            volume_capability: Some(rpc::csi::VolumeCapability {
+                access_mode: Some(rpc::csi::volume_capability::AccessMode {
+                    mode: rpc::csi::volume_capability::access_mode::Mode::SingleNodeWriter as i32,
+                }),
+                access_type: Some(rpc::csi::volume_capability::AccessType::Mount(
+                    rpc::csi::volume_capability::MountVolume {
+                        fs_type: "ext4".to_string(),
+                        mount_flags: vec![],
+                        volume_mount_group: "".to_string(),
+                    },
+                )),
+            }),
+            secrets: Default::default(),
+            volume_context: Default::default(),
+        };
+        let response = self.csi.node_stage_volume(request).await?;
+        Ok(response.into_inner())
+    }
+    /// Unstage the given volume.
+    pub async fn node_unstage_volume(
+        &mut self,
+        volume: &Volume,
+    ) -> Result<NodeUnstageVolumeResponse, Error> {
+        let request = rpc::csi::NodeUnstageVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            staging_target_path: format!("/var/tmp/staging/mount/{}", volume.spec.uuid),
+        };
+        let response = self.csi.node_unstage_volume(request).await?;
         Ok(response.into_inner())
     }
 }
