@@ -6,7 +6,7 @@ FORCE=
 while [ "$#" -gt 0 ]; do
   case $1 in
     -f|--force)
-      FORCE="true"
+      FORCE="--force"
       shift
       ;;
     *)
@@ -16,9 +16,15 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-for mod in `git config --file .gitmodules --get-regexp path | awk '{ print $2 }'`; do
+submodule_init() {
+  for mod in `git config --file .gitmodules --get-regexp path | awk '{ print $2 }'`; do
     if [ -n "$FORCE" ] || [ ! -f $mod/.git ]; then
-       git submodule update --init --recursive $mod
+      git submodule update $FORCE --init --recursive $mod
     fi
+    pushd $mod 1>/dev/null
+    submodule_init
+    popd 1>/dev/null
 done
+}
 
+submodule_init

@@ -42,7 +42,6 @@ jsonwebtoken = "8.1.1"
 common-lib = { path = "../../common" }
 utils = { path = "../../utils/utils-lib" }
 humantime = "2.1.0"
-git-version = "0.3.5"
 grpc = { path = "../grpc" }
 num_cpus = "1.13.1"
 

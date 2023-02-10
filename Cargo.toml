@@ -20,12 +20,9 @@ members = [
     "utils/utils-lib",
     "utils/pstor-usage",
     "utils/shutdown",
-    "utils/dependencies/composer",
-    "utils/dependencies/devinfo",
-    "utils/dependencies/nvmeadm",
-    "utils/dependencies/sysfs",
-    "utils/dependencies/version-info",
     "utils/deployer-cluster",
-    # Test io-engine through the rest api
     "tests/io-engine",
+]
+exclude = [
+    "utils/dependencies/*",
 ]
