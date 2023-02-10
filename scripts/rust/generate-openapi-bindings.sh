@@ -106,7 +106,7 @@ fi
 if [ -f "$RUST_FMT" ]; then
   cp "$RUST_FMT" "$tmpd"
   cp "$CARGO_LOCK" "$tmpd"
-  ( cd "$tmpd" && cargo fmt --all )
+  ( cd "$tmpd" && cargo fmt --all || true )
   # Cargo.lock is no longer generated when running cargo fmt
   ( cd "$tmpd"; rm Cargo.lock || true; rm "$(basename "$RUST_FMT")" )
 fi

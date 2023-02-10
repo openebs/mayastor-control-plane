@@ -32,14 +32,10 @@ kube = { version = "0.74.0", features = ["derive", "runtime"] }
 schemars = "0.8.11"
 serde = "1.0.152"
 serde_json = "1.0.93"
-serde_yaml = "0.8.26"
 snafu = "0.7.4"
 tokio = { version = "1.25.0", features = ["full"] }
 humantime = "2.1.0"
 
 # Tracing
 tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
-opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
-tracing-opentelemetry = "0.17.4"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }

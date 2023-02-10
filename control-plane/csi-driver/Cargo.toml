@@ -33,7 +33,6 @@ regex = "1.7.1"
 rpc = { path = "../../rpc" }
 grpc = { path = "../grpc" }
 tokio = { version = "1.25.0", features = ["full"] }
-tokio-stream = { version = "0.1.11", features = ["net"] }
 clap = "2.34.0"
 nix = "0.22.3"
 strum = "0.21.0"
@@ -42,13 +41,7 @@ heck = "0.4.1"
 
 # Tracing
 tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
-opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
-tracing-opentelemetry = "0.17.4"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
-
-async-trait = "0.1.64"
-chrono = "0.4.23"
 glob = "0.3.1"
 lazy_static = "1.4.0"
 serde_json = "1.0.93"
@@ -69,7 +62,3 @@ shutdown = { path = "../../utils/shutdown" }
 udev = "0.6.3"
 devinfo = { path = "../../utils/dependencies/devinfo" }
 sys-mount = { version = "1.5.1", default-features = false }
-
-[dependencies.serde]
-features = ["derive"]
-version = "1.0.152"
