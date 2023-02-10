@@ -783,15 +783,15 @@ pub(crate) trait InternalOps {
     /// Get the inner lock, typically used to sync mutating gRPC operations.
     async fn grpc_lock(&self) -> Arc<tokio::sync::Mutex<()>>;
     /// Update the node's nexus state information.
-    async fn update_nexus_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    async fn update_nexus_states(&self, ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update a node's nexus state information.
     async fn update_nexus_state(&self, state: Either<Nexus, NexusId>);
     /// Update the node's pool state information.
-    async fn update_pool_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    async fn update_pool_states(&self, ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update a node's pool state information.
     async fn update_pool_state(&self, state: Either<PoolState, PoolId>);
     /// Update the node's replica state information.
-    async fn update_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    async fn update_replica_states(&self, ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update a node's replica state information.
     async fn update_replica_state(&self, state: Either<Replica, ReplicaId>);
     /// Update all node state information.

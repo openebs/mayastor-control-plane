@@ -23,23 +23,23 @@ tls = [ "openapi/tower-client-tls" ]
 [dependencies]
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
 utils = { path = "../../utils/utils-lib" }
-anyhow = "1.0.44"
-chrono = "0.4.19"
-clap =  { version = "2.33.3", features = ["color"] }
-futures = "0.3.21"
+anyhow = "1.0.69"
+chrono = "0.4.23"
+clap =  { version = "2.34.0", features = ["color"] }
+futures = "0.3.26"
 k8s-openapi = { version = "0.15.0", features = ["v1_20"] }
 kube = { version = "0.74.0", features = ["derive", "runtime"] }
-schemars = "0.8.10"
-serde = "1.0.140"
-serde_json = "1.0.82"
+schemars = "0.8.11"
+serde = "1.0.152"
+serde_json = "1.0.93"
 serde_yaml = "0.8.26"
-snafu = "0.7.1"
-tokio = { version = "1.20.1", features = ["full"] }
+snafu = "0.7.4"
+tokio = { version = "1.25.0", features = ["full"] }
 humantime = "2.1.0"
 
 # Tracing
-tracing = "0.1.35"
-tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
 tracing-opentelemetry = "0.17.4"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
