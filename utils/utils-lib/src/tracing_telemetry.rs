@@ -134,6 +134,8 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
     };
 }
 
+/// Flush the traces from the tracer provider.
+/// todo: force flush the traces.
 pub fn flush_traces() {
     opentelemetry::global::shutdown_tracer_provider();
 }

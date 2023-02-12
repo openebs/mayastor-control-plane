@@ -91,7 +91,12 @@ async fn fault_enospc_child() {
         .composer()
         .exec(
             cluster.csi_container(0).as_str(),
-            vec!["dd", "if=/dev/zero", format!("of={device_path}").as_str()],
+            vec![
+                "dd",
+                "if=/dev/zero",
+                format!("of={device_path}").as_str(),
+                "bs=64k",
+            ],
         )
         .await;
 

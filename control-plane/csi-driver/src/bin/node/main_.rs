@@ -167,7 +167,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     );
     utils::tracing_telemetry::init_tracing("csi-node", tags, None);
 
-    if let Some(nvme_io_timeout_secs) = matches.get_one::<String>("nvme_core io_timeout") {
+    if let Some(nvme_io_timeout_secs) = matches.get_one::<String>("nvme-core-io-timeout") {
         let io_timeout_secs: u32 = nvme_io_timeout_secs.parse().expect(
             "nvme_core io_timeout should be an integer number, representing the timeout in seconds",
         );
