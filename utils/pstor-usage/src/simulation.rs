@@ -11,72 +11,76 @@ use openapi::{
 };
 
 use anyhow::anyhow;
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use structopt::StructOpt;
+
+fn parse_size_compat(src: &str) -> Result<u64, parse_size::Error> {
+    parse_size::parse_size(src)
+}
 
 /// Simulate how much storage a cluster would require based on some parameters.
-#[derive(StructOpt, Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Parser, Debug, Clone, Hash, Eq, PartialEq)]
 pub(crate) struct Simulation {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     opts: SimulationOpts,
 
     /// Skip the output of the total storage usage after allocation of all resources and also after
     /// those resources have been deleted.
-    #[structopt(long = "no-total-stats", parse(from_flag = std::ops::Not::not))]
+    #[clap(long = "no-total-stats", action = clap::ArgAction::SetFalse)]
     total_stats: bool,
 
-    #[structopt(skip)]
+    #[clap(skip)]
     no_print_samples: bool,
 }
 
-#[derive(StructOpt, Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Parser, Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 #[serde(default)]
 pub(crate) struct SimulationOpts {
     /// Size of the pools.
-    #[structopt(long, parse(try_from_str = parse_size::parse_size), default_value = "20MiB")]
+    #[clap(long, value_parser = parse_size_compat, default_value = "20MiB")]
     pool_size: u64,
 
     /// Size of the volumes.
-    #[structopt(long, parse(try_from_str = parse_size::parse_size), default_value = "5MiB")]
+    #[clap(long, value_parser = parse_size_compat, default_value = "5MiB")]
     volume_size: u64,
 
     /// Number of volume replicas.
-    #[structopt(long, default_value = "3")]
+    #[clap(long, default_value = "3")]
     volume_replicas: u8,
 
     /// Number of pools per sample.
-    #[structopt(short, long, default_value = "10")]
+    #[clap(short, long, default_value = "10")]
     pools: u32,
 
     /// Number of pool samples.
-    #[structopt(long, default_value = "5")]
+    #[clap(long, default_value = "5")]
     pool_samples: u32,
 
     /// Number of volumes per sample.
-    #[structopt(short, long, default_value = "20")]
+    #[clap(short, long, default_value = "20")]
     volumes: u32,
 
     /// Number of volume samples.
-    #[structopt(long, default_value = "10")]
+    #[clap(long, default_value = "10")]
     volume_samples: u32,
 
     /// Attaches and detaches `N` volumes from each volume sample.
     /// In other words, we will publish/unpublish each `N` volumes from each list of samples.
     /// Please note that this can take quite some time; it's very slow to create volume targets
     /// with remote replicas.
-    #[structopt(long, default_value = "2")]
+    #[clap(long, default_value = "2")]
     volume_attach_cycles: u32,
 
     /// Use ram based pools instead of files (useful for debugging with small pool allocation).
     /// When using files the /tmp/pool directory will be used.
-    #[structopt(long)]
+    #[clap(long)]
     pool_use_malloc: bool,
 }
 
 impl Default for SimulationOpts {
     fn default() -> Self {
-        SimulationOpts::from_iter(Vec::<String>::new())
+        SimulationOpts::parse_from(Vec::<String>::new())
     }
 }
 

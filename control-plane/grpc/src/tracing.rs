@@ -183,7 +183,7 @@ where
             }
             Err(error) => {
                 let span = context.span();
-                span.set_status(opentelemetry::trace::StatusCode::Error, error.to_string());
+                span.set_status(opentelemetry::trace::Status::error(error.to_string()));
                 span.end();
                 Err(error)
             }
@@ -195,9 +195,9 @@ fn update_span_from_response<T>(context: opentelemetry::Context, response: &Resp
     let grpc_code = match tonic::Status::from_header_map(response.headers()) {
         Some(status) => {
             if status.code() == tonic::Code::Ok {
-                span.set_status(opentelemetry::trace::StatusCode::Ok, status.to_string());
+                span.set_status(opentelemetry::trace::Status::Ok);
             } else {
-                span.set_status(opentelemetry::trace::StatusCode::Error, status.to_string());
+                span.set_status(opentelemetry::trace::Status::error(status.to_string()));
             }
             status.code()
         }

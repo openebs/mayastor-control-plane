@@ -1,9 +1,7 @@
 /// OpenTelemetry KeyVal for Processor Tags
-pub use opentelemetry::KeyValue;
-use opentelemetry::{
-    global,
-    sdk::{propagation::TraceContextPropagator, Resource},
-};
+pub use opentelemetry::{global, trace, Context, KeyValue};
+
+use opentelemetry::sdk::{propagation::TraceContextPropagator, Resource};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
 /// Parse KeyValues from structopt's cmdline arguments
@@ -120,8 +118,8 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
             set_jaeger_env();
 
             global::set_text_map_propagator(TraceContextPropagator::new());
-            let tracer = opentelemetry_jaeger::new_pipeline()
-                .with_agent_endpoint(jaeger)
+            let tracer = opentelemetry_jaeger::new_agent_pipeline()
+                .with_endpoint(jaeger)
                 .with_service_name(service_name)
                 .with_trace_config(
                     opentelemetry::sdk::trace::Config::default()
@@ -134,4 +132,8 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
         }
         None => subscriber.init(),
     };
+}
+
+pub fn flush_traces() {
+    opentelemetry::global::shutdown_tracer_provider();
 }

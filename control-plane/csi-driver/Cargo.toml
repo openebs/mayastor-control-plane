@@ -33,25 +33,22 @@ regex = "1.7.1"
 rpc = { path = "../../rpc" }
 grpc = { path = "../grpc" }
 tokio = { version = "1.25.0", features = ["full"] }
-clap = "2.34.0"
-nix = "0.22.3"
-strum = "0.21.0"
-strum_macros = "0.21.1"
+clap =  { version = "4.1.4", features = ["color", "env", "string"] }
+nix = "0.26.2"
+strum = "0.24.1"
+strum_macros = "0.24.3"
 heck = "0.4.1"
-
-# Tracing
 tracing = "0.1.37"
-opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
 glob = "0.3.1"
 lazy_static = "1.4.0"
 serde_json = "1.0.93"
 snafu = "0.7.4"
 tower = { version = "0.4.13", features = [ "timeout", "util" ] }
 url = "2.3.1"
-uuid = { version = "0.8.2", features = ["v4"] }
+uuid = { version = "1.3.0", features = ["v4"] }
 which = "4.4.0"
-k8s-openapi = { version = "0.15.0", features = ["v1_20"] }
-kube = { version = "0.74.0", features = ["runtime", "derive"] }
+k8s-openapi = { version = "0.17.0", features = ["v1_20"] }
+kube = { version = "0.78.0", features = ["runtime", "derive"] }
 nvmeadm = { path = "../../utils/dependencies/nvmeadm" }
 sysfs = { path = "../../utils/dependencies/sysfs" }
 common-lib = { path = "../../common" }
@@ -59,6 +56,7 @@ utils = { path = "../../utils/utils-lib" }
 shutdown = { path = "../../utils/shutdown" }
 
 [target.'cfg(target_os="linux")'.dependencies]
-udev = "0.6.3"
+udev = "0.7.0"
 devinfo = { path = "../../utils/dependencies/devinfo" }
 sys-mount = { version = "1.5.1", default-features = false }
+#sys-mount = { version = "2.0.2", default-features = false }

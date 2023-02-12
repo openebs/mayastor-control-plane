@@ -17,7 +17,7 @@ use dyn_clonable::clonable;
 use serde::{de::StdError, Deserialize, Serialize};
 
 use std::{fmt::Debug, num::TryFromIntError, str::FromStr, time::Duration};
-use strum_macros::{AsRefStr, ToString};
+use strum_macros::{AsRefStr, Display};
 use tokio::task::JoinError;
 use tonic::Code;
 
@@ -94,7 +94,7 @@ impl FromStr for MessageId {
 impl ToString for MessageId {
     fn to_string(&self) -> String {
         match self {
-            Self::v0(id) => format!("{}/{}", VERSION, id.to_string()),
+            Self::v0(id) => format!("{VERSION}/{id}"),
         }
     }
 }
@@ -108,7 +108,7 @@ pub trait Message {
 }
 
 /// All the different variants of Resources
-#[derive(Serialize, Deserialize, Debug, Clone, AsRefStr, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, AsRefStr, Display, Eq, PartialEq)]
 pub enum ResourceKind {
     /// Unknown or unspecified resource
     Unknown,

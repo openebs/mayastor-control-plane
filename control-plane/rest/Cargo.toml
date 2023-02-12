@@ -18,17 +18,17 @@ path = "./src/lib.rs"
 [dependencies]
 # Actix Server, telemetry
 rustls = "0.20.8"
-rustls-pemfile = "0.2.1"
+rustls-pemfile = "1.0.2"
 actix-web = { version = "4.3.0", features = ["rustls"] }
 actix-service = "2.0.2"
-opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
-actix-web-opentelemetry = "0.12.0"
+opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
+actix-web-opentelemetry = "0.13.0"
 tracing = "0.1.37"
 once_cell = "1.17.0"
 async-trait = "0.1.64"
 serde_json = { version = "1.0.93", features = ["preserve_order"] }
-serde_yaml = "0.8.26"
-structopt = "0.3.26"
+serde_yaml = "0.9.17"
+clap = { version = "4.1.4", features = ["color", "derive", "env", "string"] }
 futures = "0.3.26"
 anyhow = "1.0.69"
 snafu = "0.7.4"

@@ -4,12 +4,12 @@ use common_lib::{
     transport_api::{ClientId, MessageId},
     types::v0::transport::MessageIdVs,
 };
-use opentelemetry::trace::FutureExt;
 use std::time::Duration;
 use tonic::{
     transport::{Channel, Uri},
     IntoRequest,
 };
+use utils::tracing_telemetry::trace::FutureExt;
 
 use utils::DEFAULT_REQ_TIMEOUT;
 
@@ -143,7 +143,7 @@ impl Context {
         T: std::future::Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        let context = opentelemetry::Context::current();
+        let context = utils::tracing_telemetry::Context::current();
         tokio::spawn(future.with_context(context))
     }
 }

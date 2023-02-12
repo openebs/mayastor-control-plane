@@ -2,23 +2,23 @@ pub mod infra;
 
 use infra::*;
 
+use clap::{builder::TypedValueParser, Parser};
 use composer::Builder;
 use rpc::io_engine::IoEngineApiVersion;
 use std::{collections::HashMap, convert::TryInto, fmt::Write, str::FromStr, time::Duration};
-use structopt::StructOpt;
 pub(crate) use utils::tracing_telemetry::KeyValue;
 
 const TEST_LABEL_PREFIX: &str = "io.composer.test";
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
+#[derive(Debug, Parser)]
+#[clap(name = utils::package_description!(), version = utils::version_info_str!())]
 pub struct CliArgs {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     action: Action,
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Deployment actions")]
+#[derive(Debug, Parser)]
+#[clap(about = "Deployment actions")]
 pub(crate) enum Action {
     Start(Box<StartOptions>),
     Stop(StopOptions),
@@ -29,28 +29,28 @@ pub(crate) enum Action {
 /// $prefix.name = $name
 const DEFAULT_CLUSTER_LABEL: &str = ".cluster";
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Stop and delete all components")]
+#[derive(Debug, Parser)]
+#[clap(about = "Stop and delete all components")]
 pub struct StopOptions {
     /// Label for the cluster
     /// In the form of "prefix.name"
-    #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
+    #[clap(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
     pub cluster_label: ClusterLabel,
 }
 
-#[derive(Debug, Default, StructOpt)]
-#[structopt(about = "List all running components")]
+#[derive(Debug, Default, Parser)]
+#[clap(about = "List all running components")]
 pub struct ListOptions {
     /// Simple list without using the docker executable
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub no_docker: bool,
 
     /// Format the docker output
-    #[structopt(short, long, conflicts_with = "no-docker")]
+    #[clap(short, long, conflicts_with = "no-docker")]
     pub format: Option<String>,
 
     /// Label for the cluster
-    #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
+    #[clap(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
     pub cluster_label: ClusterLabel,
 }
 
@@ -69,228 +69,228 @@ pub fn default_agents() -> &'static str {
     "Core"
 }
 
-#[derive(Debug, Default, Clone, StructOpt)]
-#[structopt(about = "Create and start all components")]
+#[derive(Debug, Default, Clone, Parser)]
+#[clap(about = "Create and start all components")]
 pub struct StartOptions {
     /// Use the following Control Plane Agents
     /// Specify one agent at a time or as a list.
     /// ( "" for no agents ).
     /// todo: specify start arguments, eg: Node="-v".
-    #[structopt(
+    #[clap(
         short,
         long,
         default_value = default_agents(),
-        possible_values = &ControlPlaneAgent::variants(),
-        value_delimiter = ","
+        value_parser = clap::builder::PossibleValuesParser::new(ControlPlaneAgent::variants()).map(|s| s.parse::<ControlPlaneAgent>().unwrap()),
+        value_delimiter = ','
     )]
     pub agents: Vec<ControlPlaneAgent>,
 
     /// Kubernetes Config file if using operators.
     /// [default: "~/.kube/config"]
-    #[structopt(long)]
+    #[clap(long)]
     pub kube_config: Option<String>,
 
     /// Use a base image for the binary components (eg: alpine:latest).
-    #[structopt(long, env = "BASE_IMAGE")]
+    #[clap(long, env = "BASE_IMAGE")]
     pub base_image: Option<String>,
 
     /// Use the jaegertracing service.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub jaeger: bool,
 
     /// Use an external jaegertracing collector.
-    #[structopt(long, env = "EXTERNAL_JAEGER")]
+    #[clap(long, env = "EXTERNAL_JAEGER")]
     pub external_jaeger: Option<String>,
 
     /// Use the elasticsearch service.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub elastic: bool,
 
     /// Use the kibana service.
     /// Note: the index pattern is only created when used in conjunction with `wait_timeout`.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub kibana: bool,
 
     /// Disable the REST Server.
-    #[structopt(long)]
+    #[clap(long)]
     pub no_rest: bool,
 
     /// Enable the CSI Controller plugin.
-    #[structopt(long)]
+    #[clap(long)]
     pub csi_controller: bool,
 
     /// Enable the CSI Node plugin.
-    #[structopt(long)]
+    #[clap(long)]
     pub csi_node: bool,
 
     /// Use `N` csi-node instances
-    #[structopt(long, requires = "csi-node")]
+    #[clap(long, requires = "csi_node")]
     pub app_nodes: Option<u32>,
 
     /// Run csi-node instances on io-engine nodes.
-    #[structopt(short, long, requires = "csi-node")]
+    #[clap(short, long, requires = "csi_node")]
     pub local_nodes: bool,
 
     /// Rest Path to JSON Web KEY file used for authenticating REST requests.
     /// Otherwise, no authentication is used
-    #[structopt(long, conflicts_with = "no-rest")]
+    #[clap(long, conflicts_with = "no_rest")]
     pub rest_jwk: Option<String>,
 
     /// Use the following image pull policy when creating containers from images.
-    #[structopt(long, default_value = "ifnotpresent")]
+    #[clap(long, default_value = "ifnotpresent")]
     pub image_pull_policy: composer::ImagePullPolicy,
 
     /// Use `N` io_engine instances
     /// Note: the io_engine containers have the host's /tmp directory mapped into the container
     /// as /host/tmp. This is useful to create pool's from file images.
-    #[structopt(short, long, default_value = "1")]
+    #[clap(short, long, default_value = "1")]
     pub io_engines: u32,
 
     /// Use the following docker image for the io_engine instances.
-    #[structopt(long, env = "IO_ENGINE_IMAGE", default_value = Box::leak(utils::io_engine_image().into_boxed_str()))]
+    #[clap(long, env = "IO_ENGINE_IMAGE", default_value = utils::io_engine_image())]
     pub io_engine_image: String,
 
     /// Use the following runnable binary for the io_engine instances.
-    #[structopt(long, env = "IO_ENGINE_BIN", conflicts_with = "io-engine-image")]
+    #[clap(long, env = "IO_ENGINE_BIN", conflicts_with = "io_engine_image")]
     pub io_engine_bin: Option<String>,
 
     /// Add host block devices to the io_engine containers as a docker bind mount
     /// A raw block device: --io_engine-devices /dev/sda /dev/sdb
     /// An lvm volume group: --io_engine-devices /dev/sdavg
     /// Note: the io_engine containers will run as `privileged`!
-    #[structopt(long)]
+    #[clap(long)]
     pub io_engine_devices: Vec<String>,
 
     /// Run each io_engine on separate cores.
-    #[structopt(long)]
+    #[clap(long)]
     pub io_engine_isolate: bool,
 
     /// Run each io_engine with these many cores.
     /// A value of 0 means we'll rely on the default value set by the io-engine.
-    #[structopt(long, default_value = "0")]
+    #[clap(long, default_value = "0")]
     pub io_engine_cores: u32,
 
     /// Add the following environment variables to the io_engine containers.
-    #[structopt(long, env = "IO_ENGINE_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(long, env = "IO_ENGINE_ENV", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     pub io_engine_env: Option<Vec<KeyValue>>,
 
     /// The gRPC api versions to be passed to the io-engine.
-    #[structopt(
+    #[clap(
         long,
         env = "IO_ENGINE_API_VERSIONS",
-        value_delimiter = ",",
+        value_delimiter = ',',
         default_value = "v1"
     )]
     io_engine_api_versions: Vec<IoEngineApiVersion>,
 
     /// Set the developer delayed env flag of the io_engine reactor.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub developer_delayed: bool,
 
     /// Add the following environment variables to the agent containers.
-    #[structopt(long, env = "AGENTS_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(long, env = "AGENTS_ENV", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     pub agents_env: Option<Vec<KeyValue>>,
 
     /// Add the following environment variables to the rest container.
-    #[structopt(long, env = "REST_ENV", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(long, env = "REST_ENV", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     pub rest_env: Option<Vec<KeyValue>>,
 
     /// Cargo Build each component before deploying.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub build: bool,
 
     /// Cargo Build the workspace before deploying.
-    #[structopt(long)]
+    #[clap(long)]
     pub build_all: bool,
 
     /// Use a dns resolver for the cluster: defreitas/dns-proxy-server.
     /// Note this messes with your /etc/resolv.conf so use at your own risk.
-    #[structopt(long)]
+    #[clap(long)]
     pub dns: bool,
 
     /// Show information from the cluster after creation.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub show_info: bool,
 
     /// Name of the cluster - currently only one allowed at a time.
     /// Note: Does not quite work as intended, as we haven't figured out how to bridge between
     /// different networks.
-    #[structopt(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
+    #[clap(short, long, default_value = DEFAULT_CLUSTER_LABEL)]
     pub cluster_label: ClusterLabel,
 
     /// Uid of the cluster.
     /// By default the agents will determine this value themselves.
-    #[structopt(long)]
+    #[clap(long)]
     pub cluster_uid: Option<ClusterUid>,
 
     /// Disable the etcd service.
-    #[structopt(long)]
+    #[clap(long)]
     pub no_etcd: bool,
 
     /// The period at which the registry updates its cache of all
     /// resources from all nodes.
-    #[structopt(long)]
+    #[clap(long)]
     pub cache_period: Option<humantime::Duration>,
 
     /// Override the node's deadline for the Core Agent.
-    #[structopt(long)]
+    #[clap(long)]
     pub node_deadline: Option<humantime::Duration>,
 
     /// Override the base request timeout for GRPC requests.
-    #[structopt(long)]
+    #[clap(long)]
     pub request_timeout: Option<humantime::Duration>,
 
     /// Override the node's connection timeout.
-    #[structopt(long)]
+    #[clap(long)]
     pub node_conn_timeout: Option<humantime::Duration>,
 
     /// Don't use minimum timeouts for specific requests.
-    #[structopt(long)]
+    #[clap(long)]
     no_min_timeouts: bool,
 
     /// Override the core agent's store operation timeout.
-    #[structopt(long)]
+    #[clap(long)]
     pub store_timeout: Option<humantime::Duration>,
 
     /// Override the core agent's lease lock ttl for the persistent store after which it'll loose
     /// the exclusive access to the store.
-    #[structopt(long)]
+    #[clap(long)]
     pub store_lease_ttl: Option<humantime::Duration>,
 
     /// Override the core agent's reconcile period.
-    #[structopt(long)]
+    #[clap(long)]
     pub reconcile_period: Option<humantime::Duration>,
 
     /// Override the core agent's reconcile idle period.
-    #[structopt(long)]
+    #[clap(long)]
     pub reconcile_idle_period: Option<humantime::Duration>,
 
     /// Override the opentel max exporter batch size.
-    #[structopt(long, env = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE")]
+    #[clap(long, env = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE")]
     pub otel_max_batch_size: Option<String>,
 
     /// Amount of time to wait for all containers to start.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub wait_timeout: Option<humantime::Duration>,
 
     /// Don't stop/remove existing containers on the same cluster
     /// Allows us to start "different" stacks independently, eg:
     /// > deployer start -ejk -s -a "" --no-rest --no-etcd -m 0
     /// > deployer start -s -m 2
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub reuse_cluster: bool,
 
     /// Add process service tags to the traces.
-    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     tracing_tags: Vec<KeyValue>,
 
     /// Maximum number of concurrent rebuilds across the cluster.
-    #[structopt(long)]
+    #[clap(long)]
     max_rebuilds: Option<u32>,
 
     /// Deploy a fio-spdk container.
     /// This can be used for userspace io against a volume's nvmf target using the spdk ioengine.
-    #[structopt(long)]
+    #[clap(long)]
     pub(crate) fio_spdk: bool,
 }
 

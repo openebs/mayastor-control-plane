@@ -6,61 +6,62 @@ use crate::{
     simulation::{RunStats, SimulationOpts},
     Etcd, PrettyPrinter, Printer, Simulation, Url,
 };
+
+use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
-use structopt::StructOpt;
 
 /// Extrapolate how much storage a cluster would require if it were to run for a specified
 /// number of days.
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 pub(crate) struct Extrapolation {
     /// Runtime in days to extrapolate.
-    #[structopt(long, short)]
+    #[clap(long, short)]
     days: std::num::NonZeroU64,
 
     /// Maximum number of table entries to print.
-    #[structopt(long, default_value = "10")]
+    #[clap(long, default_value = "10")]
     table_entries: std::num::NonZeroU64,
 
     /// Show only the usage in the stdout output.
-    #[structopt(long)]
+    #[clap(long)]
     usage_only: bool,
 
     /// Show the usage in the stdout output as bytes.
-    #[structopt(long, requires("usage-only"))]
+    #[clap(long, requires("usage-only"))]
     usage_bytes: bool,
 
     /// Extrapolation specific options.
-    #[structopt(flatten)]
+    #[clap(flatten)]
     opts: ExtrapolationDayOpts,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     cluster_opts: ClusterOpts,
 
     /// Show tabulated simulation output.
-    #[structopt(long)]
+    #[clap(long)]
     show_simulation: bool,
 
     /// Customize simulation options.
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     simulate: Option<Command>,
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 enum Command {
     Simulate(SimulationOpts),
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 struct ExtrapolationDayOpts {
     /// Volume turnover:
     /// how many volumes are created/deleted every day.
-    #[structopt(long, default_value = "50")]
+    #[clap(long, default_value = "50")]
     volume_turnover: u64,
 
     /// Volume attach cycle:
     /// how many volume modifications (publish/unpublish) are done every day.
-    #[structopt(long, default_value = "200")]
+    #[clap(long, default_value = "200")]
     volume_attach_cycle: u64,
 }
 

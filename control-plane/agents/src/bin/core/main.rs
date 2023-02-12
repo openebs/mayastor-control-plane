@@ -16,82 +16,82 @@ pub(crate) mod volume;
 /// The watch related operations.
 pub(crate) mod watch;
 
+use clap::Parser;
 use controller::registry::NumRebuilds;
 use std::net::SocketAddr;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
 use common_lib::HostAccessControl;
-use opentelemetry::{trace::TracerProvider, KeyValue};
-use structopt::StructOpt;
+use utils::tracing_telemetry::{trace::TracerProvider, KeyValue};
 
 /// The Cli arguments for this binary.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 #[structopt(name = utils::package_description!(), version = version_info_str!())]
 pub(crate) struct CliArgs {
     /// The period at which the registry updates its cache of all
     /// resources from all nodes.
-    #[structopt(long, short, default_value = utils::CACHE_POLL_PERIOD)]
+    #[clap(long, short, default_value = utils::CACHE_POLL_PERIOD)]
     pub(crate) cache_period: humantime::Duration,
 
     /// The period at which the reconcile loop checks for new work.
-    #[structopt(long, default_value = "30s")]
+    #[clap(long, default_value = "30s")]
     pub(crate) reconcile_idle_period: humantime::Duration,
 
     /// The period at which the reconcile loop attempts to do work.
-    #[structopt(long, default_value = "10s")]
+    #[clap(long, default_value = "10s")]
     pub(crate) reconcile_period: humantime::Duration,
 
     /// Deadline for the io-engine instance keep alive registration.
-    #[structopt(long, short, default_value = "10s")]
+    #[clap(long, short, default_value = "10s")]
     pub(crate) deadline: humantime::Duration,
 
     /// The Persistent Store URLs to connect to.
     /// (supports the http/https schema)
-    #[structopt(long, short, default_value = "http://localhost:2379")]
+    #[clap(long, short, default_value = "http://localhost:2379")]
     pub(crate) store: String,
 
     /// The timeout for store operations.
-    #[structopt(long, default_value = utils::STORE_OP_TIMEOUT)]
+    #[clap(long, default_value = utils::STORE_OP_TIMEOUT)]
     pub(crate) store_timeout: humantime::Duration,
 
     /// The lease lock ttl for the persistent store after which we'll lose the exclusive access.
-    #[structopt(long, default_value = utils::STORE_LEASE_LOCK_TTL)]
+    #[clap(long, default_value = utils::STORE_LEASE_LOCK_TTL)]
     pub(crate) store_lease_ttl: humantime::Duration,
 
     /// The timeout for every node connection (gRPC).
-    #[structopt(long, default_value = utils::DEFAULT_CONN_TIMEOUT)]
+    #[clap(long, default_value = utils::DEFAULT_CONN_TIMEOUT)]
     pub(crate) connect_timeout: humantime::Duration,
 
     /// The default timeout for node request timeouts (gRPC).
-    #[structopt(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
+    #[clap(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
     pub(crate) request_timeout: humantime::Duration,
 
     /// Control hosts access control via their NQN's.
-    #[structopt(long, short, use_delimiter = true, default_value = utils::DEFAULT_HOST_ACCESS_CONTROL)]
+    #[clap(long, use_value_delimiter = true, default_value = utils::DEFAULT_HOST_ACCESS_CONTROL)]
     pub(crate) hosts_acl: Vec<HostAccessControl>,
 
     /// Add process service tags to the traces.
-    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     tracing_tags: Vec<KeyValue>,
 
     /// Don't use minimum timeouts for specific requests.
-    #[structopt(long)]
+    #[clap(long)]
     no_min_timeouts: bool,
     /// Trace rest requests to the Jaeger endpoint agent.
-    #[structopt(long, short)]
+    #[clap(long, short)]
     jaeger: Option<String>,
     /// The GRPC Server URLs to connect to.
     /// (supports the http/https schema)
-    #[structopt(long, short, default_value = DEFAULT_GRPC_SERVER_ADDR)]
+    #[clap(long, short, default_value = DEFAULT_GRPC_SERVER_ADDR)]
     pub(crate) grpc_server_addr: SocketAddr,
     /// The maximum number of system-wide rebuilds permitted at any given time.
     /// If `None` do not limit the number of rebuilds.
-    #[structopt(long)]
+    #[clap(long)]
     max_rebuilds: Option<NumRebuilds>,
 }
 impl CliArgs {
     fn args() -> Self {
-        CliArgs::from_args()
+        CliArgs::parse()
     }
 }
 
@@ -127,11 +127,13 @@ async fn server(cli_args: CliArgs) {
     .await;
 
     let service = agents::Service::builder()
-        .with_shared_state(opentelemetry::global::tracer_provider().versioned_tracer(
-            "core-agent",
-            Some(env!("CARGO_PKG_VERSION")),
-            None,
-        ))
+        .with_shared_state(
+            utils::tracing_telemetry::global::tracer_provider().versioned_tracer(
+                "core-agent",
+                Some(env!("CARGO_PKG_VERSION")),
+                None,
+            ),
+        )
         .with_shared_state(registry.clone())
         .with_shared_state(cli_args.grpc_server_addr)
         .configure_async(node::configure)
@@ -145,5 +147,5 @@ async fn server(cli_args: CliArgs) {
     registry.start().await;
     service.run(cli_args.grpc_server_addr).await;
     registry.stop().await;
-    opentelemetry::global::shutdown_tracer_provider();
+    utils::tracing_telemetry::flush_traces();
 }

@@ -24,15 +24,18 @@ impl CsiControllerConfig {
         );
 
         let rest_endpoint = args
-            .value_of("endpoint")
+            .get_one::<String>("endpoint")
             .context("rest endpoint must be specified")?;
 
         let io_timeout = args
-            .value_of("timeout")
+            .get_one::<String>("timeout")
             .context("I/O timeout must be specified")?
             .parse::<humantime::Duration>()?;
 
-        let node_selector = csi_driver::csi_node_selector_parse(args.values_of("node-selector"))?;
+        let node_selector = csi_driver::csi_node_selector_parse(
+            args.get_many::<String>("node-selector")
+                .map(|s| s.map(|s| s.as_str())),
+        )?;
 
         CONFIG.get_or_init(|| Self {
             rest_endpoint: rest_endpoint.into(),

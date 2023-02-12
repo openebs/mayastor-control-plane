@@ -21,12 +21,12 @@ common-lib = { path = "../common" }
 rpc = { path = "../rpc" }
 utils = { path = "../utils/utils-lib" }
 grpc = { path = "../control-plane/grpc" }
-structopt = "0.3.26"
+clap = { version = "4.1.4", features = ["color", "derive", "env", "string"] }
 tokio = { version = "1.25.0", features = ["full"] }
 tonic = "0.8.3"
 async-trait = "0.1.64"
-strum = "0.21.0"
-strum_macros = "0.21.1"
+strum = "0.24.1"
+strum_macros = "0.24.3"
 paste = "1.0.11"
 humantime = "2.1.0"
 reqwest = { version = "0.11.14", features = ["multipart"] }

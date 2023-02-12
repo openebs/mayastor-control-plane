@@ -1,3 +1,4 @@
+use clap::Parser;
 use common_lib::{
     transport_api::TimeoutOptions, types::v0::transport::cluster_agent::NodeAgentInfo,
 };
@@ -7,16 +8,14 @@ use grpc::{
 };
 use http::Uri;
 use once_cell::sync::OnceCell;
-use opentelemetry::KeyValue;
 use std::{net::SocketAddr, time::Duration};
-use structopt::StructOpt;
 use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use utils::{
-    package_description, version_info_str, DEFAULT_CLUSTER_AGENT_CLIENT_ADDR,
-    DEFAULT_NODE_AGENT_SERVER_ADDR, NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD,
-    NVME_PATH_RETRANSMISSION_PERIOD,
+    package_description, tracing_telemetry::KeyValue, version_info_str,
+    DEFAULT_CLUSTER_AGENT_CLIENT_ADDR, DEFAULT_NODE_AGENT_SERVER_ADDR,
+    NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD, NVME_PATH_RETRANSMISSION_PERIOD,
 };
 mod detector;
 mod path_provider;
@@ -27,43 +26,43 @@ use detector::PathFailureDetector;
 use server::NodeAgentApiServer;
 
 /// TODO
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 #[structopt(name = package_description!(), version = version_info_str!())]
 struct Cli {
     /// HA Cluster Agent URL or address to connect to the services.
-    #[structopt(long, short, default_value = DEFAULT_CLUSTER_AGENT_CLIENT_ADDR)]
+    #[clap(long, short, default_value = DEFAULT_CLUSTER_AGENT_CLIENT_ADDR)]
     cluster_agent: Uri,
 
     /// Node name(spec.nodeName). This must be the same as provided in csi-node.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     node_name: String,
 
     /// IP address and port for the ha node-agent to listen on.
-    #[structopt(short, long, default_value = DEFAULT_NODE_AGENT_SERVER_ADDR)]
+    #[clap(short, long, default_value = DEFAULT_NODE_AGENT_SERVER_ADDR)]
     grpc_endpoint: SocketAddr,
 
     /// Add process service tags to the traces.
-    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     tracing_tags: Vec<KeyValue>,
 
     /// Path failure detection period.
-    #[structopt(short, long, env = "DETECTION_PERIOD", default_value = NVME_PATH_CHECK_PERIOD)]
+    #[clap(short, long, env = "DETECTION_PERIOD", default_value = NVME_PATH_CHECK_PERIOD)]
     detection_period: humantime::Duration,
 
     /// Retransmission period for reporting failed paths in case of network issues.
-    #[structopt(short, long, env = "RETRANSMISSION_PERIOD", default_value = NVME_PATH_RETRANSMISSION_PERIOD)]
+    #[clap(short, long, env = "RETRANSMISSION_PERIOD", default_value = NVME_PATH_RETRANSMISSION_PERIOD)]
     retransmission_period: humantime::Duration,
 
     /// Period for aggregating multiple failed paths before reporting them.
-    #[structopt(short, long, env = "AGGREGATION_PERIOD", default_value = NVME_PATH_AGGREGATION_PERIOD)]
+    #[clap(short, long, env = "AGGREGATION_PERIOD", default_value = NVME_PATH_AGGREGATION_PERIOD)]
     aggregation_period: humantime::Duration,
 
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
-    #[structopt(long, short)]
+    #[clap(long, short)]
     jaeger: Option<String>,
 
     /// The csi-node socket file for grpc over uds.
-    #[structopt(long)]
+    #[clap(long)]
     csi_socket: std::path::PathBuf,
 }
 
@@ -85,7 +84,7 @@ pub fn csi_node_nvme_client() -> &'static NvmeOperationsClient<Channel> {
 
 impl Cli {
     fn args() -> Self {
-        Cli::from_args()
+        Cli::parse()
     }
 }
 

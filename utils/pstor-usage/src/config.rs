@@ -1,11 +1,14 @@
-use crate::{printer::TabledData, simulation::SimulationOpts, StructOpt};
+use crate::{printer::TabledData, simulation::SimulationOpts};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    convert::TryFrom,
     ffi::{OsStr, OsString},
 };
 
-#[derive(StructOpt, Debug, Clone)]
+use clap::Parser;
+
+#[derive(Parser, Debug, Clone)]
 pub(crate) struct ClusterOpts {
     /// Reads cluster configuration from a YAML configuration file.
     /// Example format:
@@ -21,12 +24,12 @@ pub(crate) struct ClusterOpts {
     ///     volume_attach_cycles: 15
     /// ```
     /// When using this option you must specify which cluster to extrapolate using --cluster-name.
-    #[structopt(long, short, verbatim_doc_comment, parse(try_from_os_str = Config::parse_config))]
+    #[clap(long, short, verbatim_doc_comment, value_parser = clap::builder::OsStringValueParser::new())]
     config: Option<Config>,
 
     /// When using a cluster config (--config), you can specify a single cluster to extrapolate.
     /// Otherwise, we'll extrapolate all clusters.
-    #[structopt(long, requires = "config")]
+    #[clap(long, requires = "config")]
     cluster_name: Option<ClusterName>,
 }
 impl ClusterOpts {
@@ -66,6 +69,14 @@ pub(crate) type ClusterName = String;
 pub(crate) struct Config {
     clusters: HashMap<ClusterName, ClusterConfig>,
     simulation: Option<SimulationOpts>,
+}
+
+impl TryFrom<&OsStr> for Config {
+    type Error = OsString;
+
+    fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
+        Config::parse_config(value)
+    }
 }
 
 impl Config {

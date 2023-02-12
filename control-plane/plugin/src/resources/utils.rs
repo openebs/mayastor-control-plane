@@ -84,7 +84,7 @@ pub trait GetHeaderRow {
 }
 
 // OutputFormat to be used as an enum to match the output from args.
-#[derive(Debug, strum_macros::EnumString, strum_macros::AsRefStr)]
+#[derive(Debug, Clone, strum_macros::EnumString, strum_macros::AsRefStr)]
 #[strum(serialize_all = "lowercase")]
 pub enum OutputFormat {
     None,

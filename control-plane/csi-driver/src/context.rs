@@ -20,7 +20,7 @@ pub fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, ton
 }
 
 /// The various volume context parameters.
-#[derive(strum_macros::AsRefStr, strum_macros::ToString)]
+#[derive(strum_macros::AsRefStr, strum_macros::Display)]
 #[strum(serialize_all = "camelCase")]
 pub enum Parameters {
     IoTimeout,

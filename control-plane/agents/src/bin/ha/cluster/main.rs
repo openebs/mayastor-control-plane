@@ -1,13 +1,12 @@
+use clap::Parser;
 use grpc::client::CoreClient;
 use http::Uri;
 use once_cell::sync::OnceCell;
-use opentelemetry::{global, KeyValue};
 use std::net::SocketAddr;
-use structopt::StructOpt;
 use tracing::info;
 use utils::{
-    package_description, version_info_str, DEFAULT_CLUSTER_AGENT_SERVER_ADDR,
-    DEFAULT_GRPC_CLIENT_ADDR,
+    package_description, tracing_telemetry::KeyValue, version_info_str,
+    DEFAULT_CLUSTER_AGENT_SERVER_ADDR, DEFAULT_GRPC_CLIENT_ADDR,
 };
 mod etcd;
 mod nodes;
@@ -15,37 +14,37 @@ mod server;
 mod switchover;
 mod volume;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 #[structopt(name = package_description!(), version = version_info_str!())]
 struct Cli {
     /// IP address and port for the cluster-agent to listen on.
-    #[structopt(long, short, default_value = DEFAULT_CLUSTER_AGENT_SERVER_ADDR)]
+    #[clap(long, short, default_value = DEFAULT_CLUSTER_AGENT_SERVER_ADDR)]
     grpc_endpoint: SocketAddr,
 
     /// The Persistent Store URL to connect to.
-    #[structopt(long, short, default_value = "http://localhost:2379")]
+    #[clap(long, short, default_value = "http://localhost:2379")]
     store: Uri,
 
     /// Timeout for store operation.
-    #[structopt(long, default_value = utils::STORE_OP_TIMEOUT)]
+    #[clap(long, default_value = utils::STORE_OP_TIMEOUT)]
     store_timeout: humantime::Duration,
 
     /// Core gRPC server URL or address.
-    #[structopt(long, short, default_value = DEFAULT_GRPC_CLIENT_ADDR)]
+    #[clap(long, short, default_value = DEFAULT_GRPC_CLIENT_ADDR)]
     core_grpc: Uri,
 
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
-    #[structopt(long, short)]
+    #[clap(long, short)]
     jaeger: Option<String>,
 
     /// Add process service tags to the traces.
-    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     tracing_tags: Vec<KeyValue>,
 }
 
 impl Cli {
     fn args() -> Self {
-        Cli::from_args()
+        Cli::parse()
     }
 }
 
@@ -96,6 +95,6 @@ async fn main() -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("Error running server: {e}"))?;
 
-    global::shutdown_tracer_provider();
+    utils::tracing_telemetry::flush_traces();
     Ok(())
 }

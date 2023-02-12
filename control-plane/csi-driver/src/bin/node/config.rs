@@ -137,28 +137,28 @@ impl TryFrom<NvmeParseParams<'_>> for NvmeConfig {
         Self::try_from(NvmeArgValues::try_from(value)?)
     }
 }
-impl TryFrom<&ArgMatches<'_>> for NvmeArgValues {
+impl TryFrom<&ArgMatches> for NvmeArgValues {
     type Error = anyhow::Error;
-    fn try_from(matches: &ArgMatches<'_>) -> Result<Self, Self::Error> {
+    fn try_from(matches: &ArgMatches) -> Result<Self, Self::Error> {
         let mut map = NvmeArgValues::default();
-        if let Some(value) = matches.value_of(nvme_nr_io_queues()) {
+        if let Some(value) = matches.get_one::<String>(&nvme_nr_io_queues()) {
             map.0
                 .insert(Parameters::NvmeNrIoQueues.to_string(), value.to_string());
         }
 
-        if let Some(value) = matches.value_of(nvme_ctrl_loss_tmo()) {
+        if let Some(value) = matches.get_one::<String>(&nvme_ctrl_loss_tmo()) {
             map.0
                 .insert(Parameters::NvmeCtrlLossTmo.to_string(), value.to_string());
         }
 
-        if let Some(value) = matches.value_of(nvme_keep_alive_tmo()) {
+        if let Some(value) = matches.get_one::<String>(&nvme_keep_alive_tmo()) {
             map.0
                 .insert(Parameters::NvmeKeepAliveTmo.to_string(), value.to_string());
         }
         Ok(map)
     }
 }
-impl TryFrom<&ArgMatches<'_>> for NvmeConfig {
+impl TryFrom<&ArgMatches> for NvmeConfig {
     type Error = anyhow::Error;
     fn try_from(matches: &ArgMatches) -> Result<Self, Self::Error> {
         Self::try_from(NvmeArgValues::try_from(matches)?)

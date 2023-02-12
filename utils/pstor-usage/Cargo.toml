@@ -13,11 +13,11 @@ openapi = { path = "../../openapi", default-features = false, features = [ "towe
 deployer-cluster = { path = "../../utils/deployer-cluster" }
 utils = { path = "../utils-lib" }
 anyhow = "1.0.69"
-structopt = "0.3.26"
-parse-size = "1.0.0"
+clap = { version = "4.1.4", features = ["color", "derive", "env", "string"] }
+parse-size = { version = "1.0.0", features = [ "std" ] }
 async-trait = "0.1.64"
 etcd-client = "0.10.2"
-prettytable-rs = "0.8.0"
+prettytable-rs = "0.10.0"
 serde = "1.0.152"
-serde_yaml = "0.8.26"
+serde_yaml = "0.9.17"
 itertools = "0.10.5"
