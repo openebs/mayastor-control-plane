@@ -9,7 +9,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, ops::RangeInclusive};
-use strum_macros::{EnumString, ToString};
+use strum_macros::{Display, EnumString};
 
 /// Volume Nexuses
 ///
@@ -76,7 +76,7 @@ impl From<Nexus> for models::Nexus {
 rpc_impl_string_uuid!(NexusId, "UUID of a nexus");
 
 /// Nexus State information
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum NexusStatus {
     /// Default Unknown state.
     Unknown = 0,
@@ -118,7 +118,7 @@ impl From<NexusStatus> for models::NexusState {
 }
 
 /// The protocol used to share the nexus.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, EnumString, Display, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum NexusShareProtocol {

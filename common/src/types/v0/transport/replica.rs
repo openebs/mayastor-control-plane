@@ -3,7 +3,7 @@ use super::*;
 use crate::{types::v0::store::nexus::ReplicaUri, IntoOption};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, ops::Deref};
-use strum_macros::{EnumString, ToString};
+use strum_macros::{Display, EnumString};
 
 /// Get all the replicas from specific node and pool
 /// or None for all nodes or all pools
@@ -417,7 +417,7 @@ pub struct UnshareReplica {
 }
 
 /// The protocol used to share the replica.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, EnumString, Display, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum ReplicaShareProtocol {
@@ -452,7 +452,7 @@ impl From<ReplicaShareProtocol> for Protocol {
 }
 
 /// State of the Replica
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum ReplicaStatus {

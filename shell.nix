@@ -22,8 +22,6 @@ in
 mkShell {
   name = "control-plane-shell";
   buildInputs = [
-    cargo-expand
-    cargo-udeps
     clang
     commitlint
     cowsay

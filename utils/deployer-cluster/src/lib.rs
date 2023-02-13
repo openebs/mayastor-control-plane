@@ -11,6 +11,7 @@ use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use common_lib::{transport_api::TimeoutOptions, types::v0::transport};
 use openapi::apis::Uuid;
 
+use clap::Parser;
 use common_lib::{
     transport_api::ReplyError,
     types::v0::{
@@ -47,7 +48,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use structopt::StructOpt;
 use tokio::net::UnixStream;
 use tonic::transport::Uri;
 use tracing::dispatcher::DefaultGuard;
@@ -70,7 +70,7 @@ async fn smoke_test() {
 /// Default options to create a cluster
 pub fn default_options() -> StartOptions {
     // using from_iter as Default::default would not set the default_value from structopt
-    let options: StartOptions = StartOptions::from_iter(&[""]);
+    let options: StartOptions = StartOptions::parse_from([""]);
     options
         .with_agents(default_agents().split(',').collect())
         .with_jaeger(true)
@@ -785,7 +785,7 @@ impl ClusterBuilder {
                 tracing_tags.dedup();
 
                 global::set_text_map_propagator(TraceContextPropagator::new());
-                let tracer = opentelemetry_jaeger::new_pipeline()
+                let tracer = opentelemetry_jaeger::new_agent_pipeline()
                     .with_service_name("cluster-client")
                     .with_trace_config(
                         opentelemetry::sdk::trace::Config::default()

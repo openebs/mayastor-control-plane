@@ -11,76 +11,75 @@ use actix_web::{
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, rsa_private_keys};
 use std::{fs::File, io::BufReader};
-use structopt::StructOpt;
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 #[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 pub(crate) struct CliArgs {
     /// The bind address for the REST interface (with HTTPS)
     /// Default: 0.0.0.0:8080
-    #[structopt(long, default_value = "0.0.0.0:8080")]
+    #[clap(long, default_value = "0.0.0.0:8080")]
     https: String,
     /// The bind address for the REST interface (with HTTP)
-    #[structopt(long)]
+    #[clap(long)]
     http: Option<String>,
 
     /// The CORE gRPC Server URL or address to connect to the services.
-    #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
+    #[clap(long, short = 'z', default_value = DEFAULT_GRPC_CLIENT_ADDR)]
     core_grpc: Uri,
 
     /// The json gRPC Server URL or address to connect to the service.
-    #[structopt(long, short = "J")]
+    #[clap(long, short = 'J')]
     json_grpc: Option<Uri>,
 
     /// Path to the certificate file
-    #[structopt(long, short, required_unless = "dummy-certificates")]
+    #[clap(long, short, required_unless_present = "dummy_certificates")]
     cert_file: Option<String>,
     /// Path to the key file
-    #[structopt(long, short, required_unless = "dummy-certificates")]
+    #[clap(long, short, required_unless_present = "dummy_certificates")]
     key_file: Option<String>,
 
     /// Use dummy HTTPS certificates (for testing)
-    #[structopt(long, short, required_unless = "cert-file")]
+    #[clap(long, short, required_unless_present = "cert_file")]
     dummy_certificates: bool,
 
     /// Trace rest requests to the Jaeger endpoint agent
-    #[structopt(long, short)]
+    #[clap(long, short)]
     jaeger: Option<String>,
 
     /// Path to JSON Web KEY file used for authenticating REST requests
-    #[structopt(long, required_unless = "no-auth")]
+    #[clap(long, required_unless_present = "no_auth")]
     jwk: Option<String>,
 
     /// Don't authenticate REST requests
-    #[structopt(long, required_unless = "jwk")]
+    #[clap(long, required_unless_present = "jwk")]
     no_auth: bool,
 
     /// The default timeout for backend requests issued by the REST Server
-    #[structopt(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
+    #[clap(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
     request_timeout: humantime::Duration,
 
     /// Add process service tags to the traces
-    #[structopt(short, long, env = "TRACING_TAGS", value_delimiter=",", parse(try_from_str = utils::tracing_telemetry::parse_key_value))]
+    #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     tracing_tags: Vec<KeyValue>,
 
     /// Don't use minimum timeouts for specific requests
-    #[structopt(long)]
+    #[clap(long)]
     no_min_timeouts: bool,
 
     /// Set number of workers to start.
     /// The value 0 means the number of available physical CPUs is used.
-    #[structopt(long, short, default_value = physical())]
+    #[clap(long, short, default_value = physical())]
     workers: usize,
 
     /// Set the max number of workers to start.
     /// The value 0 means the number of available physical CPUs is used.
-    #[structopt(long, short, default_value = utils::DEFAULT_REST_MAX_WORKER_THREADS)]
+    #[clap(long, short, default_value = utils::DEFAULT_REST_MAX_WORKER_THREADS)]
     max_workers: usize,
 }
 impl CliArgs {
     fn args() -> Self {
-        CliArgs::from_args()
+        CliArgs::parse()
     }
 }
 
@@ -102,10 +101,11 @@ fn timeout_opts() -> TimeoutOptions {
 }
 
 use actix_web_opentelemetry::RequestTracing;
+use clap::Parser;
 use common_lib::transport_api::{RequestMinTimeout, TimeoutOptions};
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use http::Uri;
-use opentelemetry::{global, KeyValue};
+use utils::tracing_telemetry::KeyValue;
 
 /// Extension trait for actix-web applications.
 pub trait OpenApiExt<T> {
@@ -244,7 +244,7 @@ async fn main() -> anyhow::Result<()> {
     .await
     .map_err(|e| e.into());
 
-    global::shutdown_tracer_provider();
+    utils::tracing_telemetry::flush_traces();
 
     result
 }

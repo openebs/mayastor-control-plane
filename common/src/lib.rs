@@ -69,7 +69,7 @@ pub use platform::init_cluster_info_or_panic;
 pub const ETCD_KEY_PREFIX: &str = "/openebs.io/mayastor";
 
 /// Enum defining the host access control kind.
-#[derive(Debug, Copy, Clone, strum_macros::ToString, strum_macros::EnumString, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, strum_macros::Display, strum_macros::EnumString, Eq, PartialEq)]
 #[strum(serialize_all = "lowercase")]
 pub enum HostAccessControl {
     None,

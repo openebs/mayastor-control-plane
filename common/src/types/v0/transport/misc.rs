@@ -7,14 +7,14 @@ use std::{
 };
 
 use std::str::FromStr;
-use strum_macros::{EnumString, ToString};
+use strum_macros::Display;
 
 /// Filter Objects based on one of the following criteria.
 /// # Example:
 /// // Get all nexuses from the node `node_id`
 /// let nexuses =
 ///     client.get_nexuses(Filter::Node(node_id)).await.unwrap();
-#[derive(Serialize, Deserialize, Debug, Clone, strum_macros::ToString)] // likely this ToString does not do the right thing...
+#[derive(Serialize, Deserialize, Debug, Clone, strum_macros::Display)] // likely this ToString does not do the right thing...
 pub enum Filter {
     /// All objects.
     None,
@@ -276,7 +276,7 @@ macro_rules! rpc_impl_string_id_percent_decoding {
 }
 
 /// Indicates what protocol the bdev is shared as.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Display, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum Protocol {

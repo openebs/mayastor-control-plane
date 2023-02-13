@@ -18,23 +18,22 @@ use crate::{
     resources::ResourceUpdates,
     simulation::Simulation,
 };
-
 use openapi::apis::Url;
 
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(structopt::StructOpt, Debug)]
-#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
+#[derive(Parser, Debug)]
+#[clap(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
     /// The rest endpoint if reusing a cluster.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     rest_url: Option<Url>,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Operations,
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 enum Operations {
     Simulate(Simulation),
     Extrapolate(Extrapolation),
@@ -42,7 +41,7 @@ enum Operations {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = CliArgs::from_args();
+    let args = CliArgs::parse();
     match args.command {
         Operations::Simulate(simulation) => {
             let _ = simulation.simulate(&args.rest_url).await?;

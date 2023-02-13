@@ -6,7 +6,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, ops::Deref};
-use strum_macros::{EnumString, ToString};
+use strum_macros::{Display, EnumString};
 
 /// Pool Service
 /// Get all the pools from specific node or None for all nodes
@@ -17,7 +17,7 @@ pub struct GetPools {
 }
 
 /// Status of the Pool
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum PoolStatus {
     /// unknown state
     Unknown = 0,

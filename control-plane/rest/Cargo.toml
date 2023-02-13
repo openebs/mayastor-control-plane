@@ -17,39 +17,36 @@ path = "./src/lib.rs"
 
 [dependencies]
 # Actix Server, telemetry
-rustls = "0.20.0"
-rustls-pemfile = "0.2.1"
-actix-web = { version = "4.1.0", features = ["rustls"] }
-actix-service = "2.0.0"
-opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio-current-thread"] }
-tracing-opentelemetry = "0.17.4"
-opentelemetry = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
-actix-web-opentelemetry = "0.12.0"
-tracing = "0.1.35"
-tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }
-once_cell = "1.9.0"
-async-trait = "0.1.51"
-serde_json = { version = "1.0.82", features = ["preserve_order"] }
-serde_yaml = "0.8.26"
-structopt = "0.3.23"
-futures = "0.3.21"
-anyhow = "1.0.44"
-snafu = "0.7.1"
-url = "2.2.2"
-http = "0.2.5"
+rustls = "0.20.8"
+rustls-pemfile = "1.0.2"
+actix-web = { version = "4.3.0", features = ["rustls"] }
+actix-service = "2.0.2"
+opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
+actix-web-opentelemetry = "0.13.0"
+tracing = "0.1.37"
+once_cell = "1.17.0"
+async-trait = "0.1.64"
+serde_json = { version = "1.0.93", features = ["preserve_order"] }
+serde_yaml = "0.9.17"
+clap = { version = "4.1.4", features = ["color", "derive", "env", "string"] }
+futures = "0.3.26"
+anyhow = "1.0.69"
+snafu = "0.7.4"
+url = "2.3.1"
+http = "0.2.8"
 tinytemplate = "1.2.1"
-jsonwebtoken = "8.1.1"
+jsonwebtoken = "8.2.0"
 common-lib = { path = "../../common" }
 utils = { path = "../../utils/utils-lib" }
 humantime = "2.1.0"
 grpc = { path = "../grpc" }
-num_cpus = "1.13.1"
+num_cpus = "1.15.0"
 
 [dev-dependencies]
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { version = "1.25.0", features = ["full"] }
 composer = { path = "../../utils/dependencies/composer", default-features = false }
 deployer-cluster = { path = "../../utils/deployer-cluster" }
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.130"
+version = "1.0.152"

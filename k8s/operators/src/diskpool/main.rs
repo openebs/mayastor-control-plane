@@ -6,7 +6,7 @@
 mod crd;
 
 use chrono::Utc;
-use clap::{App, Arg, ArgMatches};
+use clap::{Arg, ArgMatches};
 use crd::{DiskPool, DiskPoolStatus, PoolState};
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
@@ -22,7 +22,6 @@ use openapi::{
     clients::{self, tower::Url},
     models::{CreatePoolBody, Pool, RestJsonError},
 };
-use opentelemetry::global;
 
 use serde_json::json;
 use snafu::Snafu;
@@ -653,7 +652,7 @@ async fn ensure_crd(k8s: Client) {
 
 /// Determine what we want to do when dealing with errors from the
 /// reconciliation loop
-fn error_policy(error: &Error, _ctx: Arc<OperatorContext>) -> Action {
+fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext>) -> Action {
     let duration = Duration::from_secs(match error {
         Error::Duplicate { timeout } | Error::SpecError { timeout, .. } => (*timeout).into(),
 
@@ -718,17 +717,19 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
     }
 }
 
-async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
+async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     let k8s = Client::try_default().await?;
-    let namespace = args.value_of("namespace").unwrap();
+
+    let namespace = args.get_one::<String>("namespace").unwrap();
     ensure_crd(k8s.clone()).await;
 
     let dsp: Api<DiskPool> = Api::namespaced(k8s.clone(), namespace);
     let lp = ListParams::default();
-    let url = Url::parse(args.value_of("endpoint").unwrap()).expect("endpoint is not a valid URL");
+    let url = Url::parse(args.get_one::<String>("endpoint").unwrap())
+        .expect("endpoint is not a valid URL");
 
     let timeout: Duration = args
-        .value_of("request-timeout")
+        .get_one::<String>("request-timeout")
         .unwrap()
         .parse::<humantime::Duration>()
         .expect("timeout value is invalid")
@@ -748,17 +749,15 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
         inventory: tokio::sync::RwLock::new(HashMap::new()),
         http: clients::tower::ApiClient::new(cfg),
         interval: args
-            .value_of("interval")
+            .get_one::<String>("interval")
             .unwrap()
             .parse::<humantime::Duration>()
             .expect("interval value is invalid")
             .as_secs(),
-        retries: args
-            .value_of("retries")
-            .unwrap()
-            .parse::<u32>()
+        retries: *args
+            .get_one::<u32>("retries")
             .expect("retries value is invalid"),
-        disable_device_validation: args.is_present("disable_device_validation"),
+        disable_device_validation: args.get_flag("disable-device-validation"),
     };
 
     info!(
@@ -785,63 +784,60 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
-    let matches = App::new(utils::package_description!())
-        .author(clap::crate_authors!())
+    let matches = clap::Command::new(utils::package_description!())
         .version(utils::version_info_str!())
-        .settings(&[
-            clap::AppSettings::ColoredHelp,
-            clap::AppSettings::ColorAlways,
-        ])
         .arg(
-            Arg::with_name("interval")
-                .short("i")
+            Arg::new("interval")
+                .short('i')
                 .long("interval")
                 .env("INTERVAL")
                 .default_value(utils::CACHE_POLL_PERIOD)
                 .help("specify timer based reconciliation loop"),
         )
         .arg(
-            Arg::with_name("request-timeout")
-                .short("t")
+            Arg::new("request-timeout")
+                .short('t')
                 .long("request-timeout")
                 .env("REQUEST_TIMEOUT")
                 .default_value(utils::DEFAULT_REQ_TIMEOUT)
                 .help("the timeout for remote requests"),
         )
         .arg(
-            Arg::with_name("retries")
-                .short("r")
+            Arg::new("retries")
+                .long("retries")
+                .short('r')
                 .env("RETRIES")
+                .value_parser(clap::value_parser!(u32).range(1 ..))
                 .default_value("10")
                 .help("the number of retries before we set the resource into the error state"),
         )
         .arg(
-            Arg::with_name("endpoint")
+            Arg::new("endpoint")
                 .long("endpoint")
-                .short("e")
+                .short('e')
                 .env("ENDPOINT")
                 .default_value("http://ksnode-1:30011")
                 .help("an URL endpoint to the control plane's rest endpoint"),
         )
         .arg(
-            Arg::with_name("namespace")
+            Arg::new("namespace")
                 .long("namespace")
-                .short("-n")
+                .short('n')
                 .env("NAMESPACE")
                 .default_value("mayastor")
                 .help("the default namespace we are supposed to operate in"),
         )
         .arg(
-            Arg::with_name("jaeger")
-                .short("-j")
+            Arg::new("jaeger")
+                .short('j')
                 .long("jaeger")
                 .env("JAEGER_ENDPOINT")
                 .help("enable open telemetry and forward to jaeger"),
         )
         .arg(
-            Arg::with_name("disable_device_validation")
+            Arg::new("disable-device-validation")
                 .long("disable-device-validation")
-                .takes_value(false)
+                .action(clap::ArgAction::SetTrue)
                 .help("do not attempt to validate the block device prior to pool creation"),
         )
         .get_matches();
@@ -855,11 +851,11 @@ async fn main() -> anyhow::Result<()> {
     utils::tracing_telemetry::init_tracing(
         "dsp-operator",
         tags,
-        matches.value_of("jaeger").map(|s| s.to_string()),
+        matches.get_one::<String>("jaeger").cloned(),
     );
 
     pool_controller(matches).await?;
-    global::shutdown_tracer_provider();
+    utils::tracing_telemetry::flush_traces();
     Ok(())
 }
 

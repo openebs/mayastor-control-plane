@@ -2,23 +2,23 @@ mod service;
 
 use crate::service::JsonGrpcSvc;
 use agents::{Service, ServiceError};
+use clap::Parser;
 use grpc::{client::CoreClient, operations::jsongrpc::server::JsonGrpcServer};
 use http::Uri;
 use once_cell::sync::OnceCell;
 use std::{net::SocketAddr, sync::Arc};
-use structopt::StructOpt;
 use tracing::{error, info};
 use utils::{DEFAULT_GRPC_CLIENT_ADDR, DEFAULT_JSON_GRPC_SERVER_ADDR};
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 #[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
 struct CliArgs {
     /// The json grpc server URL or address to connect to the its services.
-    #[structopt(long, short = "J", default_value = DEFAULT_JSON_GRPC_SERVER_ADDR)]
+    #[clap(long, short = 'J', default_value = DEFAULT_JSON_GRPC_SERVER_ADDR)]
     json_grpc_server_addr: SocketAddr,
 
     /// The CORE gRPC client URL or address to connect to the core services.
-    #[structopt(long, short = "z", default_value = DEFAULT_GRPC_CLIENT_ADDR)]
+    #[clap(long, short = 'z', default_value = DEFAULT_GRPC_CLIENT_ADDR)]
     core_grpc: Uri,
 }
 
@@ -26,7 +26,7 @@ pub(crate) static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
 
 #[tokio::main]
 async fn main() {
-    let cli_args = CliArgs::from_args();
+    let cli_args = CliArgs::parse();
     utils::print_package_info!();
     info!("Using options: {:?}", &cli_args);
 

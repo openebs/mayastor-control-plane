@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, str::FromStr};
 
 use crate::{types::v0::store::node::NodeSpec, IntoOption};
-use strum_macros::{EnumString, ToString};
+use strum_macros::{Display, EnumString};
 
 /// Registration
 ///
@@ -95,7 +95,7 @@ impl From<Node> for models::Node {
 }
 
 /// Status of the Node
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, ToString, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum NodeStatus {
     /// Node has unexpectedly disappeared
     Unknown,

@@ -1,7 +1,6 @@
 use tracing::info;
 
-use clap::{App, Arg, ArgMatches};
-use opentelemetry::global;
+use clap::{Arg, ArgMatches};
 mod client;
 mod config;
 mod controller;
@@ -24,50 +23,45 @@ fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
 
 #[tokio::main(worker_threads = 2)]
 async fn main() -> anyhow::Result<()> {
-    let args = App::new(utils::package_description!())
-        .author(clap::crate_authors!())
+    let args = clap::Command::new(utils::package_description!())
         .version(utils::version_info_str!())
-        .settings(&[
-            clap::AppSettings::ColoredHelp,
-            clap::AppSettings::ColorAlways,
-        ])
         .arg(
-            Arg::with_name("endpoint")
+            Arg::new("endpoint")
                 .long("rest-endpoint")
-                .short("-r")
+                .short('r')
                 .env("ENDPOINT")
                 .default_value("http://ksnode-1:30011")
                 .help("a URL endpoint to the control plane's rest endpoint"),
         )
         .arg(
-            Arg::with_name("socket")
+            Arg::new("socket")
                 .long("csi-socket")
-                .short("-c")
+                .short('c')
                 .env("CSI_SOCKET")
                 .default_value(CSI_SOCKET)
                 .help("CSI socket path"),
         )
         .arg(
-            Arg::with_name("jaeger")
-                .short("-j")
+            Arg::new("jaeger")
+                .short('j')
                 .long("jaeger")
                 .env("JAEGER_ENDPOINT")
                 .help("enable open telemetry and forward to jaeger"),
         )
         .arg(
-            Arg::with_name("timeout")
-                .short("-t")
+            Arg::new("timeout")
+                .short('t')
                 .long("rest-timeout")
                 .env("REST_TIMEOUT")
                 .default_value("5s"),
         )
         .arg(
-            Arg::with_name("node-selector")
+            Arg::new("node-selector")
                 .long("node-selector")
-                .multiple(true)
-                .number_of_values(1)
+                .action(clap::ArgAction::Append)
+                .num_args(1)
                 .allow_hyphen_values(true)
-                .default_value(Box::leak(csi_driver::csi_node_selector().into_boxed_str()))
+                .default_value(csi_driver::csi_node_selector())
                 .help(
                     "The node selector label which this plugin will report as part of its topology.\n\
                     Example:\n --node-selector key=value --node-selector key2=value2",
@@ -84,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
     utils::tracing_telemetry::init_tracing(
         "csi-controller",
         tags,
-        args.value_of("jaeger").map(|s| s.to_string()),
+        args.get_one::<String>("jaeger").cloned(),
     );
 
     initialize_controller(&args)?;
@@ -101,11 +95,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let result = server::CsiServer::run(
-        args.value_of("socket")
+        args.get_one::<String>("socket")
             .expect("CSI socket must be specified")
-            .to_string(),
+            .clone(),
     )
     .await;
-    global::shutdown_tracer_provider();
-    result.map_err(|e| anyhow::anyhow!("e: {}", e))
+    utils::tracing_telemetry::flush_traces();
+    result.map_err(|error| anyhow::anyhow!("error: {}", error))
 }

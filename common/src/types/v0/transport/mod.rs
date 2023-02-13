@@ -36,12 +36,12 @@ pub use crate::{
 use crate::{transport_api::MessageId, types::v0::openapi::*};
 
 use std::fmt::Debug;
-use strum_macros::{EnumString, ToString};
+use strum_macros::{Display, EnumString};
 
 pub const VERSION: &str = "v0";
 
 /// Versioned Message Id's.
-#[derive(Debug, PartialEq, Clone, ToString, EnumString)]
+#[derive(Debug, PartialEq, Clone, Display, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum MessageIdVs {
     /// Default.

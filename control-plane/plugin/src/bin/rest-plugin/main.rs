@@ -1,6 +1,5 @@
 use clap::Parser;
 use openapi::tower::client::Url;
-use opentelemetry::global;
 use plugin::{
     operations::{
         Cordoning, Drain, Get, GetBlockDevices, List, Operations, ReplicaTopology, Scale,
@@ -48,7 +47,7 @@ async fn main() {
 
     execute(CliArgs::args()).await;
 
-    global::shutdown_tracer_provider();
+    utils::tracing_telemetry::flush_traces();
 }
 
 async fn execute(cli_args: CliArgs) {

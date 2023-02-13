@@ -8,7 +8,7 @@ use crate::{
     nodeplugin_grpc::NodePluginGrpcServer, nodeplugin_nvme::NvmeOperationsSvc,
     shutdown_event::Shutdown,
 };
-use clap::{App, Arg};
+use clap::Arg;
 use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
 use grpc::csi_node_nvme::nvme_operations_server::NvmeOperationsServer;
@@ -78,81 +78,74 @@ impl AsyncWrite for UnixStream {
 const GRPC_PORT: u16 = 50051;
 
 pub(super) async fn main() -> anyhow::Result<()> {
-    let matches = App::new(utils::package_description!())
+    let matches = clap::Command::new(utils::package_description!())
         .about("k8s sidecar for IoEngine implementing CSI among others")
         .version(utils::version_info_str!())
         .arg(
-            Arg::with_name("csi-socket")
-                .short("c")
+            Arg::new("csi-socket")
+                .short('c')
                 .long("csi-socket")
                 .value_name("PATH")
                 .help("CSI gRPC listen socket (default /var/tmp/csi.sock)")
-                .takes_value(true),
         )
         .arg(
-            Arg::with_name("node-name")
-                .short("n")
+            Arg::new("node-name")
+                .short('n')
                 .long("node-name")
                 .value_name("NAME")
                 .help("Unique node name where this instance runs")
                 .required(true)
-                .takes_value(true),
         )
         .arg(
-            Arg::with_name("grpc-endpoint")
-                .short("g")
+            Arg::new("grpc-endpoint")
+                .short('g')
                 .long("grpc-endpoint")
                 .value_name("NAME")
                 .help("ip address where this instance runs, and optionally the gRPC port")
                 .default_value("0.0.0.0")
                 .required(false)
-                .takes_value(true),
         )
         .arg(
-            Arg::with_name("v")
-                .short("v")
-                .multiple(true)
-                .help("Sets the verbosity level"),
+            Arg::new("v")
+                .short('v')
+                .action(clap::ArgAction::Count)
+                .help("Sets the verbosity level")
         )
         .arg(
-            Arg::with_name("nvme-core-io-timeout")
+            Arg::new("nvme-core-io-timeout")
                 .long("nvme-core-io-timeout")
                 .value_name("TIMEOUT")
-                .takes_value(true)
                 .required(false)
-                .help("Sets the global nvme_core module io_timeout, in seconds"),
+                .help("Sets the global nvme_core module io_timeout, in seconds")
         )
         .arg(
-            Arg::with_name(Box::leak(crate::config::nvme_nr_io_queues().into_boxed_str()))
-                .long(&crate::config::nvme_nr_io_queues())
+            Arg::new(crate::config::nvme_nr_io_queues())
+                .long(crate::config::nvme_nr_io_queues())
                 .value_name("NUMBER")
-                .takes_value(true)
                 .required(false)
-                .help("Sets the nvme-nr-io-queues parameter when connecting to a volume target"),
+                .help("Sets the nvme-nr-io-queues parameter when connecting to a volume target")
         )
         .arg(
-            Arg::with_name(Box::leak(crate::config::nvme_ctrl_loss_tmo().into_boxed_str()))
-                .long(&crate::config::nvme_ctrl_loss_tmo())
+            Arg::new(crate::config::nvme_ctrl_loss_tmo())
+                .long(crate::config::nvme_ctrl_loss_tmo())
                 .value_name("NUMBER")
-                .takes_value(true)
                 .required(false)
-                .help("Sets the nvme-ctrl-loss-tmo parameter when connecting to a volume target. (May be overridden through the storage class)"),
+                .help("Sets the nvme-ctrl-loss-tmo parameter when connecting to a volume target. (May be overridden through the storage class)")
         )
         .arg(
-            Arg::with_name(Box::leak(crate::config::nvme_keep_alive_tmo().into_boxed_str()))
-                .long(&crate::config::nvme_keep_alive_tmo())
+            Arg::new(crate::config::nvme_keep_alive_tmo())
+                .long(crate::config::nvme_keep_alive_tmo())
                 .value_name("NUMBER")
-                .takes_value(true)
                 .required(false)
-                .help("Sets the nvme-keep-alive-tmo parameter when connecting to a volume target"),
+                .help("Sets the nvme-keep-alive-tmo parameter when connecting to a volume target")
         )
         .arg(
-            Arg::with_name("node-selector")
+            Arg::new("node-selector")
                 .long("node-selector")
-                .multiple(true)
-                .number_of_values(1)
+                .action(clap::ArgAction::Append)
+                .num_args(1)
                 .allow_hyphen_values(true)
-                .default_value(Box::leak(csi_driver::csi_node_selector().into_boxed_str()))
+                .default_value(csi_driver::csi_node_selector())
                 .help(
                     "The node selector label which this plugin will report as part of its topology.\n\
                     Example:\n --node-selector key=value --node-selector key2=value2",
@@ -162,9 +155,10 @@ pub(super) async fn main() -> anyhow::Result<()> {
 
     utils::print_package_info!();
 
-    let endpoint = matches.value_of("grpc-endpoint").unwrap();
+    let endpoint = matches.get_one::<String>("grpc-endpoint").unwrap();
     let csi_socket = matches
-        .value_of("csi-socket")
+        .get_one::<String>("csi-socket")
+        .map(|s| s.as_str())
         .unwrap_or("/var/tmp/csi.sock");
 
     let tags = utils::tracing_telemetry::default_tracing_tags(
@@ -173,7 +167,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     );
     utils::tracing_telemetry::init_tracing("csi-node", tags, None);
 
-    if let Some(nvme_io_timeout_secs) = matches.value_of("nvme_core io_timeout") {
+    if let Some(nvme_io_timeout_secs) = matches.get_one::<String>("nvme-core-io-timeout") {
         let io_timeout_secs: u32 = nvme_io_timeout_secs.parse().expect(
             "nvme_core io_timeout should be an integer number, representing the timeout in seconds",
         );
@@ -213,11 +207,14 @@ struct CsiServer {}
 impl CsiServer {
     fn run(
         csi_socket: &str,
-        cli_args: &clap::ArgMatches<'_>,
+        cli_args: &clap::ArgMatches,
     ) -> anyhow::Result<impl Future<Output = anyhow::Result<()>>> {
-        let node_name = cli_args.value_of("node-name").expect("required");
-        let node_selector =
-            csi_driver::csi_node_selector_parse(cli_args.values_of("node-selector"))?;
+        let node_name = cli_args.get_one::<String>("node-name").expect("required");
+        let node_selector = csi_driver::csi_node_selector_parse(
+            cli_args
+                .get_many::<String>("node-selector")
+                .map(|s| s.map(|s| s.as_str())),
+        )?;
 
         let incoming = {
             let uds = UnixListener::bind(csi_socket).unwrap();

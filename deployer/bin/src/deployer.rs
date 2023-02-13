@@ -1,8 +1,9 @@
+use clap::Parser;
 use deployer_lib::CliArgs;
-use structopt::StructOpt;
 
 const RUST_LOG_SILENCE_DEFAULTS: &str =
     "h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,mio=info,tokio_util=info,async_io=info,polling=info,tonic=info,want=info,bollard=info,common_lib=warn";
+
 fn rust_log_add_quiet_defaults(
     current: Option<tracing_subscriber::EnvFilter>,
 ) -> tracing_subscriber::EnvFilter {
@@ -29,7 +30,7 @@ fn init_tracing() {
 async fn main() {
     init_tracing();
 
-    let cli_args = CliArgs::from_args();
+    let cli_args = CliArgs::parse();
     tracing::info!("Using options: {:?}", &cli_args);
 
     composer::initialize(

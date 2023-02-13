@@ -14,12 +14,12 @@ mod rest;
 use super::StartOptions;
 use async_trait::async_trait;
 
+use clap::Parser;
 use composer::{Builder, BuilderConfigure, ComposeTest};
 use futures::future::{join_all, try_join_all};
 use paste::paste;
 use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
-use structopt::StructOpt;
-use strum_macros::{EnumVariantNames, ToString};
+use strum_macros::{Display, EnumVariantNames};
 
 /// Error type used by the deployer.
 pub type Error = Box<dyn std::error::Error>;
@@ -40,8 +40,8 @@ macro_rules! impl_ctrlp_agents {
 
         /// All the Control Plane Agents.
         /// concat_idents!($name, Agent)(concat_idents!($name, Agent)),
-        #[derive(Debug, Clone, StructOpt, ToString)]
-        #[structopt(about = "Control Plane Agents")]
+        #[derive(Debug, Clone, Parser, Display)]
+        #[clap(about = "Control Plane Agents")]
         pub enum ControlPlaneAgent {
             Empty(Empty),
             $(
@@ -238,8 +238,8 @@ impl Components {
 macro_rules! impl_component {
     ($($name:ident,$order:literal,)+) => {
         /// All the Control Plane Components.
-        #[derive(Debug, Clone, StructOpt, ToString, EnumVariantNames, Eq, PartialEq)]
-        #[structopt(about = "Control Plane Components")]
+        #[derive(Debug, Clone, Parser, Display, EnumVariantNames, Eq, PartialEq)]
+        #[clap(about = "Control Plane Components")]
         pub enum Component {
             $(
                 $name($name),
@@ -290,7 +290,7 @@ macro_rules! impl_component {
         })+
 
         /// An individual Component.
-        $(#[derive(Default, Debug, Clone, StructOpt, Eq, PartialEq)]
+        $(#[derive(Default, Debug, Clone, Parser, Eq, PartialEq)]
         pub struct $name {})+
 
         impl Component {

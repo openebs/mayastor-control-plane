@@ -15,10 +15,10 @@ use crate::types::v0::openapi::models;
 
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use strum_macros::ToString;
+use strum_macros::Display;
 
 /// Enum defining the various states that a resource spec can be in.
-#[derive(Serialize, Deserialize, Debug, Clone, ToString, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Display, PartialEq)]
 pub enum SpecStatus<T> {
     Creating,
     Created(T),

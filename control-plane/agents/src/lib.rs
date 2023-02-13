@@ -105,7 +105,7 @@ impl Service {
     /// The opentel traces are also immediately flushed before returning.
     pub async fn shutdown_signal() {
         shutdown::Shutdown::wait().await;
-        opentelemetry::global::force_flush_tracer_provider();
+        utils::tracing_telemetry::flush_traces();
     }
 }
 
