@@ -1,10 +1,10 @@
-use common_lib::types::v0::{
-    store::node::{NodeLabels, NodeSpec},
-    transport::{ApiVersion, Filter, HostNqn, Node, NodeId, NodeState, NodeStatus},
-};
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::node::traits::NodeOperations;
 use std::time::Duration;
+use stor_port::types::v0::{
+    store::node::{NodeLabels, NodeSpec},
+    transport::{ApiVersion, Filter, HostNqn, Node, NodeId, NodeState, NodeStatus},
+};
 
 /// Get new `Node` from the given parameters
 fn new_node(
@@ -37,7 +37,7 @@ async fn node() {
         .build()
         .await
         .unwrap();
-    let rpc_timeout = common_lib::transport_api::TimeoutOptions::default()
+    let rpc_timeout = stor_port::transport_api::TimeoutOptions::default()
         .with_req_timeout(Duration::from_secs(1))
         .with_timeout_backoff(Duration::from_millis(100))
         .with_max_retries(6);

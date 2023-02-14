@@ -4,7 +4,7 @@ use crate::controller::{
     resources::operations_helper::ResourceSpecsLocked, wrapper::NodeWrapper,
 };
 use agents::errors::SvcError;
-use common_lib::types::v0::transport::{
+use stor_port::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 

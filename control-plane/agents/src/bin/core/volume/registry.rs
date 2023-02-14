@@ -1,13 +1,13 @@
 use crate::controller::registry::Registry;
 use agents::errors::SvcError;
-use common_lib::types::v0::transport::{
+use stor_port::types::v0::transport::{
     uri_with_hostnqn, NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
 };
 
 use crate::controller::reconciler::PollTriggerEvent;
-use common_lib::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec};
 use grpc::operations::{PaginatedResult, Pagination};
 use std::collections::HashMap;
+use stor_port::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec};
 
 impl Registry {
     /// Get the volume state for the specified volume.

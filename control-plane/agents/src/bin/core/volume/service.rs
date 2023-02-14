@@ -10,16 +10,6 @@ use crate::controller::{
     },
 };
 use agents::errors::SvcError;
-use common_lib::{
-    transport_api::{v0::Volumes, ReplyError},
-    types::v0::{
-        store::volume::VolumeSpec,
-        transport::{
-            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume,
-            RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
-        },
-    },
-};
 use grpc::{
     context::Context,
     operations::{
@@ -29,6 +19,16 @@ use grpc::{
             UnshareVolumeInfo, VolumeOperations,
         },
         Pagination,
+    },
+};
+use stor_port::{
+    transport_api::{v0::Volumes, ReplyError},
+    types::v0::{
+        store::volume::VolumeSpec,
+        transport::{
+            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume,
+            RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+        },
     },
 };
 

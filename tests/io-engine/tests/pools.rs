@@ -1,7 +1,7 @@
-use common_lib::types::v0::transport as v0;
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::pool::traits::PoolOperations;
 use openapi::models;
+use stor_port::types::v0::transport as v0;
 
 #[tokio::test]
 async fn create_pool_malloc() {

@@ -1,12 +1,12 @@
 use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
-use common_lib::{
+use rpc::io_engine::Null;
+use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         CreateReplica, DestroyReplica, NodeId, Replica, ShareReplica, UnshareReplica,
     },
 };
-use rpc::io_engine::Null;
 
 use snafu::ResultExt;
 

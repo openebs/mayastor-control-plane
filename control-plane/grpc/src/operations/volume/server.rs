@@ -13,8 +13,8 @@ use crate::{
         UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
-use common_lib::types::v0::transport::Filter;
 use std::{convert::TryFrom, sync::Arc};
+use stor_port::types::v0::transport::Filter;
 use tonic::{Request, Response, Status};
 
 /// RPC Volume Server

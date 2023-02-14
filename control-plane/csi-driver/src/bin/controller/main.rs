@@ -89,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Starts PV Garbage Collector if platform type is k8s
-    if common_lib::platform::current_plaform_type() == common_lib::platform::PlatformType::K8s {
+    if stor_port::platform::current_plaform_type() == stor_port::platform::PlatformType::K8s {
         let gc_instance = pvwatcher::PvGarbageCollector::new().await?;
         tokio::spawn(async move { gc_instance.run_watcher().await });
     }

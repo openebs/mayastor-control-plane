@@ -1,10 +1,10 @@
 use crate::controller::{registry::Registry, wrapper::*};
 use agents::errors::{NexusNotFound, SvcError};
-use common_lib::types::v0::{
+use snafu::OptionExt;
+use stor_port::types::v0::{
     store::nexus_persistence::{NexusInfo, NexusInfoKey},
     transport::{Nexus, NexusId, NodeId, VolumeId},
 };
-use snafu::OptionExt;
 
 /// Nexus helpers
 impl Registry {

@@ -10,11 +10,11 @@ use crate::{
         RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
     },
 };
-use common_lib::{
+use std::{convert::TryFrom, ops::Deref};
+use stor_port::{
     transport_api::{v0::Nexuses, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{Child, Filter, MessageIdVs, Nexus},
 };
-use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 /// RPC Nexus Client

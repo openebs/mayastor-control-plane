@@ -1,5 +1,5 @@
 use crate::common;
-use common_lib::transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
+use stor_port::transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 /// Trait to validate the Grpc type by an intermediate conversion
 pub trait ValidateRequestTypes {

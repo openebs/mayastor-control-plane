@@ -1,10 +1,10 @@
-use common_lib::types::v0::store::{
-    AsOperationSequencer, OperationMode, OperationSequenceState, OperationSequencer,
-};
 use parking_lot::Mutex;
 use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
+};
+use stor_port::types::v0::store::{
+    AsOperationSequencer, OperationMode, OperationSequenceState, OperationSequencer,
 };
 
 mod nexus;

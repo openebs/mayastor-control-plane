@@ -1,5 +1,5 @@
-use common_lib::types::v0::transport as v0;
 use grpc::operations::replica::traits::ReplicaOperations;
+use stor_port::types::v0::transport as v0;
 
 use deployer_cluster::{result_either, test_result_grpc, ClusterBuilder};
 

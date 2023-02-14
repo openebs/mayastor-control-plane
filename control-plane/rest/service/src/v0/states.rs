@@ -1,6 +1,6 @@
 use super::*;
-use common_lib::types::v0::transport::{GetStates, States};
 use grpc::operations::registry::traits::RegistryOperations;
+use stor_port::types::v0::transport::{GetStates, States};
 
 fn client() -> impl RegistryOperations {
     core_grpc().registry()

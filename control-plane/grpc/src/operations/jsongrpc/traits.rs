@@ -1,5 +1,5 @@
 use crate::{context::Context, jsongrpc};
-use common_lib::{
+use stor_port::{
     transport_api::ReplyError,
     types::v0::transport::{JsonGrpcMethod, JsonGrpcParams, JsonGrpcRequest, NodeId},
 };

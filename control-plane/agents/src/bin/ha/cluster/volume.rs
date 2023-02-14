@@ -3,8 +3,8 @@ use crate::{
     nodes::NodeList,
     switchover::{SwitchOverEngine, SwitchOverRequest},
 };
-use common_lib::types::v0::transport::{NodeId, VolumeId};
 use std::{convert::TryFrom, net::SocketAddr};
+use stor_port::types::v0::transport::{NodeId, VolumeId};
 use utils::NVME_TARGET_NQN_PREFIX;
 
 /// Defines spec for VolumeMover.

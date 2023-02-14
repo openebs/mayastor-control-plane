@@ -1,10 +1,10 @@
 use super::*;
 use crate::v0::nexuses::nexus;
-use common_lib::types::v0::{
+use grpc::operations::nexus::traits::NexusOperations;
+use stor_port::types::v0::{
     openapi::apis::Uuid,
     transport::{AddNexusChild, Child, ChildUri, Filter, Nexus, RemoveNexusChild},
 };
-use grpc::operations::nexus::traits::NexusOperations;
 use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {

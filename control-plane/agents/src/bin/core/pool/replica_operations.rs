@@ -8,7 +8,7 @@ use crate::controller::{
     },
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::replica::{ReplicaOperation, ReplicaSpec},
     transport::{
         CreateReplica, DestroyReplica, Replica, ReplicaOwners, ShareReplica, UnshareReplica,

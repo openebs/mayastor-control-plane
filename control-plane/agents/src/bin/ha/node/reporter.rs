@@ -1,6 +1,6 @@
 use crate::{cluster_agent_client, Cli};
-use common_lib::types::v0::transport::{FailedPath, ReportFailedPaths};
 use grpc::operations::ha_node::traits::ClusterAgentOperations;
+use stor_port::types::v0::transport::{FailedPath, ReportFailedPaths};
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     time::{sleep, Duration},

@@ -1,8 +1,8 @@
 use super::*;
 use crate::v0::pools::pool;
-use common_lib::{transport_api::ReplyError, types::v0::openapi::apis::Uuid};
 use grpc::operations::{pool::traits::PoolOperations, replica::traits::ReplicaOperations};
 use std::convert::{TryFrom, TryInto};
+use stor_port::{transport_api::ReplyError, types::v0::openapi::apis::Uuid};
 use transport_api::{ReplyErrorKind, ResourceKind};
 
 fn pool_client() -> impl PoolOperations {

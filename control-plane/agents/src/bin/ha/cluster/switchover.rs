@@ -1,7 +1,13 @@
 use crate::{core_grpc, etcd::EtcdStore, nodes::NodeList};
 use anyhow::anyhow;
 use chrono::Utc;
-use common_lib::{
+use grpc::operations::{
+    ha_node::{client::NodeAgentClient, traits::NodeAgentOperations},
+    volume::traits::VolumeOperations,
+};
+use serde::{Deserialize, Serialize};
+use std::{cmp::Ordering, collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use stor_port::{
     transport_api::ReplyErrorKind,
     types::v0::{
         store::{
@@ -14,12 +20,6 @@ use common_lib::{
         },
     },
 };
-use grpc::operations::{
-    ha_node::{client::NodeAgentClient, traits::NodeAgentOperations},
-    volume::traits::VolumeOperations,
-};
-use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     Mutex,

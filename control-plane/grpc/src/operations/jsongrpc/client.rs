@@ -3,12 +3,12 @@ use crate::{
     jsongrpc::{json_grpc_client, json_grpc_reply, ProbeRequest},
     operations::jsongrpc::traits::{JsonGrpcOperations, JsonGrpcRequestInfo},
 };
-use common_lib::{
+use serde_json::Value;
+use std::{ops::Deref, time::Duration};
+use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::transport::MessageIdVs,
 };
-use serde_json::Value;
-use std::{ops::Deref, time::Duration};
 use tonic::transport::Uri;
 
 /// RPC JsonGrpc Client

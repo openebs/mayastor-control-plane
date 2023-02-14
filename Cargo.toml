@@ -6,11 +6,11 @@ panic = "abort"
 
 [workspace]
 members = [
-    "common",
     "control-plane/agents",
     "control-plane/rest",
     "control-plane/csi-driver",
     "control-plane/grpc",
+    "control-plane/stor-port",
     "control-plane/plugin",
     "k8s/operators",
     "k8s/forward",
@@ -18,6 +18,8 @@ members = [
     "openapi",
     "rpc",
     "utils/utils-lib",
+    "utils/pstor",
+    "utils/platform",
     "utils/pstor-usage",
     "utils/shutdown",
     "utils/deployer-cluster",

@@ -2,9 +2,9 @@
 //! These methods are typically used to control SPDK directly.
 
 use super::*;
-use common_lib::types::v0::transport::JsonGrpcRequest;
 use grpc::operations::jsongrpc::traits::JsonGrpcOperations;
 use serde_json::Value;
+use stor_port::types::v0::transport::JsonGrpcRequest;
 
 #[async_trait::async_trait]
 impl apis::actix_server::JsonGrpc for RestApi {

@@ -1,4 +1,4 @@
-use common_lib::types::v0::transport::{PoolState, PoolStatus, Protocol, Replica, ReplicaId};
+use stor_port::types::v0::transport::{PoolState, PoolStatus, Protocol, Replica, ReplicaId};
 
 use std::{cmp::Ordering, ops::Deref};
 

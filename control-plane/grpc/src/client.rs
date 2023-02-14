@@ -10,8 +10,8 @@ use crate::{
         watch::{client::WatchClient, traits::WatchOperations},
     },
 };
-use common_lib::transport_api::TimeoutOptions;
 use std::time::Duration;
+use stor_port::transport_api::TimeoutOptions;
 use tonic::transport::Uri;
 
 /// CoreClient encapsulates all the individual clients needed for gRPC transport

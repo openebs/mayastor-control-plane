@@ -1,5 +1,5 @@
 use super::{ResourceMutex, ResourceUid};
-use common_lib::types::v0::{store::volume::VolumeSpec, transport::VolumeId};
+use stor_port::types::v0::{store::volume::VolumeSpec, transport::VolumeId};
 
 impl ResourceMutex<VolumeSpec> {
     /// Get the resource uuid.

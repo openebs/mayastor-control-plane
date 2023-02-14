@@ -8,7 +8,17 @@ use crate::controller::{
     wrapper::GetterOps,
 };
 use agents::errors::{PoolNotFound, ReplicaNotFound, SvcError};
-use common_lib::{
+use grpc::{
+    context::Context,
+    operations::{
+        pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
+        replica::traits::{
+            CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ShareReplicaInfo,
+            UnshareReplicaInfo,
+        },
+    },
+};
+use stor_port::{
     transport_api::{
         v0::{Pools, Replicas},
         ReplyError,
@@ -18,16 +28,6 @@ use common_lib::{
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
             NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,
-        },
-    },
-};
-use grpc::{
-    context::Context,
-    operations::{
-        pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
-        replica::traits::{
-            CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ShareReplicaInfo,
-            UnshareReplicaInfo,
         },
     },
 };

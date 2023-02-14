@@ -1,15 +1,12 @@
-use common_lib::{
-    store::etcd::Etcd,
+use deployer_cluster::{etcd_client::Client, *};
+use stor_port::{
+    pstor::{etcd::Etcd, StoreObj},
     types::v0::{
         openapi::models,
-        store::{
-            definitions::Store,
-            registry::{ControlPlaneService, StoreLeaseOwner, StoreLeaseOwnerKey},
-        },
+        store::registry::{ControlPlaneService, StoreLeaseOwner, StoreLeaseOwnerKey},
         transport,
     },
 };
-use deployer_cluster::{etcd_client::Client, *};
 
 /// Test that the content of the registry is correctly loaded from the persistent store on start up.
 #[tokio::test]
@@ -82,9 +79,13 @@ async fn store_lease_lock() {
         .unwrap();
 
     let lease_ttl = std::time::Duration::from_secs(2);
-    let _core_agent = Etcd::new_leased(["0.0.0.0:2379"], ControlPlaneService::CoreAgent, lease_ttl)
-        .await
-        .unwrap();
+    let _core_agent = Etcd::new_leased(
+        ["0.0.0.0:2379"],
+        ControlPlaneService::CoreAgent.to_string(),
+        lease_ttl,
+    )
+    .await
+    .unwrap();
 
     let mut store = Client::connect(["0.0.0.0:2379"], None)
         .await
@@ -109,10 +110,13 @@ async fn store_lease_lock() {
         "Lease should be the same!"
     );
 
-    let _core_agent2 =
-        Etcd::new_leased(["0.0.0.0:2379"], ControlPlaneService::CoreAgent, lease_ttl)
-            .await
-            .expect_err("One core-agent is already running!");
+    let _core_agent2 = Etcd::new_leased(
+        ["0.0.0.0:2379"],
+        ControlPlaneService::CoreAgent.to_string(),
+        lease_ttl,
+    )
+    .await
+    .expect_err("One core-agent is already running!");
 }
 
 /// Test that store lease lock works as expected
@@ -151,10 +155,13 @@ async fn core_agent_lease_lock() {
         "Lease should be the same!"
     );
 
-    let _core_agent2 =
-        Etcd::new_leased(["0.0.0.0:2379"], ControlPlaneService::CoreAgent, lease_ttl)
-            .await
-            .expect_err("One core-agent is already running!");
+    let _core_agent2 = Etcd::new_leased(
+        ["0.0.0.0:2379"],
+        ControlPlaneService::CoreAgent.to_string(),
+        lease_ttl,
+    )
+    .await
+    .expect_err("One core-agent is already running!");
 
     // pause the core agent
     cluster.composer().pause("core").await.unwrap();
@@ -182,10 +189,13 @@ async fn core_agent_lease_lock() {
     // let its lease expire
     tokio::time::sleep(lease_ttl_wait).await;
 
-    let _core_agent2 =
-        Etcd::new_leased(["0.0.0.0:2379"], ControlPlaneService::CoreAgent, lease_ttl)
-            .await
-            .expect("First core-agent expired, the second one can now run!");
+    let _core_agent2 = Etcd::new_leased(
+        ["0.0.0.0:2379"],
+        ControlPlaneService::CoreAgent.to_string(),
+        lease_ttl,
+    )
+    .await
+    .expect("First core-agent expired, the second one can now run!");
 
     let leases = store.leases().await.unwrap();
     let current_lease_id = leases.leases().first().unwrap().id();

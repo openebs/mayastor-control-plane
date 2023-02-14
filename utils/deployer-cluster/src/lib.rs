@@ -8,20 +8,10 @@ use deployer_lib::{
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
-use common_lib::{transport_api::TimeoutOptions, types::v0::transport};
 use openapi::apis::Uuid;
+use stor_port::{transport_api::TimeoutOptions, types::v0::transport};
 
 use clap::Parser;
-use common_lib::{
-    transport_api::ReplyError,
-    types::v0::{
-        store::{
-            definitions::ObjectKey,
-            registry::{ControlPlaneService, StoreLeaseLockKey},
-        },
-        transport::CreatePool,
-    },
-};
 pub use composer::ImagePullPolicy;
 pub use csi_driver::node::internal::*;
 use deployer_lib::infra::CsiNode;
@@ -47,6 +37,16 @@ use std::{
     str::FromStr,
     sync::Arc,
     time::Duration,
+};
+use stor_port::{
+    transport_api::ReplyError,
+    types::v0::{
+        store::{
+            definitions::ObjectKey,
+            registry::{ControlPlaneService, StoreLeaseLockKey},
+        },
+        transport::CreatePool,
+    },
 };
 use tokio::net::UnixStream;
 use tonic::transport::Uri;
@@ -288,7 +288,7 @@ impl Cluster {
     }
 
     /// openapi rest client v0
-    pub fn rest_v00(&self) -> common_lib::types::v0::openapi::tower::client::direct::ApiClient {
+    pub fn rest_v00(&self) -> stor_port::types::v0::openapi::tower::client::direct::ApiClient {
         self.rest_client.v0()
     }
 
@@ -528,11 +528,11 @@ impl ClusterBuilder {
             .as_str(),
         )
     }
-    /// Silence common_lib and deployer_cluster traces by setting them to WARN.
+    /// Silence stor_port and deployer_cluster traces by setting them to WARN.
     #[must_use]
     pub fn with_silence_test_traces(mut self) -> Self {
         self.env_filter = self.env_filter.map(|f| {
-            f.add_directive(Directive::from_str("common_lib=warn").unwrap())
+            f.add_directive(Directive::from_str("stor_port=warn").unwrap())
                 .add_directive(Directive::from_str("deployer_cluster=warn").unwrap())
         });
         self

@@ -1,6 +1,12 @@
 #![cfg(test)]
 
-use common_lib::{
+use deployer_cluster::{Cluster, ClusterBuilder};
+use grpc::operations::{
+    pool::traits::PoolOperations, registry::traits::RegistryOperations,
+    replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
+};
+use std::{collections::HashMap, time::Duration};
+use stor_port::{
     transport_api::{ReplyErrorKind, ResourceKind},
     types::v0::{
         store::nexus::NexusSpec,
@@ -10,12 +16,6 @@ use common_lib::{
         },
     },
 };
-use deployer_cluster::{Cluster, ClusterBuilder};
-use grpc::operations::{
-    pool::traits::PoolOperations, registry::traits::RegistryOperations,
-    replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
-};
-use std::{collections::HashMap, time::Duration};
 use tokio::time::sleep;
 
 #[tokio::test]

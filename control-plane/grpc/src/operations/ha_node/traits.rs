@@ -4,7 +4,8 @@ use crate::{
     ha_cluster_agent::{FailedNvmePath, HaNodeInfo, ReportFailedNvmePathsRequest},
     ha_node_agent::{GetNvmeControllerRequest, NvmeControllers, ReplacePathRequest},
 };
-use common_lib::{
+use std::{collections::HashMap, net::SocketAddr};
+use stor_port::{
     transport_api::{v0::NvmeSubsystems, ReplyError, ResourceKind},
     types::v0::transport::{
         cluster_agent::NodeAgentInfo, FailedPath, GetController, NvmeSubsystem, ReplacePath,
@@ -12,7 +13,6 @@ use common_lib::{
     },
     IntoVec,
 };
-use std::{collections::HashMap, net::SocketAddr};
 
 /// NodeAgentOperations trait implemented by client which supports cluster-agent operations
 #[tonic::async_trait]

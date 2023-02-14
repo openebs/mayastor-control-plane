@@ -102,9 +102,9 @@ fn timeout_opts() -> TimeoutOptions {
 
 use actix_web_opentelemetry::RequestTracing;
 use clap::Parser;
-use common_lib::transport_api::{RequestMinTimeout, TimeoutOptions};
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use http::Uri;
+use stor_port::transport_api::{RequestMinTimeout, TimeoutOptions};
 use utils::tracing_telemetry::KeyValue;
 
 /// Extension trait for actix-web applications.

@@ -7,7 +7,7 @@ use crate::controller::{
     task_poller::{squash_results, PollResult, PollerState},
 };
 
-use common_lib::{
+use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
         store::{nexus::NexusSpec, volume::VolumeSpec},

@@ -1,10 +1,10 @@
 use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 
-use common_lib::types::v0::openapi::models::{
+use rpc::csi::{Topology as CsiTopology, *};
+use stor_port::types::v0::openapi::models::{
     LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
     VolumeShareProtocol,
 };
-use rpc::csi::{Topology as CsiTopology, *};
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
 use csi_driver::context::{CreateParams, PublishParams};

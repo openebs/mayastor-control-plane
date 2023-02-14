@@ -13,7 +13,7 @@ use crate::controller::{
     resources::{operations::ResourceOwnerUpdate, ResourceMutex, ResourceUid},
 };
 use agents::errors::SvcError;
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::{
         nexus::NexusSpec, nexus_persistence::NexusInfo, replica::ReplicaSpec, volume::VolumeSpec,
     },

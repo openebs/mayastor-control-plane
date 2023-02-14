@@ -6,23 +6,6 @@ mod helpers;
 mod hotspare;
 mod switchover;
 
-use common_lib::{
-    store::etcd::Etcd,
-    transport_api::{v0::Replicas, ReplyError, ReplyErrorKind, ResourceKind},
-    types::v0::{
-        openapi::{models, models::NodeStatus},
-        store::{
-            definitions::Store,
-            nexus_persistence::{NexusInfo, NexusInfoKey},
-        },
-        transport::{
-            Child, ChildState, CreateVolume, DestroyVolume, Filter, GetNexuses, GetReplicas,
-            GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume, Topology,
-            UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeShareProtocol, VolumeState,
-            VolumeStatus,
-        },
-    },
-};
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     nexus::traits::NexusOperations, node::traits::NodeOperations,
@@ -33,6 +16,20 @@ use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
     time::Duration,
+};
+use stor_port::{
+    pstor::{etcd::Etcd, StoreObj},
+    transport_api::{v0::Replicas, ReplyError, ReplyErrorKind, ResourceKind},
+    types::v0::{
+        openapi::{models, models::NodeStatus},
+        store::nexus_persistence::{NexusInfo, NexusInfoKey},
+        transport::{
+            Child, ChildState, CreateVolume, DestroyVolume, Filter, GetNexuses, GetReplicas,
+            GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume, Topology,
+            UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeShareProtocol, VolumeState,
+            VolumeStatus,
+        },
+    },
 };
 use tokio::time::sleep;
 

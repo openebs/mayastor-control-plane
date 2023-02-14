@@ -13,13 +13,13 @@ mod test {
         context::Context,
         operations::pool::{client::PoolClient, server::PoolServer, traits::PoolOperations},
     };
-    use common_lib::{transport_api::TimeoutOptions, types::v0::transport::Filter};
     use once_cell::sync::OnceCell;
     use std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, Mutex},
         time::{Duration, Instant},
     };
+    use stor_port::{transport_api::TimeoutOptions, types::v0::transport::Filter};
     use tokio::sync::oneshot::Sender;
     use tonic::transport::Uri;
 
@@ -103,11 +103,11 @@ mod test {
                 traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
             },
         };
-        use common_lib::{
+        use std::time::Duration;
+        use stor_port::{
             transport_api::{v0::Pools, ReplyError},
             types::v0::transport::{Filter, Pool},
         };
-        use std::time::Duration;
 
         pub(super) struct Server {}
         #[tonic::async_trait]

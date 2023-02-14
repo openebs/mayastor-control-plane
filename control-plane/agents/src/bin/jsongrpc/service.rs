@@ -4,10 +4,6 @@
 use crate::CORE_CLIENT;
 use ::rpc::io_engine::{JsonRpcReply, JsonRpcRequest};
 use agents::errors::{JsonRpcDeserialise, NodeNotOnline, SvcError};
-use common_lib::{
-    transport_api::ReplyError,
-    types::v0::transport::{ApiVersion, Filter, JsonGrpcRequest, Node, NodeId},
-};
 use grpc::{
     context::Context,
     operations::{
@@ -18,6 +14,10 @@ use grpc::{
 use rpc::io_engine::json_rpc_client::JsonRpcClient;
 use serde_json::Value;
 use snafu::{OptionExt, ResultExt};
+use stor_port::{
+    transport_api::ReplyError,
+    types::v0::transport::{ApiVersion, Filter, JsonGrpcRequest, Node, NodeId},
+};
 
 #[derive(Clone, Default)]
 pub(super) struct JsonGrpcSvc {}

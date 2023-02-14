@@ -3,7 +3,7 @@
 use super::super::RestClient;
 use std::convert::{TryFrom, TryInto};
 
-pub use common_lib::{
+pub use stor_port::{
     transport_api,
     types::v0::{
         openapi::{apis, apis::actix_server::RestError, models, tower::client},
@@ -20,18 +20,18 @@ pub use common_lib::{
     },
 };
 
-use common_lib::{IntoOption, IntoVec};
 pub use models::rest_json_error::Kind as RestJsonErrorKind;
+use stor_port::{IntoOption, IntoVec};
 
-use common_lib::{
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         openapi::models::RestJsonError,
         transport::{HostNqn, HostNqnParseError},
     },
 };
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 
 /// Create Replica Body JSON.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]

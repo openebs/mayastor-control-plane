@@ -1,10 +1,10 @@
 use super::*;
-use common_lib::types::v0::{
+use grpc::operations::watch::traits::WatchOperations;
+use std::convert::TryFrom;
+use stor_port::types::v0::{
     openapi::apis::Uuid,
     transport::{CreateWatch, DeleteWatch, GetWatches, WatchCallback, WatchResourceId, WatchType},
 };
-use grpc::operations::watch::traits::WatchOperations;
-use std::convert::TryFrom;
 
 fn client() -> impl WatchOperations {
     core_grpc().watch()

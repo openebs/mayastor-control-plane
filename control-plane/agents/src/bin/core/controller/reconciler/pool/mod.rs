@@ -9,7 +9,7 @@ use crate::controller::{
 };
 
 use crate::controller::io_engine::PoolApi;
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::pool::PoolSpec,
     transport::{CreatePool, DestroyPool, NodeStatus},
 };

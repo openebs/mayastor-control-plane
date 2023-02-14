@@ -112,8 +112,8 @@ This way you can make changes to this specific server and test them without dest
 [nix-shell:~/git/control-plane]$ cargo run --bin rest -- --dummy-certificates --no-auth
     Finished dev [unoptimized + debuginfo] target(s) in 0.10s
      Running `sh /home/tiago/git/myconfigs/maya/test_as_sudo.sh target/debug/rest --dummy-certificates --no-auth`
-Sep 10 09:49:16.635  INFO common_lib::mbus_api::mbus_nats: Connecting to the nats server nats://0.0.0.0:4222...
-Sep 10 09:49:17.065  INFO common_lib::mbus_api::mbus_nats: Successfully connected to the nats server nats://0.0.0.0:4222
+Sep 10 09:49:16.635  INFO stor_port::mbus_api::mbus_nats: Connecting to the nats server nats://0.0.0.0:4222...
+Sep 10 09:49:17.065  INFO stor_port::mbus_api::mbus_nats: Successfully connected to the nats server nats://0.0.0.0:4222
 Sep 10 09:49:17.067  INFO actix_server::builder: Starting 16 workers
 Sep 10 09:49:17.069  INFO actix_server::builder: Starting "actix-web-service-0.0.0.0:8080" service on 0.0.0.0:8080
 ....

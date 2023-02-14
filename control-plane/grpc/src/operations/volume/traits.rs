@@ -11,7 +11,8 @@ use crate::{
         SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
-use common_lib::{
+use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
+use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
         store::volume::{FrontendConfig, TargetConfig, VolumeSpec, VolumeTarget},
@@ -25,7 +26,6 @@ use common_lib::{
     },
     IntoOption,
 };
-use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]

@@ -10,7 +10,7 @@ use crate::{
 };
 
 use agents::errors::SvcError;
-use common_lib::{
+use stor_port::{
     transport_api::{Message, MessageId, ResourceKind},
     types::v0::{
         store,

@@ -11,7 +11,7 @@ use crate::controller::{
     wrapper::PoolWrapper,
 };
 use agents::errors::SvcError;
-use common_lib::types::v0::store::{nexus::NexusSpec, volume::VolumeSpec};
+use stor_port::types::v0::store::{nexus::NexusSpec, volume::VolumeSpec};
 
 /// Return a list of pre sorted pools to be used by a volume
 pub(crate) async fn volume_pool_candidates(

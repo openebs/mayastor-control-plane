@@ -1,11 +1,11 @@
 use crate::controller::io_engine::translation::IoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
-use common_lib::{
+use grpc::operations::registration;
+use rpc::v1::host::ListBlockDevicesRequest;
+use stor_port::{
     transport_api::{v0::BlockDevices, ResourceKind},
     types::v0::transport::{GetBlockDevices, Register},
 };
-use grpc::operations::registration;
-use rpc::v1::host::ListBlockDevicesRequest;
 
 use snafu::ResultExt;
 use std::str::FromStr;

@@ -1,5 +1,5 @@
 use super::{ResourceMutex, ResourceUid};
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::nexus::{NexusSpec, NexusState},
     transport::NexusId,
 };

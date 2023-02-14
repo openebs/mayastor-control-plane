@@ -1,26 +1,23 @@
 #![cfg(test)]
 
 use super::helpers::{volume_children, wait_till_volume, wait_till_volume_nexus};
-use common_lib::{
-    store::etcd::Etcd,
-    transport_api::TimeoutOptions,
-    types::v0::{
-        store::{
-            definitions::{StorableObject, Store},
-            volume::VolumeSpec,
-        },
-        transport::{
-            CreateReplica, CreateVolume, DestroyReplica, DestroyVolume, Filter, GetReplicas,
-            GetSpecs, PublishVolume, ReplicaId, ReplicaOwners,
-        },
-    },
-};
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     node::traits::NodeOperations, registry::traits::RegistryOperations,
     replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
 };
 use std::{collections::HashMap, convert::TryInto, time::Duration};
+use stor_port::{
+    pstor::{etcd::Etcd, StorableObject, StoreObj},
+    transport_api::TimeoutOptions,
+    types::v0::{
+        store::volume::VolumeSpec,
+        transport::{
+            CreateReplica, CreateVolume, DestroyReplica, DestroyVolume, Filter, GetReplicas,
+            GetSpecs, PublishVolume, ReplicaId, ReplicaOwners,
+        },
+    },
+};
 
 #[tokio::test]
 async fn hotspare() {

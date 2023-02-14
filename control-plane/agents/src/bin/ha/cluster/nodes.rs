@@ -1,6 +1,6 @@
 use crate::volume::VolumeMover;
-use common_lib::types::v0::transport::NodeId;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use stor_port::types::v0::transport::NodeId;
 use tokio::sync::Mutex;
 use tracing::info;
 

@@ -7,10 +7,10 @@ use crate::controller::{
     task_poller::{PollResult, PollerState},
 };
 
-use common_lib::types::v0::store::volume::VolumeSpec;
+use stor_port::types::v0::store::volume::VolumeSpec;
 
 use crate::controller::reconciler::nexus::{enospc_children_faulter, faulted_nexus_remover};
-use common_lib::types::v0::transport::VolumeStatus;
+use stor_port::types::v0::transport::VolumeStatus;
 
 /// Volume nexus reconciler
 /// When io-engine instances restart they come up "empty" and so we need to recreate

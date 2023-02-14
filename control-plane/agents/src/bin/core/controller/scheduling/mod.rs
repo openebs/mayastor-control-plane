@@ -7,8 +7,8 @@ use crate::controller::scheduling::{
     resources::{ChildItem, NodeItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
-use common_lib::types::v0::transport::{PoolStatus, PoolTopology};
 use std::{cmp::Ordering, collections::HashMap, future::Future};
+use stor_port::types::v0::transport::{PoolStatus, PoolTopology};
 
 #[async_trait::async_trait(?Send)]
 pub(crate) trait ResourceFilter: Sized {

@@ -1,12 +1,12 @@
 #![cfg(test)]
 
 use crate::volume::helpers::wait_till_volume_children;
-use common_lib::types::v0::{
+use deployer_cluster::{ClusterBuilder, FindVolumeRequest};
+use std::{collections::HashMap, convert::TryFrom, time::Duration};
+use stor_port::types::v0::{
     openapi::{models, models::PublishVolumeBody},
     transport::ReplicaId,
 };
-use deployer_cluster::{ClusterBuilder, FindVolumeRequest};
-use std::{collections::HashMap, convert::TryFrom, time::Duration};
 
 #[tokio::test]
 async fn fault_enospc_child() {

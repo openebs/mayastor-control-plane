@@ -1,7 +1,7 @@
-use common_lib::types::v0::transport as v0;
 use deployer_cluster::{result_either, test_result_grpc, Cluster, ClusterBuilder};
 use grpc::operations::nexus::traits::NexusOperations;
 use openapi::models;
+use stor_port::types::v0::transport as v0;
 
 #[tokio::test]
 async fn create_nexus_malloc() {

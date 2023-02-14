@@ -15,7 +15,7 @@ path = "src/lib.rs"
 tokio = { version = "1.25.0", features = ["full"] }
 openapi = { path = "../../openapi", features = [ "tower-client", "tower-trace" ] }
 deployer-cluster = { path = "../../utils/deployer-cluster" }
-common-lib = { path = "../../common" }
+stor-port = { path = "../../control-plane/stor-port" }
 rpc = { path = "../../rpc" }
 grpc = { path = "../../control-plane/grpc" }
 tracing = "0.1.37"

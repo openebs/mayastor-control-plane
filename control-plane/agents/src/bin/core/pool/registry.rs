@@ -3,8 +3,8 @@ use crate::controller::{
     wrapper::{GetterOps, *},
 };
 use agents::errors::{self, SvcError, SvcError::PoolNotFound};
-use common_lib::types::v0::transport::{NodeId, Pool, PoolId, PoolState, Replica, ReplicaId};
 use snafu::OptionExt;
+use stor_port::types::v0::transport::{NodeId, Pool, PoolId, PoolState, Replica, ReplicaId};
 
 /// Pool helpers
 impl Registry {

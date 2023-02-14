@@ -7,7 +7,14 @@ use crate::controller::{
     },
 };
 use agents::errors::SvcError;
-use common_lib::{
+use grpc::{
+    context::Context,
+    operations::nexus::traits::{
+        AddNexusChildInfo, CreateNexusInfo, DestroyNexusInfo, NexusOperations,
+        RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
+    },
+};
+use stor_port::{
     transport_api::{v0::Nexuses, ReplyError},
     types::v0::{
         store::nexus::NexusSpec,
@@ -15,13 +22,6 @@ use common_lib::{
             AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
             RemoveNexusChild, ShareNexus, UnshareNexus,
         },
-    },
-};
-use grpc::{
-    context::Context,
-    operations::nexus::traits::{
-        AddNexusChildInfo, CreateNexusInfo, DestroyNexusInfo, NexusOperations,
-        RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
     },
 };
 

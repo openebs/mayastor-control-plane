@@ -9,8 +9,8 @@ use crate::{
         ShareReplicaRequest, UnshareReplicaReply, UnshareReplicaRequest,
     },
 };
-use common_lib::types::v0::transport::Filter;
 use std::{convert::TryFrom, sync::Arc};
+use stor_port::types::v0::transport::Filter;
 use tonic::Response;
 
 /// RPC Replica Server
