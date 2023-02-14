@@ -111,6 +111,7 @@ impl TryIoEngineToAgent for v0::ReplicaV2 {
             pool_uuid: None,
             thin: self.thin,
             size: self.size,
+            space: None,
             share: self.share.into(),
             uri: self.uri.clone(),
             status: ReplicaStatus::Online,

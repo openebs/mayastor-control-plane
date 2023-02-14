@@ -332,6 +332,7 @@ impl From<&ReplicaSpec> for transport::Replica {
             pool_uuid: replica.pool.pool_uuid(),
             thin: replica.thin,
             size: replica.size,
+            space: None,
             share: replica.share,
             uri: "".to_string(),
             status: transport::ReplicaStatus::Unknown,

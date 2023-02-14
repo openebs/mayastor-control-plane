@@ -21,6 +21,23 @@ impl GetReplicas {
     }
 }
 
+/// Replica Space Usage information.
+/// Useful for capacity management, eg: figure out how much of a thin-provisioned replica is
+/// really allocated.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub struct ReplicaSpaceUsage {
+    /// Replica capacity in bytes.
+    pub capacity_bytes: u64,
+    /// Amount of actually allocated disk space for this replica in bytes.
+    pub allocated_bytes: u64,
+    /// Cluster size in bytes.
+    pub cluster_size: u64,
+    /// Total number of clusters.
+    pub clusters: u64,
+    /// Number of actually used clusters.
+    pub allocated_clusters: u64,
+}
+
 /// Replica information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +56,8 @@ pub struct Replica {
     pub thin: bool,
     /// size of the replica in bytes
     pub size: u64,
+    /// space information
+    pub space: Option<ReplicaSpaceUsage>,
     /// protocol used for exposing the replica
     pub share: Protocol,
     /// uri usable by nexus to access it
@@ -117,11 +136,23 @@ impl From<Replica> for models::Replica {
             src.pool_uuid.into_opt(),
             src.share,
             src.size,
+            src.space.into_opt(),
             src.status,
             src.thin,
             src.uri,
             *src.uuid.uuid(),
             None::<Vec<String>>,
+        )
+    }
+}
+impl From<ReplicaSpaceUsage> for models::ReplicaSpaceUsage {
+    fn from(src: ReplicaSpaceUsage) -> Self {
+        Self::new_all(
+            src.capacity_bytes,
+            src.allocated_bytes,
+            src.cluster_size,
+            src.clusters,
+            src.allocated_clusters,
         )
     }
 }

@@ -2340,6 +2340,8 @@ components:
           type: integer
           format: int64
           minimum: 0
+        space:
+          $ref: '#/components/schemas/ReplicaSpaceUsage'
         state:
           $ref: '#/components/schemas/ReplicaState'
         thin:
@@ -2368,6 +2370,48 @@ components:
         - thin
         - uri
         - uuid
+    ReplicaSpaceUsage:
+      description: |
+        Replica space usage information.
+        Useful for capacity management, eg: figure out how much of a thin-provisioned replica is allocated.
+      type: object
+      properties:
+        capacity_bytes:
+          description: Replica capacity in bytes.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+        allocated_bytes:
+          description: Amount of actually allocated disk space for this replica in bytes.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+        cluster_size:
+          description: Cluster size in bytes.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+        clusters:
+          description: Total number of clusters.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+        allocated_clusters:
+          description: Number of actually used clusters.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - capacity_bytes
+        - allocated_bytes
+        - cluster_size
+        - clusters
+        - allocated_clusters
     RestJsonError:
       example:
         details: The Pool 'pooloop' was not found

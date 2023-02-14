@@ -98,6 +98,7 @@ async fn pool() {
             pool_uuid: replica.pool_uuid.clone(),
             thin: true,
             size: 12582912,
+            space: replica.space.clone(),
             share: Protocol::None,
             uri,
             status: ReplicaStatus::Online,

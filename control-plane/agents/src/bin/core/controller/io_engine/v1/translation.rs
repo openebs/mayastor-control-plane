@@ -98,19 +98,33 @@ impl TryIoEngineToAgent for v1::replica::Replica {
             })?),
             thin: self.thin,
             size: self.size,
+            space: self.usage.as_ref().map(IoEngineToAgent::to_agent),
             share: self.share.into(),
             uri: self.uri.clone(),
             status: ReplicaStatus::Online,
             allowed_hosts: self
                 .allowed_hosts
-                .iter()
-                .map(|n| {
+                .clone()
+                .into_iter()
+                .map(|nqn| {
                     // should we allow for invalid here since it comes directly from the dataplane?
-                    transport::HostNqn::try_from(n)
-                        .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
+                    transport::HostNqn::try_from(&nqn)
+                        .unwrap_or(transport::HostNqn::Invalid { nqn })
                 })
                 .collect(),
         })
+    }
+}
+impl IoEngineToAgent for v1::pb::ReplicaSpaceUsage {
+    type AgentMessage = transport::ReplicaSpaceUsage;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::ReplicaSpaceUsage {
+            capacity_bytes: self.capacity_bytes,
+            allocated_bytes: self.allocated_bytes,
+            cluster_size: self.cluster_size,
+            clusters: self.num_clusters,
+            allocated_clusters: self.num_allocated_clusters,
+        }
     }
 }
 

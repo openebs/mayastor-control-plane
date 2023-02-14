@@ -27,11 +27,22 @@ message Replica {
   ReplicaStatus status = 9;
   // uuid of the pool
   optional google.protobuf.StringValue pool_uuid = 10;
+  // space usage information.
+  ReplicaSpaceUsage space = 11;
 }
 
 // Multiple replicas
 message Replicas {
   repeated Replica replicas = 1;
+}
+
+// Replica space usage
+message ReplicaSpaceUsage {
+  uint64 capacity_bytes = 1; // replica capacity in bytes.
+  uint64 allocated_bytes = 2; // amount of actually allocated disk space for this replica in bytes
+  uint64 cluster_size = 3; // cluster size in bytes
+  uint64 clusters = 4; // total number of clusters
+  uint64 allocated_clusters = 5; // number of actually used clusters
 }
 
 // State of the Replica
