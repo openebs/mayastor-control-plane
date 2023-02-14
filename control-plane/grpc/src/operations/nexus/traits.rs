@@ -8,7 +8,8 @@ use crate::{
         RemoveNexusChildRequest, ShareNexusRequest, UnshareNexusRequest,
     },
 };
-use common_lib::{
+use std::convert::TryFrom;
+use stor_port::{
     transport_api::{v0::Nexuses, ReplyError, ResourceKind},
     types::v0::{
         store::{
@@ -27,7 +28,6 @@ use common_lib::{
     },
     IntoOption, TryIntoOption,
 };
-use std::convert::TryFrom;
 
 /// All nexus operations to be a part of the NexusOperations trait
 #[tonic::async_trait]

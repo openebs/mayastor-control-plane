@@ -20,7 +20,7 @@ prost = "0.11.6"
 prost-types = "0.11.6"
 
 tokio = { version = "1.25.0", features = ["full"] }
-common-lib = { path = "../../common" }
+stor-port = { path = "../stor-port" }
 humantime = "2.1.0"
 utils = { path = "../../utils/utils-lib" }
 rpc = { path = "../../rpc"}

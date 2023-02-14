@@ -1,17 +1,5 @@
 use crate::controller::registry::Registry;
 use agents::errors::{Store as SvcStoreError, SvcError};
-use common_lib::{
-    transport_api::{v0::Watches, ResourceKind},
-    types::v0::{
-        store::definitions::{
-            ObjectKey, StorableObject, StorableObjectType, Store, StoreError, StoreWatchReceiver,
-            WatchEvent,
-        },
-        transport::{
-            CreateWatch, DeleteWatch, GetWatches, Watch, WatchCallback, WatchResourceId, WatchType,
-        },
-    },
-};
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
 use std::{
@@ -20,12 +8,27 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use stor_port::{
+    pstor::{
+        Error as StoreError, ObjectKey, StorableObject, StorableObjectType, Store,
+        StoreWatchReceiver, WatchEvent,
+    },
+    transport_api::{v0::Watches, ResourceKind},
+    types::v0::transport::{
+        CreateWatch, DeleteWatch, GetWatches, Watch, WatchCallback, WatchResourceId, WatchType,
+    },
+};
 use tokio::{
     sync::{broadcast::error::TryRecvError, Mutex},
     task::JoinHandle,
 };
 
 impl ObjectKey for WatchCfgId {
+    type Kind = StorableObjectType;
+
+    fn version(&self) -> u64 {
+        0
+    }
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::WatchConfig
     }

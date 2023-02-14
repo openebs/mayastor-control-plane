@@ -1,6 +1,6 @@
 use super::*;
-use common_lib::types::v0::transport::GetSpecs;
 use grpc::operations::registry::traits::RegistryOperations;
+use stor_port::types::v0::transport::GetSpecs;
 
 fn client() -> impl RegistryOperations {
     core_grpc().registry()

@@ -1,16 +1,11 @@
 use crate::switchover::SwitchOverRequest;
-use common_lib::{
-    store::etcd::Etcd,
-    types::v0::store::{
-        definitions::{
-            key_prefix_obj, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
-        },
-        switchover::SwitchOverSpec,
-    },
-};
 use futures::lock::Mutex;
 use http::Uri;
 use std::{sync::Arc, time::Duration};
+use stor_port::{
+    pstor::{etcd::Etcd, *},
+    types::v0::store::switchover::SwitchOverSpec,
+};
 use tracing::{debug, error};
 
 /// Represent object to access Etcd.
@@ -22,7 +17,7 @@ pub struct EtcdStore {
 
 impl EtcdStore {
     /// Create a new Etcd client.
-    pub async fn new(endpoint: Uri, timeout: Duration) -> Result<Self, StoreError> {
+    pub async fn new(endpoint: Uri, timeout: Duration) -> Result<Self, Error> {
         match tokio::time::timeout(timeout, async { Etcd::new(&endpoint.to_string()).await }).await
         {
             Ok(v) => {
@@ -34,7 +29,7 @@ impl EtcdStore {
             }
             Err(error) => {
                 error!(%error, "Failed to create persistent store client");
-                Err(StoreError::Timeout {
+                Err(Error::Timeout {
                     operation: "connect".to_string(),
                     timeout,
                 })
@@ -49,7 +44,7 @@ impl EtcdStore {
             Ok(result) => result.map_err(Into::into),
             Err(error) => {
                 error!(%error, "Failed to write to persistent store");
-                Err(StoreError::Timeout {
+                Err(Error::Timeout {
                     operation: "Put".to_string(),
                     timeout: self.timeout,
                 }
@@ -68,12 +63,12 @@ impl EtcdStore {
         {
             Ok(result) => match result {
                 Ok(_) => Ok(()),
-                Err(StoreError::MissingEntry { .. }) => Ok(()),
+                Err(Error::MissingEntry { .. }) => Ok(()),
                 Err(error) => Err(error.into()),
             },
             Err(error) => {
                 error!(%error, "Failed to delete from persistent store");
-                Err(StoreError::Timeout {
+                Err(Error::Timeout {
                     operation: "Delete".to_string(),
                     timeout: self.timeout,
                 }
@@ -86,7 +81,7 @@ impl EtcdStore {
     /// Request with error or path published is considered a complete request.
     pub async fn fetch_incomplete_requests(&self) -> Result<Vec<SwitchOverRequest>, anyhow::Error> {
         let mut store = self.store.lock().await;
-        let key = key_prefix_obj(StorableObjectType::SwitchOver);
+        let key = key_prefix_obj(StorableObjectType::SwitchOver, 0);
         let store_entries = store.get_values_prefix(&key).await?;
 
         debug!(count = store_entries.len(), "fetched entries from etcd");

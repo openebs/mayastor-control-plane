@@ -21,7 +21,7 @@ use controller::registry::NumRebuilds;
 use std::net::SocketAddr;
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
-use common_lib::HostAccessControl;
+use stor_port::HostAccessControl;
 use utils::tracing_telemetry::{trace::TracerProvider, KeyValue};
 
 /// The Cli arguments for this binary.
@@ -109,7 +109,7 @@ async fn main() {
 }
 
 async fn server(cli_args: CliArgs) {
-    common_lib::init_cluster_info_or_panic().await;
+    stor_port::platform::init_cluster_info_or_panic().await;
     let registry = controller::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),

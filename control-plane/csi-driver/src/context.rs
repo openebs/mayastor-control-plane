@@ -1,5 +1,5 @@
-use common_lib::types::v0::openapi::models::VolumeShareProtocol;
 use std::{collections::HashMap, num::ParseIntError, str::FromStr};
+use stor_port::types::v0::openapi::models::VolumeShareProtocol;
 
 /// The currently supported filesystems.
 #[derive(strum_macros::AsRefStr, strum_macros::EnumString)]

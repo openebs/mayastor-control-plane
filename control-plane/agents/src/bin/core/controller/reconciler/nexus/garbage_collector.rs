@@ -7,7 +7,7 @@ use crate::controller::{
     },
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
-use common_lib::types::v0::{store::nexus::NexusSpec, transport::DestroyNexus};
+use stor_port::types::v0::{store::nexus::NexusSpec, transport::DestroyNexus};
 use tracing::Instrument;
 
 /// Nexus Garbage Collector reconciler

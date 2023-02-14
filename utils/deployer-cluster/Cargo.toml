@@ -16,7 +16,7 @@ rpc = { path = "../../rpc" }
 csi-driver = { path = "../../control-plane/csi-driver" }
 utils = { path = "../../utils/utils-lib" }
 anyhow = "1.0.69"
-common-lib = { path = "../../common" }
+stor-port = { path = "../../control-plane/stor-port" }
 clap = { version = "4.1.4", features = ["derive", "env", "string"] }
 backtrace = "0.3.67"
 etcd-client = "0.10.2"

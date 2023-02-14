@@ -3,11 +3,11 @@ use crate::{
     operations::watch::traits::{GetWatchInfo, WatchInfo, WatchOperations},
     watch::{get_watches_reply, watch_grpc_client::WatchGrpcClient},
 };
-use common_lib::{
+use std::{convert::TryFrom, ops::Deref};
+use stor_port::{
     transport_api::{v0::Watches, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::MessageIdVs,
 };
-use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 type WatchClientInner = Client<WatchGrpcClient<TracedChannel>>;

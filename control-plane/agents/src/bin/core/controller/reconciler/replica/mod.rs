@@ -9,7 +9,7 @@ use crate::controller::{
         PollContext, PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState, TaskPoller,
     },
 };
-use common_lib::types::v0::{store::replica::ReplicaSpec, transport::ReplicaOwners};
+use stor_port::types::v0::{store::replica::ReplicaSpec, transport::ReplicaOwners};
 
 /// Replica reconciler
 #[derive(Debug)]

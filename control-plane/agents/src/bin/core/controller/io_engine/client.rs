@@ -1,10 +1,10 @@
 use crate::{controller::io_engine::NodeApi, node::service::NodeCommsTimeout};
 use agents::errors::{GrpcConnectUri, SvcError};
-use common_lib::{
+use grpc::context::timeout_grpc;
+use stor_port::{
     transport_api::MessageId,
     types::v0::transport::{ApiVersion, NodeId},
 };
-use grpc::context::timeout_grpc;
 
 use snafu::ResultExt;
 use std::{

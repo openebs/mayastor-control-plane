@@ -17,7 +17,7 @@ use crate::{
     nexus::scheduling::healthy_nexus_children,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::{
         nexus::{NexusOperation, NexusSpec, NexusStatusInfo, ReplicaUri},
         nexus_child::NexusChild,

@@ -7,11 +7,11 @@ use crate::{
         ReportFailedPathsInfo,
     },
 };
-use common_lib::{
+use std::ops::Deref;
+use stor_port::{
     transport_api::{v0::NvmeSubsystems, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::MessageIdVs,
 };
-use std::ops::Deref;
 use tonic::transport::Uri;
 
 /// Cluster-Agent RPC client

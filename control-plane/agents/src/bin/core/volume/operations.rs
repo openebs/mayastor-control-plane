@@ -17,7 +17,9 @@ use crate::{
     volume::specs::{create_volume_replicas, get_volume_target_node, healthy_volume_replicas},
 };
 use agents::errors::SvcError;
-use common_lib::{
+use http::Uri;
+use std::ops::Deref;
+use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
         store::{
@@ -38,8 +40,6 @@ use common_lib::{
     },
     HostAccessControl,
 };
-use http::Uri;
-use std::ops::Deref;
 use tracing::info;
 
 #[async_trait::async_trait]

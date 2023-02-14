@@ -20,23 +20,22 @@ use crate::controller::{
     wrapper::InternalOps,
 };
 use agents::errors::SvcError;
-use common_lib::{
-    store::etcd::Etcd,
+use std::{
+    collections::HashMap,
+    future::Future,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
+use stor_port::{
+    pstor::{etcd::Etcd, Error as StoreError, StorableObject, Store, StoreKey, StoreKv, StoreObj},
     types::v0::{
         store::{
-            definitions::{StorableObject, Store, StoreError, StoreKey},
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
             volume::InitiatorAC,
         },
         transport::{HostNqn, NodeId},
     },
     HostAccessControl,
-};
-use std::{
-    collections::HashMap,
-    future::Future,
-    ops::{Deref, DerefMut},
-    sync::Arc,
 };
 use tokio::sync::{Mutex, RwLock};
 
@@ -104,7 +103,7 @@ impl Registry {
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
         let store = Etcd::new_leased(
             [&store_endpoint],
-            ControlPlaneService::CoreAgent,
+            ControlPlaneService::CoreAgent.to_string(),
             store_lease_tll,
         )
         .await

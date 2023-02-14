@@ -1,10 +1,10 @@
 use super::translation::{rpc_pool_to_agent, AgentToIoEngine};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
-use common_lib::{
+use rpc::v1::pool::ListPoolOptions;
+use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{CreatePool, DestroyPool, NodeId, PoolState},
 };
-use rpc::v1::pool::ListPoolOptions;
 
 use snafu::ResultExt;
 

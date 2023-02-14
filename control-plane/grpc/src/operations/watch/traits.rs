@@ -4,14 +4,14 @@ use crate::{
     watch,
     watch::watch_resource_id,
 };
-use common_lib::{
+use std::convert::TryFrom;
+use stor_port::{
     transport_api::{v0::Watches, ReplyError, ResourceKind},
     types::v0::transport::{
         CreateWatch, DeleteWatch, GetWatches, NexusId, ReplicaId, VolumeId, Watch, WatchCallback,
         WatchResourceId, WatchType,
     },
 };
-use std::convert::TryFrom;
 
 /// All watch crud operations to be a part of the WatchOperations trait
 #[tonic::async_trait]

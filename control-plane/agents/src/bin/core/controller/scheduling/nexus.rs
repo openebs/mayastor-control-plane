@@ -8,12 +8,12 @@ use crate::controller::{
     },
 };
 use agents::errors::SvcError;
-use common_lib::types::v0::{
+use itertools::Itertools;
+use std::{collections::HashMap, ops::Deref};
+use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
     transport::{ChildUri, NexusId, NodeId, VolumeId},
 };
-use itertools::Itertools;
-use std::{collections::HashMap, ops::Deref};
 
 /// Request to retrieve a list of healthy nexus children which is used for nexus creation
 /// used by `CreateVolumeNexus`.

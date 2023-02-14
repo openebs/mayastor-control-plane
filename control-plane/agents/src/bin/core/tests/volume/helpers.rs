@@ -1,7 +1,7 @@
 use super::RECONCILE_TIMEOUT_SECS;
-use common_lib::types::v0::transport::{Child, ChildUri, GetSpecs, GetVolumes, Volume, VolumeId};
 use grpc::operations::{registry::traits::RegistryOperations, volume::traits::VolumeOperations};
 use std::time::Duration;
+use stor_port::types::v0::transport::{Child, ChildUri, GetSpecs, GetVolumes, Volume, VolumeId};
 
 /// Wait for the published volume to have the specified replicas and to not having the specified
 /// child. Wait up to the specified timeout.

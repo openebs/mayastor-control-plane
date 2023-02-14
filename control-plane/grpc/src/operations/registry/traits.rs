@@ -3,7 +3,8 @@ use crate::{
     registry,
     registry::{GetSpecsRequest, GetStatesRequest},
 };
-use common_lib::{
+use std::convert::TryFrom;
+use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         store,
@@ -12,7 +13,6 @@ use common_lib::{
         transport::{GetSpecs, GetStates, Specs},
     },
 };
-use std::convert::TryFrom;
 
 /// Trait implemented by services which support registry operations.
 #[tonic::async_trait]

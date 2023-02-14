@@ -1,5 +1,15 @@
-use common_lib::{
-    store::etcd::Etcd,
+use deployer_cluster::{Cluster, ClusterBuilder};
+use grpc::{
+    context::Context,
+    operations::{
+        node::traits::NodeOperations, pool::traits::PoolOperations,
+        registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
+    },
+};
+use itertools::Itertools;
+use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
+use stor_port::{
+    pstor::{etcd::Etcd, StoreObj},
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
     types::v0::{
         openapi::{
@@ -11,10 +21,7 @@ use common_lib::{
                 VolumePolicy,
             },
         },
-        store::{
-            definitions::Store,
-            replica::{ReplicaSpec, ReplicaSpecKey},
-        },
+        store::replica::{ReplicaSpec, ReplicaSpecKey},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NexusId,
             NodeId, Protocol, Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol,
@@ -22,16 +29,6 @@ use common_lib::{
         },
     },
 };
-use deployer_cluster::{Cluster, ClusterBuilder};
-use grpc::{
-    context::Context,
-    operations::{
-        node::traits::NodeOperations, pool::traits::PoolOperations,
-        registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
-    },
-};
-use itertools::Itertools;
-use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
 
 #[tokio::test]
 async fn pool() {

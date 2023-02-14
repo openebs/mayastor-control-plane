@@ -169,7 +169,7 @@ variable "with_jaeger" {
 variable "control_rust_log" {
   type        = string
   description = "The RUST_LOG environment filter for all control-plane components"
-  default     = "info,agent_core=debug,api_rest=debug,csi_controller=debug,csi_node=debug,operator_diskpool=debug,common_lib=debug,grpc=debug"
+  default     = "info,agent_core=debug,api_rest=debug,csi_controller=debug,csi_node=debug,operator_diskpool=debug,stor_port=debug,grpc=debug"
 }
 
 variable "kube_create_sa_secret" {

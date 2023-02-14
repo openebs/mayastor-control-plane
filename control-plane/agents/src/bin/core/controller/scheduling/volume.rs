@@ -8,7 +8,7 @@ use crate::controller::{
 };
 
 use agents::errors::SvcError;
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
     transport::{ChildUri, CreateVolume, VolumeState},
 };

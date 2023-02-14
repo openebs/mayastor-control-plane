@@ -1,4 +1,4 @@
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     openapi::{apis, models},
     transport::WatchResourceId,
 };
@@ -6,19 +6,19 @@ use common_lib::types::v0::{
 use rest_client::RestClient;
 
 use crate::models::PublishVolumeBody;
-use common_lib::types::v0::{
-    openapi::{
-        client::direct::ApiClient,
-        clients::tower::{Error, ResponseError},
-    },
-    transport::{HostNqn, NexusId, NodeId, ReplicaId, VolumeId},
-};
 use deployer_cluster::{Cluster, ClusterBuilder};
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     str::FromStr,
     time::Duration,
+};
+use stor_port::types::v0::{
+    openapi::{
+        client::direct::ApiClient,
+        clients::tower::{Error, ResponseError},
+    },
+    transport::{HostNqn, NexusId, NodeId, ReplicaId, VolumeId},
 };
 use tracing::info;
 

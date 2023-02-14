@@ -4,7 +4,6 @@ use crate::{
     path_provider::get_nvme_path_entry,
 };
 use agents::errors::{SvcError, SvcError::SubsystemNotFound};
-use common_lib::transport_api::{ErrorChain, ReplyError, ResourceKind};
 use grpc::{
     common::MapWrapper,
     context::Context,
@@ -14,13 +13,14 @@ use grpc::{
         traits::{NodeAgentOperations, ReplacePathInfo},
     },
 };
+use stor_port::transport_api::{ErrorChain, ReplyError, ResourceKind};
 
-use common_lib::{
+use grpc::operations::ha_node::traits::GetControllerInfo;
+use nvmeadm::nvmf_subsystem::SubsystemAddr;
+use stor_port::{
     transport_api::v0::NvmeSubsystems as NvmeSubsys,
     types::v0::transport::NvmeSubsystem as NvmeCtrller,
 };
-use grpc::operations::ha_node::traits::GetControllerInfo;
-use nvmeadm::nvmf_subsystem::SubsystemAddr;
 
 use http::Uri;
 use nvmeadm::nvmf_subsystem::Subsystem;

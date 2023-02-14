@@ -1,10 +1,10 @@
 use crate::tracing::OpenTelClient;
-pub use common_lib::transport_api::TimeoutOptions;
-use common_lib::{
+use std::time::Duration;
+pub use stor_port::transport_api::TimeoutOptions;
+use stor_port::{
     transport_api::{ClientId, MessageId},
     types::v0::transport::MessageIdVs,
 };
-use std::time::Duration;
 use tonic::{
     transport::{Channel, Uri},
     IntoRequest,

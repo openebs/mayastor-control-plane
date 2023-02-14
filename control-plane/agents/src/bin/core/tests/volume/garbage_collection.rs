@@ -1,7 +1,12 @@
 #![cfg(test)]
 
 use super::RECONCILE_TIMEOUT_SECS;
-use common_lib::types::v0::{
+use deployer_cluster::{Cluster, ClusterBuilder};
+use grpc::operations::{
+    nexus::traits::NexusOperations, node::traits::NodeOperations, volume::traits::VolumeOperations,
+};
+use std::{collections::HashMap, convert::TryInto, time::Duration};
+use stor_port::types::v0::{
     openapi::{
         apis::{StatusCode, Uuid},
         models,
@@ -13,11 +18,6 @@ use common_lib::types::v0::{
         VolumeId,
     },
 };
-use deployer_cluster::{Cluster, ClusterBuilder};
-use grpc::operations::{
-    nexus::traits::NexusOperations, node::traits::NodeOperations, volume::traits::VolumeOperations,
-};
-use std::{collections::HashMap, convert::TryInto, time::Duration};
 
 #[tokio::test]
 async fn garbage_collection() {

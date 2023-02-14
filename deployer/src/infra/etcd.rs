@@ -1,6 +1,6 @@
 use crate::infra::{async_trait, Builder, ComponentAction, ComposeTest, Error, Etcd, StartOptions};
-use common_lib::store::etcd::Etcd as EtcdStore;
 use composer::{Binary, ContainerSpec};
+use stor_port::pstor::etcd::Etcd as EtcdStore;
 
 #[async_trait]
 impl ComponentAction for Etcd {

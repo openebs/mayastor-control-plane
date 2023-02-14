@@ -1,4 +1,5 @@
-use common_lib::{
+use snafu::{Error, Snafu};
+use stor_port::{
     transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         store::definitions::StoreError,
@@ -7,7 +8,6 @@ use common_lib::{
         },
     },
 };
-use snafu::{Error, Snafu};
 use tonic::Code;
 
 /// Common error type for send/receive

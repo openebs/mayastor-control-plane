@@ -5,7 +5,7 @@ use super::{
 use crate::controller::task_poller::PollTriggerEvent;
 
 use agents::errors::SvcError;
-use common_lib::{
+use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         openapi::apis::Uuid,
@@ -875,7 +875,7 @@ impl ResourceSpecsLocked {
         store: &mut S,
         spec_type: StorableObjectType,
     ) -> Result<(), SpecError> {
-        let prefix = key_prefix_obj(spec_type);
+        let prefix = key_prefix_obj(spec_type, 0);
         let store_entries =
             store
                 .get_values_prefix(&prefix)

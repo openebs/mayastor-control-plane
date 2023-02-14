@@ -1,6 +1,6 @@
 use crate::controller::io_engine::translation::{IoEngineToAgent, TryIoEngineToAgent};
 use agents::errors::SvcError;
-use common_lib::{
+use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         openapi::apis::IntoVec,

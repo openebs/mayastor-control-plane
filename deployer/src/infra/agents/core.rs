@@ -2,10 +2,10 @@ use crate::{
     build_error,
     infra::{async_trait, Builder, ComponentAction, ComposeTest, CoreAgent, Error, StartOptions},
 };
-use common_lib::types::v0::transport::{Filter, NodeStatus};
 use composer::{Binary, ContainerSpec};
 use grpc::operations::node::traits::NodeOperations;
 use std::str::FromStr;
+use stor_port::types::v0::transport::{Filter, NodeStatus};
 
 #[async_trait]
 impl ComponentAction for CoreAgent {

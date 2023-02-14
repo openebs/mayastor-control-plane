@@ -1,4 +1,10 @@
-use common_lib::{
+use deployer_cluster::{Cluster, ClusterBuilder};
+use grpc::operations::{
+    nexus::traits::NexusOperations, node::traits::NodeOperations,
+    registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
+};
+use std::{convert::TryFrom, time::Duration};
+use stor_port::{
     transport_api::*,
     types::v0::{
         store::nexus::NexusSpec,
@@ -9,12 +15,6 @@ use common_lib::{
         },
     },
 };
-use deployer_cluster::{Cluster, ClusterBuilder};
-use grpc::operations::{
-    nexus::traits::NexusOperations, node::traits::NodeOperations,
-    registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
-};
-use std::{convert::TryFrom, time::Duration};
 
 #[tokio::test]
 async fn nexus() {

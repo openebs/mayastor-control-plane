@@ -1,5 +1,6 @@
 use crate::CsiControllerConfig;
-use common_lib::types::v0::openapi::{
+use std::collections::HashMap;
+use stor_port::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
     models::{
@@ -7,7 +8,6 @@ use common_lib::types::v0::openapi::{
         Topology, Volume, VolumePolicy, VolumeShareProtocol, Volumes,
     },
 };
-use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;

@@ -7,7 +7,7 @@ use crate::controller::{
     task_poller::{PollEvent, PollResult, PollTimer, PollerState},
 };
 use agents::errors::SvcError;
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::{node::NodeSpec, volume::VolumeSpec},
     transport::{NodeId, RepublishVolume, VolumeId, VolumeShareProtocol},
 };

@@ -1,5 +1,5 @@
 use crate::controller::resources::{resource_map::ResourceMap, ResourceMutex};
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::{nexus::NexusState, pool::PoolState, replica::ReplicaState},
     transport::{self, Nexus, NexusId, PoolId, Replica, ReplicaId},
 };

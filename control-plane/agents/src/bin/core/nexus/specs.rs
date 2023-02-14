@@ -11,7 +11,7 @@ use crate::controller::{
     },
 };
 use agents::errors::SvcError;
-use common_lib::{
+use stor_port::{
     transport_api::{ErrorChain, ResourceKind},
     types::v0::{
         store::{

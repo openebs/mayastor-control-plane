@@ -8,7 +8,8 @@ use crate::{
         UnshareReplicaRequest,
     },
 };
-use common_lib::{
+use std::convert::TryFrom;
+use stor_port::{
     transport_api::{v0::Replicas, ReplyError, ResourceKind},
     types::v0::{
         store::replica::{
@@ -22,7 +23,6 @@ use common_lib::{
     },
     IntoVec,
 };
-use std::convert::TryFrom;
 
 /// All replica operations to be a part of the ReplicaOperations trait
 #[tonic::async_trait]

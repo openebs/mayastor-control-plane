@@ -10,7 +10,7 @@ use crate::controller::{
     wrapper::NodeWrapper,
 };
 use agents::errors::{NotEnough, SvcError};
-use common_lib::types::v0::store::nexus::NexusSpec;
+use stor_port::types::v0::store::nexus::NexusSpec;
 
 /// Return healthy replicas for volume/nexus
 /// The persistent store has the latest information from io-engine, which tells us if any replica

@@ -16,11 +16,11 @@ use crate::{
         ProbeRequest,
     },
 };
-use common_lib::{
+use std::{convert::TryFrom, ops::Deref};
+use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{Filter, MessageIdVs, Volume},
 };
-use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 /// RPC Volume Client

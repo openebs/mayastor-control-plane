@@ -8,7 +8,7 @@ pub(crate) use client::*;
 
 use agents::errors::SvcError;
 use async_trait::async_trait;
-use common_lib::{
+use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,

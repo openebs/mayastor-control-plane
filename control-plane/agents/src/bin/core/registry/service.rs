@@ -1,12 +1,12 @@
 use crate::{controller, controller::resources::operations_helper::ResourceSpecsLocked};
 use agents::errors::SvcError;
-use common_lib::{
-    transport_api::ReplyError,
-    types::v0::transport::{GetSpecs, GetStates, Specs, States},
-};
 use grpc::{
     context::Context,
     operations::registry::traits::{GetSpecsInfo, GetStatesInfo, RegistryOperations},
+};
+use stor_port::{
+    transport_api::ReplyError,
+    types::v0::transport::{GetSpecs, GetStates, Specs, States},
 };
 
 /// Registry Service

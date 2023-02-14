@@ -1,7 +1,7 @@
 use super::{ResourceMutex, ResourceUid};
-use common_lib::IntoVec;
 use indexmap::{map::Values, IndexMap};
 use std::{fmt::Debug, hash::Hash};
+use stor_port::IntoVec;
 
 #[derive(Debug)]
 pub(crate) struct ResourceMap<I, S: Clone> {

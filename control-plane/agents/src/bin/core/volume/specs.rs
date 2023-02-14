@@ -29,7 +29,8 @@ use agents::{
         SvcError::{ReplicaRemovalNoCandidates, VolumeNotFound},
     },
 };
-use common_lib::{
+use grpc::operations::{PaginatedResult, Pagination};
+use stor_port::{
     transport_api::{ErrorChain, ResourceKind},
     types::v0::{
         store::{
@@ -48,16 +49,15 @@ use common_lib::{
         },
     },
 };
-use grpc::operations::{PaginatedResult, Pagination};
 
 use crate::controller::resources::operations::ResourceOwnerUpdate;
-use common_lib::types::v0::{
-    store::{replica::PoolRef, volume::TargetConfig},
-    transport::ShareReplica,
-};
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use snafu::OptionExt;
 use std::convert::From;
+use stor_port::types::v0::{
+    store::{replica::PoolRef, volume::TargetConfig},
+    transport::ShareReplica,
+};
 
 /// Select a replica to be removed from the volume
 pub(crate) async fn volume_replica_remove_candidate(

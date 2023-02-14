@@ -8,12 +8,12 @@ pub(crate) mod wrapper;
 
 use super::{controller::registry::Registry, CliArgs};
 use agents::Service;
-use common_lib::{
+use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
+use std::sync::Arc;
+use stor_port::{
     transport_api::{v0::*, *},
     types::v0::transport::{GetBlockDevices, GetNodes},
 };
-use grpc::operations::{node::server::NodeServer, registration::server::RegistrationServer};
-use std::sync::Arc;
 
 /// Configure the Service and return the builder.
 pub(crate) async fn configure(builder: agents::ServiceEmpty) -> Service {

@@ -1,6 +1,6 @@
 use super::*;
-use common_lib::types::v0::transport::GetBlockDevices;
 use grpc::operations::node::traits::NodeOperations;
+use stor_port::types::v0::transport::GetBlockDevices;
 
 fn client() -> impl NodeOperations {
     core_grpc().node()

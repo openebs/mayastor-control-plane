@@ -1,9 +1,9 @@
 use agents::errors::{NodeNotFound, SvcError};
-use common_lib::types::v0::{
+use snafu::OptionExt;
+use stor_port::types::v0::{
     store::node::{NodeLabels, NodeSpec},
     transport::{NodeId, Register},
 };
-use snafu::OptionExt;
 
 use crate::controller::{
     registry::Registry,

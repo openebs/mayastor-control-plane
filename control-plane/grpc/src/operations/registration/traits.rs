@@ -1,7 +1,3 @@
-use common_lib::{
-    transport_api::{ReplyError, ResourceKind},
-    types::v0::transport::{node, Deregister, HostNqn, NodeId, Register},
-};
 use rpc::{
     v1::registration::{DeregisterRequest, RegisterRequest},
     v1_alpha::registration::{
@@ -9,6 +5,10 @@ use rpc::{
     },
 };
 use std::str::FromStr;
+use stor_port::{
+    transport_api::{ReplyError, ResourceKind},
+    types::v0::transport::{node, Deregister, HostNqn, NodeId, Register},
+};
 
 /// New type to wrap grpc ApiVersion type.
 pub struct ApiVersion(pub rpc::v1::registration::ApiVersion);

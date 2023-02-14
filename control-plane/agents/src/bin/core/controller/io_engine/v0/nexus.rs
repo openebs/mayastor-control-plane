@@ -1,14 +1,14 @@
 use super::translation::{rpc_nexus_to_agent, rpc_nexus_v2_to_agent, AgentToIoEngine};
 use crate::controller::io_engine::{translation::IoEngineToAgent, NexusListApi};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
-use common_lib::{
+use rpc::io_engine::Null;
+use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         AddNexusChild, Child, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusId, NodeId,
         RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
-use rpc::io_engine::Null;
 
 use snafu::ResultExt;
 

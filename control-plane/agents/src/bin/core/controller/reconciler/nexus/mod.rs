@@ -11,7 +11,8 @@ use crate::{
     },
     nexus::scheduling::healthy_nexus_children,
 };
-use common_lib::{
+use garbage_collector::GarbageCollector;
+use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
         store::{
@@ -21,7 +22,6 @@ use common_lib::{
         transport::{CreateNexus, NexusShareProtocol, NodeStatus, ShareNexus, UnshareNexus},
     },
 };
-use garbage_collector::GarbageCollector;
 
 use crate::controller::{
     io_engine::{NexusApi, NexusChildApi},
@@ -30,8 +30,8 @@ use crate::controller::{
     wrapper::NodeWrapper,
 };
 use agents::errors::SvcError;
-use common_lib::types::v0::transport::{FaultNexusChild, NexusStatus};
 use std::{convert::TryFrom, sync::Arc};
+use stor_port::types::v0::transport::{FaultNexusChild, NexusStatus};
 use tokio::sync::RwLock;
 use tracing::Instrument;
 

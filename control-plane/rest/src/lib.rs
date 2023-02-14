@@ -15,7 +15,7 @@
 /// expose different versions of the client
 pub mod versions;
 
-use common_lib::types::v0::openapi::client;
+use stor_port::types::v0::openapi::client;
 
 /// Tower Rest Client
 #[derive(Clone)]

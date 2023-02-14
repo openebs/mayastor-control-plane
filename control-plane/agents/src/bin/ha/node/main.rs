@@ -1,7 +1,4 @@
 use clap::Parser;
-use common_lib::{
-    transport_api::TimeoutOptions, types::v0::transport::cluster_agent::NodeAgentInfo,
-};
 use grpc::{
     csi_node_nvme::nvme_operations_client::NvmeOperationsClient,
     operations::ha_node::{client::ClusterAgentClient, traits::ClusterAgentOperations},
@@ -9,6 +6,9 @@ use grpc::{
 use http::Uri;
 use once_cell::sync::OnceCell;
 use std::{net::SocketAddr, time::Duration};
+use stor_port::{
+    transport_api::TimeoutOptions, types::v0::transport::cluster_agent::NodeAgentInfo,
+};
 use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;

@@ -4,7 +4,8 @@ use crate::{
     pool,
     pool::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
 };
-use common_lib::{
+use std::convert::TryFrom;
+use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
         store::pool::{PoolLabel, PoolSpec, PoolSpecStatus},
@@ -14,7 +15,6 @@ use common_lib::{
         },
     },
 };
-use std::convert::TryFrom;
 
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]

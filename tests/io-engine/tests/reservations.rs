@@ -1,14 +1,14 @@
-use common_lib::types::v0::{
-    store::{nexus::ReplicaUri, nexus_child::NexusChild},
-    transport as v0,
-    transport::{Filter, NexusNvmePreemption, NvmeReservation, ShareReplica},
-};
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     nexus::traits::NexusOperations, pool::traits::PoolOperations,
     replica::traits::ReplicaOperations,
 };
 use std::convert::{From, TryInto};
+use stor_port::types::v0::{
+    store::{nexus::ReplicaUri, nexus_child::NexusChild},
+    transport as v0,
+    transport::{Filter, NexusNvmePreemption, NvmeReservation, ShareReplica},
+};
 
 #[tokio::test]
 async fn preservation() {

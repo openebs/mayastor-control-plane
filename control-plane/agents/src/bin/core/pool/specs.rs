@@ -10,7 +10,7 @@ use crate::controller::{
     },
 };
 use agents::errors::{SvcError, SvcError::PoolNotFound};
-use common_lib::{
+use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{

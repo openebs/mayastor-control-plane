@@ -3,11 +3,11 @@ use crate::{
     operations::registry::traits::{GetSpecsInfo, GetStatesInfo, RegistryOperations},
     registry::{get_specs_reply, get_states_reply, registry_grpc_client::RegistryGrpcClient},
 };
-use common_lib::{
+use std::{convert::TryFrom, ops::Deref};
+use stor_port::{
     transport_api::{ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{MessageIdVs, Specs, States},
 };
-use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 /// RPC Registry Client

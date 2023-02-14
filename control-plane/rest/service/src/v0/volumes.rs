@@ -1,12 +1,12 @@
 use super::*;
-use common_lib::types::v0::{
+use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
+use stor_port::types::v0::{
     openapi::apis::Uuid,
     transport::{
         DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume, RepublishVolume,
         SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
     },
 };
-use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
 
 fn client() -> impl VolumeOperations {
     core_grpc().volume()

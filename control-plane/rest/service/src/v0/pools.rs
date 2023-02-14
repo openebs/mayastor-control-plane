@@ -1,6 +1,6 @@
 use super::*;
-use common_lib::types::v0::transport::{DestroyPool, Filter};
 use grpc::operations::pool::traits::PoolOperations;
+use stor_port::types::v0::transport::{DestroyPool, Filter};
 use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl PoolOperations {

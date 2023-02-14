@@ -1,10 +1,10 @@
 use crate::infra::{
     async_trait, Builder, ComponentAction, ComposeTest, Error, IoEngine, StartOptions,
 };
-use common_lib::types::v0::openapi::apis::Uuid;
 use composer::{Binary, ContainerSpec};
 use rpc::io_engine::{IoEngineApiVersion, RpcHandle};
 use std::net::{IpAddr, SocketAddr};
+use stor_port::types::v0::openapi::apis::Uuid;
 use utils::DEFAULT_GRPC_CLIENT_ADDR;
 
 #[async_trait]

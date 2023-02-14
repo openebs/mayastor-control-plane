@@ -9,14 +9,14 @@ use crate::{
     },
     operations::node::traits::{GetBlockDeviceInfo, NodeOperations},
 };
-use common_lib::{
+use std::{convert::TryFrom, ops::Deref};
+use stor_port::{
     transport_api::{
         v0::{BlockDevices, Nodes},
         ReplyError, ResourceKind, TimeoutOptions,
     },
     types::v0::transport::{Filter, MessageIdVs, Node, NodeId},
 };
-use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 /// RPC Node Client

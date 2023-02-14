@@ -1,9 +1,9 @@
 use super::*;
-use common_lib::types::v0::{
+use grpc::operations::nexus::traits::NexusOperations;
+use stor_port::types::v0::{
     openapi::apis::Uuid,
     transport::{DestroyNexus, Filter, UnshareNexus},
 };
-use grpc::operations::nexus::traits::NexusOperations;
 use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl NexusOperations {

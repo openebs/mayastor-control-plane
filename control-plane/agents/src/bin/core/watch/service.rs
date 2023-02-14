@@ -4,13 +4,13 @@ use crate::{
 };
 pub(crate) use agents::errors::SvcError;
 
-use common_lib::{
-    transport_api::{v0::Watches, ReplyError},
-    types::v0::transport::{CreateWatch, DeleteWatch, GetWatches},
-};
 use grpc::{
     context::Context,
     operations::watch::traits::{GetWatchInfo, WatchInfo, WatchOperations},
+};
+use stor_port::{
+    transport_api::{v0::Watches, ReplyError},
+    types::v0::transport::{CreateWatch, DeleteWatch, GetWatches},
 };
 
 use std::sync::Arc;

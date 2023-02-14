@@ -17,7 +17,7 @@ use tonic::transport::Uri;
 use crate::operations::replica::traits::{
     CreateReplicaInfo, DestroyReplicaInfo, ShareReplicaInfo, UnshareReplicaInfo,
 };
-use common_lib::{
+use stor_port::{
     transport_api::{v0::Replicas, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{Filter, MessageIdVs, Replica},
 };

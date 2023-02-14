@@ -7,11 +7,11 @@ use crate::{
         GetPoolsRequest,
     },
 };
-use common_lib::{
+use std::{convert::TryFrom, ops::Deref};
+use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{Filter, MessageIdVs, Pool},
 };
-use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 /// RPC Pool Client

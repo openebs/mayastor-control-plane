@@ -2,7 +2,8 @@ use crate::{
     blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
     node::get_nodes_request,
 };
-use common_lib::{
+use std::{convert::TryFrom, str::FromStr};
+use stor_port::{
     transport_api::{
         v0::{BlockDevices, Nodes},
         ReplyError, ResourceKind,
@@ -16,7 +17,6 @@ use common_lib::{
     },
     TryIntoOption,
 };
-use std::{convert::TryFrom, str::FromStr};
 
 /// Trait implemented by services which support node operations.
 #[tonic::async_trait]

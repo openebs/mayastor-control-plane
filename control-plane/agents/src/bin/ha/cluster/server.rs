@@ -1,5 +1,4 @@
 use crate::{nodes::NodeList, volume::VolumeMover};
-use common_lib::transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 use grpc::{
     context::Context,
     operations::ha_node::{
@@ -8,6 +7,7 @@ use grpc::{
     },
 };
 use std::{net::SocketAddr, sync::Arc};
+use stor_port::transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 /// High-level object that represents HA Cluster agent gRPC server.
 pub(crate) struct ClusterAgent {

@@ -17,7 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 composer = { path = "../utils/dependencies/composer", default-features = false }
-common-lib = { path = "../common" }
+stor-port = { path = "../control-plane/stor-port" }
 rpc = { path = "../rpc" }
 utils = { path = "../utils/utils-lib" }
 grpc = { path = "../control-plane/grpc" }

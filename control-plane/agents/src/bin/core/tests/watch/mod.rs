@@ -1,5 +1,10 @@
-use common_lib::{
-    store::etcd::Etcd,
+use deployer_cluster::ClusterBuilder;
+use grpc::operations::volume::traits::VolumeOperations;
+use http::{Request, Response};
+use once_cell::sync::OnceCell;
+use std::{convert::Infallible, net::SocketAddr, str::FromStr, time::Duration};
+use stor_port::{
+    pstor::{etcd::Etcd, ObjectKey, StoreKv},
     types::v0::{
         openapi::{
             client::hyper::{
@@ -8,15 +13,9 @@ use common_lib::{
             },
             models,
         },
-        store::definitions::{ObjectKey, Store},
         transport::{CreateVolume, Volume, VolumeId, WatchResourceId},
     },
 };
-use deployer_cluster::ClusterBuilder;
-use grpc::operations::volume::traits::VolumeOperations;
-use http::{Request, Response};
-use once_cell::sync::OnceCell;
-use std::{convert::Infallible, net::SocketAddr, str::FromStr, time::Duration};
 use tokio::net::TcpStream;
 
 static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();

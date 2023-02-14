@@ -1,4 +1,3 @@
-use common_lib::types::v0::transport::{ChildState, Filter};
 use deployer_cluster::{Cluster, ClusterBuilder, FindVolumeRequest};
 use grpc::operations::nexus::traits::NexusOperations;
 use openapi::{
@@ -6,6 +5,7 @@ use openapi::{
     models,
     models::PublishVolumeBody,
 };
+use stor_port::types::v0::transport::{ChildState, Filter};
 
 use std::{collections::HashMap, time::Duration};
 use tokio::sync::oneshot::error::TryRecvError;

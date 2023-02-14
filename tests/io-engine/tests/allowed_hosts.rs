@@ -1,6 +1,6 @@
-use common_lib::types::v0::{transport as v0, transport::strip_queries};
 use deployer_cluster::{Cluster, ClusterBuilder};
 use std::collections::HashMap;
+use stor_port::types::v0::{transport as v0, transport::strip_queries};
 
 use openapi::{models, models::PublishVolumeBody};
 

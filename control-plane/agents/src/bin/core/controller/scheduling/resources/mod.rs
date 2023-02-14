@@ -2,7 +2,7 @@ use crate::controller::{
     registry::Registry,
     wrapper::{NodeWrapper, PoolWrapper},
 };
-use common_lib::types::v0::{
+use stor_port::types::v0::{
     store::{
         nexus_child::NexusChild,
         nexus_persistence::{ChildInfo, NexusInfo},
