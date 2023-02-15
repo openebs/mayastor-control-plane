@@ -18,8 +18,8 @@ derive = "PartialEq",
 derive = "Default",
 shortname = "dsp",
 printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
-printcolumn = r#"{ "name":"status", "type":"string", "description":"pool status", "jsonPath":".status.state"}"#,
-printcolumn = r#"{ "name":"poolstatus", "type":"string", "description":"control plane pool status", "jsonPath":".status.status"}"#,
+printcolumn = r#"{ "name":"state", "type":"string", "description":"dsp cr state", "jsonPath":".status.state"}"#,
+printcolumn = r#"{ "name":"pool_status", "type":"string", "description":"Control plane pool status", "jsonPath":".status.pool_status"}"#,
 printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
 printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
 printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
@@ -46,7 +46,6 @@ impl DiskPoolSpec {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
 #[non_exhaustive]
-/// PoolState represents operator specific states for DSP CR.
 pub enum PoolState {
     /// The pool is a new OR missing resource, and it has not been created or
     /// imported yet by the operator. The pool spec MAY be but DOES
@@ -58,8 +57,6 @@ pub enum PoolState {
     /// The resource is present, and the pool has been created. The schema MUST
     /// have a status and spec field.
     Online,
-    /// This state is set when we receive delete event on the dsp cr.
-    Terminating,
     /// The resource is present but the control plane did not return the pool state.
     Unknown,
     /// Trying to converge to the next state has exceeded the maximum retry
@@ -68,6 +65,22 @@ pub enum PoolState {
     /// reconciliation stops. Only external events (a new resource version)
     /// will trigger a new attempt.
     Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema, Default)]
+#[non_exhaustive]
+/// PoolState represents operator specific states for DSP CR.
+pub enum CrPoolState {
+    /// The pool is a new OR missing resource, and it has not been created or
+    /// imported yet by the operator. The pool spec MAY be but DOES
+    /// NOT have a status field.
+    #[default]
+    Creating,
+    /// The resource spec has been created, and the pool is getting created by
+    /// the control plane.
+    Created,
+    /// This state is set when we receive delete event on the dsp cr.
+    Terminating,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
@@ -87,10 +100,12 @@ pub enum PoolStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
 /// Status of the pool which is driven and changed by the controller loop.
 pub struct DiskPoolStatus {
-    /// The state of the pool.
     pub state: PoolState,
+    /// The state of the pool.
+    #[serde(default)]
+    pub cr_state: CrPoolState,
     /// Pool status from respective control plane object.
-    pub status: Option<PoolStatus>,
+    pub pool_status: Option<PoolStatus>,
     /// Capacity as number of bytes.
     capacity: u64,
     /// Used number of bytes.
@@ -103,7 +118,8 @@ impl Default for DiskPoolStatus {
     fn default() -> Self {
         Self {
             state: PoolState::Creating,
-            status: None,
+            cr_state: CrPoolState::Creating,
+            pool_status: None,
             capacity: 0,
             used: 0,
             available: 0,
@@ -112,28 +128,15 @@ impl Default for DiskPoolStatus {
 }
 
 impl DiskPoolStatus {
-    /// Set when Pool creation fails for some reason.
-    pub fn error() -> Self {
-        Self {
-            state: PoolState::Error,
-            ..Default::default()
-        }
-    }
-    /// Set when create pool api call is successful.
-    pub fn created() -> Self {
+    /// Set when Pool is not found for some reason.
+    pub fn not_found() -> Self {
         Self {
             state: PoolState::Created,
+            pool_status: None,
             ..Default::default()
         }
     }
-    /// Set when we cant get the Pool from control plane.
-    pub fn unknown() -> Self {
-        Self {
-            state: PoolState::Unknown,
-            status: Some(PoolStatus::Unknown),
-            ..Default::default()
-        }
-    }
+
     /// Set when operator is attempting delete on pool.
     pub fn terminating(p: Pool) -> Self {
         let state = p.state.unwrap_or_default();
@@ -143,8 +146,9 @@ impl DiskPoolStatus {
             0
         };
         Self {
-            state: PoolState::Terminating,
-            status: Some(state.status.into()),
+            state: PoolState::Online,
+            cr_state: CrPoolState::Terminating,
+            pool_status: Some(state.status.into()),
             capacity: state.capacity,
             used: state.used,
             available: free,
@@ -154,8 +158,18 @@ impl DiskPoolStatus {
     /// Set when deleting a Pool which is not accessible.
     pub fn terminating_when_unknown() -> Self {
         Self {
-            state: PoolState::Terminating,
-            status: Some(PoolStatus::Unknown),
+            state: PoolState::Unknown,
+            cr_state: CrPoolState::Terminating,
+            pool_status: Some(PoolStatus::Unknown),
+            ..Default::default()
+        }
+    }
+
+    pub fn mark_unknown() -> Self {
+        Self {
+            state: PoolState::Unknown,
+            cr_state: CrPoolState::Created,
+            pool_status: Some(PoolStatus::Unknown),
             ..Default::default()
         }
     }
@@ -175,40 +189,26 @@ impl From<RestPoolStatus> for PoolStatus {
 /// Returns DiskPoolStatus from Control plane pool object.
 impl From<Pool> for DiskPoolStatus {
     fn from(p: Pool) -> Self {
-        let state = p.state.expect("pool does not have state");
-        // todo: Should we set the pool to some sort of error state?
-        let free = if state.capacity > state.used {
-            state.capacity - state.used
+        if let Some(state) = p.state {
+            let free = if state.capacity > state.used {
+                state.capacity - state.used
+            } else {
+                0
+            };
+            Self {
+                state: PoolState::Online,
+                cr_state: CrPoolState::Created,
+                pool_status: Some(state.status.into()),
+                capacity: state.capacity,
+                used: state.used,
+                available: free,
+            }
         } else {
-            0
-        };
-        Self {
-            state: PoolState::Online,
-            status: Some(state.status.into()),
-            capacity: state.capacity,
-            used: state.used,
-            available: free,
+            Self {
+                state: PoolState::Online,
+                cr_state: CrPoolState::Created,
+                ..Default::default()
+            }
         }
-    }
-}
-
-/// converts the pool state into a string
-impl ToString for PoolState {
-    fn to_string(&self) -> String {
-        match self {
-            PoolState::Creating => "Creating",
-            PoolState::Created => "Created",
-            PoolState::Online => "Online",
-            PoolState::Unknown => "Unknown",
-            PoolState::Error => "Error",
-            PoolState::Terminating => "Terminating",
-        }
-        .to_string()
-    }
-}
-/// Pool state into a string
-impl From<PoolState> for String {
-    fn from(p: PoolState) -> Self {
-        p.to_string()
     }
 }
