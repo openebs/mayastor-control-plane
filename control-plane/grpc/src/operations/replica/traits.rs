@@ -18,10 +18,11 @@ use stor_port::{
         transport,
         transport::{
             CreateReplica, DestroyReplica, Filter, HostNqn, NexusId, NodeId, PoolId, PoolUuid,
-            Replica, ReplicaId, ReplicaName, ReplicaOwners, ShareReplica, UnshareReplica, VolumeId,
+            Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaSpaceUsage, ShareReplica,
+            UnshareReplica, VolumeId,
         },
     },
-    IntoVec,
+    IntoOption, IntoVec,
 };
 
 /// All replica operations to be a part of the ReplicaOperations trait
@@ -64,12 +65,24 @@ impl From<Replica> for replica::Replica {
             name: replica.name.into(),
             replica_id: Some(replica.uuid.into()),
             pool_id: replica.pool_id.into(),
-            pool_uuid: replica.pool_uuid.map(|uuid| uuid.into()),
+            pool_uuid: replica.pool_uuid.into_opt(),
             thin: replica.thin,
             size: replica.size,
             share: share as i32,
             uri: replica.uri,
             status: status as i32,
+            space: replica.space.into_opt(),
+        }
+    }
+}
+impl From<ReplicaSpaceUsage> for replica::ReplicaSpaceUsage {
+    fn from(space: ReplicaSpaceUsage) -> Self {
+        Self {
+            capacity_bytes: space.capacity_bytes,
+            allocated_bytes: space.allocated_bytes,
+            cluster_size: space.cluster_size,
+            clusters: space.clusters,
+            allocated_clusters: space.allocated_clusters,
         }
     }
 }
@@ -97,6 +110,7 @@ impl TryFrom<replica::Replica> for Replica {
             },
             thin: replica.thin,
             size: replica.size,
+            space: replica.space.into_opt(),
             share: match common::Protocol::from_i32(replica.share) {
                 Some(share) => share.into(),
                 None => {
@@ -120,6 +134,17 @@ impl TryFrom<replica::Replica> for Replica {
             },
             allowed_hosts: vec![],
         })
+    }
+}
+impl From<replica::ReplicaSpaceUsage> for ReplicaSpaceUsage {
+    fn from(space: replica::ReplicaSpaceUsage) -> Self {
+        Self {
+            capacity_bytes: space.capacity_bytes,
+            allocated_bytes: space.allocated_bytes,
+            cluster_size: space.cluster_size,
+            clusters: space.clusters,
+            allocated_clusters: space.allocated_clusters,
+        }
     }
 }
 

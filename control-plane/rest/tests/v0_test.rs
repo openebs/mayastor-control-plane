@@ -182,6 +182,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             uuid: FromStr::from_str("e6e7d39d-e343-42f7-936a-1ab05f1839db").unwrap(),
             thin: false,
             size: 12582912,
+            space: replica.space.clone(),
             share: models::Protocol::Nvmf,
             uri,
             state: models::ReplicaState::Online,
