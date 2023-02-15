@@ -27,6 +27,7 @@ impl_message!(GetNodes);
 
 impl_message!(CreatePool);
 impl_message!(DestroyPool);
+impl_message!(ImportPool);
 impl_vector_request!(Pools, Pool);
 impl_message!(GetPools);
 

@@ -3,7 +3,7 @@ use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::io_engine::Null;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::transport::{CreatePool, DestroyPool, NodeId, PoolState},
+    types::v0::transport::{CreatePool, DestroyPool, ImportPool, NodeId, PoolState},
 };
 
 use snafu::ResultExt;
@@ -56,5 +56,13 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 request: "destroy_pool",
             })?;
         Ok(())
+    }
+
+    async fn import_pool(&self, _request: &ImportPool) -> Result<PoolState, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Pool,
+            request: "import_pool".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 }

@@ -32,6 +32,7 @@ use crate::controller::{
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
+use stor_port::types::v0::transport::ImportPool;
 use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
@@ -973,15 +974,28 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
             Err(SvcError::GrpcRequestError { source, .. })
                 if source.code() == tonic::Code::NotFound =>
             {
-                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-                self.update_pool_states(ctx.deref_mut()).await?;
-                Ok(())
+                self.update_pool_state(Either::Remove(request.id.clone()))
+                    .await;
+                Err(SvcError::PoolNotFound {
+                    pool_id: request.id.clone(),
+                })
             }
             Err(error) => Err(error),
             Ok(_) => {
                 self.update_pool_state(Either::Remove(request.id.clone()))
                     .await;
                 Ok(())
+            }
+        }
+    }
+
+    async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        match dataplane.import_pool(request).await {
+            Err(error) => Err(error),
+            Ok(pool) => {
+                self.update_pool_state(Either::Insert(pool.clone())).await;
+                Ok(pool)
             }
         }
     }

@@ -260,7 +260,7 @@ impl Service {
     }
 
     /// Create a pool using the given parameters.
-    #[tracing::instrument(level = "debug", skip(self), err, fields(pool.id = %request.id))]
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.id))]
     pub(super) async fn create_pool(&self, request: &CreatePool) -> Result<Pool, SvcError> {
         OperationGuardArc::<PoolSpec>::create(&self.registry, request).await
     }

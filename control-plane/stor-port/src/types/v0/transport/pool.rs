@@ -272,6 +272,32 @@ impl CreatePool {
     }
 }
 
+/// Create Pool Request
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPool {
+    /// id of the io-engine instance
+    pub node: NodeId,
+    /// id of the pool
+    pub id: PoolId,
+    /// disk device paths or URIs to be claimed by the pool
+    pub disks: Vec<PoolDeviceUri>,
+    /// the pool uuid if specified
+    pub uuid: Option<PoolUuid>,
+}
+
+impl ImportPool {
+    /// Create new `Self` from the given parameters
+    pub fn new(node: &NodeId, id: &PoolId, disks: &[PoolDeviceUri]) -> Self {
+        Self {
+            node: node.clone(),
+            id: id.clone(),
+            disks: disks.to_vec(),
+            uuid: None,
+        }
+    }
+}
+
 /// Destroy Pool Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

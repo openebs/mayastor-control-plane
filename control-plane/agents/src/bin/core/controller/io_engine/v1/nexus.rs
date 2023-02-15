@@ -78,6 +78,7 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusApi<()> for super::RpcClient {
+    #[tracing::instrument(name = "rpc::v1::nexus::create", level = "debug", skip(self), err)]
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
         let response =
             self.nexus()
@@ -90,6 +91,7 @@ impl crate::controller::io_engine::NexusApi<()> for super::RpcClient {
         Self::nexus_opt(response.into_inner().nexus, &request.node, "create_nexus")
     }
 
+    #[tracing::instrument(name = "rpc::v1::nexus::destroy", level = "debug", skip(self), err)]
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError> {
         let result = self.nexus().destroy_nexus(request.to_rpc()).await;
         match result {
@@ -108,6 +110,7 @@ impl crate::controller::io_engine::NexusApi<()> for super::RpcClient {
         }
     }
 
+    #[tracing::instrument(name = "rpc::v1::nexus::shutdown", level = "debug", skip(self), err)]
     async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {
         let _ = self
             .nexus()
@@ -185,6 +188,7 @@ impl crate::controller::io_engine::NexusShareApi<Nexus, Nexus> for super::RpcCli
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::RpcClient {
+    #[tracing::instrument(name = "rpc::v1::nexus::add_child", level = "debug", skip(self), err)]
     async fn add_child(&self, request: &AddNexusChild) -> Result<Nexus, SvcError> {
         let rpc_nexus = self
             .nexus()
@@ -205,6 +209,12 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
         }
     }
 
+    #[tracing::instrument(
+        name = "rpc::v1::nexus::remove_child",
+        level = "debug",
+        skip(self),
+        err
+    )]
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<Nexus, SvcError> {
         let result = self
             .nexus()
@@ -238,6 +248,7 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
         }
     }
 
+    #[tracing::instrument(name = "rpc::v1::nexus::fault_child", level = "debug", skip(self), err)]
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
         let _ = self
             .nexus()

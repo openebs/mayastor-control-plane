@@ -62,7 +62,17 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
 
         self.start_destroy(registry).await?;
 
-        let result = node.destroy_pool(request).await;
+        let result = match node.destroy_pool(request).await {
+            Ok(_) => Ok(()),
+            Err(SvcError::PoolNotFound { .. }) => {
+                match node.import_pool(&self.as_ref().into()).await {
+                    Ok(_) => node.destroy_pool(request).await,
+                    Err(error) if error.tonic_code() == tonic::Code::InvalidArgument => Ok(()),
+                    Err(error) => Err(error),
+                }
+            }
+            Err(error) => Err(error),
+        };
         self.complete_destroy(result, registry).await
     }
 }
