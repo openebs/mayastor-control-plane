@@ -6,14 +6,14 @@ use std::{convert::TryFrom, fmt::Debug, ops::Deref};
 use strum_macros::{Display, EnumString};
 
 /// Get all the replicas from specific node and pool
-/// or None for all nodes or all pools
+/// or None for all nodes or all pools.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct GetReplicas {
-    /// Filter request
+    /// Filter request.
     pub filter: Filter,
 }
 impl GetReplicas {
-    /// Return new `Self` to fetch a replica by its `ReplicaId`
+    /// Return new `Self` to fetch a replica by its `ReplicaId`.
     pub fn new(uuid: &ReplicaId) -> Self {
         Self {
             filter: Filter::Replica(uuid.clone()),
@@ -38,64 +38,64 @@ pub struct ReplicaSpaceUsage {
     pub allocated_clusters: u64,
 }
 
-/// Replica information
+/// Replica information.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Replica {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// name of the replica
+    /// Name of the replica.
     pub name: ReplicaName,
-    /// uuid of the replica
+    /// UUID of the replica.
     pub uuid: ReplicaId,
-    /// id of the pool
+    /// Id of the pool.
     pub pool_id: PoolId,
-    /// uuid of the pool
+    /// UUID of the pool.
     pub pool_uuid: Option<PoolUuid>,
-    /// thin provisioning
+    /// Thin provisioning.
     pub thin: bool,
-    /// size of the replica in bytes
+    /// Size of the replica in bytes.
     pub size: u64,
-    /// space information
+    /// Space information.
     pub space: Option<ReplicaSpaceUsage>,
-    /// protocol used for exposing the replica
+    /// Protocol used for exposing the replica.
     pub share: Protocol,
-    /// uri usable by nexus to access it
+    /// Uri usable by nexus to access it.
     pub uri: String,
-    /// status of the replica
+    /// Status of the replica.
     pub status: ReplicaStatus,
     /// Host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
 }
 impl Replica {
-    /// check if the replica is online
+    /// Check if the replica is online.
     pub fn online(&self) -> bool {
         self.status.online()
     }
 }
 
-/// Name of a Replica
+/// Name of a Replica.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct ReplicaName(String);
 
 impl ReplicaName {
-    /// Derive Self from option or the replica_uuid, todo: needed until we fix CAS-1107
+    /// Derive Self from option or the replica_uuid, todo: needed until we fix CAS-1107.
     pub fn from_opt_uuid(opt: Option<&Self>, replica_uuid: &ReplicaId) -> Self {
         opt.unwrap_or(&Self::from_uuid(replica_uuid)).clone()
     }
-    /// Derive Self from a replica_uuid, todo: needed until we fix CAS-1107
+    /// Derive Self from a replica_uuid, todo: needed until we fix CAS-1107.
     pub fn from_uuid(replica_uuid: &ReplicaId) -> Self {
         // CAS-1107 -> replica uuid are not checked to be unique, so until that is fixed
         // use the name as uuid (since the name is guaranteed to be unique)
         ReplicaName(replica_uuid.to_string())
     }
-    /// Create new `Self` derived from the replica and volume id's
+    /// Create new `Self` derived from the replica and volume id's.
     pub fn new(replica_uuid: &ReplicaId, _volume_uuid: Option<&VolumeId>) -> Self {
         // CAS-1107 -> replica uuid are not checked to be unique, so until that is fixed
         // use the name as uuid (since the name is guaranteed to be unique)
         ReplicaName(replica_uuid.to_string())
     }
-    /// Create new `Self` derived from the replica name string
+    /// Create new `Self` derived from the replica name string.
     pub fn from_string(replica_name: String) -> Self {
         ReplicaName(replica_name)
     }
@@ -172,35 +172,35 @@ impl From<Replica> for DestroyReplica {
     }
 }
 
-/// Create Replica Request
+/// Create Replica Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateReplica {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// name of the replica
+    /// Name of the replica.
     pub name: Option<ReplicaName>,
-    /// uuid of the replica
+    /// UUID of the replica.
     pub uuid: ReplicaId,
-    /// id of the pool
+    /// Id of the pool.
     pub pool_id: PoolId,
-    /// uuid of the pool
+    /// UUID of the pool.
     pub pool_uuid: Option<PoolUuid>,
-    /// size of the replica in bytes
+    /// Size of the replica in bytes.
     pub size: u64,
-    /// thin provisioning
+    /// Thin provisioning.
     pub thin: bool,
-    /// protocol to expose the replica over
+    /// Protocol to expose the replica over.
     pub share: Protocol,
-    /// Managed by our control plane
+    /// Managed by our control plane.
     pub managed: bool,
-    /// Owners of the resource
+    /// Owners of the resource.
     pub owners: ReplicaOwners,
     /// Host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
 }
 
-/// Replica owners which is a volume or none and a list of nexuses
+/// Replica owners which is a volume or none and a list of nexuses.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct ReplicaOwners {
     volume: Option<VolumeId>,
@@ -209,7 +209,7 @@ pub struct ReplicaOwners {
     disown_all: bool,
 }
 impl ReplicaOwners {
-    /// Create new owners from the given volume and nexus id's
+    /// Create new owners from the given volume and nexus id's.
     pub fn new(volume: Option<VolumeId>, nexuses: Vec<NexusId>) -> Self {
         Self {
             volume,
@@ -229,31 +229,31 @@ impl ReplicaOwners {
         self.disown_all = true;
         self
     }
-    /// Return the volume owner, if any
+    /// Return the volume owner, if any.
     pub fn volume(&self) -> Option<&VolumeId> {
         self.volume.as_ref()
     }
-    /// Return the nexuses that own the replica
+    /// Return the nexuses that own the replica.
     pub fn nexuses(&self) -> &Vec<NexusId> {
         self.nexuses.as_ref()
     }
-    /// Check if this replica is owned by any nexuses or a volume
+    /// Check if this replica is owned by any nexuses or a volume.
     pub fn is_owned(&self) -> bool {
         self.volume.is_some() || !self.nexuses.is_empty()
     }
-    /// Check if this replica is owned by the volume
+    /// Check if this replica is owned by the volume.
     pub fn owned_by(&self, id: &VolumeId) -> bool {
         self.volume.as_ref() == Some(id)
     }
-    /// Check if this replica is owned by the nexus
+    /// Check if this replica is owned by the nexus.
     pub fn owned_by_nexus(&self, id: &NexusId) -> bool {
         self.nexuses.iter().any(|n| n == id)
     }
-    /// Check if this replica is owned by a nexus
+    /// Check if this replica is owned by a nexus.
     pub fn owned_by_a_nexus(&self) -> bool {
         !self.nexuses.is_empty()
     }
-    /// Create new owners from the volume Id
+    /// Create new owners from the volume Id.
     pub fn from_volume(volume: &VolumeId) -> Self {
         Self {
             volume: Some(volume.clone()),
@@ -261,15 +261,15 @@ impl ReplicaOwners {
             disown_all: false,
         }
     }
-    /// The replica is no longer part of the volume
+    /// The replica is no longer part of the volume.
     pub fn disowned_by_volume(&mut self) {
         let _ = self.volume.take();
     }
-    /// The replica is no longer part of the nexus
+    /// The replica is no longer part of the nexus.
     pub fn disowned_by_nexus(&mut self, nexus: &NexusId) {
         self.nexuses.retain(|n| n != nexus)
     }
-    /// The replica is no longer part of the provided owners
+    /// The replica is no longer part of the provided owners.
     pub fn disown(&mut self, disowner: &Self) {
         if disowner.disown_all {
             self.disown_all();
@@ -310,25 +310,25 @@ impl From<ReplicaOwners> for models::ReplicaSpecOwners {
     }
 }
 
-/// Destroy Replica Request
+/// Destroy Replica Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DestroyReplica {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// id of the pool
+    /// Id of the pool.
     pub pool_id: PoolId,
-    /// uuid of the pool
+    /// UUID of the pool.
     pub pool_uuid: Option<PoolUuid>,
-    /// uuid of the replica
+    /// UUID of the replica.
     pub uuid: ReplicaId,
-    /// name of the replica
+    /// Name of the replica.
     pub name: Option<ReplicaName>,
-    /// delete by owners
+    /// Delete by owners.
     pub disowners: ReplicaOwners,
 }
 impl DestroyReplica {
-    /// Return a new `Self` from the provided arguments
+    /// Return a new `Self` from the provided arguments.
     pub fn new(
         node: &NodeId,
         pool_id: &PoolId,
@@ -353,21 +353,21 @@ impl DestroyReplica {
     }
 }
 
-/// Share Replica Request
+/// Share Replica Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareReplica {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// id of the pool
+    /// Id of the pool.
     pub pool_id: PoolId,
-    /// uuid of the pool
+    /// UUID of the pool.
     pub pool_uuid: Option<PoolUuid>,
-    /// uuid of the replica
+    /// UUID of the replica.
     pub uuid: ReplicaId,
-    /// name of the replica,
+    /// Name of the replica.
     pub name: Option<ReplicaName>,
-    /// protocol used for exposing the replica
+    /// Protocol used for exposing the replica.
     pub protocol: ReplicaShareProtocol,
     /// Nqn of hosts allowed to connect to the replica.
     pub allowed_hosts: Vec<HostNqn>,
@@ -435,15 +435,15 @@ impl From<UnshareReplica> for ShareReplica {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UnshareReplica {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// id of the pool
+    /// Id of the pool.
     pub pool_id: PoolId,
-    /// uuid of the pool
+    /// UUID of the pool.
     pub pool_uuid: Option<PoolUuid>,
-    /// uuid of the replica
+    /// UUID of the replica.
     pub uuid: ReplicaId,
-    /// name of the replica
+    /// Name of the replica.
     pub name: Option<ReplicaName>,
 }
 
@@ -452,7 +452,7 @@ pub struct UnshareReplica {
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum ReplicaShareProtocol {
-    /// shared as NVMe-oF TCP
+    /// Shared as NVMe-oF TCP.
     Nvmf = 1,
 }
 
@@ -482,22 +482,22 @@ impl From<ReplicaShareProtocol> for Protocol {
     }
 }
 
-/// State of the Replica
+/// State of the Replica.
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum ReplicaStatus {
-    /// unknown state
+    /// Unknown state.
     Unknown = 0,
-    /// the replica is in normal working order
+    /// The replica is in normal working order.
     Online = 1,
-    /// the replica has experienced a failure but can still function
+    /// The replica has experienced a failure but can still function.
     Degraded = 2,
-    /// the replica is completely inaccessible
+    /// The replica is completely inaccessible.
     Faulted = 3,
 }
 impl ReplicaStatus {
-    /// check if the state is online
+    /// Check if the state is online.
     pub fn online(&self) -> bool {
         self == &Self::Online
     }
@@ -529,21 +529,21 @@ impl From<ReplicaStatus> for models::ReplicaState {
     }
 }
 
-/// Add Replica to Nexus Request
+/// Add Replica to Nexus Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AddNexusReplica {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// uuid of the nexus
+    /// UUID of the nexus.
     pub nexus: NexusId,
-    /// UUID and URI of the replica to be added
+    /// UUID and URI of the replica to be added.
     pub replica: ReplicaUri,
-    /// auto start rebuilding
+    /// Auto start rebuilding.
     pub auto_rebuild: bool,
 }
 impl AddNexusReplica {
-    /// Return new `Self` from it's properties
+    /// Return new `Self` from it's properties.
     pub fn new(node: &NodeId, nexus: &NexusId, replica: &ReplicaUri, auto_rebuild: bool) -> Self {
         Self {
             node: node.clone(),
@@ -566,19 +566,19 @@ impl From<&AddNexusReplica> for AddNexusChild {
     }
 }
 
-/// Remove Replica from Nexus Request
+/// Remove Replica from Nexus Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveNexusReplica {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// uuid of the nexus
+    /// UUID of the nexus.
     pub nexus: NexusId,
-    /// UUID and URI of the replica to be added
+    /// UUID and URI of the replica to be added.
     pub replica: ReplicaUri,
 }
 impl RemoveNexusReplica {
-    /// Return new `Self`
+    /// Return new `Self`.
     pub fn new(node: &NodeId, nexus: &NexusId, replica: &ReplicaUri) -> Self {
         Self {
             node: node.clone(),
