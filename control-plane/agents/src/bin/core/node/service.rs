@@ -245,7 +245,7 @@ impl Service {
     }
 
     /// Deregister a node through the deregister information
-    #[tracing::instrument(level = "trace", skip(self), fields(node.id = %node.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(node.id = %node.id))]
     pub(super) async fn deregister(&self, node: &Deregister) {
         let nodes = self.registry.nodes().read().await;
         match nodes.get(&node.id) {

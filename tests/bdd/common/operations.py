@@ -1,4 +1,5 @@
 from common.apiclient import ApiClient
+from openapi.exceptions import NotFoundException
 
 
 class Pool(object):
@@ -10,7 +11,10 @@ class Pool(object):
     @staticmethod
     def delete_all():
         for pool in Pool.__pools_api().get_pools():
-            Pool.__pools_api().del_pool(pool.id)
+            try:
+                Pool.__pools_api().del_pool(pool.id)
+            except NotFoundException:
+                pass
 
 
 class Volume(object):
@@ -22,4 +26,7 @@ class Volume(object):
     @staticmethod
     def delete_all():
         for volume in Volume.__api().get_volumes().entries:
-            Volume.__api().del_volume(volume.spec.uuid)
+            try:
+                Volume.__api().del_volume(volume.spec.uuid)
+            except NotFoundException:
+                pass

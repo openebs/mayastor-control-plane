@@ -418,6 +418,18 @@ impl AgentToIoEngine for transport::DestroyPool {
     }
 }
 
+impl AgentToIoEngine for transport::ImportPool {
+    type IoEngineMessage = v1::pb::ImportPoolRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::pb::ImportPoolRequest {
+            name: self.id.clone().into(),
+            uuid: None,
+            disks: self.disks.clone().into_vec(),
+            pooltype: v1::pool::PoolType::Lvs as i32,
+        }
+    }
+}
+
 /// Converts rpc pool to a agent pool.
 pub(super) fn rpc_pool_to_agent(rpc_pool: &rpc::v1::pool::Pool, id: &NodeId) -> PoolState {
     let mut pool = rpc_pool.to_agent();

@@ -6,7 +6,7 @@ Feature: Pool creation
 
   Scenario: creating a pool with a non-existent disk
     When the user attempts to create a pool with a non-existent disk
-    Then the pool creation should fail with error kind "Internal"
+    Then the pool creation should fail with error kind "NotFound"
 
   Scenario: creating a pool with multiple disks
     When the user attempts to create a pool specifying multiple disks

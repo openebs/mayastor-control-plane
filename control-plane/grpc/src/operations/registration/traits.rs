@@ -13,7 +13,7 @@ use stor_port::{
 /// New type to wrap grpc ApiVersion type.
 pub struct ApiVersion(pub rpc::v1::registration::ApiVersion);
 
-/// Operations to be supportes by the Registration Service.
+/// Operations to be supported by the Registration Service.
 #[tonic::async_trait]
 pub trait RegistrationOperations: Send + Sync {
     /// Register a dataplane node to controlplane.

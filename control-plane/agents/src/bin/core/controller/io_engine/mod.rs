@@ -12,9 +12,9 @@ use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
-        DestroyReplica, FaultNexusChild, GetBlockDevices, Nexus, NexusId, NodeId, PoolState,
-        Register, RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus,
-        UnshareReplica,
+        DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus, NexusId, NodeId,
+        PoolState, Register, RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus,
+        UnshareNexus, UnshareReplica,
     },
 };
 
@@ -48,6 +48,8 @@ pub(crate) trait PoolApi {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError>;
     /// Destroy a pool on the node via gRPC.
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError>;
+    /// Import a pool on the node via gRPC.
+    async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError>;
 }
 
 #[async_trait]

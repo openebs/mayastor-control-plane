@@ -3,7 +3,7 @@ use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::pool::ListPoolOptions;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::transport::{CreatePool, DestroyPool, NodeId, PoolState},
+    types::v0::transport::{CreatePool, DestroyPool, ImportPool, NodeId, PoolState},
 };
 
 use snafu::ResultExt;
@@ -27,19 +27,35 @@ impl crate::controller::io_engine::PoolListApi for super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::PoolApi for super::RpcClient {
+    #[tracing::instrument(name = "rpc::v1::pool::create", level = "debug", skip(self), err)]
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
-        let rpc_pool =
-            self.pool()
-                .create_pool(request.to_rpc())
-                .await
-                .context(GrpcRequestError {
+        match self.pool().create_pool(request.to_rpc()).await {
+            Ok(rpc_pool) => {
+                let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
+                Ok(pool)
+            }
+            Err(error)
+                if error.code() == tonic::Code::Internal
+                    && error.message()
+                        == format!(
+                            "Failed to create a BDEV '{}'",
+                            request.disks.first().cloned().unwrap_or_default()
+                        ) =>
+            {
+                Err(SvcError::GrpcRequestError {
                     resource: ResourceKind::Pool,
-                    request: "create_pool",
-                })?;
-        let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
-        Ok(pool)
+                    request: "create_pool".to_string(),
+                    source: tonic::Status::not_found(error.message()),
+                })
+            }
+            Err(error) => Err(error).context(GrpcRequestError {
+                resource: ResourceKind::Pool,
+                request: "create_pool",
+            }),
+        }
     }
 
+    #[tracing::instrument(name = "rpc::v1::pool::destroy", level = "debug", skip(self), err)]
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
         let _ = self
             .pool()
@@ -50,5 +66,19 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 request: "destroy_pool",
             })?;
         Ok(())
+    }
+
+    #[tracing::instrument(name = "rpc::v1::pool::import", level = "debug", skip(self), err)]
+    async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError> {
+        let rpc_pool =
+            self.pool()
+                .import_pool(request.to_rpc())
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Pool,
+                    request: "import_pool",
+                })?;
+        let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
+        Ok(pool)
     }
 }

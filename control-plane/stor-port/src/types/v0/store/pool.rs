@@ -12,6 +12,7 @@ use crate::types::v0::{
 // PoolLabel is the type for the labels
 pub type PoolLabel = std::collections::HashMap<String, String>;
 
+use crate::types::v0::transport::ImportPool;
 use serde::{Deserialize, Serialize};
 use std::{convert::From, fmt::Debug};
 
@@ -81,6 +82,17 @@ pub struct PoolSpec {
     pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<PoolOperationState>,
+}
+
+impl From<&PoolSpec> for ImportPool {
+    fn from(value: &PoolSpec) -> Self {
+        Self {
+            node: value.node.clone(),
+            id: value.id.clone(),
+            disks: value.disks.clone(),
+            uuid: None,
+        }
+    }
 }
 
 impl AsOperationSequencer for PoolSpec {

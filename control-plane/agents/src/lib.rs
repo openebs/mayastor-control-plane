@@ -62,7 +62,12 @@ impl Service {
     pub fn builder() -> Service<tonic::transport::Server<LayerStack>> {
         Service::<tonic::transport::Server<LayerStack>> {
             shared_state: Arc::new(<Container![Send + Sync]>::new()),
-            tonic_server: tonic::transport::Server::builder().layer(OpenTelServer::new()),
+            tonic_server: tonic::transport::Server::builder().layer(OpenTelServer::new(vec![
+                // This is a bit of hack, but tonic doesn't seem to provide access to this uri
+                // path in any way.
+                // todo: add ignored routes via shared state
+                "/mayastor.v1.Registration/Register",
+            ])),
         }
     }
 

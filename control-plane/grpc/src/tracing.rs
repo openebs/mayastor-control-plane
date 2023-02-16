@@ -79,18 +79,20 @@ impl tower::Service<TonicClientRequest> for OpenTelClientService<Channel> {
 
 /// Extract OpenTelemetry Spans from Http Headers
 #[derive(Clone, Default)]
-pub struct OpenTelServer {}
+pub struct OpenTelServer {
+    ignored_routes: Vec<&'static str>,
+}
 impl OpenTelServer {
     /// Return new `Self`
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(ignored_routes: Vec<&'static str>) -> Self {
+        Self { ignored_routes }
     }
 }
 impl<S> tower::Layer<S> for OpenTelServer {
     type Service = OpenTelServerService<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        OpenTelServerService::new(service)
+        OpenTelServerService::new(service, self.ignored_routes.clone())
     }
 }
 
@@ -98,10 +100,17 @@ impl<S> tower::Layer<S> for OpenTelServer {
 #[derive(Clone)]
 pub struct OpenTelServerService<S> {
     service: S,
+    ignored_routes: Vec<&'static str>,
 }
 impl<S> OpenTelServerService<S> {
-    fn new(service: S) -> Self {
-        Self { service }
+    fn new(service: S, ignored_routes: Vec<&'static str>) -> Self {
+        Self {
+            service,
+            ignored_routes,
+        }
+    }
+    fn ignore(&self, request: &TonicServerRequest) -> bool {
+        self.ignored_routes.contains(&request.uri().path())
     }
 }
 
@@ -125,6 +134,10 @@ where
     }
 
     fn call(&mut self, request: TonicServerRequest) -> Self::Future {
+        if self.ignore(&request) {
+            return http_service_call(&mut self.service, request);
+        }
+
         let tracer = global::tracer_provider().versioned_tracer(
             "grpc-server",
             Some(env!("CARGO_PKG_VERSION")),
@@ -161,6 +174,26 @@ fn clone_service<
     std::mem::replace(service, service_clone)
 }
 
+fn http_service_call<
+    T: tower::Service<Req, Response = Response<R>, Error = E> + Clone + Send + 'static,
+    Req: Send + 'static,
+    R,
+    E: ToString,
+>(
+    service: &mut T,
+    request: Req,
+) -> BoxedFuture<Response<R>, E>
+where
+    <T as tower::Service<Req>>::Future: Send,
+{
+    let mut service = clone_service(service);
+    Box::pin(async move {
+        match service.call(request).await {
+            Ok(response) => Ok(response),
+            Err(error) => Err(error),
+        }
+    })
+}
 fn trace_http_service_call<
     T: tower::Service<Req, Response = Response<R>, Error = E> + Clone + Send + 'static,
     Req: Send + 'static,

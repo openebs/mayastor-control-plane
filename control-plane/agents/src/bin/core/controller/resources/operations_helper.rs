@@ -65,6 +65,7 @@ impl OnCreateFail {
     pub(crate) fn eeinval_delete<O>(result: &Result<O, SvcError>) -> Self {
         match result {
             Err(error) if error.tonic_code() == tonic::Code::InvalidArgument => Self::Delete,
+            Err(error) if error.tonic_code() == tonic::Code::NotFound => Self::Delete,
             _ => Self::SetDeleting,
         }
     }
@@ -129,7 +130,7 @@ pub(crate) trait GuardedOperationsHelper:
     /// # Note:
     /// `on_err_destroy` is used to determine if the resource spec should be deleted on error.
     /// On most cases we don't want to destroy as that will prevent garbage collection.
-    async fn complete_create<O, R: Send>(
+    async fn complete_create<O, R: Send + Debug>(
         &self,
         result: Result<R, SvcError>,
         registry: &Registry,
@@ -140,6 +141,8 @@ pub(crate) trait GuardedOperationsHelper:
     {
         match result {
             Ok(val) => {
+                tracing::info!(?val, "complete_create");
+
                 let mut spec_clone = self.lock().clone();
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
@@ -327,7 +330,7 @@ pub(crate) trait GuardedOperationsHelper:
     /// Completes a destroy operation by trying to delete the spec from the persistent store.
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
-    async fn complete_destroy<O, R: Send>(
+    async fn complete_destroy<O, R: Send + Debug>(
         &mut self,
         result: Result<R, SvcError>,
         registry: &Registry,
@@ -339,6 +342,8 @@ pub(crate) trait GuardedOperationsHelper:
         let key = self.lock().key();
         match result {
             Ok(val) => {
+                tracing::info!(?val, "complete_destroy");
+
                 let mut spec_clone = self.lock().clone();
                 spec_clone.commit_op();
                 let deleted = registry.delete_kv(&key.key()).await;
@@ -402,7 +407,7 @@ pub(crate) trait GuardedOperationsHelper:
     /// Completes an update operation by trying to update the spec in the persistent store.
     /// If the persistent store operation fails then the spec is marked accordingly and the dirty
     /// spec reconciler will attempt to update the store when the store is back online.
-    async fn complete_update<R: Send, O>(
+    async fn complete_update<R: Send + Debug, O>(
         &mut self,
         registry: &Registry,
         result: Result<R, SvcError>,
@@ -414,6 +419,8 @@ pub(crate) trait GuardedOperationsHelper:
     {
         match result {
             Ok(val) => {
+                tracing::info!(?val, "complete_update");
+
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
                 match stored {
@@ -765,7 +772,7 @@ impl<T: AsOperationSequencer + SpecOperationsHelper> OperationSequenceGuard<T>
             Ok(guard) => Ok(guard),
             Err((error, log)) => {
                 if log {
-                    tracing::debug!("Resource '{}' is busy: {}", self.lock().uuid_str(), error);
+                    tracing::trace!("Resource '{}' is busy: {}", self.lock().uuid_str(), error);
                 }
                 Err(SvcError::Conflict {})
             }

@@ -9,23 +9,23 @@ use std::{cmp::Ordering, fmt::Debug, ops::Deref};
 use strum_macros::{Display, EnumString};
 
 /// Pool Service
-/// Get all the pools from specific node or None for all nodes
+/// Get all the pools from specific node or None for all nodes.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct GetPools {
     /// Filter request
     pub filter: Filter,
 }
 
-/// Status of the Pool
+/// Status of the Pool.
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum PoolStatus {
-    /// unknown state
+    /// Unknown state.
     Unknown = 0,
-    /// the pool is in normal working order
+    /// The pool is in normal working order.
     Online = 1,
-    /// the pool has experienced a failure but can still function
+    /// The pool has experienced a failure but can still function.
     Degraded = 2,
-    /// the pool is completely inaccessible
+    /// The pool is completely inaccessible.
     Faulted = 3,
 }
 
@@ -55,21 +55,21 @@ impl From<PoolStatus> for models::PoolStatus {
     }
 }
 
-/// Pool information
+/// Pool state information.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolState {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// id of the pool
+    /// Id of the pool.
     pub id: PoolId,
-    /// absolute disk paths claimed by the pool
+    /// Absolute disk paths claimed by the pool.
     pub disks: Vec<PoolDeviceUri>,
-    /// current state of the pool
+    /// Current state of the pool.
     pub status: PoolStatus,
-    /// size of the pool in bytes
+    /// Size of the pool in bytes.
     pub capacity: u64,
-    /// used bytes from the pool
+    /// Used bytes from the pool.
     pub used: u64,
 }
 
@@ -121,13 +121,13 @@ impl PartialOrd for PoolStatus {
     }
 }
 
-/// A Storage Pool
-/// It may have a spec which is the specification provided by the creator
-/// It may have a state if such state is retrieved from a storage node
+/// A Storage Pool.
+/// It may have a spec which is the specification provided by the creator.
+/// It may have a state if such state is retrieved from a storage node.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Pool {
-    /// pool identification
+    /// Pool identification.
     id: PoolId,
     /// Desired specification of the pool.
     spec: Option<PoolSpec>,
@@ -136,7 +136,7 @@ pub struct Pool {
 }
 
 impl Pool {
-    /// Construct a new pool with spec and state
+    /// Construct a new pool with spec and state.
     pub fn new(spec: PoolSpec, state: PoolState) -> Self {
         Self {
             id: spec.id.clone(),
@@ -144,7 +144,7 @@ impl Pool {
             state: Some(state),
         }
     }
-    /// Construct a new pool with spec but no state
+    /// Construct a new pool with spec but no state.
     pub fn from_spec(spec: PoolSpec) -> Self {
         Self {
             id: spec.id.clone(),
@@ -152,7 +152,7 @@ impl Pool {
             state: None,
         }
     }
-    /// Construct a new pool with optional spec and state
+    /// Construct a new pool with optional spec and state.
     pub fn from_state(state: PoolState, spec: Option<PoolSpec>) -> Self {
         Self {
             id: state.id.clone(),
@@ -160,7 +160,7 @@ impl Pool {
             state: Some(state),
         }
     }
-    /// Try to construct a new pool from spec and state
+    /// Try to construct a new pool from spec and state.
     pub fn try_new(spec: Option<PoolSpec>, state: Option<PoolState>) -> Option<Self> {
         match (spec, state) {
             (Some(spec), Some(state)) => Some(Self::new(spec, state)),
@@ -181,7 +181,7 @@ impl Pool {
     pub fn state(&self) -> Option<PoolState> {
         self.state.clone()
     }
-    /// Get the node identification
+    /// Get the node identification.
     pub fn node(&self) -> NodeId {
         match &self.spec {
             // guaranteed that at either spec or state are defined
@@ -198,9 +198,9 @@ impl From<Pool> for models::Pool {
     }
 }
 
-/// Pool device URI
-/// Can be specified in the form of a file path or a URI
-/// eg: /dev/sda, aio:///dev/sda, malloc:///disk?size_mb=100
+/// Pool device URI.
+/// Can be specified in the form of a file path or a URI.
+/// eg: /dev/sda, aio:///dev/sda, malloc:///disk?size_mb=100.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct PoolDeviceUri(String);
 impl Deref for PoolDeviceUri {
@@ -230,9 +230,9 @@ impl From<String> for PoolDeviceUri {
         Self(device)
     }
 }
-impl ToString for PoolDeviceUri {
-    fn to_string(&self) -> String {
-        self.deref().to_string()
+impl std::fmt::Display for PoolDeviceUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 impl From<PoolDeviceUri> for String {
@@ -241,22 +241,22 @@ impl From<PoolDeviceUri> for String {
     }
 }
 
-/// Create Pool Request
+/// Create Pool Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatePool {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// id of the pool
+    /// Id of the pool.
     pub id: PoolId,
-    /// disk device paths or URIs to be claimed by the pool
+    /// Disk device paths or URIs to be claimed by the pool.
     pub disks: Vec<PoolDeviceUri>,
-    /// labels to be set on the pool
+    /// Labels to be set on the pool.
     pub labels: Option<PoolLabel>,
 }
 
 impl CreatePool {
-    /// Create new `Self` from the given parameters
+    /// Create new `Self` from the given parameters.
     pub fn new(
         node: &NodeId,
         id: &PoolId,
@@ -272,12 +272,38 @@ impl CreatePool {
     }
 }
 
-/// Destroy Pool Request
+/// Create Pool Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPool {
+    /// Id of the io-engine instance.
+    pub node: NodeId,
+    /// Id of the pool.
+    pub id: PoolId,
+    /// Disk device paths or URIs to be claimed by the pool.
+    pub disks: Vec<PoolDeviceUri>,
+    /// The pool uuid if specified.
+    pub uuid: Option<PoolUuid>,
+}
+
+impl ImportPool {
+    /// Create new `Self` from the given parameters.
+    pub fn new(node: &NodeId, id: &PoolId, disks: &[PoolDeviceUri]) -> Self {
+        Self {
+            node: node.clone(),
+            id: id.clone(),
+            disks: disks.to_vec(),
+            uuid: None,
+        }
+    }
+}
+
+/// Destroy Pool Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DestroyPool {
-    /// id of the io-engine instance
+    /// Id of the io-engine instance.
     pub node: NodeId,
-    /// id of the pool
+    /// Id of the pool.
     pub id: PoolId,
 }

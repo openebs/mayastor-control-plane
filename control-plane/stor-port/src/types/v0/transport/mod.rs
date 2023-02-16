@@ -69,6 +69,8 @@ pub enum MessageIdVs {
     CreatePool,
     /// Destroy Pool.
     DestroyPool,
+    /// Import Pool.
+    ImportPool,
     /// Get replicas with filter.
     GetReplicas,
     /// Create Replica.
