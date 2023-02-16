@@ -230,9 +230,9 @@ impl From<String> for PoolDeviceUri {
         Self(device)
     }
 }
-impl ToString for PoolDeviceUri {
-    fn to_string(&self) -> String {
-        self.deref().to_string()
+impl std::fmt::Display for PoolDeviceUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 impl From<PoolDeviceUri> for String {

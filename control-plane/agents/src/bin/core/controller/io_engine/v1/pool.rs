@@ -29,16 +29,30 @@ impl crate::controller::io_engine::PoolListApi for super::RpcClient {
 impl crate::controller::io_engine::PoolApi for super::RpcClient {
     #[tracing::instrument(name = "rpc::v1::pool::create", level = "debug", skip(self), err)]
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
-        let rpc_pool =
-            self.pool()
-                .create_pool(request.to_rpc())
-                .await
-                .context(GrpcRequestError {
+        match self.pool().create_pool(request.to_rpc()).await {
+            Ok(rpc_pool) => {
+                let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
+                Ok(pool)
+            }
+            Err(error)
+                if error.code() == tonic::Code::Internal
+                    && error.message()
+                        == format!(
+                            "Failed to create a BDEV '{}'",
+                            request.disks.first().cloned().unwrap_or_default()
+                        ) =>
+            {
+                Err(SvcError::GrpcRequestError {
                     resource: ResourceKind::Pool,
-                    request: "create_pool",
-                })?;
-        let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
-        Ok(pool)
+                    request: "create_pool".to_string(),
+                    source: tonic::Status::not_found(error.message()),
+                })
+            }
+            Err(error) => Err(error).context(GrpcRequestError {
+                resource: ResourceKind::Pool,
+                request: "create_pool",
+            }),
+        }
     }
 
     #[tracing::instrument(name = "rpc::v1::pool::destroy", level = "debug", skip(self), err)]
