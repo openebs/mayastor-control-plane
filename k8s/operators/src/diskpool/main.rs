@@ -19,10 +19,10 @@ use kube::{
     Client, CustomResourceExt, Resource, ResourceExt,
 };
 use openapi::{
+    apis::StatusCode,
     clients::{self, tower::Url},
     models::{CreatePoolBody, Pool, RestJsonError},
 };
-
 use serde_json::json;
 use snafu::Snafu;
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
@@ -403,19 +403,33 @@ impl ResourceContext {
         let res = self
             .pools_api()
             .del_node_pool(&self.spec.node(), &self.name_any())
-            .await?;
-
-        if res.status().is_success() {
-            self.k8s_notify(
-                "Destroyed pool",
-                "Destroy",
-                "The pool has been destroyed",
-                "Normal",
-            )
             .await;
-        }
 
-        Ok(Action::await_change())
+        match res {
+            Ok(_) => {
+                self.k8s_notify(
+                    "Destroyed pool",
+                    "Destroy",
+                    "The pool has been destroyed",
+                    "Normal",
+                )
+                .await;
+                Ok(Action::await_change())
+            }
+            Err(clients::tower::Error::Response(response))
+                if response.status() == StatusCode::NOT_FOUND =>
+            {
+                self.k8s_notify(
+                    "Destroyed pool",
+                    "Destroy",
+                    "The pool was already destroyed",
+                    "Normal",
+                )
+                .await;
+                Ok(Action::await_change())
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     /// Online the pool which is no-op from the data plane point of view. However
