@@ -1,5 +1,25 @@
 #!/usr/bin/env bash
 
+install_toolchain()
+{
+  if ! diff -r --exclude Cargo.lock "$RUST_TOOLCHAIN" "$RUST_TOOLCHAIN_NIX" &>/dev/null; then
+    rm -rf "$RUST_TOOLCHAIN"
+    mkdir -p "$RUST_TOOLCHAIN" 2>/dev/null
+    cp -r "$RUST_TOOLCHAIN_NIX"/* "$RUST_TOOLCHAIN"
+    chmod -R +w "$RUST_TOOLCHAIN"
+  fi
+  export RUST_TOOLCHAIN="$(realpath "$RUST_TOOLCHAIN")"
+}
+uninstall_toolchain()
+{
+  rm -rf "$RUST_TOOLCHAIN"
+}
+
+path_remove()
+{
+  export PATH=`echo -n $PATH | awk -v RS=: -v ORS=: '$0 != "'$1'"' | sed 's/:$//'`
+}
+
 # Meant to be called only from the nix-shell shellHook
 
 # these are provided by the shellHook
@@ -9,19 +29,11 @@ rust_version=${rust_version:-}
 rustup_channel=${rustup_channel:-$rust_version}
 
 if [ -z "$CI" ]; then
-  if ! diff -r --exclude Cargo.lock "$RUST_TOOLCHAIN" "$RUST_TOOLCHAIN_NIX" &>/dev/null; then
-    rm -rf "$RUST_TOOLCHAIN"
-    mkdir -p "$RUST_TOOLCHAIN" 2>/dev/null
-    cp -r "$RUST_TOOLCHAIN_NIX"/* "$RUST_TOOLCHAIN"
-    chmod -R +w "$RUST_TOOLCHAIN"
-  fi
-  export RUST_TOOLCHAIN="$(realpath "$RUST_TOOLCHAIN")"
   if [ "$dev_rustup" == "1" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
     cowsay "$devrustup_moth"
     unset dev_rustup
     unset USE_NIX_RUST
     RUSTUP_CUSTOM=
-    path_remove () { export PATH=`echo -n $PATH | awk -v RS=: -v ORS=: '$0 != "'$1'"' | sed 's/:$//'`; }
     path_remove "$RUST_TOOLCHAIN_NIX/bin"
 
     # https://discourse.nixos.org/t/nix-shell-with-rustup/22452
@@ -33,6 +45,7 @@ if [ -z "$CI" ]; then
       fi
     fi
     if [ -n "$RUSTUP_CUSTOM" ]; then
+      install_toolchain
       cat <<EOF >rust-toolchain.toml
 [toolchain]
 path = "$RUST_TOOLCHAIN"
@@ -44,7 +57,8 @@ EOF
       # priority: https://github.com/rust-lang/cargo/pull/11023
       export PATH=$RUST_TOOLCHAIN/bin:$PATH:~/.cargo/bin
     else
-      # Expose this we can fmt files out of tree, eg: when we rustfmt the openapi in /tmp
+      uninstall_toolchain
+      # Expose this so we can fmt files out of tree, eg: when we rustfmt the openapi in /tmp
       export RUSTUP_TOOLCHAIN="$rustup_channel"
       cat <<EOF >rust-toolchain.toml
 [toolchain]
@@ -56,6 +70,12 @@ EOF
       rustup toolchain install "$rustup_channel" -c rust-src
     fi
   elif [ -n "$USE_NIX_RUST" ]; then
+    install_toolchain
+    path_remove "$RUST_TOOLCHAIN_NIX/bin"
+    cat <<EOF >rust-toolchain.toml
+[toolchain]
+path = "$RUST_TOOLCHAIN"
+EOF
     export PATH=$RUST_TOOLCHAIN/bin:$PATH
   fi
 fi
