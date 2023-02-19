@@ -140,9 +140,9 @@ pub(crate) async fn nexus_attach_candidates(
 /// replica count
 pub(crate) async fn volume_replica_candidates(
     registry: &Registry,
-    request: impl Into<GetSuitablePools>,
+    volume_spec: &VolumeSpec,
 ) -> Result<Vec<CreateReplica>, SvcError> {
-    let request = request.into();
+    let request = GetSuitablePools::new(volume_spec);
     let pools = scheduling::volume_pool_candidates(request.clone(), registry).await;
 
     if pools.is_empty() {
@@ -151,7 +151,7 @@ pub(crate) async fn volume_replica_candidates(
         });
     }
 
-    request.trace(&format!(
+    volume_spec.trace(&format!(
         "Creation pool candidates for volume: {:?}",
         pools.iter().map(|p| p.state()).collect::<Vec<_>>()
     ));
@@ -182,6 +182,7 @@ pub(crate) async fn volume_replica_candidates(
 pub(crate) async fn create_volume_replicas(
     registry: &Registry,
     request: &CreateVolume,
+    volume: &VolumeSpec,
 ) -> Result<Vec<CreateReplica>, SvcError> {
     if !request.allowed_nodes().is_empty()
         && request.replicas > request.allowed_nodes().len() as u64
@@ -190,7 +191,7 @@ pub(crate) async fn create_volume_replicas(
         return Err(SvcError::InvalidArguments {});
     }
 
-    let node_replicas = volume_replica_candidates(registry, request).await?;
+    let node_replicas = volume_replica_candidates(registry, volume).await?;
 
     if request.replicas > node_replicas.len() as u64 {
         Err(SvcError::from(NotEnough::OfPools {

@@ -1,19 +1,19 @@
 use crate::controller::{
     registry::Registry,
+    resources::ResourceMutex,
     scheduling::{
         resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},
-        AddReplicaFilters, AddReplicaSorters, ChildSorters, NodeFilters, PoolFilters, PoolSorters,
-        ResourceFilter,
+        volume_policy::ThickPolicy,
+        AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceFilter,
     },
 };
 
 use agents::errors::SvcError;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
-    transport::{ChildUri, CreateVolume, VolumeState},
+    transport::{ChildUri, VolumeState},
 };
 
-use crate::controller::resources::ResourceMutex;
 use itertools::Itertools;
 use std::{collections::HashMap, ops::Deref};
 
@@ -23,15 +23,8 @@ pub(crate) struct GetSuitablePools {
     spec: VolumeSpec,
 }
 
-impl From<&CreateVolume> for GetSuitablePools {
-    fn from(create: &CreateVolume) -> Self {
-        Self {
-            spec: create.into(),
-        }
-    }
-}
-impl From<&VolumeSpec> for GetSuitablePools {
-    fn from(spec: &VolumeSpec) -> Self {
+impl GetSuitablePools {
+    pub(crate) fn new(spec: &VolumeSpec) -> Self {
         Self { spec: spec.clone() }
     }
 }
@@ -73,43 +66,28 @@ pub(crate) struct AddVolumeReplica {
 }
 
 impl AddVolumeReplica {
-    async fn builder(request: impl Into<GetSuitablePools>, registry: &Registry) -> Self {
-        let request = request.into();
+    async fn builder(request: GetSuitablePools, registry: &Registry) -> Self {
         Self {
             context: GetSuitablePoolsContext {
                 registry: registry.clone(),
-                spec: request.spec.clone(),
+                spec: request.spec,
             },
             list: PoolItemLister::list(registry).await,
         }
     }
+    fn with_default_policy(self) -> Self {
+        self.with_thick_policy()
+    }
+    fn with_thick_policy(self) -> Self {
+        self.policy(ThickPolicy::new())
+    }
+
     /// Default rules for pool selection when creating replicas for a volume.
     pub(crate) async fn builder_with_defaults(
-        request: impl Into<GetSuitablePools>,
+        request: GetSuitablePools,
         registry: &Registry,
     ) -> Self {
-        Self::builder(request, registry)
-            .await
-            // filter pools according to the following criteria (any order):
-            // 1. exclude nodes that are cordoned
-            // 2. if allowed_nodes were specified then only pools from those nodes
-            // can be used.
-            // 3. pools should have enough free space for the
-            // volume (do we need to take into account metadata?)
-            // 4. ideally use only healthy(online) pools with degraded pools as a
-            // fallback
-            // 5. only one replica per node
-            .filter(NodeFilters::cordoned_for_pool)
-            .filter(NodeFilters::online_for_pool)
-            .filter(NodeFilters::allowed)
-            .filter(NodeFilters::unused)
-            .filter(PoolFilters::usable)
-            .filter(PoolFilters::capacity)
-            .filter(PoolFilters::free_space)
-            .filter(PoolFilters::free_space_full_rebuild)
-            .filter(PoolFilters::topology)
-            // sort pools in order of preference (from least to most number of replicas)
-            .sort(PoolSorters::sort_by_replica_count)
+        Self::builder(request, registry).await.with_default_policy()
     }
 }
 
@@ -119,8 +97,7 @@ impl ResourceFilter for AddVolumeReplica {
     type Item = PoolItem;
 
     fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
-        let request = self.context.clone();
-        self.list.retain(|v| filter(&request, v));
+        self.list.retain(|v| filter(&self.context, v));
         self
     }
 
