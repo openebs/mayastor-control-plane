@@ -21,7 +21,8 @@ pub(crate) struct PoolItem {
 }
 
 impl PoolItem {
-    fn new(node: NodeWrapper, pool: PoolWrapper) -> Self {
+    /// Create a new `Self`.
+    pub(crate) fn new(node: NodeWrapper, pool: PoolWrapper) -> Self {
         Self { node, pool }
     }
     /// Get the number of replicas in the pool.

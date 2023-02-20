@@ -72,7 +72,7 @@ impl SimplePolicy {
             .score()
             .unwrap();
 
-        score_a.cmp(&score_b)
+        score_b.cmp(&score_a)
     }
     /// Minimum free space is the currently allocated usage plus some percentage of volume size
     /// slack.
@@ -91,5 +91,96 @@ impl SimplePolicy {
                 item.pool.free_space() > min_size
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        controller::scheduling::{resources::PoolItem, volume_policy::SimplePolicy},
+        node::wrapper::NodeWrapper,
+        pool::wrapper::PoolWrapper,
+    };
+    use stor_port::types::v0::transport::{NodeState, NodeStatus, PoolState, PoolStatus, Replica};
+
+    use std::net::{IpAddr, Ipv4Addr};
+
+    fn make_node(name: &str) -> NodeWrapper {
+        let state = NodeState::new(
+            name.into(),
+            std::net::SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            NodeStatus::Online,
+            None,
+            None,
+        );
+        NodeWrapper::new_stub(&state)
+    }
+    fn make_pool(node: &str, pool: &str, free_space: u64, replicas: usize) -> PoolItem {
+        let node_state = make_node(node);
+        let used = 0; //10 * 1024 * 1024 * 1024;
+        let capacity = free_space + used;
+        let state = PoolState {
+            node: node.into(),
+            id: pool.into(),
+            disks: vec![],
+            status: PoolStatus::Online,
+            capacity,
+            used,
+        };
+        let replica = Replica::default();
+        let pool = PoolWrapper::new(
+            state,
+            vec![replica]
+                .into_iter()
+                .cycle()
+                .take(replicas)
+                .collect::<Vec<_>>(),
+        );
+        PoolItem::new(node_state, pool)
+    }
+    #[test]
+    fn sort_by_weights() {
+        let gig = 1024 * 1024 * 1024;
+        let mut pools = vec![
+            make_pool("1", "1", gig, 0),
+            make_pool("1", "2", gig * 2, 0),
+            make_pool("2", "3", gig, 1),
+        ];
+        pools.sort_by(SimplePolicy::sort_by_weights);
+
+        let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(pool_names, vec!["2", "1", "3"]);
+
+        let mut pools = vec![
+            make_pool("1", "1", gig * 3, 0),
+            make_pool("1", "2", gig * 2, 0),
+            make_pool("2", "3", gig, 1),
+        ];
+        pools.sort_by(SimplePolicy::sort_by_weights);
+
+        let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(pool_names, vec!["1", "2", "3"]);
+
+        let mut pools = vec![
+            make_pool("1", "1", gig * 3, 400),
+            make_pool("1", "2", gig * 2, 0),
+            make_pool("2", "3", gig, 1),
+        ];
+        pools.sort_by(SimplePolicy::sort_by_weights);
+
+        let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(pool_names, vec!["2", "3", "1"]);
+
+        let mut pools = vec![
+            make_pool("1", "1", gig * 50, 100),
+            make_pool("1", "2", gig * 2, 0),
+            make_pool("2", "3", gig, 1),
+        ];
+        pools.sort_by(SimplePolicy::sort_by_weights);
+
+        let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(pool_names, vec!["1", "2", "3"]);
+
+        // todo: add more tests before merge
     }
 }

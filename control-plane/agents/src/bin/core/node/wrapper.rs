@@ -94,6 +94,24 @@ impl NodeWrapper {
         }
     }
 
+    /// Create a stub `Self` for a `Node` with a given state.
+    #[allow(unused)]
+    pub(crate) fn new_stub(node: &NodeState) -> Self {
+        Self {
+            node_state: node.clone(),
+            watchdog: Watchdog::new(&node.id, std::time::Duration::from_secs(1)),
+            missed_deadline: false,
+            lock: Default::default(),
+            comms_timeouts: NodeCommsTimeout::new(
+                std::time::Duration::from_secs(1),
+                std::time::Duration::from_secs(1),
+                false,
+            ),
+            states: ResourceStatesLocked::new(),
+            num_rebuilds: Arc::new(RwLock::new(0)),
+        }
+    }
+
     /// Set the node state to the passed argument.
     fn set_state_inner(&mut self, mut node_state: NodeState, creation: bool) -> bool {
         // don't modify the status through the state.
