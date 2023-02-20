@@ -4,7 +4,7 @@ use crate::controller::{
     scheduling::{
         resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},
         volume_policy::ThickPolicy,
-        AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceFilter,
+        AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceData, ResourceFilter,
     },
 };
 
@@ -14,8 +14,7 @@ use stor_port::types::v0::{
     transport::{ChildUri, VolumeState},
 };
 
-use itertools::Itertools;
-use std::{collections::HashMap, ops::Deref};
+use std::ops::Deref;
 
 /// Select suitable pools for volume replica creation.
 #[derive(Clone)]
@@ -61,18 +60,19 @@ impl Deref for GetSuitablePools {
 /// Selects the best pool candidates to create lvol replicas on.
 #[derive(Clone)]
 pub(crate) struct AddVolumeReplica {
-    context: GetSuitablePoolsContext,
-    list: Vec<PoolItem>,
+    data: ResourceData<GetSuitablePoolsContext, PoolItem>,
 }
 
 impl AddVolumeReplica {
     async fn builder(request: GetSuitablePools, registry: &Registry) -> Self {
         Self {
-            context: GetSuitablePoolsContext {
-                registry: registry.clone(),
-                spec: request.spec,
-            },
-            list: PoolItemLister::list(registry).await,
+            data: ResourceData::new(
+                GetSuitablePoolsContext {
+                    registry: registry.clone(),
+                    spec: request.spec,
+                },
+                PoolItemLister::list(registry).await,
+            ),
         }
     }
     fn with_default_policy(self) -> Self {
@@ -96,33 +96,19 @@ impl ResourceFilter for AddVolumeReplica {
     type Request = GetSuitablePoolsContext;
     type Item = PoolItem;
 
-    fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
-        self.list.retain(|v| filter(&self.context, v));
-        self
-    }
-
-    fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
-        self.list = self.list.into_iter().sorted_by(sort).collect();
-        self
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
     }
 
     fn collect(self) -> Vec<Self::Item> {
-        self.list
-    }
-
-    fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
-        self,
-        group: F,
-    ) -> HashMap<K, V> {
-        group(&self.context, &self.list)
+        self.data.list
     }
 }
 
 /// Decrease a volume's replicas when it exceeds the required count.
 #[derive(Clone)]
 pub(crate) struct DecreaseVolumeReplica {
-    context: GetChildForRemovalContext,
-    list: Vec<ReplicaItem>,
+    data: ResourceData<GetChildForRemovalContext, ReplicaItem>,
 }
 
 /// Request to decrease volume replicas.
@@ -250,9 +236,9 @@ impl GetChildForRemovalContext {
 impl DecreaseVolumeReplica {
     async fn builder(request: &GetChildForRemoval, registry: &Registry) -> Result<Self, SvcError> {
         let context = GetChildForRemovalContext::new(registry, request).await?;
+        let list = context.list().await;
         Ok(Self {
-            list: context.list().await,
-            context,
+            data: ResourceData::new(context, list),
         })
     }
     /// Create new `Self` from the given arguments with a default list of sorting rules.
@@ -267,7 +253,7 @@ impl DecreaseVolumeReplica {
     /// Get the `ReplicaRemovalCandidates` for this request, which splits the candidates into
     /// healthy and unhealthy candidates.
     pub(crate) fn candidates(self) -> ReplicaRemovalCandidates {
-        ReplicaRemovalCandidates::new(self.context, self.list)
+        ReplicaRemovalCandidates::new(self.data.context, self.data.list)
     }
 }
 
@@ -336,26 +322,12 @@ impl ResourceFilter for DecreaseVolumeReplica {
     type Request = GetChildForRemovalContext;
     type Item = ReplicaItem;
 
-    fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
-        let request = self.context.clone();
-        self.list.retain(|v| filter(&request, v));
-        self
-    }
-
-    fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
-        self.list = self.list.into_iter().sorted_by(sort).collect();
-        self
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
     }
 
     fn collect(self) -> Vec<Self::Item> {
-        self.list
-    }
-
-    fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
-        self,
-        group: F,
-    ) -> HashMap<K, V> {
-        group(&self.context, &self.list)
+        self.data.list
     }
 }
 
@@ -463,8 +435,7 @@ impl VolumeReplicasForNexusCtx {
 /// Retrieve a list of healthy replicas to add to a volume nexus.
 #[derive(Clone)]
 pub(crate) struct AddVolumeNexusReplicas {
-    context: VolumeReplicasForNexusCtx,
-    list: Vec<ChildItem>,
+    data: ResourceData<VolumeReplicasForNexusCtx, ChildItem>,
 }
 
 impl AddVolumeNexusReplicas {
@@ -475,7 +446,9 @@ impl AddVolumeNexusReplicas {
     ) -> Result<Self, SvcError> {
         let context = VolumeReplicasForNexusCtx::new(registry, vol_spec, nx_spec).await?;
         let list = context.list().await;
-        Ok(Self { list, context })
+        Ok(Self {
+            data: ResourceData::new(context, list),
+        })
     }
 
     /// Builder used to retrieve a list of healthy replicas to add to a volume nexus.
@@ -507,38 +480,11 @@ impl ResourceFilter for AddVolumeNexusReplicas {
     type Request = VolumeReplicasForNexusCtx;
     type Item = ChildItem;
 
-    fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
-        let request = self.context.clone();
-        self.list.retain(|v| filter(&request, v));
-        self
-    }
-
-    fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
-        self.list = self.list.into_iter().sorted_by(sort).collect();
-        self
-    }
-
-    fn sort_ctx<P: FnMut(&Self::Request, &Self::Item, &Self::Item) -> std::cmp::Ordering>(
-        mut self,
-        mut sort: P,
-    ) -> Self {
-        let context = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .sorted_by(|a, b| sort(&context, a, b))
-            .collect();
-        self
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
     }
 
     fn collect(self) -> Vec<Self::Item> {
-        self.list
-    }
-
-    fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
-        self,
-        group: F,
-    ) -> HashMap<K, V> {
-        group(&self.context, &self.list)
+        self.data.list
     }
 }

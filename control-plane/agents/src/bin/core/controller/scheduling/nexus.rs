@@ -3,13 +3,13 @@ use crate::controller::{
     resources::ResourceMutex,
     scheduling::{
         resources::{ChildItem, NodeItem},
-        ChildInfoFilters, ChildItemSorters, NodeFilters, NodeSorters, ReplicaFilters,
+        ChildInfoFilters, ChildItemSorters, NodeFilters, NodeSorters, ReplicaFilters, ResourceData,
         ResourceFilter,
     },
 };
 use agents::errors::SvcError;
-use itertools::Itertools;
-use std::{collections::HashMap, ops::Deref};
+
+use std::ops::Deref;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
     transport::{ChildUri, NexusId, NodeId, VolumeId},
@@ -166,8 +166,7 @@ impl GetPersistedNexusChildrenCtx {
 /// Builder used to retrieve a list of healthy nexus children which is used for nexus creation.
 #[derive(Clone)]
 pub(crate) struct CreateVolumeNexus {
-    context: GetPersistedNexusChildrenCtx,
-    list: Vec<ChildItem>,
+    data: ResourceData<GetPersistedNexusChildrenCtx, ChildItem>,
 }
 
 impl CreateVolumeNexus {
@@ -175,14 +174,16 @@ impl CreateVolumeNexus {
         request: &GetPersistedNexusChildren,
         registry: &Registry,
     ) -> Result<Self, SvcError> {
-        let context = GetPersistedNexusChildrenCtx::new(registry, request).await?;
-        let list = context.list().await;
-        Ok(Self { list, context })
+        let request = GetPersistedNexusChildrenCtx::new(registry, request).await?;
+        let list = request.list().await;
+        Ok(Self {
+            data: ResourceData::new(request, list),
+        })
     }
 
     /// Get the inner context.
     pub(crate) fn context(&self) -> &GetPersistedNexusChildrenCtx {
-        &self.context
+        &self.data.context
     }
 
     /// Get `Self` with a default set of filters for replicas/children according to the following
@@ -209,39 +210,12 @@ impl ResourceFilter for CreateVolumeNexus {
     type Request = GetPersistedNexusChildrenCtx;
     type Item = ChildItem;
 
-    fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
-        let request = self.context.clone();
-        self.list.retain(|v| filter(&request, v));
-        self
-    }
-
-    fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
-        self.list = self.list.into_iter().sorted_by(sort).collect();
-        self
-    }
-
-    fn sort_ctx<P: FnMut(&Self::Request, &Self::Item, &Self::Item) -> std::cmp::Ordering>(
-        mut self,
-        mut sort: P,
-    ) -> Self {
-        let context = self.context.clone();
-        self.list = self
-            .list
-            .into_iter()
-            .sorted_by(|a, b| sort(&context, a, b))
-            .collect();
-        self
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
     }
 
     fn collect(self) -> Vec<Self::Item> {
-        self.list
-    }
-
-    fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
-        self,
-        group: F,
-    ) -> HashMap<K, V> {
-        group(&self.context, &self.list)
+        self.data.list
     }
 }
 
@@ -291,8 +265,7 @@ impl Deref for GetSuitableNodes {
 /// placement on failover/publish.
 #[derive(Clone)]
 pub(crate) struct NexusTargetNode {
-    context: GetSuitableNodesContext,
-    list: Vec<NodeItem>,
+    data: ResourceData<GetSuitableNodesContext, NodeItem>,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -300,40 +273,34 @@ impl ResourceFilter for NexusTargetNode {
     type Request = GetSuitableNodesContext;
     type Item = NodeItem;
 
-    fn filter<P: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: P) -> Self {
-        let request = self.context.clone();
-        self.list.retain(|v| filter(&request, v));
-        self
-    }
-
-    fn sort<P: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: P) -> Self {
-        self.list = self.list.into_iter().sorted_by(sort).collect();
-        self
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
     }
 
     fn collect(self) -> Vec<Self::Item> {
-        self.list
+        self.data.list
     }
 }
 
 impl NexusTargetNode {
     async fn builder(request: impl Into<GetSuitableNodes>, registry: &Registry) -> Self {
         let request = request.into();
-        Self {
-            context: GetSuitableNodesContext {
-                registry: registry.clone(),
-                spec: request.spec.clone(),
-            },
-            list: {
-                let nodes = registry.node_wrappers().await;
-                let mut node_items = Vec::with_capacity(nodes.len());
-                for node in nodes {
-                    let node = node.read().await;
+        let request = GetSuitableNodesContext {
+            registry: registry.clone(),
+            spec: request.spec.clone(),
+        };
+        let list = {
+            let nodes = registry.node_wrappers().await;
+            let mut node_items = Vec::with_capacity(nodes.len());
+            for node in nodes {
+                let node = node.read().await;
 
-                    node_items.push(NodeItem::new(node.clone()));
-                }
-                node_items
-            },
+                node_items.push(NodeItem::new(node.clone()));
+            }
+            node_items
+        };
+        Self {
+            data: ResourceData::new(request, list),
         }
     }
 

@@ -18,10 +18,28 @@ pub(crate) trait ResourcePolicy<Request: ResourceFilter>: Sized {
     }
 }
 
+/// Default container of context and a list of items which must be filtered down and sorted.
+#[derive(Clone)]
+pub(crate) struct ResourceData<C, I> {
+    context: C,
+    list: Vec<I>,
+}
+impl<C, I> ResourceData<C, I> {
+    /// Create a new `Self`.
+    pub(crate) fn new(request: C, list: Vec<I>) -> Self {
+        Self {
+            context: request,
+            list,
+        }
+    }
+}
+
 #[async_trait::async_trait(?Send)]
 pub(crate) trait ResourceFilter: Sized {
     type Request;
     type Item;
+
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item>;
 
     fn policy<P: ResourcePolicy<Self>>(self, policy: P) -> Self {
         policy.apply(self)
@@ -33,7 +51,7 @@ pub(crate) trait ResourceFilter: Sized {
     where
         F: FnMut(&P, &Self::Request, &Self::Item) -> bool,
     {
-        todo!()
+        unimplemented!()
     }
     fn filter_iter(self, filter: fn(Self) -> Self) -> Self {
         filter(self)
@@ -45,20 +63,31 @@ pub(crate) trait ResourceFilter: Sized {
     {
         filter(self).await
     }
-    fn filter<F: FnMut(&Self::Request, &Self::Item) -> bool>(self, filter: F) -> Self;
-    fn sort<F: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(self, sort: F) -> Self;
+    fn filter<F: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: F) -> Self {
+        let data = self.data();
+        data.list.retain(|v| filter(&data.context, v));
+        self
+    }
+    fn sort<F: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: F) -> Self {
+        let data = self.data();
+        data.list.sort_by(sort);
+        self
+    }
     fn sort_ctx<F: FnMut(&Self::Request, &Self::Item, &Self::Item) -> std::cmp::Ordering>(
-        self,
-        _sort: F,
+        mut self,
+        mut sort: F,
     ) -> Self {
-        unimplemented!();
+        let data = self.data();
+        data.list.sort_by(|a, b| sort(&data.context, a, b));
+        self
     }
     fn collect(self) -> Vec<Self::Item>;
     fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
-        self,
-        _group: F,
+        mut self,
+        group: F,
     ) -> HashMap<K, V> {
-        unimplemented!();
+        let data = self.data();
+        group(&data.context, &data.list)
     }
 }
 
