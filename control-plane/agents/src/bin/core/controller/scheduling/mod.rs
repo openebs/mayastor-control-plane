@@ -47,11 +47,13 @@ pub(crate) trait ResourceFilter: Sized {
     fn policy_async<P: ResourcePolicy<Self>>(self, policy: P) -> Self {
         policy.apply_async(self)
     }
-    fn filter_param<P, F>(self, _param: P, _filter: F) -> Self
+    fn filter_param<P, F>(mut self, param: &P, filter: F) -> Self
     where
-        F: FnMut(&P, &Self::Request, &Self::Item) -> bool,
+        F: Fn(&P, &Self::Request, &Self::Item) -> bool,
     {
-        unimplemented!()
+        let data = self.data();
+        data.list.retain(|v| filter(param, &data.context, v));
+        self
     }
     fn filter_iter(self, filter: fn(Self) -> Self) -> Self {
         filter(self)

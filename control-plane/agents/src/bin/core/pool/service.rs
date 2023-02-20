@@ -188,11 +188,11 @@ impl Service {
                     .pool_wrapper(&pool_id)
                     .await
                     .context(PoolNotFound { pool_id })?;
-                Ok(pool_wrapper.replicas())
+                Ok(pool_wrapper.replicas().clone())
             }
             Filter::Pool(pool_id) => {
                 let pool_wrapper = self.registry.get_node_pool_wrapper(pool_id).await?;
-                Ok(pool_wrapper.replicas())
+                Ok(pool_wrapper.replicas().clone())
             }
             Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
                 let node = self.registry.node_wrapper(&node_id).await?;

@@ -8,6 +8,7 @@ use std::{cmp::Ordering, ops::Deref};
 pub(crate) struct PoolWrapper {
     state: PoolState,
     replicas: Vec<Replica>,
+    over_commitment: u64,
 }
 
 impl Deref for PoolWrapper {
@@ -20,15 +21,21 @@ impl Deref for PoolWrapper {
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas.
     pub(crate) fn new(pool: PoolState, replicas: Vec<Replica>) -> Self {
+        let over_commitment = replicas
+            .iter()
+            .flat_map(|r| &r.space)
+            .map(|r| r.capacity_bytes - r.allocated_bytes)
+            .sum();
         Self {
             state: pool,
             replicas,
+            over_commitment,
         }
     }
 
     /// Get all the replicas.
-    pub(crate) fn replicas(&self) -> Vec<Replica> {
-        self.replicas.clone()
+    pub(crate) fn replicas(&self) -> &Vec<Replica> {
+        &self.replicas
     }
     /// Get the specified replica.
     pub(crate) fn replica(&self, replica: &ReplicaId) -> Option<&Replica> {
@@ -37,6 +44,11 @@ impl PoolWrapper {
     /// Get the state.
     pub(crate) fn state(&self) -> &PoolState {
         &self.state
+    }
+
+    /// Get the over commitment in bytes.
+    pub(crate) fn over_commitment(&self) -> u64 {
+        self.over_commitment
     }
 
     /// Get the free space.

@@ -24,6 +24,14 @@ impl PoolItem {
     fn new(node: NodeWrapper, pool: PoolWrapper) -> Self {
         Self { node, pool }
     }
+    /// Get the number of replicas in the pool.
+    pub(crate) fn len(&self) -> u64 {
+        self.pool.replicas().len() as u64
+    }
+    /// Get a reference to the inner `PoolWrapper`.
+    pub(crate) fn pool(&self) -> &PoolWrapper {
+        &self.pool
+    }
     /// Collect the item into a pool.
     pub(crate) fn collect(self) -> PoolWrapper {
         self.pool
