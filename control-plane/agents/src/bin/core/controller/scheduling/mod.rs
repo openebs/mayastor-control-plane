@@ -1,6 +1,7 @@
 pub(crate) mod nexus;
 pub(crate) mod resources;
 pub(crate) mod volume;
+mod volume_policy;
 
 use crate::controller::scheduling::{
     nexus::{GetPersistedNexusChildrenCtx, GetSuitableNodesContext},
@@ -8,13 +9,50 @@ use crate::controller::scheduling::{
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
 use std::{cmp::Ordering, collections::HashMap, future::Future};
-use stor_port::types::v0::transport::{PoolStatus, PoolTopology};
+
+#[async_trait::async_trait(?Send)]
+pub(crate) trait ResourcePolicy<Request: ResourceFilter>: Sized {
+    fn apply(self, to: Request) -> Request;
+    fn apply_async(self, to: Request) -> Request {
+        self.apply(to)
+    }
+}
+
+/// Default container of context and a list of items which must be filtered down and sorted.
+#[derive(Clone)]
+pub(crate) struct ResourceData<C, I> {
+    context: C,
+    list: Vec<I>,
+}
+impl<C, I> ResourceData<C, I> {
+    /// Create a new `Self`.
+    pub(crate) fn new(request: C, list: Vec<I>) -> Self {
+        Self {
+            context: request,
+            list,
+        }
+    }
+}
 
 #[async_trait::async_trait(?Send)]
 pub(crate) trait ResourceFilter: Sized {
     type Request;
     type Item;
 
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item>;
+
+    fn policy<P: ResourcePolicy<Self>>(self, policy: P) -> Self {
+        policy.apply(self)
+    }
+    fn policy_async<P: ResourcePolicy<Self>>(self, policy: P) -> Self {
+        policy.apply_async(self)
+    }
+    fn filter_param<P, F>(self, _param: P, _filter: F) -> Self
+    where
+        F: FnMut(&P, &Self::Request, &Self::Item) -> bool,
+    {
+        unimplemented!()
+    }
     fn filter_iter(self, filter: fn(Self) -> Self) -> Self {
         filter(self)
     }
@@ -25,20 +63,31 @@ pub(crate) trait ResourceFilter: Sized {
     {
         filter(self).await
     }
-    fn filter<F: FnMut(&Self::Request, &Self::Item) -> bool>(self, filter: F) -> Self;
-    fn sort<F: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(self, sort: F) -> Self;
+    fn filter<F: FnMut(&Self::Request, &Self::Item) -> bool>(mut self, mut filter: F) -> Self {
+        let data = self.data();
+        data.list.retain(|v| filter(&data.context, v));
+        self
+    }
+    fn sort<F: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: F) -> Self {
+        let data = self.data();
+        data.list.sort_by(sort);
+        self
+    }
     fn sort_ctx<F: FnMut(&Self::Request, &Self::Item, &Self::Item) -> std::cmp::Ordering>(
-        self,
-        _sort: F,
+        mut self,
+        mut sort: F,
     ) -> Self {
-        unimplemented!();
+        let data = self.data();
+        data.list.sort_by(|a, b| sort(&data.context, a, b));
+        self
     }
     fn collect(self) -> Vec<Self::Item>;
     fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
-        self,
-        _group: F,
+        mut self,
+        group: F,
     ) -> HashMap<K, V> {
-        unimplemented!();
+        let data = self.data();
+        group(&data.context, &data.list)
     }
 }
 
@@ -98,82 +147,6 @@ impl NodeFilters {
         !volume_targets
             .into_iter()
             .any(|n| &n.lock().node == item.node_wrapper().id())
-    }
-}
-
-/// Filter pools used for replica creation.
-pub(crate) struct PoolFilters {}
-impl PoolFilters {
-    /// The minimum free space in a pool for it to be eligible for thin provisioned replicas.
-    fn free_space_watermark() -> u64 {
-        16 * 1024 * 1024
-    }
-    /// Should only attempt to use pools with capacity bigger than the requested replica size.
-    pub(crate) fn capacity(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        item.pool.capacity > request.size
-    }
-    /// Should only attempt to use pools with sufficient free space.
-    pub(crate) fn free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        match request.thin {
-            true => item.pool.free_space() > Self::free_space_watermark(),
-            false => item.pool.free_space() > request.size,
-        }
-    }
-    /// Should only attempt to use pools with sufficient free space for a full rebuild.
-    /// Currently the data-plane fully rebuilds a volume, meaning a thin provisioned volume
-    /// becomes fully allocated.
-    pub(crate) fn free_space_full_rebuild(
-        request: &GetSuitablePoolsContext,
-        item: &PoolItem,
-    ) -> bool {
-        match request.thin && request.config().is_none() {
-            true => item.pool.free_space() > Self::free_space_watermark(),
-            false => item.pool.free_space() > request.size,
-        }
-    }
-    /// Should only attempt to use usable (not faulted) pools.
-    pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
-    }
-    /// Should only attempt to use pools having specific creation label if topology has it.
-    pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        let volume_pool_topology_labels: HashMap<String, String>;
-        match request.topology.clone() {
-            None => return true,
-            Some(topology) => match topology.pool {
-                None => return true,
-                Some(pool_topology) => match pool_topology {
-                    PoolTopology::Labelled(labelled_topology) => {
-                        // The labels in Volume Pool Topology should match the pool labels if
-                        // present, otherwise selection of any pool is allowed.
-                        if !labelled_topology.inclusion.is_empty() {
-                            volume_pool_topology_labels = labelled_topology.inclusion
-                        } else {
-                            return true;
-                        }
-                    }
-                },
-            },
-        };
-        // We will reach this part of code only if the volume has pool topology labels.
-        match request.registry().specs().pool(&item.pool.id) {
-            Ok(spec) => match spec.labels {
-                None => false,
-                Some(label) => volume_pool_topology_labels.keys().all(|k| {
-                    label.contains_key(k) && (volume_pool_topology_labels.get(k) == label.get(k))
-                }),
-            },
-            Err(_) => false,
-        }
-    }
-}
-
-/// Sort the pools used for replica creation
-pub(crate) struct PoolSorters {}
-impl PoolSorters {
-    /// Sort pools by their number of allocated replicas
-    pub(crate) fn sort_by_replica_count(a: &PoolItem, b: &PoolItem) -> std::cmp::Ordering {
-        a.pool.cmp(&b.pool)
     }
 }
 

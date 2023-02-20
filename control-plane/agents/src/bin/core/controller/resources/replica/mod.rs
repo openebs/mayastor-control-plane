@@ -6,7 +6,7 @@ use stor_port::types::v0::{
 
 impl ResourceMutex<ReplicaSpec> {
     /// Get the resource uuid.
-    pub fn uuid(&mut self) -> &ReplicaId {
+    pub fn uuid(&self) -> &ReplicaId {
         &self.immutable_ref().uuid
     }
 }

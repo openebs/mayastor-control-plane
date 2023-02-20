@@ -18,7 +18,7 @@ pub(crate) async fn volume_pool_candidates(
     request: impl Into<GetSuitablePools>,
     registry: &Registry,
 ) -> Vec<PoolWrapper> {
-    volume::AddVolumeReplica::builder_with_defaults(request, registry)
+    volume::AddVolumeReplica::builder_with_defaults(request.into(), registry)
         .await
         .collect()
         .into_iter()
