@@ -8,11 +8,12 @@ use stor_port::types::v0::{
     transport::ReplicaId,
 };
 
+/// Re-enable after onliner...
 #[tokio::test]
 async fn fault_enospc_child() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_io_engines(2)
+        .with_io_engines(3)
         .with_pools(1)
         .with_csi(false, true)
         .with_options(|o| o.with_isolated_io_engine(true))
@@ -31,7 +32,7 @@ async fn fault_enospc_child() {
     let mut volume_1 = volumes_api
         .put_volume(
             &"ec4e66fd-3b33-4439-b504-d49aba53da26".parse().unwrap(),
-            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 2, volume_1_size, true),
+            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 3, volume_1_size, true),
         )
         .await
         .unwrap();
@@ -55,6 +56,19 @@ async fn fault_enospc_child() {
     replica_api
         .put_pool_replica(
             cluster.pool(0, 0).as_str(),
+            &ReplicaId::new(),
+            models::CreateReplicaBody {
+                share: None,
+                size: 85u64 * 1024 * 1024,
+                thin: false,
+                allowed_hosts: None,
+            },
+        )
+        .await
+        .unwrap();
+    replica_api
+        .put_pool_replica(
+            cluster.pool(1, 0).as_str(),
             &ReplicaId::new(),
             models::CreateReplicaBody {
                 share: None,
@@ -112,7 +126,7 @@ async fn fault_enospc_child() {
     tracing::info!("\n{:?}", output.unwrap());
 
     let volume_client = cluster.grpc_client().volume();
-    let _ = wait_till_volume_children(&volume_1.spec.uuid.into(), 1, &volume_client).await;
+    let _ = wait_till_volume_children(&volume_1.spec.uuid.into(), 2, &volume_client).await;
 }
 
 struct DeviceDisconnect(nvmeadm::NvmeTarget);

@@ -131,6 +131,13 @@ impl NexusSpec {
     pub fn status_info(&self) -> &NexusStatusInfo {
         &self.status_info
     }
+    /// Get the matching `ReplicaUri`.
+    pub fn replica_uri(&self, uri: &ChildUri) -> Option<ReplicaUri> {
+        self.children.iter().find_map(|c| match c {
+            NexusChild::Replica(replica) if &replica.share_uri == uri => Some(replica.clone()),
+            _ => None,
+        })
+    }
 }
 
 impl From<&NexusSpec> for CreateNexus {
@@ -231,7 +238,9 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                     self.spec_status = SpecStatus::Created(transport::NexusStatus::Shutdown)
                 }
                 NexusOperation::AddChild(uri) => self.children.push(uri),
-                NexusOperation::RemoveChild(uri) => self.children.retain(|c| c != &uri),
+                NexusOperation::RemoveChild(uri) => {
+                    self.children.retain(|c| c.uri() != uri.uri());
+                }
             }
         }
         self.clear_op();

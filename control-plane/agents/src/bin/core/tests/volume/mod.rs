@@ -170,7 +170,7 @@ async fn nexus_persistence_test_iteration(
     let mark_child_unhealthy = |c: &Child, ni: &mut NexusInfo| {
         let uri = url::Url::from_str(c.uri.as_str()).unwrap();
         let uuid = uri.query_pairs().find(|(q, _)| q == "uuid").unwrap().1;
-        let child_info = ni.children.iter_mut().find(|c| c.uuid == uuid);
+        let child_info = ni.children.iter_mut().find(|c| c.uuid.as_str() == uuid);
         child_info.unwrap().healthy = false;
     };
     match fault {

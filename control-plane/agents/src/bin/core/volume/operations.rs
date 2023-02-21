@@ -11,8 +11,9 @@ use crate::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
                 SpecOperationsHelper,
             },
-            OperationGuardArc, TraceSpan, TraceStrLog,
+            OperationGuardArc, ResourceUid, TraceSpan, TraceStrLog,
         },
+        scheduling::pool::ENoSpcReplica,
     },
     volume::specs::{create_volume_replicas, get_volume_target_node, healthy_volume_replicas},
 };
@@ -685,5 +686,71 @@ impl OperationGuardArc<VolumeSpec> {
             ),
             frontend,
         )
+    }
+
+    /// Remove the given `ENoSpcReplica` but make sure we're not removing the last healthy replica
+    /// of the volume which would cause data loss!
+    /// TODO: Should there be a minimum remaining number of healthy replicas left?
+    #[tracing::instrument(level = "debug", skip(self, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
+    pub(crate) async fn remove_replica(
+        &mut self,
+        info: &ENoSpcReplica,
+        registry: &Registry,
+    ) -> Result<(), SvcError> {
+        let health_info = self.lock().health_info_id().cloned();
+        let nexus_info = registry
+            .nexus_info(Some(self.uuid()), health_info.as_ref(), true)
+            .await?
+            .ok_or(SvcError::Internal {
+                details: "No NexusInfo for a volume with allocated storage?".into(),
+            })?;
+        let nexus = info.nexus().operation_guard()?;
+
+        let state = registry.volume_state(self.uuid()).await?;
+
+        let healthy_children_len = if self.as_ref().target().is_some() {
+            let spec_children = info.nexus().lock().children.clone();
+            state
+                .target
+                .into_iter()
+                .flat_map(|n| n.children)
+                .filter(|c| c.state.online())
+                .filter(|c| {
+                    match spec_children
+                        .iter()
+                        .find(|sc| sc.uri() == c.uri)
+                        .and_then(|sc| sc.as_replica())
+                    {
+                        Some(sc) => nexus_info.is_replica_healthy(sc.uuid()),
+                        None => false,
+                    }
+                })
+                .filter(|c| &c.uri != info.child().uri())
+                .count()
+        } else {
+            nexus_info
+                .children
+                .iter()
+                .filter(|c| c.healthy)
+                .filter(|c| &c.uuid != info.child().uuid())
+                .filter(|c| {
+                    state
+                        .replica_topology
+                        .get(&c.uuid)
+                        .map(|r| r.status().online())
+                        == Some(true)
+                })
+                .count()
+        };
+        // todo: what should the minimum number of healthy children be?
+        if healthy_children_len == 0 {
+            tracing::error!("No healthy children left");
+            return Ok(());
+        }
+
+        let mut replica = registry.specs().replica(info.replica().uid()).await?;
+        replica.fault(nexus, info, registry).await?;
+
+        Ok(())
     }
 }

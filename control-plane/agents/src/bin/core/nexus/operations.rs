@@ -25,9 +25,14 @@ use stor_port::types::v0::{
     transport::{
         child::Child,
         nexus::{CreateNexus, DestroyNexus, Nexus, ShareNexus, UnshareNexus},
-        AddNexusChild, NodeStatus, RemoveNexusChild, ShutdownNexus,
+        AddNexusChild, FaultNexusChild, NodeStatus, RemoveNexusChild, ShutdownNexus,
     },
 };
+
+// pub(crate) struct FaultNexusChild {
+//     pub(crate) uri: ChildUri,
+// }
+//pub(crate) type FaultNexusChild = ChildUri;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
@@ -195,6 +200,7 @@ impl ResourceOffspring for OperationGuardArc<NexusSpec> {
     type Add = AddNexusChild;
     type AddOutput = Child;
     type Remove = RemoveNexusChild;
+    type Fault = FaultNexusChild;
 
     async fn add_child(
         &mut self,
@@ -218,6 +224,7 @@ impl ResourceOffspring for Option<&mut OperationGuardArc<NexusSpec>> {
     type Add = AddNexusChild;
     type AddOutput = Child;
     type Remove = RemoveNexusChild;
+    type Fault = FaultNexusChild;
 
     async fn add_child(
         &mut self,

@@ -95,7 +95,7 @@ impl Registry {
                         info.uuid = nexus_uuid.clone();
                         Ok(Some(info))
                     }
-                    Err(SvcError::StoreMissingEntry { .. }) if missing_key_is_error => Ok(None),
+                    Err(SvcError::StoreMissingEntry { .. }) if !missing_key_is_error => Ok(None),
                     Err(error) => Err(error),
                 }
             }

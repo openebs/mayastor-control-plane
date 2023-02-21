@@ -89,6 +89,7 @@ pub(crate) trait ResourceOffspring {
     type Add: Sync + Send;
     type AddOutput: Sync + Send;
     type Remove: Sync + Send;
+    type Fault: Sync + Send;
 
     /// Add a child to the resource.
     async fn add_child(

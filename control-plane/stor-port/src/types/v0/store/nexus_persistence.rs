@@ -24,11 +24,12 @@ pub struct NexusInfo {
 impl NexusInfo {
     /// Check if the provided replica is healthy or not
     pub fn is_replica_healthy(&self, replica: &ReplicaId) -> bool {
-        match self.children.iter().find(|c| c.uuid == replica.as_str()) {
+        match self.children.iter().find(|c| &c.uuid == replica) {
             Some(info) => info.healthy,
             None => false,
         }
     }
+
     /// Check if no replica is healthy
     pub fn no_healthy_replicas(&self) -> bool {
         self.children.iter().all(|c| !c.healthy) || self.children.is_empty()
@@ -40,7 +41,7 @@ impl NexusInfo {
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct ChildInfo {
     /// UUID of the child.
-    pub uuid: String,
+    pub uuid: ReplicaId,
     /// Child's state of health.
     pub healthy: bool,
 }

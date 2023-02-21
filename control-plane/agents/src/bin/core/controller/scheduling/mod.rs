@@ -1,4 +1,5 @@
 pub(crate) mod nexus;
+pub(crate) mod pool;
 pub(crate) mod resources;
 pub(crate) mod volume;
 mod volume_policy;

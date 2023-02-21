@@ -6,7 +6,7 @@ use stor_port::types::v0::{
 
 impl ResourceMutex<NexusSpec> {
     /// Get the resource uuid.
-    pub fn uuid(&mut self) -> &NexusId {
+    pub fn uuid(&self) -> &NexusId {
         &self.immutable_ref().uuid
     }
 }

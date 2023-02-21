@@ -1,6 +1,7 @@
 mod pool_operations;
 mod registry;
 mod replica_operations;
+pub(crate) mod scheduling;
 mod service;
 mod specs;
 pub(crate) mod wrapper;

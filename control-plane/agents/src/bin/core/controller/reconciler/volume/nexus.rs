@@ -1,16 +1,16 @@
 use crate::controller::{
     reconciler::{
-        nexus::{fixup_nexus_protocol, missing_nexus_recreate},
+        nexus::{
+            capacity::enospc_children_onliner, faulted_nexus_remover, fixup_nexus_protocol,
+            missing_nexus_recreate,
+        },
         PollContext, TaskPoller,
     },
     resources::{operations_helper::OperationSequenceGuard, ResourceMutex},
     task_poller::{PollResult, PollerState},
 };
 
-use stor_port::types::v0::store::volume::VolumeSpec;
-
-use crate::controller::reconciler::nexus::{enospc_children_faulter, faulted_nexus_remover};
-use stor_port::types::v0::transport::VolumeStatus;
+use stor_port::types::v0::{store::volume::VolumeSpec, transport::VolumeStatus};
 
 /// Volume nexus reconciler
 /// When io-engine instances restart they come up "empty" and so we need to recreate
@@ -60,7 +60,7 @@ async fn volume_nexus_reconcile(
             if volume_state.status != VolumeStatus::Online {
                 faulted_nexus_remover(&mut nexus, context).await?;
                 missing_nexus_recreate(&mut nexus, context).await?;
-                enospc_children_faulter(&mut nexus, context).await?;
+                enospc_children_onliner(&mut nexus, context).await?;
             }
             fixup_nexus_protocol(&mut nexus, context).await
         }
