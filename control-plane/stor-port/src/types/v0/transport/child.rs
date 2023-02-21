@@ -240,3 +240,69 @@ impl FaultNexusChild {
         }
     }
 }
+
+/// A Nexus Child operation kind.
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+pub enum NexusChildActionKind {
+    /// Offline the child.
+    #[default]
+    Offline,
+    /// Online the child.
+    Online,
+    /// Retire the child.
+    Retire,
+}
+
+/// A request for a `NexusChildActionKind` operation against a Nexus Child.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NexusChildActionContext {
+    /// Id of the io-engine instance.
+    node: NodeId,
+    /// UUID of the nexus parent.
+    nexus: NexusId,
+    /// The URI of the child.
+    uri: ChildUri,
+}
+impl NexusChildActionContext {
+    /// Return new `Self`.
+    pub fn new(node: &NodeId, nexus: &NexusId, uri: &ChildUri) -> Self {
+        Self {
+            node: node.clone(),
+            nexus: nexus.clone(),
+            uri: uri.clone(),
+        }
+    }
+}
+
+/// A request for a `NexusChildActionKind` operation against a Nexus Child.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NexusChildAction {
+    /// Common info for all child actions.
+    context: NexusChildActionContext,
+    /// Action to perform against the child.
+    action: NexusChildActionKind,
+}
+impl NexusChildAction {
+    /// Return new `Self`.
+    pub fn new(context: NexusChildActionContext, action: NexusChildActionKind) -> Self {
+        Self { context, action }
+    }
+    /// Get a reference to the node.
+    pub fn node(&self) -> &NodeId {
+        &self.context.node
+    }
+    /// Get a reference to the nexus uuid.
+    pub fn nexus(&self) -> &NexusId {
+        &self.context.nexus
+    }
+    /// Get a reference to the child uri.
+    pub fn uri(&self) -> &ChildUri {
+        &self.context.uri
+    }
+    /// Get a reference to the action kind.
+    pub fn action(&self) -> &NexusChildActionKind {
+        &self.action
+    }
+}

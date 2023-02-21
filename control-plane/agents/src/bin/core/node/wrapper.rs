@@ -26,13 +26,13 @@ use stor_port::{
 };
 
 use crate::controller::{
-    io_engine::{NexusChildApi, NexusShareApi},
+    io_engine::{NexusChildActionApi, NexusChildApi, NexusShareApi},
     states::Either,
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
-use stor_port::types::v0::transport::ImportPool;
+use stor_port::types::v0::transport::{ImportPool, NexusChildAction};
 use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
@@ -1247,6 +1247,17 @@ impl NexusChildApi<Child, (), ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 }
             }
         }
+    }
+}
+
+#[async_trait]
+impl NexusChildActionApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    async fn child_action(&self, request: &NexusChildAction) -> Result<Nexus, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        // todo: any idempotency checks we need to perform on error?
+        let nexus = dataplane.child_action(request).await?;
+        self.update_nexus_state(Either::Insert(nexus.clone())).await;
+        Ok(nexus)
     }
 }
 

@@ -12,9 +12,10 @@ use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
-        DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus, NexusId, NodeId,
-        PoolState, Register, RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus,
-        UnshareNexus, UnshareReplica,
+        DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus, NexusChildAction,
+        NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, PoolState, Register,
+        RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus,
+        UnshareReplica,
     },
 };
 
@@ -29,6 +30,7 @@ pub(crate) trait NodeApi:
     + NexusApi<()>
     + NexusShareApi<Nexus, Nexus>
     + NexusChildApi<Nexus, Nexus, ()>
+    + NexusChildActionApi
     + HostApi
     + Sync
     + Send
@@ -106,6 +108,30 @@ pub(crate) trait NexusChildApi<Add, Rm, Flt> {
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<Rm, SvcError>;
     /// Fault a child from its parent nexus via gRPC.
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<Flt, SvcError>;
+}
+
+#[async_trait]
+pub(crate) trait NexusChildActionApi {
+    /// Execute a child action within its parent nexus via gRPC.
+    async fn child_action(&self, request: &NexusChildAction) -> Result<Nexus, SvcError>;
+
+    /// Online a child within its parent nexus via gRPC.
+    async fn online_child(&self, request: &NexusChildActionContext) -> Result<Nexus, SvcError> {
+        self.child_action(&NexusChildAction::new(
+            request.clone(),
+            NexusChildActionKind::Online,
+        ))
+        .await
+    }
+
+    /// Offline a child within its parent nexus via gRPC.
+    async fn offline_child(&self, request: &NexusChildActionContext) -> Result<Nexus, SvcError> {
+        self.child_action(&NexusChildAction::new(
+            request.clone(),
+            NexusChildActionKind::Offline,
+        ))
+        .await
+    }
 }
 
 #[async_trait]
