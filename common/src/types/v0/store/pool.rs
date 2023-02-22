@@ -196,3 +196,14 @@ impl From<&PoolSpec> for transport::PoolState {
         }
     }
 }
+
+impl From<&PoolSpec> for transport::ImportPool {
+    fn from(value: &PoolSpec) -> Self {
+        Self {
+            node: value.node.clone(),
+            id: value.id.clone(),
+            disks: value.disks.clone(),
+            uuid: None,
+        }
+    }
+}
