@@ -65,6 +65,7 @@ impl OnCreateFail {
     pub(crate) fn eeinval_delete<O>(result: &Result<O, SvcError>) -> Self {
         match result {
             Err(error) if error.tonic_code() == tonic::Code::InvalidArgument => Self::Delete,
+            Err(error) if error.tonic_code() == tonic::Code::NotFound => Self::Delete,
             _ => Self::SetDeleting,
         }
     }
