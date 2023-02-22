@@ -32,8 +32,8 @@ use common_lib::{
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
-            DestroyPool, DestroyReplica, FaultNexusChild, MessageIdVs, Nexus, NexusId, NodeId,
-            NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
+            DestroyPool, DestroyReplica, FaultNexusChild, ImportPool, MessageIdVs, Nexus, NexusId,
+            NodeId, NodeState, NodeStatus, PoolId, PoolState, PoolStatus, Protocol, Register,
             RemoveNexusChild, Replica, ReplicaId, ReplicaName, ShareNexus, ShareReplica,
             ShutdownNexus, UnshareNexus, UnshareReplica, VolumeId,
         },
@@ -770,6 +770,8 @@ pub(crate) trait ClientOps {
     async fn grpc_client_locked(&self, request: MessageId) -> Result<GrpcClientLocked, SvcError>;
     /// Create a pool on the node via gRPC.
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError>;
+    /// Import a pool on the node via gRPC.
+    async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError>;
     /// Destroy a pool on the node via gRPC.
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError>;
     /// Create a replica on the pool via gRPC.
@@ -972,10 +974,31 @@ impl ClientOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
             Err(SvcError::GrpcRequestError { source, .. })
                 if source.code() == tonic::Code::NotFound =>
             {
-                Ok(())
+                Err(SvcError::PoolNotFound {
+                    pool_id: request.id.clone(),
+                })
             }
             Err(error) => Err(error),
             Ok(_) => Ok(()),
+        }
+    }
+
+    /// Import a pool on the node via gRPC.
+    async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let import_response = dataplane.import_pool(request).await;
+        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+        self.update_pool_states(ctx.deref_mut()).await?;
+        self.update_replica_states(ctx.deref_mut()).await?;
+        let pool = self.read().await.pool(&request.id);
+        match (pool, import_response) {
+            (_, Ok(pool)) => Ok(pool),
+            (Some(pool), Err(SvcError::GrpcRequestError { source, .. }))
+                if source.code() == tonic::Code::AlreadyExists =>
+            {
+                Ok(pool)
+            }
+            (_, Err(error)) => Err(error),
         }
     }
 
@@ -1244,26 +1267,85 @@ impl ClientOps for GrpcClientLocked {
     async fn create_pool(&self, request: &CreatePool) -> Result<PoolState, SvcError> {
         match self.api_version() {
             ApiVersion::V0 => {
-                let rpc_pool = self
+                match self
                     .client_v0()?
                     .create_pool(v0_conversion::to_rpc(request))
                     .await
-                    .context(GrpcRequestError {
+                {
+                    Ok(rpc_pool) => {
+                        let pool = v0_rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
+                        Ok(pool)
+                    }
+                    Err(error)
+                        if error.code() == tonic::Code::Internal
+                            && error.message()
+                                == format!(
+                                    "Failed to create a BDEV '{}'",
+                                    request.disks.first().cloned().unwrap_or_default()
+                                ) =>
+                    {
+                        Err(SvcError::GrpcRequestError {
+                            resource: ResourceKind::Pool,
+                            request: "create_pool".to_string(),
+                            source: tonic::Status::not_found(error.message()),
+                        })
+                    }
+                    Err(error) => Err(error).context(GrpcRequestError {
                         resource: ResourceKind::Pool,
                         request: "create_pool",
-                    })?;
-                let pool = v0_rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
-                Ok(pool)
+                    }),
+                }
             }
             ApiVersion::V1 => {
-                let rpc_pool = self
+                match self
                     .client_v1()?
                     .pool()
                     .create_pool(v1_conversion::to_rpc(request))
                     .await
-                    .context(GrpcRequestError {
+                {
+                    Ok(rpc_pool) => {
+                        let pool = v1_rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
+                        Ok(pool)
+                    }
+                    Err(error)
+                        if error.code() == tonic::Code::Internal
+                            && error.message()
+                                == format!(
+                                    "Failed to create a BDEV '{}'",
+                                    request.disks.first().cloned().unwrap_or_default()
+                                ) =>
+                    {
+                        Err(SvcError::GrpcRequestError {
+                            resource: ResourceKind::Pool,
+                            request: "create_pool".to_string(),
+                            source: tonic::Status::not_found(error.message()),
+                        })
+                    }
+                    Err(error) => Err(error).context(GrpcRequestError {
                         resource: ResourceKind::Pool,
                         request: "create_pool",
+                    }),
+                }
+            }
+        }
+    }
+
+    async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError> {
+        match self.api_version() {
+            ApiVersion::V0 => Err(SvcError::GrpcRequestError {
+                resource: ResourceKind::Pool,
+                request: "import_pool".to_string(),
+                source: tonic::Status::unimplemented("import pool is not supported for v0"),
+            }),
+            ApiVersion::V1 => {
+                let rpc_pool = self
+                    .client_v1()?
+                    .pool()
+                    .import_pool(v1_conversion::to_rpc(request))
+                    .await
+                    .context(GrpcRequestError {
+                        resource: ResourceKind::Pool,
+                        request: "import_pool",
                     })?;
                 let pool = v1_rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
                 Ok(pool)

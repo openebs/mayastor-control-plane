@@ -230,17 +230,16 @@ impl From<String> for PoolDeviceUri {
         Self(device)
     }
 }
-impl ToString for PoolDeviceUri {
-    fn to_string(&self) -> String {
-        self.deref().to_string()
-    }
-}
 impl From<PoolDeviceUri> for String {
     fn from(device: PoolDeviceUri) -> Self {
         device.to_string()
     }
 }
-
+impl std::fmt::Display for PoolDeviceUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 /// Create Pool Request
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -280,4 +279,18 @@ pub struct DestroyPool {
     pub node: NodeId,
     /// id of the pool
     pub id: PoolId,
+}
+
+/// Import Pool Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPool {
+    /// Id of the io-engine instance.
+    pub node: NodeId,
+    /// Dd of the pool.
+    pub id: PoolId,
+    /// Disk device paths or URIs to be claimed by the pool.
+    pub disks: Vec<PoolDeviceUri>,
+    /// The pool uuid if specified.
+    pub uuid: Option<PoolUuid>,
 }

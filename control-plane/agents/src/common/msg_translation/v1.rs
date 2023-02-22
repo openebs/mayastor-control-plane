@@ -411,6 +411,18 @@ impl AgentToIoEngine for transport::CreatePool {
     }
 }
 
+impl AgentToIoEngine for transport::ImportPool {
+    type IoEngineMessage = v1_rpc::pool::ImportPoolRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            name: self.id.clone().into(),
+            uuid: None,
+            disks: self.disks.clone().into_vec(),
+            pooltype: v1_rpc::pool::PoolType::Lvs as i32,
+        }
+    }
+}
+
 impl AgentToIoEngine for transport::DestroyPool {
     type IoEngineMessage = v1_rpc::pool::DestroyPoolRequest;
     /// This converts Control plane DeletePool struct to IO Engine gRPC message.

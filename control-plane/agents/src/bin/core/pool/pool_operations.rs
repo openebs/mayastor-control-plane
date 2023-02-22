@@ -37,6 +37,14 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         }
 
         let node = registry.node_wrapper(&request.node).await?;
+
+        // todo: issue rpc to the node to find out?
+        if !node.read().await.is_online() {
+            return Err(SvcError::NodeNotOnline {
+                node: request.node.clone(),
+            });
+        }
+
         let pool = specs
             .get_or_create_pool(request)
             .operation_guard_wait()
@@ -62,7 +70,18 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
 
         self.start_destroy(registry).await?;
 
-        let result = node.destroy_pool(request).await;
+        let result = match node.destroy_pool(request).await {
+            Ok(_) => Ok(()),
+            Err(SvcError::PoolNotFound { .. }) => {
+                match node.import_pool(&self.as_ref().into()).await {
+                    Ok(_) => node.destroy_pool(request).await,
+                    Err(error) if error.tonic_code() == tonic::Code::InvalidArgument => Ok(()),
+                    Err(error) => Err(error),
+                }
+            }
+            Err(error) => Err(error),
+        };
+
         self.complete_destroy(result, registry).await
     }
 }
@@ -88,11 +107,10 @@ impl ResourceLifecycle for Option<OperationGuardArc<PoolSpec>> {
         if let Some(pool) = self {
             pool.destroy(registry, request).await
         } else {
-            // what if the node is never coming back?
-            // do we need a way to forcefully "delete" things?
-            let node = registry.node_wrapper(&request.node).await?;
-
-            node.destroy_pool(request).await
+            // todo: add flag to handle bypassing calls to io-engine!
+            Err(SvcError::PoolNotFound {
+                pool_id: request.id.clone(),
+            })
         }
     }
 }

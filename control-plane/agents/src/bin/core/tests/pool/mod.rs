@@ -32,7 +32,6 @@ use grpc::{
 };
 use itertools::Itertools;
 use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
-
 #[tokio::test]
 async fn pool() {
     let cluster = ClusterBuilder::builder()
@@ -576,11 +575,14 @@ async fn wait_till_pool_state(cluster: &Cluster, pool: (u32, u32), has_state: bo
 /// that pools with same spec can be created.
 #[tokio::test]
 async fn reconciler_deleting_pool_on_node_down() {
+    const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
         .with_io_engines(2)
-        .with_pools(2)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
         .await
@@ -894,4 +896,50 @@ async fn test_disown_missing_replica_owners() {
         .expect("Failed to get replicas.")
         .len();
     assert_eq!(num_replicas, 0);
+}
+
+#[tokio::test]
+async fn destroy_after_restart() {
+    const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+
+    let cluster = ClusterBuilder::builder()
+        .with_io_engines(1)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_reconcile_period(Duration::from_secs(10), Duration::from_secs(10))
+        .build()
+        .await
+        .unwrap();
+
+    let client = cluster.grpc_client();
+
+    let pools = client
+        .pool()
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap();
+    let pool = pools.into_inner().first().cloned().unwrap();
+
+    cluster
+        .composer()
+        .restart(cluster.node(0).as_str())
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    let destroy = DestroyPool {
+        node: cluster.node(0),
+        id: cluster.pool(0, 0),
+    };
+    let create = CreatePool {
+        node: cluster.node(0),
+        id: "bob".into(),
+        disks: pool.state().unwrap().disks,
+        labels: None,
+    };
+
+    client.pool().destroy(&destroy, None).await.unwrap();
+    let pool = client.pool().create(&create, None).await.unwrap();
+
+    assert_eq!(pool.state().unwrap().id, create.id);
 }

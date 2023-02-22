@@ -96,7 +96,7 @@ impl ReconcilerWorker {
         }
     }
 
-    #[tracing::instrument(skip(context), level = "trace", err)]
+    #[tracing::instrument(skip(context), level = "trace")]
     async fn poller_work(&mut self, context: PollContext) -> PollResult {
         tracing::trace!("Entering the reconcile loop...");
         let mut results = vec![];
