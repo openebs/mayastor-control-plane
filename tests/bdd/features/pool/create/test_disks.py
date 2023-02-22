@@ -71,11 +71,11 @@ def the_user_attempts_to_create_a_pool_with_a_nonexistent_disk(
     """the user attempts to create a pool with a non-existent disk."""
 
 
-@then('the pool creation should fail with error kind "Internal"')
+@then('the pool creation should fail with error kind "NotFound"')
 def the_pool_creation_should_fail_with_error_internal(pool_attempt):
-    """the pool creation should fail with error kind "Internal"."""
-    assert pool_attempt.status == http.HTTPStatus.INTERNAL_SERVER_ERROR
-    assert ApiClient.exception_to_error(pool_attempt).kind == "Internal"
+    """the pool creation should fail with error kind "NotFound"."""
+    assert pool_attempt.status == http.HTTPStatus.NOT_FOUND
+    assert ApiClient.exception_to_error(pool_attempt).kind == "NotFound"
 
 
 @then('the pool creation should fail with error kind "InvalidArgument"')
