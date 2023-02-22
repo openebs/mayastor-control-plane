@@ -115,7 +115,7 @@ impl TryIoEngineToAgent for v1::replica::Replica {
         })
     }
 }
-impl IoEngineToAgent for v1::pb::ReplicaSpaceUsage {
+impl IoEngineToAgent for v1::replica::ReplicaSpaceUsage {
     type AgentMessage = transport::ReplicaSpaceUsage;
     fn to_agent(&self) -> Self::AgentMessage {
         transport::ReplicaSpaceUsage {
@@ -360,6 +360,27 @@ impl AgentToIoEngine for transport::FaultNexusChild {
     }
 }
 
+impl AgentToIoEngine for transport::NexusChildAction {
+    type IoEngineMessage = v1::nexus::ChildOperationRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::nexus::ChildOperationRequest {
+            nexus_uuid: self.nexus().to_string(),
+            uri: self.uri().to_string(),
+            action: self.action().to_rpc().into(),
+        }
+    }
+}
+impl AgentToIoEngine for transport::NexusChildActionKind {
+    type IoEngineMessage = v1::nexus::ChildAction;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        match self {
+            transport::NexusChildActionKind::Offline => v1::nexus::ChildAction::Offline,
+            transport::NexusChildActionKind::Online => v1::nexus::ChildAction::Online,
+            transport::NexusChildActionKind::Retire => v1::nexus::ChildAction::Retire,
+        }
+    }
+}
+
 impl AgentToIoEngine for transport::ShutdownNexus {
     type IoEngineMessage = v1::nexus::ShutdownNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
@@ -419,9 +440,9 @@ impl AgentToIoEngine for transport::DestroyPool {
 }
 
 impl AgentToIoEngine for transport::ImportPool {
-    type IoEngineMessage = v1::pb::ImportPoolRequest;
+    type IoEngineMessage = v1::pool::ImportPoolRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        v1::pb::ImportPoolRequest {
+        v1::pool::ImportPoolRequest {
             name: self.id.clone().into(),
             uuid: None,
             disks: self.disks.clone().into_vec(),

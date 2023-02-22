@@ -5,8 +5,8 @@ use rpc::v1::nexus::ListNexusOptions;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        AddNexusChild, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusId, NodeId,
-        RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
+        AddNexusChild, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusChildAction,
+        NexusId, NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
 
@@ -259,6 +259,21 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
                 request: "fault_child_nexus",
             })?;
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::controller::io_engine::NexusChildActionApi for super::RpcClient {
+    async fn child_action(&self, request: &NexusChildAction) -> Result<Nexus, SvcError> {
+        let response = self
+            .nexus()
+            .child_operation(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Child,
+                request: "child_action",
+            })?;
+        Self::nexus_opt(response.into_inner().nexus, request.node(), "child_action")
     }
 }
 

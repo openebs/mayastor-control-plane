@@ -22,6 +22,7 @@ members = [
     "utils/platform",
     "utils/pstor-usage",
     "utils/shutdown",
+    "utils/weighted-scoring",
     "utils/deployer-cluster",
     "tests/io-engine",
 ]

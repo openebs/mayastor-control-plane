@@ -62,6 +62,7 @@ rpc =  { path = "../../rpc"}
 stor-port = { path = "../stor-port" }
 utils = { path = "../../utils/utils-lib" }
 nvmeadm = { path = "../../utils/dependencies/nvmeadm" }
+weighted-scoring = { path = "../../utils/weighted-scoring" }
 
 [target.'cfg(target_os="linux")'.dependencies]
 tokio-udev = { version = "0.8.0" }

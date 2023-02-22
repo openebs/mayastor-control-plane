@@ -5,8 +5,8 @@ use rpc::io_engine::Null;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        AddNexusChild, Child, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusId, NodeId,
-        RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
+        AddNexusChild, Child, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusChildAction,
+        NexusId, NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
 
@@ -220,6 +220,17 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
         crate::controller::io_engine::NexusChildApi::<Child, (), ()>::fault_child(self, request)
             .await
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::controller::io_engine::NexusChildActionApi for super::RpcClient {
+    async fn child_action(&self, _: &NexusChildAction) -> Result<Nexus, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Child,
+            request: "child_action".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 }
 

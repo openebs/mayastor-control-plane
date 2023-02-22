@@ -49,6 +49,7 @@ impl_message!(UnshareNexus);
 impl_message!(RemoveNexusChild);
 impl_message!(AddNexusChild);
 impl_message!(FaultNexusChild);
+impl_message!(NexusChildAction);
 impl_message!(ShutdownNexus);
 
 impl_vector_request_token!(Volumes, Volume);

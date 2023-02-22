@@ -272,6 +272,7 @@ dependencies = [
  "url",
  "utils",
  "uuid",
+ "weighted-scoring",
 ]
 
 [[package]]
@@ -4383,6 +4384,10 @@ checksum = "b6c71e40d7d2c34a5106301fb632274ca37242cd0c9d3e64dbece371a40a2d87"
 dependencies = [
  "webpki",
 ]
+
+[[package]]
+name = "weighted-scoring"
+version = "0.1.0"
 
 [[package]]
 name = "which"

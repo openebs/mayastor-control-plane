@@ -3,7 +3,7 @@ use crate::controller::{
     resources::ResourceMutex,
     scheduling::{
         resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},
-        volume_policy::ThickPolicy,
+        volume_policy::{SimplePolicy, ThickPolicy},
         AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceData, ResourceFilter,
     },
 };
@@ -33,11 +33,16 @@ impl GetSuitablePools {
 pub(crate) struct GetSuitablePoolsContext {
     registry: Registry,
     spec: VolumeSpec,
+    allocated_bytes: Option<u64>,
 }
 impl GetSuitablePoolsContext {
     /// Get the registry.
     pub(crate) fn registry(&self) -> &Registry {
         &self.registry
+    }
+    /// Get the currently allocated bytes (per replica).
+    pub(crate) fn allocated_bytes(&self) -> &Option<u64> {
+        &self.allocated_bytes
     }
 }
 
@@ -64,22 +69,44 @@ pub(crate) struct AddVolumeReplica {
 }
 
 impl AddVolumeReplica {
+    // Return max allocated bytes from volume replicas.
+    // May return None if the replica nodes are offline.
+    async fn allocated_bytes(registry: &Registry, volume: &VolumeSpec) -> Option<u64> {
+        let replicas = registry.specs().volume_replicas(&volume.uuid);
+        let mut used_bytes = Vec::with_capacity(replicas.len());
+        for spec in replicas {
+            if let Ok(state) = registry.get_replica(spec.uuid()).await {
+                if let Some(space) = state.space {
+                    used_bytes.push(space.allocated_bytes);
+                }
+            }
+        }
+        used_bytes.iter().max().cloned()
+    }
     async fn builder(request: GetSuitablePools, registry: &Registry) -> Self {
+        let allocated_bytes = Self::allocated_bytes(registry, &request.spec).await;
         Self {
             data: ResourceData::new(
                 GetSuitablePoolsContext {
                     registry: registry.clone(),
                     spec: request.spec,
+                    allocated_bytes,
                 },
                 PoolItemLister::list(registry).await,
             ),
         }
     }
     fn with_default_policy(self) -> Self {
-        self.with_thick_policy()
+        match self.data.context.thin {
+            true => self.with_simple_policy(),
+            false => self.with_thick_policy(),
+        }
     }
     fn with_thick_policy(self) -> Self {
         self.policy(ThickPolicy::new())
+    }
+    fn with_simple_policy(self) -> Self {
+        self.policy(SimplePolicy::builder())
     }
 
     /// Default rules for pool selection when creating replicas for a volume.

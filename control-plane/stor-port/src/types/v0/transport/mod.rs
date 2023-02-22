@@ -99,6 +99,8 @@ pub enum MessageIdVs {
     AddNexusChild,
     /// Fault the nexus child.
     FaultNexusChild,
+    /// Nexus Child actions.
+    NexusChildAction,
     /// Get all volumes.
     GetVolumes,
     /// Create Volume.
