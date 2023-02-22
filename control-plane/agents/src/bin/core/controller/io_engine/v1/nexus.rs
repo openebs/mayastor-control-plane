@@ -188,7 +188,13 @@ impl crate::controller::io_engine::NexusShareApi<Nexus, Nexus> for super::RpcCli
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::RpcClient {
-    #[tracing::instrument(name = "rpc::v1::nexus::add_child", level = "debug", skip(self), err)]
+    #[tracing::instrument(
+        name = "rpc::v1::nexus::add_child",
+        level = "debug",
+        skip(self),
+        fields(rpc.io_engine = true),
+        err
+    )]
     async fn add_child(&self, request: &AddNexusChild) -> Result<Nexus, SvcError> {
         let rpc_nexus = self
             .nexus()
@@ -213,6 +219,7 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
         name = "rpc::v1::nexus::remove_child",
         level = "debug",
         skip(self),
+        fields(rpc.io_engine = true),
         err
     )]
     async fn remove_child(&self, request: &RemoveNexusChild) -> Result<Nexus, SvcError> {
@@ -248,7 +255,7 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
         }
     }
 
-    #[tracing::instrument(name = "rpc::v1::nexus::fault_child", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "rpc::v1::nexus::fault_child", level = "debug", skip(self), fields(rpc.io_engine = true), err)]
     async fn fault_child(&self, request: &FaultNexusChild) -> Result<(), SvcError> {
         let _ = self
             .nexus()
@@ -264,6 +271,7 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusChildActionApi for super::RpcClient {
+    #[tracing::instrument(name = "rpc::v1::nexus::child_action", level = "debug", skip(self), fields(rpc.io_engine = true), err)]
     async fn child_action(&self, request: &NexusChildAction) -> Result<Nexus, SvcError> {
         let response = self
             .nexus()

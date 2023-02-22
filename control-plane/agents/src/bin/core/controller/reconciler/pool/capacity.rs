@@ -1,7 +1,9 @@
 use crate::{
     controller::{
         registry::Registry,
-        resources::{operations_helper::OperationSequenceGuard, ResourceMutex},
+        resources::{
+            operations_helper::OperationSequenceGuard, ResourceMutex, ResourceUid, TraceSpan,
+        },
         scheduling::pool::ENoSpcReplica,
         wrapper::{GetterOps, PoolWrapper},
     },
@@ -21,7 +23,7 @@ pub(crate) async fn remove_larger_replicas(registry: &Registry) {
     let pools = unfiltered_enospc_pools(registry).await;
 
     if !pools.is_empty() {
-        tracing::warn!("Found {} pools with ENOSPACE replicas", pools.len());
+        tracing::debug!("Found {} pools with ENOSPACE replicas", pools.len());
     }
 
     for pool in pools {
@@ -48,13 +50,13 @@ pub(crate) async fn remove_larger_replicas(registry: &Registry) {
             // If the node is online/flaky we might not be able to get the current replica
             // information, and in this case there's not much we can do.
             if let Some(largest_replica) = largest_replica {
-                let _ = remove_larger_replica(largest_replica, registry).await;
+                let _ = remove_largest_replica(largest_replica, registry).await;
             }
         }
     }
 }
 
-async fn remove_larger_replica(
+async fn remove_largest_replica(
     (replica, eno_replica): (ResourceMutex<ReplicaSpec>, &ENoSpcReplica),
     registry: &Registry,
 ) -> Result<bool, SvcError> {
@@ -63,6 +65,12 @@ async fn remove_larger_replica(
         Some(volume) => {
             let mut volume = registry.specs().volume(&volume).await?;
             volume.remove_replica(eno_replica, registry).await?;
+            volume.warn_span(|| {
+                tracing::warn!(
+                    replica.uuid = eno_replica.replica().uid().as_str(),
+                    "Successfully removed replica"
+                )
+            });
             Ok(true)
         }
         None => {
@@ -71,9 +79,16 @@ async fn remove_larger_replica(
                 return Ok(false);
             }
 
-            let nexus = eno_replica.nexus().operation_guard()?;
+            let mut nexus = eno_replica.nexus().operation_guard()?;
             let mut replica = replica.operation_guard()?;
-            replica.fault(nexus, eno_replica, registry).await?;
+            replica.fault(&mut nexus, eno_replica, registry).await?;
+            nexus.warn_span(|| {
+                tracing::warn!(
+                    child.uri = eno_replica.child().uri().as_str(),
+                    child.uuid = eno_replica.replica().uid().as_str(),
+                    "Successfully faulted child"
+                )
+            });
             Ok(true)
         }
     }
@@ -81,8 +96,7 @@ async fn remove_larger_replica(
 
 async fn node_pool_wrapper(pool: &PoolSpec, registry: &Registry) -> Result<PoolWrapper, SvcError> {
     let node = registry.node_wrapper(&pool.node).await?;
-    let pool_wrapper = node.pool_wrapper(&pool.id).await.context(PoolNotFound {
+    node.pool_wrapper(&pool.id).await.context(PoolNotFound {
         pool_id: pool.id.clone(),
-    })?;
-    Ok(pool_wrapper)
+    })
 }

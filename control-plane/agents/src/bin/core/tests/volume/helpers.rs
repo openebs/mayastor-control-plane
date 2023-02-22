@@ -113,6 +113,7 @@ async fn existing_replicas(volume_id: &VolumeId, client: &dyn VolumeOperations) 
 }
 
 /// Wait for the published volume target to have the specified number of children.
+#[allow(dead_code)]
 pub(crate) async fn wait_till_volume_children(
     volume: &VolumeId,
     children: usize,

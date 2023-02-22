@@ -154,6 +154,7 @@ async fn enospc_nexus_children(
         children_states
             .into_iter()
             .flat_map(|state| nexus.replica_uri(&state.uri))
+            .cloned()
             .collect::<Vec<_>>()
     };
 

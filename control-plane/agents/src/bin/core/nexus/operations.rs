@@ -29,11 +29,6 @@ use stor_port::types::v0::{
     },
 };
 
-// pub(crate) struct FaultNexusChild {
-//     pub(crate) uri: ChildUri,
-// }
-//pub(crate) type FaultNexusChild = ChildUri;
-
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
     type Create = CreateNexus;

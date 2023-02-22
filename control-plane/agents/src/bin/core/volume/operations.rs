@@ -691,7 +691,7 @@ impl OperationGuardArc<VolumeSpec> {
     /// Remove the given `ENoSpcReplica` but make sure we're not removing the last healthy replica
     /// of the volume which would cause data loss!
     /// TODO: Should there be a minimum remaining number of healthy replicas left?
-    #[tracing::instrument(level = "debug", skip(self, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
+    #[tracing::instrument(level = "info", skip(self, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
     pub(crate) async fn remove_replica(
         &mut self,
         info: &ENoSpcReplica,
@@ -704,7 +704,7 @@ impl OperationGuardArc<VolumeSpec> {
             .ok_or(SvcError::Internal {
                 details: "No NexusInfo for a volume with allocated storage?".into(),
             })?;
-        let nexus = info.nexus().operation_guard()?;
+        let mut nexus = info.nexus().operation_guard()?;
 
         let state = registry.volume_state(self.uuid()).await?;
 
@@ -744,12 +744,26 @@ impl OperationGuardArc<VolumeSpec> {
         };
         // todo: what should the minimum number of healthy children be?
         if healthy_children_len == 0 {
-            tracing::error!("No healthy children left");
-            return Ok(());
+            self.warn_span(|| {
+                tracing::error!(
+                    replica.uuid = info.replica().uid().as_str(),
+                    "Cannot remove replica as volume has no other healthy children remaining"
+                )
+            });
+            return Err(SvcError::NoHealthyReplicas {
+                id: self.uuid().to_string(),
+            });
         }
 
         let mut replica = registry.specs().replica(info.replica().uid()).await?;
-        replica.fault(nexus, info, registry).await?;
+        replica.fault(&mut nexus, info, registry).await?;
+        self.warn_span(|| {
+            tracing::warn!(
+                child.uri = info.child().uri().as_str(),
+                child.uuid = info.replica().uid().as_str(),
+                "Successfully faulted child"
+            )
+        });
 
         Ok(())
     }

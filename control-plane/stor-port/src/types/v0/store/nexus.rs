@@ -132,9 +132,9 @@ impl NexusSpec {
         &self.status_info
     }
     /// Get the matching `ReplicaUri`.
-    pub fn replica_uri(&self, uri: &ChildUri) -> Option<ReplicaUri> {
+    pub fn replica_uri(&self, uri: &ChildUri) -> Option<&ReplicaUri> {
         self.children.iter().find_map(|c| match c {
-            NexusChild::Replica(replica) if &replica.share_uri == uri => Some(replica.clone()),
+            NexusChild::Replica(replica) if &replica.share_uri == uri => Some(replica),
             _ => None,
         })
     }
@@ -384,7 +384,7 @@ impl From<&NexusSpec> for DestroyNexus {
 /// Additional information about the nexus status.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct NexusStatusInfo {
-    pub shutdown_failed: bool,
+    shutdown_failed: bool,
 }
 
 impl NexusStatusInfo {

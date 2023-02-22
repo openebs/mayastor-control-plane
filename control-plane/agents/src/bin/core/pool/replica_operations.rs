@@ -200,15 +200,15 @@ impl OperationGuardArc<ReplicaSpec> {
     /// The replica is first removed from the nexus, which will let us know if it's safe to destroy
     /// it.
     /// Then we can destroy the replica knowing it's not integral part of a volume.
-    #[tracing::instrument(level = "debug", skip(self, nexus, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
+    #[tracing::instrument(level = "info", skip(self, nexus, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
     pub(crate) async fn fault(
         &mut self,
-        mut nexus: OperationGuardArc<NexusSpec>,
+        nexus: &mut OperationGuardArc<NexusSpec>,
         info: &ENoSpcReplica,
         registry: &Registry,
     ) -> Result<(), SvcError> {
         // First we must remove the child from thus nexus, thus rendering it a "non-healthy" child.
-        // The nexus should fail removal if there are no other healthy children.
+        // The nexus should fail the removal if there are no other healthy children.
         let nexus_node = nexus.as_ref().node.clone();
         nexus
             .remove_child(
@@ -222,14 +222,22 @@ impl OperationGuardArc<ReplicaSpec> {
             .await?;
 
         // Now it's safe to delete the replica.
-        let request = destroy_replica_request(info.replica(), info.repl_node());
+        let request = destroy_replica_request(
+            info.replica(),
+            info.repl_node(),
+            ReplicaOwners::new_disown_all(),
+        );
         self.destroy(registry, &request).await?;
 
         Ok(())
     }
 }
 
-fn destroy_replica_request(spec: &ReplicaSpec, node: &NodeId) -> DestroyReplica {
+fn destroy_replica_request(
+    spec: &ReplicaSpec,
+    node: &NodeId,
+    disowners: ReplicaOwners,
+) -> DestroyReplica {
     let pool_id = match spec.pool.clone() {
         PoolRef::Named(id) => id,
         PoolRef::Uuid(id, _) => id,
@@ -244,6 +252,6 @@ fn destroy_replica_request(spec: &ReplicaSpec, node: &NodeId) -> DestroyReplica 
         pool_uuid,
         uuid: spec.uuid.clone(),
         name: spec.name.clone().into(),
-        disowners: ReplicaOwners::new_disown_all(),
+        disowners,
     }
 }

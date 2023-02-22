@@ -96,6 +96,13 @@ pub struct ReplicaSpec {
     pub allowed_hosts: Vec<HostNqn>,
 }
 
+impl ReplicaSpec {
+    /// Get the pool name.
+    pub fn pool_name(&self) -> &PoolId {
+        self.pool.pool_name()
+    }
+}
+
 /// Reference of a pool.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(untagged)]
