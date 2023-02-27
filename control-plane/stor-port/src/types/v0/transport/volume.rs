@@ -352,6 +352,37 @@ pub struct CreateVolume {
     pub thin: bool,
 }
 
+/// Volume Group related information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeGroup {
+    /// The name of the volume group.
+    name: String,
+}
+
+impl VolumeGroup {
+    /// Create a new VolumeGroup from the params.
+    pub fn new(name: String) -> Self {
+        Self { name }
+    }
+    /// The name of the volume group.
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+}
+
+impl From<VolumeGroup> for models::VolumeGroup {
+    fn from(value: VolumeGroup) -> Self {
+        Self { name: value.name }
+    }
+}
+
+impl From<models::VolumeGroup> for VolumeGroup {
+    fn from(value: models::VolumeGroup) -> Self {
+        Self { name: value.name }
+    }
+}
+
 /// Volume label information.
 pub type VolumeLabels = HashMap<String, String>;
 

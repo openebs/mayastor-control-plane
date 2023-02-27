@@ -207,6 +207,7 @@ impl IoEngineApiClient {
             topology: Some(topology),
             policy: VolumePolicy::new_all(true),
             labels: None,
+            volume_group: None,
         };
 
         let result = self
