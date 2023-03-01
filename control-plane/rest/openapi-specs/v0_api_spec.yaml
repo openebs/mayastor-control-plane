@@ -2051,6 +2051,7 @@ components:
         size: 10485761
         thin: false
         topology: null
+        volume_group: null
       description: Create Volume Body
       type: object
       properties:
@@ -2077,11 +2078,26 @@ components:
           type: object
           additionalProperties:
             type: string
+        volume_group:
+          description: Volume Group related information.
+          allOf:
+            - $ref: '#/components/schemas/VolumeGroup'
       required:
         - policy
         - replicas
         - size
         - thin
+    VolumeGroup:
+      example:
+        name: "vg"
+      description: Volume Group related information.
+      type: object
+      properties:
+        name:
+          description: Name of the Volume Group.
+          type: string
+      required:
+        - name
     PublishVolumeBody:
       example:
         node: "io-engine-1"

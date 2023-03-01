@@ -29,7 +29,7 @@ use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         openapi::models::RestJsonError,
-        transport::{HostNqn, HostNqnParseError},
+        transport::{HostNqn, HostNqnParseError, VolumeGroup},
     },
 };
 
@@ -189,6 +189,8 @@ pub struct CreateVolumeBody {
     pub labels: Option<VolumeLabels>,
     /// Flag indicating whether the volume should be thin provisioned
     pub thin: bool,
+    /// Volume Group related information.
+    pub volume_group: Option<VolumeGroup>,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -199,6 +201,7 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             topology: src.topology.into_opt(),
             labels: src.labels,
             thin: src.thin,
+            volume_group: None,
         }
     }
 }
@@ -211,6 +214,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             topology: create.topology,
             labels: create.labels,
             thin: create.thin,
+            volume_group: None,
         }
     }
 }
