@@ -21,7 +21,7 @@ use stor_port::{
             LabelledTopology, Nexus, NexusId, NexusNvmfConfig, NodeId, NodeTopology, PoolTopology,
             PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, RepublishVolume,
             SetVolumeReplica, ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume,
-            VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState,
+            VolumeGroup, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState,
         },
     },
     IntoOption,
@@ -115,6 +115,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 topology: volume_spec.topology.map(|topology| topology.into()),
                 last_nexus_id: nexus_id.map(|id| id.to_string()),
                 thin: volume_spec.thin,
+                volume_group: volume_spec.volume_group.into_opt(),
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -244,6 +245,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             publish_context: volume_meta
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
+            volume_group: volume_spec.volume_group.into_opt(),
         };
         Ok(volume_spec)
     }
@@ -674,6 +676,8 @@ pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     fn labels(&self) -> Option<VolumeLabels>;
     /// Flag indicating whether the volume should be thin provisioned
     fn thin(&self) -> bool;
+    /// Volume Group related information.
+    fn volume_group(&self) -> Option<VolumeGroup>;
 }
 
 impl CreateVolumeInfo for CreateVolume {
@@ -703,6 +707,10 @@ impl CreateVolumeInfo for CreateVolume {
 
     fn thin(&self) -> bool {
         self.thin
+    }
+
+    fn volume_group(&self) -> Option<VolumeGroup> {
+        self.volume_group.clone()
     }
 }
 
@@ -748,6 +756,10 @@ impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
     fn thin(&self) -> bool {
         self.inner.thin
     }
+
+    fn volume_group(&self) -> Option<VolumeGroup> {
+        self.inner.volume_group.clone().map(|vg| vg.into())
+    }
 }
 
 impl ValidateRequestTypes for CreateVolumeRequest {
@@ -783,6 +795,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolume {
             topology: data.topology(),
             labels: data.labels(),
             thin: data.thin(),
+            volume_group: data.volume_group(),
         }
     }
 }
@@ -799,6 +812,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
                 .labels()
                 .map(|labels| crate::common::StringMapValue { value: labels }),
             thin: data.thin(),
+            volume_group: data.volume_group().map(|vg| vg.into()),
         }
     }
 }
@@ -1481,5 +1495,17 @@ impl From<&dyn DestroyShutdownTargetsInfo> for DestroyShutdownTargetRequest {
 impl From<&dyn DestroyShutdownTargetsInfo> for DestroyShutdownTargets {
     fn from(data: &dyn DestroyShutdownTargetsInfo) -> Self {
         Self::new(data.uuid().clone(), data.registered_targets())
+    }
+}
+
+impl From<volume::VolumeGroup> for VolumeGroup {
+    fn from(value: volume::VolumeGroup) -> Self {
+        VolumeGroup::new(value.name)
+    }
+}
+
+impl From<VolumeGroup> for volume::VolumeGroup {
+    fn from(value: VolumeGroup) -> Self {
+        Self { name: value.name() }
     }
 }

@@ -166,8 +166,8 @@ pub struct VolumeSpec {
     /// The publish context of the volume.
     #[serde(default)]
     pub publish_context: Option<HashMap<String, String>>,
-    #[serde(default)]
     /// Volume Group related information.
+    #[serde(default)]
     pub volume_group: Option<VolumeGroup>,
 }
 
