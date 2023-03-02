@@ -350,6 +350,8 @@ pub struct CreateVolume {
     pub labels: Option<VolumeLabels>,
     /// The flag indicating whether the volume should be thin provisioned.
     pub thin: bool,
+    /// Volume Group related information.
+    pub volume_group: Option<VolumeGroup>,
 }
 
 /// Volume Group related information.
