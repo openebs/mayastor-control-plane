@@ -3,7 +3,7 @@ use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineA
 use rpc::csi::{Topology as CsiTopology, *};
 use stor_port::types::v0::openapi::models::{
     LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
-    VolumeShareProtocol,
+    VolumeGroup, VolumeShareProtocol,
 };
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
@@ -218,11 +218,28 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     })),
                 );
 
+                let volume_group_name = context.volume_group();
+
                 IoEngineApiClient::get_client()
-                    .create_volume(&u, replica_count, size, volume_topology, thin)
+                    .create_volume(
+                        &u,
+                        replica_count,
+                        size,
+                        volume_topology,
+                        thin,
+                        volume_group_name.clone().map(VolumeGroup::new),
+                    )
                     .await?;
 
-                debug!(volume.uuid = volume_uuid, "Volume successfully created");
+                if let Some(vg_name) = volume_group_name {
+                    debug!(
+                        volume.uuid = volume_uuid,
+                        volume.volume_group = vg_name,
+                        "Volume successfully created"
+                    );
+                } else {
+                    debug!(volume.uuid = volume_uuid, "Volume successfully created");
+                }
             }
             Err(e) => return Err(e.into()),
         }
@@ -235,7 +252,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             accessible_topology: vt_mapper.volume_accessible_topology(),
         };
 
-        debug!("Created volume: {:?}", volume);
         Ok(Response::new(CreateVolumeResponse {
             volume: Some(volume),
         }))

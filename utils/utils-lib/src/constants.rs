@@ -117,4 +117,6 @@ pub const NVME_PATH_AGGREGATION_PERIOD: &str = "1s";
 pub const DEFAULT_HOST_ACCESS_CONTROL: &str = "nexuses,replicas";
 
 /// K8s sts pvc naming convention regex expression.
+/// The naming format is {pvc-name-common}-{sts-name}-{index}.
+/// A valid sts pvc name of above format is matched by the regex below.
 pub const K8S_STS_PVC_NAMING_REGEX: &str = r#"^([a-z0-9](?:[-a-z0-9]*[a-z0-9])?)-\d+$"#;

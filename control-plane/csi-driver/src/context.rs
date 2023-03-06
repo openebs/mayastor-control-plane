@@ -47,7 +47,7 @@ pub enum Parameters {
     PvcName,
     #[strum(serialize = "csi.storage.k8s.io/pvc/namespace")]
     PvcNamespace,
-    #[strum(serialize = "openebs.io/volumegroup")]
+    #[strum(serialize = "volumeGroup")]
     VolumeGroup,
 }
 impl Parameters {
@@ -80,7 +80,7 @@ impl Parameters {
         Self::parse_u32(value)
     }
     /// Parse the value for `Self::VolumeGroup`
-    pub fn volumne_group(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
+    pub fn volume_group(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
         Self::parse_bool(value)
     }
 }
@@ -177,8 +177,8 @@ impl CreateParams {
     }
     /// Get the final volume group name, using the `Parameters::PvcName, Parameters::PvcNamespace,
     /// Parameters::VolumeGroup` values.
-    pub fn volume_group(&self) -> Option<String> {
-        self.volume_group.clone()
+    pub fn volume_group(&self) -> &Option<String> {
+        &self.volume_group
     }
 }
 impl TryFrom<&HashMap<String, String>> for CreateParams {
@@ -205,17 +205,15 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             None => 1,
         };
 
-        let volume_group = Parameters::volumne_group(args.get(Parameters::VolumeGroup.as_ref()))
+        let volume_group = Parameters::volume_group(args.get(Parameters::VolumeGroup.as_ref()))
             .map_err(|_| {
-                tonic::Status::invalid_argument(
-                    "Invalid `openebs.io/volumegroup` value, expected a bool",
-                )
+                tonic::Status::invalid_argument("Invalid `volumeGroup` value, expected a bool")
             })?;
 
         let volume_group_name = if volume_group.unwrap_or(false) {
             generate_volume_group_name(
-                args.get(Parameters::PvcName.as_ref()).cloned(),
-                args.get(Parameters::PvcNamespace.as_ref()).cloned(),
+                &args.get(Parameters::PvcName.as_ref()).cloned(),
+                &args.get(Parameters::PvcNamespace.as_ref()).cloned(),
             )
         } else {
             None
@@ -233,8 +231,11 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
 // Generate a volume group name from the parameters.
 // 1. Both pvc name and ns should be valid.
 // 2. Pvc name should follow the sts pvc naming convention.
-fn generate_volume_group_name(pvc_name: Option<String>, pvc_ns: Option<String>) -> Option<String> {
-    match (pvc_name.clone(), pvc_ns.clone()) {
+fn generate_volume_group_name(
+    pvc_name: &Option<String>,
+    pvc_ns: &Option<String>,
+) -> Option<String> {
+    match (pvc_name, pvc_ns) {
         (Some(pvc_name), Some(pvc_ns)) => {
             let re = Regex::from_str(K8S_STS_PVC_NAMING_REGEX);
             if let Ok(regex) = re {
@@ -250,7 +251,7 @@ fn generate_volume_group_name(pvc_name: Option<String>, pvc_ns: Option<String>) 
             None
         }
         _ => {
-            warn!("Invalid PVC Name: {:?} or PVC Namespace: {:?}, not triggering statefulset volume replica anti-affinity", pvc_name, pvc_ns);
+            warn!("Invalid PVC Name: {pvc_name:?} or PVC Namespace: {pvc_ns:?}, not triggering statefulset volume replica anti-affinity");
             None
         }
     }
@@ -260,58 +261,50 @@ fn generate_volume_group_name(pvc_name: Option<String>, pvc_ns: Option<String>) 
 mod tests {
     use crate::context::generate_volume_group_name;
 
-    struct TestSuite {
+    struct VolGrpTestEntry {
         pvc_name: Option<String>,
         pvc_namespace: Option<String>,
         result: Option<String>,
     }
 
-    impl TestSuite {
-        fn new(
-            pvc_name: Option<String>,
-            pvc_namespace: Option<String>,
-            result: Option<String>,
-        ) -> Self {
+    impl VolGrpTestEntry {
+        fn new(pvc_name: Option<&str>, pvc_namespace: Option<&str>, result: Option<&str>) -> Self {
             Self {
-                pvc_name,
-                pvc_namespace,
-                result,
+                pvc_name: pvc_name.map(|s| s.to_string()),
+                pvc_namespace: pvc_namespace.map(|s| s.to_string()),
+                result: result.map(|s| s.to_string()),
             }
         }
     }
 
     #[test]
     fn vg_name_generator() {
-        let test_suites: Vec<TestSuite> = vec![
-            TestSuite::new(
-                Some("mongo-db-0".to_string()),
-                Some("default".to_string()),
-                Some("default/mongo-db".to_string()),
+        let vol_grp_test_entries: Vec<VolGrpTestEntry> = vec![
+            VolGrpTestEntry::new(
+                Some("mongo-db-0"),
+                Some("default"),
+                Some("default/mongo-db"),
             ),
-            TestSuite::new(None, Some("default".to_string()), None),
-            TestSuite::new(Some("mongo-db-0".to_string()), None, None),
-            TestSuite::new(None, None, None),
-            TestSuite::new(
-                Some("mongo-db-2424".to_string()),
-                Some("mayastor-123".to_string()),
-                Some("mayastor-123/mongo-db".to_string()),
+            VolGrpTestEntry::new(None, Some("default"), None),
+            VolGrpTestEntry::new(Some("mongo-db-0"), None, None),
+            VolGrpTestEntry::new(None, None, None),
+            VolGrpTestEntry::new(
+                Some("mongo-db-2424"),
+                Some("mayastor-123"),
+                Some("mayastor-123/mongo-db"),
             ),
-            TestSuite::new(
-                Some("mongo-db-123-abcd-2".to_string()),
-                Some("default".to_string()),
-                Some("default/mongo-db-123-abcd".to_string()),
+            VolGrpTestEntry::new(
+                Some("mongo-db-123-abcd-2"),
+                Some("default"),
+                Some("default/mongo-db-123-abcd"),
             ),
-            TestSuite::new(
-                Some("mongo-db-123-abcd".to_string()),
-                Some("xyz-12".to_string()),
-                None,
-            ),
+            VolGrpTestEntry::new(Some("mongo-db-123-abcd"), Some("xyz-12"), None),
         ];
 
-        for test_suite in test_suites {
+        for test_entry in vol_grp_test_entries {
             assert_eq!(
-                generate_volume_group_name(test_suite.pvc_name, test_suite.pvc_namespace),
-                test_suite.result
+                generate_volume_group_name(&test_entry.pvc_name, &test_entry.pvc_namespace),
+                test_entry.result
             );
         }
     }
