@@ -115,3 +115,6 @@ pub const NVME_PATH_AGGREGATION_PERIOD: &str = "1s";
 
 /// Period for aggregating multiple failed paths before reporting them.
 pub const DEFAULT_HOST_ACCESS_CONTROL: &str = "nexuses,replicas";
+
+/// K8s sts pvc naming convention regex expression.
+pub const K8S_STS_PVC_NAMING_REGEX: &str = r#"^([a-z0-9](?:[-a-z0-9]*[a-z0-9])?)-\d+$"#;
