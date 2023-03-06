@@ -1,6 +1,8 @@
 //! Common modules used by the different core services
 
 pub(crate) mod io_engine;
+/// Various policies' definitions(e.g. rebuild policy)
+pub(crate) mod policies;
 /// reconciliation logic
 pub(crate) mod reconciler;
 /// registry with node and all its resources
