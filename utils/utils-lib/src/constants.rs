@@ -107,6 +107,9 @@ pub const NVME_INITIATOR_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:node-name:";
 /// NVMe path check period.
 pub const NVME_PATH_CHECK_PERIOD: &str = "3s";
 
+/// NVMe path connection timeout for path replacement operation.
+pub const NVME_PATH_CONNECTION_PERIOD: &str = "4s";
+
 /// The default retransmission interval for reporting failed paths in case of network issues.
 pub const NVME_PATH_RETRANSMISSION_PERIOD: &str = "10s";
 
