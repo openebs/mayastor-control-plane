@@ -9,7 +9,7 @@ use crate::{
         },
         transport::{
             self, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId, ReplicaId, Topology,
-            VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeStatus,
+            VolumeGroup, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeStatus,
         },
     },
     IntoOption,
@@ -166,6 +166,9 @@ pub struct VolumeSpec {
     /// The publish context of the volume.
     #[serde(default)]
     pub publish_context: Option<HashMap<String, String>>,
+    /// Volume Group related information.
+    #[serde(default)]
+    pub volume_group: Option<VolumeGroup>,
 }
 
 /// The volume's Nvmf Configuration.
@@ -535,6 +538,7 @@ impl From<&CreateVolume> for VolumeSpec {
             thin: request.thin,
             target_config: None,
             publish_context: None,
+            volume_group: request.volume_group.clone(),
         }
     }
 }

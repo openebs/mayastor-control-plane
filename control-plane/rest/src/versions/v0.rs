@@ -201,7 +201,7 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             topology: src.topology.into_opt(),
             labels: src.labels,
             thin: src.thin,
-            volume_group: None,
+            volume_group: src.volume_group.map(|vg| vg.into()),
         }
     }
 }
@@ -214,7 +214,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             topology: create.topology,
             labels: create.labels,
             thin: create.thin,
-            volume_group: None,
+            volume_group: create.volume_group,
         }
     }
 }
@@ -229,6 +229,7 @@ impl CreateVolumeBody {
             topology: self.topology.clone(),
             labels: self.labels.clone(),
             thin: self.thin,
+            volume_group: self.volume_group.clone(),
         }
     }
 }
