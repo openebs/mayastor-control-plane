@@ -1,8 +1,17 @@
-use std::{collections::HashMap, num::ParseIntError, str::FromStr};
+use regex::Regex;
+use std::{
+    collections::HashMap,
+    convert::AsRef,
+    num::ParseIntError,
+    str::{FromStr, ParseBoolError},
+};
 use stor_port::types::v0::openapi::models::VolumeShareProtocol;
+use strum_macros::{AsRefStr, Display, EnumString};
+use tracing::log::warn;
+use utils::K8S_STS_PVC_NAMING_REGEX;
 
 /// The currently supported filesystems.
-#[derive(strum_macros::AsRefStr, strum_macros::EnumString)]
+#[derive(AsRefStr, EnumString, Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum FileSystem {
     Ext4,
@@ -20,7 +29,7 @@ pub fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, ton
 }
 
 /// The various volume context parameters.
-#[derive(strum_macros::AsRefStr, strum_macros::Display)]
+#[derive(AsRefStr, EnumString, Display)]
 #[strum(serialize_all = "camelCase")]
 pub enum Parameters {
     IoTimeout,
@@ -33,11 +42,24 @@ pub enum Parameters {
     FileSystem,
     #[strum(serialize = "protocol")]
     ShareProtocol,
+    // TODO: Get the values from constant.
+    #[strum(serialize = "csi.storage.k8s.io/pvc/name")]
+    PvcName,
+    #[strum(serialize = "csi.storage.k8s.io/pvc/namespace")]
+    PvcNamespace,
+    #[strum(serialize = "volumeGroup")]
+    VolumeGroup,
 }
 impl Parameters {
     fn parse_u32(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Ok(match value {
             Some(value) => value.parse::<u32>().map(Some)?,
+            None => None,
+        })
+    }
+    fn parse_bool(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
+        Ok(match value {
+            Some(value) => value.parse::<bool>().map(Some)?,
             None => None,
         })
     }
@@ -56,6 +78,10 @@ impl Parameters {
     /// Parse the value for `Self::IoTimeout`.
     pub fn io_timeout(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
+    }
+    /// Parse the value for `Self::VolumeGroup`
+    pub fn volume_group(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
+        Self::parse_bool(value)
     }
 }
 
@@ -138,6 +164,7 @@ pub struct CreateParams {
     publish_params: PublishParams,
     share_protocol: VolumeShareProtocol,
     replica_count: u8,
+    volume_group: Option<String>,
 }
 impl CreateParams {
     /// Get the `Parameters::ShareProtocol` value.
@@ -147,6 +174,11 @@ impl CreateParams {
     /// Get the `Parameters::ReplicaCount` value.
     pub fn replica_count(&self) -> u8 {
         self.replica_count
+    }
+    /// Get the final volume group name, using the `Parameters::PvcName, Parameters::PvcNamespace,
+    /// Parameters::VolumeGroup` values.
+    pub fn volume_group(&self) -> &Option<String> {
+        &self.volume_group
     }
 }
 impl TryFrom<&HashMap<String, String>> for CreateParams {
@@ -173,10 +205,107 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             None => 1,
         };
 
+        let volume_group = Parameters::volume_group(args.get(Parameters::VolumeGroup.as_ref()))
+            .map_err(|_| {
+                tonic::Status::invalid_argument("Invalid `volumeGroup` value, expected a bool")
+            })?;
+
+        let volume_group_name = if volume_group.unwrap_or(false) {
+            generate_volume_group_name(
+                &args.get(Parameters::PvcName.as_ref()).cloned(),
+                &args.get(Parameters::PvcNamespace.as_ref()).cloned(),
+            )
+        } else {
+            None
+        };
+
         Ok(Self {
             publish_params,
             share_protocol,
             replica_count,
+            volume_group: volume_group_name,
         })
+    }
+}
+
+// Generate a volume group name from the parameters.
+// 1. Both pvc name and ns should be valid.
+// 2. Pvc name should follow the sts pvc naming convention.
+fn generate_volume_group_name(
+    pvc_name: &Option<String>,
+    pvc_ns: &Option<String>,
+) -> Option<String> {
+    match (pvc_name, pvc_ns) {
+        (Some(pvc_name), Some(pvc_ns)) => {
+            let re = Regex::from_str(K8S_STS_PVC_NAMING_REGEX);
+            if let Ok(regex) = re {
+                if regex.is_match(pvc_name.as_str()) {
+                    if let Some(captures) = regex.captures(pvc_name.as_str()) {
+                        if let Some(common_binding) = captures.get(1) {
+                            return Some(format!("{pvc_ns}/{}", common_binding.as_str()));
+                        }
+                    }
+                }
+            }
+            warn!("PVC Name: {pvc_name} is not a valid statefulset pvc naming format, not triggering statefulset volume replica anti-affinity");
+            None
+        }
+        _ => {
+            warn!("Invalid PVC Name: {pvc_name:?} or PVC Namespace: {pvc_ns:?}, not triggering statefulset volume replica anti-affinity");
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::context::generate_volume_group_name;
+
+    struct VolGrpTestEntry {
+        pvc_name: Option<String>,
+        pvc_namespace: Option<String>,
+        result: Option<String>,
+    }
+
+    impl VolGrpTestEntry {
+        fn new(pvc_name: Option<&str>, pvc_namespace: Option<&str>, result: Option<&str>) -> Self {
+            Self {
+                pvc_name: pvc_name.map(|s| s.to_string()),
+                pvc_namespace: pvc_namespace.map(|s| s.to_string()),
+                result: result.map(|s| s.to_string()),
+            }
+        }
+    }
+
+    #[test]
+    fn vg_name_generator() {
+        let vol_grp_test_entries: Vec<VolGrpTestEntry> = vec![
+            VolGrpTestEntry::new(
+                Some("mongo-db-0"),
+                Some("default"),
+                Some("default/mongo-db"),
+            ),
+            VolGrpTestEntry::new(None, Some("default"), None),
+            VolGrpTestEntry::new(Some("mongo-db-0"), None, None),
+            VolGrpTestEntry::new(None, None, None),
+            VolGrpTestEntry::new(
+                Some("mongo-db-2424"),
+                Some("mayastor-123"),
+                Some("mayastor-123/mongo-db"),
+            ),
+            VolGrpTestEntry::new(
+                Some("mongo-db-123-abcd-2"),
+                Some("default"),
+                Some("default/mongo-db-123-abcd"),
+            ),
+            VolGrpTestEntry::new(Some("mongo-db-123-abcd"), Some("xyz-12"), None),
+        ];
+
+        for test_entry in vol_grp_test_entries {
+            assert_eq!(
+                generate_volume_group_name(&test_entry.pvc_name, &test_entry.pvc_namespace),
+                test_entry.result
+            );
+        }
     }
 }
