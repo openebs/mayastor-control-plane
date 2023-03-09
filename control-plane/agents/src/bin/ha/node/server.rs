@@ -2,6 +2,7 @@ use crate::{
     csi_node_nvme_client,
     detector::{NvmeController, NvmePathCache},
     path_provider::get_nvme_path_entry,
+    Cli,
 };
 use agents::errors::{SvcError, SvcError::SubsystemNotFound};
 use common_lib::transport_api::{ErrorChain, ReplyError, ResourceKind};
@@ -24,7 +25,7 @@ use nvmeadm::nvmf_subsystem::SubsystemAddr;
 
 use http::Uri;
 use nvmeadm::nvmf_subsystem::Subsystem;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Instant};
 use tokio::time::{sleep, Duration};
 use utils::NVME_TARGET_NQN_PREFIX;
 
@@ -38,21 +39,30 @@ const SUBSYSTEM_STATE_REFRESH_INTERVAL_MS: u64 = 500;
 pub(crate) struct NodeAgentApiServer {
     endpoint: SocketAddr,
     path_cache: NvmePathCache,
+    path_connection_timeout: Duration,
 }
 
 impl NodeAgentApiServer {
     /// Returns a new `Self` with the given parameters.
-    pub(crate) fn new(endpoint: SocketAddr, path_cache: NvmePathCache) -> Self {
+    pub(crate) fn new(args: &Cli, path_cache: NvmePathCache) -> Self {
         Self {
-            endpoint,
+            endpoint: args.grpc_endpoint,
             path_cache,
+            path_connection_timeout: *args.path_connection_timeout,
         }
     }
 
     /// Runs this server as a future until a shutdown signal is received.
     pub(crate) async fn serve(&self) -> Result<(), agents::ServiceError> {
-        let r = NodeAgentServer::new(Arc::new(NodeAgentSvc::new(self.path_cache.clone())));
-        tracing::info!("Starting gRPC server at {:?}", self.endpoint);
+        let r = NodeAgentServer::new(Arc::new(NodeAgentSvc::new(
+            self.path_cache.clone(),
+            self.path_connection_timeout,
+        )));
+        tracing::info!(
+            endpoint=?self.endpoint,
+            path_connection_timeout=?self.path_connection_timeout,
+            "Starting gRPC server"
+        );
         agents::Service::builder()
             .with_service(r.into_grpc_server())
             .run_err(self.endpoint)
@@ -63,12 +73,16 @@ impl NodeAgentApiServer {
 /// The gRPC server implementation for the HA Node agent.
 struct NodeAgentSvc {
     path_cache: NvmePathCache,
+    path_connection_timeout: Duration,
 }
 
 impl NodeAgentSvc {
     /// Returns a new `Self` with the given parameters.
-    pub(crate) fn new(path_cache: NvmePathCache) -> Self {
-        Self { path_cache }
+    pub(crate) fn new(path_cache: NvmePathCache, path_connection_timeout: Duration) -> Self {
+        Self {
+            path_cache,
+            path_connection_timeout,
+        }
     }
 }
 
@@ -140,6 +154,15 @@ impl NodeAgentSvc {
 
         tracing::info!(new_path, "Connecting to NVMe target");
 
+        // Check if the NVMe subsystem already exists to not
+        // delete it in case of unsuccessful path replacement.
+        let preexisted_subsystem = Subsystem::get(
+            parsed_uri.host().as_str(),
+            &parsed_uri.port(),
+            parsed_uri.nqn().as_str(),
+        )
+        .is_ok();
+
         // Open connection to the new nexus: ANA will automatically create
         // the second path and add it as an alternative for the first broken one,
         // which immediately resumes all stalled I/O
@@ -182,6 +205,8 @@ impl NodeAgentSvc {
             }
         };
 
+        let now = Instant::now();
+        let timeout = self.path_connection_timeout;
         // Wait till new controller is fully connected before completing the call.
         // Straight after connection subsystem transitions into 'new' state, then
         // proceeds to 'connecting' till the connection is fully established,
@@ -228,6 +253,55 @@ impl NodeAgentSvc {
                         ),
                     });
                 }
+            }
+
+            // Check if path reconnection timeout has elapsed.
+            if now.elapsed() >= timeout {
+                tracing::error!(
+                    new_path,
+                    nqn,
+                    "Timeout while connecting NVMe path, disconnecting NVMe subsystem"
+                );
+
+                let nvme_err = format!(
+                    "Timeout while connecting to new NVMe target: new path: {}, nqn: {}",
+                    new_path, nqn
+                );
+
+                // Delete the subsystem in case it is not pre-existed.
+                // Re-read the subsystem to get the most recent data on raw device path.
+                if !preexisted_subsystem {
+                    let curr_subsystem = match Subsystem::get(
+                        parsed_uri.host().as_str(),
+                        &parsed_uri.port(),
+                        parsed_uri.nqn().as_str(),
+                    ) {
+                        Ok(s) => s,
+                        Err(error) => {
+                            tracing::warn!(
+                                new_path,
+                                ?error,
+                                "Can't lookup NVMe subsystem, skipping removal"
+                            );
+                            return Err(SvcError::NvmeConnectError { details: nvme_err });
+                        }
+                    };
+
+                    // Remove the subsystem.
+                    if let Err(error) = curr_subsystem.disconnect() {
+                        tracing::error!(
+                            ?curr_subsystem,
+                            ?error,
+                            "Failed to disconnect NVMe subsystem"
+                        );
+                    } else {
+                        tracing::info!(?curr_subsystem, "NVMe subsystem successfully disconnected");
+                    }
+                } else {
+                    tracing::info!(?subsystem, "Keeping NVMe subsystem after connect timeout");
+                }
+
+                return Err(SvcError::NvmeConnectError { details: nvme_err });
             }
         }
 

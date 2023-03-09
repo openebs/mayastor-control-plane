@@ -16,7 +16,7 @@ use tower::service_fn;
 use utils::{
     package_description, version_info_str, DEFAULT_CLUSTER_AGENT_CLIENT_ADDR,
     DEFAULT_NODE_AGENT_SERVER_ADDR, NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD,
-    NVME_PATH_RETRANSMISSION_PERIOD,
+    NVME_PATH_CONNECTION_PERIOD, NVME_PATH_RETRANSMISSION_PERIOD,
 };
 mod detector;
 mod path_provider;
@@ -57,6 +57,10 @@ struct Cli {
     /// Period for aggregating multiple failed paths before reporting them.
     #[structopt(short, long, env = "AGGREGATION_PERIOD", default_value = NVME_PATH_AGGREGATION_PERIOD)]
     aggregation_period: humantime::Duration,
+
+    /// Connection timeout for path replacement operation.
+    #[structopt(short, long, env = "PATH_CONNECTION_TIMEOUT", default_value = NVME_PATH_CONNECTION_PERIOD)]
+    path_connection_timeout: humantime::Duration,
 
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
     #[structopt(long, short)]
@@ -132,7 +136,7 @@ async fn main() {
     let cache = detector.get_cache();
 
     // Instantiate gRPC server.
-    let server = NodeAgentApiServer::new(cli_args.grpc_endpoint, cache);
+    let server = NodeAgentApiServer::new(&cli_args, cache);
 
     // Start gRPC server and path failure detection loop.
     tokio::select! {
