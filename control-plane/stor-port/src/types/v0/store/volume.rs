@@ -592,41 +592,43 @@ impl From<VolumeSpec> for models::VolumeSpec {
     }
 }
 
+/// VolumeGroupId type.
+pub type VolumeGroupId = String;
+
 /// In memory representation of volume group.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct VolumeGroupSpec {
     /// Name of the volume group.
-    volume_group_name: String,
+    id: VolumeGroupId,
     /// List of ids of volumes that belong to the volume group.
     volumes: Vec<VolumeId>,
     /// The operation sequence resource is in.
     sequencer: OperationSequence,
 }
 
-#[allow(dead_code)] // todo: remove this after other implementation is in place.
 impl VolumeGroupSpec {
     /// Create a new VolumeGroupSpec.
-    pub fn new(volume_group_name: String, volumes: Vec<VolumeId>) -> Self {
+    pub fn new(id: VolumeGroupId, volumes: Vec<VolumeId>) -> Self {
         Self {
-            volume_group_name: volume_group_name.clone(),
+            id: id.clone(),
             volumes,
-            sequencer: OperationSequence::new(volume_group_name),
+            sequencer: OperationSequence::new(id),
         }
     }
     /// Name of the volume group.
-    pub fn name(&self) -> &String {
-        &self.volume_group_name
+    pub fn id(&self) -> &VolumeGroupId {
+        &self.id
     }
     /// Add a new volume to the list of volumes.
-    pub fn append_volume(&mut self, id: VolumeId) {
+    pub fn append(&mut self, id: VolumeId) {
         self.volumes.push(id)
     }
     /// Add a new volume to the list of volumes.
-    pub fn remove_volume(&mut self, id: VolumeId) {
-        self.volumes.retain(|vol| vol.clone() != id)
+    pub fn remove(&mut self, id: &VolumeId) {
+        self.volumes.retain(|vol| vol != id)
     }
     /// Check if the volume group has any more volumes.
-    pub fn volume_list_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.volumes.is_empty()
     }
 }

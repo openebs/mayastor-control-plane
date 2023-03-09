@@ -1,5 +1,8 @@
 use super::{ResourceMutex, ResourceUid};
-use stor_port::types::v0::{store::volume::VolumeSpec, transport::VolumeId};
+use stor_port::types::v0::{
+    store::volume::{VolumeGroupSpec, VolumeSpec},
+    transport::VolumeId,
+};
 
 impl ResourceMutex<VolumeSpec> {
     /// Get the resource uuid.
@@ -11,6 +14,13 @@ impl ResourceUid for VolumeSpec {
     type Uid = VolumeId;
     fn uid(&self) -> &Self::Uid {
         &self.uuid
+    }
+}
+
+impl ResourceUid for VolumeGroupSpec {
+    type Uid = String;
+    fn uid(&self) -> &Self::Uid {
+        self.id()
     }
 }
 

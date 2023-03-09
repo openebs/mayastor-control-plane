@@ -1506,6 +1506,8 @@ impl From<volume::VolumeGroup> for VolumeGroup {
 
 impl From<VolumeGroup> for volume::VolumeGroup {
     fn from(value: VolumeGroup) -> Self {
-        Self { name: value.name() }
+        Self {
+            name: value.id().clone(),
+        }
     }
 }
