@@ -596,13 +596,14 @@ impl From<VolumeSpec> for models::VolumeSpec {
 pub type VolumeGroupId = String;
 
 /// In memory representation of volume group.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeGroupSpec {
     /// Name of the volume group.
     id: VolumeGroupId,
     /// List of ids of volumes that belong to the volume group.
     volumes: Vec<VolumeId>,
     /// The operation sequence resource is in.
+    #[serde(skip)]
     sequencer: OperationSequence,
 }
 
@@ -618,6 +619,10 @@ impl VolumeGroupSpec {
     /// Name of the volume group.
     pub fn id(&self) -> &VolumeGroupId {
         &self.id
+    }
+    /// List of volumes in volume group.
+    pub fn volumes(&self) -> &Vec<VolumeId> {
+        &self.volumes
     }
     /// Add a new volume to the list of volumes.
     pub fn append(&mut self, id: VolumeId) {

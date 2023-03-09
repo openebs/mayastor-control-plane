@@ -8,7 +8,12 @@ use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         store,
-        store::{nexus::NexusSpec, pool::PoolSpec, replica::ReplicaSpec, volume::VolumeSpec},
+        store::{
+            nexus::NexusSpec,
+            pool::PoolSpec,
+            replica::ReplicaSpec,
+            volume::{VolumeGroupSpec, VolumeSpec},
+        },
         transport,
         transport::{GetSpecs, GetStates, Specs},
     },
@@ -102,6 +107,14 @@ impl TryFrom<registry::Specs> for transport::Specs {
                 }
                 replica_specs
             },
+            volume_groups: {
+                let mut vg_specs: Vec<VolumeGroupSpec> =
+                    Vec::with_capacity(value.volume_groups.len());
+                for vg_spec in value.volume_groups {
+                    vg_specs.push(VolumeGroupSpec::try_from(vg_spec)?);
+                }
+                vg_specs
+            },
         })
     }
 }
@@ -128,6 +141,11 @@ impl From<transport::Specs> for registry::Specs {
                 .replicas
                 .into_iter()
                 .map(|replica_spec| replica_spec.into())
+                .collect(),
+            volume_groups: value
+                .volume_groups
+                .into_iter()
+                .map(|vg_spec| vg_spec.into())
                 .collect(),
         }
     }

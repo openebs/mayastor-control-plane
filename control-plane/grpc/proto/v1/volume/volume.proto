@@ -345,6 +345,12 @@ message DestroyShutdownTargetReply {
   optional common.ReplyError error = 1;
 }
 
+// VolumeGroup's representation in memory.
+message VolumeGroupSpec {
+  string name = 1;
+  repeated google.protobuf.StringValue volumes = 2;
+}
+
 service VolumeGrpc {
   rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
   rpc DestroyVolume (DestroyVolumeRequest) returns (DestroyVolumeReply) {}

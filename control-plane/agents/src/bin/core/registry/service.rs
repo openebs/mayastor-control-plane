@@ -56,6 +56,7 @@ impl Service {
             nexuses: specs.nexuses(),
             replicas: specs.replicas(),
             pools: specs.pools(),
+            volume_groups: specs.volume_groups(),
         })
     }
 
