@@ -1,8 +1,8 @@
-#![allow(unused)]
-use stor_port::types::v0::transport::Nexus;
-
+#[allow(unused)]
 use serde::{Deserialize, Serialize};
+
 use std::time::Duration;
+use stor_port::types::v0::transport::Nexus;
 
 /*
     This file defines the policies that control plane uses to make
@@ -16,11 +16,12 @@ use std::time::Duration;
 */
 
 // time constants, in seconds
-const TWAIT_SPERF: std::time::Duration = Duration::new(600, 0);
-const TWAIT_SAVAIL: std::time::Duration = Duration::new(300, 0);
-const TWAIT_ZERO: std::time::Duration = Duration::new(0, 0);
+pub const TWAIT_SPERF: std::time::Duration = Duration::new(600, 0);
+pub const TWAIT_SAVAIL: std::time::Duration = Duration::new(300, 0);
+pub const TWAIT_ZERO: std::time::Duration = Duration::new(0, 0);
 // 100GiB = 100 * 1024 * 1024 * 1024 bytes
-const VOL_SIZE_100GIB: u64 = 107374182400;
+#[allow(unused)]
+pub const VOL_SIZE_100GIB: u64 = 107374182400;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
 /// SystemPerf policy, optimized for rebuild performance.
@@ -41,6 +42,7 @@ impl RuleSet {
     /// Returns a duration value. The caller can use this duration
     /// to timeout between two time Instants, particularly to wait
     /// upon a faulted child to possibly be healthy again.
+    #[allow(dead_code)]
     pub fn faulted_child_wait(nexus: &Nexus) -> Duration {
         let _pol = Self::assign(nexus.size);
         Self::default_faulted_child_timewait()
@@ -53,6 +55,7 @@ impl RuleSet {
     }
 
     /// Assign a rebuild policy to the nexus.
+    #[allow(dead_code)]
     fn assign(size: u64) -> Self {
         match size > VOL_SIZE_100GIB {
             true => RuleSet::SystemPerf(SystemPerf {}),
@@ -60,6 +63,7 @@ impl RuleSet {
         }
     }
 
+    #[allow(dead_code)]
     fn default_faulted_child_timewait() -> Duration {
         tracing::info!("default timed-wait TWAIT_SPERF(10 mins)");
         TWAIT_SPERF
