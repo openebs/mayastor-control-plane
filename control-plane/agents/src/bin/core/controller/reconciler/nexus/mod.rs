@@ -3,7 +3,8 @@ mod garbage_collector;
 
 use crate::{
     controller::{
-        io_engine::NexusApi,
+        io_engine::{NexusApi, NexusChildActionApi},
+        policies::rebuild_policies::RuleSet,
         reconciler::{ReCreate, Reconciler},
         resources::{
             operations::ResourceSharing,
@@ -22,23 +23,27 @@ use crate::{
 use agents::errors::SvcError;
 use capacity::enospc_children_onliner;
 use garbage_collector::GarbageCollector;
+use std::{
+    convert::TryFrom,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 use stor_port::{
-    transport_api::ErrorChain,
+    transport_api::{ErrorChain, ResourceKind},
     types::v0::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
         },
         transport::{
-            CreateNexus, NexusShareProtocol, NexusStatus, NodeStatus, ShareNexus, UnshareNexus,
+            Child, ChildStateReason, ChildUri, CreateNexus, NexusChildActionContext, NexusId,
+            NexusShareProtocol, NexusStatus, NodeStatus, Replica, ShareNexus, UnshareNexus,
         },
     },
 };
-
-use std::{convert::TryFrom, sync::Arc};
 use tokio::sync::RwLock;
-use tracing::Instrument;
-
+use tracing::{info, Instrument};
+use crate::node::wrapper::NexusChildActionContextNode;
 /// Nexus Reconciler loop
 #[derive(Debug)]
 pub(crate) struct NexusReconciler {
@@ -116,7 +121,7 @@ async fn nexus_reconciler(
 
     if reconcile {
         match squash_results(vec![
-            faulted_children_remover(nexus, context).await,
+            handle_faulted_child(nexus, context).await,
             unknown_children_remover(nexus, context).await,
             missing_children_remover(nexus, context).await,
             fixup_nexus_protocol(nexus, context).await,
@@ -130,61 +135,139 @@ async fn nexus_reconciler(
     }
 }
 
-/// Find and removes faulted children from the given nexus
-/// If the child is a replica it also disowns and destroys it
+/// Checks if nexus is Degraded and any child is Faulted. If yes, Depending on rebuild policy for
+/// child it performs rebuild operation. We exclude NoSpace Degrade.
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
-pub(super) async fn faulted_children_remover(
+pub(super) async fn handle_faulted_child(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
     let nexus_state = context.registry().nexus(nexus_uuid).await?;
     let child_count = nexus_state.children.len();
-
-    // Remove faulted children only from a degraded nexus with other healthy children left
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
-        let span = tracing::info_span!("faulted_children_remover", nexus.uuid = %nexus_uuid, request.reconcile = true);
-        async {
-            let nexus_spec_clone = nexus.lock().clone();
-            for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
-                nexus_spec_clone.warn_span(|| {
-                    tracing::warn!(%child.state, %child.state_reason, "Attempting to remove faulted child '{}'", child.uri)
-                });
-                if let Err(error) = nexus
-                    .remove_child_by_uri(
-                        context.registry(),
-                        &nexus_state,
-                        &child.uri,
-                        true,
-                    )
-                    .await
+        let nexus_spec_clone = nexus.lock().clone();
+        for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
+            if child.state_reason != ChildStateReason::NoSpace {
+                let wait_time = RuleSet::faulted_child_wait(&nexus_state, context.registry());
+                if wait_time.is_zero()
+                    || child.state_reason.clone() == ChildStateReason::RebuildFailed
                 {
-                    nexus_spec_clone.error_span(|| {
-                        tracing::error!(
-                            error = error.full_string().as_str(),
-                            %child.state,
-                            %child.state_reason,
-                            child.uri = %child.uri.as_str(),
-                            "Failed to remove faulted child"
-                        )
-                    });
+                    info!(%child.uri, "Start full rebuild for child");
+                    faulted_children_remover(nexus, &child.uri, context).await?
+                } else if is_time_elapsed(child.faulted_at, Some(wait_time), &child.uri).await {
+                    info!(
+                        %child.uri, "Start full rebuild for child,  Wait time has elapsed"
+
+                    );
+                    faulted_children_remover(nexus, &child.uri, context).await?;
+                } else if get_child_replica(nexus_spec_clone.clone(), &child.clone(), context)
+                    .await
+                    .is_err()
+                {
+                    info!(%child.uri,"Replica is still not online for child");
                 } else {
-                    nexus_spec_clone.info_span(|| {
-                        tracing::info!(
-                            %child.uri,
-                            %child.state,
-                            %child.state_reason,
-                            "Successfully removed faulted child",
-                        )
-                    });
+                    info!(
+                        %child.uri, "Replica for child is Online, starting partial rebuild"
+                    );
+                    if let Err(error) =
+                        initialize_partial_rebuild(nexus.uuid(), &child.uri, context).await
+                    {
+                        info!(%child.uri, "Initializing Full rebuild as partial rebuild failed for child, failed with : {:?}", error);
+                        faulted_children_remover(nexus, &child.uri, context).await?
+                    }
                 }
             }
         }
-        .instrument(span)
-        .await
     }
+    Ok(PollerState::Idle)
+}
 
-    PollResult::Ok(PollerState::Idle)
+/// Removes child from nexus children list to initiate Full rebuild of child.
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+pub(super) async fn faulted_children_remover(
+    nexus: &mut OperationGuardArc<NexusSpec>,
+    child: &ChildUri,
+    context: &PollContext,
+) -> Result<(), SvcError> {
+    let nexus_uuid = nexus.uuid();
+    let nexus_state = context.registry().nexus(nexus_uuid).await?;
+
+    info!(%child, "Attempting to remove faulted child '{}'", child);
+    nexus
+        .remove_child_by_uri(context.registry(), &nexus_state, child, true)
+        .await?;
+
+    info!(%child ,"Successfully removed faulted child",);
+    Ok(())
+}
+
+/// Returns true if time elapsed from child fault time is greater or equal to wait time duration.
+async fn is_time_elapsed(
+    fault_time: Option<SystemTime>,
+    wait_time: Option<Duration>,
+    uri: &ChildUri,
+) -> bool {
+    if let Some(fault_time) = fault_time {
+        if let Some(wait_time) = wait_time {
+            if let Ok(elapsed) = fault_time.elapsed() {
+                info!(
+                    child.uri = %uri,
+                    "waited {:?} for child to comeback. Wait time is {:?}",
+                    elapsed, wait_time
+                );
+                return elapsed >= wait_time;
+            };
+        }
+    }
+    false
+}
+
+/// If we can get replica for a child from registry. It means that child node is online, Pool is
+/// imported containing the child/replica.
+async fn get_child_replica(
+    nexus: NexusSpec,
+    child: &Child,
+    context: &PollContext,
+) -> Result<Replica, SvcError> {
+    for nexus_child in nexus.children.iter() {
+        if let Some(replica) = nexus_child.as_replica() {
+            if replica.uri() == &child.uri {
+                return if let Ok(replica) = context.registry().replica(replica.uuid()).await {
+                    Ok(replica)
+                } else {
+                    Err(SvcError::ReplicaNotFound {
+                        replica_id: replica.uuid().clone(),
+                    })
+                };
+            } else {
+                continue;
+            }
+        }
+    }
+    Err(SvcError::NotFound {
+        kind: ResourceKind::Node,
+        id: "Child replica not found".to_string(),
+    })
+}
+
+/// Tries to mark child as Online. Returns error on failing to do so.
+pub(super) async fn initialize_partial_rebuild(
+    nexus: &NexusId,
+    child: &ChildUri,
+    context: &PollContext,
+) -> Result<(), SvcError> {
+    let nexus_state = context.registry().nexus(nexus).await?;
+    info!("Making {:?} online of {:?} nexus", child, nexus);
+    let node = context.registry().node_wrapper(&nexus_state.node).await?;
+    let online_context = NexusChildActionContext::new(&nexus_state.node, &nexus.clone(), child);
+    let ctx = NexusChildActionContextNode::new(online_context, context.registry());
+    // TODO: Check if we can handle things differently for different SvcError.
+    node.online_child(ctx).await?;
+    info!(
+        %child, %nexus,"Successfully made child online"
+    );
+    Ok(())
 }
 
 /// Find and removes unknown children from the given nexus

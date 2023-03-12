@@ -104,21 +104,19 @@ async fn generic_nexus_reconciler(
     context: &PollContext,
 ) -> PollResult {
     let mut results = vec![];
-    results.push(faulted_children_remover(nexus, context).await);
+    results.push(handle_faulted_child(nexus, context).await);
     results.push(unknown_children_remover(nexus, context).await);
     results.push(missing_children_remover(nexus, context).await);
     squash_results(results)
 }
 
-/// Given a degraded volume
-/// When a nexus state has faulty children
-/// Then they should eventually be removed from the state and spec
-/// And the replicas should eventually be destroyed
-async fn faulted_children_remover(
+/// Checks if nexus is Degraded and any child is Faulted. If yes, Depending on rebuild policy for
+/// child it performs rebuild operation. We exclude NoSpace Degrade.
+async fn handle_faulted_child(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    nexus::faulted_children_remover(nexus, context).await
+    nexus::handle_faulted_child(nexus, context).await
 }
 
 /// Given a degraded volume
