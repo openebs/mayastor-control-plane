@@ -173,6 +173,7 @@ impl SwitchOverRequest {
 
     /// Attempts to republish the volume by either recreating the existing target or by
     /// creating a new target (on a different node).
+    #[tracing::instrument(level = "info", skip(self), fields(volume.uuid = %self.volume_id), err)]
     async fn republish_volume(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
         self.start_op(etcd).await?;
         info!(volume.uuid=%self.volume_id, frontend_node=%self.node_name, "Republishing");
@@ -237,9 +238,10 @@ impl SwitchOverRequest {
                                 info!("Retrying Republish after cleaning up targets");
                                 return Ok(());
                             }
-                            _ => {
-                                let err =
-                                    "Failed to list Nvme subsystems for the volume".to_string();
+                            Err(error) => {
+                                let err = format!(
+                                    "Failed to list Nvme subsystems for the volume, error: {error}"
+                                );
                                 Err(anyhow!(err))
                             }
                         }
