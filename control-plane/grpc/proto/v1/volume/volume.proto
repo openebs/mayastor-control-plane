@@ -347,7 +347,9 @@ message DestroyShutdownTargetReply {
 
 // VolumeGroup's representation in memory.
 message VolumeGroupSpec {
-  string name = 1;
+  // Volume group id
+  string id = 1;
+  // List of ids of volumes part of the volume group
   repeated google.protobuf.StringValue volumes = 2;
 }
 

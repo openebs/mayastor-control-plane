@@ -237,7 +237,7 @@ impl ResourceSpecs {
         self.volumes.values().map(|v| v.lock().clone()).collect()
     }
 
-    /// Gets all VolumeGroupSpec's
+    /// Gets all VolumeGroupSpecs.
     pub(crate) fn volume_groups(&self) -> Vec<VolumeGroupSpec> {
         self.volume_groups
             .values()

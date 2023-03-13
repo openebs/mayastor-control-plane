@@ -1515,7 +1515,7 @@ impl From<VolumeGroup> for volume::VolumeGroup {
 impl From<VolumeGroupSpec> for volume::VolumeGroupSpec {
     fn from(value: VolumeGroupSpec) -> Self {
         Self {
-            name: value.name().clone(),
+            id: value.id().clone(),
             volumes: value.volumes().iter().map(|id| id.to_string()).collect(),
         }
     }
@@ -1532,6 +1532,6 @@ impl TryFrom<volume::VolumeGroupSpec> for VolumeGroupSpec {
             })?;
             volumes.push(volume_id)
         }
-        Ok(VolumeGroupSpec::new(value.name, volumes))
+        Ok(VolumeGroupSpec::new(value.id, volumes))
     }
 }
