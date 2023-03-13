@@ -240,7 +240,7 @@ impl SwitchOverRequest {
                             }
                             Err(error) => {
                                 let err = format!(
-                                    "Failed to list Nvme subsystems for the volume, error : {}",
+                                    "Failed to list Nvme subsystems for the volume, error: {}",
                                     error
                                 );
                                 Err(anyhow!(err))
