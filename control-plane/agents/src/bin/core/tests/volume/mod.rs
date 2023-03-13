@@ -39,7 +39,7 @@ async fn volume() {
         .with_rest(true)
         .with_agents(vec!["core"])
         .with_io_engines(3)
-        .with_pools(1)
+        .with_tmpfs_pool(100 * 1024 * 1024)
         .with_cache_period("1s")
         // don't let the reconcile interfere with the tests
         .with_reconcile_period(Duration::from_secs(1000), Duration::from_secs(1000))
