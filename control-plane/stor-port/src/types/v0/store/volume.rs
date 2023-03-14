@@ -591,3 +591,44 @@ impl From<VolumeSpec> for models::VolumeSpec {
         )
     }
 }
+
+/// VolumeGroupId type.
+pub type VolumeGroupId = String;
+
+/// In memory representation of volume group.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct VolumeGroupSpec {
+    /// Name of the volume group.
+    id: VolumeGroupId,
+    /// List of ids of volumes that belong to the volume group.
+    volumes: Vec<VolumeId>,
+    /// The operation sequence resource is in.
+    sequencer: OperationSequence,
+}
+
+impl VolumeGroupSpec {
+    /// Create a new VolumeGroupSpec.
+    pub fn new(id: VolumeGroupId, volumes: Vec<VolumeId>) -> Self {
+        Self {
+            id: id.clone(),
+            volumes,
+            sequencer: OperationSequence::new(id),
+        }
+    }
+    /// Name of the volume group.
+    pub fn id(&self) -> &VolumeGroupId {
+        &self.id
+    }
+    /// Add a new volume to the list of volumes.
+    pub fn append(&mut self, id: VolumeId) {
+        self.volumes.push(id)
+    }
+    /// Add a new volume to the list of volumes.
+    pub fn remove(&mut self, id: &VolumeId) {
+        self.volumes.retain(|vol| vol != id)
+    }
+    /// Check if the volume group has any more volumes.
+    pub fn is_empty(&self) -> bool {
+        self.volumes.is_empty()
+    }
+}

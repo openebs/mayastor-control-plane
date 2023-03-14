@@ -1,6 +1,9 @@
 use super::*;
 
-use crate::{types::v0::store::volume::VolumeSpec, IntoOption};
+use crate::{
+    types::v0::store::volume::{VolumeGroupId, VolumeSpec},
+    IntoOption,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom, fmt::Debug};
 
@@ -359,29 +362,29 @@ pub struct CreateVolume {
 #[serde(rename_all = "camelCase")]
 pub struct VolumeGroup {
     /// The name of the volume group.
-    name: String,
+    id: VolumeGroupId,
 }
 
 impl VolumeGroup {
     /// Create a new VolumeGroup from the params.
-    pub fn new(name: String) -> Self {
-        Self { name }
+    pub fn new(id: VolumeGroupId) -> Self {
+        Self { id }
     }
     /// The name of the volume group.
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn id(&self) -> &VolumeGroupId {
+        &self.id
     }
 }
 
 impl From<VolumeGroup> for models::VolumeGroup {
     fn from(value: VolumeGroup) -> Self {
-        Self { name: value.name }
+        Self { name: value.id }
     }
 }
 
 impl From<models::VolumeGroup> for VolumeGroup {
     fn from(value: models::VolumeGroup) -> Self {
-        Self { name: value.name }
+        Self { id: value.name }
     }
 }
 
