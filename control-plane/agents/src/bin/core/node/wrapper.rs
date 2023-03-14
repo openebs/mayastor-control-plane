@@ -652,6 +652,20 @@ impl NodeWrapper {
         Ok(())
     }
 
+    /// Update all the pool and replica states.
+    async fn update_pool_replica_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let fetcher = node.read().await.fetcher();
+        let pools = fetcher.fetch_pools(client).await?;
+        let replicas = fetcher.fetch_replicas(client).await?;
+        let node = node.write().await;
+        node.update_resources(ResourceType::Pools(pools));
+        node.update_resources(ResourceType::Replicas(replicas));
+        Ok(())
+    }
+
     /// Update the given pool state.
     async fn update_pool_state(
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
@@ -807,6 +821,8 @@ pub(crate) trait InternalOps {
     async fn update_nexus_state(&self, state: Either<Nexus, NexusId>);
     /// Update the node's pool state information.
     async fn update_pool_states(&self, ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    /// Update the node's pool and replica state information.
+    async fn update_pool_replica_states(&self, ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update a node's pool state information.
     async fn update_pool_state(&self, state: Either<PoolState, PoolId>);
     /// Update the node's replica state information.
@@ -894,6 +910,10 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
         NodeWrapper::update_pool_states(self, ctx.deref_mut()).await
     }
 
+    async fn update_pool_replica_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
+        NodeWrapper::update_pool_replica_states(self, ctx.deref_mut()).await
+    }
+
     async fn update_pool_state(&self, state: Either<PoolState, PoolId>) {
         NodeWrapper::update_pool_state(self, state).await;
     }
@@ -970,8 +990,7 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
             }
             Err(error) => {
                 let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-                self.update_pool_states(ctx.deref_mut()).await?;
-                self.update_replica_states(ctx.deref_mut()).await?;
+                self.update_pool_replica_states(ctx.deref_mut()).await?;
                 let pool = self.read().await.pool(&request.id);
                 match (pool, &error) {
                     (Some(pool), SvcError::GrpcRequestError { source, .. })
@@ -1012,7 +1031,8 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         match dataplane.import_pool(request).await {
             Err(error) => Err(error),
             Ok(pool) => {
-                self.update_pool_state(Either::Insert(pool.clone())).await;
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_pool_replica_states(ctx.deref_mut()).await?;
                 Ok(pool)
             }
         }
@@ -1044,8 +1064,7 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
             }
             Err(error) => {
                 let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-                self.update_replica_states(ctx.deref_mut()).await?;
-                self.update_pool_states(ctx.deref_mut()).await?;
+                self.update_pool_replica_states(ctx.deref_mut()).await?;
 
                 match self.read().await.replicas().into_iter().find(|replica| {
                     replica.uuid == request.uuid

@@ -11,7 +11,7 @@ use crate::controller::{
 use crate::controller::io_engine::PoolApi;
 use stor_port::types::v0::{
     store::pool::PoolSpec,
-    transport::{CreatePool, DestroyPool, NodeStatus},
+    transport::{DestroyPool, ImportPool, NodeStatus},
 };
 use tracing::Instrument;
 
@@ -141,8 +141,8 @@ async fn missing_pool_state_reconciler(
         async {
             pool_spec.warn_span(|| tracing::warn!("Attempting to recreate missing pool"));
 
-            let request = CreatePool::new(&pool_spec.node, &pool_spec.id, &pool_spec.disks, &pool_spec.labels);
-            match node.create_pool(&request).await {
+            let request = ImportPool::new(&pool_spec.node, &pool_spec.id, &pool_spec.disks);
+            match node.import_pool(&request).await {
                 Ok(_) => {
                     pool_spec.info_span(|| tracing::info!("Pool successfully recreated"));
                     PollResult::Ok(PollerState::Idle)

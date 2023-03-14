@@ -1,6 +1,7 @@
 """Volume creation feature tests."""
 import time
 
+import os
 from pytest_bdd import (
     given,
     scenario,
@@ -39,13 +40,36 @@ NODE_NAME = "io-engine-1"
 # It starts the deployer which launches all the necessary containers.
 # A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
-def init():
+def init(disks):
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_NAME, POOL_UUID, CreatePoolBody([f"{disks[0]}"])
     )
     yield
     Deployer.stop()
+
+
+@pytest.fixture
+def tmp_files():
+    files = []
+    for index in range(0, 1):
+        files.append(f"/tmp/disk_{index}")
+    yield files
+
+
+@pytest.fixture
+def disks(tmp_files):
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
+        with open(disk, "w") as file:
+            file.truncate(100 * 1024 * 1024)
+    # /tmp is mapped into /host/tmp within the io-engine containers
+    yield list(map(lambda file: f"/host{file}", tmp_files))
+
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
 
 
 # Fixture used to pass the volume create request between test steps.

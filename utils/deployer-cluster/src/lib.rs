@@ -415,15 +415,18 @@ enum PoolDisk {
     Tmp(TmpDiskFile),
 }
 
-/// Temporary "disk" file, which gets deleted on drop
+/// Wrapper over a temporary "disk" file, which gets deleted on drop.
 #[derive(Clone)]
 pub struct TmpDiskFile {
     inner: std::sync::Arc<TmpDiskFileInner>,
 }
 
-struct TmpDiskFileInner {
+/// Temporary "disk" file, which gets deleted on drop.
+#[derive(Debug)]
+pub struct TmpDiskFileInner {
     path: String,
     uri: String,
+    cleanup: bool,
 }
 
 impl TmpDiskFile {
@@ -434,16 +437,25 @@ impl TmpDiskFile {
             inner: std::sync::Arc::new(TmpDiskFileInner::new(name, size)),
         }
     }
-    /// Disk URI to be used by the dataplane
+    /// Disk URI to be used by the dataplane.
     pub fn uri(&self) -> &str {
         self.inner.uri()
+    }
+
+    /// Get the inner disk if there are no other references to it.
+    pub fn into_inner(self) -> Result<TmpDiskFileInner, Arc<TmpDiskFileInner>> {
+        Arc::try_unwrap(self.inner)
     }
 }
 impl TmpDiskFileInner {
     fn new(name: &str, size: u64) -> Self {
-        let path = format!("/tmp/io-engine-disk-{name}");
-        let file = std::fs::File::create(&path).expect("to create the tmp file");
+        let disk = Self::make_new(name);
+        let file = std::fs::File::create(&disk.path).expect("to create the tmp file");
         file.set_len(size).expect("to truncate the tmp file");
+        disk
+    }
+    fn make_new(name: &str) -> Self {
+        let path = Self::make_path(name);
         Self {
             // the io-engine is setup with a bind mount from /tmp to /host/tmp
             uri: format!(
@@ -452,16 +464,30 @@ impl TmpDiskFileInner {
                 transport::PoolId::new()
             ),
             path,
+            cleanup: true,
         }
+    }
+    fn make_path(name: &str) -> String {
+        format!("/tmp/io-engine-disk-{name}")
     }
     fn uri(&self) -> &str {
         &self.uri
+    }
+    /// Move the disk to another location.
+    pub fn rename(&mut self, new_name: &str) -> std::io::Result<()> {
+        let new_disk = Self::make_new(new_name);
+        std::fs::rename(&self.path, &new_disk.path)?;
+        self.cleanup = false;
+        *self = new_disk;
+        Ok(())
     }
 }
 
 impl Drop for TmpDiskFileInner {
     fn drop(&mut self) {
-        std::fs::remove_file(&self.path).expect("to unlink the tmp file");
+        if self.cleanup {
+            std::fs::remove_file(&self.path).expect("to unlink the tmp file");
+        }
     }
 }
 

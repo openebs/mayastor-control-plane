@@ -462,6 +462,7 @@ async fn replica_transaction_store() {
 
 const RECONCILE_TIMEOUT_SECS: u64 = 7;
 const POOL_FILE_NAME: &str = "disk1.img";
+const POOL_FILE_NAME_2: &str = "disk2.img";
 const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 
 /// Creates a pool on a io_engine instance, which will have both spec and state.
@@ -512,12 +513,13 @@ async fn reconciler_missing_pool_state() {
     let maya = cluster.node(0);
     async fn pool_checker(cluster: &Cluster, state: Option<&PoolState>) {
         let maya = cluster.node(0);
+        let tm = Duration::from_secs(3);
 
-        let pool = wait_till_pool_state(cluster, (0, 0), false).await;
+        let pool = wait_till_pool_state(cluster, (0, 0), false, tm).await;
         assert!(pool.state.is_none());
 
-        cluster.composer().start(maya.as_str()).await.unwrap();
-        let pool = wait_till_pool_state(cluster, (0, 0), true).await;
+        cluster.composer().restart(maya.as_str()).await.unwrap();
+        let pool = wait_till_pool_state(cluster, (0, 0), state.is_some(), tm).await;
         // the state should be the same as it was before
         assert_eq!(pool.state.as_ref(), state);
     }
@@ -528,6 +530,20 @@ async fn reconciler_missing_pool_state() {
 
     // now kill it, so there's no deregistration message
     cluster.composer().kill(maya.as_str()).await.unwrap();
+
+    // move pool disk to another location and replace it with another disk.
+    // this means import should fail as we cannot import from that disk!
+    assert_ne!(POOL_FILE_NAME, POOL_FILE_NAME_2);
+    let mut disk = disk.into_inner().unwrap();
+    disk.rename(POOL_FILE_NAME_2).unwrap();
+
+    let new_disk = deployer_cluster::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
+    pool_checker(&cluster, None).await;
+
+    // move original disk back and now import should succeed!
+    drop(new_disk);
+    disk.rename(POOL_FILE_NAME).unwrap();
+
     pool_checker(&cluster, pool.state.as_ref()).await;
 
     // we should have also "imported" the same replicas, perhaps in a different order...
@@ -545,20 +561,27 @@ async fn reconciler_missing_pool_state() {
 }
 
 /// Wait until the specified pool state option presence matches the `has_state` flag
-async fn wait_till_pool_state(cluster: &Cluster, pool: (u32, u32), has_state: bool) -> Pool {
+async fn wait_till_pool_state(
+    cluster: &Cluster,
+    pool: (u32, u32),
+    has_state: bool,
+    timeout: Duration,
+) -> Pool {
     let pool_id = cluster.pool(pool.0, pool.1);
-    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
     let client = cluster.rest_v00();
     let pools_api = client.pools_api();
     let start = std::time::Instant::now();
     loop {
         let pool = pools_api.get_pool(pool_id.as_str()).await.unwrap();
 
-        if pool.state.is_some() == has_state {
+        if has_state && pool.state.is_some() {
             return pool;
         }
 
         if std::time::Instant::now() > (start + timeout) {
+            if !has_state && pool.state.is_none() {
+                return pool;
+            }
             panic!(
                 "Timeout waiting for the pool to have 'has_state': '{has_state}'. Pool: '{pool:#?}'"
             );
