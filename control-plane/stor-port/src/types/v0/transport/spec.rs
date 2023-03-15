@@ -13,14 +13,16 @@ pub struct GetSpecs {}
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Specs {
-    /// volume specs
+    /// Volume specs.
     pub volumes: Vec<volume::VolumeSpec>,
-    /// nexus specs
+    /// Nexus specs.
     pub nexuses: Vec<nexus::NexusSpec>,
-    /// pool specs
+    /// Pool specs.
     pub pools: Vec<pool::PoolSpec>,
-    /// replica specs
+    /// Replica specs.
     pub replicas: Vec<replica::ReplicaSpec>,
+    /// Volume group specs.
+    pub volume_groups: Vec<volume::VolumeGroupSpec>,
 }
 
 impl From<Specs> for models::Specs {

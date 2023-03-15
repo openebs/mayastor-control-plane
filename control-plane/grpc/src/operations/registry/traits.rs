@@ -8,7 +8,12 @@ use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         store,
-        store::{nexus::NexusSpec, pool::PoolSpec, replica::ReplicaSpec, volume::VolumeSpec},
+        store::{
+            nexus::NexusSpec,
+            pool::PoolSpec,
+            replica::ReplicaSpec,
+            volume::{VolumeGroupSpec, VolumeSpec},
+        },
         transport,
         transport::{GetSpecs, GetStates, Specs},
     },
@@ -74,34 +79,31 @@ impl TryFrom<registry::Specs> for transport::Specs {
 
     fn try_from(value: registry::Specs) -> Result<Self, Self::Error> {
         Ok(Self {
-            volumes: {
-                let mut volume_specs: Vec<VolumeSpec> = Vec::with_capacity(value.volumes.len());
-                for volume_definition in value.volumes {
-                    volume_specs.push(VolumeSpec::try_from(volume_definition)?);
-                }
-                volume_specs
-            },
-            nexuses: {
-                let mut nexus_specs: Vec<NexusSpec> = Vec::with_capacity(value.nexuses.len());
-                for nexus_spec in value.nexuses {
-                    nexus_specs.push(NexusSpec::try_from(nexus_spec)?);
-                }
-                nexus_specs
-            },
-            pools: {
-                let mut pool_specs: Vec<PoolSpec> = Vec::with_capacity(value.pools.len());
-                for pool_definition in value.pools {
-                    pool_specs.push(PoolSpec::try_from(pool_definition)?);
-                }
-                pool_specs
-            },
-            replicas: {
-                let mut replica_specs: Vec<ReplicaSpec> = Vec::with_capacity(value.replicas.len());
-                for replica_spec in value.replicas {
-                    replica_specs.push(ReplicaSpec::try_from(replica_spec)?);
-                }
-                replica_specs
-            },
+            volumes: value
+                .volumes
+                .into_iter()
+                .map(VolumeSpec::try_from)
+                .collect::<Result<Vec<VolumeSpec>, ReplyError>>()?,
+            nexuses: value
+                .nexuses
+                .into_iter()
+                .map(NexusSpec::try_from)
+                .collect::<Result<Vec<NexusSpec>, ReplyError>>()?,
+            pools: value
+                .pools
+                .into_iter()
+                .map(PoolSpec::try_from)
+                .collect::<Result<Vec<PoolSpec>, ReplyError>>()?,
+            replicas: value
+                .replicas
+                .into_iter()
+                .map(ReplicaSpec::try_from)
+                .collect::<Result<Vec<ReplicaSpec>, ReplyError>>()?,
+            volume_groups: value
+                .volume_groups
+                .into_iter()
+                .map(VolumeGroupSpec::try_from)
+                .collect::<Result<Vec<VolumeGroupSpec>, ReplyError>>()?,
         })
     }
 }
@@ -128,6 +130,11 @@ impl From<transport::Specs> for registry::Specs {
                 .replicas
                 .into_iter()
                 .map(|replica_spec| replica_spec.into())
+                .collect(),
+            volume_groups: value
+                .volume_groups
+                .into_iter()
+                .map(|vg_spec| vg_spec.into())
                 .collect(),
         }
     }

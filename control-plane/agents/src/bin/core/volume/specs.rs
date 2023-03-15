@@ -39,7 +39,7 @@ use stor_port::{
             nexus_child::NexusChild,
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
-            volume::{VolumeOperation, VolumeSpec},
+            volume::{VolumeGroupSpec, VolumeOperation, VolumeSpec},
             SpecStatus, SpecTransaction,
         },
         transport::{
@@ -235,6 +235,14 @@ impl ResourceSpecs {
     /// Gets all VolumeSpec's
     pub(crate) fn volumes(&self) -> Vec<VolumeSpec> {
         self.volumes.values().map(|v| v.lock().clone()).collect()
+    }
+
+    /// Gets all VolumeGroupSpecs.
+    pub(crate) fn volume_groups(&self) -> Vec<VolumeGroupSpec> {
+        self.volume_groups
+            .values()
+            .map(|v| v.lock().clone())
+            .collect()
     }
 
     /// Get a subset of the volumes based on the pagination argument.

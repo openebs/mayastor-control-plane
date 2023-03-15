@@ -15,7 +15,7 @@ use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
-        store::volume::{FrontendConfig, TargetConfig, VolumeSpec, VolumeTarget},
+        store::volume::{FrontendConfig, TargetConfig, VolumeGroupSpec, VolumeSpec, VolumeTarget},
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, ExplicitNodeTopology, Filter,
             LabelledTopology, Nexus, NexusId, NexusNvmfConfig, NodeId, NodeTopology, PoolTopology,
@@ -1509,5 +1509,29 @@ impl From<VolumeGroup> for volume::VolumeGroup {
         Self {
             name: value.id().clone(),
         }
+    }
+}
+
+impl From<VolumeGroupSpec> for volume::VolumeGroupSpec {
+    fn from(value: VolumeGroupSpec) -> Self {
+        Self {
+            id: value.id().clone(),
+            volumes: value.volumes().iter().map(|id| id.to_string()).collect(),
+        }
+    }
+}
+
+impl TryFrom<volume::VolumeGroupSpec> for VolumeGroupSpec {
+    type Error = ReplyError;
+
+    fn try_from(value: volume::VolumeGroupSpec) -> Result<Self, Self::Error> {
+        let mut volumes: Vec<VolumeId> = Vec::with_capacity(value.volumes.len());
+        for volume in value.volumes {
+            let volume_id = VolumeId::try_from(volume).map_err(|error| {
+                ReplyError::invalid_argument(ResourceKind::Volume, "volume_id", error.to_string())
+            })?;
+            volumes.push(volume_id)
+        }
+        Ok(VolumeGroupSpec::new(value.id, volumes))
     }
 }
