@@ -2,16 +2,21 @@ use crate::controller::{
     io_engine::ReplicaApi,
     registry::Registry,
     resources::{
-        operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceSharing},
+        operations::{ResourceLifecycle, ResourceOffspring, ResourceOwnerUpdate, ResourceSharing},
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc, UpdateInnerValue,
     },
+    scheduling::pool::ENoSpcReplica,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use stor_port::types::v0::{
-    store::replica::{ReplicaOperation, ReplicaSpec},
+    store::{
+        nexus::NexusSpec,
+        replica::{PoolRef, ReplicaOperation, ReplicaSpec},
+    },
     transport::{
-        CreateReplica, DestroyReplica, Replica, ReplicaOwners, ShareReplica, UnshareReplica,
+        CreateReplica, DestroyReplica, NodeId, RemoveNexusChild, Replica, ReplicaOwners,
+        ShareReplica, UnshareReplica,
     },
 };
 
@@ -187,5 +192,66 @@ impl ResourceOwnerUpdate for OperationGuardArc<ReplicaSpec> {
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+impl OperationGuardArc<ReplicaSpec> {
+    /// Faults this replica.
+    /// The replica is first removed from the nexus, which will let us know if it's safe to destroy
+    /// it.
+    /// Then we can destroy the replica knowing it's not integral part of a volume.
+    #[tracing::instrument(level = "info", skip(self, nexus, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
+    pub(crate) async fn fault(
+        &mut self,
+        nexus: &mut OperationGuardArc<NexusSpec>,
+        info: &ENoSpcReplica,
+        registry: &Registry,
+    ) -> Result<(), SvcError> {
+        // First we must remove the child from thus nexus, thus rendering it a "non-healthy" child.
+        // The nexus should fail the removal if there are no other healthy children.
+        let nexus_node = nexus.as_ref().node.clone();
+        nexus
+            .remove_child(
+                registry,
+                &RemoveNexusChild {
+                    node: nexus_node,
+                    nexus: info.nexus().uuid().clone(),
+                    uri: info.child().uri().clone(),
+                },
+            )
+            .await?;
+
+        // Now it's safe to delete the replica.
+        let request = destroy_replica_request(
+            info.replica(),
+            info.repl_node(),
+            ReplicaOwners::new_disown_all(),
+        );
+        self.destroy(registry, &request).await?;
+
+        Ok(())
+    }
+}
+
+fn destroy_replica_request(
+    spec: &ReplicaSpec,
+    node: &NodeId,
+    disowners: ReplicaOwners,
+) -> DestroyReplica {
+    let pool_id = match spec.pool.clone() {
+        PoolRef::Named(id) => id,
+        PoolRef::Uuid(id, _) => id,
+    };
+    let pool_uuid = match spec.pool.clone() {
+        PoolRef::Named(_) => None,
+        PoolRef::Uuid(_, uuid) => Some(uuid),
+    };
+    DestroyReplica {
+        node: node.clone(),
+        pool_id,
+        pool_uuid,
+        uuid: spec.uuid.clone(),
+        name: spec.name.clone().into(),
+        disowners,
     }
 }

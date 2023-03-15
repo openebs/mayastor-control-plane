@@ -3,6 +3,7 @@ use super::*;
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, str::FromStr};
+use strum_macros::Display;
 
 /// Child information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -70,7 +71,7 @@ impl PartialEq<String> for ChildUri {
 }
 
 /// Child State information
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Display)]
 pub enum ChildState {
     /// Default Unknown state
     Unknown,

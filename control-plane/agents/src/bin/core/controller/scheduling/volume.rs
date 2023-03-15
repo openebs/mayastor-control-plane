@@ -11,7 +11,7 @@ use crate::controller::{
 use agents::errors::SvcError;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
-    transport::{ChildUri, VolumeState},
+    transport::VolumeState,
 };
 
 use std::ops::Deref;
@@ -438,7 +438,7 @@ impl VolumeReplicasForNexusCtx {
                 let child_info = self.nexus_info.as_ref().and_then(|n| {
                     n.children.iter().find(|c| {
                         if let Some(replica_state) = replica_state {
-                            ChildUri::from(&replica_state.uri).uuid_str().as_ref() == Some(&c.uuid)
+                            replica_state.uuid == c.uuid
                         } else {
                             false
                         }

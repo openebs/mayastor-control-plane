@@ -240,8 +240,21 @@ pub enum SvcError {
     },
     #[snafu(display("The nqn couldnt be parsed"))]
     NvmeParseError {},
-    #[snafu(display("Nvme connect failed : {}", details))]
+    #[snafu(display("Nvme connect failed: {}", details))]
     NvmeConnectError { details: String },
+    #[snafu(display(
+        "Remaining pool {} free space {} not enough to online child '{}' as we required {}",
+        pool_id,
+        free_space,
+        child,
+        required
+    ))]
+    NoCapacityToOnline {
+        pool_id: String,
+        child: String,
+        free_space: u64,
+        required: u64,
+    },
 }
 
 impl SvcError {
@@ -661,7 +674,7 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::SubsystemNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
-                resource: ResourceKind::Unknown,
+                resource: ResourceKind::NvmeSubsystem,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
@@ -673,7 +686,7 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::NvmeParseError { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
-                resource: ResourceKind::Unknown,
+                resource: ResourceKind::NvmePath,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
@@ -685,7 +698,13 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::NvmeConnectError { .. } => ReplyError {
                 kind: ReplyErrorKind::Aborted,
-                resource: ResourceKind::Unknown,
+                resource: ResourceKind::NvmeSubsystem,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::NoCapacityToOnline { .. } => ReplyError {
+                kind: ReplyErrorKind::ResourceExhausted,
+                resource: ResourceKind::Pool,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

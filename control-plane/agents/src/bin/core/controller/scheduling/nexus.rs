@@ -12,7 +12,7 @@ use agents::errors::SvcError;
 use std::ops::Deref;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
-    transport::{ChildUri, NexusId, NodeId, VolumeId},
+    transport::{NexusId, NodeId, VolumeId},
 };
 
 /// Request to retrieve a list of healthy nexus children which is used for nexus creation
@@ -143,7 +143,7 @@ impl GetPersistedNexusChildrenCtx {
                 let child_info = self.nexus_info.as_ref().and_then(|n| {
                     n.children.iter().find(|c| {
                         if let Some(replica_state) = replica_state {
-                            ChildUri::from(&replica_state.uri).uuid_str().as_ref() == Some(&c.uuid)
+                            replica_state.uuid == c.uuid
                         } else {
                             false
                         }

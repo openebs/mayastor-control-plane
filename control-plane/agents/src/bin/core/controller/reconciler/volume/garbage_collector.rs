@@ -296,7 +296,7 @@ async fn disown_non_reservable_replicas(
 
     // Remove the local child from the shutdown pending nexuses as they are
     // non reservable.
-    for mut nexus in shutdown_failed_nexuses {
+    for nexus in shutdown_failed_nexuses {
         let children = nexus.lock().clone().children;
         for child in children {
             if let Some(replica_uri) = child.as_replica() {

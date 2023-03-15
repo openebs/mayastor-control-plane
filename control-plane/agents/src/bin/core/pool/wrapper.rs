@@ -37,6 +37,10 @@ impl PoolWrapper {
     pub(crate) fn replicas(&self) -> &Vec<Replica> {
         &self.replicas
     }
+    /// Get all the replicas.
+    pub(crate) fn move_replicas(self) -> Vec<Replica> {
+        self.replicas
+    }
     /// Get the specified replica.
     pub(crate) fn replica(&self, replica: &ReplicaId) -> Option<&Replica> {
         self.replicas.iter().find(|r| &r.uuid == replica)

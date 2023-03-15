@@ -1,16 +1,26 @@
+pub(super) mod capacity;
 mod garbage_collector;
 
 use crate::{
     controller::{
-        resources::operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
+        io_engine::NexusApi,
+        reconciler::{ReCreate, Reconciler},
+        resources::{
+            operations::ResourceSharing,
+            operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
+            OperationGuardArc, TraceSpan, TraceStrLog,
+        },
         scheduling::resources::HealthyChildItems,
         task_poller::{
             squash_results, PollContext, PollPeriods, PollResult, PollTimer, PollerState,
             TaskPoller,
         },
+        wrapper::NodeWrapper,
     },
     nexus::scheduling::healthy_nexus_children,
 };
+use agents::errors::SvcError;
+use capacity::enospc_children_onliner;
 use garbage_collector::GarbageCollector;
 use stor_port::{
     transport_api::ErrorChain,
@@ -19,19 +29,13 @@ use stor_port::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
         },
-        transport::{CreateNexus, NexusShareProtocol, NodeStatus, ShareNexus, UnshareNexus},
+        transport::{
+            CreateNexus, NexusShareProtocol, NexusStatus, NodeStatus, ShareNexus, UnshareNexus,
+        },
     },
 };
 
-use crate::controller::{
-    io_engine::{NexusApi, NexusChildApi},
-    reconciler::{ReCreate, Reconciler},
-    resources::{operations::ResourceSharing, OperationGuardArc, TraceSpan, TraceStrLog},
-    wrapper::NodeWrapper,
-};
-use agents::errors::SvcError;
 use std::{convert::TryFrom, sync::Arc};
-use stor_port::types::v0::transport::{FaultNexusChild, NexusStatus};
 use tokio::sync::RwLock;
 use tracing::Instrument;
 
@@ -116,7 +120,7 @@ async fn nexus_reconciler(
             unknown_children_remover(nexus, context).await,
             missing_children_remover(nexus, context).await,
             fixup_nexus_protocol(nexus, context).await,
-            enospc_children_faulter(nexus, context).await,
+            enospc_children_onliner(nexus, context).await,
         ]) {
             Err(SvcError::NexusNotFound { .. }) => PollResult::Ok(PollerState::Idle),
             other => other,
@@ -144,7 +148,7 @@ pub(super) async fn faulted_children_remover(
             let nexus_spec_clone = nexus.lock().clone();
             for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
                 nexus_spec_clone.warn_span(|| {
-                    tracing::warn!("Attempting to remove faulted child '{}'", child.uri)
+                    tracing::warn!(%child.state, "Attempting to remove faulted child '{}'", child.uri)
                 });
                 if let Err(error) = context
                     .specs()
@@ -480,35 +484,6 @@ pub(super) async fn faulted_nexus_remover(
             if node_online && !healthy_children.candidates().is_empty() {
                 faulted_nexus_remover(nexus, node).await?;
             }
-        }
-    }
-
-    PollResult::Ok(PollerState::Idle)
-}
-
-/// Find thin-provisioned Nexus children which are degraded due to ENOSPC and fault them.
-/// fixme: This is just a place-holder for the actual logic.
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
-pub(super) async fn enospc_children_faulter(
-    nexus: &mut OperationGuardArc<NexusSpec>,
-    context: &PollContext,
-) -> PollResult {
-    let nexus_uuid = nexus.uuid();
-    let nexus_state = context.registry().nexus(nexus_uuid).await?;
-    let child_count = nexus_state.children.len();
-
-    if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
-        for child in nexus_state.children.iter().filter(|c| c.enospc()) {
-            nexus.warn_span(|| {
-                tracing::info!(child.uri = child.uri.as_str(), "Found child with enospc")
-            });
-            let node = context.registry().node_wrapper(&nexus_state.node).await?;
-            node.fault_child(&FaultNexusChild {
-                node: nexus_state.node.clone(),
-                nexus: nexus_state.uuid.clone(),
-                uri: child.uri.clone(),
-            })
-            .await?;
         }
     }
 
