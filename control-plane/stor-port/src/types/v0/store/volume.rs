@@ -232,6 +232,16 @@ impl AsOperationSequencer for VolumeSpec {
     }
 }
 
+impl AsOperationSequencer for VolumeGroupSpec {
+    fn as_ref(&self) -> &OperationSequence {
+        &self.sequencer
+    }
+
+    fn as_mut(&mut self) -> &mut OperationSequence {
+        &mut self.sequencer
+    }
+}
+
 impl VolumeSpec {
     /// Get the currently active target.
     pub fn target(&self) -> Option<&VolumeTarget> {
