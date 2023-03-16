@@ -11,11 +11,14 @@ use crate::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
                 SpecOperationsHelper,
             },
-            OperationGuardArc, ResourceUid, TraceSpan, TraceStrLog,
+            OperationGuardArc, TraceSpan, TraceStrLog,
         },
         scheduling::pool::ENoSpcReplica,
     },
-    volume::specs::{create_volume_replicas, get_volume_target_node, healthy_volume_replicas},
+    volume::specs::{
+        create_volume_replicas, get_volume_target_node, healthy_volume_replicas,
+        volume_move_replica_candidates,
+    },
 };
 use agents::errors::SvcError;
 use http::Uri;
@@ -24,6 +27,7 @@ use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
         store::{
+            nexus::NexusSpec,
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{
@@ -34,7 +38,7 @@ use stor_port::{
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
             Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig, NodeId, NvmeReservation,
-            NvmfControllerIdRange, Protocol, PublishVolume, Replica, ReplicaOwners,
+            NvmfControllerIdRange, Protocol, PublishVolume, Replica, ReplicaId, ReplicaOwners,
             RepublishVolume, SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus,
             UnpublishVolume, UnshareNexus, UnshareVolume, Volume, VolumeShareProtocol,
         },
@@ -517,9 +521,40 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     }
 }
 
+/// Request to move the given replica to another pool.
+/// May be useful to reclaim space in the current pool to handle thin provisioning.
+#[derive(Debug, Clone)]
+pub(crate) struct MoveReplicaRequest {
+    replica: ReplicaId,
+    /// Delete the moved replica after we've created the replacement replica?
+    /// todo: we might only want to delete after rebuild completes only..
+    delete: bool,
+}
+impl MoveReplicaRequest {
+    /// Get a reference to the replica.
+    pub(crate) fn replica(&self) -> &ReplicaId {
+        &self.replica
+    }
+    /// Builder-like specification of delete behaviour.
+    pub(crate) fn with_delete(mut self, delete: bool) -> Self {
+        self.delete = delete;
+        self
+    }
+}
+impl From<&ENoSpcReplica> for MoveReplicaRequest {
+    fn from(value: &ENoSpcReplica) -> Self {
+        Self {
+            replica: value.replica().uuid.clone(),
+            delete: false,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl ResourceReplicas for OperationGuardArc<VolumeSpec> {
     type Request = SetVolumeReplica;
+    type MoveRequest = MoveReplicaRequest;
+    type MoveResp = Replica;
 
     async fn set_replica(
         &mut self,
@@ -544,6 +579,43 @@ impl ResourceReplicas for OperationGuardArc<VolumeSpec> {
                 .await?;
         }
         Ok(())
+    }
+
+    async fn move_replica(
+        &mut self,
+        registry: &Registry,
+        request: &Self::MoveRequest,
+    ) -> Result<Self::MoveResp, SvcError> {
+        let candidates =
+            volume_move_replica_candidates(registry, self.as_ref(), request.replica()).await?;
+
+        let new_replica = registry
+            .specs()
+            .create_volume_replica_with(registry, self.as_ref(), candidates)
+            .await?;
+
+        if let Some(nexus_spec) = &self
+            .as_ref()
+            .target()
+            .and_then(|t| registry.specs().nexus_rsc(t.nexus()))
+        {
+            let mut guard = nexus_spec.operation_guard()?;
+            let nexus = registry.nexus(guard.uuid()).await?;
+            registry
+                .specs()
+                .attach_replica_to_nexus(registry, &mut guard, self.uuid(), &nexus, &new_replica)
+                .await?;
+
+            if request.delete {
+                self.remove_child_replica(request.replica(), &mut guard, registry)
+                    .await?;
+            }
+        } else if request.delete {
+            // todo: if there's no nexus, should we delete it?
+            // For now let the reconciler delete it?
+        }
+
+        Ok(new_replica)
     }
 }
 
@@ -574,8 +646,7 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
         for nexus_res in shutdown_nexuses {
             match nexus_res.operation_guard_wait().await {
                 Ok(mut guard) => {
-                    let uuid = nexus_res.lock().clone().uuid;
-                    if let Ok(nexus) = registry.nexus(&uuid).await {
+                    if let Ok(nexus) = registry.nexus(nexus_res.uuid()).await {
                         if target_registered(request.registered_targets(), nexus)? {
                             continue;
                         }
@@ -688,13 +759,14 @@ impl OperationGuardArc<VolumeSpec> {
         )
     }
 
-    /// Remove the given `ENoSpcReplica` but make sure we're not removing the last healthy replica
-    /// of the volume which would cause data loss!
+    /// Remove the given NexusChild Replica but make sure we're not removing the last healthy
+    /// replica of the volume which would cause data loss!
     /// TODO: Should there be a minimum remaining number of healthy replicas left?
-    #[tracing::instrument(level = "info", skip(self, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
-    pub(crate) async fn remove_replica(
+    #[tracing::instrument(level = "info", skip(self, nexus, registry), fields(volume.uuid = %self.uuid()))]
+    pub(crate) async fn remove_child_replica(
         &mut self,
-        info: &ENoSpcReplica,
+        replica_id: &ReplicaId,
+        nexus: &mut OperationGuardArc<NexusSpec>,
         registry: &Registry,
     ) -> Result<(), SvcError> {
         let health_info = self.lock().health_info_id().cloned();
@@ -704,49 +776,40 @@ impl OperationGuardArc<VolumeSpec> {
             .ok_or(SvcError::Internal {
                 details: "No NexusInfo for a volume with allocated storage?".into(),
             })?;
-        let mut nexus = info.nexus().operation_guard()?;
 
-        let state = registry.volume_state(self.uuid()).await?;
+        let nexus_state = registry.nexus(nexus.uuid()).await?;
 
-        let healthy_children_len = if self.as_ref().target().is_some() {
-            let spec_children = info.nexus().lock().children.clone();
-            state
-                .target
-                .into_iter()
-                .flat_map(|n| n.children)
-                .filter(|c| c.state.online())
-                .filter(|c| {
-                    match spec_children
-                        .iter()
-                        .find(|sc| sc.uri() == c.uri)
-                        .and_then(|sc| sc.as_replica())
-                    {
-                        Some(sc) => nexus_info.is_replica_healthy(sc.uuid()),
-                        None => false,
-                    }
-                })
-                .filter(|c| &c.uri != info.child().uri())
-                .count()
-        } else {
-            nexus_info
-                .children
-                .iter()
-                .filter(|c| c.healthy)
-                .filter(|c| &c.uuid != info.child().uuid())
-                .filter(|c| {
-                    state
-                        .replica_topology
-                        .get(&c.uuid)
-                        .map(|r| r.status().online())
-                        == Some(true)
-                })
-                .count()
-        };
+        let replica_uri = match nexus.as_ref().replica_uuid_uri(replica_id) {
+            Some(replica_uri) => Ok(replica_uri.clone()),
+            // If the child is no longer present, not much point carrying on..
+            None => Err(SvcError::ChildNotFound {
+                nexus: nexus.uuid().to_string(),
+                child: replica_id.to_string(),
+            }),
+        }?;
+        let spec_children = &nexus.as_ref().children;
+        let healthy_children_len = nexus_state
+            .children
+            .into_iter()
+            .filter(|c| c.state.online())
+            .filter(|c| {
+                match spec_children
+                    .iter()
+                    .find(|sc| sc.uri() == c.uri)
+                    .and_then(|sc| sc.as_replica())
+                {
+                    Some(sc) => nexus_info.is_replica_healthy(sc.uuid()),
+                    None => false,
+                }
+            })
+            .filter(|c| &c.uri != replica_uri.uri())
+            .count();
+
         // todo: what should the minimum number of healthy children be?
         if healthy_children_len == 0 {
             self.warn_span(|| {
                 tracing::error!(
-                    replica.uuid = info.replica().uid().as_str(),
+                    replica.uuid = replica_id.as_str(),
                     "Cannot remove replica as volume has no other healthy children remaining"
                 )
             });
@@ -755,12 +818,12 @@ impl OperationGuardArc<VolumeSpec> {
             });
         }
 
-        let mut replica = registry.specs().replica(info.replica().uid()).await?;
-        replica.fault(&mut nexus, info, registry).await?;
+        let mut replica = registry.specs().replica(replica_id).await?;
+        replica.fault(nexus, registry).await?;
         self.warn_span(|| {
             tracing::warn!(
-                child.uri = info.child().uri().as_str(),
-                child.uuid = info.replica().uid().as_str(),
+                child.uri = replica_uri.uri().as_str(),
+                child.uuid = replica_uri.uuid().as_str(),
                 "Successfully faulted child"
             )
         });

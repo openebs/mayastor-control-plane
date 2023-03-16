@@ -11,20 +11,51 @@ use crate::controller::{
 use agents::errors::SvcError;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
-    transport::VolumeState,
+    transport::{NodeId, PoolId, VolumeState},
 };
 
 use std::ops::Deref;
 
-/// Select suitable pools for volume replica creation.
+/// Move replica to another pool.
+#[derive(Clone)]
+pub(crate) struct MoveReplica {
+    /// Current replica node.
+    node: NodeId,
+    /// Current replica pool.
+    pool: PoolId,
+}
+impl MoveReplica {
+    /// Return new `Self` from its node and pool.
+    pub(crate) fn new(node: &NodeId, pool: &PoolId) -> Self {
+        Self {
+            node: node.clone(),
+            pool: pool.clone(),
+        }
+    }
+    /// Get the replica node.
+    pub(crate) fn node(&self) -> &NodeId {
+        &self.node
+    }
+    /// Get the replica pool.
+    pub(crate) fn pool(&self) -> &PoolId {
+        &self.pool
+    }
+}
+
+/// Select suitable pools for volume replica creation or replacement/move.
 #[derive(Clone)]
 pub(crate) struct GetSuitablePools {
     spec: VolumeSpec,
+    move_repl: Option<MoveReplica>,
 }
 
 impl GetSuitablePools {
-    pub(crate) fn new(spec: &VolumeSpec) -> Self {
-        Self { spec: spec.clone() }
+    /// Return a new `Self` given the volume and optional replica move params.
+    pub(crate) fn new(spec: &VolumeSpec, move_repl: Option<MoveReplica>) -> Self {
+        Self {
+            spec: spec.clone(),
+            move_repl,
+        }
     }
 }
 
@@ -34,6 +65,7 @@ pub(crate) struct GetSuitablePoolsContext {
     registry: Registry,
     spec: VolumeSpec,
     allocated_bytes: Option<u64>,
+    move_repl: Option<MoveReplica>,
 }
 impl GetSuitablePoolsContext {
     /// Get the registry.
@@ -43,6 +75,10 @@ impl GetSuitablePoolsContext {
     /// Get the currently allocated bytes (per replica).
     pub(crate) fn allocated_bytes(&self) -> &Option<u64> {
         &self.allocated_bytes
+    }
+    /// Get the optional replica move request.
+    pub(crate) fn move_repl(&self) -> Option<&MoveReplica> {
+        self.move_repl.as_ref()
     }
 }
 
@@ -91,6 +127,7 @@ impl AddVolumeReplica {
                     registry: registry.clone(),
                     spec: request.spec,
                     allocated_bytes,
+                    move_repl: request.move_repl,
                 },
                 PoolItemLister::list(registry).await,
             ),

@@ -8,6 +8,8 @@ mod scheduling;
 mod service;
 mod specs;
 
+pub(crate) use operations::MoveReplicaRequest;
+
 /// Configure the Service and return the builder.
 pub(crate) fn configure(builder: agents::Service) -> agents::Service {
     let registry = builder.shared_state::<Registry>().clone();

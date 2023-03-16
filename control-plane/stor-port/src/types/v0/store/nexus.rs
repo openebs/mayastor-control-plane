@@ -138,6 +138,13 @@ impl NexusSpec {
             _ => None,
         })
     }
+    /// Get the matching `ReplicaUri`.
+    pub fn replica_uuid_uri(&self, uuid: &ReplicaId) -> Option<&ReplicaUri> {
+        self.children.iter().find_map(|c| match c {
+            NexusChild::Replica(replica) if &replica.uuid == uuid => Some(replica),
+            _ => None,
+        })
+    }
 }
 
 impl From<&NexusSpec> for CreateNexus {

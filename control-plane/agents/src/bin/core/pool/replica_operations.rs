@@ -6,7 +6,6 @@ use crate::controller::{
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc, UpdateInnerValue,
     },
-    scheduling::pool::ENoSpcReplica,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use stor_port::types::v0::{
@@ -200,31 +199,36 @@ impl OperationGuardArc<ReplicaSpec> {
     /// The replica is first removed from the nexus, which will let us know if it's safe to destroy
     /// it.
     /// Then we can destroy the replica knowing it's not integral part of a volume.
-    #[tracing::instrument(level = "info", skip(self, nexus, info, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %info.child().uuid()))]
+    #[tracing::instrument(level = "info", skip(self, nexus, registry), fields(volume.uuid = %self.uuid(), replica.uuid = %self.uuid()))]
     pub(crate) async fn fault(
         &mut self,
         nexus: &mut OperationGuardArc<NexusSpec>,
-        info: &ENoSpcReplica,
         registry: &Registry,
     ) -> Result<(), SvcError> {
         // First we must remove the child from thus nexus, thus rendering it a "non-healthy" child.
         // The nexus should fail the removal if there are no other healthy children.
-        let nexus_node = nexus.as_ref().node.clone();
-        nexus
-            .remove_child(
-                registry,
-                &RemoveNexusChild {
-                    node: nexus_node,
-                    nexus: info.nexus().uuid().clone(),
-                    uri: info.child().uri().clone(),
-                },
-            )
-            .await?;
+        if let Some(uri) = nexus.as_ref().replica_uuid_uri(self.uuid()) {
+            let nexus_node = nexus.as_ref().node.clone();
+            let nexus_uuid = nexus.uuid().clone();
+
+            nexus
+                .remove_child(
+                    registry,
+                    &RemoveNexusChild {
+                        node: nexus_node,
+                        nexus: nexus_uuid,
+                        uri: uri.uri().clone(),
+                    },
+                )
+                .await?;
+        }
+
+        let replica = registry.get_replica(self.uuid()).await?;
 
         // Now it's safe to delete the replica.
         let request = destroy_replica_request(
-            info.replica(),
-            info.repl_node(),
+            self.as_ref(),
+            &replica.node,
             ReplicaOwners::new_disown_all(),
         );
         self.destroy(registry, &request).await?;

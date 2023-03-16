@@ -50,7 +50,9 @@ use stor_port::{
     },
 };
 
-use crate::controller::resources::operations::ResourceOwnerUpdate;
+use crate::controller::{
+    resources::operations::ResourceOwnerUpdate, scheduling::volume::MoveReplica,
+};
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use snafu::OptionExt;
 use std::convert::From;
@@ -135,14 +137,60 @@ pub(crate) async fn nexus_attach_candidates(
     Ok(candidates)
 }
 
-/// Return a list of appropriate requests which can be used to create a a replica on a pool
+/// Return a list of appropriate requests which can be used to create a replica on a pool.
 /// This can be used when the volume's current replica count is smaller than the desired volume's
 /// replica count
 pub(crate) async fn volume_replica_candidates(
     registry: &Registry,
     volume_spec: &VolumeSpec,
 ) -> Result<Vec<CreateReplica>, SvcError> {
-    let request = GetSuitablePools::new(volume_spec);
+    let request = GetSuitablePools::new(volume_spec, None);
+    let pools = scheduling::volume_pool_candidates(request.clone(), registry).await;
+
+    if pools.is_empty() {
+        return Err(SvcError::NotEnoughResources {
+            source: NotEnough::OfPools { have: 0, need: 1 },
+        });
+    }
+
+    volume_spec.trace(&format!(
+        "Creation pool candidates for volume: {:?}",
+        pools.iter().map(|p| p.state()).collect::<Vec<_>>()
+    ));
+
+    Ok(pools
+        .iter()
+        .map(|p| {
+            let replica_uuid = ReplicaId::new();
+            CreateReplica {
+                node: p.node.clone(),
+                name: Some(ReplicaName::new(&replica_uuid, Some(&request.uuid))),
+                uuid: replica_uuid,
+                pool_id: p.id.clone(),
+                pool_uuid: None,
+                size: request.size,
+                thin: request.thin,
+                share: Protocol::None,
+                managed: true,
+                owners: ReplicaOwners::from_volume(&request.uuid),
+                allowed_hosts: vec![],
+            }
+        })
+        .collect::<Vec<_>>())
+}
+
+/// Return a list of appropriate requests which can be used to create a replica on a pool to replace
+/// a given replica.
+/// This can be used when attempting to move a replica due to ENOSPC.
+pub(crate) async fn volume_move_replica_candidates(
+    registry: &Registry,
+    volume_spec: &VolumeSpec,
+    move_replica: &ReplicaId,
+) -> Result<Vec<CreateReplica>, SvcError> {
+    let replica_state = registry.get_replica(move_replica).await?;
+
+    let move_repl = MoveReplica::new(&replica_state.node, &replica_state.pool_id);
+    let request = GetSuitablePools::new(volume_spec, Some(move_repl));
     let pools = scheduling::volume_pool_candidates(request.clone(), registry).await;
 
     if pools.is_empty() {
@@ -499,21 +547,19 @@ impl ResourceSpecsLocked {
         }
     }
 
-    /// Create a replica for the given volume using the provided list of candidates in order
-    pub(crate) async fn create_volume_replica(
+    /// Create a replica for the given volume using the provided list of candidates in order.
+    pub(crate) async fn create_volume_replica_with(
         &self,
         registry: &Registry,
-        state: &VolumeState,
-        candidates: &[CreateReplica],
+        volume: &VolumeSpec,
+        candidates: Vec<CreateReplica>,
     ) -> Result<Replica, SvcError> {
         let mut result = Err(SvcError::NotEnoughResources {
             source: NotEnough::OfReplicas { have: 0, need: 1 },
         });
-        for attempt in candidates.iter() {
-            let mut attempt = attempt.clone();
-
-            if let Some(nexus) = &state.target {
-                if nexus.node == attempt.node {
+        for mut attempt in candidates {
+            if let Some(target) = &volume.target() {
+                if target.node() == &attempt.node {
                     attempt.share = Protocol::None;
                 }
             }
@@ -526,8 +572,7 @@ impl ResourceSpecsLocked {
         result
     }
 
-    /// Create `count` replicas for the given volume using the provided
-    /// list of candidates, in order.
+    /// Create `count` replicas for the given volume.
     pub(crate) async fn create_volume_replicas(
         &self,
         registry: &Registry,
@@ -546,21 +591,20 @@ impl ResourceSpecsLocked {
                 }
             };
 
-            for attempt in candidates.into_iter() {
-                match OperationGuardArc::<ReplicaSpec>::create(registry, &attempt).await {
-                    Ok(replica) => {
-                        volume_spec
-                            .debug(&format!("Successfully created replica '{}'", replica.uuid));
-                        created_replicas.push(replica.uuid);
-                        break;
-                    }
-                    Err(error) => {
-                        volume_spec.error(&format!(
-                            "Failed to create replica '{:?}', error: '{}'",
-                            attempt,
-                            error.full_string(),
-                        ));
-                    }
+            match self
+                .create_volume_replica_with(registry, volume_spec, candidates)
+                .await
+            {
+                Ok(replica) => {
+                    volume_spec.debug(&format!("Successfully created replica '{}'", replica.uuid));
+                    created_replicas.push(replica.uuid);
+                    break;
+                }
+                Err(error) => {
+                    volume_spec.error(&format!(
+                        "Failed to create replica, error: '{}'",
+                        error.full_string(),
+                    ));
                 }
             }
 
@@ -611,7 +655,7 @@ impl ResourceSpecsLocked {
 
         // Create the data replica from the pool candidates
         let result = self
-            .create_volume_replica(registry, &state, &candidates)
+            .create_volume_replica_with(registry, &spec_clone, candidates)
             .await;
         let replica = volume
             .validate_update_step(registry, result, &spec_clone)
