@@ -59,15 +59,18 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             .await?;
         let volume_clone = volume.start_create(registry, request).await?;
 
+        // If the volume is a part of the vg, create or update accordingly.
+        registry.specs().get_or_create_volume_group(request);
+
         // todo: pick nodes and pools using the Node&Pool Topology
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
         let result = create_volume_replicas(registry, request, &volume_clone).await;
-        let create_replicas = volume
+        let create_replica_candidate = volume
             .validate_create_step_ext(registry, result, OnCreateFail::Delete)
             .await?;
 
         let mut replicas = Vec::<Replica>::new();
-        for replica in &create_replicas {
+        for replica in create_replica_candidate.candidates() {
             if replicas.len() >= request.replicas as usize {
                 break;
             } else if replicas.iter().any(|r| r.node == replica.node) {
