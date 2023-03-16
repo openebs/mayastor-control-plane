@@ -1,5 +1,6 @@
 use parking_lot::Mutex;
 use std::{
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -307,7 +308,10 @@ impl<R: Clone + std::fmt::Debug + AsOperationSequencer> UpdateInnerValue
 /// Trait which exposes a resource Uid for various types of resources.
 pub(crate) trait ResourceUid {
     /// The associated type for Id.
-    type Uid: Clone;
+    type Uid: Clone + Display;
     /// The id of the resource.
     fn uid(&self) -> &Self::Uid;
+    fn uid_str(&self) -> String {
+        self.uid().to_string()
+    }
 }
