@@ -593,17 +593,16 @@ impl OperationGuardArc<VolumeSpec> {
     pub(super) async fn next_target_node(
         &self,
         registry: &Registry,
-        status: &VolumeState,
         request: &impl PublishVolumeInfo,
         republish: bool,
     ) -> Result<NodeId, SvcError> {
         if !republish {
             // We can't configure a new target_node if the volume is currently published
-            if let Some(nexus) = &status.target {
+            if let Some(target) = self.as_ref().target() {
                 return Err(SvcError::VolumeAlreadyPublished {
-                    vol_id: status.uuid.to_string(),
-                    node: nexus.node.to_string(),
-                    protocol: nexus.share.to_string(),
+                    vol_id: self.uuid().to_string(),
+                    node: target.node().to_string(),
+                    protocol: format!("{:?}", target.protocol()),
                 });
             }
         }

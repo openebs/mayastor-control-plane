@@ -1059,7 +1059,7 @@ async fn offline_node(cluster: &Cluster) {
     // Unpublish volume2
     let _ = volume_client
         .unpublish(
-            &UnpublishVolume::new(&VolumeId::try_from(VOLUME_1).unwrap(), false),
+            &UnpublishVolume::new(&VolumeId::try_from(VOLUME_2).unwrap(), false),
             None,
         )
         .await

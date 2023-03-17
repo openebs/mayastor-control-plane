@@ -289,9 +289,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         request: &Self::Publish,
     ) -> Result<Self::PublishOutput, SvcError> {
         let state = registry.volume_state(&request.uuid).await?;
-        let nexus_node = self
-            .next_target_node(registry, &state, request, false)
-            .await?;
+        let nexus_node = self.next_target_node(registry, request, false).await?;
 
         let last_target = self.as_ref().health_info_id().cloned();
         let frontend_nodes = &request.frontend_nodes;
@@ -454,9 +452,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         }
 
         // Get the newer target node for the new nexus creation.
-        let nexus_node = self
-            .next_target_node(registry, &state, request, true)
-            .await?;
+        let nexus_node = self.next_target_node(registry, request, true).await?;
         let nodes = target_cfg.frontend().node_names();
         let target_cfg = self
             .next_target_config(registry, &nexus_node, &Some(request.share), &nodes)
