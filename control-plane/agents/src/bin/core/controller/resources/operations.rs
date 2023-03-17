@@ -74,6 +74,8 @@ pub(crate) trait ResourcePublishing {
 #[async_trait::async_trait]
 pub(crate) trait ResourceReplicas {
     type Request: Sync + Send;
+    type MoveRequest: Sync + Send;
+    type MoveResp: Sync + Send;
 
     /// Set the resource's replica count.
     async fn set_replica(
@@ -81,6 +83,12 @@ pub(crate) trait ResourceReplicas {
         registry: &Registry,
         request: &Self::Request,
     ) -> Result<(), SvcError>;
+
+    async fn move_replica(
+        &mut self,
+        registry: &Registry,
+        request: &Self::MoveRequest,
+    ) -> Result<Self::MoveResp, SvcError>;
 }
 
 /// Resource Children/Offspring Operations.

@@ -46,8 +46,9 @@ impl ComponentAction for IoEngine {
 
             let core_list = match options.io_engine_isolate {
                 true => {
-                    let initial = i * options.io_engine_cores;
-                    initial .. initial + options.io_engine_cores
+                    let cores = 1.max(options.io_engine_cores);
+                    let initial = i * cores;
+                    initial .. initial + cores
                 }
                 false => 0 .. options.io_engine_cores,
             }

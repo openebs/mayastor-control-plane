@@ -3,10 +3,13 @@ use grpc::operations::volume::server::VolumeServer;
 use std::sync::Arc;
 
 mod operations;
+mod operations_helper;
 mod registry;
 mod scheduling;
 mod service;
 mod specs;
+
+pub(crate) use operations::MoveReplicaRequest;
 
 /// Configure the Service and return the builder.
 pub(crate) fn configure(builder: agents::Service) -> agents::Service {

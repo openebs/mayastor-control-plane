@@ -10,7 +10,7 @@ use stor_port::types::v0::{
         pool::PoolSpec,
         replica::ReplicaSpec,
     },
-    transport::{Child, NexusId, NexusStatus, NodeId},
+    transport::{Child, NexusId, NexusStatus},
 };
 
 #[derive(Clone)]
@@ -74,7 +74,6 @@ pub(crate) struct ENoSpcReplica {
     nexus: ResourceMutex<NexusSpec>,
     replica: ReplicaSpec,
     child: ReplicaUri,
-    repl_node: NodeId,
 }
 impl ENoSpcPool {
     /// Collect the spec and replicas.
@@ -90,10 +89,6 @@ impl ENoSpcReplica {
     /// Get a reference to the nexus.
     pub(crate) fn nexus(&self) -> &ResourceMutex<NexusSpec> {
         &self.nexus
-    }
-    /// Get a reference to the replica node.
-    pub(crate) fn repl_node(&self) -> &NodeId {
-        &self.repl_node
     }
     /// Get a reference to the child.
     pub(crate) fn child(&self) -> &ReplicaUri {
@@ -115,7 +110,6 @@ async fn nexus_enospc_pools(registry: &Registry) -> Vec<ENoSpcPool> {
         if let Ok(repl) = registry.specs().replica(child.uuid()).await {
             let pool = repl.as_ref().pool.pool_name();
             if let Ok(pool) = registry.specs().pool(pool) {
-                let node = pool.node.clone();
                 match pools.iter_mut().find(|p| p.pool.uid() == pool.uid()) {
                     None => {
                         pools.push(ENoSpcPool {
@@ -124,7 +118,6 @@ async fn nexus_enospc_pools(registry: &Registry) -> Vec<ENoSpcPool> {
                                 nexus: nexus.clone(),
                                 replica: repl.lock().clone(),
                                 child,
-                                repl_node: node,
                             }],
                         });
                     }
@@ -133,7 +126,6 @@ async fn nexus_enospc_pools(registry: &Registry) -> Vec<ENoSpcPool> {
                             nexus: nexus.clone(),
                             replica: repl.lock().clone(),
                             child,
-                            repl_node: node,
                         });
                     }
                 }

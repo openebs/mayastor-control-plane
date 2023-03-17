@@ -1,7 +1,6 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::ResourceLifecycle,
         operations_helper::{
             GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
             SpecOperationsHelper,
@@ -246,29 +245,6 @@ impl ResourceSpecsLocked {
                 replica_id: replica.clone(),
             }),
             Some(replica) => Ok(replica.operation_guard_wait().await?),
-        }
-    }
-
-    pub(crate) async fn destroy_replica_spec(
-        &self,
-        registry: &Registry,
-        replica_spec: &ReplicaSpec,
-        destroy_by: ReplicaOwners,
-    ) -> Result<(), SvcError> {
-        match Self::replica_node(registry, replica_spec).await {
-            // Should never happen, but just in case...
-            None => Err(SvcError::Internal {
-                details: "Failed to find the node where a replica lives".to_string(),
-            }),
-            Some(node) => {
-                let mut replica = self.replica(&replica_spec.uuid).await?;
-                replica
-                    .destroy(
-                        registry,
-                        &Self::destroy_replica_request(replica_spec.clone(), destroy_by, &node),
-                    )
-                    .await
-            }
         }
     }
 

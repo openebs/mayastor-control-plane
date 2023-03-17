@@ -6,7 +6,7 @@ use stor_port::types::v0::{
 
 impl ResourceMutex<VolumeSpec> {
     /// Get the resource uuid.
-    pub fn uuid(&mut self) -> &VolumeId {
+    pub fn uuid(&self) -> &VolumeId {
         &self.immutable_ref().uuid
     }
 }

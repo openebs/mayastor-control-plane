@@ -106,7 +106,13 @@ impl NodeFilters {
         request.allowed_nodes().is_empty() || request.allowed_nodes().contains(&item.pool.node)
     }
     /// Should only attempt to use nodes not currently used by the volume.
+    /// When moving a replica the current replica node is allowed to be reused for a different pool.
     pub(crate) fn unused(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        if let Some(moving) = request.move_repl() {
+            if moving.node() == &item.pool.node && moving.pool() != &item.pool.id {
+                return true;
+            }
+        }
         let registry = request.registry();
         let used_nodes = registry.specs().volume_data_nodes(&request.uuid);
         !used_nodes.contains(&item.pool.node)

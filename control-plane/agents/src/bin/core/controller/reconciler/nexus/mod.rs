@@ -150,11 +150,9 @@ pub(super) async fn faulted_children_remover(
                 nexus_spec_clone.warn_span(|| {
                     tracing::warn!(%child.state, "Attempting to remove faulted child '{}'", child.uri)
                 });
-                if let Err(error) = context
-                    .specs()
-                    .remove_nexus_child_by_uri(
+                if let Err(error) = nexus
+                    .remove_child_by_uri(
                         context.registry(),
-                        nexus,
                         &nexus_state,
                         &child.uri,
                         true,
@@ -208,15 +206,8 @@ pub(super) async fn unknown_children_remover(
                 nexus.warn_span(|| {
                     tracing::warn!("Attempting to remove unknown child '{}'", child.uri)
                 });
-                if let Err(error) = context
-                    .specs()
-                    .remove_nexus_child_by_uri(
-                        context.registry(),
-                        nexus,
-                        &nexus_state,
-                        &child.uri,
-                        false,
-                    )
+                if let Err(error) = nexus
+                    .remove_child_by_uri(context.registry(), &nexus_state, &child.uri, false)
                     .await
                 {
                     nexus.error(&format!(
@@ -260,9 +251,8 @@ pub(super) async fn missing_children_remover(
             child.uri(),
         ));
 
-        if let Err(error) = context
-            .specs()
-            .remove_nexus_child_by_uri(context.registry(), nexus, &nexus_state, &child.uri(), true)
+        if let Err(error) = nexus
+            .remove_child_by_uri(context.registry(), &nexus_state, &child.uri(), true)
             .await
         {
             nexus.error_span(|| {
@@ -298,8 +288,11 @@ pub(super) async fn missing_nexus_recreate(
         return PollResult::Ok(PollerState::Idle);
     }
 
-    #[tracing::instrument(skip(nexus, context), fields(nexus.uuid = %nexus.uuid, request.reconcile = true))]
-    async fn missing_nexus_recreate(mut nexus: NexusSpec, context: &PollContext) -> PollResult {
+    #[tracing::instrument(skip(nexus_guard, context), fields(nexus.uuid = %nexus_guard.uuid(), request.reconcile = true))]
+    async fn missing_nexus_recreate(
+        nexus_guard: &mut OperationGuardArc<NexusSpec>,
+        context: &PollContext,
+    ) -> PollResult {
         let warn_missing = |nexus_spec: &NexusSpec, node_status: NodeStatus| {
             nexus_spec.debug_span(|| {
                 tracing::debug!(
@@ -310,14 +303,16 @@ pub(super) async fn missing_nexus_recreate(
             });
         };
 
+        let nexus = nexus_guard.as_ref();
+
         let node = match context.registry().node_wrapper(&nexus.node).await {
             Ok(node) if !node.read().await.is_online() => {
                 let node_status = node.read().await.status();
-                warn_missing(&nexus, node_status);
+                warn_missing(nexus, node_status);
                 return PollResult::Ok(PollerState::Idle);
             }
             Err(_) => {
-                warn_missing(&nexus, NodeStatus::Unknown);
+                warn_missing(nexus, NodeStatus::Unknown);
                 return PollResult::Ok(PollerState::Idle);
             }
             Ok(node) => node,
@@ -325,14 +320,13 @@ pub(super) async fn missing_nexus_recreate(
 
         nexus.warn_span(|| tracing::warn!("Attempting to recreate missing nexus"));
 
-        let children = healthy_nexus_children(&nexus, context.registry()).await?;
+        let children = healthy_nexus_children(nexus, context.registry()).await?;
 
         let mut nexus_replicas = vec![];
         for item in children.candidates() {
             // just in case the replica gets somehow shared/unshared?
-            match context
-                .specs()
-                .make_replica_accessible(context.registry(), item.state(), &nexus.node)
+            match nexus_guard
+                .make_me_replica_accessible(context.registry(), item.state())
                 .await
             {
                 Ok(uri) => {
@@ -342,12 +336,14 @@ pub(super) async fn missing_nexus_recreate(
                     )));
                 }
                 Err(error) => {
-                    nexus.error_span(|| {
-                        tracing::error!(nexus.node=%nexus.node, replica.uuid = %item.spec().uuid, error=%error, "Failed to make the replica available on the nexus node");
+                    nexus_guard.error_span(|| {
+                        tracing::error!(nexus.node=%nexus_guard.as_ref().node, replica.uuid = %item.spec().uuid, error=%error, "Failed to make the replica available on the nexus node");
                     });
                 }
             }
         }
+
+        let mut nexus = nexus_guard.as_ref().clone();
 
         nexus.children = match children {
             HealthyChildItems::One(_, _) => nexus_replicas.first().into_iter().cloned().collect(),
@@ -382,7 +378,6 @@ pub(super) async fn missing_nexus_recreate(
         }
     }
 
-    let nexus = nexus.lock().clone();
     missing_nexus_recreate(nexus, context).await
 }
 

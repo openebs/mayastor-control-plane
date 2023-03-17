@@ -2,12 +2,14 @@ use crate::{
     controller::{
         registry::Registry,
         resources::{
-            operations_helper::OperationSequenceGuard, ResourceMutex, ResourceUid, TraceSpan,
+            operations::ResourceReplicas, operations_helper::OperationSequenceGuard, ResourceMutex,
+            ResourceUid, TraceSpan,
         },
         scheduling::pool::ENoSpcReplica,
         wrapper::{GetterOps, PoolWrapper},
     },
     pool::scheduling::unfiltered_enospc_pools,
+    volume::MoveReplicaRequest,
 };
 use agents::errors::{PoolNotFound, SvcError};
 use snafu::OptionExt;
@@ -50,13 +52,13 @@ pub(crate) async fn remove_larger_replicas(registry: &Registry) {
             // If the node is online/flaky we might not be able to get the current replica
             // information, and in this case there's not much we can do.
             if let Some(largest_replica) = largest_replica {
-                let _ = remove_largest_replica(largest_replica, registry).await;
+                let _ = move_largest_replica(largest_replica, registry).await;
             }
         }
     }
 }
 
-async fn remove_largest_replica(
+async fn move_largest_replica(
     (replica, eno_replica): (ResourceMutex<ReplicaSpec>, &ENoSpcReplica),
     registry: &Registry,
 ) -> Result<bool, SvcError> {
@@ -64,29 +66,37 @@ async fn remove_largest_replica(
     match volume_owner {
         Some(volume) => {
             let mut volume = registry.specs().volume(&volume).await?;
-            volume.remove_replica(eno_replica, registry).await?;
+            let replica = volume
+                .move_replica(
+                    registry,
+                    &MoveReplicaRequest::from(eno_replica).with_delete(true),
+                )
+                .await?;
+
             volume.warn_span(|| {
                 tracing::warn!(
                     replica.uuid = eno_replica.replica().uid().as_str(),
-                    "Successfully removed replica"
+                    replica.old_pool = eno_replica.replica().pool_name().as_str(),
+                    replica.pool = replica.pool_id.as_str(),
+                    "Successfully moved enospc replica"
                 )
             });
             Ok(true)
         }
         None => {
-            // The replica is not part of a volume, and not managed by us, NMP.
+            // The replica is not part of a volume AND is not managed by us, NMP.
             if !replica.lock().managed {
                 return Ok(false);
             }
 
             let mut nexus = eno_replica.nexus().operation_guard()?;
             let mut replica = replica.operation_guard()?;
-            replica.fault(&mut nexus, eno_replica, registry).await?;
+            replica.fault(&mut nexus, registry).await?;
             nexus.warn_span(|| {
                 tracing::warn!(
                     child.uri = eno_replica.child().uri().as_str(),
                     child.uuid = eno_replica.replica().uid().as_str(),
-                    "Successfully faulted child"
+                    "Successfully faulted enospc child"
                 )
             });
             Ok(true)

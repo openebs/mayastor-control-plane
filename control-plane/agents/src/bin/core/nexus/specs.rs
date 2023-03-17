@@ -1,29 +1,23 @@
 use crate::controller::{
-    io_engine::NexusChildApi,
     registry::Registry,
     resources::{
-        operations::{ResourceOffspring, ResourceOwnerUpdate},
         operations_helper::{
             GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
             SpecOperationsHelper,
         },
-        OperationGuardArc, ResourceMutex, TraceSpan,
+        OperationGuardArc, ResourceMutex,
     },
 };
 use agents::errors::SvcError;
 use stor_port::{
-    transport_api::{ErrorChain, ResourceKind},
+    transport_api::ResourceKind,
     types::v0::{
         store::{
             nexus::{NexusOperation, NexusSpec},
-            nexus_child::NexusChild,
             replica::ReplicaSpec,
             SpecStatus, SpecTransaction,
         },
-        transport::{
-            AddNexusReplica, Child, ChildUri, CreateNexus, Nexus, NexusId, NexusOwners,
-            NexusStatus, RemoveNexusChild, RemoveNexusReplica, ReplicaOwners,
-        },
+        transport::{CreateNexus, Nexus, NexusId, NexusOwners, NexusStatus, ReplicaOwners},
     },
 };
 
@@ -235,163 +229,6 @@ impl ResourceSpecsLocked {
                 replica.disown(&ReplicaOwners::new(None, vec![nexus.uuid.clone()]));
             }
         });
-    }
-
-    pub(crate) async fn add_nexus_replica(
-        &self,
-        nexus: Option<&mut OperationGuardArc<NexusSpec>>,
-        registry: &Registry,
-        request: &AddNexusReplica,
-    ) -> Result<Child, SvcError> {
-        let node = registry.node_wrapper(&request.node).await?;
-
-        if let Some(nexus) = nexus {
-            let status = registry.nexus(&request.nexus).await?;
-            let spec_clone = nexus
-                .start_update(
-                    registry,
-                    &status,
-                    NexusOperation::AddChild(NexusChild::from(&request.replica)),
-                )
-                .await?;
-
-            let result = node.add_child(&request.into()).await;
-            self.on_add_own_replica(request, &result);
-            nexus.complete_update(registry, result, spec_clone).await
-        } else {
-            Err(SvcError::NexusNotFound {
-                nexus_id: request.nexus.to_string(),
-            })
-        }
-    }
-
-    fn on_add_own_replica(&self, request: &AddNexusReplica, result: &Result<Child, SvcError>) {
-        if result.is_ok() {
-            if let Some(replica) = self.replica_rsc(request.replica.uuid()) {
-                let mut replica = replica.lock();
-                replica.owners.add_owner(&request.nexus);
-            }
-        }
-    }
-
-    pub(crate) async fn remove_nexus_replica(
-        &self,
-        nexus: Option<&mut OperationGuardArc<NexusSpec>>,
-        registry: &Registry,
-        request: &RemoveNexusReplica,
-    ) -> Result<(), SvcError> {
-        let node = registry.node_wrapper(&request.node).await?;
-
-        if let Some(nexus) = nexus {
-            let status = registry.nexus(&request.nexus).await?;
-            let spec_clone = nexus
-                .start_update(
-                    registry,
-                    &status,
-                    NexusOperation::RemoveChild(NexusChild::from(&request.replica)),
-                )
-                .await?;
-
-            let result = node.remove_child(&request.into()).await;
-            self.on_remove_disown_replica(registry, request, &result)
-                .await;
-
-            nexus.complete_update(registry, result, spec_clone).await
-        } else {
-            Err(SvcError::NexusNotFound {
-                nexus_id: request.nexus.to_string(),
-            })
-        }
-    }
-
-    /// Remove a nexus child uri
-    /// If it's a replica it also disowns the replica from the volume and attempts to destroy it,
-    /// if requested.
-    pub(crate) async fn remove_nexus_child_by_uri(
-        &self,
-        registry: &Registry,
-        nexus_guard: &mut OperationGuardArc<NexusSpec>,
-        nexus: &Nexus,
-        uri: &ChildUri,
-        destroy_replica: bool,
-    ) -> Result<(), SvcError> {
-        let nexus_children = nexus_guard.lock().children.clone();
-        match nexus_children.into_iter().find(|c| &c.uri() == uri) {
-            Some(NexusChild::Replica(replica)) => {
-                let request = RemoveNexusReplica::new(&nexus.node, &nexus.uuid, &replica);
-                match self
-                    .remove_nexus_replica(Some(nexus_guard), registry, &request)
-                    .await
-                {
-                    Ok(_) if destroy_replica => {
-                        let mut replica = self
-                            .replica_rsc(replica.uuid())
-                            .ok_or(SvcError::ReplicaNotFound {
-                                replica_id: replica.uuid().clone(),
-                            })?
-                            .operation_guard()?;
-                        let pool_ref = replica.as_ref().pool.pool_name();
-                        match Self::pool_node(registry, pool_ref).await {
-                            Some(node) => {
-                                if let Err(error) = self
-                                    .disown_and_destroy_replica(registry, &node, &mut replica)
-                                    .await
-                                {
-                                    nexus_guard.lock().clone().error_span(|| {
-                                        tracing::error!(
-                                            replica.uuid = %replica.uuid(),
-                                            error = %error.full_string(),
-                                            "Failed to disown and destroy the replica"
-                                        )
-                                    });
-                                }
-                            }
-                            None => {
-                                // The replica node was not found (perhaps because it is offline).
-                                // The replica can't be destroyed because the node isn't there.
-                                // Instead, disown the replica from the volume and let the garbage
-                                // collector destroy it later.
-                                nexus_guard.warn_span(|| {
-                                    tracing::warn!(
-                                        replica.uuid = %replica.uuid(),
-                                        "Failed to find the node where the replica is hosted"
-                                    )
-                                });
-                                let disowner = ReplicaOwners::new_disown_all();
-                                let _ = replica.remove_owners(registry, &disowner, true).await;
-                            }
-                        }
-
-                        Ok(())
-                    }
-                    result => result,
-                }
-            }
-            Some(NexusChild::Uri(uri)) => {
-                let request = RemoveNexusChild::new(&nexus.node, &nexus.uuid, &uri);
-                nexus_guard.remove_child(registry, &request).await
-            }
-            None => {
-                let request = RemoveNexusChild::new(&nexus.node, &nexus.uuid, uri);
-                nexus_guard.remove_child(registry, &request).await
-            }
-        }
-    }
-
-    async fn on_remove_disown_replica(
-        &self,
-        registry: &Registry,
-        request: &RemoveNexusReplica,
-        result: &Result<(), SvcError>,
-    ) {
-        if result.is_ok() {
-            if let Some(replica) = self.replica_rsc(request.replica.uuid()) {
-                if let Ok(mut replica) = replica.operation_guard() {
-                    let disowner = ReplicaOwners::new(None, vec![request.nexus.clone()]);
-                    let _ = replica.remove_owners(registry, &disowner, true).await;
-                }
-            }
-        }
     }
 
     /// Remove nexus by its `id`

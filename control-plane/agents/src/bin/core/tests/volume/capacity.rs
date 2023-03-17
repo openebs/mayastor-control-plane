@@ -12,6 +12,7 @@ use stor_port::types::v0::{
 #[tokio::test]
 async fn online_enospc_child() {
     let cache_period = Duration::from_millis(250);
+    let reconcile_period = Duration::from_millis(3000);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_io_engines(2)
@@ -20,7 +21,7 @@ async fn online_enospc_child() {
         .with_csi(false, true)
         .with_options(|o| o.with_isolated_io_engine(true))
         .with_cache_period(&humantime::Duration::from(cache_period).to_string())
-        .with_reconcile_period(Duration::from_millis(3000), Duration::from_millis(3000))
+        .with_reconcile_period(reconcile_period, reconcile_period)
         .build()
         .await
         .unwrap();
@@ -141,15 +142,6 @@ async fn online_enospc_child() {
     tokio::time::sleep(cache_period * 2).await;
     log_thin(&cluster).await;
 
-    pools_api
-        .put_node_pool(
-            cluster.node(1).as_str(),
-            cluster.pool(1, 1).as_str(),
-            models::CreatePoolBody::new(vec!["malloc:///disk?size_mb=200"]),
-        )
-        .await
-        .unwrap();
-
     let dd_1 = cluster.composer().exec(
         name.as_str(),
         vec!["dd", "if=/dev/urandom", dev_path_1.as_str(), "bs=64k"],
@@ -171,8 +163,30 @@ async fn online_enospc_child() {
 
     tracing::info!("\n{:?}", output);
 
-    tokio::time::sleep(cache_period * 2).await;
+    tokio::time::sleep(reconcile_period * 2).await;
     log_thin(&cluster).await;
+
+    // no children should be removed as there's no space for the larger replica
+    let current_replicas = replica_api.get_replicas().await.unwrap();
+    let new_replicas = current_replicas
+        .iter()
+        .any(|r| !replicas.iter().any(|or| or.uuid == r.uuid));
+    assert!(!new_replicas, "There should be no new replicas");
+
+    let volume_1 = volumes_api.get_volume(&volume_1.spec.uuid).await.unwrap();
+    assert_eq!(volume_1.state.status, models::VolumeStatus::Degraded);
+    let volume_2 = volumes_api.get_volume(&volume_2.spec.uuid).await.unwrap();
+    assert_eq!(volume_2.state.status, models::VolumeStatus::Degraded);
+
+    // Now we add a pool which allows us to move the largest replica
+    pools_api
+        .put_node_pool(
+            cluster.node(1).as_str(),
+            cluster.pool(1, 1).as_str(),
+            models::CreatePoolBody::new(vec!["malloc:///disk?size_mb=200"]),
+        )
+        .await
+        .unwrap();
 
     let volume_client = cluster.grpc_client().volume();
     wait_till_1_volume_healthy(&volume_client).await;
@@ -243,7 +257,8 @@ async fn wait_till_1_volume_healthy(volume_client: &dyn VolumeOperations) {
         }
 
         if std::time::Instant::now() > (start + timeout) {
-            panic!("Timeout waiting for a volume to be healthy! Current: {volumes:#?}");
+            tracing::error!("Timeout waiting for a volume to be healthy! Current: {volumes:#?}");
+            panic!("Timeout waiting for a volume to be healthy!");
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
