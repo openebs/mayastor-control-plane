@@ -95,25 +95,15 @@ async fn destroy_orphaned_nexus(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let owner = {
-        let nexus_spec = nexus.lock();
-        if !nexus_spec.managed {
-            return PollResult::Ok(PollerState::Idle);
-        }
-        nexus_spec
-            .owner
-            .as_ref()
-            .map(|owner| (owner.clone(), nexus_spec.clone()))
-    };
+    if !nexus.as_ref().managed {
+        return PollResult::Ok(PollerState::Idle);
+    }
 
-    if let Some((owner, nexus_clone)) = owner {
-        if context.specs().volume_clone(&owner).is_err() {
-            nexus_clone.warn_span(|| tracing::warn!("Attempting to disown orphaned nexus"));
-            context
-                .specs()
-                .disown_nexus(context.registry(), nexus)
-                .await?;
-            nexus_clone.info_span(|| tracing::info!("Successfully disowned orphaned nexus"));
+    if let Some(owner) = &nexus.as_ref().owner {
+        if context.specs().volume_rsc(owner).is_none() {
+            nexus.warn_span(|| tracing::warn!("Attempting to disown orphaned nexus"));
+            nexus.disown(context.registry()).await?;
+            nexus.info_span(|| tracing::info!("Successfully disowned orphaned nexus"));
         }
     }
 
@@ -129,7 +119,7 @@ async fn destroy_disowned_nexus(
     context: &PollContext,
 ) -> PollResult {
     let not_owned = {
-        let nexus_spec = nexus.lock();
+        let nexus_spec = nexus.as_ref();
         nexus_spec.managed && !nexus_spec.owned()
     };
     if not_owned {
@@ -148,7 +138,7 @@ async fn destroy_deleting_nexus(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let deleting = nexus.lock().status().deleting();
+    let deleting = nexus.as_ref().status().deleting();
     if deleting {
         let span = tracing::info_span!("destroy_deleting_nexus", nexus.uuid = %nexus.uuid(), request.reconcile = true);
         destroy_nexus(nexus, context).instrument(span).await?;
@@ -162,23 +152,21 @@ async fn destroy_nexus(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let node = nexus.lock().node.clone();
+    let node = nexus.as_ref().node.clone();
     let node_online = matches!(context.registry().node_wrapper(&node).await, Ok(node) if node.read().await.is_online());
     if node_online {
-        let nexus_clone = nexus.lock().clone();
-        nexus_clone.warn_span(|| tracing::warn!("Attempting to destroy nexus"));
-        let request = DestroyNexus::from(&nexus_clone);
+        nexus.warn_span(|| tracing::warn!("Attempting to destroy nexus"));
+        let request = DestroyNexus::from(nexus.as_ref());
         match nexus
             .destroy(context.registry(), &request.with_disown_all())
             .await
         {
             Ok(_) => {
-                nexus_clone.info_span(|| tracing::info!("Successfully destroyed nexus"));
+                nexus.info_span(|| tracing::info!("Successfully destroyed nexus"));
                 Ok(PollerState::Idle)
             }
             Err(error) => {
-                nexus_clone
-                    .error_span(|| tracing::error!(error = %error, "Failed to destroy nexus"));
+                nexus.error_span(|| tracing::error!(%error, "Failed to destroy nexus"));
                 Err(error)
             }
         }

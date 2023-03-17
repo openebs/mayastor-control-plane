@@ -280,6 +280,13 @@ impl ReplicaOwners {
         }
         self.nexuses.retain(|n| !disowner.owned_by_nexus(n));
     }
+    /// The replica is no longer part of the provided owners.
+    pub fn merge(&mut self, owners: Self) {
+        if self.volume.is_none() {
+            self.volume = owners.volume;
+        }
+        self.nexuses.extend(owners.nexuses);
+    }
     pub fn disown_all(&mut self) {
         self.volume.take();
         self.nexuses.clear();

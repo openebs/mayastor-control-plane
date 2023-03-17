@@ -205,9 +205,8 @@ async fn nexus_replica_count_reconciler_traced(
                     volume_replicas
                 )
             });
-            context
-                .specs()
-                .attach_replicas_to_nexus(context.registry(), volume, nexus, &nexus_state)
+            volume
+                .attach_replicas_to_nexus(context.registry(), nexus)
                 .await?;
         }
         Ordering::Greater => {
@@ -218,9 +217,8 @@ async fn nexus_replica_count_reconciler_traced(
                     volume_replicas
                 )
             });
-            context
-                .specs()
-                .remove_excess_replicas_from_nexus(context.registry(), volume, nexus, &nexus_state)
+            volume
+                .remove_excess_replicas_from_nexus(context.registry(), nexus, &nexus_state)
                 .await?;
         }
         Ordering::Equal => {}
@@ -275,9 +273,8 @@ async fn volume_replica_count_reconciler_traced(
             });
 
             let diff = required_replica_count - current_replica_count;
-            match context
-                .specs()
-                .create_volume_replicas(context.registry(), volume.as_ref(), diff)
+            match volume
+                .create_volume_replicas(context.registry(), diff)
                 .await?
             {
                 result if !result.is_empty() => {
@@ -313,9 +310,8 @@ async fn volume_replica_count_reconciler_traced(
             });
 
             let diff = current_replica_count - required_replica_count;
-            match context
-                .specs()
-                .remove_unused_volume_replicas(context.registry(), volume, diff)
+            match volume
+                .remove_unused_volume_replicas(context.registry(), diff)
                 .await
             {
                 Ok(_) => {

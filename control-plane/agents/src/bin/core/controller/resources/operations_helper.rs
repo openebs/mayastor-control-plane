@@ -843,11 +843,9 @@ impl ResourceSpecsLocked {
         // patch up the missing replica nexus owners
         let nexuses = self.nexuses();
         for replica in self.replicas() {
-            let replica_uuid = replica.lock().uuid.clone();
-
             nexuses
                 .iter()
-                .filter(|n| n.lock().contains_replica(&replica_uuid))
+                .filter(|n| n.lock().contains_replica(replica.uuid()))
                 .for_each(|n| replica.lock().owners.add_owner(&n.lock().uuid));
         }
     }

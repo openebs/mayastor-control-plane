@@ -178,24 +178,19 @@ async fn destroy_replica(
 ) -> PollResult {
     let pool_ref = replica.as_ref().pool.pool_name();
     if let Some(node) = ResourceSpecsLocked::pool_node(context.registry(), pool_ref).await {
-        let replica_spec = replica.lock().clone();
         match replica
             .destroy(
                 context.registry(),
-                &ResourceSpecsLocked::destroy_replica_request(
-                    replica_spec.clone(),
-                    ReplicaOwners::new_disown_all(),
-                    &node,
-                ),
+                &replica.destroy_request(ReplicaOwners::new_disown_all(), &node),
             )
             .await
         {
             Ok(_) => {
-                tracing::info!(replica.uuid=%replica_spec.uuid, "Successfully destroyed replica");
+                tracing::info!(replica.uuid=%replica.uuid(), "Successfully destroyed replica");
                 PollResult::Ok(PollerState::Idle)
             }
             Err(error) => {
-                tracing::trace!(replica.uuid=%replica_spec.uuid, %error, "Failed to destroy replica");
+                tracing::trace!(replica.uuid=%replica.uuid(), %error, "Failed to destroy replica");
                 PollResult::Err(error)
             }
         }

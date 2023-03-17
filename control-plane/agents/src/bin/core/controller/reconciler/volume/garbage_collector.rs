@@ -151,26 +151,23 @@ async fn disown_unused_nexuses(
     let mut results = vec![];
 
     for nexus in context.specs().volume_nexuses(volume.uuid()) {
-        let nexus_clone = nexus.lock().clone();
-
-        match volume.as_ref().target() {
-            Some(target) if target.nexus() == nexus.uid() || nexus_clone.is_shutdown() => continue,
-            _ => {}
-        };
-
-        nexus_clone.warn_span(|| tracing::warn!("Attempting to disown unused nexus"));
-        // the nexus garbage collector will destroy the disowned nexuses
-        match context
-            .specs()
-            .disown_nexus(context.registry(), &nexus)
-            .await
-        {
-            Ok(_) => {
-                nexus_clone.info_span(|| tracing::info!("Successfully disowned unused nexus"));
+        if let Ok(mut nexus) = nexus.operation_guard() {
+            if let Some(target) = volume.as_ref().target() {
+                if target.nexus() == nexus.uid() || nexus.as_ref().is_shutdown() {
+                    continue;
+                }
             }
-            Err(error) => {
-                nexus_clone.error_span(|| tracing::error!("Failed to disown unused nexus"));
-                results.push(Err(error));
+
+            nexus.warn_span(|| tracing::warn!("Attempting to disown unused nexus"));
+            // the nexus garbage collector will destroy the disowned nexuses
+            match nexus.disown(context.registry()).await {
+                Ok(_) => {
+                    nexus.info_span(|| tracing::info!("Successfully disowned unused nexus"));
+                }
+                Err(error) => {
+                    nexus.error_span(|| tracing::error!("Failed to disown unused nexus"));
+                    results.push(Err(error));
+                }
             }
         }
     }

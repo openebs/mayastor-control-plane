@@ -8,5 +8,5 @@ tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 tracing-opentelemetry = "0.18.0"
 opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
-version-info = { path = "../dependencies/version-info", default-features = false }
+version-info = { path = "../dependencies/version-info", default-features = false, features = ["git-version-stale"] }
 git-version-macro = { path = "../dependencies/rust-git-version/git-version-macro" }

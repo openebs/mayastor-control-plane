@@ -3,6 +3,7 @@ use grpc::operations::volume::server::VolumeServer;
 use std::sync::Arc;
 
 mod operations;
+mod operations_helper;
 mod registry;
 mod scheduling;
 mod service;

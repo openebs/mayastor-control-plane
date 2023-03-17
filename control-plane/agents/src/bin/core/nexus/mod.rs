@@ -3,6 +3,7 @@ use grpc::operations::nexus::server::NexusServer;
 use std::sync::Arc;
 
 mod operations;
+mod operations_helper;
 mod registry;
 /// Nexus Scheduling helpers.
 pub(crate) mod scheduling;

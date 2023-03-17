@@ -41,7 +41,7 @@ async fn volume_nexus_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let mut volume = match volume_spec.operation_guard() {
+    let volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };

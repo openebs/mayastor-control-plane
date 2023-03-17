@@ -1,3 +1,4 @@
+mod operations_helper;
 mod pool_operations;
 mod registry;
 mod replica_operations;

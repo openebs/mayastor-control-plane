@@ -425,9 +425,8 @@ impl OperationGuardArc<NexusSpec> {
         let mut nexus_replicas = vec![];
         for item in children.candidates() {
             // just in case the replica gets somehow shared/unshared?
-            match registry
-                .specs()
-                .make_replica_accessible(registry, item.state(), &nexus.node)
+            match self
+                .make_me_replica_accessible(registry, item.state())
                 .await
             {
                 Ok(uri) => {
