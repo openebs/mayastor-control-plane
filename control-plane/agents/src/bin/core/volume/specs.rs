@@ -47,6 +47,29 @@ use stor_port::{
 use snafu::OptionExt;
 use std::convert::From;
 
+/// CreateReplicaCandidate for volume and volume group.
+pub(crate) struct CreateReplicaCandidate {
+    candidates: Vec<CreateReplica>,
+    _volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+}
+
+impl CreateReplicaCandidate {
+    /// Create a new `CreateReplicaCandidate` with candidates and optional vg guard.
+    pub(crate) fn new(
+        candidates: Vec<CreateReplica>,
+        volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+    ) -> CreateReplicaCandidate {
+        Self {
+            candidates,
+            _volume_group_guard: volume_group_guard,
+        }
+    }
+    /// Get the candidates.
+    pub(crate) fn candidates(&self) -> &Vec<CreateReplica> {
+        &self.candidates
+    }
+}
+
 /// Select a replica to be removed from the volume
 pub(crate) async fn volume_replica_remove_candidate(
     spec: &VolumeSpec,
@@ -217,7 +240,13 @@ pub(crate) async fn create_volume_replicas(
     registry: &Registry,
     request: &CreateVolume,
     volume: &VolumeSpec,
-) -> Result<Vec<CreateReplica>, SvcError> {
+) -> Result<CreateReplicaCandidate, SvcError> {
+    // Create a vg guard to prevent candidate collision.
+    let vg_guard = match registry.specs().get_or_create_volume_group(request) {
+        Some(vg) => Some(vg.operation_guard_wait().await?),
+        _ => None,
+    };
+
     if !request.allowed_nodes().is_empty()
         && request.replicas > request.allowed_nodes().len() as u64
     {
@@ -233,7 +262,7 @@ pub(crate) async fn create_volume_replicas(
             need: request.replicas,
         }))
     } else {
-        Ok(node_replicas)
+        Ok(CreateReplicaCandidate::new(node_replicas, vg_guard))
     }
 }
 
@@ -515,6 +544,38 @@ impl ResourceSpecsLocked {
         specs.volumes.remove(id);
     }
 
+    /// Remove volume group by its `id` only if the volume list becomes empty.
+    pub(super) fn remove_volume_group(&self, id: &VolumeId, vg_id: &String) {
+        let mut specs = self.write();
+        if let Some(vg_spec) = specs.volume_groups.get(vg_id).cloned() {
+            let mut vg_spec = vg_spec.lock();
+            vg_spec.remove(id);
+            if vg_spec.is_empty() {
+                specs.volume_groups.remove(vg_id);
+            }
+        }
+    }
+
+    /// Get or Create the resourced VolumeGroupSpec for the given request.
+    pub(crate) fn get_or_create_volume_group(
+        &self,
+        request: &CreateVolume,
+    ) -> Option<ResourceMutex<VolumeGroupSpec>> {
+        request.volume_group.as_ref().map(|vg_info| {
+            let mut specs = self.write();
+            if let Some(vg_spec) = specs.volume_groups.get(vg_info.id()) {
+                vg_spec.lock().append(request.uuid.clone());
+                vg_spec.clone()
+            } else {
+                let vg_spec = specs.volume_groups.insert(VolumeGroupSpec::new(
+                    vg_info.id().clone(),
+                    vec![request.uuid.clone()],
+                ));
+                vg_spec
+            }
+        })
+    }
+
     /// Get or Create the resourced VolumeSpec for the given request
     pub(crate) fn get_or_create_volume(&self, request: &CreateVolume) -> ResourceMutex<VolumeSpec> {
         let mut specs = self.write();
@@ -556,6 +617,10 @@ impl GuardedOperationsHelper for OperationGuardArc<VolumeSpec> {
     fn remove_spec(&self, registry: &Registry) {
         let uuid = self.lock().uuid.clone();
         registry.specs().remove_volume(&uuid);
+        let vg_info = self.lock().volume_group.clone();
+        if let Some(vg) = vg_info {
+            registry.specs().remove_volume_group(&uuid, vg.id())
+        }
     }
 }
 

@@ -590,7 +590,7 @@ pub(crate) trait GuardedOperationsHelper:
 
 #[async_trait::async_trait]
 pub(crate) trait SpecOperationsHelper:
-    Clone + Debug + StorableObject + AsOperationSequencer + ResourceUid + PartialEq<Self::Create>
+    Clone + Debug + StorableObject + AsOperationSequencer + PartialEq<Self::Create>
 {
     type Create: Debug + PartialEq + Sync + Send;
     type Status: PartialEq + Sync + Send;
@@ -742,7 +742,10 @@ pub(crate) trait SpecOperationsHelper:
 
 /// Operations are locked
 #[async_trait::async_trait]
-pub(crate) trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperationsHelper> {
+pub(crate) trait OperationSequenceGuard<
+    T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid,
+>
+{
     /// Attempt to obtain a guard for the specified operation mode
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError>;
     /// Attempt to obtain a guard for the specified operation mode
@@ -762,7 +765,7 @@ pub(crate) trait OperationSequenceGuard<T: AsOperationSequencer + SpecOperations
 }
 
 #[async_trait::async_trait]
-impl<T: AsOperationSequencer + SpecOperationsHelper> OperationSequenceGuard<T>
+impl<T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid> OperationSequenceGuard<T>
     for ResourceMutex<T>
 {
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
@@ -772,7 +775,7 @@ impl<T: AsOperationSequencer + SpecOperationsHelper> OperationSequenceGuard<T>
             Ok(guard) => Ok(guard),
             Err((error, log)) => {
                 if log {
-                    tracing::trace!("Resource '{}' is busy: {}", self.lock().uuid_str(), error);
+                    tracing::trace!("Resource '{}' is busy: {}", self.lock().uid_str(), error);
                 }
                 Err(SvcError::Conflict {})
             }
