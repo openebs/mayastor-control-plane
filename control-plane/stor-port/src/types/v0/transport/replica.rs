@@ -206,6 +206,7 @@ pub struct ReplicaOwners {
     volume: Option<VolumeId>,
     #[serde(skip)]
     nexuses: Vec<NexusId>,
+    #[serde(default)]
     disown_all: bool,
 }
 impl ReplicaOwners {

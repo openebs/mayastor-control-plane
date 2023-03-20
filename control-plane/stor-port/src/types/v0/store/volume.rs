@@ -180,12 +180,21 @@ pub struct TargetConfig {
     /// Indicates whether the target is active.
     /// We keep this config even if the target is no longer active so we can inspect
     /// what the previous config was like.
+    #[serde(default = "default_active")]
     active: bool,
     /// The nexus nvmf configuration.
+    #[serde(default)]
     config: NexusNvmfConfig,
     /// Config of frontend-nodes where IO will be sent from.
+    #[serde(default)]
     frontend: FrontendConfig,
 }
+
+/// Default value for the active field in TargetConfig.
+fn default_active() -> bool {
+    true
+}
+
 impl TargetConfig {
     /// Get the uuid of the target.
     pub fn new(target: VolumeTarget, config: NexusNvmfConfig, frontend: FrontendConfig) -> Self {
@@ -196,6 +205,7 @@ impl TargetConfig {
             frontend,
         }
     }
+
     /// Get the last target configuration.
     /// # Note: It may or may not the the current active target.
     pub fn target(&self) -> &VolumeTarget {
