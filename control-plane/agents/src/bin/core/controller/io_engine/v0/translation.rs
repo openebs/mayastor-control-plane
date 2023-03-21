@@ -235,6 +235,7 @@ impl IoEngineToAgent for v0::Child {
             state_reason: v0::ChildStateReason::from_i32(self.reason)
                 .map(|f| From::from(ExternalType(f)))
                 .unwrap_or(ChildStateReason::Unknown),
+            faulted_at: None,
         }
     }
 }

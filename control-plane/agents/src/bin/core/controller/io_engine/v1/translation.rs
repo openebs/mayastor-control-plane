@@ -266,6 +266,11 @@ impl IoEngineToAgent for v1::nexus::Child {
             state_reason: v1::nexus::ChildStateReason::from_i32(self.state_reason)
                 .map(|f| From::from(ExternalType(f)))
                 .unwrap_or(ChildStateReason::Unknown),
+            faulted_at: self
+                .fault_timestamp
+                .clone()
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .map(chrono::DateTime::from),
         }
     }
 }

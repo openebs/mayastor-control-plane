@@ -1,5 +1,6 @@
 use super::*;
 
+use chrono::{DateTime, Utc};
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, str::FromStr};
@@ -17,6 +18,8 @@ pub struct Child {
     pub rebuild_progress: Option<u8>,
     /// Reason for the child state.
     pub state_reason: ChildStateReason,
+    /// Last faulted timestamp of this child.
+    pub faulted_at: Option<DateTime<Utc>>,
 }
 impl Child {
     /// If if the state reason is lack of space.
