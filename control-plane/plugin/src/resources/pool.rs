@@ -18,12 +18,9 @@ pub struct Pools {}
 // Pools returned from REST call.
 impl CreateRows for openapi::models::Pool {
     fn create_rows(&self) -> Vec<Row> {
-        let mut managed = true;
-        if self.spec.is_none() {
-            managed = false;
-        }
         // The spec would be empty if it was not created using
         // control plane.
+        let managed = self.spec.is_some();
         let spec = self.spec.clone().unwrap_or_default();
         // In case the state is not coming as filled, either due to pool, node lost, fill in
         // spec data and mark the status as Unknown.
@@ -35,15 +32,21 @@ impl CreateRows for openapi::models::Pool {
             status: openapi::models::PoolStatus::Unknown,
             used: 0,
         });
+        let free = if state.capacity > state.used {
+            state.capacity - state.used
+        } else {
+            0
+        };
         let disks = state.disks.join(", ");
         let rows = vec![row![
             self.id,
-            state.capacity,
-            state.used,
             disks,
+            managed,
             state.node,
             state.status,
-            managed
+            state.capacity,
+            state.used,
+            free,
         ]];
         rows
     }

@@ -19,19 +19,22 @@ lazy_static! {
         "ACCESSIBILITY",
         "STATUS",
         "SIZE",
-        "THIN-PROVISIONED"
+        "THIN-PROVISIONED",
+        "ALLOCATED"
     ];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",
-        "TOTAL CAPACITY",
-        "USED CAPACITY",
         "DISKS",
+        "MANAGED",
         "NODE",
         "STATUS",
-        "MANAGED"
+        "CAPACITY",
+        "ALLOCATED",
+        "AVAILABLE"
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "CORDONED"];
-    pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row!["ID", "NODE", "POOL", "STATUS"];
+    pub static ref REPLICA_TOPOLOGY_HEADERS: Row =
+        row!["ID", "NODE", "POOL", "STATUS", "CAPACITY", "ALLOCATED"];
     pub static ref BLOCKDEVICE_HEADERS_ALL: Row = row![
         "DEVNAME",
         "DEVTYPE",

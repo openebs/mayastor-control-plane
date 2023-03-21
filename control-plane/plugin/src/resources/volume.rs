@@ -21,16 +21,16 @@ pub struct Volumes {}
 impl CreateRows for openapi::models::Volume {
     fn create_rows(&self) -> Vec<Row> {
         let state = self.state.clone();
-        let rows = vec![row![
+        vec![row![
             state.uuid,
             self.spec.num_replicas,
             optional_cell(state.target.clone().map(|t| t.node)),
             optional_cell(state.target.as_ref().and_then(target_protocol)),
             state.status,
             state.size,
-            self.spec.thin
-        ]];
-        rows
+            self.spec.thin,
+            optional_cell(state.usage.map(|u| u.allocated))
+        ]]
     }
 }
 
@@ -161,15 +161,17 @@ impl GetHeaderRow for HashMap<String, openapi::models::ReplicaTopology> {
 
 impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
     fn create_rows(&self) -> Vec<Row> {
-        let mut rows = vec![];
-        self.iter().for_each(|(id, topology)| {
-            rows.push(row![
-                id,
-                optional_cell(topology.node.as_ref()),
-                optional_cell(topology.pool.as_ref()),
-                topology.state,
-            ])
-        });
-        rows
+        self.iter()
+            .map(|(id, topology)| {
+                row![
+                    id,
+                    optional_cell(topology.node.as_ref()),
+                    optional_cell(topology.pool.as_ref()),
+                    topology.state,
+                    optional_cell(topology.usage.as_ref().map(|u| u.capacity)),
+                    optional_cell(topology.usage.as_ref().map(|u| u.allocated))
+                ]
+            })
+            .collect()
     }
 }
