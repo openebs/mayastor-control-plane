@@ -575,6 +575,7 @@ impl From<&VolumeSpec> for transport::VolumeState {
         Self {
             uuid: spec.uuid.clone(),
             size: spec.size,
+            usage: None,
             status: transport::VolumeStatus::Unknown,
             target: None,
             replica_topology: HashMap::new(),

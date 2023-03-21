@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 /// All the control-plane resources which are persisted in the persistent store.
 pub mod store;
 /// All the "transport" types which allow control-plane components to interact with each other

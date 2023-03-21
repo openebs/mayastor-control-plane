@@ -68,6 +68,48 @@ pub struct VolumeState {
     pub target: Option<Nexus>,
     /// The replica topology information.
     pub replica_topology: HashMap<ReplicaId, ReplicaTopology>,
+    /// Volume usage information.
+    /// This field is optional because we might not be able to collect the usage information
+    /// from the replicas in case the backend is offline.
+    pub usage: Option<VolumeUsage>,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeUsage {
+    /// Capacity of the volume in bytes.
+    capacity: u64,
+    /// Allocated size in bytes, related to a single healthy replica.
+    /// For example, if a volume has 2 replicas, each with 1MiB allocated space, then
+    /// this field will be 1MiB.
+    allocated: u64,
+    /// Allocated size in bytes, accrued from all the replica.
+    /// For example, if a volume has 2 replicas, each with 1MiB allocated space, then
+    /// this field will be 2MiB.
+    total_allocated: u64,
+}
+
+impl VolumeUsage {
+    /// Return a new `Self` from the given parameters.
+    pub fn new(capacity: u64, allocated: u64, total_allocated: u64) -> Self {
+        Self {
+            capacity,
+            allocated,
+            total_allocated,
+        }
+    }
+    /// Get the volume capacity.
+    pub fn capacity(&self) -> u64 {
+        self.capacity
+    }
+    /// Get the volume allocated bytes taken from a single (largest) replica.
+    pub fn allocated(&self) -> u64 {
+        self.allocated
+    }
+    /// Get the volume total allocated bytes across all replicas.
+    pub fn total_allocated(&self) -> u64 {
+        self.total_allocated
+    }
 }
 
 impl From<VolumeState> for models::VolumeState {
@@ -592,6 +634,38 @@ impl DestroyVolume {
     }
 }
 
+/// Replica usage information
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplicaUsage {
+    /// Capacity of the replica in bytes.
+    capacity: u64,
+    /// Allocated space in bytes.
+    allocated: u64,
+}
+impl ReplicaUsage {
+    /// Return a new `Self` from the given parameters.
+    pub fn new(capacity: u64, allocated: u64) -> Self {
+        Self {
+            capacity,
+            allocated,
+        }
+    }
+    /// Get the replica capacity in bytes.
+    pub fn capacity(&self) -> u64 {
+        self.capacity
+    }
+    /// Get the replica allocated bytes.
+    pub fn allocated(&self) -> u64 {
+        self.allocated
+    }
+}
+impl From<ReplicaSpaceUsage> for ReplicaUsage {
+    fn from(value: ReplicaSpaceUsage) -> Self {
+        Self::new(value.capacity_bytes, value.allocated_bytes)
+    }
+}
+
 /// Replica topology information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -602,12 +676,24 @@ pub struct ReplicaTopology {
     pool: Option<PoolId>,
     /// The status of the replica.
     status: ReplicaStatus,
+    /// The replica usage.
+    usage: Option<ReplicaUsage>,
 }
 
 impl ReplicaTopology {
     /// Create a new instance of ReplicaTopology.
-    pub fn new(node: Option<NodeId>, pool: Option<PoolId>, status: ReplicaStatus) -> Self {
-        Self { node, pool, status }
+    pub fn new(
+        node: Option<NodeId>,
+        pool: Option<PoolId>,
+        status: ReplicaStatus,
+        usage: Option<ReplicaUsage>,
+    ) -> Self {
+        Self {
+            node,
+            pool,
+            status,
+            usage,
+        }
     }
 
     /// Get the ReplicaTopology node ID.
@@ -623,6 +709,11 @@ impl ReplicaTopology {
     /// Get the status of the replica
     pub fn status(&self) -> &ReplicaStatus {
         &self.status
+    }
+
+    /// Get the storage usage of the replica.
+    pub fn usage(&self) -> Option<&ReplicaUsage> {
+        self.usage.as_ref()
     }
 }
 
