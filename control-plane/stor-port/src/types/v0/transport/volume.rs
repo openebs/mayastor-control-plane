@@ -124,7 +124,13 @@ impl From<VolumeState> for models::VolumeState {
                 .iter()
                 .map(|(k, v)| (k.into(), v.into()))
                 .collect(),
+            usage: volume.usage.into_opt(),
         }
+    }
+}
+impl From<VolumeUsage> for models::VolumeUsage {
+    fn from(value: VolumeUsage) -> Self {
+        Self::new(value.capacity, value.allocated, value.total_allocated)
     }
 }
 
@@ -723,7 +729,13 @@ impl From<&ReplicaTopology> for models::ReplicaTopology {
             replica_topology.node.clone().map(Into::into),
             replica_topology.pool.clone().map(Into::into),
             replica_topology.status.clone(),
+            replica_topology.usage.as_ref().into_opt(),
         )
+    }
+}
+impl From<&ReplicaUsage> for models::ReplicaUsage {
+    fn from(value: &ReplicaUsage) -> Self {
+        Self::new(value.capacity, value.allocated)
     }
 }
 
