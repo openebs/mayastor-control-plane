@@ -7,7 +7,7 @@ use std::fmt::Debug;
 
 /// Definition of the nexus information that gets saved in the persistent
 /// store.
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct NexusInfo {
     #[serde(skip)]
     /// uuid of the Nexus
@@ -38,7 +38,7 @@ impl NexusInfo {
 
 /// Definition of the child information that gets saved in the persistent
 /// store.
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct ChildInfo {
     /// UUID of the child.
     pub uuid: ReplicaId,
