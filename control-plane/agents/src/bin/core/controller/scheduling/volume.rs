@@ -109,6 +109,10 @@ impl AddVolumeReplica {
     // May return None if the replica nodes are offline.
     async fn allocated_bytes(registry: &Registry, volume: &VolumeSpec) -> Option<u64> {
         let replicas = registry.specs().volume_replicas(&volume.uuid);
+        if replicas.is_empty() {
+            return Some(0);
+        }
+
         let mut used_bytes = Vec::with_capacity(replicas.len());
         for spec in replicas {
             if let Ok(state) = registry.get_replica(spec.uuid()).await {
