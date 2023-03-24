@@ -1801,6 +1801,7 @@ components:
           description: size of device in (512 byte) blocks
           type: integer
           format: int64
+          minimum: 0
       required:
         - available
         - devlinks

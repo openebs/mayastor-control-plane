@@ -25,9 +25,14 @@ impl CreateRow for openapi::models::Volume {
             optional_cell(state.target.clone().map(|t| t.node)),
             optional_cell(state.target.as_ref().and_then(target_protocol)),
             state.status.clone(),
-            state.size,
+            ::utils::bytes::into_human(state.size),
             self.spec.thin,
-            optional_cell(state.usage.as_ref().map(|u| u.allocated))
+            optional_cell(
+                state
+                    .usage
+                    .as_ref()
+                    .map(|u| ::utils::bytes::into_human(u.allocated))
+            )
         ]
     }
 }
@@ -164,8 +169,18 @@ impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
                     optional_cell(topology.node.as_ref()),
                     optional_cell(topology.pool.as_ref()),
                     topology.state,
-                    optional_cell(topology.usage.as_ref().map(|u| u.capacity)),
-                    optional_cell(topology.usage.as_ref().map(|u| u.allocated))
+                    optional_cell(
+                        topology
+                            .usage
+                            .as_ref()
+                            .map(|u| ::utils::bytes::into_human(u.capacity))
+                    ),
+                    optional_cell(
+                        topology
+                            .usage
+                            .as_ref()
+                            .map(|u| ::utils::bytes::into_human(u.allocated))
+                    )
                 ]
             })
             .collect()

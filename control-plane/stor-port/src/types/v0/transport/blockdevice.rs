@@ -92,7 +92,7 @@ impl From<BlockDevice> for models::BlockDevice {
             src.filesystem,
             src.model,
             src.partition,
-            src.size as i64,
+            src.size,
         )
     }
 }

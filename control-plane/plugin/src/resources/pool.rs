@@ -42,9 +42,9 @@ impl CreateRow for openapi::models::Pool {
             managed,
             state.node,
             state.status,
-            state.capacity,
-            state.used,
-            free,
+            ::utils::bytes::into_human(state.capacity),
+            ::utils::bytes::into_human(state.used),
+            ::utils::bytes::into_human(free),
         ]
     }
 }
