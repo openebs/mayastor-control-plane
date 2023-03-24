@@ -2,7 +2,7 @@ use crate::{
     operations::GetBlockDevices,
     resources::{
         utils::{
-            print_table, CreateRows, GetHeaderRow, OutputFormat, BLOCKDEVICE_HEADERS_ALL,
+            print_table, CreateRow, GetHeaderRow, OutputFormat, BLOCKDEVICE_HEADERS_ALL,
             BLOCKDEVICE_HEADERS_USABLE,
         },
         NodeId,
@@ -47,53 +47,53 @@ impl BlockDeviceArgs {
     }
 }
 
-// CreateRows trait for BlockDeviceAll would create the row from the
-// BD returned from REST call with all set to true.
-impl CreateRows for BlockDeviceAll {
-    fn create_rows(&self) -> Vec<Row> {
-        vec![row![
-            self.0.devname.clone(),
-            self.0.devtype.clone(),
-            self.0.size.to_string(),
-            String::from(if self.0.available { "yes" } else { "no" }),
-            self.0.model.clone(),
-            self.0.devpath.clone(),
-            self.0.devmajor.to_string(),
-            self.0.devminor.to_string(),
-            self.0.filesystem.fstype.clone(),
-            self.0.filesystem.uuid.clone(),
-            self.0.filesystem.mountpoint.clone(),
-            get_partition_type(&self.0.partition),
-            self.0
+impl CreateRow for BlockDeviceAll {
+    fn row(&self) -> Row {
+        let device = self.0.clone();
+        row![
+            device.devname,
+            device.devtype,
+            ::utils::bytes::into_human(device.size * 512),
+            String::from(if device.available { "yes" } else { "no" }),
+            device.model,
+            device.devpath,
+            device.devmajor,
+            device.devminor,
+            device.filesystem.fstype,
+            device.filesystem.uuid,
+            device.filesystem.mountpoint,
+            get_partition_type(&device.partition),
+            device
                 .devlinks
                 .iter()
                 .map(|s| format!("\"{s}\""))
                 .collect::<Vec<String>>()
                 .join(", "),
-        ]]
+        ]
     }
 }
 
-// CreateRows trait for BlockDeviceUsable would create row from the
+// CreateRow trait for BlockDeviceUsable would create row from the
 // BD returned from REST call with all set to false.
-impl CreateRows for BlockDeviceUsable {
-    fn create_rows(&self) -> Vec<Row> {
-        vec![row![
-            self.0.devname.clone(),
-            self.0.devtype.clone(),
-            self.0.size.to_string(),
-            String::from(if self.0.available { "yes" } else { "no" }),
-            self.0.model.clone(),
-            self.0.devpath.clone(),
-            self.0.devmajor.to_string(),
-            self.0.devminor.to_string(),
-            self.0
+impl CreateRow for BlockDeviceUsable {
+    fn row(&self) -> Row {
+        let device = self.0.clone();
+        row![
+            device.devname,
+            device.devtype,
+            ::utils::bytes::into_human(device.size * 512),
+            String::from(if device.available { "yes" } else { "no" }),
+            device.model,
+            device.devpath,
+            device.devmajor,
+            device.devminor,
+            device
                 .devlinks
                 .iter()
                 .map(|s| format!("\"{s}\""))
                 .collect::<Vec<String>>()
                 .join(", "),
-        ]]
+        ]
     }
 }
 

@@ -140,6 +140,22 @@ message VolumeState {
   optional nexus.Nexus target = 4;
   // replica topology information
   map<string, ReplicaTopology> replica_topology = 5;
+  // volume usage information
+  optional VolumeUsage usage = 6;
+}
+
+// Volume usage information
+message VolumeUsage {
+  // Capacity of the volume in bytes.
+  uint64 capacity = 1;
+  // Allocated size in bytes, related to a single healthy replica.
+  // For example, if a volume has 2 replicas, each with 1MiB allocated space, then
+  // this field will be 1MiB.
+  uint64 allocated = 2;
+  // Allocated size in bytes, accrued from all the replica.
+  // For example, if a volume has 2 replicas, each with 1MiB allocated space, then
+  // this field will be 2MiB.
+  uint64 total_allocated = 3;
 }
 
 message ReplicaTopology {
@@ -149,6 +165,16 @@ message ReplicaTopology {
   optional string pool = 2;
   // status of the replica
   replica.ReplicaStatus status = 3;
+  // Volume Replica usage information
+  optional ReplicaUsage usage = 4;
+}
+
+// Volume Replica usage information
+message ReplicaUsage {
+  // Capacity of the replica in bytes.
+  uint64 capacity = 1;
+  // Allocated size in bytes.
+  uint64 allocated = 2;
 }
 
 message GetVolumesRequest {

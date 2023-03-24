@@ -19,9 +19,10 @@ use stor_port::{
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, ExplicitNodeTopology, Filter,
             LabelledTopology, Nexus, NexusId, NexusNvmfConfig, NodeId, NodeTopology, PoolTopology,
-            PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, RepublishVolume,
-            SetVolumeReplica, ShareVolume, Topology, UnpublishVolume, UnshareVolume, Volume,
-            VolumeGroup, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState,
+            PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, ReplicaUsage,
+            RepublishVolume, SetVolumeReplica, ShareVolume, Topology, UnpublishVolume,
+            UnshareVolume, Volume, VolumeGroup, VolumeId, VolumeLabels, VolumePolicy,
+            VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
     IntoOption,
@@ -132,16 +133,33 @@ impl From<Volume> for volume::Volume {
     fn from(volume: Volume) -> Self {
         let volume_definition = volume.spec().into();
         let status: nexus::NexusStatus = volume.state().status.into();
+
         let volume_state = volume::VolumeState {
             uuid: Some(volume.state().uuid.to_string()),
             size: volume.state().size,
             status: status as i32,
             target: volume.state().target.map(|target| target.into()),
             replica_topology: to_grpc_replica_topology_map(volume.state().replica_topology),
+            usage: volume.state().usage.into_opt(),
         };
         volume::Volume {
             definition: Some(volume_definition),
             state: Some(volume_state),
+        }
+    }
+}
+
+impl From<volume::VolumeUsage> for VolumeUsage {
+    fn from(value: volume::VolumeUsage) -> Self {
+        Self::new(value.capacity, value.allocated, value.total_allocated)
+    }
+}
+impl From<VolumeUsage> for volume::VolumeUsage {
+    fn from(value: VolumeUsage) -> Self {
+        Self {
+            capacity: value.capacity(),
+            allocated: value.allocated(),
+            total_allocated: value.total_allocated(),
         }
     }
 }
@@ -253,8 +271,8 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
 
 impl TryFrom<volume::Volume> for Volume {
     type Error = ReplyError;
-    fn try_from(volume_grpc_type: volume::Volume) -> Result<Self, Self::Error> {
-        let grpc_volume_definition = match volume_grpc_type.definition {
+    fn try_from(from: volume::Volume) -> Result<Self, Self::Error> {
+        let definition = match from.definition {
             Some(definition) => definition,
             None => {
                 return Err(ReplyError::missing_argument(
@@ -263,8 +281,8 @@ impl TryFrom<volume::Volume> for Volume {
                 ))
             }
         };
-        let volume_spec = VolumeSpec::try_from(grpc_volume_definition)?;
-        let grpc_volume_state = match volume_grpc_type.state {
+        let volume_spec = VolumeSpec::try_from(definition)?;
+        let grpc_state = match from.state {
             Some(state) => state,
             None => {
                 return Err(ReplyError::missing_argument(
@@ -274,9 +292,9 @@ impl TryFrom<volume::Volume> for Volume {
             }
         };
         let volume_state = VolumeState {
-            uuid: VolumeId::try_from(StringValue(grpc_volume_state.uuid))?,
-            size: grpc_volume_state.size,
-            status: match nexus::NexusStatus::from_i32(grpc_volume_state.status) {
+            uuid: VolumeId::try_from(StringValue(grpc_state.uuid))?,
+            size: grpc_state.size,
+            status: match nexus::NexusStatus::from_i32(grpc_state.status) {
                 Some(status) => status.into(),
                 None => {
                     return Err(ReplyError::invalid_argument(
@@ -286,7 +304,7 @@ impl TryFrom<volume::Volume> for Volume {
                     ))
                 }
             },
-            target: match grpc_volume_state.target {
+            target: match grpc_state.target {
                 Some(target) => match Nexus::try_from(target) {
                     Ok(target) => Some(target),
                     Err(err) => {
@@ -299,7 +317,7 @@ impl TryFrom<volume::Volume> for Volume {
                 },
                 None => None,
             },
-            replica_topology: match to_replica_topology_map(grpc_volume_state.replica_topology) {
+            replica_topology: match to_replica_topology_map(grpc_state.replica_topology) {
                 Ok(replica_topology_map) => replica_topology_map,
                 Err(err) => {
                     return Err(ReplyError::invalid_argument(
@@ -309,6 +327,7 @@ impl TryFrom<volume::Volume> for Volume {
                     ))
                 }
             },
+            usage: grpc_state.usage.into_opt(),
         };
         Ok(Volume::new(volume_spec, volume_state))
     }
@@ -343,10 +362,10 @@ impl From<Volumes> for volume::Volumes {
 
 impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
     type Error = ReplyError;
-    fn try_from(replica_topology_grpc_type: volume::ReplicaTopology) -> Result<Self, Self::Error> {
-        let node = replica_topology_grpc_type.node.map(|node| node.into());
-        let pool = replica_topology_grpc_type.pool.map(|pool| pool.into());
-        let status = match ReplicaStatus::try_from(replica_topology_grpc_type.status) {
+    fn try_from(topology: volume::ReplicaTopology) -> Result<Self, Self::Error> {
+        let node = topology.node.map(|node| node.into());
+        let pool = topology.pool.map(|pool| pool.into());
+        let status = match ReplicaStatus::try_from(topology.status) {
             Ok(status) => status,
             Err(err) => {
                 return Err(ReplyError::invalid_argument(
@@ -356,10 +375,20 @@ impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
                 ))
             }
         };
-        Ok(ReplicaTopology::new(node, pool, status))
+        Ok(ReplicaTopology::new(
+            node,
+            pool,
+            status,
+            topology.usage.into_opt(),
+        ))
     }
 }
 
+impl From<volume::ReplicaUsage> for ReplicaUsage {
+    fn from(value: volume::ReplicaUsage) -> Self {
+        Self::new(value.capacity, value.allocated)
+    }
+}
 impl From<ReplicaTopology> for volume::ReplicaTopology {
     fn from(replica_topology: ReplicaTopology) -> Self {
         let node = replica_topology.node().as_ref().map(|id| id.to_string());
@@ -369,6 +398,16 @@ impl From<ReplicaTopology> for volume::ReplicaTopology {
             node,
             pool,
             status: status as i32,
+            usage: replica_topology.usage().into_opt(),
+        }
+    }
+}
+
+impl From<&ReplicaUsage> for volume::ReplicaUsage {
+    fn from(value: &ReplicaUsage) -> Self {
+        Self {
+            capacity: value.capacity(),
+            allocated: value.allocated(),
         }
     }
 }

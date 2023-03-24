@@ -2,7 +2,7 @@
 name = "rest-plugin"
 description = "Rest Plugin"
 version = "1.0.0"
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "rest-plugin"

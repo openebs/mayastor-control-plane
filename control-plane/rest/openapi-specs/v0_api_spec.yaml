@@ -1801,6 +1801,7 @@ components:
           description: size of device in (512 byte) blocks
           type: integer
           format: int64
+          minimum: 0
       required:
         - available
         - devlinks
@@ -2894,15 +2895,50 @@ components:
           type: string
           format: uuid
         replica_topology:
-          description: replica location information
+          description: replica topology information
           type: object
           additionalProperties:
             $ref: '#/components/schemas/ReplicaTopology'
+        usage:
+          $ref: '#/components/schemas/VolumeUsage'
       required:
         - size
         - uuid
         - status
         - replica_topology
+    VolumeUsage:
+      example:
+      description: Volume space usage
+      type: object
+      properties:
+        capacity:
+          description: Capacity of the volume in bytes.
+          type: integer
+          example: 80241024
+          format: int64
+          minimum: 0
+        allocated:
+          description: -|
+             Allocated size in bytes, related to a single healthy replica.
+             For example, if a volume has 2 replicas, each with 1MiB allocated space, then
+             this field will be 1MiB.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+        total_allocated:
+          description: -|
+            Allocated size in bytes, accrued from all the replica.
+            For example, if a volume has 2 replicas, each with 1MiB allocated space, then
+            this field will be 2MiB.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - capacity
+        - allocated
+        - total_allocated
     Volumes:
       description: |-
         Array of volumes plus the next token for subsequent get requests when using pagination
@@ -2930,7 +2966,7 @@ components:
         - spec
         - state
     ReplicaTopology:
-      description: Location of replicas (nodes and pools)
+      description: Volume Replica information.
       type: object
       properties:
         node:
@@ -2939,8 +2975,31 @@ components:
           $ref: '#/components/schemas/PoolId'
         state:
           $ref: '#/components/schemas/ReplicaState'
+        usage:
+          $ref: '#/components/schemas/ReplicaUsage'
       required:
         - state
+    ReplicaUsage:
+      description: |
+        Replica space usage information.
+        Useful for capacity management, eg: figure out how much of a thin-provisioned replica is allocated.
+      type: object
+      properties:
+        capacity:
+          description: Replica capacity in bytes.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+        allocated:
+          description: Amount of actually allocated disk space for this replica in bytes.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - capacity
+        - allocated
     CordonDrainState:
       description: The drain state
       type: object

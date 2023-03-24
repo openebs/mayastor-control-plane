@@ -502,6 +502,7 @@ async fn publishing_test(cluster: &Cluster) {
         .await
         .unwrap();
     wait_for_node_online(cluster, &target_node).await;
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     volume_client
         .destroy(

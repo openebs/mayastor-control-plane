@@ -2,12 +2,16 @@ use crate::controller::registry::Registry;
 use agents::errors::SvcError;
 use stor_port::types::v0::transport::{
     uri_with_hostnqn, NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
+    VolumeUsage,
 };
 
 use crate::controller::reconciler::PollTriggerEvent;
 use grpc::operations::{PaginatedResult, Pagination};
 use std::collections::HashMap;
-use stor_port::types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec};
+use stor_port::{
+    types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec},
+    IntoOption,
+};
 
 impl Registry {
     /// Get the volume state for the specified volume.
@@ -37,20 +41,35 @@ impl Registry {
         let nexus_spec = self.specs().volume_target_nexus_rsc(volume_spec);
         let nexus = match nexus_spec {
             None => None,
-            Some(spec) => {
-                let nexus_id = spec.lock().uuid.clone();
-                self.nexus(&nexus_id).await.ok().map(|s| (spec, s))
+            Some(nexus) => {
+                let spec = nexus.immutable_ref();
+                self.node_nexus(&spec.node, &spec.uuid)
+                    .await
+                    .ok()
+                    .map(|s| (nexus, s))
             }
         };
 
+        let mut total_usage = 0;
+        let mut largest_allocated = 0;
         // Construct the topological information for the volume replicas.
         let mut replica_topology = HashMap::new();
         for replica_spec in &replica_specs {
-            replica_topology.insert(
-                replica_spec.uuid.clone(),
-                self.replica_topology(replica_spec).await,
-            );
+            let replica = self.replica_topology(replica_spec).await;
+            if let Some(usage) = replica.usage() {
+                total_usage += usage.allocated();
+                if usage.allocated() > largest_allocated {
+                    largest_allocated = usage.allocated();
+                }
+            }
+            replica_topology.insert(replica_spec.uuid.clone(), replica);
         }
+
+        let usage = Some(VolumeUsage::new(
+            volume_spec.size,
+            largest_allocated,
+            total_usage,
+        ));
 
         Ok(if let Some((nexus, mut nexus_state)) = nexus {
             let ah = nexus.lock().allowed_hosts.clone();
@@ -68,6 +87,7 @@ impl Registry {
                 },
                 target: Some(nexus_state),
                 replica_topology,
+                usage,
             }
         } else {
             VolumeState {
@@ -86,6 +106,7 @@ impl Registry {
                 },
                 target: None,
                 replica_topology,
+                usage,
             }
         })
     }
@@ -94,7 +115,12 @@ impl Registry {
     /// If the replica cannot be found, return the default replica topology.
     async fn replica_topology(&self, spec: &ReplicaSpec) -> ReplicaTopology {
         match self.get_replica(&spec.uuid).await {
-            Ok(state) => ReplicaTopology::new(Some(state.node), Some(state.pool_id), state.status),
+            Ok(state) => ReplicaTopology::new(
+                Some(state.node),
+                Some(state.pool_id),
+                state.status,
+                state.space.into_opt(),
+            ),
             Err(_) => {
                 tracing::trace!(replica.uuid = %spec.uuid, "Replica not found. Constructing default replica topology");
                 ReplicaTopology::default()

@@ -19,19 +19,22 @@ lazy_static! {
         "ACCESSIBILITY",
         "STATUS",
         "SIZE",
-        "THIN-PROVISIONED"
+        "THIN-PROVISIONED",
+        "ALLOCATED"
     ];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",
-        "TOTAL CAPACITY",
-        "USED CAPACITY",
         "DISKS",
+        "MANAGED",
         "NODE",
         "STATUS",
-        "MANAGED"
+        "CAPACITY",
+        "ALLOCATED",
+        "AVAILABLE"
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "CORDONED"];
-    pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row!["ID", "NODE", "POOL", "STATUS"];
+    pub static ref REPLICA_TOPOLOGY_HEADERS: Row =
+        row!["ID", "NODE", "POOL", "STATUS", "CAPACITY", "ALLOCATED"];
     pub static ref BLOCKDEVICE_HEADERS_ALL: Row = row![
         "DEVNAME",
         "DEVTYPE",
@@ -60,8 +63,8 @@ lazy_static! {
     ];
 }
 
-// table_printer takes the above defined headers and the rows created at execution,
-// to create a Tabular output and prints to the stdout.
+/// table_printer takes the above defined headers and the rows created at execution,
+/// to create a Tabular output and prints to the stdout.
 pub fn table_printer(titles: Row, rows: Vec<Row>) {
     let mut table = Table::new();
     // FORMAT_CLEAN has been set to remove table borders
@@ -73,12 +76,16 @@ pub fn table_printer(titles: Row, rows: Vec<Row>) {
     table.printstd();
 }
 
-// CreateRows trait to be implemented by Vec<`resource`> to create the rows.
+/// CreateRows trait to be implemented by Vec<`resource`> to create the rows.
 pub trait CreateRows {
     fn create_rows(&self) -> Vec<Row>;
 }
+/// CreateRows trait to be implemented by `resource` to create a row.
+pub trait CreateRow {
+    fn row(&self) -> Row;
+}
 
-// GetHeaderRow trait to be implemented by Vec<`resource`> to fetch the corresponding headers.
+/// GetHeaderRow trait to be implemented by Vec<`resource`> to fetch the corresponding headers.
 pub trait GetHeaderRow {
     fn get_header_row(&self) -> Row;
 }
@@ -94,14 +101,21 @@ pub enum OutputFormat {
 
 impl<T> CreateRows for Vec<T>
 where
-    T: CreateRows,
+    T: CreateRow,
 {
     fn create_rows(&self) -> Vec<Row> {
-        self.iter().flat_map(|i| i.create_rows()).collect()
+        self.iter().map(|i| i.row()).collect()
+    }
+}
+impl<T> CreateRows for T
+where
+    T: CreateRow,
+{
+    fn create_rows(&self) -> Vec<Row> {
+        vec![self.row()]
     }
 }
 
-// GetHeaderRow trait to be implemented by Volume/Pool to fetch the corresponding headers.
 impl<T> GetHeaderRow for Vec<T>
 where
     T: GetHeaderRow,
