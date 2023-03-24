@@ -10,7 +10,7 @@ use std::{
 };
 use stor_port::{
     pstor::{
-        Error as StoreError, ObjectKey, StorableObject, StorableObjectType, Store,
+        ApiVersion, Error as StoreError, ObjectKey, StorableObject, StorableObjectType, Store,
         StoreWatchReceiver, WatchEvent,
     },
     transport_api::{v0::Watches, ResourceKind},
@@ -26,8 +26,8 @@ use tokio::{
 impl ObjectKey for WatchCfgId {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::WatchConfig

@@ -14,6 +14,7 @@ use crate::{
     },
     IntoOption, IntoVec,
 };
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -45,9 +46,10 @@ pub struct ReplicaStateKey(ReplicaId);
 impl ObjectKey for ReplicaStateKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::ReplicaState
     }
@@ -303,9 +305,10 @@ pub struct ReplicaSpecKey(ReplicaId);
 impl ObjectKey for ReplicaSpecKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::ReplicaSpec
     }

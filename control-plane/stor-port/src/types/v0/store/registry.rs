@@ -1,4 +1,5 @@
 use crate::types::v0::store::definitions::{ObjectKey, StorableObject, StorableObjectType};
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -28,6 +29,14 @@ impl CoreRegistryConfig {
     /// Get the `mayastor_compat_v1`.
     pub fn mayastor_compat_v1(&self) -> bool {
         self.mayastor_compat_v1.unwrap_or(false)
+    }
+    /// Set the `mayastor_compat_v1` to true.
+    pub fn set_mayastor_compat_v1(&mut self, value: bool) {
+        let val = match value {
+            true => Some(true),
+            false => None,
+        };
+        self.mayastor_compat_v1 = val
     }
     /// Get a reference to the `NodeRegistration`
     pub fn node_registration(&self) -> &NodeRegistration {
@@ -76,9 +85,10 @@ impl From<&str> for CoreRegistryConfigKey {
 impl ObjectKey for CoreRegistryConfigKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::CoreRegistryConfig
     }
@@ -115,8 +125,8 @@ impl StoreLeaseLockKey {
 impl ObjectKey for StoreLeaseLockKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::StoreLeaseLock
@@ -138,8 +148,8 @@ impl StoreLeaseOwnerKey {
 impl ObjectKey for StoreLeaseOwnerKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::StoreLeaseOwner

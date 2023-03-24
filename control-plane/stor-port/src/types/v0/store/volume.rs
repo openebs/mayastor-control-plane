@@ -14,6 +14,7 @@ use crate::{
     },
     IntoOption,
 };
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -29,9 +30,10 @@ impl From<&VolumeId> for VolumeStateKey {
 impl ObjectKey for VolumeStateKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::VolumeState
     }
@@ -519,9 +521,10 @@ impl From<&VolumeId> for VolumeSpecKey {
 impl ObjectKey for VolumeSpecKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::VolumeSpec
     }

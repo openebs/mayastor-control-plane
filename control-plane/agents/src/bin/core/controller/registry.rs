@@ -27,7 +27,10 @@ use std::{
     sync::Arc,
 };
 use stor_port::{
-    pstor::{etcd::Etcd, Error as StoreError, StorableObject, Store, StoreKey, StoreKv, StoreObj},
+    pstor::{
+        detect_product_v1_prefix, etcd::Etcd, product_v1_key_prefix, Error as StoreError,
+        StorableObject, Store, StoreKey, StoreKv, StoreObj,
+    },
     types::v0::{
         store::{
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
@@ -38,6 +41,7 @@ use stor_port::{
     HostAccessControl,
 };
 use tokio::sync::{Mutex, RwLock};
+use tracing::warn;
 
 /// Registry containing all io-engine instances (aka nodes).
 #[derive(Clone, Debug)]
@@ -81,6 +85,8 @@ pub(crate) struct RegistryInner<S: Store> {
     max_rebuilds: Option<NumRebuilds>,
     /// Enablement of host access control.
     host_acl: Vec<HostAccessControl>,
+    /// Check for the legacy product version's key prefix present.
+    legacy_prefix_present: bool,
 }
 
 impl Registry {
@@ -101,7 +107,7 @@ impl Registry {
     ) -> Self {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
-        let store = Etcd::new_leased(
+        let mut store = Etcd::new_leased(
             [&store_endpoint],
             ControlPlaneService::CoreAgent.to_string(),
             store_lease_tll,
@@ -109,6 +115,11 @@ impl Registry {
         .await
         .expect("Should connect to the persistent store");
         tracing::info!("Connected to persistent store at {}", store_endpoint);
+
+        let legacy_prefix_present = detect_product_v1_prefix(&mut store)
+            .await
+            .expect("Product v1 key prefix detection should not fail");
+
         let registry = Self {
             inner: Arc::new(RegistryInner {
                 nodes: Default::default(),
@@ -119,12 +130,20 @@ impl Registry {
                 reconcile_period,
                 reconcile_idle_period,
                 reconciler: ReconcilerControl::new(),
-                config: Self::get_config_or_panic(store).await,
+                config: Self::get_config_or_panic(&mut store, legacy_prefix_present).await,
                 max_rebuilds,
                 host_acl,
+                legacy_prefix_present,
             }),
         };
         registry.init().await;
+
+        // Remove all entries of v1 key prefix.
+        store
+            .delete_values_prefix(&product_v1_key_prefix())
+            .await
+            .expect("Product v1 key prefix deletion should not fail");
+
         registry
     }
 
@@ -138,21 +157,35 @@ impl Registry {
 
     /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default.
     /// If the mayastor_v1 config exists, then reuse it.
-    async fn get_config_or_panic<S: Store>(mut store: S) -> CoreRegistryConfig {
+    async fn get_config_or_panic<S: Store>(
+        store: &mut S,
+        legacy_prefix_present: bool,
+    ) -> CoreRegistryConfig {
         let config = CoreRegistryConfig::new(NodeRegistration::Automatic);
-        match store.get_obj(&config.key()).await {
-            Ok(store_config) => store_config,
+        let mut config = match store.get_obj(&config.key()).await {
+            Ok(config) => config,
             Err(StoreError::MissingEntry { .. }) => {
-                store.put_obj(&config).await.expect(
-                    "Must be able to access the persistent store to persist configuration information",
-                );
+                store
+                    .put_obj(&config)
+                    .await
+                    .expect("Failed to persist configuration information");
                 config
-            },
-            Err(error) => panic!(
-                "Must be able to access the persistent store to load configuration information. Got error: '{error:#?}'"
-            ),
+            }
+            Err(error) => panic!("Failed to load configuration information: {error:?}"),
+        };
+
+        if legacy_prefix_present && !config.mayastor_compat_v1() {
+            config.set_mayastor_compat_v1(legacy_prefix_present);
+            store
+                .put_obj(&config)
+                .await
+                .expect("Failed to persist configuration information");
+            warn!("Legacy V1 prefix present, enabling compatibility mode");
         }
+
+        config
     }
+
     /// Get the `CoreRegistryConfig`
     pub(crate) fn config(&self) -> &CoreRegistryConfig {
         &self.config
@@ -291,7 +324,9 @@ impl Registry {
     /// Initialise the registry with the content of the persistent store.
     async fn init(&self) {
         let mut store = self.store.lock().await;
-        self.specs.init(store.deref_mut()).await;
+        self.specs
+            .init(store.deref_mut(), self.legacy_prefix_present)
+            .await;
     }
 
     /// Send a triggered event signal to the reconciler module.

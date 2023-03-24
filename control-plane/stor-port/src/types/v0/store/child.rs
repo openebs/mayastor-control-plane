@@ -4,6 +4,7 @@ use crate::types::v0::{
     store::definitions::{ObjectKey, StorableObject, StorableObjectType},
     transport::{self, ReplicaId},
 };
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 
 /// Child information
@@ -38,9 +39,10 @@ impl From<&ReplicaId> for ChildStateKey {
 impl ObjectKey for ChildStateKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::ChildState
     }
@@ -82,9 +84,10 @@ impl From<&ReplicaId> for ChildSpecKey {
 impl ObjectKey for ChildSpecKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::ChildSpec
     }

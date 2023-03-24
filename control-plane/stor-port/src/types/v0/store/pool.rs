@@ -13,6 +13,7 @@ use crate::types::v0::{
 pub type PoolLabel = std::collections::HashMap<String, String>;
 
 use crate::types::v0::transport::ImportPool;
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::{convert::From, fmt::Debug};
 
@@ -181,9 +182,10 @@ impl From<&PoolId> for PoolSpecKey {
 impl ObjectKey for PoolSpecKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::PoolSpec
     }

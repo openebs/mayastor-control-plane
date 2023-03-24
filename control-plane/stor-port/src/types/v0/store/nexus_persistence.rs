@@ -2,6 +2,7 @@ use crate::types::v0::{
     store::definitions::{key_prefix, ObjectKey, StorableObject, StorableObjectType},
     transport::{NexusId, ReplicaId, VolumeId},
 };
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -88,9 +89,6 @@ impl NexusInfoKey {
 impl ObjectKey for NexusInfoKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
-    }
     fn key(&self) -> String {
         if self.mayastor_compat_v1 {
             return self.nexus_key_mayastor_v1();
@@ -105,6 +103,10 @@ impl ObjectKey for NexusInfoKey {
                 format!("{namespace}/nexus/{nexus_uuid}/info")
             }
         }
+    }
+
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
 
     fn key_type(&self) -> StorableObjectType {

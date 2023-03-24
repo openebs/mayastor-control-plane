@@ -2,13 +2,15 @@ use crate::types::v0::{
     store::definitions::{ObjectKey, StorableObjectType},
     transport::WatchResourceId,
 };
+use pstor::ApiVersion;
 
 impl ObjectKey for WatchResourceId {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         match &self {
             WatchResourceId::Node(_) => StorableObjectType::Node,
