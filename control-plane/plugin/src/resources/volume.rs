@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use crate::{
     operations::ReplicaTopology,
-    resources::utils::{optional_cell, CreateRows, GetHeaderRow, OutputFormat},
+    resources::utils::{optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
 };
 use prettytable::Row;
 use std::collections::HashMap;
@@ -16,21 +16,19 @@ use std::collections::HashMap;
 #[derive(clap::Args, Debug)]
 pub struct Volumes {}
 
-// CreateRows being trait for Vec<Volume> would create the rows from the list of
-// Volumes returned from REST call.
-impl CreateRows for openapi::models::Volume {
-    fn create_rows(&self) -> Vec<Row> {
-        let state = self.state.clone();
-        vec![row![
+impl CreateRow for openapi::models::Volume {
+    fn row(&self) -> Row {
+        let state = &self.state;
+        row![
             state.uuid,
             self.spec.num_replicas,
             optional_cell(state.target.clone().map(|t| t.node)),
             optional_cell(state.target.as_ref().and_then(target_protocol)),
-            state.status,
+            state.status.clone(),
             state.size,
             self.spec.thin,
-            optional_cell(state.usage.map(|u| u.allocated))
-        ]]
+            optional_cell(state.usage.as_ref().map(|u| u.allocated))
+        ]
     }
 }
 
@@ -42,8 +40,6 @@ fn target_protocol(target: &openapi::models::Nexus) -> Option<openapi::models::P
     }
 }
 
-// GetHeaderRow being trait for Volume would return the Header Row for
-// Volume.
 impl GetHeaderRow for openapi::models::Volume {
     fn get_header_row(&self) -> Row {
         (*utils::VOLUME_HEADERS).clone()

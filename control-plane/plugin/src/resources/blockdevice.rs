@@ -2,7 +2,7 @@ use crate::{
     operations::GetBlockDevices,
     resources::{
         utils::{
-            print_table, CreateRows, GetHeaderRow, OutputFormat, BLOCKDEVICE_HEADERS_ALL,
+            print_table, CreateRow, GetHeaderRow, OutputFormat, BLOCKDEVICE_HEADERS_ALL,
             BLOCKDEVICE_HEADERS_USABLE,
         },
         NodeId,
@@ -47,11 +47,9 @@ impl BlockDeviceArgs {
     }
 }
 
-// CreateRows trait for BlockDeviceAll would create the row from the
-// BD returned from REST call with all set to true.
-impl CreateRows for BlockDeviceAll {
-    fn create_rows(&self) -> Vec<Row> {
-        vec![row![
+impl CreateRow for BlockDeviceAll {
+    fn row(&self) -> Row {
+        row![
             self.0.devname.clone(),
             self.0.devtype.clone(),
             self.0.size.to_string(),
@@ -70,15 +68,15 @@ impl CreateRows for BlockDeviceAll {
                 .map(|s| format!("\"{s}\""))
                 .collect::<Vec<String>>()
                 .join(", "),
-        ]]
+        ]
     }
 }
 
-// CreateRows trait for BlockDeviceUsable would create row from the
+// CreateRow trait for BlockDeviceUsable would create row from the
 // BD returned from REST call with all set to false.
-impl CreateRows for BlockDeviceUsable {
-    fn create_rows(&self) -> Vec<Row> {
-        vec![row![
+impl CreateRow for BlockDeviceUsable {
+    fn row(&self) -> Row {
+        row![
             self.0.devname.clone(),
             self.0.devtype.clone(),
             self.0.size.to_string(),
@@ -93,7 +91,7 @@ impl CreateRows for BlockDeviceUsable {
                 .map(|s| format!("\"{s}\""))
                 .collect::<Vec<String>>()
                 .join(", "),
-        ]]
+        ]
     }
 }
 

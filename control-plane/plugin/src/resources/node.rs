@@ -2,7 +2,7 @@ use crate::{
     operations::{Cordoning, Drain, Get, List},
     resources::{
         utils,
-        utils::{print_table, CreateRows, GetHeaderRow, OutputFormat},
+        utils::{print_table, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
         NodeId,
     },
     rest_wrapper::RestClient,
@@ -34,8 +34,8 @@ pub struct Nodes {}
 
 // CreateRows being trait for Node would create the rows from the list of
 // Nodes returned from REST call.
-impl CreateRows for openapi::models::Node {
-    fn create_rows(&self) -> Vec<Row> {
+impl CreateRow for openapi::models::Node {
+    fn row(&self) -> Row {
         let spec = self.spec.clone().unwrap_or_default();
         // In case the state is not coming as filled, either due to node offline, fill in
         // spec data and mark the status as Unknown.
@@ -45,13 +45,12 @@ impl CreateRows for openapi::models::Node {
             status: openapi::models::NodeStatus::Unknown,
             node_nqn: spec.node_nqn,
         });
-        let rows = vec![row![
+        row![
             self.id,
             state.grpc_endpoint,
             state.status,
             spec.cordondrainstate.is_some(),
-        ]];
-        rows
+        ]
     }
 }
 
@@ -218,7 +217,7 @@ pub enum NodeDisplayFormat {
     Drain,
 }
 
-/// The NodeDisply structure is responsible for controlling the display formatting of Node objects.
+/// The NodeDisplay structure is responsible for controlling the display formatting of Node objects.
 /// `#[serde(flatten)]` and `#[serde(skip)]` attributes are used to ensure that when the object is
 /// serialised, only the `inner` object is represented.
 #[derive(Serialize, Debug)]
@@ -235,12 +234,14 @@ impl NodeDisplay {
         let vec: Vec<openapi::models::Node> = vec![node];
         Self { inner: vec, format }
     }
+    /// Create a new `NodeDisplay` instance from a vector of nodes.
     pub(crate) fn new_nodes(nodes: Vec<openapi::models::Node>, format: NodeDisplayFormat) -> Self {
         Self {
             inner: nodes,
             format,
         }
     }
+    /// Get a list of node labels.
     pub(crate) fn get_label_list(node: &openapi::models::Node) -> Vec<String> {
         let mut cordon_labels: Vec<String> = vec![];
         let mut drain_labels: Vec<String> = vec![];
@@ -257,6 +258,7 @@ impl NodeDisplay {
         }
         [cordon_labels, drain_labels].concat()
     }
+    /// Get a list of node drain labels.
     pub(crate) fn get_drain_label_list(node: &openapi::models::Node) -> Vec<String> {
         let mut drain_labels: Vec<String> = vec![];
         match &node.spec {
@@ -272,7 +274,6 @@ impl NodeDisplay {
     }
 }
 
-// Create the rows required for a `NodeDisplay` object. Nodes returned from REST call.
 impl CreateRows for NodeDisplay {
     fn create_rows(&self) -> Vec<Row> {
         match self.format {
@@ -289,9 +290,9 @@ impl CreateRows for NodeDisplay {
                 rows
             }
             NodeDisplayFormat::Drain => {
-                let mut rows = vec![];
+                let mut rows = Vec::with_capacity(self.inner.len());
                 for node in self.inner.iter() {
-                    let mut row = node.create_rows();
+                    let mut row = node.row();
 
                     let drain_status_string = match &node.spec.as_ref().unwrap().cordondrainstate {
                         Some(ds) => match ds {
@@ -304,9 +305,9 @@ impl CreateRows for NodeDisplay {
 
                     let labelstring = NodeDisplay::get_drain_label_list(node).join(", ");
                     // Add the drain labels to each row.
-                    row[0].add_cell(Cell::new(drain_status_string));
-                    row[0].add_cell(Cell::new(&labelstring));
-                    rows.push(row[0].clone());
+                    row.add_cell(Cell::new(drain_status_string));
+                    row.add_cell(Cell::new(&labelstring));
+                    rows.push(row);
                 }
                 rows
             }

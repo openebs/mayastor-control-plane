@@ -2,7 +2,7 @@ use crate::{
     operations::{Get, List},
     resources::{
         utils,
-        utils::{CreateRows, GetHeaderRow},
+        utils::{CreateRow, GetHeaderRow},
         PoolId,
     },
     rest_wrapper::RestClient,
@@ -14,10 +14,8 @@ use prettytable::Row;
 #[derive(clap::Args, Debug)]
 pub struct Pools {}
 
-// CreateRows being trait for Pool would create the rows from the list of
-// Pools returned from REST call.
-impl CreateRows for openapi::models::Pool {
-    fn create_rows(&self) -> Vec<Row> {
+impl CreateRow for openapi::models::Pool {
+    fn row(&self) -> Row {
         // The spec would be empty if it was not created using
         // control plane.
         let managed = self.spec.is_some();
@@ -38,7 +36,7 @@ impl CreateRows for openapi::models::Pool {
             0
         };
         let disks = state.disks.join(", ");
-        let rows = vec![row![
+        row![
             self.id,
             disks,
             managed,
@@ -47,8 +45,7 @@ impl CreateRows for openapi::models::Pool {
             state.capacity,
             state.used,
             free,
-        ]];
-        rows
+        ]
     }
 }
 
