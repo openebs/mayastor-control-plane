@@ -1,5 +1,4 @@
-use crate::{error::Error, hack::generate_key};
-
+use crate::{common::ApiVersion, products::v2::generate_key, Error};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
@@ -35,6 +34,8 @@ pub trait StoreKv: Sync + Send + Clone {
         key_prefix: &str,
         limit: i64,
     ) -> Result<Vec<(String, Value)>, Error>;
+    /// Deletes all key values from a given prefix.
+    async fn delete_values_prefix(&mut self, key_prefix: &str) -> Result<(), Error>;
 }
 
 /// Trait defining the operations that can be performed on a key-value store using object semantics.
@@ -75,7 +76,7 @@ pub trait ObjectKey: Sync + Send {
     fn key(&self) -> String {
         generate_key(self)
     }
-    fn version(&self) -> u64;
+    fn version(&self) -> ApiVersion;
     fn key_type(&self) -> Self::Kind;
     fn key_uuid(&self) -> String;
 }
