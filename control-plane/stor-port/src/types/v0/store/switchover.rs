@@ -6,6 +6,7 @@ use crate::types::v0::{
     transport::{NodeId, VolumeId},
 };
 use chrono::{DateTime, Utc};
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr};
 
@@ -125,9 +126,10 @@ impl SwitchOverSpecKey {
 impl ObjectKey for SwitchOverSpecKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::SwitchOver
     }

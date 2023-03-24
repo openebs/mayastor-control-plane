@@ -8,14 +8,24 @@ pub use error::Error;
 
 /// The stor interface.
 mod api;
-/// Export pstor module.
-pub use api::{
-    ObjectKey, StorableObject, Store, StoreKey, StoreKv, StoreObj, StoreWatchReceiver, WatchEvent,
-};
 
 /// A particular implementation of the persistent store, using ETCd.
 pub mod etcd;
 mod etcd_keep_alive;
 
-mod hack;
-pub use hack::{build_key_prefix, generate_key, key_prefix, key_prefix_obj, StorableObjectType};
+/// Definition for the StorableObjectType.
+mod common;
+
+/// The product specific modules.
+mod products;
+
+/// Export pstor module.
+pub use api::{
+    ObjectKey, StorableObject, Store, StoreKey, StoreKv, StoreObj, StoreWatchReceiver, WatchEvent,
+};
+pub use common::{ApiVersion, StorableObjectType};
+pub use products::{
+    migrate_product_v1_to_v2,
+    v1::{detect_product_v1_prefix, key_prefix as product_v1_key_prefix},
+    v2::{build_key_prefix, key_prefix, key_prefix_obj, API_VERSION},
+};

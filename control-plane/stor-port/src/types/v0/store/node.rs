@@ -7,6 +7,7 @@ use crate::{
     },
     IntoOption,
 };
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -394,9 +395,10 @@ impl From<&NodeId> for NodeSpecKey {
 impl ObjectKey for NodeSpecKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::NodeSpec
     }

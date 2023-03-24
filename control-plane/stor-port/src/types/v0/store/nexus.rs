@@ -12,6 +12,7 @@ use crate::types::v0::{
         NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId, VolumeId,
     },
 };
+use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -49,9 +50,10 @@ impl From<&NexusId> for NexusStateKey {
 impl ObjectKey for NexusStateKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::NexusState
     }
@@ -295,9 +297,10 @@ impl From<&NexusId> for NexusSpecKey {
 impl ObjectKey for NexusSpecKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
+
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::NexusSpec
     }

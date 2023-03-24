@@ -29,6 +29,7 @@ use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
+use stor_port::pstor::{migrate_product_v1_to_v2, API_VERSION};
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(false)))]
@@ -36,6 +37,8 @@ enum SpecError {
     /// Failed to get entries from the persistent store.
     #[snafu(display("Failed to get entries from store. Error {}", source))]
     StoreGet { source: Box<StoreError> },
+    #[snafu(display("Failed to migrate entries from v1 to v2 space. Error {}", source))]
+    StoreMigrate { source: Box<StoreError> },
     /// Failed to get entries from the persistent store.
     #[snafu(display("Failed to deserialise object type {}", obj_type))]
     Deserialise {
@@ -829,7 +832,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Initialise the resource specs with the content from the persistent store.
-    pub(crate) async fn init<S: Store>(&self, store: &mut S) {
+    pub(crate) async fn init<S: Store>(&self, store: &mut S, legacy_prefix_present: bool) {
         let spec_types = [
             StorableObjectType::VolumeSpec,
             StorableObjectType::NodeSpec,
@@ -838,7 +841,10 @@ impl ResourceSpecsLocked {
             StorableObjectType::ReplicaSpec,
         ];
         for spec in &spec_types {
-            if let Err(e) = self.populate_specs(store, *spec).await {
+            if let Err(e) = self
+                .populate_specs(store, *spec, legacy_prefix_present)
+                .await
+            {
                 panic!("Failed to initialise resource specs. Err {e}.");
             }
         }
@@ -883,8 +889,16 @@ impl ResourceSpecsLocked {
         &self,
         store: &mut S,
         spec_type: StorableObjectType,
+        legacy_prefix_present: bool,
     ) -> Result<(), SpecError> {
-        let prefix = key_prefix_obj(spec_type, 0);
+        if legacy_prefix_present {
+            migrate_product_v1_to_v2(store, spec_type)
+                .await
+                .map_err(|e| SpecError::StoreMigrate {
+                    source: Box::new(e),
+                })?;
+        }
+        let prefix = key_prefix_obj(spec_type, API_VERSION);
         let store_entries =
             store
                 .get_values_prefix(&prefix)

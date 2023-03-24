@@ -1,8 +1,9 @@
 use crate::{
     api::{ObjectKey, StorableObject, StoreObj},
+    common::StorableObjectType,
     error::Error,
     etcd::Etcd,
-    hack::StorableObjectType,
+    ApiVersion,
 };
 use etcd_client::{Client, LeaseGrantOptions, LeaseKeepAliveStream, LeaseKeeper, LockOptions};
 use serde::{Deserialize, Serialize};
@@ -569,8 +570,8 @@ impl StoreLeaseLockKey {
 impl ObjectKey for StoreLeaseLockKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::StoreLeaseLock
@@ -592,8 +593,8 @@ impl StoreLeaseOwnerKey {
 impl ObjectKey for StoreLeaseOwnerKey {
     type Kind = StorableObjectType;
 
-    fn version(&self) -> u64 {
-        0
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
     }
     fn key_type(&self) -> StorableObjectType {
         StorableObjectType::StoreLeaseOwner

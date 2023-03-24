@@ -1,15 +1,15 @@
 use crate::{
     api::{ObjectKey, StorableObject, Store, StoreKey, StoreKv, StoreObj, StoreValue, WatchEvent},
     error::{
-        Connect, Delete, DeserialiseValue, Error, Get, GetPrefix, KeyString, Put, SerialiseValue,
-        ValueString, Watch,
+        Connect, Delete, DeletePrefix, DeserialiseValue, Error, Get, GetPrefix, KeyString, Put,
+        SerialiseValue, ValueString, Watch,
     },
     etcd_keep_alive::{ControlPlaneService, EtcdSingletonLock, LeaseLockInfo},
 };
 use async_trait::async_trait;
 use etcd_client::{
-    Client, Compare, CompareOp, EventType, GetOptions, KeyValue, SortOrder, SortTarget, Txn, TxnOp,
-    WatchStream, Watcher,
+    Client, Compare, CompareOp, DeleteOptions, EventType, GetOptions, KeyValue, SortOrder,
+    SortTarget, Txn, TxnOp, WatchStream, Watcher,
 };
 use serde_json::Value;
 use snafu::ResultExt;
@@ -254,6 +254,34 @@ impl StoreKv for Etcd {
             })
             .collect();
         Ok(result)
+    }
+
+    /// Deletes objects with the given key prefix.
+    async fn delete_values_prefix(&mut self, key_prefix: &str) -> Result<(), Error> {
+        if let Some((lease_id, lock_key)) = self.lease_lock()? {
+            let cmp = Compare::lease(lock_key.clone(), CompareOp::Equal, lease_id);
+            let del_prefix = TxnOp::delete(key_prefix, Some(DeleteOptions::new().with_prefix()));
+            let resp = self
+                .client
+                .txn(Txn::new().when([cmp]).and_then([del_prefix]))
+                .await
+                .context(DeletePrefix { prefix: key_prefix })?;
+
+            if !resp.succeeded() {
+                return Err(Error::FailedLock {
+                    reason: format!(
+                        "Etcd Txn Compare key '{lock_key}' to lease id '{lease_id:x}' failed"
+                    ),
+                });
+            }
+        } else {
+            self.client
+                .delete(key_prefix, Some(DeleteOptions::new().with_prefix()))
+                .await
+                .context(DeletePrefix { prefix: key_prefix })?;
+        };
+
+        Ok(())
     }
 }
 

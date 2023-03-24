@@ -29,9 +29,18 @@ pub enum Error {
         prefix: String,
         source: etcd_client::Error,
     },
+    /// Failed to 'delete' entry, with the given prefix, from the store.
+    #[snafu(display("Failed to 'delete' entry with prefix {}. Error {}", prefix, source))]
+    DeletePrefix {
+        prefix: String,
+        source: etcd_client::Error,
+    },
     /// Failed to find an entry with the given key.
     #[snafu(display("Entry with key {} not found.", key))]
     MissingEntry { key: String },
+    /// The resource id is not present in the key.
+    #[snafu(display("Invalid key {}, resource id not found.", key))]
+    InvalidKey { key: String },
     /// Failed to 'delete' an entry from the store.
     #[snafu(display("Failed to 'delete' entry with key {}. Error {}", key, source))]
     Delete {
