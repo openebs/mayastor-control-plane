@@ -258,12 +258,16 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
     expected_replica_toplogy = {}
     for key, value in volume.state.replica_topology.items():
         expected_replica_toplogy[key] = ReplicaTopology(
-            ReplicaState("Online"), node="io-engine-1", pool=POOL_UUID
+            ReplicaState("Online"),
+            node="io-engine-1",
+            pool=POOL_UUID,
+            usage=volume.state.replica_topology[key].usage,
         )
     expected_state = VolumeState(
         VOLUME_SIZE,
         VolumeStatus("Online"),
         VOLUME_UUID,
         expected_replica_toplogy,
+        usage=volume.state.usage,
     )
     assert str(volume.state) == str(expected_state)
