@@ -24,13 +24,20 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
                 request: "v1::get_mayastor_info",
             })?;
 
-        let registration_info = match data.into_inner().registration_info {
+        let inner = data.into_inner();
+
+        let registration_info = match inner.registration_info {
             Some(info) => info,
             None => {
-                // The dataplane did not send anything in registration info, which should
-                // not happen.
-                return Err(SvcError::NodeNotOnline {
-                    node: self.context.node().clone(),
+                // For versions which support v1 but registration info is not available,
+                // we should not enable v1 thus fail the call with unimplemented error.
+                return Err(SvcError::Unimplemented {
+                    resource: ResourceKind::Node,
+                    request: "v1::get_mayastor_info".to_string(),
+                    source: tonic::Status::unimplemented(format!(
+                        "v1::get_mayastor_info is unimplemented for {}",
+                        inner.version
+                    )),
                 });
             }
         };

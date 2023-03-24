@@ -334,6 +334,7 @@ impl NodeWrapper {
         match client.liveness_probe().await {
             Ok(data) => return Ok(data),
             Err(SvcError::GrpcRequestError { source, .. })
+            | Err(SvcError::Unimplemented { source, .. })
                 if source.code() == tonic::Code::Unimplemented =>
             {
                 debug!(

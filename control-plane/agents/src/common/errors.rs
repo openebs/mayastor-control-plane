@@ -255,6 +255,17 @@ pub enum SvcError {
         free_space: u64,
         required: u64,
     },
+    #[snafu(display(
+        "Service for request '{}' for '{}' is unimplemented with '{}'",
+        request,
+        resource.to_string(),
+        source
+    ))]
+    Unimplemented {
+        resource: ResourceKind,
+        request: String,
+        source: tonic::Status,
+    },
 }
 
 impl SvcError {
@@ -270,6 +281,7 @@ impl SvcError {
             Self::GrpcConnect { .. } => tonic::Code::Unavailable,
             Self::GrpcUdsConnect { .. } => tonic::Code::Unavailable,
             Self::Internal { .. } => tonic::Code::Internal,
+            Self::Unimplemented { .. } => tonic::Code::Unimplemented,
             _ => tonic::Code::Internal,
         }
     }
@@ -707,6 +719,12 @@ impl From<SvcError> for ReplyError {
                 resource: ResourceKind::Pool,
                 source: desc.to_string(),
                 extra: error.full_string(),
+            },
+            SvcError::Unimplemented { resource, .. } => ReplyError {
+                kind: ReplyErrorKind::Unimplemented,
+                resource,
+                source: desc.to_string(),
+                extra: error_str,
             },
         }
     }
