@@ -85,7 +85,11 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
                 .start_destroy_by(registry, &request.disowners)
                 .await?;
 
-            let result = node.destroy_replica(request).await;
+            let result = match node.destroy_replica(request).await {
+                Ok(()) => Ok(()),
+                Err(error) if error.tonic_code() == tonic::Code::NotFound => Ok(()),
+                Err(error) => Err(error),
+            };
             replica.complete_destroy(result, registry).await
         } else {
             node.destroy_replica(request).await

@@ -4,7 +4,7 @@ mod pool;
 mod replica;
 mod translation;
 
-use crate::controller::io_engine::GrpcContext;
+use crate::controller::io_engine::{ApiVersion, GrpcContext};
 use agents::errors::{GrpcConnect, SvcError};
 use rpc::io_engine::IoEngineClientV0;
 
@@ -45,4 +45,8 @@ impl RpcClient {
 }
 
 #[async_trait::async_trait]
-impl super::NodeApi for RpcClient {}
+impl super::NodeApi for RpcClient {
+    fn api_version(&self) -> ApiVersion {
+        ApiVersion::V0
+    }
+}

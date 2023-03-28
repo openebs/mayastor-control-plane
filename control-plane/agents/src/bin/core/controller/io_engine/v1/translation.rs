@@ -78,7 +78,6 @@ impl IoEngineToAgent for v1::host::BlockDevice {
     }
 }
 
-/// Pool Agent Conversions
 impl TryIoEngineToAgent for v1::replica::Replica {
     type AgentMessage = transport::Replica;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
@@ -171,13 +170,18 @@ impl AgentToIoEngine for transport::UnshareReplica {
 impl AgentToIoEngine for transport::DestroyReplica {
     type IoEngineMessage = v1::replica::DestroyReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        Self::IoEngineMessage {
+        let pool_ref = match &self.pool_uuid {
+            Some(uuid) => v1::replica::destroy_replica_request::Pool::PoolUuid(uuid.to_string()),
+            None => v1::replica::destroy_replica_request::Pool::PoolName(self.pool_id.to_string()),
+        };
+        v1::replica::DestroyReplicaRequest {
             uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
+            pool: Some(pool_ref),
         }
     }
 }
 
-/// convert rpc replica to a agent replica
+/// Convert rpc replica to an agent replica.
 pub(super) fn rpc_replica_to_agent(
     rpc_replica: &v1::replica::Replica,
     id: &NodeId,
@@ -186,8 +190,6 @@ pub(super) fn rpc_replica_to_agent(
     replica.node = id.clone();
     Ok(replica)
 }
-
-/// Volume Agent conversions
 
 impl TryIoEngineToAgent for v1::nexus::Nexus {
     type AgentMessage = transport::Nexus;
@@ -274,8 +276,6 @@ impl IoEngineToAgent for v1::nexus::Child {
         }
     }
 }
-
-/// Volume Agent Conversions
 
 impl AgentToIoEngine for transport::CreateNexus {
     type IoEngineMessage = v1::nexus::CreateNexusRequest;
@@ -456,7 +456,7 @@ impl AgentToIoEngine for transport::ImportPool {
     }
 }
 
-/// Converts rpc pool to a agent pool.
+/// Converts rpc pool to an agent pool.
 pub(super) fn rpc_pool_to_agent(rpc_pool: &rpc::v1::pool::Pool, id: &NodeId) -> PoolState {
     let mut pool = rpc_pool.to_agent();
     pool.node = id.clone();

@@ -1082,19 +1082,69 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Destroy a replica on the pool via gRPC.
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        let _ = dataplane.destroy_replica(request).await;
-        let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
-        self.update_replica_states(ctx.deref_mut()).await?;
-        // todo: remove when CAS-1107 is resolved
-        if let Some(replica) = self.read().await.replica(&request.uuid) {
-            if replica.pool_id == request.pool_id {
-                return Err(SvcError::Internal {
-                    details: "replica was not destroyed by the io-engine".to_string(),
-                });
+        match dataplane.destroy_replica(request).await {
+            // v0 success was not entirely correct as it was being returned
+            // without checking if the pool was loaded.
+            Ok(()) if dataplane.api_version() == ApiVersion::V0 => {
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_replica_states(ctx.deref_mut()).await?;
+                self.update_pool_states(ctx.deref_mut()).await?;
+                let resources = self.read().await;
+                if resources.pool(&request.pool_id).is_none() {
+                    // if the pool is not loaded then how could we delete the replica..
+                    return Err(SvcError::PoolNotLoaded {
+                        pool_id: request.pool_id.to_owned(),
+                    });
+                }
+                if let Some(replica) = resources.replica(&request.uuid) {
+                    // CAS-1107 which was not resolved on v0..
+                    if replica.pool_id == request.pool_id {
+                        return Err(SvcError::Internal {
+                            details: "replica was not destroyed by the io-engine".to_string(),
+                        });
+                    }
+                }
+                Ok(())
             }
+            Ok(()) => {
+                self.update_replica_state(Either::Remove(request.uuid.clone()))
+                    .await;
+                if let Ok(mut ctx) = dataplane.reconnect(GETS_TIMEOUT).await {
+                    self.update_pool_states(ctx.deref_mut()).await.ok();
+                }
+                Ok(())
+            }
+            Err(SvcError::GrpcRequestError { source, .. })
+                if source.metadata().contains_key("gtm-602")
+                    && source.code() == tonic::Code::NotFound =>
+            {
+                self.update_replica_state(Either::Remove(request.uuid.clone()))
+                    .await;
+                if let Ok(mut ctx) = dataplane.reconnect(GETS_TIMEOUT).await {
+                    self.update_pool_states(ctx.deref_mut()).await.ok();
+                }
+                Err(SvcError::ReplicaNotFound {
+                    replica_id: request.uuid.to_owned(),
+                })
+            }
+            // previous not found error was not entirely correct as it was being returned
+            // without checking if the pool was loaded.
+            Err(error) if error.tonic_code() == tonic::Code::NotFound => {
+                let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+                self.update_replica_states(ctx.deref_mut()).await?;
+                self.update_pool_states(ctx.deref_mut()).await?;
+                let resources = self.read().await;
+                if resources.replica(&request.uuid).is_some()
+                    || resources.pool(&request.pool_id).is_none()
+                {
+                    return Err(SvcError::PoolNotLoaded {
+                        pool_id: request.pool_id.to_owned(),
+                    });
+                }
+                Err(error)
+            }
+            Err(error) => Err(error),
         }
-        self.update_pool_states(ctx.deref_mut()).await.ok();
-        Ok(())
     }
 
     /// Share a replica on the pool via gRPC.
