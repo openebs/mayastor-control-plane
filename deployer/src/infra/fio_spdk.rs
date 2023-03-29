@@ -9,11 +9,11 @@ impl ComponentAction for FioSpdk {
         Ok(if options.fio_spdk {
             cfg.add_container_spec(
                 ContainerSpec::from_image("fio-spdk", &utils::fio_spdk_image())
-                    .with_entrypoint("sleep")
+                    .with_entrypoint("tini")
                     .with_bind("/var/run/dpdk", "/var/run/dpdk")
                     .with_bind("/dev/vfio/vfio", "/dev/vfio/vfio")
                     .with_privileged(Some(true))
-                    .with_arg("infinity"),
+                    .with_args(vec!["--", "sleep", "infinity"]),
             )
         } else {
             cfg
