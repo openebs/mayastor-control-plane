@@ -80,6 +80,8 @@ pub enum SvcError {
     },
     #[snafu(display("Node '{}' not found", node_id))]
     NodeNotFound { node_id: NodeId },
+    #[snafu(display("Pool '{}' not loaded", pool_id))]
+    PoolNotLoaded { pool_id: PoolId },
     #[snafu(display("Pool '{}' not found", pool_id))]
     PoolNotFound { pool_id: PoolId },
     #[snafu(display("Disk list should have only 1 device. Received :{:?}", disks))]
@@ -275,6 +277,10 @@ impl SvcError {
         match self {
             Self::NotFound { .. } => tonic::Code::NotFound,
             Self::NexusNotFound { .. } => tonic::Code::NotFound,
+            Self::PoolNotFound { .. } => tonic::Code::NotFound,
+            Self::ReplicaNotFound { .. } => tonic::Code::NotFound,
+            Self::PoolNotLoaded { .. } => tonic::Code::FailedPrecondition,
+            Self::ChildNotFound { .. } => tonic::Code::NotFound,
             Self::AlreadyExists { .. } => tonic::Code::AlreadyExists,
             Self::GrpcRequestError { source, .. } => source.code(),
             Self::GrpcConnectTimeout { .. } => tonic::Code::DeadlineExceeded,
@@ -512,6 +518,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::PoolNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Pool,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::PoolNotLoaded { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Pool,
                 source: desc.to_string(),
                 extra: error.full_string(),

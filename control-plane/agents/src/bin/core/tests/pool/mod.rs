@@ -59,6 +59,18 @@ async fn pool() {
         )
         .await
         .unwrap();
+    let _pool2 = pool_client
+        .create(
+            &CreatePool {
+                node: io_engine.clone(),
+                id: "pooloop2".into(),
+                disks: vec!["malloc:///disk1?size_mb=100".into()],
+                labels: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
     tracing::info!("Pools: {:?}", pool);
 
     let pools = pool_client.get(Filter::None, None).await.unwrap();
@@ -148,6 +160,23 @@ async fn pool() {
             ..
         }
     ));
+
+    let error = rep_client
+        .destroy(
+            &DestroyReplica {
+                node: io_engine.clone(),
+                uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+                pool_id: "pooloop2".into(),
+                pool_uuid: None,
+                name: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect_err("wrong pool");
+    assert_eq!(error.kind, ReplyErrorKind::Aborted);
+
     rep_client
         .destroy(
             &DestroyReplica {
@@ -162,6 +191,22 @@ async fn pool() {
         )
         .await
         .unwrap();
+
+    let error = rep_client
+        .destroy(
+            &DestroyReplica {
+                node: io_engine.clone(),
+                uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+                pool_id: "pooloop".into(),
+                pool_uuid: None,
+                name: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect_err("already deleted");
+    assert_eq!(error.kind, ReplyErrorKind::NotFound);
 
     assert!(rep_client
         .get(Filter::None, None)
@@ -180,6 +225,32 @@ async fn pool() {
         )
         .await
         .unwrap();
+    pool_client
+        .destroy(
+            &DestroyPool {
+                node: io_engine.clone(),
+                id: "pooloop2".into(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let error = rep_client
+        .destroy(
+            &DestroyReplica {
+                node: io_engine.clone(),
+                uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+                pool_id: "pooloop".into(),
+                pool_uuid: None,
+                name: None,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect_err("pool not loaded");
+    assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
 
     assert!(pool_client
         .get(Filter::None, None)

@@ -11,11 +11,11 @@ use async_trait::async_trait;
 use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
-        AddNexusChild, CreateNexus, CreatePool, CreateReplica, DestroyNexus, DestroyPool,
-        DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus, NexusChildAction,
-        NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, PoolState, Register,
-        RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus,
-        UnshareReplica,
+        AddNexusChild, ApiVersion, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
+        DestroyPool, DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus,
+        NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
+        PoolState, Register, RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus,
+        UnshareNexus, UnshareReplica,
     },
 };
 
@@ -36,6 +36,7 @@ pub(crate) trait NodeApi:
     + Send
     + Clone
 {
+    fn api_version(&self) -> ApiVersion;
 }
 
 #[async_trait]

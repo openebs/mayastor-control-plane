@@ -54,6 +54,7 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
         Ok(replica)
     }
 
+    #[tracing::instrument(name = "rpc::v1::replica::destroy", level = "debug", skip(self), err)]
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let _ = self
             .replica()
