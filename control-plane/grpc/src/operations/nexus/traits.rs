@@ -268,6 +268,7 @@ impl TryFrom<nexus::Child> for Child {
             state_reason: nexus::ChildStateReason::from_i32(child_grpc_type.reason)
                 .map(ChildStateReason::from)
                 .unwrap_or(ChildStateReason::Unknown),
+            faulted_at: None,
         };
         Ok(child)
     }
