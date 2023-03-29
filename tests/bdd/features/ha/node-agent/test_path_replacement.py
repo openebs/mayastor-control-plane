@@ -113,6 +113,7 @@ def background():
         cluster_agent=True,
         csi_node=True,
         cache_period="1s",
+        io_engine_coreisol=True,
     )
 
     ApiClient.pools_api().put_node_pool(
