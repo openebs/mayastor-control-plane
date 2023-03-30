@@ -1,15 +1,19 @@
 use crate::controller::{
     reconciler::{PollContext, TaskPoller},
     resources::{
-        operations::ResourcePublishing, operations_helper::OperationSequenceGuard, OperationGuard,
-        ResourceMutex,
+        operations::{ResourceDrain, ResourcePublishing},
+        operations_helper::OperationSequenceGuard,
+        OperationGuard, OperationGuardArc, ResourceMutex,
     },
     task_poller::{PollEvent, PollResult, PollTimer, PollerState},
 };
 use agents::errors::SvcError;
 use std::{collections::HashSet, time::Duration};
 use stor_port::types::v0::{
-    store::{node::NodeSpec, volume::VolumeSpec},
+    store::{
+        node::{DrainingVolumes, NodeSpec},
+        volume::VolumeSpec,
+    },
     transport::{NodeId, RepublishVolume, VolumeId, VolumeShareProtocol},
 };
 
@@ -31,12 +35,14 @@ impl NodeNexusReconciler {
 
 #[async_trait::async_trait]
 impl TaskPoller for NodeNexusReconciler {
+    /// Identify draining nodes and attempt to drain them,
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let nodes = context.specs().nodes();
         let mut results = Vec::with_capacity(nodes.len());
 
         for node in nodes {
-            results.push(check_and_drain_node(context, &node).await);
+            let mut node_spec = context.registry().specs().guarded_node(node.id()).await?;
+            results.push(check_and_drain_node(context, &mut node_spec).await);
         }
         Self::squash_results(results)
     }
@@ -75,15 +81,19 @@ async fn republish_volume(
     Ok(())
 }
 
-async fn find_shutdown_volumes(context: &PollContext, node_id: &NodeId) -> Result<(), SvcError> {
-    let draining_starttime = context.specs().node_draining_timestamp(node_id).await?;
+/// Identify volumes that were on the drained node that contain shutdown nexuses.
+async fn find_shutdown_volumes(
+    context: &PollContext,
+    node_spec: &mut OperationGuardArc<NodeSpec>,
+) -> Result<(), SvcError> {
+    let draining_starttime = node_spec.node_draining_timestamp().await;
 
     let Some(draining_starttime) = draining_starttime else {
         return Ok(());
     };
     let elapsed = draining_starttime.elapsed();
     if elapsed.is_ok() && elapsed.unwrap() < Duration::from_secs(DRAINING_VOLUME_TIMEOUT_SECONDS) {
-        let draining_volumes = context.specs().node_draining_volumes(node_id).await?;
+        let draining_volumes = node_spec.node_draining_volumes().await;
         let mut draining_volumes_to_remove: HashSet<VolumeId> = HashSet::new();
 
         for vi in draining_volumes {
@@ -95,48 +105,48 @@ async fn find_shutdown_volumes(context: &PollContext, node_id: &NodeId) -> Resul
             if !shutdown_nexuses.is_empty() {
                 // if it still has shutdown nexuses
                 tracing::info!(
-                    node.id = node_id.as_str(),
+                    node.id = node_spec.as_ref().id().as_str(),
                     volume.uuid = vi.as_str(),
                     nexus.count = shutdown_nexuses.len(),
                     "Shutdown nexuses remain"
                 );
             } else {
                 tracing::info!(
-                    node.id = node_id.as_str(),
+                    node.id = node_spec.as_ref().id().as_str(),
                     volume.uuid = vi.as_str(),
                     "Removing volume from the draining volume list"
                 );
                 draining_volumes_to_remove.insert(vi);
             }
         }
-        context
-            .specs()
-            .remove_node_draining_volumes(context.registry(), node_id, draining_volumes_to_remove)
+        node_spec
+            .remove_draining_volumes(
+                context.registry(),
+                DrainingVolumes::new(draining_volumes_to_remove),
+            )
             .await?;
     } else {
         // else the drain operation is timed out
-        context
-            .specs()
-            .remove_all_node_draining_volumes(context.registry(), node_id)
+        node_spec
+            .remove_all_draining_volumes(context.registry())
             .await?;
     }
     Ok(())
 }
 
 /// Drain the specified node if in draining state
-async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> PollResult {
-    if !node_spec.is_draining() {
+async fn check_and_drain_node(
+    context: &PollContext,
+    node_spec: &mut OperationGuardArc<NodeSpec>,
+) -> PollResult {
+    if !node_spec.as_ref().is_draining() {
         return PollResult::Ok(PollerState::Idle);
     }
-    let node_id = node_spec.id();
 
     // In case this pod has restarted, set the timestamp of the draining node to now.
-    context
-        .specs()
-        .set_draining_timestamp_if_none(node_id)
-        .await?;
+    node_spec.set_draining_timestamp_if_none().await;
 
-    tracing::trace!(node.id = node_id.as_str(), "Draining node");
+    tracing::trace!(node.id = node_spec.as_ref().id().as_str(), "Draining node");
     let vol_specs = context.specs().volumes_rsc();
 
     let mut move_failures = false;
@@ -150,7 +160,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
         match vol_spec.operation_guard() {
             Ok(mut guarded_vol_spec) => {
                 if let Some(target) = guarded_vol_spec.as_ref().target() {
-                    if target.node() != node_id {
+                    if target.node() != node_spec.as_ref().id() {
                         continue; // some other node's volume, ignore
                     }
                     let nexus_id = target.nexus().clone();
@@ -173,7 +183,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
                     tracing::info!(
                         volume.uuid = vol_id.as_str(),
                         nexus.uuid = nexus_id.as_str(),
-                        node.id = node_spec.id().as_str(),
+                        node.id = node_spec.as_ref().id().as_str(),
                         "Moving volume"
                     );
                     if let Err(e) =
@@ -184,7 +194,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
                             error=%e,
                             volume.uuid = vol_id.as_str(),
                             nexus.uuid = nexus_id.as_str(),
-                            node.id = node_spec.id().as_str(),
+                            node.id = node_spec.as_ref().id().as_str(),
                             "Failed to republish volume"
                         );
                         move_failures = true;
@@ -193,7 +203,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
                     tracing::info!(
                         volume.uuid = vol_id.as_str(),
                         nexus.uuid = nexus_id.as_str(),
-                        node.id = node_spec.id().as_str(),
+                        node.id = node_spec.as_ref().id().as_str(),
                         "Moved volume"
                     );
                     new_draining_volumes.insert(vol_id.clone());
@@ -205,14 +215,16 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
             }
         };
     }
-    if let Err(error) = context
-        .specs()
-        .add_node_draining_volumes(context.registry(), node_spec.id(), new_draining_volumes)
+    if let Err(error) = node_spec
+        .add_draining_volumes(
+            context.registry(),
+            DrainingVolumes::new(new_draining_volumes),
+        )
         .await
     {
         tracing::error!(
             %error,
-            node.id = node_id.as_str(),
+            node.id = node_spec.as_ref().id().as_str(),
             "Failed to add draining volumes"
         );
         return PollResult::Err(error);
@@ -222,28 +234,27 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
         // Determine whether we can mark the node as drained by checking
         // that all drained volumes do not have shutdown nexuses.
         // If that is not the case, the next reconciliation loop will check again.
-        find_shutdown_volumes(context, node_id).await?;
+        find_shutdown_volumes(context, node_spec).await?;
 
-        match context.specs().node_draining_volume_count(node_id).await? {
+        match node_spec.node_draining_volume_count().await {
             // if there are no more shutdown volumes, change the node state to "drained"
             0 => {
-                if let Err(error) = context
-                    .specs()
-                    .set_node_drained(context.registry(), node_id)
-                    .await
-                {
+                if let Err(error) = node_spec.set_drained(context.registry()).await {
                     tracing::error!(
                         %error,
-                        node.id = node_id.as_str(),
+                        node.id = node_spec.as_ref().id().as_str(),
                         "Failed to set node to state drained"
                     );
                     return PollResult::Err(error);
                 }
-                tracing::info!(node.id = node_id.as_str(), "Set node to state drained");
+                tracing::info!(
+                    node.id = node_spec.as_ref().id().as_str(),
+                    "Set node to state drained",
+                );
             }
             remaining => {
                 tracing::info!(
-                    node.id = node_id.as_str(),
+                    node.id = node_spec.as_ref().id().as_str(),
                     nexus.count = remaining,
                     "Shutdown nexuses remain"
                 );

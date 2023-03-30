@@ -1,7 +1,12 @@
 use super::*;
 use crate::controller::{
-    reconciler::PollTriggerEvent, registry::Registry,
-    resources::operations_helper::ResourceSpecsLocked, wrapper::NodeWrapper,
+    reconciler::PollTriggerEvent,
+    registry::Registry,
+    resources::{
+        operations::{ResourceCordon, ResourceDrain},
+        operations_helper::ResourceSpecsLocked,
+    },
+    wrapper::NodeWrapper,
 };
 use agents::errors::SvcError;
 use stor_port::types::v0::transport::{
@@ -22,22 +27,22 @@ use std::{collections::HashMap, sync::Arc};
 #[derive(Debug, Clone)]
 pub(crate) struct Service {
     registry: Registry,
-    /// deadline for receiving keepalive/Register messages
+    /// Deadline for receiving keepalive/Register messages.
     deadline: std::time::Duration,
-    /// node communication timeouts
+    /// Node communication timeouts.
     comms_timeouts: NodeCommsTimeout,
 }
 
 /// Node communication Timeouts for establishing the connection to a node and
-/// the request itself
+/// the request itself.
 #[derive(Debug, Clone)]
 pub(crate) struct NodeCommsTimeout {
-    /// timeout options
+    /// Timeout options.
     opts: TimeoutOptions,
 }
 
 impl NodeCommsTimeout {
-    /// return a new `Self` with the connect and request timeouts
+    /// Return a new `Self` with the connect and request timeouts.
     pub(crate) fn new(
         connect: std::time::Duration,
         request: std::time::Duration,
@@ -54,15 +59,15 @@ impl NodeCommsTimeout {
 
         Self { opts }
     }
-    /// timeout to establish connection to the node
+    /// Timeout to establish connection to the node.
     pub(crate) fn connect(&self) -> std::time::Duration {
         self.opts.connect_timeout()
     }
-    /// timeout for the request itself
+    /// Timeout for the request itself.
     pub(crate) fn request(&self) -> std::time::Duration {
         self.opts.base_timeout()
     }
-    /// timeout opts.
+    /// Timeout opts.
     pub(crate) fn opts(&self) -> &TimeoutOptions {
         &self.opts
     }
@@ -70,15 +75,18 @@ impl NodeCommsTimeout {
 
 #[tonic::async_trait]
 impl NodeOperations for Service {
+    /// Get the nodes as specified in the filter.
     async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Nodes, ReplyError> {
         let req = GetNodes::new(filter);
         let nodes = self.get_nodes(&req).await?;
         Ok(nodes)
     }
+    /// Handle probe requests.
     async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
         return Ok(true);
     }
 
+    /// Get block devices from the node specified in the request.
     async fn get_block_devices(
         &self,
         get_blockdevice: &dyn GetBlockDeviceInfo,
@@ -89,16 +97,19 @@ impl NodeOperations for Service {
         Ok(blockdevices)
     }
 
+    /// Cordon the specified node.
     async fn cordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
         let node = self.cordon(id, label).await?;
         Ok(node)
     }
 
+    /// Uncordon the specified node.
     async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
         let node = self.uncordon(id, label).await?;
         Ok(node)
     }
 
+    /// Apply a drain label to the specified node. The reconciler will perform the drain.
     async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
         let node = self.drain(id, label).await?;
         Ok(node)
@@ -107,6 +118,7 @@ impl NodeOperations for Service {
 
 #[tonic::async_trait]
 impl RegistrationOperations for Service {
+    /// Register the node as specified in the request.
     async fn register(&self, req: &dyn RegisterInfo) -> Result<(), ReplyError> {
         let register = req.try_into()?;
         let service = self.clone();
@@ -114,6 +126,7 @@ impl RegistrationOperations for Service {
         Ok(())
     }
 
+    /// Deregister the node as specified in the request.
     async fn deregister(&self, req: &dyn DeregisterInfo) -> Result<(), ReplyError> {
         let deregister = req.into();
         let service = self.clone();
@@ -124,7 +137,7 @@ impl RegistrationOperations for Service {
 
 impl Service {
     /// New Node Service which uses the `registry` as its node cache and sets
-    /// the `deadline` to each node's watchdog
+    /// the `deadline` to each node's watchdog.
     pub(super) async fn new(
         registry: Registry,
         deadline: std::time::Duration,
@@ -158,7 +171,7 @@ impl Service {
         self.registry.specs()
     }
 
-    /// Callback to be called when a node's watchdog times out
+    /// Callback to be called when a node's watchdog times out.
     pub(super) async fn on_timeout(service: &Service, id: &NodeId) {
         let registry = service.registry.clone();
         let node = {
@@ -174,7 +187,7 @@ impl Service {
         }
     }
 
-    /// Register a new node through the register information
+    /// Register a new node through the register information.
     #[tracing::instrument(level = "trace", skip(self), fields(node.id = %registration.id))]
     pub(super) async fn register(&self, registration: &Register) {
         self.registry.register_node_spec(registration).await;
@@ -244,7 +257,7 @@ impl Service {
         }
     }
 
-    /// Deregister a node through the deregister information
+    /// Deregister a node through the deregister information.
     #[tracing::instrument(level = "debug", skip(self), fields(node.id = %node.id))]
     pub(super) async fn deregister(&self, node: &Deregister) {
         let nodes = self.registry.nodes().read().await;
@@ -260,7 +273,7 @@ impl Service {
         }
     }
 
-    /// Get nodes by filter
+    /// Get nodes by filter.
     pub(crate) async fn get_nodes(&self, request: &GetNodes) -> Result<Nodes, SvcError> {
         match request.filter() {
             Filter::None => {
@@ -307,7 +320,7 @@ impl Service {
         }
     }
 
-    /// Get block devices from a node
+    /// Get block devices from a node.
     pub(crate) async fn get_block_devices(
         &self,
         request: &GetBlockDevices,
@@ -319,32 +332,29 @@ impl Service {
         client.list_blockdevices(request).await
     }
 
+    /// Cordon the specified node.
     async fn cordon(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
-        let spec = self
-            .registry
-            .specs()
-            .cordon_node(&self.registry, &id, label)
-            .await?;
+        let mut guarded_node = self.specs().guarded_node(&id).await?;
+
+        let spec = guarded_node.cordon(&self.registry, label).await?;
         let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
     }
 
+    /// Uncordon the specified node.
     async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
-        let spec = self
-            .registry
-            .specs()
-            .uncordon_node(&self.registry, &id, label)
-            .await?;
+        let mut guarded_node = self.specs().guarded_node(&id).await?;
+
+        let spec = guarded_node.uncordon(&self.registry, label).await?;
         let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
     }
 
+    /// Apply a drain label to the specified node. The reconciler will perform the drain.
     async fn drain(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
-        let spec = self
-            .registry
-            .specs()
-            .drain_node(&self.registry, &id, label)
-            .await?;
+        let mut guarded_node = self.specs().guarded_node(&id).await?;
+
+        let spec = guarded_node.drain(&self.registry, label.clone()).await?;
         let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
     }

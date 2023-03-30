@@ -1,6 +1,40 @@
 use crate::controller::registry::Registry;
 use agents::errors::SvcError;
 
+/// Resource Cordon Operations.
+#[async_trait::async_trait]
+pub(crate) trait ResourceCordon {
+    type CordonOutput: Sync + Send + Sized;
+    type UncordonOutput: Sync + Send + Sized;
+
+    /// Cordon the resource.
+    async fn cordon(
+        &mut self,
+        registry: &Registry,
+        label: String,
+    ) -> Result<Self::CordonOutput, SvcError>;
+    /// Uncordon the resource.
+    async fn uncordon(
+        &mut self,
+        registry: &Registry,
+        label: String,
+    ) -> Result<Self::UncordonOutput, SvcError>;
+}
+
+/// Resource Drain Operations.
+#[async_trait::async_trait]
+pub(crate) trait ResourceDrain {
+    type DrainOutput: Sync + Send + Sized;
+    /// Drain the resource.
+    async fn drain(
+        &mut self,
+        registry: &Registry,
+        label: String,
+    ) -> Result<Self::DrainOutput, SvcError>;
+    /// Mark the resource as drained.
+    async fn set_drained(&mut self, registry: &Registry) -> Result<Self::DrainOutput, SvcError>;
+}
+
 /// Resource Lifecycle Operations.
 #[async_trait::async_trait]
 pub(crate) trait ResourceLifecycle {

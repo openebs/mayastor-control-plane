@@ -1,16 +1,26 @@
-use agents::errors::{NodeNotFound, SvcError};
-use snafu::OptionExt;
-use stor_port::types::v0::{
-    store::node::{NodeLabels, NodeSpec},
-    transport::{NodeId, Register, VolumeId},
-};
-
 use crate::controller::{
     registry::Registry,
-    resources::{operations_helper::ResourceSpecsLocked, ResourceMutex},
+    resources::{
+        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
+        OperationGuardArc, ResourceMutex,
+    },
+};
+use agents::errors::{NodeNotFound, SvcError};
+use snafu::OptionExt;
+use stor_port::{
+    transport_api::ResourceKind,
+    types::v0::{
+        store::{
+            node::{NodeLabels, NodeOperation, NodeSpec},
+            SpecStatus, SpecTransaction,
+        },
+        transport::{NodeId, Register},
+    },
 };
 
-use std::{collections::HashSet, time::SystemTime};
+use crate::controller::resources::operations_helper::{
+    GuardedOperationsHelper, SpecOperationsHelper,
+};
 
 impl ResourceSpecsLocked {
     /// Create a node spec for the register request
@@ -66,6 +76,15 @@ impl ResourceSpecsLocked {
         self.node_rsc(node_id).map(|n| n.lock().clone())
     }
 
+    /// Get guarded cloned node spec by its `NodeId`
+    pub async fn guarded_node(
+        &self,
+        node_id: &NodeId,
+    ) -> Result<OperationGuardArc<NodeSpec>, SvcError> {
+        let node = self.node_rsc(node_id)?;
+        node.operation_guard_wait().await
+    }
+
     /// Get all locked node specs
     fn nodes_rsc(&self) -> Vec<ResourceMutex<NodeSpec>> {
         self.read().nodes.to_vec()
@@ -77,56 +96,6 @@ impl ResourceSpecsLocked {
             .into_iter()
             .map(|n| n.lock().clone())
             .collect()
-    }
-
-    /// Cordon the node with the given ID.
-    /// Return the NodeSpec after cordoning.
-    pub(crate) async fn cordon_node(
-        &self,
-        registry: &Registry,
-        node_id: &NodeId,
-        label: String,
-    ) -> Result<NodeSpec, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let cordoned_node_spec = {
-            let mut locked_node = node.lock();
-            // Do not allow the same label to be applied more than once.
-            if locked_node.has_cordon_label(&label) {
-                return Err(SvcError::CordonLabel {
-                    node_id: node_id.to_string(),
-                    label,
-                });
-            }
-            locked_node.cordon(label);
-            locked_node.clone()
-        };
-        registry.store_obj(&cordoned_node_spec).await?;
-        Ok(cordoned_node_spec.clone())
-    }
-
-    /// Uncordon the node with the given ID.
-    /// Return the NodeSpec after uncordoning.
-    pub(crate) async fn uncordon_node(
-        &self,
-        registry: &Registry,
-        node_id: &NodeId,
-        label: String,
-    ) -> Result<NodeSpec, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        // Return an error if the uncordon label doesn't exist.
-        if !node.lock().has_cordon_label(&label) {
-            return Err(SvcError::UncordonLabel {
-                node_id: node_id.to_string(),
-                label,
-            });
-        }
-        let uncordoned_node_spec = {
-            let mut locked_node = node.lock();
-            locked_node.uncordon(label);
-            locked_node.clone()
-        };
-        registry.store_obj(&uncordoned_node_spec).await?;
-        Ok(uncordoned_node_spec.clone())
     }
 
     /// Get all cordoned nodes.
@@ -144,135 +113,90 @@ impl ResourceSpecsLocked {
             })
             .collect()
     }
+}
 
-    /// Apply the drain label to trigger draining.
-    /// Return the NodeSpec.
-    pub(crate) async fn drain_node(
-        &self,
-        registry: &Registry,
-        node_id: &NodeId,
-        label: String,
-    ) -> Result<NodeSpec, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let drained_node_spec = {
-            let mut locked_node = node.lock();
-            // Do not allow the same label to be applied more than once.
-            if locked_node.has_cordon_label(&label) {
-                return Err(SvcError::CordonLabel {
-                    node_id: node_id.to_string(),
-                    label,
-                });
-            }
-            locked_node.set_drain(label);
-            locked_node.clone()
-        };
-        registry.store_obj(&drained_node_spec).await?;
-        Ok(drained_node_spec)
-    }
+#[async_trait::async_trait]
+impl GuardedOperationsHelper for OperationGuardArc<NodeSpec> {
+    type Create = NodeSpec;
+    type Owners = ();
+    type Status = ();
+    type State = NodeSpec;
+    type UpdateOp = NodeOperation;
+    type Inner = NodeSpec;
 
-    /// Set the NodeSpec to the drained state.
-    pub(crate) async fn set_node_drained(
-        &self,
-        registry: &Registry,
-        node_id: &NodeId,
-    ) -> Result<NodeSpec, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let drained_node_spec = {
-            let mut locked_node = node.lock();
-            locked_node.set_drained();
-            locked_node.clone()
-        };
-        registry.store_obj(&drained_node_spec).await?;
-        Ok(drained_node_spec)
+    fn remove_spec(&self, _registry: &Registry) {
+        unimplemented!();
     }
+}
 
-    /// Add the draining volume to the node spec for checking shutdown nexuses.
-    pub(crate) async fn add_node_draining_volumes(
-        &self,
-        registry: &Registry,
-        node_id: &NodeId,
-        draining_volumes: HashSet<VolumeId>,
-    ) -> Result<NodeSpec, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let drained_node_spec = {
-            let mut locked_node = node.lock();
-            locked_node.add_draining_volumes(draining_volumes);
-            locked_node.clone()
-        };
-        registry.store_obj(&drained_node_spec).await?;
-        Ok(drained_node_spec)
-    }
+#[async_trait::async_trait]
+impl SpecOperationsHelper for NodeSpec {
+    type Create = NodeSpec;
+    type Owners = ();
+    type Status = ();
+    type State = NodeSpec;
+    type UpdateOp = NodeOperation;
 
-    /// Get the draining volumes on this node.
-    pub(crate) async fn node_draining_volumes(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<HashSet<VolumeId>, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let locked_node = node.lock();
-        Ok(locked_node.draining_volumes())
-    }
-
-    /// Get the number of draining volumes on this node.
-    pub(crate) async fn node_draining_volume_count(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<usize, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let locked_node = node.lock();
-        Ok(locked_node.draining_volume_count())
-    }
-
-    /// Remove the given volume from this node.
-    pub(crate) async fn remove_node_draining_volumes(
-        &self,
-        registry: &Registry,
-        node_id: &NodeId,
-        draining_volumes: HashSet<VolumeId>,
-    ) -> Result<NodeSpec, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let drained_node_spec = {
-            let mut locked_node = node.lock();
-            locked_node.remove_draining_volumes(draining_volumes);
-            locked_node.clone()
-        };
-        registry.store_obj(&drained_node_spec).await?;
-        Ok(drained_node_spec)
-    }
-    /// Remove all volumes from this node.
-    pub(crate) async fn remove_all_node_draining_volumes(
-        &self,
-        registry: &Registry,
-        node_id: &NodeId,
-    ) -> Result<NodeSpec, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let drained_node_spec = {
-            let mut locked_node = node.lock();
-            locked_node.remove_all_draining_volumes();
-            locked_node.clone()
-        };
-        registry.store_obj(&drained_node_spec).await?;
-        Ok(drained_node_spec)
-    }
-
-    /// Set the draining timestamp on this node.
-    pub(crate) async fn set_draining_timestamp_if_none(
-        &self,
-        node_id: &NodeId,
+    async fn start_update_op(
+        &mut self,
+        _: &Registry,
+        _state: &Self::State,
+        op: Self::UpdateOp,
     ) -> Result<(), SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let mut locked_node = node.lock();
-        locked_node.set_draining_timestamp_if_none();
-        Ok(())
+        match op.clone() {
+            NodeOperation::Cordon(label) | NodeOperation::Drain(label) => {
+                // Do not allow the same label to be applied more than once.
+                if self.has_cordon_label(&label) {
+                    Err(SvcError::CordonLabel {
+                        node_id: self.id().to_string(),
+                        label,
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
+            NodeOperation::Uncordon(label) => {
+                // Check that the label is present.
+                if !self.has_cordon_label(&label) {
+                    Err(SvcError::CordonLabel {
+                        node_id: self.id().to_string(),
+                        label,
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
+            _ => {
+                self.start_op(op);
+                Ok(())
+            }
+        }
+    }
+    fn start_create_op(&mut self, _request: &Self::Create) {
+        unimplemented!();
+    }
+    fn start_destroy_op(&mut self) {
+        unimplemented!();
     }
 
-    /// Get the draining timestamp on this node.
-    pub(crate) async fn node_draining_timestamp(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<Option<SystemTime>, SvcError> {
-        let node = self.node_rsc(node_id)?;
-        let locked_node = node.lock();
-        Ok(locked_node.draining_timestamp())
+    fn dirty(&self) -> bool {
+        self.pending_op()
+    }
+    fn kind(&self) -> ResourceKind {
+        ResourceKind::Node
+    }
+    fn uuid_str(&self) -> String {
+        self.id().to_string()
+    }
+    fn status(&self) -> SpecStatus<Self::Status> {
+        SpecStatus::Created(())
+    }
+    fn set_status(&mut self, _status: SpecStatus<Self::Status>) {
+        unimplemented!();
+    }
+    fn operation_result(&self) -> Option<Option<bool>> {
+        self.operation.as_ref().map(|r| r.result)
     }
 }
