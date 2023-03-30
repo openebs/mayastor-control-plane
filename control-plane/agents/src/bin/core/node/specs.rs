@@ -7,7 +7,10 @@ use stor_port::types::v0::{
 
 use crate::controller::{
     registry::Registry,
-    resources::{operations_helper::ResourceSpecsLocked, ResourceMutex},
+    resources::{
+        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
+        ResourceMutex,
+    },
 };
 
 impl ResourceSpecsLocked {
@@ -65,7 +68,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get all locked node specs
-    fn nodes_rsc(&self) -> Vec<ResourceMutex<NodeSpec>> {
+    pub(crate) fn nodes_rsc(&self) -> Vec<ResourceMutex<NodeSpec>> {
         self.read().nodes.to_vec()
     }
 
@@ -86,8 +89,9 @@ impl ResourceSpecsLocked {
         label: String,
     ) -> Result<NodeSpec, SvcError> {
         let node = self.node_rsc(node_id)?;
+        let guarded_node = node.operation_guard_wait().await?;
         let cordoned_node_spec = {
-            let mut locked_node = node.lock();
+            let mut locked_node = guarded_node.lock();
             // Do not allow the same label to be applied more than once.
             if locked_node.has_cordon_label(&label) {
                 return Err(SvcError::CordonLabel {
@@ -111,15 +115,16 @@ impl ResourceSpecsLocked {
         label: String,
     ) -> Result<NodeSpec, SvcError> {
         let node = self.node_rsc(node_id)?;
+        let guarded_node = node.operation_guard_wait().await?;
         // Return an error if the uncordon label doesn't exist.
-        if !node.lock().has_cordon_label(&label) {
+        if !guarded_node.lock().has_cordon_label(&label) {
             return Err(SvcError::UncordonLabel {
                 node_id: node_id.to_string(),
                 label,
             });
         }
         let uncordoned_node_spec = {
-            let mut locked_node = node.lock();
+            let mut locked_node = guarded_node.lock();
             locked_node.uncordon(label);
             locked_node.clone()
         };
@@ -152,8 +157,9 @@ impl ResourceSpecsLocked {
         label: String,
     ) -> Result<NodeSpec, SvcError> {
         let node = self.node_rsc(node_id)?;
+        let guarded_node = node.operation_guard_wait().await?;
         let drained_node_spec = {
-            let mut locked_node = node.lock();
+            let mut locked_node = guarded_node.lock();
             // Do not allow the same label to be applied more than once.
             if locked_node.has_cordon_label(&label) {
                 return Err(SvcError::CordonLabel {

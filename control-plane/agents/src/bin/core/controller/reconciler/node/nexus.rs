@@ -29,11 +29,15 @@ impl NodeNexusReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for NodeNexusReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let nodes = context.specs().nodes();
-        let mut results = Vec::with_capacity(nodes.len());
+        let mut results = vec![];
+        let nodes = context.specs().nodes_rsc();
 
         for node in nodes {
-            results.push(check_and_drain_node(context, &node).await);
+            let mut guarded_node = match node.operation_guard() {
+                Ok(guard) => guard,
+                Err(_) => return PollResult::Ok(PollerState::Busy),
+            };
+            results.push(check_and_drain_node(&mut guarded_node, context).await);
         }
         Self::squash_results(results)
     }
@@ -72,13 +76,16 @@ async fn republish_volume(
 }
 
 /// Drain the specified node if in draining state
-async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> PollResult {
-    if !node_spec.is_draining() {
+async fn check_and_drain_node(
+    node: &mut OperationGuard<ResourceMutex<NodeSpec>, NodeSpec>,
+    context: &PollContext,
+) -> PollResult {
+    if !node.as_ref().is_draining() {
         return PollResult::Ok(PollerState::Idle);
     }
+    let node_id = node.as_ref().id().clone();
 
-    let node_id = node_spec.id();
-    tracing::trace!(node.id = node_spec.id().as_str(), "Draining node");
+    tracing::trace!(node.id = node_id.as_str(), "Draining node");
     let vol_specs = context.specs().volumes_rsc();
 
     let mut move_failures = false;
@@ -89,7 +96,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
         match vol_spec.operation_guard() {
             Ok(mut guarded_vol_spec) => {
                 if let Some(target) = guarded_vol_spec.as_ref().target() {
-                    if target.node() != node_id {
+                    if target.node() != &node_id {
                         continue; // some other node's volume, ignore
                     }
                     let nexus_id = target.nexus().clone();
@@ -112,7 +119,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
                     tracing::info!(
                         volume.uuid = vol_id.as_str(),
                         nexus.uuid = nexus_id.as_str(),
-                        node.id = node_spec.id().as_str(),
+                        node.id = node_id.as_str(),
                         "Moving volume"
                     );
                     if let Err(e) =
@@ -123,7 +130,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
                             error=%e,
                             volume.uuid = vol_id.as_str(),
                             nexus.uuid = nexus_id.as_str(),
-                            node.id = node_spec.id().as_str(),
+                            node.id = node_id.as_str(),
                             "Failed to republish volume"
                         );
                         move_failures = true;
@@ -132,7 +139,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
                     tracing::info!(
                         volume.uuid = vol_id.as_str(),
                         nexus.uuid = nexus_id.as_str(),
-                        node.id = node_spec.id().as_str(),
+                        node.id = node_id.as_str(),
                         "Moved volume"
                     );
                 }
@@ -147,7 +154,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
     if !move_failures {
         if let Err(error) = context
             .specs()
-            .set_node_drained(context.registry(), node_spec.id())
+            .set_node_drained(context.registry(), &node_id)
             .await
         {
             tracing::error!(

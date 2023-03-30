@@ -2,12 +2,16 @@
 use crate::{
     types::v0::{
         openapi::models,
-        store::definitions::{ObjectKey, StorableObject, StorableObjectType},
+        store::{
+            definitions::{ObjectKey, StorableObject, StorableObjectType},
+            AsOperationSequencer, OperationSequence,
+        },
         transport::{self, HostNqn, NodeId},
     },
     IntoOption,
 };
 use pstor::ApiVersion;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -154,6 +158,9 @@ pub struct NodeSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     node_nqn: Option<HostNqn>,
+    /// The operation sequence resource is in.
+    #[serde(skip)]
+    sequencer: OperationSequence,
 }
 
 impl NodeSpec {
@@ -166,11 +173,12 @@ impl NodeSpec {
         node_nqn: Option<HostNqn>,
     ) -> Self {
         Self {
-            id,
+            id: id.clone(),
             endpoint,
             labels,
             cordon_drain_state,
             node_nqn,
+            sequencer: OperationSequence::new(id),
         }
     }
     /// Node Nvme HOSTNQN.
@@ -353,6 +361,16 @@ impl From<NodeSpec> for models::NodeSpec {
             src.cordon_drain_state.into_opt(),
             src.node_nqn.into_opt(),
         )
+    }
+}
+
+impl AsOperationSequencer for NodeSpec {
+    fn as_ref(&self) -> &OperationSequence {
+        &self.sequencer
+    }
+
+    fn as_mut(&mut self) -> &mut OperationSequence {
+        &mut self.sequencer
     }
 }
 
