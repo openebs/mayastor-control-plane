@@ -1823,6 +1823,12 @@ components:
         - Online
         - Degraded
         - Faulted
+    ChildStateReason:
+      example: OutOfSpace
+      description: Reason for the state of a Nexus Child
+      type: string
+      enum:
+        - OutOfSpace
     Child:
       example:
         rebuildProgress: null
@@ -1837,9 +1843,9 @@ components:
           minimum: 0
           maximum: 100
         state:
-          description: state of the child
-          allOf:
-            - $ref: '#/components/schemas/ChildState'
+          $ref: '#/components/schemas/ChildState'
+        state_reason:
+          $ref: '#/components/schemas/ChildStateReason'
         uri:
           description: uri of the child device
           type: string

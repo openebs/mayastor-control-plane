@@ -33,6 +33,10 @@ impl From<Child> for models::Child {
         Self {
             rebuild_progress: src.rebuild_progress,
             state: src.state.into(),
+            state_reason: match src.state_reason {
+                ChildStateReason::NoSpace => Some(models::ChildStateReason::OutOfSpace),
+                _ => None,
+            },
             uri: src.uri.into(),
         }
     }
