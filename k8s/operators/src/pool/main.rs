@@ -3,11 +3,17 @@
 //!
 //! Successfully created pools are recreated by the control plane.
 
-mod crd;
+mod diskpool;
+pub(crate) mod error;
+mod mayastorpool;
 
 use chrono::Utc;
 use clap::{Arg, ArgMatches};
-use crd::{DiskPool, DiskPoolStatus, PoolState};
+use diskpool::{
+    client::{api, create, ensure_crd},
+    crd::*,
+};
+use error::Error;
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
 use kube::{
@@ -16,17 +22,15 @@ use kube::{
         controller::{Action, Controller},
         finalizer,
     },
-    Client, CustomResourceExt, Resource, ResourceExt,
+    Client, Resource, ResourceExt,
 };
+use mayastorpool::client::{check_crd, delete, list};
 use openapi::{
     apis::StatusCode,
     clients::{self, tower::Url},
-    models::{CreatePoolBody, Pool, RestJsonError},
+    models::{CreatePoolBody, Pool},
 };
-
-use crate::crd::CrPoolState;
 use serde_json::json;
-use snafu::Snafu;
 use std::{
     collections::HashMap,
     ops::Deref,
@@ -37,52 +41,7 @@ use tracing::{debug, error, info, trace, warn};
 
 const WHO_AM_I: &str = "DiskPool Operator";
 const WHO_AM_I_SHORT: &str = "dsp-operator";
-
-/// Errors generated during the reconciliation loop
-#[derive(Debug, Snafu)]
-#[allow(clippy::enum_variant_names)]
-pub(crate) enum Error {
-    #[snafu(display(
-        "Failed to reconcile '{}' CRD within set limits, aborting operation",
-        name
-    ))]
-    /// Error generated when the loop stops processing
-    ReconcileError {
-        name: String,
-    },
-    /// Generated when we have a duplicate resource version for a given resource
-    Duplicate {
-        timeout: u32,
-    },
-    /// Spec error
-    SpecError {
-        value: String,
-        timeout: u32,
-    },
-    #[snafu(display("Kubernetes client error: {}", source))]
-    /// k8s client error
-    Kube {
-        source: kube::Error,
-    },
-    #[snafu(display("HTTP request error: {}", source))]
-    Request {
-        source: clients::tower::RequestError,
-    },
-    #[snafu(display("HTTP response error: {}", source))]
-    Response {
-        source: clients::tower::ResponseError<RestJsonError>,
-    },
-    Noun {},
-}
-
-impl From<clients::tower::Error<RestJsonError>> for Error {
-    fn from(source: clients::tower::Error<RestJsonError>) -> Self {
-        match source {
-            clients::tower::Error::Request(source) => Error::Request { source },
-            clients::tower::Error::Response(source) => Self::Response { source },
-        }
-    }
-}
+const PAGINATION_LIMIT: u32 = 100;
 
 /// Additional per resource context during the runtime; it is volatile
 #[derive(Clone)]
@@ -213,7 +172,7 @@ impl ResourceContext {
 
     /// Construct an API handle for the resource
     fn api(&self) -> Api<DiskPool> {
-        Api::namespaced(self.ctx.k8s.clone(), &self.namespace().unwrap())
+        api(&self.ctx.k8s, &self.namespace().unwrap())
     }
 
     /// Control plane pool handler.
@@ -633,53 +592,6 @@ impl ResourceContext {
     }
 }
 
-/// ensure the CRD is installed. This creates a chicken and egg problem. When the CRD is removed,
-/// the operator will fail to list the CRD going into a error loop.
-///
-/// To prevent that, we will simply panic, and hope we can make progress after restart. Keep
-/// running is not an option as the operator would be "running" and the only way to know something
-/// is wrong would be to consult the logs.
-async fn ensure_crd(k8s: Client) {
-    let dsp: Api<k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition> = Api::all(k8s);
-
-    // Check if there is an existing dsp crd. If yes, Replace it with new generated one.
-    // Create new if it doesnt exist.
-    let mut crd = DiskPool::crd();
-    let crd_name = crd.metadata.name.as_ref().unwrap().as_str();
-    let result = if let Ok(existing) = dsp.get(crd_name).await {
-        crd.metadata.resource_version = existing.resource_version();
-        info!(
-            "Replacing CRD: {}",
-            serde_json::to_string_pretty(&crd).unwrap()
-        );
-
-        let pp = PostParams::default();
-        dsp.replace(crd_name, &pp, &crd).await
-    } else {
-        info!(
-            "Creating CRD: {}",
-            serde_json::to_string_pretty(&crd).unwrap()
-        );
-
-        let pp = PostParams::default();
-        dsp.create(&pp, &crd).await
-    };
-    match result {
-        Ok(o) => {
-            info!(crd = ?o.name_any(), "created");
-            // let the CRD settle this purely to avoid errors messages in the console
-            // that are harmless but can cause some confusion maybe.
-            tokio::time::sleep(Duration::from_secs(5)).await;
-        }
-
-        Err(e) => {
-            error!("failed to create CRD error {}", e);
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            std::process::exit(1);
-        }
-    }
-}
-
 const BACKOFF_PERIOD: u64 = 20;
 
 /// Determine what we want to do when dealing with errors from the
@@ -717,7 +629,6 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
             cr_state: CrPoolState::Creating,
             ..
         }) => dsp.create_or_import().await,
-
         Some(DiskPoolStatus {
             cr_state: CrPoolState::Created,
             ..
@@ -736,9 +647,31 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     let k8s = Client::try_default().await?;
 
     let namespace = args.get_one::<String>("namespace").unwrap();
-    ensure_crd(k8s.clone()).await;
 
-    let dsp: Api<DiskPool> = Api::namespaced(k8s.clone(), namespace);
+    // Ensure the DiskPool CRD, otherwise exit.
+    match ensure_crd(&k8s).await {
+        Ok(o) => {
+            info!(crd = ?o.name_any(), "Created");
+            // let the CRD settle this purely to avoid errors messages in the console
+            // that are harmless but can cause some confusion maybe.
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+
+        Err(error) => {
+            error!(%error, "Failed to create CRD");
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            std::process::exit(1);
+        }
+    }
+
+    // Migrate the MayastorPool CRs to the DiskPool.
+    let _ = migrate_and_clean_msps(&k8s, namespace)
+        .await
+        .map_err(|error| {
+            error!(%error, "Was not able to fully migrate existing v1 CRs");
+        });
+
+    let dsp: Api<DiskPool> = api(&k8s, namespace);
     let lp = ListParams::default();
     let url = Url::parse(args.get_one::<String>("endpoint").unwrap())
         .expect("endpoint is not a valid URL");
@@ -880,6 +813,48 @@ fn normalize_disk(disk: &str) -> String {
             .display()
             .to_string()
     })
+}
+
+/// Migrate from MayastorPool.
+pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Result<(), Error> {
+    // Check if the MayastorPool CRD is present, and migrate from it if it is.
+    match check_crd(k8s).await {
+        // Fetch the MayastorPool CRs.
+        Ok(true) => match list(k8s, namespace, PAGINATION_LIMIT).await {
+            Ok(mut msps) => {
+                for msp in msps.iter_mut() {
+                    let name = msp.clone().metadata.name.ok_or(Error::InvalidCRField {
+                        field: "diskpool.metadata.name".to_string(),
+                    })?;
+                    let node = msp.spec.node();
+                    let disks = msp.spec.disks();
+                    // Create the corresponding DiskPool CRs.
+                    if let Err(error) =
+                        create(k8s, namespace, &name, DiskPoolSpec::new(node, disks)).await
+                    {
+                        error!("Migration failed for {name} with: {error:?}");
+                    }
+                    // Patch the finalizers and delete the MayastorPool CRs.
+                    if let Err(error) = delete(k8s, namespace, msp).await {
+                        error!("Deletion failed for {name}  with: {error:?}");
+                    }
+                }
+                info!("Migration and Cleanup of CRs from MayastorPool to DiskPool complete");
+            }
+            Err(error) => {
+                return Err(Error::Generic {
+                    message: format!("Failed to list MayastorPool CRs: {error:?}"),
+                })
+            }
+        },
+        Ok(false) => warn!("MayastorPool CRD was not found in the cluster, skipping migration"),
+        Err(error) => {
+            return Err(Error::Generic {
+                message: format!("Failed to check for MayastorPool CRD: {error:?}"),
+            })
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

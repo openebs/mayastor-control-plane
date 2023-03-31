@@ -34,18 +34,21 @@ pub struct DiskPoolSpec {
 }
 
 impl DiskPoolSpec {
-    /// The node the pool is placed on
+    /// Create a new DiskPoolSpec from the node and the disks.
+    pub fn new(node: String, disks: Vec<String>) -> Self {
+        Self { node, disks }
+    }
+    /// The node the pool is placed on.
     pub fn node(&self) -> String {
         self.node.clone()
     }
-    /// The disk device the pool is located on
+    /// The disk devices that compose the pool.
     pub fn disks(&self) -> Vec<String> {
         self.disks.clone()
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
-#[non_exhaustive]
 pub enum PoolState {
     /// The pool is a new OR missing resource, and it has not been created or
     /// imported yet by the operator. The pool spec MAY be but DOES
@@ -68,7 +71,6 @@ pub enum PoolState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema, Default)]
-#[non_exhaustive]
 /// PoolState represents operator specific states for DSP CR.
 pub enum CrPoolState {
     /// The pool is a new OR missing resource, and it has not been created or
@@ -84,7 +86,6 @@ pub enum CrPoolState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
-#[non_exhaustive]
 /// PoolStatus is Control plane status of a given DSP CR.
 pub enum PoolStatus {
     /// State is Unknown.

@@ -7,7 +7,7 @@ authors = ["Jeffry Molanus <jeffry.molanus@gmail.com>"]
 
 [[bin]]
 name = "operator-diskpool"
-path = "src/diskpool/main.rs"
+path = "src/pool/main.rs"
 
 [lib]
 name = "k8s_operators"
