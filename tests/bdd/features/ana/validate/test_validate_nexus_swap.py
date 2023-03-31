@@ -109,6 +109,7 @@ def background():
         cache_period="1s",
         io_engine_env="NEXUS_NVMF_ANA_ENABLE=1,NEXUS_NVMF_RESV_ENABLE=1",
         agents_env="TEST_NEXUS_NVMF_ANA_ENABLE=1",
+        io_engine_coreisol=True,
     )
 
     ApiClient.pools_api().put_node_pool(
@@ -146,8 +147,8 @@ def run_fio_to_first_path(connect_to_first_path):
     assert len(subsystem["Paths"]) == 1, "Must be exactly one I/O path to target nexus"
     assert subsystem["Paths"][0]["State"] == "live", "I/O path is not healthy"
     # Launch fio in background and let it always run along with the test.
-    fio = Fio("job", "randread", device, runtime=FIO_RUNTIME).build()
-    return subprocess.Popen(fio, shell=True)
+    fio = Fio("job", "randread", device, runtime=FIO_RUNTIME)
+    return fio.open()
 
 
 @pytest.fixture

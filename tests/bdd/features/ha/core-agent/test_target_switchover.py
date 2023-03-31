@@ -89,6 +89,7 @@ def a_control_plane_two_ioengine_instances_two_pools():
     Deployer.start(
         io_engines=3,
         reconcile_period="10s",
+        io_engine_coreisol=True,
         fio_spdk=True,
     )
     ApiClient.pools_api().put_node_pool(
@@ -218,12 +219,12 @@ def the_newer_target_should_have_rw_access_to_the_replicas():
     newer_target = get_newer_target()
     uri = urlparse(newer_target["deviceUri"])
 
-    fio = Fio(name="job", rw="randrw", uri=uri).build_for_userspace()
+    fio = Fio(name="job", rw="randrw", size="50M", uri=uri)
 
     try:
-        subprocess.run(fio, shell=True, check=True)
+        code = fio.run().returncode
+        assert code == 0, "Fio is expected to execute successfully"
     except subprocess.CalledProcessError:
-        remove_stale_files_on_error(uri.hostname, uri.path[1:])
         assert False, "FIO is not expected to be errored out"
 
 
@@ -232,13 +233,12 @@ def the_older_target_should_not_have_rw_access_the_replicas():
     """the older target should not have R/W access the replicas."""
     uri = urlparse(pytest.older_target_uri)
 
-    fio = Fio(name="job", rw="randrw", uri=uri).build_for_userspace()
+    fio = Fio(name="job", rw="randrw", size="50M", uri=uri)
 
     try:
-        code = subprocess.run(fio, shell=True, check=True).returncode
+        code = fio.run().returncode
         assert code != 0, "Fio is not expected to execute successfully"
     except subprocess.CalledProcessError:
-        remove_stale_files_on_error(uri.hostname, uri.path[1:])
         assert True, "FIO is not expected to be errored out"
 
 
@@ -302,16 +302,3 @@ def cleanup_iptable_rules(io_engine_ip):
             subprocess.run(command, shell=True, check=True)
         except subprocess.CalledProcessError:
             break
-
-
-def remove_stale_files_on_error(ip, nqn):
-    filename = (
-        "{}/'trtype=tcp adrfam=IPv4 traddr={} trsvcid=8420 subnqn={} ns=1'".format(
-            os.environ["ROOT_DIR"], ip, nqn
-        )
-    )
-    command = "rm -f {}".format(filename)
-    try:
-        subprocess.run(command, shell=True, check=True)
-    except subprocess.CalledProcessError:
-        assert False, "Could not clean up the stale files, needs manual cleanup"

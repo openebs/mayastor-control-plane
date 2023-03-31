@@ -23,6 +23,7 @@ class StartOptions:
     ha_node_agent: bool = False
     ha_cluster_agent: bool = False
     fio_spdk: bool = False
+    io_engine_coreisol: bool = False
 
     def args(self):
         args = [
@@ -58,6 +59,8 @@ class StartOptions:
             args.append(f"--max-rebuilds={self.max_rebuilds}")
         if self.fio_spdk:
             args.append("--fio-spdk")
+        if self.io_engine_coreisol:
+            args.append("--io-engine-isolate")
 
         agent_arg = "--agents=Core"
         if self.ha_node_agent:
@@ -88,6 +91,7 @@ class Deployer(object):
         cluster_agent=False,
         node_agent=False,
         fio_spdk=False,
+        io_engine_coreisol=False,
     ):
         options = StartOptions(
             io_engines,
@@ -105,6 +109,7 @@ class Deployer(object):
             ha_node_agent=node_agent,
             ha_cluster_agent=cluster_agent,
             fio_spdk=fio_spdk,
+            io_engine_coreisol=io_engine_coreisol,
         )
         Deployer.start_with_opts(options)
 
@@ -117,7 +122,8 @@ class Deployer(object):
     # Stop containers
     @staticmethod
     def stop():
-        if os.getenv("CLEAN") == "false":
+        clean = os.getenv("CLEAN")
+        if clean is not None and clean.lower() in ("no", "false", "f", "0"):
             return
         deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
         subprocess.run([deployer_path, "stop"])
