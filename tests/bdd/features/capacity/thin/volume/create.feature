@@ -4,14 +4,14 @@ Feature: Thin Provisioning - Volume Creation
 
   # Thick volume creation.
   Scenario: Creating a thick provisioned volume
-    Given a request for a tick provisioned volume
+    Given a request for a thick provisioned volume
     When a volume is successfully created
     Then its replicas are reported to be thick provisioned
     And the pools usage increases by volume size
 
   # Thick volume space limit.
   Scenario: Creating an oversized thick provisioned volume
-    Given a request for a tick provisioned volume
+    Given a request for a thick provisioned volume
     When the request size exceeds available pools free space
     Then volume creation fails due to insufficient space
 

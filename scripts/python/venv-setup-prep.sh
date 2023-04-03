@@ -5,7 +5,7 @@
 set -e
 
 SCRIPTDIR="$(dirname "$(realpath "${BASH_SOURCE[0]:-"$0"}")")"
-ROOTDIR="$SCRIPTDIR"/../../
+ROOTDIR="$SCRIPTDIR"/../..
 
 CSI_PROTO=
 CSI_OUT=

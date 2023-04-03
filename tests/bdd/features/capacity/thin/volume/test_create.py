@@ -116,9 +116,9 @@ def a_request_for_a_thin_provisioned_volume(create_request):
     create_request[CREATE_REQUEST_KEY] = request
 
 
-@given("a request for a tick provisioned volume")
-def a_request_for_a_tick_provisioned_volume(create_request):
-    """a request for a tick provisioned volume."""
+@given("a request for a thick provisioned volume")
+def a_request_for_a_thick_provisioned_volume(create_request):
+    """a request for a thick provisioned volume."""
     request = CreateVolumeBody(
         VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
     )
