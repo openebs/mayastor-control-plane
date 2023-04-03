@@ -84,6 +84,9 @@ async fn execute(cli_args: CliArgs) {
             },
             GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
             GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
+            GetResources::VolumeReplicaTopologies => {
+                volume::Volume::topologies(&cli_args.output).await
+            }
             GetResources::VolumeReplicaTopology { id } => {
                 volume::Volume::topology(id, &cli_args.output).await
             }

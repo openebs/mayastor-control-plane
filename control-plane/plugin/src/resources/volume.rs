@@ -141,6 +141,10 @@ impl Scale for Volume {
 #[async_trait(?Send)]
 impl ReplicaTopology for Volume {
     type ID = VolumeId;
+    async fn topologies(output: &OutputFormat) {
+        let volumes = VolumeTopologies(get_paginated_volumes().await.unwrap_or_default());
+        utils::print_table(output, volumes);
+    }
     async fn topology(id: &Self::ID, output: &OutputFormat) {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
@@ -151,6 +155,49 @@ impl ReplicaTopology for Volume {
                 println!("Failed to get volume {id}. Error {e}")
             }
         }
+    }
+}
+
+#[derive(Default, Debug, serde::Serialize, serde::Deserialize)]
+struct VolumeTopologies(Vec<openapi::models::Volume>);
+
+impl GetHeaderRow for VolumeTopologies {
+    fn get_header_row(&self) -> Row {
+        utils::REPLICA_TOPOLOGIES_PREFIX
+            .iter()
+            .chain(utils::REPLICA_TOPOLOGY_HEADERS.iter())
+            .cloned()
+            .collect()
+    }
+}
+impl CreateRows for VolumeTopologies {
+    fn create_rows(&self) -> Vec<Row> {
+        self.0
+            .iter()
+            .flat_map(|volume| {
+                let mut rows = Vec::new();
+                volume
+                    .state
+                    .replica_topology
+                    .create_rows()
+                    .into_iter()
+                    .enumerate()
+                    .for_each(|(i, mut r)| {
+                        let mut row = if i == 0 {
+                            row![volume.spec.uuid]
+                        } else if i < volume.state.replica_topology.len() - 1 {
+                            row!["├─"]
+                        } else {
+                            row!["└─"]
+                        };
+                        for cell in r.iter_mut() {
+                            row.add_cell(cell.clone());
+                        }
+                        rows.push(row);
+                    });
+                rows
+            })
+            .collect()
     }
 }
 
@@ -180,7 +227,10 @@ impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
                             .usage
                             .as_ref()
                             .map(|u| ::utils::bytes::into_human(u.allocated))
-                    )
+                    ),
+                    optional_cell(topology.child_status.as_ref().map(|s| s.to_string())),
+                    optional_cell(topology.child_status_reason.as_ref().map(|s| s.to_string())),
+                    optional_cell(topology.rebuild_progress.map(|p| format!("{p}%"))),
                 ]
             })
             .collect()

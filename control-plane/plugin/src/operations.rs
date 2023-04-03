@@ -62,6 +62,7 @@ pub trait Scale {
 #[async_trait(?Send)]
 pub trait ReplicaTopology {
     type ID;
+    async fn topologies(output: &utils::OutputFormat);
     async fn topology(id: &Self::ID, output: &utils::OutputFormat);
 }
 
