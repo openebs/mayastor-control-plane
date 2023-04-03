@@ -1,8 +1,8 @@
 use crate::controller::registry::Registry;
 use agents::errors::SvcError;
 use stor_port::types::v0::transport::{
-    uri_with_hostnqn, NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState, VolumeStatus,
-    VolumeUsage,
+    uri_with_hostnqn, Nexus, NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState,
+    VolumeStatus, VolumeUsage,
 };
 
 use crate::controller::reconciler::PollTriggerEvent;
@@ -55,7 +55,9 @@ impl Registry {
         // Construct the topological information for the volume replicas.
         let mut replica_topology = HashMap::new();
         for replica_spec in &replica_specs {
-            let replica = self.replica_topology(replica_spec).await;
+            let replica = self
+                .replica_topology(replica_spec, nexus.as_ref().map(|(_, n)| n))
+                .await;
             if let Some(usage) = replica.usage() {
                 total_usage += usage.allocated();
                 if usage.allocated() > largest_allocated {
@@ -113,14 +115,20 @@ impl Registry {
 
     /// Construct a replica topology from a replica spec.
     /// If the replica cannot be found, return the default replica topology.
-    async fn replica_topology(&self, spec: &ReplicaSpec) -> ReplicaTopology {
+    async fn replica_topology(&self, spec: &ReplicaSpec, nexus: Option<&Nexus>) -> ReplicaTopology {
         match self.get_replica(&spec.uuid).await {
-            Ok(state) => ReplicaTopology::new(
-                Some(state.node),
-                Some(state.pool_id),
-                state.status,
-                state.space.into_opt(),
-            ),
+            Ok(state) => {
+                let child = nexus.and_then(|n| n.child(&state.uri));
+                ReplicaTopology::new(
+                    Some(state.node),
+                    Some(state.pool_id),
+                    state.status,
+                    state.space.into_opt(),
+                    child.map(|c| c.state.clone()),
+                    child.map(|c| c.state_reason.clone()),
+                    child.and_then(|c| c.rebuild_progress),
+                )
+            }
             Err(_) => {
                 tracing::trace!(replica.uuid = %spec.uuid, "Replica not found. Constructing default replica topology");
                 ReplicaTopology::default()

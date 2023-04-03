@@ -33,10 +33,7 @@ impl From<Child> for models::Child {
         Self {
             rebuild_progress: src.rebuild_progress,
             state: src.state.into(),
-            state_reason: match src.state_reason {
-                ChildStateReason::NoSpace => Some(models::ChildStateReason::OutOfSpace),
-                _ => None,
-            },
+            state_reason: (&src.state_reason).into(),
             uri: src.uri.into(),
         }
     }
@@ -164,6 +161,15 @@ pub enum ChildStateReason {
     ByClient,
     /// Admin command failure.
     AdminCommandFailed,
+}
+
+impl From<&ChildStateReason> for Option<models::ChildStateReason> {
+    fn from(state_reason: &ChildStateReason) -> Self {
+        match state_reason {
+            ChildStateReason::NoSpace => Some(models::ChildStateReason::OutOfSpace),
+            _ => None,
+        }
+    }
 }
 
 impl Default for ChildState {

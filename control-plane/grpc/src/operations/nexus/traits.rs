@@ -203,6 +203,11 @@ impl From<nexus::ChildState> for ChildState {
 }
 impl From<ChildState> for nexus::ChildState {
     fn from(src: ChildState) -> Self {
+        Self::from(&src)
+    }
+}
+impl From<&ChildState> for nexus::ChildState {
+    fn from(src: &ChildState) -> Self {
         match src {
             ChildState::Unknown => Self::ChildUnknown,
             ChildState::Online => Self::ChildOnline,
@@ -232,6 +237,11 @@ impl From<nexus::ChildStateReason> for ChildStateReason {
 }
 impl From<ChildStateReason> for nexus::ChildStateReason {
     fn from(src: ChildStateReason) -> Self {
+        Self::from(&src)
+    }
+}
+impl From<&ChildStateReason> for nexus::ChildStateReason {
+    fn from(src: &ChildStateReason) -> Self {
         match src {
             ChildStateReason::Unknown => Self::None,
             ChildStateReason::Init => Self::Init,
