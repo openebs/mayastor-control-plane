@@ -1,8 +1,11 @@
-use crate::controller::{registry::Registry, wrapper::*};
+use crate::controller::{registry::Registry, resources::ResourceUid, wrapper::*};
 use agents::errors::{NexusNotFound, SvcError};
 use snafu::OptionExt;
 use stor_port::types::v0::{
-    store::nexus_persistence::{NexusInfo, NexusInfoKey},
+    store::{
+        nexus_persistence::{NexusInfo, NexusInfoKey},
+        volume::VolumeSpec,
+    },
     transport::{Nexus, NexusId, NodeId, VolumeId},
 };
 
@@ -81,12 +84,18 @@ impl Registry {
 
                 let result = match self.load_obj::<NexusInfo>(&nexus_info_key).await {
                     Ok(result) => Ok(result),
-                    Err(SvcError::StoreMissingEntry { .. })
-                        if self.config().mayastor_compat_v1() =>
-                    {
-                        self.load_obj::<NexusInfo>(&nexus_info_key.with_mayastor_compat_v1(true))
+                    Err(error @ SvcError::StoreMissingEntry { .. }) => {
+                        let v1_compat = self.config().mayastor_compat_v1();
+                        if v1_compat {
+                            self.load_obj::<NexusInfo>(
+                                &nexus_info_key.with_mayastor_compat_v1(true),
+                            )
                             .await
+                        } else {
+                            Err(error)
+                        }
                     }
+
                     Err(error) => Err(error),
                 };
 
@@ -100,5 +109,39 @@ impl Registry {
                 }
             }
         }
+    }
+
+    /// Check for the presence of v1 nexus_info associated to the current volumes.
+    pub(crate) async fn nexus_info_v1_migrated(&self) -> Result<bool, SvcError> {
+        // Filter the volumes having a target.
+        let volspecs: Vec<VolumeSpec> = self
+            .specs()
+            .volumes()
+            .into_iter()
+            .filter(|vol| vol.target().is_some())
+            .collect();
+
+        for volspec in volspecs {
+            let volume_uuid = volspec.uid();
+            let nexus_uuid = match volspec.target() {
+                None => continue,
+                Some(target) => target.nexus(),
+            };
+
+            // Create the nexus_info key structure, without v1 compat.
+            let nexus_info_key = NexusInfoKey::new(&Some(volume_uuid.clone()), nexus_uuid);
+
+            // Load the nexus info with compat disabled.
+            match self.load_obj::<NexusInfo>(&nexus_info_key).await {
+                // v2 nexus_info exists, continue.
+                Ok(_) => {}
+                // If we don't have the v2 entry, its not migrated.
+                Err(SvcError::StoreMissingEntry { .. }) => return Ok(false),
+                // We failed to execute the command, so return the error.
+                Err(error) => return Err(error),
+            }
+        }
+        // If we reach here, we have the v2 keys for all volumes, thus its migrated at this point.
+        Ok(true)
     }
 }

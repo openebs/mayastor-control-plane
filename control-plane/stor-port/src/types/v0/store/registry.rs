@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 /// Registry configuration loaded from/stored into the persistent store
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CoreRegistryConfig {
     /// Key of this configuration
     id: CoreRegistryConfigKey,
@@ -45,7 +45,7 @@ impl CoreRegistryConfig {
 }
 
 /// How the Node Registration is handled
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum NodeRegistration {
     /// Nodes have to be registered via the RestApi before they can be used.
     Manual,
