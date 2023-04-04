@@ -28,11 +28,12 @@ use std::{
 };
 use stor_port::{
     pstor::{
-        detect_product_v1_prefix, etcd::Etcd, product_v1_key_prefix, Error as StoreError,
-        StorableObject, Store, StoreKey, StoreKv, StoreObj,
+        detect_product_v1_prefix, etcd::Etcd, Error as StoreError, StorableObject, Store, StoreKey,
+        StoreKv, StoreObj,
     },
     types::v0::{
         store::{
+            nexus_persistence::delete_all_v1_nexus_info,
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
             volume::InitiatorAC,
         },
@@ -80,7 +81,7 @@ pub(crate) struct RegistryInner<S: Store> {
     /// reconciliation period when work is pending.
     reconcile_period: std::time::Duration,
     reconciler: ReconcilerControl,
-    config: CoreRegistryConfig,
+    config: parking_lot::RwLock<CoreRegistryConfig>,
     /// system-wide maximum number of concurrent rebuilds allowed.
     max_rebuilds: Option<NumRebuilds>,
     /// Enablement of host access control.
@@ -104,7 +105,7 @@ impl Registry {
         reconcile_idle_period: std::time::Duration,
         max_rebuilds: Option<NumRebuilds>,
         host_acl: Vec<HostAccessControl>,
-    ) -> Self {
+    ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
         let mut store = Etcd::new_leased(
@@ -113,14 +114,22 @@ impl Registry {
             store_lease_tll,
         )
         .await
-        .expect("Should connect to the persistent store");
+        .map_err(|error| StoreError::Generic {
+            source: Box::new(error),
+            description: "Could not connect to the persistent store".to_string(),
+        })?;
+
         tracing::info!("Connected to persistent store at {}", store_endpoint);
 
-        let legacy_prefix_present = detect_product_v1_prefix(&mut store)
+        // Check for the product v1 prefix presence.
+        let product_v1_prefix = detect_product_v1_prefix(&mut store)
             .await
-            .expect("Product v1 key prefix detection should not fail");
+            .map_err(|error| StoreError::Generic {
+                source: Box::new(error),
+                description: "Product v1 prefix detection failed".to_string(),
+            })?;
 
-        let registry = Self {
+        let mut registry = Self {
             inner: Arc::new(RegistryInner {
                 nodes: Default::default(),
                 specs: ResourceSpecsLocked::new(),
@@ -130,21 +139,41 @@ impl Registry {
                 reconcile_period,
                 reconcile_idle_period,
                 reconciler: ReconcilerControl::new(),
-                config: Self::get_config_or_panic(&mut store, legacy_prefix_present).await,
+                config: parking_lot::RwLock::new(
+                    Self::get_config(&mut store, product_v1_prefix)
+                        .await
+                        .map_err(|error| StoreError::Generic {
+                            source: Box::new(error),
+                            description: "Could not get the config".to_string(),
+                        })?,
+                ),
                 max_rebuilds,
                 host_acl,
-                legacy_prefix_present,
+                legacy_prefix_present: product_v1_prefix,
             }),
         };
-        registry.init().await;
+        registry.init().await?;
 
-        // Remove all entries of v1 key prefix.
-        store
-            .delete_values_prefix(&product_v1_key_prefix())
-            .await
-            .expect("Product v1 key prefix deletion should not fail");
+        // Disable v1 compat if nexus_info keys are migrated.
+        if registry.config().mayastor_compat_v1() && registry.nexus_info_v1_migrated().await? {
+            // Delete the v1 nexus_info keys by brute force.
+            delete_all_v1_nexus_info(&mut store)
+                .await
+                .map_err(|error| StoreError::Generic {
+                    source: Box::new(error),
+                    description: "Deletetion of the v1 nexus_info failed".to_string(),
+                })?;
+            // Disable the v1 compat mode.
+            registry
+                .disable_v1_compat(&mut store)
+                .await
+                .map_err(|error| StoreError::Generic {
+                    source: Box::new(error),
+                    description: "Disabling of the v1 compatibility mode failed".to_string(),
+                })?;
+        }
 
-        registry
+        Ok(registry)
     }
 
     /// Formats the store endpoint with a default port if one isn't supplied.
@@ -157,38 +186,51 @@ impl Registry {
 
     /// Get the `CoreRegistryConfig` from etcd, if it exists, or use the default.
     /// If the mayastor_v1 config exists, then reuse it.
-    async fn get_config_or_panic<S: Store>(
+    async fn get_config<S: Store>(
         store: &mut S,
         legacy_prefix_present: bool,
-    ) -> CoreRegistryConfig {
+    ) -> Result<CoreRegistryConfig, StoreError> {
         let config = CoreRegistryConfig::new(NodeRegistration::Automatic);
         let mut config = match store.get_obj(&config.key()).await {
             Ok(config) => config,
             Err(StoreError::MissingEntry { .. }) => {
-                store
-                    .put_obj(&config)
-                    .await
-                    .expect("Failed to persist configuration information");
+                store.put_obj(&config).await?;
                 config
             }
-            Err(error) => panic!("Failed to load configuration information: {error:?}"),
+            Err(error) => return Err(error),
         };
 
         if legacy_prefix_present && !config.mayastor_compat_v1() {
             config.set_mayastor_compat_v1(legacy_prefix_present);
-            store
-                .put_obj(&config)
-                .await
-                .expect("Failed to persist configuration information");
+            store.put_obj(&config).await?;
             warn!("Legacy V1 prefix present, enabling compatibility mode");
         }
 
-        config
+        Ok(config)
     }
 
-    /// Get the `CoreRegistryConfig`
-    pub(crate) fn config(&self) -> &CoreRegistryConfig {
-        &self.config
+    /// Disable the v1 compat mode, once all nexus info keys are migrated and update
+    /// the config.
+    pub(crate) async fn disable_v1_compat<S: Store>(
+        &mut self,
+        store: &mut S,
+    ) -> Result<(), StoreError> {
+        let mut config = self.config().deref().clone();
+        config.set_mayastor_compat_v1(false);
+        store.put_obj(&config).await?;
+        self.set_config(config);
+        Ok(())
+    }
+
+    /// Get the `CoreRegistryConfig`.
+    pub(crate) fn config(&self) -> parking_lot::RwLockReadGuard<CoreRegistryConfig> {
+        self.config.read()
+    }
+
+    /// Set the `CoreRegistryConfig`.
+    pub(crate) fn set_config(&mut self, new_config: CoreRegistryConfig) {
+        let mut config = self.config.write();
+        *config = new_config
     }
 
     /// reconciliation period when no work is being done.
@@ -322,11 +364,12 @@ impl Registry {
     }
 
     /// Initialise the registry with the content of the persistent store.
-    async fn init(&self) {
+    async fn init(&self) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
         self.specs
             .init(store.deref_mut(), self.legacy_prefix_present)
-            .await;
+            .await?;
+        Ok(())
     }
 
     /// Send a triggered event signal to the reconciler module.

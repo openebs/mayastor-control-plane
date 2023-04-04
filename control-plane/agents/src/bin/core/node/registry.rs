@@ -63,7 +63,8 @@ impl Registry {
 
     /// Register new NodeSpec for the given `Register` Request
     pub(super) async fn register_node_spec(&self, request: &Register) {
-        if self.config().node_registration().automatic() {
+        let automatic = self.config().node_registration().automatic();
+        if automatic {
             self.specs().register_node(self, request).await.ok();
         }
     }

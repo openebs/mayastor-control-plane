@@ -1,10 +1,15 @@
 use crate::types::v0::{
-    store::definitions::{key_prefix, ObjectKey, StorableObject, StorableObjectType},
+    store::definitions::{key_prefix, ObjectKey, StorableObject, StorableObjectType, StoreError},
     transport::{NexusId, ReplicaId, VolumeId},
 };
-use pstor::ApiVersion;
+use pstor::{ApiVersion, Store};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use tracing::info;
+use uuid::Uuid;
+
+/// ETCD Pagination limit.
+const ETCD_PAGED_LIMIT: i64 = 1000;
 
 /// Definition of the nexus information that gets saved in the persistent
 /// store.
@@ -130,4 +135,37 @@ impl StorableObject for NexusInfo {
             mayastor_compat_v1: false,
         }
     }
+}
+
+/// Deletes all v1 nexus_info by fetching all keys and parsing the key to UUID and deletes on
+/// success.
+pub async fn delete_all_v1_nexus_info<S: Store>(store: &mut S) -> Result<(), StoreError> {
+    let mut prefix: &str = "";
+    let mut first = true;
+    let mut kvs;
+    loop {
+        kvs = store.get_values_paged(prefix, ETCD_PAGED_LIMIT).await?;
+        if !first && kvs.get(0).is_some() {
+            kvs.remove(0);
+        }
+        first = false;
+
+        // If the key is a uuid, i.e. nexus_info v1 key, and the value is a valid nexus_info then we
+        // delete it.
+        for (key, value) in &kvs {
+            if Uuid::parse_str(key).is_ok()
+                && serde_json::from_value::<NexusInfo>(value.clone()).is_ok()
+            {
+                store.delete_kv(&key).await?;
+            }
+        }
+
+        if let Some((key, _)) = kvs.last() {
+            prefix = key;
+        } else {
+            break;
+        }
+    }
+    info!("v1.0.x nexus_info cleaned up successfully");
+    Ok(())
 }

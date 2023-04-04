@@ -110,7 +110,7 @@ async fn main() {
 
 async fn server(cli_args: CliArgs) {
     stor_port::platform::init_cluster_info_or_panic().await;
-    let registry = controller::registry::Registry::new(
+    let registry = match controller::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),
         cli_args.store_timeout.into(),
@@ -124,7 +124,11 @@ async fn server(cli_args: CliArgs) {
             cli_args.hosts_acl
         },
     )
-    .await;
+    .await
+    {
+        Ok(registry) => registry,
+        Err(error) => panic!("Could not create registry instance, error: {error:?}"),
+    };
 
     let service = agents::Service::builder()
         .with_shared_state(
