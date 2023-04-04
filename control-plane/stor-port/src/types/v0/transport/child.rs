@@ -1,9 +1,7 @@
 use super::*;
-
-use chrono::{DateTime, Utc};
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, fmt::Debug, str::FromStr};
+use std::{cmp::Ordering, fmt::Debug, str::FromStr, time::SystemTime};
 use strum_macros::Display;
 
 /// Child information
@@ -19,7 +17,7 @@ pub struct Child {
     /// Reason for the child state.
     pub state_reason: ChildStateReason,
     /// Last faulted timestamp of this child.
-    pub faulted_at: Option<DateTime<Utc>>,
+    pub faulted_at: Option<SystemTime>,
 }
 impl Child {
     /// If if the state reason is lack of space.

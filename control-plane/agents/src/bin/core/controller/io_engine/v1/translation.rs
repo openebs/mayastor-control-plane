@@ -271,8 +271,7 @@ impl IoEngineToAgent for v1::nexus::Child {
             faulted_at: self
                 .fault_timestamp
                 .clone()
-                .and_then(|t| std::time::SystemTime::try_from(t).ok())
-                .map(chrono::DateTime::from),
+                .and_then(|t| std::time::SystemTime::try_from(t).ok()),
         }
     }
 }
