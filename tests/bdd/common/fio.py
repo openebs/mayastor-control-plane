@@ -18,6 +18,7 @@ class Fio(object):
         io_depth=64,
         direct=True,
         size=None,
+        offset=0,
         extra_args="",
     ):
         self.name = name
@@ -31,6 +32,7 @@ class Fio(object):
         self.bs = bs
         self.direct = direct
         self.io_depth = io_depth
+        self.offset = offset
 
         if device is None == uri is None:
             raise "Device and Uri as exclusive!"
@@ -55,9 +57,7 @@ class Fio(object):
             args = f"{args} --size={self.size}"
         if self.direct:
             args = f"{args} --direct=1"
-        args = (
-            f"{args} --bs={self.bs} --rw={self.rw} --group_reporting=1 --norandommap=1"
-        )
+        args = f"{args} --offset={self.offset} --bs={self.bs} --rw={self.rw} --group_reporting=1 --norandommap=1"
         args = f"{args} --iodepth={self.io_depth} {self.extra_args}"
         return args
 

@@ -51,6 +51,10 @@ impl Nexus {
     pub fn contains_child(&self, uri: &ChildUri) -> bool {
         self.children.iter().any(|c| &c.uri == uri)
     }
+    /// Check if the nexus contains the provided `ChildUri`
+    pub fn child(&self, uri: &str) -> Option<&Child> {
+        self.children.iter().find(|c| c.uri.as_str() == uri)
+    }
     /// Add query parameter to the Uri.
     pub fn with_query(mut self, name: &str, value: &str) -> Self {
         self.device_uri = add_query(self.device_uri, name, value);

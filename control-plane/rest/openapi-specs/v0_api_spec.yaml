@@ -2981,8 +2981,17 @@ components:
           $ref: '#/components/schemas/PoolId'
         state:
           $ref: '#/components/schemas/ReplicaState'
+        child-status:
+          $ref: '#/components/schemas/ChildState'
+        child-status-reason:
+          $ref: '#/components/schemas/ChildStateReason'
         usage:
           $ref: '#/components/schemas/ReplicaUsage'
+        rebuild-progress:
+          description: current rebuild progress (%)
+          type: integer
+          minimum: 0
+          maximum: 100
       required:
         - state
     ReplicaUsage:

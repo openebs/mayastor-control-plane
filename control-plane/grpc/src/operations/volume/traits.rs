@@ -380,6 +380,13 @@ impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
             pool,
             status,
             topology.usage.into_opt(),
+            topology
+                .child_status
+                .and_then(|s| nexus::ChildState::from_i32(s).into_opt()),
+            topology
+                .child_status_reason
+                .and_then(|s| nexus::ChildStateReason::from_i32(s).into_opt()),
+            topology.rebuild_progress.and_then(|r| u8::try_from(r).ok()),
         ))
     }
 }
@@ -399,6 +406,13 @@ impl From<ReplicaTopology> for volume::ReplicaTopology {
             pool,
             status: status as i32,
             usage: replica_topology.usage().into_opt(),
+            child_status: replica_topology
+                .child_status()
+                .map(|s| crate::nexus::ChildState::from(s).into()),
+            child_status_reason: replica_topology
+                .child_status_reason()
+                .map(|s| crate::nexus::ChildStateReason::from(s).into()),
+            rebuild_progress: replica_topology.rebuild_progress().map(|r| r as u32),
         }
     }
 }

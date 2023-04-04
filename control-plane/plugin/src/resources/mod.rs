@@ -29,7 +29,9 @@ pub enum GetResources {
     Volumes,
     /// Get volume with the given ID.
     Volume { id: VolumeId },
-    /// Get the replica topology for the volume with the given ID
+    /// Get the replica topology for all volumes.
+    VolumeReplicaTopologies,
+    /// Get the replica topology for the volume with the given ID.
     VolumeReplicaTopology { id: VolumeId },
     /// Get all pools.
     Pools,

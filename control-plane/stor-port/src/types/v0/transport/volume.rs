@@ -682,8 +682,14 @@ pub struct ReplicaTopology {
     pool: Option<PoolId>,
     /// The status of the replica.
     status: ReplicaStatus,
+    /// The status of the replica's child.
+    child_status: Option<ChildState>,
+    /// The reason for the status of the replica's child.
+    child_status_reason: Option<ChildStateReason>,
     /// The replica usage.
     usage: Option<ReplicaUsage>,
+    /// Current replica's child rebuild progress (%).
+    rebuild_progress: Option<u8>,
 }
 
 impl ReplicaTopology {
@@ -693,12 +699,18 @@ impl ReplicaTopology {
         pool: Option<PoolId>,
         status: ReplicaStatus,
         usage: Option<ReplicaUsage>,
+        child_status: Option<ChildState>,
+        child_status_reason: Option<ChildStateReason>,
+        rebuild_progress: Option<u8>,
     ) -> Self {
         Self {
             node,
             pool,
             status,
             usage,
+            child_status,
+            child_status_reason,
+            rebuild_progress,
         }
     }
 
@@ -712,9 +724,24 @@ impl ReplicaTopology {
         &self.pool
     }
 
-    /// Get the status of the replica
+    /// Get the status of the replica.
     pub fn status(&self) -> &ReplicaStatus {
         &self.status
+    }
+
+    /// Get the status of the replica as a target child.
+    pub fn child_status(&self) -> Option<&ChildState> {
+        self.child_status.as_ref()
+    }
+
+    /// Get the status reason of the replica as a target child.
+    pub fn child_status_reason(&self) -> Option<&ChildStateReason> {
+        self.child_status_reason.as_ref()
+    }
+
+    /// Get the rebuild progress of the replica as a target child.
+    pub fn rebuild_progress(&self) -> Option<u8> {
+        self.rebuild_progress
     }
 
     /// Get the storage usage of the replica.
@@ -729,7 +756,13 @@ impl From<&ReplicaTopology> for models::ReplicaTopology {
             replica_topology.node.clone().map(Into::into),
             replica_topology.pool.clone().map(Into::into),
             replica_topology.status.clone(),
+            replica_topology.child_status.clone().into_opt(),
+            replica_topology
+                .child_status_reason
+                .as_ref()
+                .and_then(Into::into),
             replica_topology.usage.as_ref().into_opt(),
+            replica_topology.rebuild_progress.into_opt(),
         )
     }
 }

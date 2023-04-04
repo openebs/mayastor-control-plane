@@ -167,6 +167,12 @@ message ReplicaTopology {
   replica.ReplicaStatus status = 3;
   // Volume Replica usage information
   optional ReplicaUsage usage = 4;
+  // status of the replica as seen by the volume target
+  optional nexus.ChildState child_status = 5;
+  // reason for the status of the replica as seen by the volume target
+  optional nexus.ChildStateReason child_status_reason = 6;
+  // current rebuild progress (%)
+  optional uint32 rebuild_progress = 7;
 }
 
 // Volume Replica usage information

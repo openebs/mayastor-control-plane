@@ -78,6 +78,7 @@ async fn move_largest_replica(
                     replica.uuid = eno_replica.replica().uid().as_str(),
                     replica.old_pool = eno_replica.replica().pool_name().as_str(),
                     replica.pool = replica.pool_id.as_str(),
+                    replica.size = replica.size,
                     "Successfully moved enospc replica"
                 )
             });

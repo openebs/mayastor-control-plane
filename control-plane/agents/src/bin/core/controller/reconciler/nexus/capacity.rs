@@ -60,6 +60,7 @@ async fn online_enospc(
     // todo: Should we list pools to check for latest free space?
     tracing::debug!(
         pool.id = pool_wrapper.id.as_str(),
+        pool.node = pool_wrapper.node.as_str(),
         pool.free_space = pool_wrapper.free_space(),
         "Reporting free space in pool"
     );
@@ -70,6 +71,8 @@ async fn online_enospc(
         nexus.info_span(|| {
             tracing::warn!(
                 child.uri = %child.uri.as_str(),
+                pool.id = pool_wrapper.id.as_str(),
+                pool.node = pool_wrapper.node.as_str(),
                 pool.free_space = pool_wrapper.free_space(),
                 slack,
                 "Not enough free_space slack to online enospc child",

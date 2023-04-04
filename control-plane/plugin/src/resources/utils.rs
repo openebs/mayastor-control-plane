@@ -33,8 +33,18 @@ lazy_static! {
         "AVAILABLE"
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "CORDONED"];
-    pub static ref REPLICA_TOPOLOGY_HEADERS: Row =
-        row!["ID", "NODE", "POOL", "STATUS", "CAPACITY", "ALLOCATED"];
+    pub static ref REPLICA_TOPOLOGIES_PREFIX: Row = row!["VOLUME-ID"];
+    pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row![
+        "ID",
+        "NODE",
+        "POOL",
+        "STATUS",
+        "CAPACITY",
+        "ALLOCATED",
+        "CHILD-STATUS",
+        "CHILD-STATUS-REASON",
+        "REBUILD"
+    ];
     pub static ref BLOCKDEVICE_HEADERS_ALL: Row = row![
         "DEVNAME",
         "DEVTYPE",

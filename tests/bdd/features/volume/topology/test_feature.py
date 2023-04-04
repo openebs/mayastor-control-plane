@@ -1,4 +1,4 @@
-"""Volume Topology feature feature tests."""
+"""Volume Topology feature tests."""
 
 import docker
 import pytest
