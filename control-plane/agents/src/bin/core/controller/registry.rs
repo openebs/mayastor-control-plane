@@ -75,6 +75,9 @@ pub(crate) struct RegistryInner<S: Store> {
     reconcile_idle_period: std::time::Duration,
     /// reconciliation period when work is pending.
     reconcile_period: std::time::Duration,
+    /// The duration for which the reconciler waits for the replica to
+    /// to be healthy again before attempting to online the faulted child.
+    faulted_child_wait_period: std::time::Duration,
     reconciler: ReconcilerControl,
     config: CoreRegistryConfig,
     /// system-wide maximum number of concurrent rebuilds allowed.
@@ -96,6 +99,7 @@ impl Registry {
         store_lease_tll: std::time::Duration,
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
+        faulted_child_wait_period: std::time::Duration,
         max_rebuilds: Option<NumRebuilds>,
         host_acl: Vec<HostAccessControl>,
     ) -> Self {
@@ -118,6 +122,7 @@ impl Registry {
                 store_timeout,
                 reconcile_period,
                 reconcile_idle_period,
+                faulted_child_wait_period,
                 reconciler: ReconcilerControl::new(),
                 config: Self::get_config_or_panic(store).await,
                 max_rebuilds,
@@ -165,6 +170,10 @@ impl Registry {
     /// reconciliation period when work is pending.
     pub(crate) fn reconcile_period(&self) -> std::time::Duration {
         self.reconcile_period
+    }
+    /// Wait period before attempting to online a faulted child.
+    pub(crate) fn faulted_child_wait_period(&self) -> std::time::Duration {
+        self.faulted_child_wait_period
     }
 
     /// Get a reference to the actual state of the nodes.

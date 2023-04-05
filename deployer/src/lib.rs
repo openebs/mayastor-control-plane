@@ -265,6 +265,10 @@ pub struct StartOptions {
     #[clap(long)]
     pub reconcile_idle_period: Option<humantime::Duration>,
 
+    /// Override the core agent's rebuild policy timed-wait setting.
+    #[clap(long)]
+    pub faulted_child_wait_period: Option<humantime::Duration>,
+
     /// Override the opentel max exporter batch size.
     #[clap(long, env = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE")]
     pub otel_max_batch_size: Option<String>,
@@ -363,6 +367,11 @@ impl StartOptions {
     pub fn with_reconcile_period(mut self, busy: Duration, idle: Duration) -> Self {
         self.reconcile_period = Some(busy.into());
         self.reconcile_idle_period = Some(idle.into());
+        self
+    }
+    #[must_use]
+    pub fn with_faulted_child_wait_period(mut self, twait: Duration) -> Self {
+        self.faulted_child_wait_period = Some(twait.into());
         self
     }
     #[must_use]
