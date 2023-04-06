@@ -13,6 +13,20 @@ impl PoolBaseFilters {
     pub(crate) fn capacity(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.capacity > request.size
     }
+    /// Should only attempt to use pools with capacity bigger than the requested replica size.
+    pub(crate) fn overcommit(
+        request: &GetSuitablePoolsContext,
+        item: &PoolItem,
+        allowed_commit_percent: u64,
+    ) -> bool {
+        match request.thin {
+            true => {
+                let max_cap_allowed = allowed_commit_percent * item.pool().capacity;
+                (request.size + item.pool().commitment()) * 100 < max_cap_allowed
+            }
+            false => true,
+        }
+    }
     /// Should only attempt to use pools with sufficient free space.
     pub(crate) fn min_free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         match request.thin {
