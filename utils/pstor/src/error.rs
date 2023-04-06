@@ -82,4 +82,8 @@ pub enum Error {
     NotReady { reason: String },
     #[snafu(display("Minimum paged value is 2"))]
     PagedMinimum,
+    Generic {
+        source: Box<Error>,
+        description: String,
+    },
 }
