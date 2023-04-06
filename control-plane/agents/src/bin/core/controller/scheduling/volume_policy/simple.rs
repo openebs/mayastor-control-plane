@@ -36,6 +36,7 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
         DefaultBasePolicy::filter(to)
             .filter(PoolBaseFilters::min_free_space)
             .filter_param(&self, SimplePolicy::min_free_space)
+            .filter_param(&self, SimplePolicy::pool_overcommit)
             // sort pools in order of preference (from least to most number of replicas)
             .sort(SimplePolicy::sort_by_weights)
     }
@@ -80,23 +81,25 @@ impl SimplePolicy {
         if !request.thin {
             return item.pool.free_space() > request.size;
         }
-        match request.allocated_bytes() {
-            Some(bytes) => {
-                let size = if bytes == &0 {
-                    self.cli_args.volume_commitment_initial * request.size
-                } else {
-                    self.cli_args.volume_commitment * request.size
-                } / 100;
-                let required_cap = (bytes + size).min(request.size);
-                item.pool.free_space() > required_cap
+        item.pool.free_space()
+            > match request.allocated_bytes() {
+                Some(bytes) => {
+                    let size = if bytes == &0 {
+                        self.cli_args.volume_commitment_initial * request.size
+                    } else {
+                        self.cli_args.volume_commitment * request.size
+                    } / 100;
+                    (bytes + size).min(request.size)
+                }
+                None => {
+                    // We really have no clue for some reason.. should not happen but just in case
+                    // let's be conservative?
+                    (self.no_state_min_free_space_percent * request.size) / 100
+                }
             }
-            None => {
-                // We really have no clue for some reason.. should not happen but just in case
-                // let's be conservative?
-                let min_size = (self.no_state_min_free_space_percent * request.size) / 100;
-                item.pool.free_space() > min_size
-            }
-        }
+    }
+    fn pool_overcommit(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        PoolBaseFilters::overcommit(request, item, self.cli_args.pool_commitment)
     }
 }
 

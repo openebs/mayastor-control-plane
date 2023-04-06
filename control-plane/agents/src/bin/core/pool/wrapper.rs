@@ -2,13 +2,17 @@ use stor_port::types::v0::transport::{PoolState, PoolStatus, Protocol, Replica, 
 
 use std::{cmp::Ordering, ops::Deref};
 
-/// Wrapper over the message bus `Pool` which includes all the replicas
-/// and Ord traits to aid pool selection for volume replicas
+/// Wrapper over a `Pool` state and all the replicas
+/// with Ord traits to aid pool selection for volume replicas (legacy).
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct PoolWrapper {
     state: PoolState,
     replicas: Vec<Replica>,
-    over_commitment: u64,
+    /// The accrued size/capacity of all replicas which means the pool usage could grow up to this
+    /// size if < pool capacity. If this size is > pool capacity, then we can say the pool is
+    /// overcommited by the size difference.
+    commitment: u64,
+    free_space: u64,
 }
 
 impl Deref for PoolWrapper {
@@ -21,15 +25,28 @@ impl Deref for PoolWrapper {
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas.
     pub(crate) fn new(pool: PoolState, replicas: Vec<Replica>) -> Self {
-        let over_commitment = replicas
+        let commitment = replicas
             .iter()
             .flat_map(|r| &r.space)
-            .map(|r| r.capacity_bytes - r.allocated_bytes)
+            .map(|r| r.capacity_bytes)
             .sum();
+        let free_space = if pool.capacity >= pool.used {
+            pool.capacity - pool.used
+        } else {
+            // odd, let's report no free space available
+            tracing::error!(
+                "Pool '{}' has a capacity of '{} B' but is using '{} B'",
+                pool.id,
+                pool.capacity,
+                pool.used
+            );
+            0
+        };
         Self {
             state: pool,
             replicas,
-            over_commitment,
+            commitment,
+            free_space,
         }
     }
 
@@ -52,23 +69,31 @@ impl PoolWrapper {
 
     /// Get the over commitment in bytes.
     pub(crate) fn over_commitment(&self) -> u64 {
-        self.over_commitment
+        if self.commitment > self.state.capacity {
+            self.commitment - self.state.capacity
+        } else {
+            0
+        }
+    }
+    /// Get the pool allocation growth potential in bytes.
+    /// Would be allocation if all replicas are fully allocated.
+    #[allow(unused)]
+    pub(crate) fn max_growth(&self) -> u64 {
+        if self.commitment > self.used {
+            self.commitment - self.used
+        } else {
+            // should not happen...
+            0
+        }
+    }
+    /// Get the commitment in bytes.
+    pub(crate) fn commitment(&self) -> u64 {
+        self.commitment
     }
 
     /// Get the free space.
     pub(crate) fn free_space(&self) -> u64 {
-        if self.state.capacity >= self.state.used {
-            self.state.capacity - self.state.used
-        } else {
-            // odd, let's report no free space available
-            tracing::error!(
-                "Pool '{}' has a capacity of '{} B' but is using '{} B'",
-                self.state.id,
-                self.state.capacity,
-                self.state.used
-            );
-            0
-        }
+        self.free_space
     }
 
     /// Set pool state as unknown.
