@@ -14,10 +14,13 @@
 //! Each instance also contains the known nexus, pools and replicas that live in
 //! said instance.
 use super::{resources::operations_helper::*, wrapper::NodeWrapper};
-use crate::controller::{
-    reconciler::ReconcilerControl,
-    task_poller::{PollEvent, PollTriggerEvent},
-    wrapper::InternalOps,
+use crate::{
+    controller::{
+        reconciler::ReconcilerControl,
+        task_poller::{PollEvent, PollTriggerEvent},
+        wrapper::InternalOps,
+    },
+    ThinArgs,
 };
 use agents::errors::SvcError;
 use std::{
@@ -88,6 +91,8 @@ pub(crate) struct RegistryInner<S: Store> {
     host_acl: Vec<HostAccessControl>,
     /// Check for the legacy product version's key prefix present.
     legacy_prefix_present: bool,
+    /// Thin provisioning parameters.
+    thin_args: ThinArgs,
 }
 
 impl Registry {
@@ -105,6 +110,7 @@ impl Registry {
         reconcile_idle_period: std::time::Duration,
         max_rebuilds: Option<NumRebuilds>,
         host_acl: Vec<HostAccessControl>,
+        thin_args: ThinArgs,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -150,6 +156,7 @@ impl Registry {
                 max_rebuilds,
                 host_acl,
                 legacy_prefix_present: product_v1_prefix,
+                thin_args,
             }),
         };
         registry.init().await?;
@@ -220,6 +227,11 @@ impl Registry {
         store.put_obj(&config).await?;
         self.set_config(config);
         Ok(())
+    }
+
+    /// Get the thin provisioning configuration parameters.
+    pub(crate) fn thin_args(&self) -> &ThinArgs {
+        &self.thin_args
     }
 
     /// Get the `CoreRegistryConfig`.

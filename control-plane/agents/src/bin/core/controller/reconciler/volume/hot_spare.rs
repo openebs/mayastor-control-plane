@@ -185,7 +185,7 @@ async fn nexus_replica_count_reconciler(
         Ordering::Equal => PollResult::Ok(PollerState::Idle),
     }
 }
-#[tracing::instrument(skip(context, volume, nexus), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(context, volume, nexus, nexus_state), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 async fn nexus_replica_count_reconciler_traced(
     volume: &mut OperationGuardArc<VolumeSpec>,
     nexus: &mut OperationGuardArc<NexusSpec>,
@@ -224,7 +224,7 @@ async fn nexus_replica_count_reconciler_traced(
         Ordering::Equal => {}
     }
 
-    PollResult::Ok(if nexus.lock().children.len() == volume_replicas {
+    PollResult::Ok(if nexus.as_ref().children.len() == volume_replicas {
         PollerState::Idle
     } else {
         PollerState::Busy
@@ -266,7 +266,7 @@ async fn volume_replica_count_reconciler_traced(
         Ordering::Less => {
             volume.warn_span(|| {
                 tracing::warn!(
-                    "The volume has '{}' replica(s) but it should have '{}'. Creating more...",
+                    "The volume has '{}' replica(s) but it should have '{}'",
                     current_replica_count,
                     required_replica_count
                 )
