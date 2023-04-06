@@ -29,7 +29,10 @@ use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
-use stor_port::pstor::{migrate_product_v1_to_v2, API_VERSION};
+use stor_port::{
+    pstor::{migrate_product_v1_to_v2, product_v1_key_prefix, API_VERSION},
+    transport_api::ErrorChain,
+};
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(false)))]
@@ -832,7 +835,11 @@ impl ResourceSpecsLocked {
     }
 
     /// Initialise the resource specs with the content from the persistent store.
-    pub(crate) async fn init<S: Store>(&self, store: &mut S, legacy_prefix_present: bool) {
+    pub(crate) async fn init<S: Store>(
+        &self,
+        store: &mut S,
+        legacy_prefix_present: bool,
+    ) -> Result<(), SvcError> {
         let spec_types = [
             StorableObjectType::VolumeSpec,
             StorableObjectType::NodeSpec,
@@ -841,12 +848,11 @@ impl ResourceSpecsLocked {
             StorableObjectType::ReplicaSpec,
         ];
         for spec in &spec_types {
-            if let Err(e) = self
-                .populate_specs(store, *spec, legacy_prefix_present)
+            self.populate_specs(store, *spec, legacy_prefix_present)
                 .await
-            {
-                panic!("Failed to initialise resource specs. Err {e}.");
-            }
+                .map_err(|error| SvcError::Internal {
+                    details: error.full_string(),
+                })?;
         }
 
         // patch up the missing replica nexus owners
@@ -857,6 +863,16 @@ impl ResourceSpecsLocked {
                 .filter(|n| n.lock().contains_replica(replica.uuid()))
                 .for_each(|n| replica.lock().owners.add_owner(&n.lock().uuid));
         }
+
+        // Remove all entries of v1 key prefix.
+        store
+            .delete_values_prefix(&product_v1_key_prefix())
+            .await
+            .map_err(|error| StoreError::Generic {
+                source: Box::new(error),
+                description: "Product v1 prefix cleanup failed".to_string(),
+            })?;
+        Ok(())
     }
 
     /// Deserialise a vector of serde_json values into specific spec types.
