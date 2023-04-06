@@ -147,7 +147,8 @@ impl AddVolumeReplica {
         self.policy(ThickPolicy::new())
     }
     fn with_simple_policy(self) -> Self {
-        self.policy(SimplePolicy::builder())
+        let simple = SimplePolicy::new(&self.data.context().registry);
+        self.policy(simple)
     }
 
     /// Default rules for pool selection when creating replicas for a volume.

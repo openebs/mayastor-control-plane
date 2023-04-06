@@ -128,7 +128,7 @@ impl PartialOrd for ChildState {
 }
 
 /// Child State Reason information.
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq, Display)]
 pub enum ChildStateReason {
     /// No particular reason for the child to be in this state.
     /// This is typically the init state.
