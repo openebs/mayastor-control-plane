@@ -106,18 +106,16 @@ pub(crate) struct ThinArgs {
     /// up to 25GiB (create 2 10GiB and 1 5GiB volume) but no further.
     #[clap(long, env = "POOL_COMMITMENT_%", value_parser = value_parse_percent, default_value = "250%")]
     pool_commitment: u64,
-    /// When creating pool replicas for a new volume, each replica pool must have at least this
-    /// much free space percentage of the volume size.
-    /// Example: if this value is 40 and the pool has 40GiB free, then the max volume size allowed
-    /// to be created on the pool is 100GiB.
-    #[clap(long, env = "VOLUME_COMMITMENT_%_INITIAL", value_parser = value_parse_percent, default_value = "40%")]
-    volume_commitment_initial: u64,
-    /// When creating pool replicas for an existing volume, each replica pool must have at least
+    /// When creating replicas for an existing volume, each replica pool must have at least
     /// this much free space percentage of the volume size.
     /// Example: if this value is 40, the pool has 40GiB free, then the max volume size allowed
     /// to be created on the pool is 100GiB.
     #[clap(long, env = "VOLUME_COMMITMENT_%", value_parser = value_parse_percent, default_value = "40%")]
     volume_commitment: u64,
+    /// Same as the `volume_commitment` argument, but applicable only when creating replicas for
+    /// a new volume.
+    #[clap(long, env = "VOLUME_COMMITMENT_%_INITIAL", value_parser = value_parse_percent, default_value = "40%")]
+    volume_commitment_initial: u64,
 }
 
 fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {

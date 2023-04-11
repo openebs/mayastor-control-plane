@@ -196,7 +196,7 @@ pub(crate) async fn volume_move_replica_candidates(
     volume_spec: &VolumeSpec,
     move_replica: &ReplicaId,
 ) -> Result<Vec<CreateReplica>, SvcError> {
-    let replica_state = registry.get_replica(move_replica).await?;
+    let replica_state = registry.replica(move_replica).await?;
 
     let move_repl = MoveReplica::new(&replica_state.node, &replica_state.pool_id);
     let request = GetSuitablePools::new(volume_spec, Some(move_repl));
@@ -421,26 +421,12 @@ impl ResourceSpecsLocked {
 
     /// Get the `NodeId` where `replica` lives
     pub(crate) async fn replica_node(registry: &Registry, replica: &ReplicaSpec) -> Option<NodeId> {
-        let pools = registry.pool_states_inner().await;
-        pools.iter().find_map(|p| {
-            if p.id == replica.pool.pool_name().clone() {
-                Some(p.node.clone())
-            } else {
-                None
-            }
-        })
+        Self::pool_node(registry, replica.pool.pool_name()).await
     }
 
     /// Get the `NodeId` where `pool` lives.
     pub(crate) async fn pool_node(registry: &Registry, pool: &PoolId) -> Option<NodeId> {
-        let pools = registry.pool_states_inner().await;
-        pools.iter().find_map(|p| {
-            if &p.id == pool {
-                Some(p.node.clone())
-            } else {
-                None
-            }
-        })
+        registry.pool_node(pool).await
     }
 
     /// Get a list of resourced NexusSpecs's which are owned by the given volume `id`

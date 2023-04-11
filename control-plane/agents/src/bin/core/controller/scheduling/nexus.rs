@@ -117,9 +117,9 @@ impl GetPersistedNexusChildrenCtx {
     }
     async fn list(&self) -> Vec<ChildItem> {
         // find all replica status
-        let state_replicas = self.registry.get_replicas().await;
+        let state_replicas = self.registry.replicas().await;
         // all pools
-        let pool_wrappers = self.registry.get_pool_wrappers().await;
+        let pool_wrappers = self.registry.pool_wrappers().await;
 
         let spec_replicas = match &self.request {
             GetPersistedNexusChildren::Create((vol_spec, _)) => {

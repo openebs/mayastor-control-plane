@@ -10,7 +10,7 @@ use crate::controller::{
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use stor_port::types::v0::{
     store::pool::PoolSpec,
-    transport::{CreatePool, DestroyPool, Pool},
+    transport::{CreatePool, CtrlPoolState, DestroyPool, Pool},
 };
 
 #[async_trait::async_trait]
@@ -53,9 +53,12 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         let result = node.create_pool(request).await;
         let on_fail = OnCreateFail::eeinval_delete(&result);
 
-        let pool_state = pool.complete_create(result, registry, on_fail).await?;
+        let state = pool.complete_create(result, registry, on_fail).await?;
         let spec = pool.lock().clone();
-        Ok(Pool::new(spec, pool_state))
+        Ok(Pool::new(
+            spec,
+            CtrlPoolState::new(state, Default::default()),
+        ))
     }
 
     async fn destroy(

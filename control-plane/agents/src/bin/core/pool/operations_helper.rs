@@ -23,7 +23,7 @@ impl OperationGuardArc<ReplicaSpec> {
             Some(node_id) => node_id.clone(),
             None => {
                 let replica_uuid = self.lock().uuid.clone();
-                match registry.get_replica(&replica_uuid).await {
+                match registry.replica(&replica_uuid).await {
                     Ok(state) => state.node.clone(),
                     Err(_) => {
                         let pool_ref = self.lock().pool.clone();

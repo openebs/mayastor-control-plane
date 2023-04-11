@@ -29,6 +29,7 @@ impl CreateRow for openapi::models::Pool {
             node: spec.node,
             status: openapi::models::PoolStatus::Unknown,
             used: 0,
+            committed: None,
         });
         let free = if state.capacity > state.used {
             state.capacity - state.used
@@ -45,6 +46,7 @@ impl CreateRow for openapi::models::Pool {
             ::utils::bytes::into_human(state.capacity),
             ::utils::bytes::into_human(state.used),
             ::utils::bytes::into_human(free),
+            utils::optional_cell(state.committed.map(::utils::bytes::into_human)),
         ]
     }
 }

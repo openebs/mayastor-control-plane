@@ -55,7 +55,38 @@ impl From<PoolStatus> for models::PoolStatus {
     }
 }
 
-/// Pool state information.
+/// Control-Plane Pool state information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CtrlPoolState {
+    /// The state, mostly as returned by the data-plane.
+    state: PoolState,
+    /// Additional metadata added by the control-plane.
+    metadata: PoolStateMetadata,
+}
+impl CtrlPoolState {
+    /// Construct a new pool with spec and state.
+    pub fn new(state: PoolState, metadata: PoolStateMetadata) -> Self {
+        Self { state, metadata }
+    }
+    /// Get the pool state.
+    pub fn state(&self) -> &PoolState {
+        &self.state
+    }
+    /// Get the pool state metadata.
+    pub fn metadata(&self) -> &PoolStateMetadata {
+        &self.metadata
+    }
+}
+impl Deref for CtrlPoolState {
+    type Target = PoolState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.state
+    }
+}
+
+/// Pool state information - as reported by the io-engine.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolState {
@@ -73,15 +104,32 @@ pub struct PoolState {
     pub used: u64,
 }
 
-impl From<PoolState> for models::PoolState {
-    fn from(src: PoolState) -> Self {
-        Self::new(
+/// Pool state metadata information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolStateMetadata {
+    /// Total pool commitment (in bytes) which is basically the accrued size of pool replicas.
+    pub committed: u64,
+}
+impl PoolStateMetadata {
+    /// Returns a new `Self` from the given parameters.
+    pub fn new(committed: u64) -> Self {
+        Self { committed }
+    }
+}
+
+impl From<CtrlPoolState> for models::PoolState {
+    fn from(src: CtrlPoolState) -> Self {
+        let metadata = src.metadata;
+        let src = src.state;
+        Self::new_all(
             src.capacity,
             src.disks,
             src.id,
             src.node,
             src.status,
             src.used,
+            Some(metadata.committed),
         )
     }
 }
@@ -132,12 +180,12 @@ pub struct Pool {
     /// Desired specification of the pool.
     spec: Option<PoolSpec>,
     /// Runtime state of the pool.
-    state: Option<PoolState>,
+    state: Option<CtrlPoolState>,
 }
 
 impl Pool {
     /// Construct a new pool with spec and state.
-    pub fn new(spec: PoolSpec, state: PoolState) -> Self {
+    pub fn new(spec: PoolSpec, state: CtrlPoolState) -> Self {
         Self {
             id: spec.id.clone(),
             spec: Some(spec),
@@ -153,7 +201,7 @@ impl Pool {
         }
     }
     /// Construct a new pool with optional spec and state.
-    pub fn from_state(state: PoolState, spec: Option<PoolSpec>) -> Self {
+    pub fn from_state(state: CtrlPoolState, spec: Option<PoolSpec>) -> Self {
         Self {
             id: state.id.clone(),
             spec,
@@ -161,7 +209,7 @@ impl Pool {
         }
     }
     /// Try to construct a new pool from spec and state.
-    pub fn try_new(spec: Option<PoolSpec>, state: Option<PoolState>) -> Option<Self> {
+    pub fn try_new(spec: Option<PoolSpec>, state: Option<CtrlPoolState>) -> Option<Self> {
         match (spec, state) {
             (Some(spec), Some(state)) => Some(Self::new(spec, state)),
             (Some(spec), None) => Some(Self::from_spec(spec)),
@@ -178,8 +226,12 @@ impl Pool {
         &self.id
     }
     /// Get the pool state.
-    pub fn state(&self) -> Option<PoolState> {
-        self.state.clone()
+    pub fn state(&self) -> Option<&PoolState> {
+        self.state.as_ref().map(|p| p.state())
+    }
+    /// Get the controller's pool state.
+    pub fn ctrl_state(&self) -> Option<&CtrlPoolState> {
+        self.state.as_ref()
     }
     /// Get the node identification.
     pub fn node(&self) -> NodeId {

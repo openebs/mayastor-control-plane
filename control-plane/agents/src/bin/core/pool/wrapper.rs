@@ -1,4 +1,6 @@
-use stor_port::types::v0::transport::{PoolState, PoolStatus, Protocol, Replica, ReplicaId};
+use stor_port::types::v0::transport::{
+    CtrlPoolState, PoolState, PoolStateMetadata, PoolStatus, Protocol, Replica, ReplicaId,
+};
 
 use std::{cmp::Ordering, ops::Deref};
 
@@ -11,7 +13,7 @@ pub(crate) struct PoolWrapper {
     /// The accrued size/capacity of all replicas which means the pool usage could grow up to this
     /// size if < pool capacity. If this size is > pool capacity, then we can say the pool is
     /// overcommited by the size difference.
-    commitment: u64,
+    committed: u64,
     free_space: u64,
 }
 
@@ -45,7 +47,7 @@ impl PoolWrapper {
         Self {
             state: pool,
             replicas,
-            commitment,
+            committed: commitment,
             free_space,
         }
     }
@@ -62,15 +64,19 @@ impl PoolWrapper {
     pub(crate) fn replica(&self, replica: &ReplicaId) -> Option<&Replica> {
         self.replicas.iter().find(|r| &r.uuid == replica)
     }
-    /// Get the state.
+    /// Get the pool data-plane state.
     pub(crate) fn state(&self) -> &PoolState {
         &self.state
+    }
+    /// Get the controller pool state (state + metadata).
+    pub(crate) fn ctrl_state(&self) -> CtrlPoolState {
+        CtrlPoolState::new(self.state.clone(), PoolStateMetadata::new(self.committed))
     }
 
     /// Get the over commitment in bytes.
     pub(crate) fn over_commitment(&self) -> u64 {
-        if self.commitment > self.state.capacity {
-            self.commitment - self.state.capacity
+        if self.committed > self.state.capacity {
+            self.committed - self.state.capacity
         } else {
             0
         }
@@ -79,8 +85,8 @@ impl PoolWrapper {
     /// Would be allocation if all replicas are fully allocated.
     #[allow(unused)]
     pub(crate) fn max_growth(&self) -> u64 {
-        if self.commitment > self.used {
-            self.commitment - self.used
+        if self.committed > self.used {
+            self.committed - self.used
         } else {
             // should not happen...
             0
@@ -88,7 +94,7 @@ impl PoolWrapper {
     }
     /// Get the commitment in bytes.
     pub(crate) fn commitment(&self) -> u64 {
-        self.commitment
+        self.committed
     }
 
     /// Get the free space.
