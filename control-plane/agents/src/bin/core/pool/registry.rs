@@ -2,13 +2,12 @@ use crate::controller::{
     registry::Registry,
     wrapper::{GetterOps, *},
 };
-use agents::errors::{self, SvcError, SvcError::PoolNotFound};
-use snafu::OptionExt;
-use stor_port::types::v0::transport::{NodeId, Pool, PoolId, PoolState, Replica, ReplicaId};
+use agents::errors::{SvcError, SvcError::PoolNotFound};
+use stor_port::types::v0::transport::{CtrlPoolState, NodeId, Pool, PoolId, Replica, ReplicaId};
 
 /// Pool helpers
 impl Registry {
-    /// Get all pools from node `node_id` or from all nodes
+    /// Get all pools from node `node_id` or from all nodes.
     pub(crate) async fn get_node_opt_pools(
         &self,
         node_id: Option<NodeId>,
@@ -16,7 +15,7 @@ impl Registry {
         match node_id {
             None => {
                 let mut pools = vec![];
-                let pools_from_state = self.pool_states_inner().await.into_iter().map(|state| {
+                let pools_from_state = self.ctrl_pool_states().await.into_iter().map(|state| {
                     let spec = self.specs().pool(&state.id).ok();
                     Pool::from_state(state, spec)
                 });
@@ -37,13 +36,13 @@ impl Registry {
             Some(node_id) => {
                 let mut pools = vec![];
                 let pools_from_state = self
-                    .get_node_pools(&node_id)
+                    .node_pool_wrappers(&node_id)
                     .await
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|state| {
-                        let spec = self.specs().pool(&state.id).ok();
-                        Pool::from_state(state, spec)
+                    .map(|wrapper| {
+                        let spec = self.specs().pool(&wrapper.id).ok();
+                        Pool::from_state(wrapper.ctrl_state(), spec)
                     });
 
                 pools.extend(pools_from_state);
@@ -64,31 +63,42 @@ impl Registry {
     }
 
     /// Get pool wrappers for the pool ID.
-    pub(crate) async fn get_node_pool_wrapper(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<PoolWrapper, SvcError> {
+    pub(crate) async fn pool_wrapper(&self, pool_id: &PoolId) -> Result<PoolWrapper, SvcError> {
         let nodes = self.node_wrappers().await;
         for node in nodes {
-            if let Some(pool) = node.pool_wrapper(&pool_id).await {
+            if let Some(pool) = node.pool_wrapper(pool_id).await {
                 return Ok(pool);
             }
         }
-        Err(PoolNotFound { pool_id })
+        Err(PoolNotFound {
+            pool_id: pool_id.to_owned(),
+        })
     }
 
-    /// Get all pools
-    pub(crate) async fn pool_states_inner(&self) -> Vec<PoolState> {
+    /// Get all controller pools states (state + metadata).
+    pub(crate) async fn ctrl_pool_states(&self) -> Vec<CtrlPoolState> {
         let nodes = self.node_wrappers().await;
         let mut pools = Vec::with_capacity(nodes.len());
         for node in nodes {
-            pools.append(&mut node.pools().await)
+            let pool_w = node.pool_wrappers().await;
+            let pool_cs = pool_w.into_iter().map(|p| p.ctrl_state());
+            pools.extend(pool_cs);
         }
         pools
     }
 
-    /// Get all pool wrappers
-    pub(crate) async fn get_pool_wrappers(&self) -> Vec<PoolWrapper> {
+    /// Get the `NodeId` where `pool` lives.
+    pub(crate) async fn pool_node(&self, pool: &PoolId) -> Option<NodeId> {
+        for node in self.node_wrappers().await {
+            if let Some(pool) = node.pool(pool).await {
+                return Some(pool.node);
+            }
+        }
+        None
+    }
+
+    /// Get all pool wrappers.
+    pub(crate) async fn pool_wrappers(&self) -> Vec<PoolWrapper> {
         let nodes = self.node_wrappers().await;
         let mut pools = Vec::with_capacity(nodes.len());
         for node in nodes {
@@ -97,31 +107,32 @@ impl Registry {
         pools
     }
 
-    /// Get all pools from node `node_id`
-    pub(crate) async fn get_node_pools(
+    /// Get all pools from node `node_id`.
+    pub(crate) async fn node_pool_wrappers(
         &self,
         node_id: &NodeId,
-    ) -> Result<Vec<PoolState>, SvcError> {
+    ) -> Result<Vec<PoolWrapper>, SvcError> {
         let node = self.node_wrapper(node_id).await?;
-        Ok(node.pools().await)
+        Ok(node.pool_wrappers().await)
     }
 
     /// Get the pool state for the specified id.
-    pub(crate) async fn get_pool_state(&self, id: &PoolId) -> Result<PoolState, SvcError> {
-        let pools = self.get_pool_wrappers().await;
-        let pool_wrapper = pools.iter().find(|p| &p.id == id);
-        pool_wrapper
-            .context(errors::PoolNotFound {
-                pool_id: id.to_owned(),
-            })
-            .map(|p| p.state().clone())
+    pub(crate) async fn has_pool_state(&self, id: &PoolId) -> bool {
+        let pools = self.pool_wrappers().await;
+        pools.iter().any(|p| &p.id == id)
+    }
+
+    /// Get the controller pool state for the specified id.
+    pub(crate) async fn ctrl_pool_state(&self, id: &PoolId) -> Result<CtrlPoolState, SvcError> {
+        let pool_wrapper = self.pool_wrapper(id).await?;
+        Ok(pool_wrapper.ctrl_state())
     }
 
     /// Get the pool object corresponding to the id.
-    pub(crate) async fn get_pool(&self, id: &PoolId) -> Result<Pool, SvcError> {
+    pub(crate) async fn ctrl_pool(&self, id: &PoolId) -> Result<Pool, SvcError> {
         Pool::try_new(
             self.specs().pool(id).ok(),
-            self.get_pool_state(id).await.ok(),
+            self.ctrl_pool_state(id).await.ok(),
         )
         .ok_or(PoolNotFound {
             pool_id: id.to_owned(),
@@ -132,7 +143,7 @@ impl Registry {
 /// Replica helpers
 impl Registry {
     /// Get all replicas
-    pub(crate) async fn get_replicas(&self) -> Vec<Replica> {
+    pub(crate) async fn replicas(&self) -> Vec<Replica> {
         let nodes = self.node_wrappers().await;
         let mut replicas = vec![];
         for node in nodes {
@@ -141,8 +152,8 @@ impl Registry {
         replicas
     }
 
-    /// Get replica `replica_id`
-    pub(crate) async fn get_replica(&self, replica_id: &ReplicaId) -> Result<Replica, SvcError> {
+    /// Get replica `replica_id`.
+    pub(crate) async fn replica(&self, replica_id: &ReplicaId) -> Result<Replica, SvcError> {
         let nodes = self.node_wrappers().await;
         for node in nodes {
             if let Some(replica) = node.replica(replica_id).await {
@@ -154,11 +165,8 @@ impl Registry {
         })
     }
 
-    /// Get all replicas from node `node_id`
-    pub(crate) async fn get_node_replicas(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<Vec<Replica>, SvcError> {
+    /// Get all replicas from node `node_id`.
+    pub(crate) async fn node_replicas(&self, node_id: &NodeId) -> Result<Vec<Replica>, SvcError> {
         let node = self.node_wrapper(node_id).await?;
         Ok(node.replicas().await)
     }

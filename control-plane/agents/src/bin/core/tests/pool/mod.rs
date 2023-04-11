@@ -1023,7 +1023,7 @@ async fn destroy_after_restart() {
     let create = CreatePool {
         node: cluster.node(0),
         id: "bob".into(),
-        disks: pool.state().unwrap().disks,
+        disks: pool.state().cloned().unwrap().disks,
         labels: None,
     };
 

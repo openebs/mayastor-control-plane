@@ -2330,6 +2330,11 @@ components:
           type: integer
           format: int64
           minimum: 0
+        committed:
+          description: accrued size of all replicas contained in this pool
+          type: integer
+          format: int64
+          minimum: 0
       required:
         - capacity
         - disks

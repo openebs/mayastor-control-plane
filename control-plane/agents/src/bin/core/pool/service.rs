@@ -160,7 +160,7 @@ impl Service {
     ) -> Result<Pools, SvcError> {
         let pools = match pool_id {
             Some(id) if node_id.is_none() => {
-                vec![self.registry.get_pool(&id).await?]
+                vec![self.registry.ctrl_pool(&id).await?]
             }
             Some(id) => {
                 let pools = self.registry.get_node_opt_pools(node_id).await?;
@@ -180,8 +180,8 @@ impl Service {
     pub(super) async fn get_replicas(&self, request: &GetReplicas) -> Result<Replicas, SvcError> {
         let filter = request.filter.clone();
         match filter {
-            Filter::None => Ok(self.registry.get_replicas().await),
-            Filter::Node(node_id) => self.registry.get_node_replicas(&node_id).await,
+            Filter::None => Ok(self.registry.replicas().await),
+            Filter::Node(node_id) => self.registry.node_replicas(&node_id).await,
             Filter::NodePool(node_id, pool_id) => {
                 let node = self.registry.node_wrapper(&node_id).await?;
                 let pool_wrapper = node
@@ -191,7 +191,7 @@ impl Service {
                 Ok(pool_wrapper.replicas().clone())
             }
             Filter::Pool(pool_id) => {
-                let pool_wrapper = self.registry.get_node_pool_wrapper(pool_id).await?;
+                let pool_wrapper = self.registry.pool_wrapper(&pool_id).await?;
                 Ok(pool_wrapper.replicas().clone())
             }
             Filter::NodePoolReplica(node_id, pool_id, replica_id) => {
@@ -214,19 +214,19 @@ impl Service {
                 Ok(vec![replica])
             }
             Filter::PoolReplica(pool_id, replica_id) => {
-                let pool_wrapper = self.registry.get_node_pool_wrapper(pool_id).await?;
+                let pool_wrapper = self.registry.pool_wrapper(&pool_id).await?;
                 let replica = pool_wrapper
                     .replica(&replica_id)
                     .context(ReplicaNotFound { replica_id })?;
                 Ok(vec![replica.clone()])
             }
             Filter::Replica(replica_id) => {
-                let replica = self.registry.get_replica(&replica_id).await?;
+                let replica = self.registry.replica(&replica_id).await?;
                 Ok(vec![replica])
             }
             Filter::Volume(volume_id) => {
                 let volume = self.registry.volume_state(&volume_id).await?;
-                let replicas = self.registry.get_replicas().await.into_iter();
+                let replicas = self.registry.replicas().await.into_iter();
                 let replicas = replicas
                     .filter(|r| {
                         if let Some(spec) = self.specs().replica_rsc(&r.uuid) {

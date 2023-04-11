@@ -116,7 +116,7 @@ impl Registry {
     /// Construct a replica topology from a replica spec.
     /// If the replica cannot be found, return the default replica topology.
     async fn replica_topology(&self, spec: &ReplicaSpec, nexus: Option<&Nexus>) -> ReplicaTopology {
-        match self.get_replica(&spec.uuid).await {
+        match self.replica(&spec.uuid).await {
             Ok(state) => {
                 let child = nexus.and_then(|n| n.child(&state.uri));
                 ReplicaTopology::new(

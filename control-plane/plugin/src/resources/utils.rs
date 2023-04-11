@@ -30,7 +30,8 @@ lazy_static! {
         "STATUS",
         "CAPACITY",
         "ALLOCATED",
-        "AVAILABLE"
+        "AVAILABLE",
+        "COMMITTED"
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "CORDONED"];
     pub static ref REPLICA_TOPOLOGIES_PREFIX: Row = row!["VOLUME-ID"];

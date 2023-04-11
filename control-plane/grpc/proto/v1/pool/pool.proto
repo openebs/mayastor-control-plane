@@ -11,8 +11,10 @@ package v1.pool;
 message Pool {
   // Desired specification of the pool and metadata
   optional PoolDefinition definition = 1;
-  // Runtime state of the pool.
+  // Runtime state of the pool as seen by the dataplane.
   optional PoolState state = 2;
+  /// State metadata information added by the control plane.
+  optional PoolStateMetadata state_meta = 3;
 }
 
 // Multiple pools
@@ -62,6 +64,12 @@ message PoolState {
   uint64 capacity = 5;
   // used bytes from the pool
   uint64 used = 6;
+}
+
+// Pool information
+message PoolStateMetadata {
+  // total size of pool replicas
+  uint64 committed = 1;
 }
 
 // status of the pool

@@ -52,10 +52,10 @@ async fn online_enospc(
             details: "Just a plain old uri, nothing we can do here..".into(),
         })?;
     let replica_spec = registry.specs().replica(replica_uri.uuid()).await?;
-    let replica_state = registry.get_replica(replica_uri.uuid()).await?;
+    let replica_state = registry.replica(replica_uri.uuid()).await?;
 
-    let pool_name = replica_spec.as_ref().pool_name().clone();
-    let pool_wrapper = registry.get_node_pool_wrapper(pool_name).await?;
+    let pool_name = replica_spec.as_ref().pool_name();
+    let pool_wrapper = registry.pool_wrapper(pool_name).await?;
 
     // todo: Should we list pools to check for latest free space?
     tracing::debug!(
@@ -90,7 +90,7 @@ async fn online_enospc(
     let children = nexus.as_ref().children.iter();
     let mut replicas = Vec::with_capacity(children.len());
     for r in children.flat_map(|c| c.as_replica()) {
-        replicas.push(registry.get_replica(r.uuid()).await?);
+        replicas.push(registry.replica(r.uuid()).await?);
     }
 
     let repl_allocated_bytes = replica_state
