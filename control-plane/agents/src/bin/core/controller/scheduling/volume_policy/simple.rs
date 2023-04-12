@@ -1,8 +1,14 @@
-use crate::controller::scheduling::{
-    resources::PoolItem,
-    volume::{AddVolumeReplica, GetSuitablePoolsContext},
-    volume_policy::{pool::PoolBaseFilters, DefaultBasePolicy},
-    ResourceFilter, ResourcePolicy,
+use crate::{
+    controller::{
+        registry::Registry,
+        scheduling::{
+            resources::PoolItem,
+            volume::{AddVolumeReplica, GetSuitablePoolsContext},
+            volume_policy::{pool::PoolBaseFilters, DefaultBasePolicy},
+            ResourceFilter, ResourcePolicy,
+        },
+    },
+    ThinArgs,
 };
 use weighted_scoring::{Criteria, Ranged, ValueGrading, WeightedScore};
 
@@ -13,21 +19,15 @@ pub(crate) struct SimplePolicy {
     /// Current volume replicas are not online.
     /// Configure a minimum size that is a percentage of the volume size.
     no_state_min_free_space_percent: u64,
-    /// When creating a volume replica, the chosen pool should have free space larger than
-    /// the current volume allocation plus some slack.
-    min_free_space_slack_percent: u64,
+    cli_args: ThinArgs,
 }
-impl Default for SimplePolicy {
-    fn default() -> Self {
+
+impl SimplePolicy {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             no_state_min_free_space_percent: 100,
-            min_free_space_slack_percent: 40,
+            cli_args: registry.thin_args().clone(),
         }
-    }
-}
-impl SimplePolicy {
-    pub(crate) fn builder() -> Self {
-        Self::default()
     }
 }
 #[async_trait::async_trait(?Send)]
@@ -36,6 +36,7 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
         DefaultBasePolicy::filter(to)
             .filter(PoolBaseFilters::min_free_space)
             .filter_param(&self, SimplePolicy::min_free_space)
+            .filter_param(&self, SimplePolicy::pool_overcommit)
             // sort pools in order of preference (from least to most number of replicas)
             .sort(SimplePolicy::sort_by_weights)
     }
@@ -80,17 +81,25 @@ impl SimplePolicy {
         if !request.thin {
             return item.pool.free_space() > request.size;
         }
-        match request.allocated_bytes() {
-            Some(bytes) => {
-                let size = (self.min_free_space_slack_percent * request.size) / 100;
-                let required_cap = (bytes + size).min(request.size);
-                item.pool.free_space() > required_cap
+        item.pool.free_space()
+            > match request.allocated_bytes() {
+                Some(bytes) => {
+                    let size = if bytes == &0 {
+                        self.cli_args.volume_commitment_initial * request.size
+                    } else {
+                        self.cli_args.volume_commitment * request.size
+                    } / 100;
+                    (bytes + size).min(request.size)
+                }
+                None => {
+                    // We really have no clue for some reason.. should not happen but just in case
+                    // let's be conservative?
+                    (self.no_state_min_free_space_percent * request.size) / 100
+                }
             }
-            None => {
-                let min_size = (self.no_state_min_free_space_percent * request.size) / 100;
-                item.pool.free_space() > min_size
-            }
-        }
+    }
+    fn pool_overcommit(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        PoolBaseFilters::overcommit(request, item, self.cli_args.pool_commitment)
     }
 }
 

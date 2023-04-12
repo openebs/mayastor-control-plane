@@ -215,7 +215,7 @@ async fn disown_unused_replicas(
         };
 
         let replica_in_target = target.as_ref().contains_replica(&replica.as_ref().uuid);
-        let replica_online = matches!(context.registry().get_replica(&replica.as_ref().uuid).await, Ok(state) if state.online());
+        let replica_online = matches!(context.registry().replica(&replica.as_ref().uuid).await, Ok(state) if state.online());
         if !replica_online
             && !replica.as_ref().dirty()
             && replica.as_ref().owners.owned_by(volume.uuid())

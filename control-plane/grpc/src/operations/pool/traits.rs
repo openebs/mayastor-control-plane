@@ -11,9 +11,11 @@ use stor_port::{
         store::pool::{PoolLabel, PoolSpec, PoolSpecStatus},
         transport,
         transport::{
-            CreatePool, DestroyPool, Filter, NodeId, Pool, PoolDeviceUri, PoolId, PoolState,
+            CreatePool, CtrlPoolState, DestroyPool, Filter, NodeId, Pool, PoolDeviceUri, PoolId,
+            PoolState, PoolStateMetadata,
         },
     },
+    IntoOption,
 };
 
 /// Trait implemented by services which support pool operations.
@@ -109,15 +111,23 @@ impl TryFrom<pool::PoolState> for PoolState {
 impl TryFrom<pool::Pool> for Pool {
     type Error = ReplyError;
     fn try_from(pool: pool::Pool) -> Result<Self, Self::Error> {
-        let pool_state = match pool.state {
+        let state = match pool.state {
             None => None,
-            Some(pool_state) => Some(PoolState::try_from(pool_state)?),
+            Some(state) => {
+                let metadata = match pool.state_meta {
+                    None => Default::default(),
+                    Some(meta) => PoolStateMetadata::new(meta.committed),
+                };
+                let state = PoolState::try_from(state)?;
+                Some(CtrlPoolState::new(state, metadata))
+            }
         };
+
         let pool_spec = match pool.definition {
             None => None,
             Some(pool_definition) => Some(PoolSpec::try_from(pool_definition)?),
         };
-        match Pool::try_new(pool_spec, pool_state) {
+        match Pool::try_new(pool_spec, state) {
             Some(pool) => Ok(pool),
             None => Err(ReplyError::missing_argument(
                 ResourceKind::Pool,
@@ -159,14 +169,22 @@ impl From<PoolState> for pool::PoolState {
         }
     }
 }
+impl From<PoolStateMetadata> for pool::PoolStateMetadata {
+    fn from(meta: PoolStateMetadata) -> Self {
+        pool::PoolStateMetadata {
+            committed: meta.committed,
+        }
+    }
+}
 
 impl From<Pool> for pool::Pool {
     fn from(pool: Pool) -> Self {
-        let pool_definition = pool.spec().map(|pool_spec| pool_spec.into());
-        let pool_state = pool.state().map(|pool_state| pool_state.into());
+        let definition = pool.spec().map(|pool_spec| pool_spec.into());
+        let state = pool.ctrl_state();
         pool::Pool {
-            definition: pool_definition,
-            state: pool_state,
+            definition,
+            state: state.map(|p| p.state()).cloned().into_opt(),
+            state_meta: state.map(|p| p.metadata()).cloned().into_opt(),
         }
     }
 }

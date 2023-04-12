@@ -33,6 +33,9 @@ impl<C, I> ResourceData<C, I> {
             list,
         }
     }
+    pub(crate) fn context(&self) -> &C {
+        &self.context
+    }
 }
 
 #[async_trait::async_trait(?Send)]

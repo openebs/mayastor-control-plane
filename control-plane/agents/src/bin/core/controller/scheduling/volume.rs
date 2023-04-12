@@ -115,7 +115,7 @@ impl AddVolumeReplica {
 
         let mut used_bytes = Vec::with_capacity(replicas.len());
         for spec in replicas {
-            if let Ok(state) = registry.get_replica(spec.uuid()).await {
+            if let Ok(state) = registry.replica(spec.uuid()).await {
                 if let Some(space) = state.space {
                     used_bytes.push(space.allocated_bytes);
                 }
@@ -147,7 +147,8 @@ impl AddVolumeReplica {
         self.policy(ThickPolicy::new())
     }
     fn with_simple_policy(self) -> Self {
-        self.policy(SimplePolicy::builder())
+        let simple = SimplePolicy::new(&self.data.context().registry);
+        self.policy(simple)
     }
 
     /// Default rules for pool selection when creating replicas for a volume.
@@ -246,7 +247,7 @@ impl GetChildForRemovalContext {
         let nexus = self.registry.specs().volume_target_nexus_rsc(&self.spec);
         let replicas = replicas.iter().map(|r| r.lock().clone());
 
-        let replica_states = self.registry.get_replicas().await;
+        let replica_states = self.registry.replicas().await;
         replicas
             .map(|replica_spec| {
                 ReplicaItem::new(
@@ -460,7 +461,7 @@ impl VolumeReplicasForNexusCtx {
     }
     async fn list(&self) -> Vec<ChildItem> {
         // find all replica states
-        let state_replicas = self.registry.get_replicas().await;
+        let state_replicas = self.registry.replicas().await;
         // find all replica specs which are not yet part of the nexus
         let spec_replicas = self
             .registry
@@ -468,7 +469,7 @@ impl VolumeReplicasForNexusCtx {
             .volume_replicas(&self.vol_spec.uuid)
             .into_iter()
             .filter(|r| !self.nexus_spec.contains_replica(&r.lock().uuid));
-        let pool_wrappers = self.registry.get_pool_wrappers().await;
+        let pool_wrappers = self.registry.pool_wrappers().await;
 
         spec_replicas
             .filter_map(|replica_spec| {
