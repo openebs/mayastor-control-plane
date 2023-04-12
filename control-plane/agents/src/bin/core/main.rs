@@ -18,7 +18,7 @@ pub(crate) mod watch;
 
 use clap::Parser;
 use controller::registry::NumRebuilds;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, num::ParseIntError};
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
 
 use stor_port::HostAccessControl;
@@ -88,11 +88,38 @@ pub(crate) struct CliArgs {
     /// If `None` do not limit the number of rebuilds.
     #[clap(long)]
     max_rebuilds: Option<NumRebuilds>,
+
+    #[clap(flatten)]
+    thin_args: ThinArgs,
 }
 impl CliArgs {
     fn args() -> Self {
         CliArgs::parse()
     }
+}
+
+/// Cluster wide thin provisioning parameters.
+#[derive(Debug, clap::Parser, Clone)]
+pub(crate) struct ThinArgs {
+    /// The allowed pool commitment limit when dealing with thin provisioned volumes.
+    /// Example: If the commitment is 250 and the pool is 10GiB we can overcommit the pool
+    /// up to 25GiB (create 2 10GiB and 1 5GiB volume) but no further.
+    #[clap(long, env = "POOL_COMMITMENT_%", value_parser = value_parse_percent, default_value = "250%")]
+    pool_commitment: u64,
+    /// When creating replicas for an existing volume, each replica pool must have at least
+    /// this much free space percentage of the volume size.
+    /// Example: if this value is 40, the pool has 40GiB free, then the max volume size allowed
+    /// to be created on the pool is 100GiB.
+    #[clap(long, env = "VOLUME_COMMITMENT_%", value_parser = value_parse_percent, default_value = "40%")]
+    volume_commitment: u64,
+    /// Same as the `volume_commitment` argument, but applicable only when creating replicas for
+    /// a new volume.
+    #[clap(long, env = "VOLUME_COMMITMENT_%_INITIAL", value_parser = value_parse_percent, default_value = "40%")]
+    volume_commitment_initial: u64,
+}
+
+fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {
+    value.replace('%', "").parse()
 }
 
 #[tokio::main]
@@ -121,8 +148,9 @@ async fn server(cli_args: CliArgs) {
         if cli_args.hosts_acl.contains(&HostAccessControl::None) {
             vec![]
         } else {
-            cli_args.hosts_acl
+            cli_args.hosts_acl.clone()
         },
+        cli_args.thin_args,
     )
     .await
     {

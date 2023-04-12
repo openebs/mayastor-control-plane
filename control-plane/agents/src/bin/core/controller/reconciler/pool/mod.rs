@@ -115,7 +115,7 @@ async fn missing_pool_state_reconciler(
     }
     let pool_id = pool.id();
 
-    if context.registry().get_pool_state(pool_id).await.is_err() {
+    if !context.registry().has_pool_state(pool_id).await {
         let pool_spec = pool.lock().clone();
 
         let warn_missing = |pool_spec: &PoolSpec, node_status: NodeStatus| {

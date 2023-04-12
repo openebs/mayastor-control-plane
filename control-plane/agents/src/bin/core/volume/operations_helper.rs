@@ -151,6 +151,7 @@ impl OperationGuardArc<VolumeSpec> {
             tracing::warn!(
                 child.uri = replica_uri.uri().as_str(),
                 child.uuid = replica_uri.uuid().as_str(),
+                replica.pool = replica.as_ref().pool.pool_name().as_str(),
                 "Successfully faulted child"
             )
         });
@@ -334,10 +335,15 @@ impl OperationGuardArc<VolumeSpec> {
             }
             match nexus.attach_replica(registry, replica.state()).await {
                 Ok(_) => {
-                    nexus.info(&format!(
-                        "Successfully attached replica '{}' to nexus",
-                        replica.state().uuid,
-                    ));
+                    nexus.info_span(|| {
+                        let state = replica.state();
+                        tracing::info!(
+                            replica.uuid = %state.uuid,
+                            replica.pool = %state.pool_id,
+                            replica.node = %state.node,
+                            "Successfully attached replica to nexus",
+                        )
+                    });
                     nexus_children += 1;
                 }
                 Err(error) => {

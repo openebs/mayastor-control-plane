@@ -148,7 +148,7 @@ pub(super) async fn faulted_children_remover(
             let nexus_spec_clone = nexus.lock().clone();
             for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
                 nexus_spec_clone.warn_span(|| {
-                    tracing::warn!(%child.state, "Attempting to remove faulted child '{}'", child.uri)
+                    tracing::warn!(%child.state, %child.state_reason, "Attempting to remove faulted child '{}'", child.uri)
                 });
                 if let Err(error) = nexus
                     .remove_child_by_uri(
@@ -161,7 +161,9 @@ pub(super) async fn faulted_children_remover(
                 {
                     nexus_spec_clone.error_span(|| {
                         tracing::error!(
-                            error = %error.full_string().as_str(),
+                            error = error.full_string().as_str(),
+                            %child.state,
+                            %child.state_reason,
                             child.uri = %child.uri.as_str(),
                             "Failed to remove faulted child"
                         )
@@ -169,7 +171,9 @@ pub(super) async fn faulted_children_remover(
                 } else {
                     nexus_spec_clone.info_span(|| {
                         tracing::info!(
-                            child.uri = %child.uri.as_str(),
+                            %child.uri,
+                            %child.state,
+                            %child.state_reason,
                             "Successfully removed faulted child",
                         )
                     });

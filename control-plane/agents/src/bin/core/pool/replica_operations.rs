@@ -136,7 +136,7 @@ impl ResourceSharing for Option<&mut OperationGuardArc<ReplicaSpec>> {
         let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(replica) = self {
-            let status = registry.get_replica(&request.uuid).await?;
+            let status = registry.replica(&request.uuid).await?;
             let update = ReplicaOperation::Share(request.protocol, request.allowed_hosts.clone());
             let spec_clone = replica.start_update(registry, &status, update).await?;
 
@@ -155,7 +155,7 @@ impl ResourceSharing for Option<&mut OperationGuardArc<ReplicaSpec>> {
         let node = registry.node_wrapper(&request.node).await?;
 
         if let Some(replica) = self {
-            let status = registry.get_replica(&request.uuid).await?;
+            let status = registry.replica(&request.uuid).await?;
             let spec_clone = replica
                 .start_update(registry, &status, ReplicaOperation::Unshare)
                 .await?;
@@ -227,7 +227,7 @@ impl OperationGuardArc<ReplicaSpec> {
                 .await?;
         }
 
-        let replica = registry.get_replica(self.uuid()).await?;
+        let replica = registry.replica(self.uuid()).await?;
 
         // Now it's safe to delete the replica.
         let request = destroy_replica_request(
