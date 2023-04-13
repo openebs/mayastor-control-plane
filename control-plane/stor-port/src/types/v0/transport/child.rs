@@ -292,17 +292,27 @@ impl NexusChildActionContext {
 /// A request for a `NexusChildActionKind` operation against a Nexus Child.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusChildAction {
+pub struct NexusChildAction<Context: Send + Sync = NexusChildActionContext> {
     /// Common info for all child actions.
-    context: NexusChildActionContext,
+    context: Context,
     /// Action to perform against the child.
     action: NexusChildActionKind,
 }
-impl NexusChildAction {
+impl<Context: Send + Sync> NexusChildAction<Context> {
     /// Return new `Self`.
-    pub fn new(context: NexusChildActionContext, action: NexusChildActionKind) -> Self {
+    pub fn new(context: Context, action: NexusChildActionKind) -> Self {
         Self { context, action }
     }
+    /// Get a reference to the action kind.
+    pub fn action(&self) -> &NexusChildActionKind {
+        &self.action
+    }
+    /// Split `Self` into `Context` and `NexusChildActionKind`.
+    pub fn into_parts(self) -> (Context, NexusChildActionKind) {
+        (self.context, self.action)
+    }
+}
+impl NexusChildAction {
     /// Get a reference to the node.
     pub fn node(&self) -> &NodeId {
         &self.context.node
@@ -314,9 +324,5 @@ impl NexusChildAction {
     /// Get a reference to the child uri.
     pub fn uri(&self) -> &ChildUri {
         &self.context.uri
-    }
-    /// Get a reference to the action kind.
-    pub fn action(&self) -> &NexusChildActionKind {
-        &self.action
     }
 }

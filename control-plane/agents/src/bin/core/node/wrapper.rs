@@ -27,12 +27,15 @@ use stor_port::{
 
 use crate::controller::{
     io_engine::{NexusChildActionApi, NexusChildApi, NexusShareApi},
+    registry::Registry,
     states::Either,
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
-use stor_port::types::v0::transport::{ImportPool, NexusChildAction};
+use stor_port::types::v0::transport::{
+    ImportPool, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
+};
 use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
@@ -1338,9 +1341,34 @@ impl NexusChildApi<Child, (), ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
     }
 }
 
+/// Wrapper over `NexusChildActionContext` including `Registry`.
+pub(crate) struct NexusChildActionContextNode {
+    context: NexusChildActionContext,
+    registry: Registry,
+}
+impl NexusChildActionContextNode {
+    /// Return new `Self`.
+    pub(crate) fn new(context: NexusChildActionContext, registry: &Registry) -> Self {
+        Self {
+            context,
+            registry: registry.clone(),
+        }
+    }
+}
+
 #[async_trait]
-impl NexusChildActionApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
-    async fn child_action(&self, request: &NexusChildAction) -> Result<Nexus, SvcError> {
+impl NexusChildActionApi<NexusChildActionContextNode> for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    async fn child_action(
+        &self,
+        request: NexusChildAction<NexusChildActionContextNode>,
+    ) -> Result<Nexus, SvcError> {
+        let (node_ctx, action) = request.into_parts();
+        if action == NexusChildActionKind::Online {
+            // Onlining a child will initiate a rebuild so we need to check if it's allowed.
+            node_ctx.registry.rebuild_allowed().await?;
+        }
+        let request = NexusChildAction::new(node_ctx.context, action);
+
         let dataplane = self.grpc_client_locked(request.id()).await?;
         // todo: any idempotency checks we need to perform on error?
         let nexus = dataplane.child_action(request).await?;

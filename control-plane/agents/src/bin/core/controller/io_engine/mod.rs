@@ -30,7 +30,7 @@ pub(crate) trait NodeApi:
     + NexusApi<()>
     + NexusShareApi<Nexus, Nexus>
     + NexusChildApi<Nexus, Nexus, ()>
-    + NexusChildActionApi
+    + NexusChildActionApi<NexusChildActionContext>
     + HostApi
     + Sync
     + Send
@@ -112,23 +112,23 @@ pub(crate) trait NexusChildApi<Add, Rm, Flt> {
 }
 
 #[async_trait]
-pub(crate) trait NexusChildActionApi {
+pub(crate) trait NexusChildActionApi<Ctx>
+where
+    for<'async_trait> Ctx: Send + Sync + 'async_trait,
+{
     /// Execute a child action within its parent nexus via gRPC.
-    async fn child_action(&self, request: &NexusChildAction) -> Result<Nexus, SvcError>;
+    async fn child_action(&self, request: NexusChildAction<Ctx>) -> Result<Nexus, SvcError>;
 
     /// Online a child within its parent nexus via gRPC.
-    async fn online_child(&self, request: &NexusChildActionContext) -> Result<Nexus, SvcError> {
-        self.child_action(&NexusChildAction::new(
-            request.clone(),
-            NexusChildActionKind::Online,
-        ))
-        .await
+    async fn online_child(&self, request: Ctx) -> Result<Nexus, SvcError> {
+        self.child_action(NexusChildAction::new(request, NexusChildActionKind::Online))
+            .await
     }
 
     /// Offline a child within its parent nexus via gRPC.
-    async fn offline_child(&self, request: &NexusChildActionContext) -> Result<Nexus, SvcError> {
-        self.child_action(&NexusChildAction::new(
-            request.clone(),
+    async fn offline_child(&self, request: Ctx) -> Result<Nexus, SvcError> {
+        self.child_action(NexusChildAction::new(
+            request,
             NexusChildActionKind::Offline,
         ))
         .await

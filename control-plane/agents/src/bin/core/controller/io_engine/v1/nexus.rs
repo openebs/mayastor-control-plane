@@ -6,7 +6,8 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         AddNexusChild, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusChildAction,
-        NexusId, NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
+        NexusChildActionContext, NexusId, NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus,
+        UnshareNexus,
     },
 };
 
@@ -270,9 +271,14 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
 }
 
 #[async_trait::async_trait]
-impl crate::controller::io_engine::NexusChildActionApi for super::RpcClient {
+impl crate::controller::io_engine::NexusChildActionApi<NexusChildActionContext>
+    for super::RpcClient
+{
     #[tracing::instrument(name = "rpc::v1::nexus::child_action", level = "debug", skip(self), fields(rpc.io_engine = true), err)]
-    async fn child_action(&self, request: &NexusChildAction) -> Result<Nexus, SvcError> {
+    async fn child_action(
+        &self,
+        request: NexusChildAction<NexusChildActionContext>,
+    ) -> Result<Nexus, SvcError> {
         let response = self
             .nexus()
             .child_operation(request.to_rpc())
