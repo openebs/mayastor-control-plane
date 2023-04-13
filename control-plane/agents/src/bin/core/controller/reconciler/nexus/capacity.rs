@@ -1,8 +1,11 @@
-use crate::controller::{
-    io_engine::NexusChildActionApi,
-    registry::Registry,
-    resources::{OperationGuardArc, TraceSpan},
-    task_poller::{PollContext, PollResult, PollerState},
+use crate::{
+    controller::{
+        io_engine::NexusChildActionApi,
+        registry::Registry,
+        resources::{OperationGuardArc, TraceSpan},
+        task_poller::{PollContext, PollResult, PollerState},
+    },
+    node::wrapper::NexusChildActionContextNode,
 };
 use agents::errors::SvcError;
 
@@ -132,10 +135,9 @@ async fn online_enospc(
 
     let nexus_node = &nexus.as_ref().node;
     let node = registry.node_wrapper(nexus_node).await?;
-    node.online_child(&NexusChildActionContext::new(
-        nexus_node,
-        nexus.uuid(),
-        &child.uri,
+    node.online_child(NexusChildActionContextNode::new(
+        NexusChildActionContext::new(nexus_node, nexus.uuid(), &child.uri),
+        registry,
     ))
     .await?;
     nexus.info_span(|| {
