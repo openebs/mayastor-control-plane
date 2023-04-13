@@ -380,7 +380,7 @@ impl AgentToIoEngine for transport::NexusChildActionKind {
         match self {
             transport::NexusChildActionKind::Offline => v1::nexus::ChildAction::Offline,
             transport::NexusChildActionKind::Online => v1::nexus::ChildAction::Online,
-            transport::NexusChildActionKind::Retire => v1::nexus::ChildAction::Retire,
+            transport::NexusChildActionKind::Retire => v1::nexus::ChildAction::FaultIoError,
         }
     }
 }
@@ -415,6 +415,11 @@ impl IoEngineToAgent for v1::pool::Pool {
             capacity: self.capacity,
             used: self.used,
             status: self.state.into(),
+            committed: if self.used > 0 && self.committed == 0 {
+                None
+            } else {
+                Some(self.committed)
+            },
         }
     }
 }

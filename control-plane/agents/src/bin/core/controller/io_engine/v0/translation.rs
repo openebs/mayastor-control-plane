@@ -93,6 +93,7 @@ impl IoEngineToAgent for v0::Pool {
             status: self.state.into(),
             capacity: self.capacity,
             used: self.used,
+            committed: None,
         }
     }
 }
