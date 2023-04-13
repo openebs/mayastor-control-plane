@@ -28,8 +28,8 @@ devrustup_moth=${devrustup_moth:-}
 rust_version=${rust_version:-}
 rustup_channel=${rustup_channel:-$rust_version}
 
-if [ -z "$CI" ]; then
-  if [ "$dev_rustup" == "1" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
+if [ -z "$CI" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
+  if [ "$dev_rustup" == "1" ]; then
     cowsay "$devrustup_moth"
     unset dev_rustup
     unset USE_NIX_RUST
