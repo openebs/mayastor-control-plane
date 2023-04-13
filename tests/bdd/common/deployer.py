@@ -11,6 +11,7 @@ class StartOptions:
     csi_controller: bool = False
     csi_node: bool = False
     reconcile_period: str = ""
+    faulted_child_wait_period: str = ""
     cache_period: str = ""
     io_engine_env: str = ""
     agents_env: str = ""
@@ -41,6 +42,8 @@ class StartOptions:
         if len(self.reconcile_period) > 0:
             args.append(f"--reconcile-period={self.reconcile_period}")
             args.append(f"--reconcile-idle-period={self.reconcile_period}")
+        if len(self.faulted_child_wait_period) > 0:
+            args.append(f"--faulted-child-wait-period={self.faulted_child_wait_period}")
         if len(self.cache_period) > 0:
             args.append(f"--cache-period={self.cache_period}")
         if len(self.node_deadline) > 0:
@@ -81,6 +84,7 @@ class Deployer(object):
         csi_controller=False,
         csi_node=False,
         reconcile_period="",
+        faulted_child_wait_period="",
         cache_period="",
         io_engine_env="",
         agents_env="",
@@ -99,6 +103,7 @@ class Deployer(object):
             csi_controller=csi_controller,
             csi_node=csi_node,
             reconcile_period=reconcile_period,
+            faulted_child_wait_period=faulted_child_wait_period,
             cache_period=cache_period,
             io_engine_env=io_engine_env,
             agents_env=agents_env,

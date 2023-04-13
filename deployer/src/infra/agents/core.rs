@@ -54,6 +54,9 @@ impl ComponentAction for CoreAgent {
         if let Some(period) = &options.reconcile_idle_period {
             binary = binary.with_args(vec!["--reconcile-idle-period", &period.to_string()]);
         }
+        if let Some(twait) = &options.faulted_child_wait_period {
+            binary = binary.with_args(vec!["--faulted-child-wait-period", &twait.to_string()]);
+        }
         if cfg.container_exists("jaeger") {
             let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
             binary = binary.with_args(vec!["--jaeger", &jaeger_config]);

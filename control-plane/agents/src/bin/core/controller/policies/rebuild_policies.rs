@@ -1,22 +1,25 @@
+//!
+//! This file defines the policies that control plane uses to make
+//! decisions about rebuild workflow behaviour in case of a child
+//! becoming faulted. We can logically provide multiple different policies.
+//! These policies are represented as an enum, since only one of the policy
+//! can be applied to a given volume/nexus at a time. Once applied, the
+//! behaviour of the policy can vary depending on runtime state of the nexus.
+//! Any new policy introduced in future will have to implement Policy trait
+//! for defining the policy behaviour.
+
 #![allow(unused)]
+
 use stor_port::types::v0::transport::Nexus;
 
+use crate::controller::registry::Registry;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-/*
-    This file defines the policies that control plane uses to make
-    decisions about rebuild workflow behaviour in case of a child
-    becoming faulted. We can logically provide multiple different policies.
-    These policies are represented as an enum, since only one of the policy
-    can be applied to a given volume/nexus at a time. Once applied, the
-    behaviour of the policy can vary depending on runtime state of the nexus.
-    Any new policy introduced in future will have to implement Policy trait
-    for defining the policy behaviour.
-*/
-
 // time constants, in seconds
+/// A time period optimized for rebuild performance i.e. preferring log-based rebuild.
 const TWAIT_SPERF: std::time::Duration = Duration::new(600, 0);
+/// A time period optimized for better redundancy and quicker rebuild decisions.
 const TWAIT_SAVAIL: std::time::Duration = Duration::new(300, 0);
 const TWAIT_ZERO: std::time::Duration = Duration::new(0, 0);
 // 100GiB = 100 * 1024 * 1024 * 1024 bytes
@@ -41,7 +44,12 @@ impl RuleSet {
     /// Returns a duration value. The caller can use this duration
     /// to timeout between two time Instants, particularly to wait
     /// upon a faulted child to possibly be healthy again.
-    pub fn faulted_child_wait(nexus: &Nexus) -> Duration {
+    pub(crate) fn faulted_child_wait(nexus: &Nexus, registry: &Registry) -> Duration {
+        let cli_twait = registry.faulted_child_wait_period();
+        if !cli_twait.is_zero() {
+            return cli_twait;
+        }
+
         let _pol = Self::assign(nexus.size);
         Self::default_faulted_child_timewait()
 
