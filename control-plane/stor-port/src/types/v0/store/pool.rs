@@ -212,6 +212,7 @@ impl From<&PoolSpec> for transport::PoolState {
             status: transport::PoolStatus::Unknown,
             capacity: 0,
             used: 0,
+            committed: None,
         }
     }
 }
