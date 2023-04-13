@@ -193,12 +193,12 @@ pub(super) async fn faulted_children_remover(
     let nexus_uuid = nexus.uuid();
     let nexus_state = context.registry().nexus(nexus_uuid).await?;
 
-    info!(%child, "Attempting to remove faulted child '{}'", child);
+    info!(%child, "Attempting to remove faulted child");
     nexus
         .remove_child_by_uri(context.registry(), &nexus_state, child, true)
         .await?;
 
-    info!(%child ,"Successfully removed faulted child",);
+    info!(%child ,"Successfully removed faulted child");
     Ok(())
 }
 
@@ -258,14 +258,14 @@ pub(super) async fn initialize_partial_rebuild(
     context: &PollContext,
 ) -> Result<(), SvcError> {
     let nexus_state = context.registry().nexus(nexus).await?;
-    info!("Making {:?} online of {:?} nexus", child, nexus);
+    info!(%child, "Making online of {:?} nexus", nexus);
     let node = context.registry().node_wrapper(&nexus_state.node).await?;
     let online_context = NexusChildActionContext::new(&nexus_state.node, &nexus.clone(), child);
     let ctx = NexusChildActionContextNode::new(online_context, context.registry());
     // TODO: Check if we can handle things differently for different SvcError.
     node.online_child(ctx).await?;
     info!(
-        %child, %nexus,"Successfully made child online"
+        %child, "Successfully made child online in nexus :{:?}", nexus
     );
     Ok(())
 }
