@@ -205,7 +205,7 @@ pub(super) async fn faulted_children_remover(
 /// Returns true if time elapsed from child fault time is greater or equal to wait time duration.
 async fn is_time_elapsed(
     fault_time: Option<SystemTime>,
-    wait_time: Duration,
+    wait_duration: Duration,
     uri: &ChildUri,
 ) -> bool {
     if let Some(fault_time) = fault_time {
@@ -213,9 +213,9 @@ async fn is_time_elapsed(
             info!(
                 child.uri = %uri,
                 "waited {:?} for child to comeback. Wait time is {:?}",
-                elapsed, wait_time
+                elapsed, wait_duration
             );
-            return elapsed >= wait_time;
+            return elapsed >= wait_duration;
         };
     }
     false
