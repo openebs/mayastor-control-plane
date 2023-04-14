@@ -333,6 +333,26 @@ impl OperationGuardArc<VolumeSpec> {
             if nexus_children >= volume_children {
                 break;
             }
+
+            if replica.rebuildable() == &Some(false) {
+                if self
+                    .remove_unused_volume_replica(registry, &replica.state().uuid)
+                    .await
+                    .is_ok()
+                {
+                    nexus.info_span(|| {
+                        let state = replica.state();
+                        tracing::warn!(
+                            replica.uuid = %state.uuid,
+                            replica.pool = %state.pool_id,
+                            replica.node = %state.node,
+                            "Removed unrebuildable replica from the volume",
+                        )
+                    });
+                }
+                continue;
+            }
+
             match nexus.attach_replica(registry, replica.state()).await {
                 Ok(_) => {
                     nexus.info_span(|| {
@@ -347,11 +367,16 @@ impl OperationGuardArc<VolumeSpec> {
                     nexus_children += 1;
                 }
                 Err(error) => {
-                    nexus.error(&format!(
-                        "Failed to attach replica '{}' to nexus, error: '{}'",
-                        replica.state().uuid,
-                        error.full_string()
-                    ));
+                    nexus.warn_span(|| {
+                        let state = replica.state();
+                        tracing::error!(
+                            replica.uuid = %state.uuid,
+                            replica.pool = %state.pool_id,
+                            replica.node = %state.node,
+                            error = error.full_string(),
+                            "Failed to attach replica to nexus",
+                        )
+                    });
                     result = Err(error);
                 }
             };

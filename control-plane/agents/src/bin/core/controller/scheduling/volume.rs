@@ -14,6 +14,7 @@ use stor_port::types::v0::{
     transport::{NodeId, PoolId, VolumeState},
 };
 
+use crate::controller::scheduling::pool::replica_rebuildable;
 use std::ops::Deref;
 
 /// Move replica to another pool.
@@ -409,6 +410,7 @@ pub(crate) struct VolumeReplicasForNexusCtx {
     nexus_spec: NexusSpec,
     nexus_info: Option<NexusInfo>,
     shutdown_failed_nexuses: Vec<ResourceMutex<NexusSpec>>,
+    allocated_bytes: u64,
 }
 
 impl VolumeReplicasForNexusCtx {
@@ -451,12 +453,23 @@ impl VolumeReplicasForNexusCtx {
             .volume_failed_shutdown_nexuses(&vol_spec.uuid)
             .await;
 
+        let mut allocated_bytes = 0;
+        for child in nexus_info.as_ref().map(|n| &n.children).unwrap_or(&vec![]) {
+            if let Ok(replica) = registry.replica(&child.uuid).await {
+                let bytes = replica.space.map(|s| s.allocated_bytes).unwrap_or_default();
+                if bytes > allocated_bytes {
+                    allocated_bytes = bytes;
+                }
+            }
+        }
+
         Ok(Self {
             registry: registry.clone(),
             vol_spec: vol_spec.clone(),
             nexus_spec: nx_spec.clone(),
             nexus_info,
             shutdown_failed_nexuses: shutdown_pending_nexuses,
+            allocated_bytes,
         })
     }
     async fn list(&self) -> Vec<ChildItem> {
@@ -493,7 +506,13 @@ impl VolumeReplicasForNexusCtx {
                     .find(|p| p.id == pool_id)
                     .and_then(|pool| {
                         replica_state.map(|replica_state| {
-                            ChildItem::new(&replica_spec, replica_state, child_info, pool)
+                            let rebuild = Some(replica_rebuildable(
+                                pool,
+                                self.allocated_bytes,
+                                replica_state,
+                            ));
+
+                            ChildItem::new(&replica_spec, replica_state, child_info, pool, rebuild)
                         })
                     })
             })
