@@ -44,6 +44,7 @@ def init():
         wait="10s",
         reconcile_period=f"{RECONCILE_PERIOD_SECS}s",
         cache_period="1s",
+        faulted_child_wait_period="1s",
         max_rebuilds=f"{MAX_REBUILDS}",
     )
 
