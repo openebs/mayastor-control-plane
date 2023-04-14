@@ -1,7 +1,10 @@
-use crate::controller::{
-    registry::Registry,
-    resources::{ResourceMutex, ResourceUid},
-    scheduling::{ResourceData, ResourceFilter},
+use crate::{
+    controller::{
+        registry::Registry,
+        resources::{ResourceMutex, ResourceUid},
+        scheduling::{ResourceData, ResourceFilter},
+    },
+    pool::wrapper::PoolWrapper,
 };
 use agents::errors::SvcError;
 use stor_port::types::v0::{
@@ -10,7 +13,7 @@ use stor_port::types::v0::{
         pool::PoolSpec,
         replica::ReplicaSpec,
     },
-    transport::{Child, NexusId, NexusStatus},
+    transport::{Child, NexusId, NexusStatus, Replica},
 };
 
 #[derive(Clone)]
@@ -167,4 +170,36 @@ async fn enospc_children(
         return Ok(enospc);
     }
     Ok(vec![])
+}
+
+/// Check if the given replica can be rebuilt by ensuring it can grow at least up to the
+/// given allocation.
+pub(crate) fn replica_rebuildable(
+    pool_wrapper: &PoolWrapper,
+    min_allocated_bytes: u64,
+    replica: &Replica,
+) -> bool {
+    let required_free_space = rebuild_space_required(min_allocated_bytes, replica);
+    pool_wrapper.free_space() > required_free_space
+}
+
+/// Calculates the number of bytes required to rebuild this replica up to the given minimum.
+/// # Warning: valid only if the current blocks are exactly the same as the healthy replicas.
+pub(crate) fn rebuild_space_required(min_allocated_bytes: u64, replica: &Replica) -> u64 {
+    let repl_allocated_bytes = replica
+        .space
+        .as_ref()
+        .map(|s| s.allocated_bytes)
+        .unwrap_or_default();
+
+    // we've already allocated some bytes, so take those into account
+    // did you read the warning above?
+    let bytes_needed = min_allocated_bytes - repl_allocated_bytes;
+
+    // We need sufficient free space for at least the current allocation of other replicas, but
+    // just this capacity may not be enough as applications may carry on issuing new writes.
+    // So add some slack to ensure we have a little wiggle room.
+    // todo: how to figure out which slack to add, probably pool allocation rate?
+    let slack = 16 * 1024 * 1024;
+    bytes_needed + slack
 }

@@ -155,7 +155,7 @@ impl GetPersistedNexusChildrenCtx {
                     .find(|p| p.id == pool_id)
                     .and_then(|pool| {
                         replica_state.map(|replica_state| {
-                            ChildItem::new(&replica_spec, replica_state, child_info, pool)
+                            ChildItem::new(&replica_spec, replica_state, child_info, pool, None)
                         })
                     })
             })

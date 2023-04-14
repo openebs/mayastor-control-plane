@@ -132,6 +132,7 @@ pub(crate) struct ChildItem {
     replica_state: Replica,
     pool_state: PoolWrapper,
     child_info: Option<ChildInfo>,
+    rebuildable: Option<bool>,
 }
 
 // todo: keep original Debug and use valuable trait from tracing instead
@@ -186,12 +187,14 @@ impl ChildItem {
         replica_state: &Replica,
         child_info: Option<&ChildInfo>,
         pool_state: &PoolWrapper,
+        rebuildable: Option<bool>,
     ) -> Self {
         Self {
             replica_spec: replica_spec.clone(),
             replica_state: replica_state.clone(),
             child_info: child_info.cloned(),
             pool_state: pool_state.clone(),
+            rebuildable,
         }
     }
     /// Get the replica spec.
@@ -209,6 +212,10 @@ impl ChildItem {
     /// Get the pool wrapper.
     pub(crate) fn pool(&self) -> &PoolWrapper {
         &self.pool_state
+    }
+    /// Check if we can rebuild this child.
+    pub(crate) fn rebuildable(&self) -> &Option<bool> {
+        &self.rebuildable
     }
 }
 
