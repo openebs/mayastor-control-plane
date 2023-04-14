@@ -55,10 +55,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
 
         let state = pool.complete_create(result, registry, on_fail).await?;
         let spec = pool.lock().clone();
-        Ok(Pool::new(
-            spec,
-            CtrlPoolState::new(state, Default::default()),
-        ))
+        Ok(Pool::new(spec, CtrlPoolState::new(state)))
     }
 
     async fn destroy(

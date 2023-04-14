@@ -12,7 +12,7 @@ use stor_port::{
         transport,
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, Filter, NodeId, Pool, PoolDeviceUri, PoolId,
-            PoolState, PoolStateMetadata,
+            PoolState,
         },
     },
     IntoOption,
@@ -104,6 +104,7 @@ impl TryFrom<pool::PoolState> for PoolState {
             },
             capacity: pool_state.capacity,
             used: pool_state.used,
+            committed: pool_state.committed,
         })
     }
 }
@@ -114,12 +115,8 @@ impl TryFrom<pool::Pool> for Pool {
         let state = match pool.state {
             None => None,
             Some(state) => {
-                let metadata = match pool.state_meta {
-                    None => Default::default(),
-                    Some(meta) => PoolStateMetadata::new(meta.committed),
-                };
                 let state = PoolState::try_from(state)?;
-                Some(CtrlPoolState::new(state, metadata))
+                Some(CtrlPoolState::new(state))
             }
         };
 
@@ -166,13 +163,7 @@ impl From<PoolState> for pool::PoolState {
             status: pool_state.status as i32,
             capacity: pool_state.capacity,
             used: pool_state.used,
-        }
-    }
-}
-impl From<PoolStateMetadata> for pool::PoolStateMetadata {
-    fn from(meta: PoolStateMetadata) -> Self {
-        pool::PoolStateMetadata {
-            committed: meta.committed,
+            committed: pool_state.committed,
         }
     }
 }
@@ -184,7 +175,6 @@ impl From<Pool> for pool::Pool {
         pool::Pool {
             definition,
             state: state.map(|p| p.state()).cloned().into_opt(),
-            state_meta: state.map(|p| p.metadata()).cloned().into_opt(),
         }
     }
 }

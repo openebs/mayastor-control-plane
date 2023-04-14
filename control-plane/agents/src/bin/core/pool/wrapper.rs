@@ -1,5 +1,5 @@
 use stor_port::types::v0::transport::{
-    CtrlPoolState, PoolState, PoolStateMetadata, PoolStatus, Protocol, Replica, ReplicaId,
+    CtrlPoolState, PoolState, PoolStatus, Protocol, Replica, ReplicaId,
 };
 
 use std::{cmp::Ordering, ops::Deref};
@@ -26,12 +26,7 @@ impl Deref for PoolWrapper {
 
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas.
-    pub(crate) fn new(pool: PoolState, replicas: Vec<Replica>) -> Self {
-        let commitment = replicas
-            .iter()
-            .flat_map(|r| &r.space)
-            .map(|r| r.capacity_bytes)
-            .sum();
+    pub(crate) fn new(mut pool: PoolState, replicas: Vec<Replica>) -> Self {
         let free_space = if pool.capacity >= pool.used {
             pool.capacity - pool.used
         } else {
@@ -44,10 +39,16 @@ impl PoolWrapper {
             );
             0
         };
+        let committed = pool.committed.unwrap_or_else(|| {
+            let committed = replicas.iter().map(|r| &r.size).sum();
+            pool.committed = Some(committed);
+            committed
+        });
+
         Self {
             state: pool,
             replicas,
-            committed: commitment,
+            committed,
             free_space,
         }
     }
@@ -70,7 +71,7 @@ impl PoolWrapper {
     }
     /// Get the controller pool state (state + metadata).
     pub(crate) fn ctrl_state(&self) -> CtrlPoolState {
-        CtrlPoolState::new(self.state.clone(), PoolStateMetadata::new(self.committed))
+        CtrlPoolState::new(self.state.clone())
     }
 
     /// Get the over commitment in bytes.
