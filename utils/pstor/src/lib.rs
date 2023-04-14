@@ -25,7 +25,9 @@ pub use api::{
 };
 pub use common::{ApiVersion, StorableObjectType};
 pub use products::{
-    migrate_product_v1_to_v2,
-    v1::{detect_product_v1_prefix, key_prefix as product_v1_key_prefix},
+    v1::{
+        detect_product_v1_prefix, key_prefix as product_v1_key_prefix,
+        key_prefix_obj as product_v1_key_prefix_obj,
+    },
     v2::{build_key_prefix, key_prefix, key_prefix_obj, API_VERSION},
 };
