@@ -3,6 +3,7 @@ use crate::{
         io_engine::NexusChildActionApi,
         registry::Registry,
         resources::{OperationGuardArc, TraceSpan},
+        scheduling::pool::rebuild_space_required,
         task_poller::{PollContext, PollResult, PollerState},
     },
     node::wrapper::NexusChildActionContextNode,
@@ -89,33 +90,19 @@ async fn online_enospc(
         });
     }
 
-    // must have enough space for the current volume size!
     let children = nexus.as_ref().children.iter();
     let mut replicas = Vec::with_capacity(children.len());
     for r in children.flat_map(|c| c.as_replica()) {
         replicas.push(registry.replica(r.uuid()).await?);
     }
-
-    let repl_allocated_bytes = replica_state
-        .space
-        .as_ref()
-        .map(|s| s.allocated_bytes)
-        .unwrap_or_default();
-    let allocated_bytes = replicas
+    let min_allocated_bytes = replicas
         .into_iter()
         .flat_map(|r| r.space)
         .map(|r| r.allocated_bytes)
         .max()
         .unwrap_or_else(|| nexus.as_ref().size);
-    // we've already allocated some bytes, so take those into account
-    let bytes_needed = allocated_bytes - repl_allocated_bytes;
 
-    // We need sufficient free space for at least the current allocation of other replicas, but
-    // just this capacity may not be enough as applications may carry on issuing new writes.
-    // So add some slack to ensure we have a little wiggle room.
-    // todo: how to figure out which slack to add, probably pool allocation rate?
-    let slack = 16 * 1024 * 1024;
-    let required_free_space = bytes_needed + slack;
+    let required_free_space = rebuild_space_required(min_allocated_bytes, &replica_state);
     if pool_wrapper.free_space() < required_free_space {
         nexus.info_span(|| {
             tracing::warn!(

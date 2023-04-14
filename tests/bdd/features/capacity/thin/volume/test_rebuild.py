@@ -1,4 +1,6 @@
 """Thin Provisioning - Volume Rebuild feature tests."""
+import time
+
 from retrying import retry
 from urllib.parse import urlparse
 import pytest
@@ -76,6 +78,11 @@ def test_replicating_a_thin_volume():
 )
 def test_resolving_outofspace_condition_for_a_thin_multireplica_volume():
     """Resolving out-of-space condition for a thin multi-replica volume."""
+
+
+@scenario("rebuild.feature", "Rebuild is not started if there's no space in the pool")
+def test_rebuild_is_not_started_if_theres_no_space_in_the_pool():
+    """Rebuild is not started if there's no space in the pool."""
 
 
 @given("a control plane, Io-Engine instances and pools")
@@ -226,6 +233,39 @@ def the_total_number_of_healthy_replicas_of_the_volume_decreases_by_one():
     """the total number of healthy replicas of the volume decreases by one."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     wait_volume_degraded(volume)
+
+
+@then("if the volume is republished again")
+def if_the_volume_is_republished_again():
+    """if the volume is republished again."""
+    ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
+    volume = ApiClient.volumes_api().put_volume_target(
+        VOLUME_UUID,
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf")),
+    )
+    assert hasattr(volume.spec, "target")
+    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    pytest.volume = volume
+
+
+@then("the faulted replica should be deleted")
+def the_faulted_replica_should_be_deleted():
+    """the faulted replica should be deleted."""
+    wait_unrebuildable_removed(pytest.volume, True)
+
+
+@then("the faulted replica should not be rebuilt as there's no free space in the pool")
+def the_faulted_replica_should_not_be_rebuilt_as_theres_no_free_space_in_the_pool():
+    """the faulted replica should not be rebuilt as there's no free space in the pool."""
+    wait_unrebuildable_removed(pytest.volume, False)
+
+
+@retry(wait_fixed=200, stop_max_attempt_number=20)
+def wait_unrebuildable_removed(volume, deleted):
+    volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
+    assert volume.state.status == VolumeStatus("Degraded")
+    assert len(volume.state.target["children"]) == 1, "We should not add the Child"
+    assert not deleted or len(volume.state.replica_topology.keys()) == 1
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=20)
