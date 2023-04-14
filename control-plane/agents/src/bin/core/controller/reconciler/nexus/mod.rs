@@ -149,13 +149,13 @@ pub(super) async fn handle_faulted_child(
         let nexus_spec_clone = nexus.lock().clone();
         for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
             if child.state_reason != ChildStateReason::NoSpace {
-                let wait_time = RuleSet::faulted_child_wait(&nexus_state, context.registry());
-                if wait_time.is_zero()
+                let wait_duration = RuleSet::faulted_child_wait(&nexus_state, context.registry());
+                if wait_duration.is_zero()
                     || child.state_reason.clone() == ChildStateReason::RebuildFailed
                 {
                     info!(%child.uri, "Start full rebuild for child");
                     faulted_children_remover(nexus, &child.uri, context).await?
-                } else if is_time_elapsed(child.faulted_at, Some(wait_time), &child.uri).await {
+                } else if is_time_elapsed(child.faulted_at, wait_duration, &child.uri).await {
                     info!(
                         %child.uri, "Start full rebuild for child,  Wait time has elapsed"
 
@@ -205,20 +205,18 @@ pub(super) async fn faulted_children_remover(
 /// Returns true if time elapsed from child fault time is greater or equal to wait time duration.
 async fn is_time_elapsed(
     fault_time: Option<SystemTime>,
-    wait_time: Option<Duration>,
+    wait_time: Duration,
     uri: &ChildUri,
 ) -> bool {
     if let Some(fault_time) = fault_time {
-        if let Some(wait_time) = wait_time {
-            if let Ok(elapsed) = fault_time.elapsed() {
-                info!(
-                    child.uri = %uri,
-                    "waited {:?} for child to comeback. Wait time is {:?}",
-                    elapsed, wait_time
-                );
-                return elapsed >= wait_time;
-            };
-        }
+        if let Ok(elapsed) = fault_time.elapsed() {
+            info!(
+                child.uri = %uri,
+                "waited {:?} for child to comeback. Wait time is {:?}",
+                elapsed, wait_time
+            );
+            return elapsed >= wait_time;
+        };
     }
     false
 }
