@@ -61,21 +61,15 @@ impl From<PoolStatus> for models::PoolStatus {
 pub struct CtrlPoolState {
     /// The state, mostly as returned by the data-plane.
     state: PoolState,
-    /// Additional metadata added by the control-plane.
-    metadata: PoolStateMetadata,
 }
 impl CtrlPoolState {
     /// Construct a new pool with spec and state.
-    pub fn new(state: PoolState, metadata: PoolStateMetadata) -> Self {
-        Self { state, metadata }
+    pub fn new(state: PoolState) -> Self {
+        Self { state }
     }
     /// Get the pool state.
     pub fn state(&self) -> &PoolState {
         &self.state
-    }
-    /// Get the pool state metadata.
-    pub fn metadata(&self) -> &PoolStateMetadata {
-        &self.metadata
     }
 }
 impl Deref for CtrlPoolState {
@@ -102,25 +96,12 @@ pub struct PoolState {
     pub capacity: u64,
     /// Used bytes from the pool.
     pub used: u64,
-}
-
-/// Pool state metadata information.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct PoolStateMetadata {
     /// Total pool commitment (in bytes) which is basically the accrued size of pool replicas.
-    pub committed: u64,
-}
-impl PoolStateMetadata {
-    /// Returns a new `Self` from the given parameters.
-    pub fn new(committed: u64) -> Self {
-        Self { committed }
-    }
+    pub committed: Option<u64>,
 }
 
 impl From<CtrlPoolState> for models::PoolState {
     fn from(src: CtrlPoolState) -> Self {
-        let metadata = src.metadata;
         let src = src.state;
         Self::new_all(
             src.capacity,
@@ -129,7 +110,7 @@ impl From<CtrlPoolState> for models::PoolState {
             src.node,
             src.status,
             src.used,
-            Some(metadata.committed),
+            src.committed,
         )
     }
 }

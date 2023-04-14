@@ -135,6 +135,7 @@ mod tests {
             status: PoolStatus::Online,
             capacity,
             used,
+            committed: None,
         };
         let replica = Replica::default();
         let pool = PoolWrapper::new(

@@ -416,6 +416,11 @@ impl IoEngineToAgent for v1::pool::Pool {
             capacity: self.capacity,
             used: self.used,
             status: self.state.into(),
+            committed: if self.used > 0 && self.committed == 0 {
+                None
+            } else {
+                Some(self.committed)
+            },
         }
     }
 }
