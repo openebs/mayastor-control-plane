@@ -32,13 +32,16 @@ VOLUME_SIZE = 10485761
 NUM_IO_ENGINES = 3
 NUM_VOLUME_REPLICAS = 2
 REPLICA_CONTEXT_KEY = "replica"
+SLEEP_BEFORE_CHECK = 3
 
 
 # Initialisation function to setup system for test cases.
 # The deployer uses the default parameterisation.
 @pytest.fixture()
 def init():
-    Deployer.start(NUM_IO_ENGINES)
+    Deployer.start(
+        NUM_IO_ENGINES, faulted_child_wait_period="1s", reconcile_period="1s"
+    )
     init_resources()
     yield
     Deployer.stop()
@@ -49,7 +52,12 @@ def init():
 @pytest.fixture()
 def init_parameterised_deployer():
     # Shorten the reconcile periods and cache period to speed up the tests.
-    Deployer.start(NUM_IO_ENGINES, reconcile_period="1s", cache_period="1s")
+    Deployer.start(
+        NUM_IO_ENGINES,
+        reconcile_period="1s",
+        cache_period="1s",
+        faulted_child_wait_period="1s",
+    )
     init_resources()
     yield
     Deployer.stop()
@@ -219,6 +227,7 @@ def the_volume_spec_should_show_1_replica():
 # Wait for the number of runtime volume replicas to reach the expected number of replicas.
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def wait_for_volume_replica_count(expected_num_replicas):
+    time.sleep(SLEEP_BEFORE_CHECK)
     assert num_runtime_volume_replicas() == expected_num_replicas
 
 
