@@ -19,7 +19,6 @@ pub struct Child {
     /// Last faulted timestamp of this child.
     pub faulted_at: Option<SystemTime>,
 }
-
 impl Child {
     /// If if the state reason is lack of space.
     pub fn enospc(&self) -> bool {

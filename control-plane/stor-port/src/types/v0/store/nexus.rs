@@ -110,7 +110,6 @@ pub struct NexusSpec {
     /// Hosts allowed to access the nexus.
     pub allowed_hosts: Vec<HostNqn>,
 }
-
 impl NexusSpec {
     /// Check if the spec contains the provided replica by it's `ReplicaId`.
     pub fn contains_replica(&self, uuid: &ReplicaId) -> bool {
