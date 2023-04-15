@@ -165,12 +165,13 @@ async fn handle_child_rebuild(
     context: &PollContext,
 ) -> Result<(), SvcError> {
     let wait_duration = RuleSet::faulted_child_wait(nexus, context.registry());
-    if wait_duration.is_zero() || child.state_reason == ChildStateReason::RebuildFailed {
-        info!(%child.uri, "Start full rebuild for child");
+    let is_elapsed = is_time_elapsed(child.faulted_at, wait_duration, &child.uri).await;
+    if wait_duration.is_zero()
+        || child.state_reason == ChildStateReason::RebuildFailed
+        || is_elapsed
+    {
+        info!(%child.uri, "Start full rebuild for child, elapsed: {}, child state reason: {:?}", is_elapsed, child.state_reason);
         faulted_children_remover(nexus_spec, &child.uri, context).await?
-    } else if is_time_elapsed(child.faulted_at, wait_duration, &child.uri).await {
-        info!(%child.uri, "Start full rebuild for child,  Wait time has elapsed");
-        faulted_children_remover(nexus_spec, &child.uri, context).await?;
     } else if get_child_replica(nexus_spec.as_ref(), child, context)
         .await
         .is_err()
