@@ -166,7 +166,7 @@ async fn handle_child_rebuild(
     let is_elapsed = is_time_elapsed(child.faulted_at, wait_duration, &child.uri);
     if child.state_reason == ChildStateReason::RebuildFailed || is_elapsed {
         info!(%child.uri, "Start full rebuild for child, elapsed: {}, child state reason: {:?}", is_elapsed.to_string(), child.state_reason);
-        faulted_children_remover(nexus_spec, &child.uri, context).await?
+        faulted_children_remover(nexus_spec, child, context).await?
     } else if get_child_replica(nexus_spec.as_ref(), child, context)
         .await
         .is_ok()
@@ -174,7 +174,7 @@ async fn handle_child_rebuild(
         info!(%child.uri, "Child's Replica is Online within the partial rebuild window");
         if let Err(error) = initialize_partial_rebuild(nexus_spec, &child.uri, context).await {
             info!(%child.uri, "Initializing Full rebuild as online child attempt failed for child, failed with : {:?}", error);
-            faulted_children_remover(nexus_spec, &child.uri, context).await?
+            faulted_children_remover(nexus_spec, child, context).await?
         }
     } else {
         info!(%child.uri, "Child's Replica is not online yet");
@@ -186,18 +186,22 @@ async fn handle_child_rebuild(
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 pub(super) async fn faulted_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
-    child: &ChildUri,
+    child: &Child,
     context: &PollContext,
 ) -> Result<(), SvcError> {
     let nexus_uuid = nexus.uuid();
     let nexus_state = context.registry().nexus(nexus_uuid).await?;
-
-    info!(%child, "Attempting to remove faulted child");
+    let nexus_spec_clone = nexus.lock().clone();
+    nexus_spec_clone.warn_span(|| {
+        tracing::warn!(%child.uri, %child.state, %child.state_reason, "Attempting to remove faulted child")
+    });
     nexus
-        .remove_child_by_uri(context.registry(), &nexus_state, child, true)
+        .remove_child_by_uri(context.registry(), &nexus_state, &child.uri, true)
         .await?;
 
-    info!(%child ,"Successfully removed faulted child");
+    nexus_spec_clone.warn_span(|| {
+        tracing::warn!(%child.uri, %child.state, %child.state_reason, "Successfully removed faulted child")
+    });
     Ok(())
 }
 
