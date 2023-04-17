@@ -147,9 +147,7 @@ pub(super) async fn handle_faulted_children(
     let child_count = nexus_state.children.len();
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
         for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
-            if child.state_reason != ChildStateReason::NoSpace {
-                let _ = handle_child_rebuild(nexus, child, &nexus_state, context).await;
-            }
+            let _ = handle_child_rebuild(nexus, child, &nexus_state, context).await;
         }
     }
     Ok(PollerState::Idle)
