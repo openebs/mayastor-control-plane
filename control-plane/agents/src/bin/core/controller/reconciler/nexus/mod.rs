@@ -221,7 +221,7 @@ fn is_time_elapsed(
                 elapsed, wait_duration
             );
             return elapsed >= wait_duration;
-        };
+        }
     }
     false
 }
