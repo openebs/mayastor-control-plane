@@ -38,7 +38,9 @@ REPLICA_CONTEXT_KEY = "replica"
 # The deployer uses the default parameterisation.
 @pytest.fixture()
 def init():
-    Deployer.start(NUM_IO_ENGINES)
+    Deployer.start(
+        NUM_IO_ENGINES, faulted_child_wait_period="1s", reconcile_period="1s"
+    )
     init_resources()
     yield
     Deployer.stop()
@@ -49,7 +51,12 @@ def init():
 @pytest.fixture()
 def init_parameterised_deployer():
     # Shorten the reconcile periods and cache period to speed up the tests.
-    Deployer.start(NUM_IO_ENGINES, reconcile_period="1s", cache_period="1s")
+    Deployer.start(
+        NUM_IO_ENGINES,
+        reconcile_period="1s",
+        cache_period="1s",
+        faulted_child_wait_period="1s",
+    )
     init_resources()
     yield
     Deployer.stop()
