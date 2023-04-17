@@ -17,7 +17,7 @@ fn build_key_prefix(cluster_uid: &dyn platform::PlatformInfo) -> String {
 
 /// Returns the control plane prefix that is used for the keys, in conjunction
 /// with a `StorableObjectType` type.
-pub(crate) fn key_prefix_obj<K: AsRef<str>>(key_type: K) -> String {
+pub fn key_prefix_obj<K: AsRef<str>>(key_type: K) -> String {
     format!("{}/{}", key_prefix(), key_type.as_ref())
 }
 
