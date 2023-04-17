@@ -136,7 +136,7 @@ async fn nexus_reconciler(
 }
 
 /// Checks if nexus is Degraded and any child is Faulted. If yes, Depending on rebuild policy for
-/// child it performs rebuild operation. We exclude NoSpace Degrade.
+/// child it performs rebuild operation.
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 pub(super) async fn handle_faulted_children(
     nexus: &mut OperationGuardArc<NexusSpec>,
