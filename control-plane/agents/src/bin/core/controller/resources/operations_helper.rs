@@ -2,8 +2,9 @@ use super::{
     super::registry::Registry, resource_map::ResourceMap, OperationGuardArc, ResourceMutex,
     ResourceUid, UpdateInnerValue,
 };
-use crate::controller::task_poller::PollTriggerEvent;
-
+use crate::controller::{
+    resources::migration::migrate_product_v1_to_v2, task_poller::PollTriggerEvent,
+};
 use agents::errors::SvcError;
 use stor_port::{
     transport_api::ResourceKind,
@@ -30,7 +31,7 @@ use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 use stor_port::{
-    pstor::{migrate_product_v1_to_v2, product_v1_key_prefix, API_VERSION},
+    pstor::{product_v1_key_prefix, API_VERSION},
     transport_api::ErrorChain,
 };
 
