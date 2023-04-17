@@ -163,7 +163,7 @@ async fn handle_child_rebuild(
     context: &PollContext,
 ) -> Result<(), SvcError> {
     let wait_duration = RuleSet::faulted_child_wait(nexus, context.registry());
-    let is_elapsed = is_time_elapsed(child.faulted_at, wait_duration, &child.uri);
+    let is_elapsed = wait_duration_elapsed(child.faulted_at, wait_duration, &child.uri);
     if child.state_reason == ChildStateReason::RebuildFailed || is_elapsed {
         info!(%child.uri, "Start full rebuild for child, elapsed: {}, child state reason: {:?}", is_elapsed.to_string(), child.state_reason);
         faulted_children_remover(nexus_spec, child, context).await?
@@ -172,7 +172,7 @@ async fn handle_child_rebuild(
         .is_ok()
     {
         info!(%child.uri, "Child's Replica is Online within the partial rebuild window");
-        if let Err(error) = initialize_partial_rebuild(nexus_spec, &child.uri, context).await {
+        if let Err(error) = online_nexus_child(nexus_spec, &child.uri, context).await {
             info!(%child.uri, "Initializing Full rebuild as online child attempt failed for child, failed with : {:?}", error);
             faulted_children_remover(nexus_spec, child, context).await?
         }
@@ -191,7 +191,7 @@ pub(super) async fn faulted_children_remover(
 ) -> Result<(), SvcError> {
     let nexus_uuid = nexus.uuid();
     let nexus_state = context.registry().nexus(nexus_uuid).await?;
-    let nexus_spec_clone = nexus.lock().clone();
+    let nexus_spec_clone = nexus.as_ref().clone();
     nexus_spec_clone.warn_span(|| {
         tracing::warn!(%child.uri, %child.state, %child.state_reason, "Attempting to remove faulted child")
     });
@@ -206,7 +206,7 @@ pub(super) async fn faulted_children_remover(
 }
 
 /// Returns true if time elapsed from child fault time is greater or equal to wait time duration.
-fn is_time_elapsed(
+fn wait_duration_elapsed(
     fault_time: Option<SystemTime>,
     wait_duration: Duration,
     uri: &ChildUri,
@@ -239,7 +239,7 @@ async fn get_child_replica(
 }
 
 /// Tries to mark child as Online. Returns error on failing to do so.
-pub(super) async fn initialize_partial_rebuild(
+pub(super) async fn online_nexus_child(
     nexus: &mut OperationGuardArc<NexusSpec>,
     child: &ChildUri,
     context: &PollContext,
@@ -252,7 +252,7 @@ pub(super) async fn initialize_partial_rebuild(
     // TODO: Check if we can handle things differently for different SvcError.
     node.online_child(ctx).await?;
     info!(
-        %child, "Successfully made child online in nexus :{:?}", nexus
+        %child, "Successfully made child online in nexus :{:?}", nexus.uuid()
     );
     Ok(())
 }
