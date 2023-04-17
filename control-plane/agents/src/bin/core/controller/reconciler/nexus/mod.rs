@@ -155,6 +155,7 @@ pub(super) async fn handle_faulted_children(
 
 /// Checks rebuild policy for the child. Depending on the policy performs the either waits for
 /// child to comeback for specified duration or does Full rebuild straightaway.
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid, request.reconcile = true))]
 async fn handle_child_rebuild(
     nexus_spec: &mut OperationGuardArc<NexusSpec>,
     child: &Child,
