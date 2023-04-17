@@ -38,8 +38,7 @@ use stor_port::{
         },
         transport::{
             Child, ChildStateReason, ChildUri, CreateNexus, Nexus, NexusChildActionContext,
-            NexusId, NexusShareProtocol, NexusStatus, NodeStatus, Replica, ShareNexus,
-            UnshareNexus,
+            NexusShareProtocol, NexusStatus, NodeStatus, Replica, ShareNexus, UnshareNexus,
         },
     },
 };
@@ -165,24 +164,26 @@ async fn handle_child_rebuild(
     context: &PollContext,
 ) -> Result<(), SvcError> {
     let wait_duration = RuleSet::faulted_child_wait(nexus, context.registry());
-    let is_elapsed = is_time_elapsed(child.faulted_at, wait_duration, &child.uri).await;
+    let is_elapsed = is_time_elapsed(child.faulted_at, wait_duration, &child.uri);
     if wait_duration.is_zero()
         || child.state_reason == ChildStateReason::RebuildFailed
         || is_elapsed
     {
-        info!(%child.uri, "Start full rebuild for child, elapsed: {}, child state reason: {:?}", is_elapsed, child.state_reason);
+        info!(%child.uri, "Start full rebuild for child, elapsed: {}, child state reason: {:?}", is_elapsed.to_string(), child.state_reason);
         faulted_children_remover(nexus_spec, &child.uri, context).await?
-    } else if get_child_replica(nexus_spec.as_ref(), child, context)
+    }
+
+    if get_child_replica(nexus_spec.as_ref(), child, context)
         .await
-        .is_err()
+        .is_ok()
     {
-        info!(%child.uri,"Replica is still not online for child");
-    } else {
-        info!(%child.uri, "Replica for child is Online, starting partial rebuild");
-        if let Err(error) = initialize_partial_rebuild(&nexus.uuid, &child.uri, context).await {
-            info!(%child.uri, "Initializing Full rebuild as partial rebuild failed for child, failed with : {:?}", error);
+        info!(%child.uri, "Child's Replica is Online within the partial rebuild window");
+        if let Err(error) = initialize_partial_rebuild(nexus_spec, &child.uri, context).await {
+            info!(%child.uri, "Initializing Full rebuild as online child attempt failed for child, failed with : {:?}", error);
             faulted_children_remover(nexus_spec, &child.uri, context).await?
         }
+    } else {
+        info!(%child.uri, "Child's Replica is not online yet");
     }
     Ok(())
 }
@@ -207,7 +208,7 @@ pub(super) async fn faulted_children_remover(
 }
 
 /// Returns true if time elapsed from child fault time is greater or equal to wait time duration.
-async fn is_time_elapsed(
+fn is_time_elapsed(
     fault_time: Option<SystemTime>,
     wait_duration: Duration,
     uri: &ChildUri,
@@ -232,37 +233,23 @@ async fn get_child_replica(
     child: &Child,
     context: &PollContext,
 ) -> Result<Replica, SvcError> {
-    for nexus_child in nexus.children.iter() {
-        if let Some(replica) = nexus_child.as_replica() {
-            if replica.uri() == &child.uri {
-                return if let Ok(replica) = context.registry().replica(replica.uuid()).await {
-                    Ok(replica)
-                } else {
-                    Err(SvcError::ReplicaNotFound {
-                        replica_id: replica.uuid().clone(),
-                    })
-                };
-            } else {
-                continue;
-            }
-        }
-    }
-    Err(SvcError::NotFound {
-        kind: ResourceKind::Node,
+    let replica_uri = nexus.replica_uri(&child.uri).ok_or(SvcError::NotFound {
+        kind: ResourceKind::Replica,
         id: "Child replica not found".to_string(),
-    })
+    })?;
+    context.registry().replica(replica_uri.uuid()).await
 }
 
 /// Tries to mark child as Online. Returns error on failing to do so.
 pub(super) async fn initialize_partial_rebuild(
-    nexus: &NexusId,
+    nexus: &mut OperationGuardArc<NexusSpec>,
     child: &ChildUri,
     context: &PollContext,
 ) -> Result<(), SvcError> {
-    let nexus_state = context.registry().nexus(nexus).await?;
+    let nexus_node = &nexus.as_ref().node;
     info!(%child, "Making online of {:?} nexus", nexus);
-    let node = context.registry().node_wrapper(&nexus_state.node).await?;
-    let online_context = NexusChildActionContext::new(&nexus_state.node, &nexus.clone(), child);
+    let node = context.registry().node_wrapper(nexus_node).await?;
+    let online_context = NexusChildActionContext::new(nexus_node, nexus.uuid(), child);
     let ctx = NexusChildActionContextNode::new(online_context, context.registry());
     // TODO: Check if we can handle things differently for different SvcError.
     node.online_child(ctx).await?;
