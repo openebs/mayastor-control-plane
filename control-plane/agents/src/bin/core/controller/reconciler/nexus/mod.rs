@@ -245,7 +245,6 @@ pub(super) async fn online_nexus_child(
     context: &PollContext,
 ) -> Result<(), SvcError> {
     let nexus_node = &nexus.as_ref().node;
-    info!(%child, "Making online of {:?} nexus", nexus);
     let node = context.registry().node_wrapper(nexus_node).await?;
     let online_context = NexusChildActionContext::new(nexus_node, nexus.uuid(), child);
     let ctx = NexusChildActionContextNode::new(online_context, context.registry());
