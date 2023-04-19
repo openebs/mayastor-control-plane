@@ -25,6 +25,7 @@ use agents::{
     errors::{NotEnough, SvcError, SvcError::VolumeNotFound},
 };
 use grpc::operations::{PaginatedResult, Pagination};
+use std::collections::HashMap;
 
 use stor_port::{
     transport_api::ResourceKind,
@@ -46,6 +47,7 @@ use stor_port::{
 
 use snafu::OptionExt;
 use std::convert::From;
+use stor_port::types::v0::store::volume::VolumeGroupId;
 
 /// CreateReplicaCandidate for volume and volume group.
 pub(crate) struct CreateReplicaCandidate {
@@ -357,6 +359,23 @@ impl ResourceSpecsLocked {
         }
     }
 
+    /// Get the VolumeGroupSpec for the given volume group id.
+    pub(crate) fn volume_group_spec(
+        &self,
+        id: &VolumeGroupId,
+    ) -> Result<VolumeGroupSpec, SvcError> {
+        let specs = self.read();
+        match specs.volume_groups.get(id) {
+            None => Err(SvcError::VolumeGroupNotFound {
+                vol_grp_id: id.to_string(),
+            }),
+            Some(vol_grp) => {
+                let spec = vol_grp.lock();
+                Ok(spec.clone())
+            }
+        }
+    }
+
     /// Gets a copy of all VolumeSpec's
     pub(crate) fn volumes(&self) -> Vec<VolumeSpec> {
         let specs = self.read();
@@ -588,6 +607,27 @@ impl ResourceSpecsLocked {
             }
         }
         pending_ops
+    }
+
+    /// Get the list of nodes where the replicas of the volume are currently placed.
+    pub(crate) fn get_volume_replica_nodes(
+        &self,
+        registry: &Registry,
+        volume_id: &VolumeId,
+    ) -> Vec<NodeId> {
+        // Map of pool id to the node id.
+        let mut pool_node_map: HashMap<PoolId, NodeId> = HashMap::new();
+        // Fetch all pools and create the map.
+        for pool in registry.specs().pools() {
+            pool_node_map.insert(pool.id, pool.node);
+        }
+        // Map the replica's pool to the node and return the list of nodes.
+        registry
+            .specs()
+            .volume_replicas(volume_id)
+            .iter()
+            .filter_map(|replica| pool_node_map.get(replica.lock().pool_name()).cloned())
+            .collect()
     }
 }
 

@@ -100,6 +100,8 @@ pub enum SvcError {
     ChildAlreadyExists { nexus: String, child: String },
     #[snafu(display("Volume '{}' not found", vol_id))]
     VolumeNotFound { vol_id: String },
+    #[snafu(display("Volume Group '{}' not found", vol_grp_id))]
+    VolumeGroupNotFound { vol_grp_id: String },
     #[snafu(display("Volume '{}' not published", vol_id))]
     VolumeNotPublished { vol_id: String },
     #[snafu(display("Node '{}' not allowed to access target for volume '{}'", node, vol_id))]
@@ -737,6 +739,12 @@ impl From<SvcError> for ReplyError {
                 resource,
                 source: desc.to_string(),
                 extra: error_str,
+            },
+            SvcError::VolumeGroupNotFound { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::VolumeGroup,
+                source: desc.to_string(),
+                extra: error.full_string(),
             },
         }
     }

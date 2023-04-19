@@ -82,12 +82,3 @@ impl PoolBaseFilters {
         }
     }
 }
-
-/// Sort the pools used for replica creation.
-pub(crate) struct PoolBaseSorters {}
-impl PoolBaseSorters {
-    /// Sort pools by their number of allocated replicas.
-    pub(crate) fn sort_by_replica_count(a: &PoolItem, b: &PoolItem) -> std::cmp::Ordering {
-        a.pool.cmp(&b.pool)
-    }
-}

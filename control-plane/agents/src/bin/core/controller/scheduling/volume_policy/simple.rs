@@ -4,13 +4,14 @@ use crate::{
         scheduling::{
             resources::PoolItem,
             volume::{AddVolumeReplica, GetSuitablePoolsContext},
-            volume_policy::{pool::PoolBaseFilters, DefaultBasePolicy},
-            ResourceFilter, ResourcePolicy,
+            volume_policy::{pool::PoolBaseFilters, volume_group, DefaultBasePolicy},
+            ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
         },
     },
     ThinArgs,
 };
-use weighted_scoring::{Criteria, Ranged, ValueGrading, WeightedScore};
+use std::cmp::Ordering;
+use weighted_scoring::{Criteria, Ranged, ValueGrading};
 
 /// A very simple policy for pool replica placement that takes into account thin provisioning
 /// and currently allocated bytes.
@@ -23,6 +24,7 @@ pub(crate) struct SimplePolicy {
 }
 
 impl SimplePolicy {
+    /// Create a new simple policy.
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             no_state_min_free_space_percent: 100,
@@ -35,46 +37,94 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
     fn apply(self, to: AddVolumeReplica) -> AddVolumeReplica {
         DefaultBasePolicy::filter(to)
             .filter(PoolBaseFilters::min_free_space)
+            .filter(volume_group::SingleReplicaPolicy::replica_anti_affinity)
             .filter_param(&self, SimplePolicy::min_free_space)
             .filter_param(&self, SimplePolicy::pool_overcommit)
-            // sort pools in order of preference (from least to most number of replicas)
-            .sort(SimplePolicy::sort_by_weights)
+            // sort pools in order of total weight of certain field values.
+            .sort_ctx(SimplePolicy::sort_by_weights)
     }
 }
 
+const TOTAL_REPLICA_COUNT_WEIGHT: Ranged = Ranged::new_const(25);
+const FREE_SPACE_WEIGHT: Ranged = Ranged::new_const(40);
+const OVER_COMMIT_WEIGHT: Ranged = Ranged::new_const(35);
+// Only for volume group multiple replica case.
+const VG_TOTAL_REPLICA_COUNT_WEIGHT: Ranged = Ranged::new_const(15);
+const VG_REPL_COUNT_WEIGHT: Ranged = Ranged::new_const(10);
+
 impl SimplePolicy {
+    /// SortCriteria for free space on pool.
+    fn free_space() -> SortCriteria {
+        SortCriteria::new(
+            Criteria::new("free_space", FREE_SPACE_WEIGHT),
+            ValueGrading::Higher,
+            |pool_item| pool_item.pool().free_space().into(),
+        )
+    }
+    /// SortCriteria for number of volume group replicas on pool only for volume group.
+    fn vg_replica_count() -> SortCriteria {
+        SortCriteria::new(
+            Criteria::new("vg_replica_count", VG_REPL_COUNT_WEIGHT),
+            ValueGrading::Lower,
+            |pool_item| pool_item.vg_replica_count().into(),
+        )
+    }
+    /// SortCriteria for number of total replicas on pool only for volume group.
+    fn vg_total_replica_count() -> SortCriteria {
+        SortCriteria::new(
+            Criteria::new("vg_total_replica_count", VG_TOTAL_REPLICA_COUNT_WEIGHT),
+            ValueGrading::Lower,
+            |pool_item| pool_item.len().into(),
+        )
+    }
+    /// SortCriteria for number of total replicas on pool.
+    fn non_vg_total_replica_count() -> SortCriteria {
+        SortCriteria::new(
+            Criteria::new("non_vg_total_replica_count", TOTAL_REPLICA_COUNT_WEIGHT),
+            ValueGrading::Lower,
+            |item| item.len().into(),
+        )
+    }
+    /// SortCriteria for over commitment on pool.
+    fn over_commitment() -> SortCriteria {
+        SortCriteria::new(
+            Criteria::new("over_commitment", OVER_COMMIT_WEIGHT),
+            ValueGrading::Lower,
+            |item| item.pool().over_commitment().into(),
+        )
+    }
     /// Sort pools using weights between:
-    /// 1. number of replicas (N_REPL_WEIGHT %)
+    /// 1. number of replicas or number of replicas of a vg (N_REPL_WEIGHT %)
     /// 2. free space         (FREE_SPACE_WEIGHT %)
     /// 3. overcommitment     (OVER_COMMIT_WEIGHT %)
-    pub(crate) fn sort_by_weights(a: &PoolItem, b: &PoolItem) -> std::cmp::Ordering {
-        const N_REPL_WEIGHT: Ranged = Ranged::new_const(25);
-        const FREE_SPACE_WEIGHT: Ranged = Ranged::new_const(40);
-        const OVER_COMMIT_WEIGHT: Ranged = Ranged::new_const(35);
-
-        let n_replicas = Criteria::new("n_replicas", N_REPL_WEIGHT);
-        let free_space = Criteria::new("free_space", FREE_SPACE_WEIGHT);
-        let over_commit = Criteria::new("over_commit", OVER_COMMIT_WEIGHT);
-
-        let (score_a, score_b) = WeightedScore::dual_values()
-            .weigh(n_replicas, ValueGrading::Lower, a.len(), b.len())
-            .weigh(
-                free_space,
-                ValueGrading::Higher,
-                a.pool().free_space(),
-                b.pool().free_space(),
-            )
-            .weigh(
-                over_commit,
-                ValueGrading::Lower,
-                a.pool().over_commitment(),
-                b.pool().over_commitment(),
-            )
-            .score()
-            .unwrap();
-
-        score_b.cmp(&score_a)
+    pub(crate) fn sort_by_weights(
+        request: &GetSuitablePoolsContext,
+        a: &PoolItem,
+        b: &PoolItem,
+    ) -> std::cmp::Ordering {
+        match a.pool.state().status.partial_cmp(&b.pool().state().status) {
+            Some(Ordering::Greater) => Ordering::Greater,
+            Some(Ordering::Less) => Ordering::Less,
+            None | Some(Ordering::Equal) => {
+                let builder = SortBuilder::new();
+                if request.volume_group.is_some() && request.num_replicas > 1 {
+                    if a.vg_replica_count.is_none() && b.vg_replica_count.is_none() {
+                        builder.with_criteria(SimplePolicy::non_vg_total_replica_count)
+                    } else {
+                        builder
+                            .with_criteria(SimplePolicy::vg_replica_count)
+                            .with_criteria(SimplePolicy::vg_total_replica_count)
+                    }
+                } else {
+                    builder.with_criteria(SimplePolicy::non_vg_total_replica_count)
+                }
+                .with_criteria(SimplePolicy::free_space)
+                .with_criteria(SimplePolicy::over_commitment)
+                .compare(a, b)
+            }
+        }
     }
+
     /// Minimum free space is the currently allocated usage plus some percentage of volume size
     /// slack.
     fn min_free_space(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
@@ -106,13 +156,15 @@ impl SimplePolicy {
 #[cfg(test)]
 mod tests {
     use crate::{
-        controller::scheduling::{resources::PoolItem, volume_policy::SimplePolicy},
+        controller::scheduling::{resources::PoolItem, volume_policy::SimplePolicy, SortBuilder},
         node::wrapper::NodeWrapper,
         pool::wrapper::PoolWrapper,
     };
+    use std::{
+        cmp::Ordering,
+        net::{IpAddr, Ipv4Addr},
+    };
     use stor_port::types::v0::transport::{NodeState, NodeStatus, PoolState, PoolStatus, Replica};
-
-    use std::net::{IpAddr, Ipv4Addr};
 
     fn make_node(name: &str) -> NodeWrapper {
         let state = NodeState::new(
@@ -124,7 +176,13 @@ mod tests {
         );
         NodeWrapper::new_stub(&state)
     }
-    fn make_pool(node: &str, pool: &str, free_space: u64, replicas: usize) -> PoolItem {
+    fn make_pool(
+        node: &str,
+        pool: &str,
+        free_space: u64,
+        replicas: usize,
+        vg_replica_count: Option<u64>,
+    ) -> PoolItem {
         let node_state = make_node(node);
         let used = 0; //10 * 1024 * 1024 * 1024;
         let capacity = free_space + used;
@@ -146,50 +204,101 @@ mod tests {
                 .take(replicas)
                 .collect::<Vec<_>>(),
         );
-        PoolItem::new(node_state, pool)
+        PoolItem::new(node_state, pool, vg_replica_count)
+    }
+    fn vg_sort_comparator(a: &PoolItem, b: &PoolItem) -> Ordering {
+        let builder = SortBuilder::new();
+        if a.vg_replica_count.is_none() && b.vg_replica_count.is_none() {
+            builder.with_criteria(SimplePolicy::non_vg_total_replica_count)
+        } else {
+            builder
+                .with_criteria(SimplePolicy::vg_replica_count)
+                .with_criteria(SimplePolicy::vg_total_replica_count)
+        }
+        .with_criteria(SimplePolicy::free_space)
+        .with_criteria(SimplePolicy::over_commitment)
+        .compare(a, b)
     }
     #[test]
     fn sort_by_weights() {
         let gig = 1024 * 1024 * 1024;
+
+        let sort_builder = SortBuilder::new()
+            .with_criteria(SimplePolicy::non_vg_total_replica_count)
+            .with_criteria(SimplePolicy::free_space)
+            .with_criteria(SimplePolicy::over_commitment);
+
         let mut pools = vec![
-            make_pool("1", "1", gig, 0),
-            make_pool("1", "2", gig * 2, 0),
-            make_pool("2", "3", gig, 1),
+            make_pool("1", "1", gig, 0, None),
+            make_pool("1", "2", gig * 2, 0, None),
+            make_pool("2", "3", gig, 1, None),
         ];
-        pools.sort_by(SimplePolicy::sort_by_weights);
+        pools.sort_by(|a, b| sort_builder.compare(a, b));
 
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["2", "1", "3"]);
 
         let mut pools = vec![
-            make_pool("1", "1", gig * 3, 0),
-            make_pool("1", "2", gig * 2, 0),
-            make_pool("2", "3", gig, 1),
+            make_pool("1", "1", gig * 3, 0, None),
+            make_pool("1", "2", gig * 2, 0, None),
+            make_pool("2", "3", gig, 1, None),
         ];
-        pools.sort_by(SimplePolicy::sort_by_weights);
+        pools.sort_by(|a, b| sort_builder.compare(a, b));
 
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["1", "2", "3"]);
 
         let mut pools = vec![
-            make_pool("1", "1", gig * 3, 400),
-            make_pool("1", "2", gig * 2, 0),
-            make_pool("2", "3", gig, 1),
+            make_pool("1", "1", gig * 3, 400, None),
+            make_pool("1", "2", gig * 2, 0, None),
+            make_pool("2", "3", gig, 1, None),
         ];
-        pools.sort_by(SimplePolicy::sort_by_weights);
+        pools.sort_by(|a, b| sort_builder.compare(a, b));
 
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["2", "3", "1"]);
 
         let mut pools = vec![
-            make_pool("1", "1", gig * 50, 100),
-            make_pool("1", "2", gig * 2, 0),
-            make_pool("2", "3", gig, 1),
+            make_pool("1", "1", gig * 50, 100, None),
+            make_pool("1", "2", gig * 2, 0, None),
+            make_pool("2", "3", gig, 1, None),
         ];
-        pools.sort_by(SimplePolicy::sort_by_weights);
+        pools.sort_by(|a, b| sort_builder.compare(a, b));
 
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["1", "2", "3"]);
+
+        let mut pools = vec![
+            make_pool("1", "pool-1", gig, 500, None),
+            make_pool("2", "pool-2", gig, 20, None),
+            make_pool("3", "pool-3", gig, 500, Some(2)),
+            make_pool("3", "pool-4", gig, 549, Some(4)),
+            make_pool("3", "pool-5", gig, 550, Some(2)),
+            make_pool("3", "pool-6", gig, 549, Some(2)),
+        ];
+
+        pools.sort_by(vg_sort_comparator);
+        let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(
+            pool_names,
+            vec!["pool-2", "pool-1", "pool-3", "pool-6", "pool-5", "pool-4"]
+        );
+
+        let mut pools = vec![
+            make_pool("1", "pool-1", gig, 500, None),
+            make_pool("2", "pool-2", gig * 2, 20, None),
+            make_pool("3", "pool-3", gig, 500, Some(2)),
+            make_pool("3", "pool-4", gig * 10, 549, Some(4)),
+            make_pool("3", "pool-5", gig * 2, 550, Some(2)),
+            make_pool("3", "pool-6", gig, 549, Some(2)),
+        ];
+
+        pools.sort_by(vg_sort_comparator);
+        let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(
+            pool_names,
+            vec!["pool-4", "pool-2", "pool-5", "pool-1", "pool-3", "pool-6"]
+        );
 
         // todo: add more tests before merge
     }

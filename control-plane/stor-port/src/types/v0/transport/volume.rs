@@ -426,13 +426,13 @@ impl VolumeGroup {
 
 impl From<VolumeGroup> for models::VolumeGroup {
     fn from(value: VolumeGroup) -> Self {
-        Self { name: value.id }
+        Self { id: value.id }
     }
 }
 
 impl From<models::VolumeGroup> for VolumeGroup {
     fn from(value: models::VolumeGroup) -> Self {
-        Self { id: value.name }
+        Self { id: value.id }
     }
 }
 
