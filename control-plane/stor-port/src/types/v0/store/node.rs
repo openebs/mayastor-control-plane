@@ -3,13 +3,13 @@ use crate::{
     types::v0::{
         openapi::models,
         store::definitions::{ObjectKey, StorableObject, StorableObjectType},
-        transport::{self, HostNqn, NodeId},
+        transport::{self, HostNqn, NodeId, VolumeId},
     },
     IntoOption,
 };
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, time::SystemTime};
 
 /// Generic labels associated with the node.
 pub type NodeLabels = HashMap<String, String>;
@@ -154,6 +154,10 @@ pub struct NodeSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     node_nqn: Option<HostNqn>,
+    #[serde(default)] // Ensure backwards compatibility.
+    draining_volumes: Vec<VolumeId>,
+    #[serde(default, skip)] // Ensure backwards compatibility and do not store.
+    draining_timestamp: Option<SystemTime>,
 }
 
 impl NodeSpec {
@@ -171,6 +175,8 @@ impl NodeSpec {
             labels,
             cordon_drain_state,
             node_nqn,
+            draining_volumes: Vec::new(),
+            draining_timestamp: None,
         }
     }
     /// Node Nvme HOSTNQN.
@@ -251,7 +257,7 @@ impl NodeSpec {
                 CordonDrainState::Cordoned(state) => {
                     // set state to draining and add label
                     self.cordon_drain_state =
-                        Some(CordonDrainState::Draining(state.into_drain(&label)))
+                        Some(CordonDrainState::Draining(state.into_drain(&label)));
                 }
                 CordonDrainState::Draining(state) => {
                     // add the label
@@ -342,6 +348,50 @@ impl NodeSpec {
             Some(ds) => ds.is_drained(),
             None => false,
         }
+    }
+
+    /// Add the draining volume to the node spec for checking shutdown nexuses.
+    pub fn add_draining_volume(&mut self, volume_id: &VolumeId) {
+        self.draining_volumes.push(volume_id.clone());
+        if self.draining_timestamp.is_none() {
+            self.draining_timestamp = Some(SystemTime::now())
+        }
+    }
+
+    /// Get the vector of draining volumes on this node.
+    pub fn get_draining_volumes(&self) -> Vec<VolumeId> {
+        self.draining_volumes.clone()
+    }
+
+    /// Get the vector of draining volumes on this node.
+    pub fn get_draining_volume_count(&self) -> usize {
+        self.draining_volumes.len()
+    }
+
+    /// Remove the given volume from the vector on this node.
+    pub fn remove_draining_volume(&mut self, volume_id: &VolumeId) {
+        self.draining_volumes.retain(|k| k != volume_id);
+        if self.draining_volumes.is_empty() {
+            self.draining_timestamp = None;
+        }
+    }
+
+    /// Remove all volumes from the vector on this node.
+    pub fn remove_draining_volumes(&mut self) {
+        self.draining_volumes.clear();
+        self.draining_timestamp = None;
+    }
+
+    /// Get the draining timestamp on this node.
+    pub fn set_draining_timestamp_if_none(&mut self) {
+        if self.draining_timestamp.is_none() {
+            self.draining_timestamp = Some(SystemTime::now())
+        }
+    }
+
+    /// Get the draining timestamp on this node.
+    pub fn get_draining_timestamp(&self) -> Option<SystemTime> {
+        self.draining_timestamp
     }
 }
 

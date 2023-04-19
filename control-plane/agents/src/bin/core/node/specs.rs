@@ -2,13 +2,15 @@ use agents::errors::{NodeNotFound, SvcError};
 use snafu::OptionExt;
 use stor_port::types::v0::{
     store::node::{NodeLabels, NodeSpec},
-    transport::{NodeId, Register},
+    transport::{NodeId, Register, VolumeId},
 };
 
 use crate::controller::{
     registry::Registry,
     resources::{operations_helper::ResourceSpecsLocked, ResourceMutex},
 };
+
+use std::time::SystemTime;
 
 impl ResourceSpecsLocked {
     /// Create a node spec for the register request
@@ -182,5 +184,95 @@ impl ResourceSpecsLocked {
         };
         registry.store_obj(&drained_node_spec).await?;
         Ok(drained_node_spec)
+    }
+
+    /// Add the draining volume to the node spec for checking shutdown nexuses.
+    pub(crate) async fn add_node_draining_volume(
+        &self,
+        registry: &Registry,
+        node_id: &NodeId,
+        volume_id: &VolumeId,
+    ) -> Result<NodeSpec, SvcError> {
+        let node = self.node_rsc(node_id)?;
+        let drained_node_spec = {
+            let mut locked_node = node.lock();
+            locked_node.add_draining_volume(volume_id);
+            locked_node.clone()
+        };
+        registry.store_obj(&drained_node_spec).await?;
+        Ok(drained_node_spec)
+    }
+
+    /// Get the vector of draining volumes on this node.
+    pub(crate) async fn get_node_draining_volumes(
+        &self,
+        node_id: &NodeId,
+    ) -> Result<Vec<VolumeId>, SvcError> {
+        let node = self.node_rsc(node_id)?;
+        let locked_node = node.lock().clone();
+        Ok(locked_node.get_draining_volumes())
+    }
+
+    /// Get the vector of draining volumes on this node.
+    pub(crate) async fn get_node_draining_volume_count(
+        &self,
+        node_id: &NodeId,
+    ) -> Result<usize, SvcError> {
+        let node = self.node_rsc(node_id)?;
+        let locked_node = node.lock().clone();
+        Ok(locked_node.get_draining_volume_count())
+    }
+
+    /// Remove the given volume from the vector on this node.
+    pub(crate) async fn remove_node_draining_volume(
+        &self,
+        registry: &Registry,
+        node_id: &NodeId,
+        volume_id: &VolumeId,
+    ) -> Result<NodeSpec, SvcError> {
+        let node = self.node_rsc(node_id)?;
+        let drained_node_spec = {
+            let mut locked_node = node.lock();
+            locked_node.remove_draining_volume(volume_id);
+            locked_node.clone()
+        };
+        registry.store_obj(&drained_node_spec).await?;
+        Ok(drained_node_spec)
+    }
+    /// Remove all volumes from the vector on this node.
+    pub(crate) async fn remove_node_draining_volumes(
+        &self,
+        registry: &Registry,
+        node_id: &NodeId,
+    ) -> Result<NodeSpec, SvcError> {
+        let node = self.node_rsc(node_id)?;
+        let drained_node_spec = {
+            let mut locked_node = node.lock();
+            locked_node.remove_draining_volumes();
+            locked_node.clone()
+        };
+        registry.store_obj(&drained_node_spec).await?;
+        Ok(drained_node_spec)
+    }
+
+    /// Set the draining timestamp on this node.
+    pub(crate) async fn set_draining_timestamp_if_none(
+        &self,
+        node_id: &NodeId,
+    ) -> Result<(), SvcError> {
+        let node = self.node_rsc(node_id)?;
+        let mut locked_node = node.lock().clone();
+        locked_node.set_draining_timestamp_if_none();
+        Ok(())
+    }
+
+    /// Get the draining timestamp on this node.
+    pub(crate) async fn get_node_draining_timestamp(
+        &self,
+        node_id: &NodeId,
+    ) -> Result<Option<SystemTime>, SvcError> {
+        let node = self.node_rsc(node_id)?;
+        let locked_node = node.lock().clone();
+        Ok(locked_node.get_draining_timestamp())
     }
 }
