@@ -2,6 +2,7 @@ pub(crate) mod nexus;
 pub(crate) mod pool;
 pub(crate) mod resources;
 pub(crate) mod volume;
+pub(crate) mod volume_group;
 mod volume_policy;
 
 use crate::controller::scheduling::{
@@ -9,8 +10,8 @@ use crate::controller::scheduling::{
     resources::{ChildItem, NodeItem, PoolItem, ReplicaItem},
     volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
 };
-
 use std::{cmp::Ordering, collections::HashMap, future::Future};
+use weighted_scoring::{Criteria, Value, ValueGrading, WeightedScore};
 
 #[async_trait::async_trait(?Send)]
 pub(crate) trait ResourcePolicy<Request: ResourceFilter>: Sized {
@@ -95,6 +96,61 @@ pub(crate) trait ResourceFilter: Sized {
     ) -> HashMap<K, V> {
         let data = self.data();
         group(&data.context, &data.list)
+    }
+}
+
+/// Represents a sort criteria to be passed to a sort builder.
+pub(crate) struct SortCriteria {
+    criteria: Criteria,
+    grading: ValueGrading,
+    value_fn: Box<dyn Fn(&PoolItem) -> Value>,
+}
+
+impl SortCriteria {
+    /// Create a new sort criteria.
+    pub(crate) fn new(
+        criteria: Criteria,
+        grading: ValueGrading,
+        value_fn: impl Fn(&PoolItem) -> Value + 'static,
+    ) -> Self {
+        SortCriteria {
+            criteria,
+            grading,
+            value_fn: Box::new(value_fn),
+        }
+    }
+}
+
+/// Builds a weighted sorting comparator, with the various sort criterias being added to it.
+pub(crate) struct SortBuilder {
+    sort_criterias: Vec<SortCriteria>,
+}
+
+impl SortBuilder {
+    /// Create a new sort builder.
+    pub(crate) fn new() -> Self {
+        SortBuilder {
+            sort_criterias: Vec::new(),
+        }
+    }
+
+    /// Add sort criteria to the builder.
+    pub(crate) fn with_criteria(mut self, sort_criteria: fn() -> SortCriteria) -> Self {
+        self.sort_criterias.push(sort_criteria());
+        self
+    }
+
+    /// Build the comparator based on the weights of sort criteria.
+    pub(crate) fn compare(&self, a: &PoolItem, b: &PoolItem) -> std::cmp::Ordering {
+        let mut weighted_score = WeightedScore::dual_values();
+        for criteria in &self.sort_criterias {
+            let value_a = (criteria.value_fn)(a);
+            let value_b = (criteria.value_fn)(b);
+            weighted_score =
+                weighted_score.weigh(criteria.criteria, criteria.grading, value_a, value_b);
+        }
+        let (score_a, score_b) = weighted_score.score().unwrap();
+        score_b.cmp(&score_a)
     }
 }
 

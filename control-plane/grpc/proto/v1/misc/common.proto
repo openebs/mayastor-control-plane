@@ -103,6 +103,8 @@ enum ResourceKind {
   NvmeSubsystem = 15;
   // Nvme Path
   NvmePath = 16;
+  // Volume Group
+  VolumeGroup = 17;
 }
 
 // Filter by Node and Replica id

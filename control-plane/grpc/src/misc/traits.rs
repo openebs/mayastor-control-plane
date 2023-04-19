@@ -28,6 +28,7 @@ impl From<ResourceKind> for common::ResourceKind {
             ResourceKind::State => Self::State,
             ResourceKind::NvmeSubsystem => Self::NvmeSubsystem,
             ResourceKind::NvmePath => Self::NvmePath,
+            ResourceKind::VolumeGroup => Self::VolumeGroup,
         }
     }
 }
@@ -51,6 +52,7 @@ impl From<common::ResourceKind> for ResourceKind {
             common::ResourceKind::State => Self::State,
             common::ResourceKind::NvmeSubsystem => Self::NvmeSubsystem,
             common::ResourceKind::NvmePath => Self::NvmePath,
+            common::ResourceKind::VolumeGroup => Self::VolumeGroup,
         }
     }
 }

@@ -2,13 +2,14 @@ use crate::controller::{
     registry::Registry,
     wrapper::{NodeWrapper, PoolWrapper},
 };
+use std::collections::HashMap;
 use stor_port::types::v0::{
     store::{
         nexus_child::NexusChild,
         nexus_persistence::{ChildInfo, NexusInfo},
         replica::ReplicaSpec,
     },
-    transport::{Child, ChildUri, Replica},
+    transport::{Child, ChildUri, PoolId, Replica},
 };
 
 /// Item for pool scheduling logic.
@@ -18,16 +19,29 @@ pub(crate) struct PoolItem {
     pub(crate) node: NodeWrapper,
     /// The pool.
     pub(crate) pool: PoolWrapper,
+    /// Number of replicas of a vg present on the pool.
+    /// This would have a value if the volume is a part of
+    /// a volume group and the already created volumes have replicas
+    /// on this pool.
+    pub(crate) vg_replica_count: Option<u64>,
 }
 
 impl PoolItem {
     /// Create a new `Self`.
-    pub(crate) fn new(node: NodeWrapper, pool: PoolWrapper) -> Self {
-        Self { node, pool }
+    pub(crate) fn new(node: NodeWrapper, pool: PoolWrapper, vg_replica_count: Option<u64>) -> Self {
+        Self {
+            node,
+            pool,
+            vg_replica_count,
+        }
     }
     /// Get the number of replicas in the pool.
     pub(crate) fn len(&self) -> u64 {
         self.pool.replicas().len() as u64
+    }
+    /// Get the number of volume group replicas in the pool.
+    pub(crate) fn vg_replica_count(&self) -> u64 {
+        self.vg_replica_count.unwrap_or(u64::MIN)
     }
     /// Get a reference to the inner `PoolWrapper`.
     pub(crate) fn pool(&self) -> &PoolWrapper {
@@ -52,7 +66,10 @@ impl PoolItemLister {
         raw_nodes
     }
     /// Get a list of pool items.
-    pub(crate) async fn list(registry: &Registry) -> Vec<PoolItem> {
+    pub(crate) async fn list(
+        registry: &Registry,
+        pool_vg_rep: &Option<HashMap<PoolId, u64>>,
+    ) -> Vec<PoolItem> {
         let pools = Self::nodes(registry)
             .await
             .iter()
@@ -60,7 +77,12 @@ impl PoolItemLister {
                 n.pool_wrappers()
                     .iter()
                     .filter(|p| registry.specs().pool(&p.id).is_ok())
-                    .map(|p| PoolItem::new(n.clone(), p.clone()))
+                    .map(|p| {
+                        let vg_rep_count =
+                            pool_vg_rep.as_ref().and_then(|map| map.get(&p.id).cloned());
+
+                        PoolItem::new(n.clone(), p.clone(), vg_rep_count)
+                    })
                     .collect::<Vec<_>>()
             })
             .collect();

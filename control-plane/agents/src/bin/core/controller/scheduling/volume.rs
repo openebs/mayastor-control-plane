@@ -2,20 +2,19 @@ use crate::controller::{
     registry::Registry,
     resources::ResourceMutex,
     scheduling::{
+        pool::replica_rebuildable,
         resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},
+        volume_group::{get_pool_vg_replica_count, get_restricted_nodes},
         volume_policy::{SimplePolicy, ThickPolicy},
         AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceData, ResourceFilter,
     },
 };
-
 use agents::errors::SvcError;
+use std::{collections::HashMap, ops::Deref};
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
     transport::{NodeId, PoolId, VolumeState},
 };
-
-use crate::controller::scheduling::pool::replica_rebuildable;
-use std::ops::Deref;
 
 /// Move replica to another pool.
 #[derive(Clone)]
@@ -67,6 +66,7 @@ pub(crate) struct GetSuitablePoolsContext {
     spec: VolumeSpec,
     allocated_bytes: Option<u64>,
     move_repl: Option<MoveReplica>,
+    vg_restricted_nodes: Option<Vec<NodeId>>,
 }
 impl GetSuitablePoolsContext {
     /// Get the registry.
@@ -80,6 +80,9 @@ impl GetSuitablePoolsContext {
     /// Get the optional replica move request.
     pub(crate) fn move_repl(&self) -> Option<&MoveReplica> {
         self.move_repl.as_ref()
+    }
+    pub(crate) fn vg_restricted_nodes(&self) -> &Option<Vec<NodeId>> {
+        &self.vg_restricted_nodes
     }
 }
 
@@ -125,16 +128,35 @@ impl AddVolumeReplica {
         used_bytes.iter().max().cloned()
     }
     async fn builder(request: GetSuitablePools, registry: &Registry) -> Self {
-        let allocated_bytes = Self::allocated_bytes(registry, &request.spec).await;
+        let volume_spec = request.spec;
+
+        let allocated_bytes = Self::allocated_bytes(registry, &volume_spec).await;
+
+        let mut vg_restricted_nodes: Option<Vec<NodeId>> = None;
+        let mut pool_vg_replica_count_map: Option<HashMap<PoolId, u64>> = None;
+
+        if let Some(volume_group) = &volume_spec.volume_group {
+            if let Ok(volume_group_spec) = registry.specs().volume_group_spec(volume_group.id()) {
+                vg_restricted_nodes = Some(get_restricted_nodes(
+                    &volume_spec,
+                    &volume_group_spec,
+                    registry,
+                ));
+                pool_vg_replica_count_map =
+                    Some(get_pool_vg_replica_count(&volume_group_spec, registry).await);
+            }
+        }
+
         Self {
             data: ResourceData::new(
                 GetSuitablePoolsContext {
                     registry: registry.clone(),
-                    spec: request.spec,
+                    spec: volume_spec,
                     allocated_bytes,
                     move_repl: request.move_repl,
+                    vg_restricted_nodes,
                 },
-                PoolItemLister::list(registry).await,
+                PoolItemLister::list(registry, &pool_vg_replica_count_map).await,
             ),
         }
     }
@@ -151,7 +173,6 @@ impl AddVolumeReplica {
         let simple = SimplePolicy::new(&self.data.context().registry);
         self.policy(simple)
     }
-
     /// Default rules for pool selection when creating replicas for a volume.
     pub(crate) async fn builder_with_defaults(
         request: GetSuitablePools,

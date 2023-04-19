@@ -612,6 +612,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.topology.into_opt(),
             src.policy,
             src.thin,
+            src.volume_group.into_opt(),
         )
     }
 }

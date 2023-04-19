@@ -2096,15 +2096,15 @@ components:
         - thin
     VolumeGroup:
       example:
-        name: "vg"
+        id: "vg"
       description: Volume Group related information.
       type: object
       properties:
-        name:
-          description: Name of the Volume Group.
+        id:
+          description: Identification of the Volume Group.
           type: string
       required:
-        - name
+        - id
     PublishVolumeBody:
       example:
         node: "io-engine-1"
@@ -2789,6 +2789,8 @@ components:
         thin:
           description: Thin provisioning flag
           type: boolean
+        volume_group:
+          $ref: '#/components/schemas/VolumeGroup'
       required:
         - num_paths
         - num_replicas
