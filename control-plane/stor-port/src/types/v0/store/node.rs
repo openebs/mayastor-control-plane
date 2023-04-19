@@ -3,13 +3,16 @@ use crate::{
     types::v0::{
         openapi::models,
         store::definitions::{ObjectKey, StorableObject, StorableObjectType},
-        transport::{self, HostNqn, NodeId},
+        transport::{self, HostNqn, NodeId, VolumeId},
     },
     IntoOption,
 };
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    time::SystemTime,
+};
 
 /// Generic labels associated with the node.
 pub type NodeLabels = HashMap<String, String>;
@@ -154,6 +157,10 @@ pub struct NodeSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     node_nqn: Option<HostNqn>,
+    #[serde(default)] // Ensure backwards compatibility.
+    draining_volumes: HashSet<VolumeId>,
+    #[serde(skip)] // Do not store.
+    draining_timestamp: Option<SystemTime>,
 }
 
 impl NodeSpec {
@@ -171,6 +178,8 @@ impl NodeSpec {
             labels,
             cordon_drain_state,
             node_nqn,
+            draining_volumes: HashSet::new(),
+            draining_timestamp: None,
         }
     }
     /// Node Nvme HOSTNQN.
@@ -227,6 +236,9 @@ impl NodeSpec {
             },
             None => {}
         }
+        if !matches!(self.cordon_drain_state, Some(CordonDrainState::Draining(_))) {
+            self.remove_all_draining_volumes();
+        }
     }
 
     /// Cordon node by applying the label.
@@ -234,13 +246,13 @@ impl NodeSpec {
         match &mut self.cordon_drain_state {
             Some(ds) => {
                 ds.add_cordon_label(&label);
-                self.resolve();
             }
             None => {
                 //add the label and set the state to cordoned
                 self.cordon_drain_state = Some(CordonDrainState::cordon(&label));
             }
         }
+        self.resolve();
     }
 
     /// Drain node by applying the drain label.
@@ -251,7 +263,7 @@ impl NodeSpec {
                 CordonDrainState::Cordoned(state) => {
                     // set state to draining and add label
                     self.cordon_drain_state =
-                        Some(CordonDrainState::Draining(state.into_drain(&label)))
+                        Some(CordonDrainState::Draining(state.into_drain(&label)));
                 }
                 CordonDrainState::Draining(state) => {
                     // add the label
@@ -272,6 +284,7 @@ impl NodeSpec {
                 )));
             }
         }
+        self.resolve();
     }
 
     /// Move state from Draining to Drained, no change to the labels.
@@ -281,8 +294,8 @@ impl NodeSpec {
                 state.cordonlabels.clone(),
                 state.drainlabels.clone(),
             )));
-            self.resolve();
         }
+        self.resolve();
     }
 
     /// Uncordon node by removing the corresponding label.
@@ -342,6 +355,51 @@ impl NodeSpec {
             Some(ds) => ds.is_drained(),
             None => false,
         }
+    }
+
+    /// Add the draining volumes to the node spec for checking shutdown nexuses.
+    pub fn add_draining_volumes(&mut self, draining_volumes: HashSet<VolumeId>) {
+        if !draining_volumes.is_empty() {
+            self.draining_volumes.extend(draining_volumes.into_iter());
+            self.draining_timestamp = Some(SystemTime::now())
+        }
+    }
+
+    /// Get the draining volumes on this node.
+    pub fn draining_volumes(&self) -> HashSet<VolumeId> {
+        self.draining_volumes.clone()
+    }
+
+    /// Get the number of draining volumes on this node.
+    pub fn draining_volume_count(&self) -> usize {
+        self.draining_volumes.len()
+    }
+
+    /// Remove the given volumes from this node.
+    pub fn remove_draining_volumes(&mut self, draining_volumes: HashSet<VolumeId>) {
+        self.draining_volumes
+            .retain(|k| !draining_volumes.contains(k));
+        if self.draining_volumes.is_empty() {
+            self.draining_timestamp = None;
+        }
+    }
+
+    /// Remove all volumes from this node.
+    pub fn remove_all_draining_volumes(&mut self) {
+        self.draining_volumes.clear();
+        self.draining_timestamp = None;
+    }
+
+    /// Get the draining timestamp on this node.
+    pub fn set_draining_timestamp_if_none(&mut self) {
+        if self.draining_timestamp.is_none() {
+            self.draining_timestamp = Some(SystemTime::now())
+        }
+    }
+
+    /// Get the draining timestamp on this node.
+    pub fn draining_timestamp(&self) -> Option<SystemTime> {
+        self.draining_timestamp
     }
 }
 
