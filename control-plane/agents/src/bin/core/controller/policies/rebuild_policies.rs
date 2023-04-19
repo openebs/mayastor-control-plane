@@ -1,4 +1,3 @@
-//!
 //! This file defines the policies that control plane uses to make
 //! decisions about rebuild workflow behaviour in case of a child
 //! becoming faulted. We can logically provide multiple different policies.
@@ -7,8 +6,6 @@
 //! behaviour of the policy can vary depending on runtime state of the nexus.
 //! Any new policy introduced in future will have to implement Policy trait
 //! for defining the policy behaviour.
-
-#![allow(unused)]
 
 use stor_port::types::v0::transport::Nexus;
 
@@ -23,6 +20,7 @@ const TWAIT_SPERF: std::time::Duration = Duration::new(600, 0);
 const TWAIT_SAVAIL: std::time::Duration = Duration::new(300, 0);
 const TWAIT_ZERO: std::time::Duration = Duration::new(0, 0);
 // 100GiB = 100 * 1024 * 1024 * 1024 bytes
+#[allow(unused)]
 const VOL_SIZE_100GIB: u64 = 107374182400;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
@@ -50,27 +48,23 @@ impl RuleSet {
             return cli_twait;
         }
 
-        let _pol = Self::assign(nexus.size);
-        Self::default_faulted_child_timewait()
+        let pol = Self::assign(nexus.size);
 
-        // TODO: Enable when policies are dynamic
-        /* match pol {
+        match pol {
             RuleSet::SystemAvail(pol) => pol.faulted_child_wait_duration(nexus),
             RuleSet::SystemPerf(pol) => pol.faulted_child_wait_duration(nexus),
-        } */
+        }
     }
 
     /// Assign a rebuild policy to the nexus.
-    fn assign(size: u64) -> Self {
+    fn assign(_size: u64) -> Self {
+        RuleSet::SystemPerf(SystemPerf {})
+        /*
         match size > VOL_SIZE_100GIB {
             true => RuleSet::SystemPerf(SystemPerf {}),
             false => RuleSet::default(),
         }
-    }
-
-    fn default_faulted_child_timewait() -> Duration {
-        tracing::info!("default timed-wait TWAIT_SPERF(10 mins)");
-        TWAIT_SPERF
+        */
     }
 }
 
@@ -86,7 +80,11 @@ trait Policy {
 }
 
 impl Policy for SystemPerf {
-    fn faulted_child_wait_duration(&self, _nexus: &Nexus) -> Duration {
+    fn faulted_child_wait_duration(&self, nexus: &Nexus) -> Duration {
+        if 1 == online_child_count_check(nexus) {
+            // immediate full rebuild
+            return TWAIT_ZERO;
+        }
         TWAIT_SPERF
     }
 
@@ -95,13 +93,13 @@ impl Policy for SystemPerf {
     }
 }
 
+fn online_child_count_check(nexus: &Nexus) -> usize {
+    nexus.children.iter().filter(|c| c.state.online()).count()
+}
+
 impl Policy for SystemAvail {
     fn faulted_child_wait_duration(&self, nexus: &Nexus) -> Duration {
-        let mut online_child_cnt = 0;
-        for _ in nexus.children.iter().filter(|c| c.state.online()) {
-            online_child_cnt += 1;
-        }
-        if online_child_cnt <= 1 {
+        if 1 == online_child_count_check(nexus) {
             // immediate full rebuild
             return TWAIT_ZERO;
         }
