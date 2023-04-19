@@ -145,19 +145,56 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
     }
     // Change the node state to "drained"
     if !move_failures {
-        if let Err(error) = context
-            .specs()
-            .set_node_drained(context.registry(), node_spec.id())
-            .await
-        {
-            tracing::error!(
-                %error,
-                node.id = node_id.as_str(),
-                "Failed to set node to state drained"
-            );
-            return PollResult::Err(error);
+        // get the list of volumes
+        let vol_specs = context.specs().volumes_rsc();
+        // for each volume call volume_shutdown_nexuses()
+        let mut count_shutdown_nexuses = 0;
+        for vol_spec in vol_specs {
+            tracing::info!(volume.id = node_id.as_str(), "found volume");
+
+            match vol_spec.operation_guard() {
+                Ok(guarded_vol_spec) => {
+                    let vol_id = guarded_vol_spec.as_ref().uuid.clone();
+                    tracing::info!(volume.id = vol_id.as_str(), "found volume");
+                    let shutdown_nexuses = context
+                        .registry()
+                        .specs()
+                        .volume_shutdown_nexuses(&vol_id)
+                        .await;
+                    count_shutdown_nexuses += shutdown_nexuses.len();
+                }
+                Err(error) => {
+                    tracing::error!(
+                        %error,
+                        node.id = node_id.as_str(),
+                        "Failed to get the guarded volume"
+                    );
+                    return PollResult::Err(error);
+                }
+            }
         }
-        tracing::info!(node.id = node_id.as_str(), "Set node to state drained");
+        tracing::info!(
+            nexus.count = count_shutdown_nexuses,
+            "Remaining shutdown nexuses"
+        );
+        if count_shutdown_nexuses == 0 {
+            if let Err(error) = context
+                .specs()
+                .set_node_drained(context.registry(), node_spec.id())
+                .await
+            {
+                // there are targets and it is before the timeout, don't set to drained
+                tracing::error!(
+                    %error,
+                    node.id = node_id.as_str(),
+                    "Failed to set node to state drained"
+                );
+                return PollResult::Err(error);
+            }
+            tracing::info!(node.id = node_id.as_str(), "Set node to state drained");
+        } else {
+            tracing::info!(node.id = node_id.as_str(), "Shutdown nexuses remain");
+        }
     }
     PollResult::Ok(PollerState::Idle)
 }
