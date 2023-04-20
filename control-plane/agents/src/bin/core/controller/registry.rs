@@ -85,7 +85,7 @@ pub(crate) struct RegistryInner<S: Store> {
     reconcile_period: std::time::Duration,
     /// The duration for which the reconciler waits for the replica to
     /// to be healthy again before attempting to online the faulted child.
-    faulted_child_wait_period: std::time::Duration,
+    faulted_child_wait_period: Option<std::time::Duration>,
     reconciler: ReconcilerControl,
     config: parking_lot::RwLock<CoreRegistryConfig>,
     /// system-wide maximum number of concurrent rebuilds allowed.
@@ -111,7 +111,7 @@ impl Registry {
         store_lease_tll: std::time::Duration,
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
-        faulted_child_wait_period: std::time::Duration,
+        faulted_child_wait_period: Option<std::time::Duration>,
         max_rebuilds: Option<NumRebuilds>,
         host_acl: Vec<HostAccessControl>,
         thin_args: ThinArgs,
@@ -259,7 +259,7 @@ impl Registry {
         self.reconcile_period
     }
     /// Wait period before attempting to online a faulted child.
-    pub(crate) fn faulted_child_wait_period(&self) -> std::time::Duration {
+    pub(crate) fn faulted_child_wait_period(&self) -> Option<std::time::Duration> {
         self.faulted_child_wait_period
     }
 
