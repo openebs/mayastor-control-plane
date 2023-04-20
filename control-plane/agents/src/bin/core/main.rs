@@ -43,8 +43,8 @@ pub(crate) struct CliArgs {
 
     /// The duration for which the reconciler waits for the replica to
     /// to be healthy again before attempting to online the faulted child.
-    #[clap(long, default_value = "0s")]
-    pub(crate) faulted_child_wait_period: humantime::Duration,
+    #[clap(long)]
+    pub(crate) faulted_child_wait_period: Option<humantime::Duration>,
 
     /// Deadline for the io-engine instance keep alive registration.
     #[clap(long, short, default_value = "10s")]
@@ -149,7 +149,7 @@ async fn server(cli_args: CliArgs) {
         cli_args.store_lease_ttl.into(),
         cli_args.reconcile_period.into(),
         cli_args.reconcile_idle_period.into(),
-        cli_args.faulted_child_wait_period.into(),
+        cli_args.faulted_child_wait_period.map(|t| t.into()),
         cli_args.max_rebuilds,
         if cli_args.hosts_acl.contains(&HostAccessControl::None) {
             vec![]

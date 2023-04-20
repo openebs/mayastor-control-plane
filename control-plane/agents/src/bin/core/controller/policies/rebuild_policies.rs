@@ -46,8 +46,8 @@ impl RuleSet {
     /// upon a faulted child to possibly be healthy again.
     pub(crate) fn faulted_child_wait(nexus: &Nexus, registry: &Registry) -> Duration {
         let cli_twait = registry.faulted_child_wait_period();
-        if !cli_twait.is_zero() {
-            return cli_twait;
+        if let Some(t) = cli_twait {
+            return t;
         }
 
         let _pol = Self::assign(nexus.size);
