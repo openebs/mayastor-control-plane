@@ -164,18 +164,20 @@ async fn handle_child_rebuild(
 ) -> Result<(), SvcError> {
     let wait_duration = RuleSet::faulted_child_wait(nexus, context.registry());
     let is_elapsed = wait_duration_elapsed(child.faulted_at, wait_duration, &child.uri);
-    if child.state_reason == ChildStateReason::RebuildFailed || is_elapsed {
-        info!(%child.uri, "Start full rebuild for child, elapsed: {}, child state reason: {:?}", is_elapsed.to_string(), child.state_reason);
-        faulted_children_remover(nexus_spec, child, context).await?
-    } else if get_child_replica(nexus_spec.as_ref(), child, context)
-        .await
-        .is_ok()
+    let is_rebuild_failed = child.state_reason == ChildStateReason::RebuildFailed;
+    if !is_rebuild_failed
+        && get_child_replica(nexus_spec.as_ref(), child, context)
+            .await
+            .is_ok()
     {
         info!(%child.uri, "Child's Replica is Online within the partial rebuild window");
         if let Err(error) = online_nexus_child(nexus_spec, &child.uri, context).await {
             info!(%child.uri, "Initializing Full rebuild as online child attempt failed for child, failed with : {:?}", error);
             faulted_children_remover(nexus_spec, child, context).await?
         }
+    } else if is_rebuild_failed || is_elapsed {
+        info!(%child.uri, "Start full rebuild for child, elapsed: {}, child state reason: {:?}", is_elapsed.to_string(), child.state_reason);
+        faulted_children_remover(nexus_spec, child, context).await?
     } else {
         info!(%child.uri, "Child's Replica is not online yet");
     }
