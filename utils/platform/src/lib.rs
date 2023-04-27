@@ -1,6 +1,7 @@
 use std::ops::Deref;
 use tokio::{runtime::Builder, sync::OnceCell};
 
+mod deployer;
 /// K8S Platform Information.
 pub mod k8s;
 mod none;
@@ -25,6 +26,8 @@ pub trait PlatformInfo: Send + Sync {
 pub enum PlatformType {
     /// As it says in the tin.
     K8s,
+    /// Deployer cluster in containers.
+    Deployer,
     /// We don't have others, other than running the binary directly or on deployer "clusters".
     None,
 }
@@ -34,7 +37,10 @@ pub fn current_plaform_type() -> PlatformType {
     if std::env::var("KUBERNETES_SERVICE_HOST").is_ok() {
         PlatformType::K8s
     } else {
-        PlatformType::None
+        match std::env::var("PLATFORM_TYPE").unwrap_or_default().as_str() {
+            "deployer" => PlatformType::Deployer,
+            _ => PlatformType::None,
+        }
     }
 }
 
@@ -47,6 +53,9 @@ pub async fn init_cluster_info() -> Result<&'static dyn PlatformInfo, PlatformEr
         .get_or_try_init(|| async move {
             Ok(match current_plaform_type() {
                 PlatformType::K8s => Box::new(k8s::K8s::new().await?) as Box<dyn PlatformInfo>,
+                PlatformType::Deployer => {
+                    Box::new(deployer::Deployer::new()) as Box<dyn PlatformInfo>
+                }
                 PlatformType::None => Box::new(none::None::new()) as Box<dyn PlatformInfo>,
             })
         })

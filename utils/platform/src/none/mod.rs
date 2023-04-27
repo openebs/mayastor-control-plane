@@ -3,12 +3,14 @@ use crate::{PlatformInfo, PlatformNS, PlatformUid};
 /// No specific platform.
 /// Attempt to retrieve the platform uuid from (in order):
 /// env var `NOPLATFORM_UUID_VAR`
+/// machine id file `MACHINE_ID`
 /// hardcoded from var `DUMMY_PLATFORM_UUID`
 pub(super) struct None {
     platform_uuid: PlatformUid,
     platform_ns: PlatformNS,
 }
 
+const MACHINE_ID: &str = "/etc/machine-id";
 const NOPLATFORM_UUID_VAR: &str = "NOPLATFORM_UUID";
 const DUMMY_PLATFORM_UUID: &str = "dummy-uuid";
 const DUMMY_PLATFORM_NS: &str = "default";
@@ -19,7 +21,7 @@ impl None {
         let platform_uuid = if let Ok(uuid) = std::env::var(NOPLATFORM_UUID_VAR) {
             uuid
         } else {
-            DUMMY_PLATFORM_UUID.to_string()
+            std::fs::read_to_string(MACHINE_ID).unwrap_or_else(|_| DUMMY_PLATFORM_UUID.to_string())
         };
 
         Self {

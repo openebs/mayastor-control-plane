@@ -333,7 +333,8 @@ impl BuilderConfigure for Components {
         Ok(cfg.with_spec_map(|spec| {
             let spec = spec
                 .with_direct_bind("/etc/machine-id")
-                .with_direct_bind("/sys/class/dmi/id/product_uuid");
+                .with_direct_bind("/sys/class/dmi/id/product_uuid")
+                .with_env("PLATFORM_TYPE", "deployer");
             if let Some(uid) = &self.1.cluster_uid {
                 spec.with_env("NOPLATFORM_UUID", uid)
             } else {

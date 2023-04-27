@@ -1,8 +1,7 @@
-use crossbeam_queue::SegQueue;
-use futures_util::future::ready;
-#[cfg(target_os = "linux")]
-use futures_util::stream::StreamExt;
 use nvmeadm::nvmf_subsystem::{NvmeSubsystems, Subsystem};
+use stor_port::platform::{current_plaform_type, PlatformType};
+use utils::NVME_TARGET_NQN_PREFIX;
+
 #[cfg(target_os = "linux")]
 use std::convert::TryInto;
 use std::{
@@ -10,9 +9,13 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+use crossbeam_queue::SegQueue;
+use futures_util::future::ready;
+#[cfg(target_os = "linux")]
+use futures_util::stream::StreamExt;
 #[cfg(target_os = "linux")]
 use tokio_udev::{AsyncMonitorSocket, EventType, MonitorBuilder};
-use utils::NVME_TARGET_NQN_PREFIX;
 
 const SYSFS_PREFIX: &str = "/sys/devices/virtual/nvme-fabrics/ctl/";
 /// Maximum number of events to process upon cache update (to prevent event flooding).
@@ -64,6 +67,8 @@ pub fn get_nvme_path_entry(path: &String) -> Option<NvmePath> {
 enum CacheOp {
     Add(String),
     Remove(String),
+    /// Sync up subsystems for platforms where udev is not supported.
+    SubsystemsSync(Vec<String>),
     InvalidateCache,
 }
 
@@ -92,9 +97,43 @@ impl CachedNvmePathProvider {
     pub fn start(&mut self) -> anyhow::Result<impl std::future::Future<Output = ()> + '_> {
         Ok(ready(()))
     }
+    #[cfg(target_os = "linux")]
+    fn spawn_nvmeadm_syncer(&self) {
+        tracing::warn!("Using Nvme Adm subsystem syncer WA");
+        let udev_queue = self.udev_queue.clone();
+        tokio::spawn(async move {
+            loop {
+                let subsystems =
+                    NvmeSubsystems::new().expect("Failed to initialise NVMe subsystems");
+
+                let mut paths = Vec::new();
+                for e in subsystems {
+                    match e {
+                        Ok(s) => paths.push(format!("{SYSFS_PREFIX}{}", s.name)),
+                        Err(error) => tracing::error!(?error, "Failed to read NVMe subsystem"),
+                    }
+                }
+                udev_queue.push(CacheOp::SubsystemsSync(paths));
+
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        });
+    }
+    #[cfg(target_os = "linux")]
+    fn udev_supported() -> bool {
+        match current_plaform_type() {
+            PlatformType::K8s => true,
+            PlatformType::None => true,
+            PlatformType::Deployer => false,
+        }
+    }
     /// Start UDEV monitoring loop.
     #[cfg(target_os = "linux")]
     pub fn start(&mut self) -> anyhow::Result<impl std::future::Future<Output = ()> + '_> {
+        if !Self::udev_supported() {
+            self.spawn_nvmeadm_syncer();
+        }
+
         let builder = MonitorBuilder::new()?.match_subsystem("nvme")?;
 
         let monitor: AsyncMonitorSocket = builder.listen()?.try_into()?;
@@ -200,7 +239,7 @@ impl NvmePathNameCollection {
             match e {
                 Ok(s) => self.add_cache_entry(format!("{SYSFS_PREFIX}{}", s.name)),
                 Err(error) => tracing::error!(?error, "Failed to read NVMe subsystem"),
-            };
+            }
         }
 
         tracing::info!(
@@ -225,6 +264,27 @@ impl NvmePathNameCollection {
                             tracing::warn!(path, "NVMe path not in cache, skipping removal")
                         }
                     },
+                    CacheOp::SubsystemsSync(paths) => {
+                        let removing_paths = self
+                            .entries
+                            .keys()
+                            .filter(|k| !paths.contains(k))
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        for path in paths {
+                            if !self.entries.contains_key(&path) {
+                                self.add_cache_entry(path);
+                            }
+                        }
+                        for path in removing_paths {
+                            match self.entries.remove(&path) {
+                                Some(_) => tracing::info!(path, "NVMe path removed from the cache"),
+                                None => {
+                                    tracing::warn!(path, "NVMe path not in cache, skipping removal")
+                                }
+                            }
+                        }
+                    }
                     CacheOp::InvalidateCache => {
                         self.invalidate_cache();
                     }
