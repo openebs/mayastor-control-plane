@@ -10,7 +10,7 @@ use crate::{
 use std::ops::Deref;
 use stor_port::{
     transport_api::{v0::NvmeSubsystems, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::MessageIdVs,
+    types::v0::transport::{FailedPathsResponse, MessageIdVs},
 };
 use tonic::transport::Uri;
 
@@ -63,10 +63,14 @@ impl ClusterAgentOperations for ClusterAgentClient {
         &self,
         request: &dyn ReportFailedPathsInfo,
         context: Option<Context>,
-    ) -> Result<(), ReplyError> {
+    ) -> Result<FailedPathsResponse, ReplyError> {
         let req = self.request(request, context, MessageIdVs::ReportFailedPaths);
-        self.client().report_failed_nvme_paths(req).await?;
-        Ok(())
+        let report = self
+            .client()
+            .report_failed_nvme_paths(req)
+            .await?
+            .into_inner();
+        Ok(report.into())
     }
 }
 
@@ -104,10 +108,8 @@ impl NodeAgentOperations for NodeAgentClient {
         context: Option<Context>,
     ) -> Result<(), ReplyError> {
         let req = self.request(request, context, MessageIdVs::ReplacePathInfo);
-        match self.client().replace_path(req).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
+        self.client().replace_path(req).await?;
+        Ok(())
     }
     #[tracing::instrument(
         name = "NodeAgentClient::get_nvme_controller",

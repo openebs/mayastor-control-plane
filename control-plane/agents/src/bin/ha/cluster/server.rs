@@ -7,7 +7,10 @@ use grpc::{
     },
 };
 use std::{net::SocketAddr, sync::Arc};
-use stor_port::transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
+use stor_port::{
+    transport_api::{ReplyError, ResourceKind},
+    types::v0::transport::FailedPathsResponse,
+};
 
 /// High-level object that represents HA Cluster agent gRPC server.
 pub(crate) struct ClusterAgent {
@@ -69,37 +72,34 @@ impl ClusterAgentOperations for ClusterAgentSvc {
         &self,
         request: &dyn ReportFailedPathsInfo,
         _context: Option<Context>,
-    ) -> Result<(), ReplyError> {
-        let mut v: Vec<(String, String)> = Vec::new();
+    ) -> Result<FailedPathsResponse, ReplyError> {
+        let mut report = FailedPathsResponse::default();
 
-        for x in request.failed_paths().into_iter() {
+        for path in request.failed_paths().into_iter() {
             let nodes = self.nodes.clone();
             match nodes
                 .report_failed_path(
                     request.node().into(),
-                    x.target_nqn().to_string(),
+                    path.target_nqn().to_string(),
                     self.mover.clone(),
                     request.endpoint(),
                 )
                 .await
             {
-                Ok(_) => continue,
-                Err(err) => v.push((x.target_nqn().to_string(), err.to_string())),
+                Ok(_) => {
+                    report.push(tonic::Code::Ok, path.target_nqn());
+                }
+                Err(error) => {
+                    let status = tonic::Status::from(error);
+                    report.push(status.code(), path.target_nqn());
+                }
             }
         }
 
-        if !v.is_empty() {
-            let mut e = ReplyError {
-                kind: ReplyErrorKind::WithMessage,
-                resource: ResourceKind::Unknown,
-                source: "".into(),
-                extra: "".into(),
-            };
-            v.iter().for_each(|x| {
-                e.extend(&x.0, &x.1);
-            });
-            return Err(e);
+        if report.is_all_ok() {
+            return Ok(FailedPathsResponse::default());
         }
-        Ok(())
+
+        Ok(report)
     }
 }

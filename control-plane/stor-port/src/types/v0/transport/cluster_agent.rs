@@ -81,6 +81,59 @@ impl ReportFailedPaths {
     pub fn failed_paths(&self) -> &Vec<FailedPath> {
         &self.failed_paths
     }
+
+    /// Remove path from request.
+    pub fn remove_path(&mut self, path: &str) {
+        self.failed_paths.retain(|p| p.target_nqn != path);
+    }
+}
+
+/// Report failed NVMe paths.
+#[derive(Default, Debug)]
+pub struct FailedPathsResponse {
+    failed_paths: Vec<FailedPathResponse>,
+}
+impl FailedPathsResponse {
+    /// Create a new `Self`.
+    pub fn new(failed_paths: Vec<FailedPathResponse>) -> Self {
+        Self { failed_paths }
+    }
+    /// Adds a new failed path.
+    pub fn push(&mut self, status_code: tonic::Code, failed_path: &str) {
+        self.failed_paths
+            .push(FailedPathResponse::new(status_code, failed_path.into()));
+    }
+    /// Check if they're no reported paths.
+    pub fn is_empty(&self) -> bool {
+        self.failed_paths.is_empty()
+    }
+    /// Check if all path reporting succeeded.
+    pub fn is_all_ok(&self) -> bool {
+        self.failed_paths
+            .iter()
+            .all(|p| p.status_code == tonic::Code::Ok)
+    }
+    /// Convert into a list of failed paths.
+    pub fn into_failed_paths(self) -> Vec<FailedPathResponse> {
+        self.failed_paths
+    }
+}
+/// A specific failed path response.
+#[derive(Debug)]
+pub struct FailedPathResponse {
+    /// The status code related to this report failure.
+    pub status_code: tonic::Code,
+    /// The failed path reported.
+    pub failed_nqn: String,
+}
+impl FailedPathResponse {
+    /// Create a new `Self`.
+    pub fn new(status_code: tonic::Code, failed_nqn: String) -> Self {
+        Self {
+            status_code,
+            failed_nqn,
+        }
+    }
 }
 
 /// Request struct to get Nvme subsystems registered for a given nqn.
@@ -118,6 +171,10 @@ impl NvmeSubsystem {
     /// Get IP address of the Nvme Subsystem.
     pub fn address(&self) -> &str {
         self.address.as_str()
+    }
+    /// Get IP address of the Nvme Subsystem.
+    pub fn into_address(self) -> String {
+        self.address
     }
 }
 

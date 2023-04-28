@@ -10,14 +10,14 @@ use tracing::{debug, error};
 
 /// Represent object to access Etcd.
 #[derive(Debug, Clone)]
-pub struct EtcdStore {
+pub(crate) struct EtcdStore {
     store: Arc<Mutex<Etcd>>,
     timeout: Duration,
 }
 
 impl EtcdStore {
     /// Create a new Etcd client.
-    pub async fn new(endpoint: Uri, timeout: Duration) -> Result<Self, Error> {
+    pub(crate) async fn new(endpoint: Uri, timeout: Duration) -> Result<Self, Error> {
         match tokio::time::timeout(timeout, async { Etcd::new(&endpoint.to_string()).await }).await
         {
             Ok(v) => {
@@ -38,7 +38,10 @@ impl EtcdStore {
     }
 
     /// Serialized write to the persistent store.
-    pub async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), anyhow::Error> {
+    pub(crate) async fn store_obj<O: StorableObject>(
+        &self,
+        object: &O,
+    ) -> Result<(), anyhow::Error> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(self.timeout, async move { store.put_obj(object).await }).await {
             Ok(result) => result.map_err(Into::into),
@@ -54,7 +57,10 @@ impl EtcdStore {
     }
 
     /// Delete the object from the persistent store.
-    pub async fn delete_obj<O: StorableObject>(&self, object: &O) -> Result<(), anyhow::Error> {
+    pub(crate) async fn delete_obj<O: StorableObject>(
+        &self,
+        object: &O,
+    ) -> Result<(), anyhow::Error> {
         let mut store = self.store.lock().await;
         match tokio::time::timeout(self.timeout, async move {
             store.delete_kv(&object.key().key()).await
@@ -79,7 +85,9 @@ impl EtcdStore {
 
     /// Get incomplete requests stored in Etcd.
     /// Request with error or path published is considered a complete request.
-    pub async fn fetch_incomplete_requests(&self) -> Result<Vec<SwitchOverRequest>, anyhow::Error> {
+    pub(crate) async fn fetch_incomplete_requests(
+        &self,
+    ) -> Result<Vec<SwitchOverRequest>, anyhow::Error> {
         let mut store = self.store.lock().await;
         let key = key_prefix_obj(StorableObjectType::SwitchOver, API_VERSION);
         let store_entries = store.get_values_prefix(&key).await?;
