@@ -25,6 +25,7 @@ class StartOptions:
     ha_cluster_agent: bool = False
     fio_spdk: bool = False
     io_engine_coreisol: bool = False
+    io_engine_devices: [str] = ()
 
     def args(self):
         args = [
@@ -64,6 +65,8 @@ class StartOptions:
             args.append("--fio-spdk")
         if self.io_engine_coreisol:
             args.append("--io-engine-isolate")
+        for device in self.io_engine_devices:
+            args.append(f"--io-engine-devices={device}")
 
         agent_arg = "--agents=Core"
         if self.ha_node_agent:
@@ -96,6 +99,7 @@ class Deployer(object):
         node_agent=False,
         fio_spdk=False,
         io_engine_coreisol=False,
+        io_engine_devices=[],
     ):
         options = StartOptions(
             io_engines,
@@ -115,6 +119,7 @@ class Deployer(object):
             ha_cluster_agent=cluster_agent,
             fio_spdk=fio_spdk,
             io_engine_coreisol=io_engine_coreisol,
+            io_engine_devices=io_engine_devices,
         )
         Deployer.start_with_opts(options)
 
