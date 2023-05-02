@@ -510,6 +510,7 @@ impl PublishVolume {
 /// Republishes the target on a new node (pre-selected or determined by the control-plane).
 /// If online, the previous target nexus is first shutdown which may gives us enough time for the
 /// switchover as it'd be prevent from failing any IO outright.
+/// todo: add builder new..
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RepublishVolume {
@@ -523,6 +524,8 @@ pub struct RepublishVolume {
     pub share: VolumeShareProtocol,
     /// Allows reusing of the current target.
     pub reuse_existing: bool,
+    /// Allows reusing the existing target, but prefers a target move.
+    pub reuse_existing_fallback: bool,
 }
 impl RepublishVolume {
     /// Create new `RepublishVolume` based on the provided arguments.
@@ -532,6 +535,7 @@ impl RepublishVolume {
         frontend_node: NodeId,
         share: VolumeShareProtocol,
         reuse_existing: bool,
+        reuse_existing_fallback: bool,
     ) -> Self {
         Self {
             uuid,
@@ -539,6 +543,7 @@ impl RepublishVolume {
             frontend_node,
             share,
             reuse_existing,
+            reuse_existing_fallback,
         }
     }
 }

@@ -28,3 +28,11 @@ Feature: Switchover Robustness
     When the ha clustering fails a few times
     And we restart the volume target node
     Then the path should be established
+
+  Scenario: second failure during switchover with no other nodes
+    Given a 2 replica volume
+    And a connected nvme initiator
+    When the volume target node has io-path broken
+    And the ha clustering fails as there is no other node
+    When the volume target node has io-path fixed
+    Then the path should be established

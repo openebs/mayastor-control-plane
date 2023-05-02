@@ -164,6 +164,7 @@ impl apis::actix_server::Volumes for RestApi {
                             target_node: publish_volume_body.node.map(|id| id.into()),
                             share: publish_volume_body.protocol.into(),
                             reuse_existing: publish_volume_body.reuse_existing.unwrap_or(true),
+                            reuse_existing_fallback: false,
                             frontend_node: publish_volume_body
                                 .frontend_node
                                 .unwrap_or_default()

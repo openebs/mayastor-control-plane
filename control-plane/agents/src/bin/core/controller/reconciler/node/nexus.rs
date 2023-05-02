@@ -60,6 +60,7 @@ async fn republish_volume(
         frontend_node.clone(),
         VolumeShareProtocol::Nvmf,
         false,
+        false,
     );
     tracing::info!(
         volume.uuid = vol_uuid.as_str(),

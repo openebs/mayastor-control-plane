@@ -8,7 +8,7 @@ use grpc::operations::{
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use stor_port::{
-    transport_api::ReplyErrorKind,
+    transport_api::{ReplyError, ReplyErrorKind},
     types::v0::{
         store::{
             switchover::{Operation, OperationState, SwitchOverSpec, SwitchOverTime},
@@ -16,7 +16,7 @@ use stor_port::{
         },
         transport::{
             DestroyShutdownTargets, GetController, NodeId, NvmeSubsystem, ReplacePath,
-            RepublishVolume, VolumeId, VolumeShareProtocol,
+            RepublishVolume, Volume, VolumeId, VolumeShareProtocol,
         },
     },
 };
@@ -85,7 +85,7 @@ pub(crate) struct SwitchOverRequest {
     new_path: Option<String>,
     /// Number of failed attempts in the current Stage.
     retry_count: u64,
-    /// Reuse existing target.
+    /// Reuse existing target by default.
     reuse_existing: bool,
     /// Publish context.
     publish_context: Option<HashMap<String, String>>,
@@ -171,7 +171,7 @@ impl SwitchOverRequest {
             .path_and_query("")
             .build()
     }
-    fn build_node_uri(&mut self) -> Result<Uri, anyhow::Error> {
+    fn build_node_uri(&self) -> Result<Uri, anyhow::Error> {
         match self.node_uri() {
             Ok(node) => Ok(node),
             Err(error) => {
@@ -182,14 +182,6 @@ impl SwitchOverRequest {
                 ))
             }
         }
-    }
-    fn handle_republish_exhaustion(&mut self) -> Result<(), anyhow::Error> {
-        if self.fast_exhaustion_retry {
-            self.fast_exhaustion_retry = false;
-            info!("Retrying Republish after cleaning up targets");
-            return Ok(());
-        }
-        Err(anyhow!("Retrying Republish after cleaning up targets"))
     }
     fn set_stage(&self, stage: Stage) {
         *self.stage.0.write() = stage;
@@ -242,20 +234,54 @@ impl SwitchOverRequest {
         Ok(())
     }
 
-    /// Attempts to republish the volume by either recreating the existing target or by
-    /// creating a new target (on a different node).
-    #[tracing::instrument(level = "info", skip(self), fields(volume.uuid = %self.volume_id), err)]
-    async fn republish_volume(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
-        self.start_op(etcd).await?;
-        info!(volume.uuid=%self.volume_id, frontend_node=%self.node_name, "Republishing");
+    async fn send_republish_volume(
+        &self,
+        reuse_existing_fallback: bool,
+    ) -> Result<Volume, ReplyError> {
         let republish_req = RepublishVolume {
             uuid: self.volume_id.clone(),
             target_node: None,
             share: VolumeShareProtocol::Nvmf,
             reuse_existing: self.reuse_existing,
             frontend_node: self.node_name.clone(),
+            reuse_existing_fallback,
         };
-        let vol = match client().republish(&republish_req, None).await {
+        client().republish(&republish_req, None).await
+    }
+    /// Cleanup volume targets that are not registered as Nvme Subsystems in the Node.
+    async fn destroy_shutdown(&self) {
+        let Ok(uri) = self.build_node_uri() else {
+            return;
+        };
+        if let Some(new_path) = self.new_path.clone() {
+            let node_client = NodeAgentClient::new(uri, None).await;
+            let request = GetController::new(new_path);
+            if let Err(error) = match node_client.get_nvme_controller(&request, None).await {
+                Ok(target_addresses) => {
+                    self.destroy_shutdown_targets(target_addresses.into_inner())
+                        .await
+                }
+                Err(err) if matches!(err.kind, ReplyErrorKind::NotFound) => {
+                    self.destroy_all_shutdown_targets().await
+                }
+                Err(error) => Err(anyhow!(
+                    "Failed to list Nvme subsystems for the volume, error: {error}"
+                )),
+            } {
+                tracing::error!(%error, "Failed to destroy all shutdown targets");
+            } else {
+                tracing::info!("Retrying Republish after cleaning up targets");
+            }
+        }
+    }
+
+    /// Attempts to republish the volume by either recreating the existing target or by
+    /// creating a new target (on a different node).
+    #[tracing::instrument(level = "info", skip(self), fields(volume.uuid = %self.volume_id), err)]
+    async fn republish_volume(&mut self, etcd: &EtcdStore) -> Result<(), anyhow::Error> {
+        self.start_op(etcd).await?;
+        info!(volume.uuid=%self.volume_id, frontend_node=%self.node_name, "Republishing");
+        let vol = match self.send_republish_volume(false).await {
             Ok(vol) => Ok(vol),
             Err(error)
                 if matches!(
@@ -267,34 +293,13 @@ impl SwitchOverRequest {
             {
                 error!(volume.uuid=%self.volume_id, %error, "Cancelling switchover");
                 self.set_stage(Stage::Errored);
-                Err(error.into())
+                Err(error)
             }
             Err(error) if error.kind == ReplyErrorKind::ResourceExhausted => {
-                // todo: if we hit this we should try again with move = false?
-                // Cleanup volume targets that are not registered as Nvme Subsystems in the Node.
-                if let Some(new_path) = self.new_path.clone() {
-                    let uri = self.build_node_uri()?;
-                    let node_client = NodeAgentClient::new(uri, None).await;
-                    let request = GetController::new(new_path);
-                    match node_client.get_nvme_controller(&request, None).await {
-                        Ok(target_addresses) => {
-                            self.destroy_shutdown_targets(target_addresses.into_inner())
-                                .await?;
-                            return self.handle_republish_exhaustion();
-                        }
-                        Err(err) if matches!(err.kind, ReplyErrorKind::NotFound) => {
-                            self.destroy_all_shutdown_targets().await?;
-                            return self.handle_republish_exhaustion();
-                        }
-                        Err(error) => Err(anyhow!(
-                            "Failed to list Nvme subsystems for the volume, error: {error}"
-                        )),
-                    }
-                } else {
-                    Err(error.into())
-                }
+                self.destroy_shutdown().await;
+                self.send_republish_volume(true).await
             }
-            Err(error) => Err(error.into()),
+            Err(error) => Err(error),
         }?;
         self.publish_context = vol.spec().publish_context;
         self.new_path = match vol.state().target {

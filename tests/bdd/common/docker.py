@@ -27,6 +27,18 @@ class Docker(object):
             container_state = container.attrs["State"]
             return container_state["Status"]
 
+    @staticmethod
+    def container_ip(container_name):
+        docker_client = docker.from_env()
+        try:
+            container = docker_client.containers.get(container_name)
+        except docker.errors.NotFound as exc:
+            raise Exception("{} container not found", container_name)
+        else:
+            return container.attrs["NetworkSettings"]["Networks"]["cluster"][
+                "IPAddress"
+            ]
+
     # Kill a container with the given name.
     @staticmethod
     def kill_container(name):
