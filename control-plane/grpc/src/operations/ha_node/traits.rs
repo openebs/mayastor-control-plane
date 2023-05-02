@@ -1,18 +1,24 @@
 use crate::{
     common,
     context::Context,
-    ha_cluster_agent::{FailedNvmePath, HaNodeInfo, ReportFailedNvmePathsRequest},
+    ha_cluster_agent::{
+        FailedNvmePath, FailedNvmePathResponse, FailedNvmePathsResponse, HaNodeInfo,
+        ReportFailedNvmePathsRequest,
+    },
     ha_node_agent::{GetNvmeControllerRequest, NvmeControllers, ReplacePathRequest},
 };
-use std::{collections::HashMap, net::SocketAddr};
+
 use stor_port::{
     transport_api::{v0::NvmeSubsystems, ReplyError, ResourceKind},
     types::v0::transport::{
-        cluster_agent::NodeAgentInfo, FailedPath, GetController, NvmeSubsystem, ReplacePath,
-        ReportFailedPaths,
+        cluster_agent::NodeAgentInfo, FailedPath, FailedPathsResponse, GetController,
+        NvmeSubsystem, ReplacePath, ReportFailedPaths,
     },
     IntoVec,
 };
+
+use std::{collections::HashMap, net::SocketAddr};
+use stor_port::types::v0::transport::FailedPathResponse;
 
 /// NodeAgentOperations trait implemented by client which supports cluster-agent operations
 #[tonic::async_trait]
@@ -145,7 +151,7 @@ pub trait ClusterAgentOperations: Send + Sync {
         &self,
         request: &dyn ReportFailedPathsInfo,
         context: Option<Context>,
-    ) -> Result<(), ReplyError>;
+    ) -> Result<FailedPathsResponse, ReplyError>;
 }
 
 /// NodeInfo trait for the node-agent registration to be implemented by entities which want to
@@ -266,6 +272,33 @@ impl From<FailedPath> for FailedNvmePath {
     fn from(path: FailedPath) -> Self {
         Self {
             target_nqn: path.target_nqn().to_string(),
+        }
+    }
+}
+
+impl From<FailedNvmePathResponse> for FailedPathResponse {
+    fn from(value: FailedNvmePathResponse) -> Self {
+        Self::new(tonic::Code::from_i32(value.status_code), value.failed_nqn)
+    }
+}
+impl From<FailedPathResponse> for FailedNvmePathResponse {
+    fn from(value: FailedPathResponse) -> Self {
+        Self {
+            status_code: value.status_code as i32,
+            failed_nqn: value.failed_nqn,
+        }
+    }
+}
+
+impl From<FailedNvmePathsResponse> for FailedPathsResponse {
+    fn from(value: FailedNvmePathsResponse) -> Self {
+        Self::new(value.failed_paths.into_vec())
+    }
+}
+impl From<FailedPathsResponse> for FailedNvmePathsResponse {
+    fn from(value: FailedPathsResponse) -> Self {
+        Self {
+            failed_paths: value.into_failed_paths().into_vec(),
         }
     }
 }

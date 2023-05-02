@@ -181,6 +181,9 @@ impl From<ReplyError> for tonic::Status {
             ReplyErrorKind::FailedPrecondition => {
                 tonic::Status::failed_precondition(error.full_string())
             }
+            ReplyErrorKind::FailedPersist => {
+                tonic::Status::failed_precondition(error.full_string())
+            }
             ReplyErrorKind::AlreadyExists => tonic::Status::already_exists(error.full_string()),
             ReplyErrorKind::Aborted => tonic::Status::aborted(error.full_string()),
             ReplyErrorKind::NotFound => tonic::Status::not_found(error.full_string()),
@@ -275,6 +278,15 @@ impl ReplyError {
             extra: format!("Argument {arg_name} was not provided"),
         }
     }
+    /// Failed to persist.
+    pub fn failed_persist(resource: ResourceKind, source: String, extra: String) -> Self {
+        Self {
+            kind: ReplyErrorKind::FailedPersist,
+            resource,
+            source,
+            extra,
+        }
+    }
     /// For errors that can occur when serializing or deserializing JSON data.
     pub fn serde_error(
         resource: ResourceKind,
@@ -362,11 +374,19 @@ impl std::fmt::Display for ReplyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "'{}' Error on '{}' resources, from Error '{}', extra: '{}'",
+            "{}{}: {}{}",
             self.kind.as_ref(),
-            self.resource.as_ref(),
+            if matches!(self.resource, ResourceKind::Unknown) {
+                String::new()
+            } else {
+                format!("/{}", self.resource.as_ref())
+            },
             self.source,
-            self.extra
+            if !self.extra.is_empty() {
+                format!(": {}", self.extra)
+            } else {
+                String::new()
+            }
         )
     }
 }
@@ -469,6 +489,7 @@ pub struct RequestMinTimeout {
     nexus: Duration,
     pool: Duration,
     nexus_shutdown: Duration,
+    nvme_reconnect: Duration,
 }
 
 impl Default for RequestMinTimeout {
@@ -478,25 +499,30 @@ impl Default for RequestMinTimeout {
             nexus: Duration::from_secs(30),
             pool: Duration::from_secs(20),
             nexus_shutdown: Duration::from_secs(15),
+            nvme_reconnect: Duration::from_secs(12),
         }
     }
 }
 impl RequestMinTimeout {
-    /// minimum timeout for a replica operation.
+    /// Minimum timeout for a replica operation.
     pub fn replica(&self) -> Duration {
         self.replica
     }
-    /// minimum timeout for a nexus operation.
+    /// Minimum timeout for a nexus operation.
     pub fn nexus(&self) -> Duration {
         self.nexus
     }
-    /// minimum timeout for a pool operation.
+    /// Minimum timeout for a pool operation.
     pub fn pool(&self) -> Duration {
         self.pool
     }
-    /// minimum timeout for nexus shutdown
+    /// Minimum timeout for nexus shutdown.
     pub fn nexus_shutdown(&self) -> Duration {
         self.nexus_shutdown
+    }
+    /// Minimum timeout for nvme reconnect.
+    pub fn nvme_reconnect(&self) -> Duration {
+        self.nvme_reconnect
     }
 }
 

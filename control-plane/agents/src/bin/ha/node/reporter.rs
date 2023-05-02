@@ -1,6 +1,7 @@
 use crate::{cluster_agent_client, Cli};
 use grpc::operations::ha_node::traits::ClusterAgentOperations;
 use stor_port::types::v0::transport::{FailedPath, ReportFailedPaths};
+
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     time::{sleep, Duration},
@@ -59,30 +60,52 @@ impl PathReporter {
             // Phase 1: wait till a path batch is available.
             while let Ok(batch) = aggregator.receive_batch().await {
                 // Phase 2: send all aggregated paths in one shot.
-                let failed_paths = batch
-                    .into_paths()
-                    .into_iter()
-                    .map(FailedPath::new)
-                    .collect::<Vec<FailedPath>>();
-                let node_ep = Cli::args().grpc_endpoint;
-                let req = ReportFailedPaths::new(node_name.clone(), failed_paths, node_ep);
+                Self::process_batch(batch, &node_name, retransmission_period);
+            }
+        });
+    }
 
-                // Report all paths in a separate task, continue till transmission succeeds.
-                tokio::spawn(async move {
-                    let client = cluster_agent_client();
+    fn process_batch(batch: PathBatch, node_name: &str, retransmission_period: Duration) {
+        let failed_paths = batch
+            .into_paths()
+            .into_iter()
+            .map(FailedPath::new)
+            .collect::<Vec<FailedPath>>();
+        let node_ep = Cli::args().grpc_endpoint;
+        let mut req = ReportFailedPaths::new(node_name.to_string(), failed_paths, node_ep);
 
-                    // todo: should we check if we still ought to report failed paths after error?
-                    //       otherwise when we finally report it could be very outdated?
-                    loop {
-                        match client.report_failed_nvme_paths(&req, None).await {
-                            Ok(_) => break,
-                            Err(error) => {
-                                tracing::error!(%error, "Failed to report failed NVMe paths");
-                                sleep(retransmission_period).await;
+        // Report all paths in a separate task, continue till transmission succeeds.
+        tokio::spawn(async move {
+            let client = cluster_agent_client();
+
+            // todo: should we check if we still ought to report failed paths after error?
+            //       otherwise when we finally report it could be very outdated?
+            while !req.failed_paths().is_empty() {
+                match client.report_failed_nvme_paths(&req, None).await {
+                    Ok(report) if report.is_empty() => {
+                        break;
+                    }
+                    Ok(report) => {
+                        tracing::error!(?report, "Failed paths reporting");
+                        for fail in report.into_failed_paths() {
+                            match fail.status_code {
+                                tonic::Code::Ok
+                                | tonic::Code::InvalidArgument
+                                | tonic::Code::AlreadyExists => {
+                                    req.remove_path(&fail.failed_nqn);
+                                }
+                                // anything else, retry
+                                _ => {
+                                    tracing::error!(?fail, "Failed to report failed NVMe paths");
+                                }
                             }
                         }
                     }
-                });
+                    Err(error) => {
+                        tracing::error!(%error, "Failed to report failed NVMe paths");
+                    }
+                }
+                sleep(retransmission_period).await;
             }
         });
     }

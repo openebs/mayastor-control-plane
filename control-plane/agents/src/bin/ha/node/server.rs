@@ -370,16 +370,13 @@ impl NodeAgentOperations for NodeAgentSvc {
         match Subsystem::try_from_nqn(nqn.as_str()) {
             Ok(subsys_list) => {
                 let controller_list = subsys_list
-                    .iter()
-                    .filter(|controller| {
-                        controller.state == "live" && controller.state == "connecting"
-                    })
-                    .map(|controller| NvmeCtrller::new(controller.clone().address))
+                    .into_iter()
+                    .map(|controller| NvmeCtrller::new(controller.address))
                     .collect();
                 Ok(NvmeSubsys(controller_list))
             }
             Err(_) => Err(ReplyError::not_found(
-                ResourceKind::Unknown,
+                ResourceKind::NvmeSubsystem,
                 "Node agent".to_string(),
                 "Could not find any subsystems for the supplied nqn".to_string(),
             )),

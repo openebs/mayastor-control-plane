@@ -1,4 +1,4 @@
-pytest-bdd
+pytest-bdd==6.0.0
 python-dateutil
 retrying
 urllib3

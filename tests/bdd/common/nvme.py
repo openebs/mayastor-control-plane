@@ -69,6 +69,7 @@ def nvme_connect(uri):
     hostnqn = nvme_hostnqn_arg(u)
 
     command = f"sudo nvme connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
+    print(command)
     subprocess.run(command, check=True, shell=True, capture_output=False)
     time.sleep(1)
     command = "sudo nvme list -v -o json"
@@ -78,17 +79,20 @@ def nvme_connect(uri):
         ).stdout
     )
 
-    dev = list(filter(lambda d: nqn in d.get("SubsystemNQN"), discover.get("Devices")))
-
+    dev = list(
+        filter(
+            lambda d: list(
+                filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
+            ),
+            discover.get("Devices"),
+        )
+    )
     # we should only have one connection
     assert len(dev) == 1
-    try:
-        device = "/dev/{}".format(dev[0]["Namespaces"][0].get("NameSpace"))
-    except KeyError:
-        device = "/dev/{}".format(
-            dev[0]["Controllers"][0]["Namespaces"][0].get("NameSpace")
-        )
-    return device
+    assert len(dev[0].get("Subsystems")) == 1
+    subsystem = dev[0].get("Subsystems")[0]
+
+    return "/dev/{}".format(subsystem["Namespaces"][0].get("NameSpace"))
 
 
 def nvme_id_ctrl(device):
@@ -141,34 +145,20 @@ def nvme_find_device(uri):
         ).stdout
     )
 
-    dev = list(filter(lambda d: nqn in d.get("SubsystemNQN"), discover.get("Devices")))
-
+    dev = list(
+        filter(
+            lambda d: list(
+                filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
+            ),
+            discover.get("Devices"),
+        )
+    )
     # we should only have one connection
     assert len(dev) == 1
+    assert len(dev[0].get("Subsystems")) == 1
+    subsystem = dev[0].get("Subsystems")[0]
 
-    # The device list seems to differ locally and CI, possibly due to kernel differences
-    # See the example snippet for some details
-    # 5.10.52 #1-NixOS SMP Tue Jul 20 14:05:59 UTC 2021 x86_64 GNU/Linux
-    #   Controllers:
-    #   - Controller: nvme2
-    #     Namespaces:
-    #     - NameSpace: nvme2c2n1
-    #       NSID: 1
-    #   Namespaces:
-    #   - NameSpace: nvme2n1
-    #     NSID: 1
-    #  VS
-    # 5.18.10 #1-NixOS SMP PREEMPT_DYNAMIC Thu Jul 7 15:55:01 UTC 2022 x86_64 GNU/Linux
-    #   Controllers:
-    #   - Controller: nvme2
-    #     Namespaces:
-    #     - NameSpace: nvme2n1
-    #       NSID: 1
-    if "Namespaces" in dev[0]:
-        return "/dev/{}".format(dev[0]["Namespaces"][0].get("NameSpace"))
-    return "/dev/{}".format(
-        dev[0]["Controllers"][0].get("Namespaces")[0].get("NameSpace")
-    )
+    return "/dev/{}".format(subsystem["Namespaces"][0].get("NameSpace"))
 
 
 def nvme_disconnect(uri):
@@ -195,11 +185,12 @@ def nvme_disconnect_controller(name):
 def nvme_list_subsystems(device):
     """Retrieve information for NVMe subsystems"""
     command = "sudo nvme list-subsys {} -o json".format(device)
-    return json.loads(
+    subsystems = json.loads(
         subprocess.run(
             command, check=True, shell=True, capture_output=True, encoding="utf-8"
         ).stdout
     )
+    return list(filter(lambda s: len(s["Subsystems"]) == 1, subsystems))[0]
 
 
 NS_PROPS = ["nguid", "eui64"]
@@ -218,3 +209,32 @@ def identify_namespace(device):
         if len(v) == 2 and v[0] in NS_PROPS:
             ns[v[0]] = v[1]
     return ns
+
+
+def nvme_set_reconnect_delay(uri, delay=10):
+    u = urlparse(uri)
+    nqn = u.path[1:]
+
+    command = "sudo nvme list -v -o json"
+    discover = json.loads(
+        subprocess.run(
+            command, shell=True, check=True, text=True, capture_output=True
+        ).stdout
+    )
+    dev = list(
+        filter(
+            lambda d: list(
+                filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
+            ),
+            discover.get("Devices"),
+        )
+    )
+    # we should only have one connection
+    assert len(dev) == 1
+    assert len(dev[0].get("Subsystems")) == 1
+    subsystem = dev[0].get("Subsystems")[0]
+
+    controller = subsystem["Controllers"][0].get("Controller")
+
+    command = f"echo {delay} | sudo tee -a /sys/class/nvme/{controller}/reconnect_delay"
+    subprocess.run(command, check=True, shell=True, capture_output=True)

@@ -63,6 +63,8 @@ pub fn timeout_grpc(op_id: MessageId, timeout_opts: TimeoutOptions) -> Duration 
 
                 MessageIdVs::CreatePool => min_timeouts.pool(),
                 MessageIdVs::DestroyPool => min_timeouts.pool(),
+
+                MessageIdVs::ReplacePathInfo => min_timeouts.nvme_reconnect(),
                 _ => base,
             },
         };

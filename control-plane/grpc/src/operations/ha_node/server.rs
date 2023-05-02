@@ -1,9 +1,7 @@
-use tonic::{Request, Response, Status};
-
 use crate::{
     ha_cluster_agent::{
         ha_cluster_rpc_server::{HaClusterRpc, HaClusterRpcServer},
-        HaNodeInfo, ReportFailedNvmePathsRequest,
+        FailedNvmePathsResponse, HaNodeInfo, ReportFailedNvmePathsRequest,
     },
     ha_node_agent::{
         get_nvme_controller_response,
@@ -12,6 +10,9 @@ use crate::{
     },
     operations::ha_node::traits::{ClusterAgentOperations, NodeAgentOperations, NodeInfoConv},
 };
+
+use tonic::{Request, Response, Status};
+
 use std::sync::Arc;
 
 /// RPC cluster-node server
@@ -33,16 +34,20 @@ impl NodeAgentServer {
 
 #[tonic::async_trait]
 impl HaNodeRpc for NodeAgentServer {
+    #[tracing::instrument(
+        name = "NodeAgentServer::replace_path",
+        level = "debug",
+        skip(self, request),
+        err
+    )]
     async fn replace_path(
         &self,
-        request: tonic::Request<ReplacePathRequest>,
-    ) -> Result<tonic::Response<()>, tonic::Status> {
+        request: Request<ReplacePathRequest>,
+    ) -> Result<Response<()>, tonic::Status> {
         let msg = request.into_inner();
 
-        match self.service.replace_path(&msg, None).await {
-            Ok(_) => Ok(Response::new(())),
-            Err(err) => Err(err.into()),
-        }
+        self.service.replace_path(&msg, None).await?;
+        Ok(Response::new(()))
     }
 
     async fn get_nvme_controller(
@@ -99,11 +104,11 @@ impl HaClusterRpc for ClusterAgentServer {
     async fn report_failed_nvme_paths(
         &self,
         request: tonic::Request<ReportFailedNvmePathsRequest>,
-    ) -> Result<tonic::Response<()>, tonic::Status> {
+    ) -> Result<tonic::Response<FailedNvmePathsResponse>, tonic::Status> {
         let pathinfo = request.into_inner();
         match self.service.report_failed_nvme_paths(&pathinfo, None).await {
-            Ok(_) => Ok(Response::new(())),
-            Err(err) => Err(Status::internal(format!("Failed to report path: {err:?}"))),
+            Ok(response) => Ok(Response::new(response.into())),
+            Err(error) => Err(error.into()),
         }
     }
 }
