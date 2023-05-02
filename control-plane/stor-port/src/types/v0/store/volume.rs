@@ -651,7 +651,9 @@ impl VolumeGroupSpec {
     }
     /// Add a new volume to the list of volumes.
     pub fn append(&mut self, id: VolumeId) {
-        self.volumes.push(id)
+        if !self.volumes.contains(&id) {
+            self.volumes.push(id)
+        }
     }
     /// Add a new volume to the list of volumes.
     pub fn remove(&mut self, id: &VolumeId) {

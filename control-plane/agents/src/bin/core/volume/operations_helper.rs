@@ -18,7 +18,7 @@ use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
 use grpc::operations::volume::traits::PublishVolumeInfo;
 
 use crate::{
-    controller::resources::operations_helper::ResourceSpecsLocked,
+    controller::resources::operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
     nexus::scheduling::target_node_candidate,
 };
 use stor_port::{
@@ -168,6 +168,12 @@ impl OperationGuardArc<VolumeSpec> {
         state: VolumeState,
         spec_clone: VolumeSpec,
     ) -> Result<Volume, SvcError> {
+        // Create a vg guard to prevent candidate collision.
+        let _vg_guard = match registry.specs().get_or_create_volume_group(&spec_clone) {
+            Some(vg) => Some(vg.operation_guard_wait().await?),
+            _ => None,
+        };
+
         // Prepare a list of candidates (based on some criteria)
         let result = volume_replica_candidates(registry, &spec_clone).await;
         let candidates = self
@@ -195,6 +201,12 @@ impl OperationGuardArc<VolumeSpec> {
         state: VolumeState,
         spec_clone: VolumeSpec,
     ) -> Result<Volume, SvcError> {
+        // Create a vg guard to prevent candidate collision.
+        let _vg_guard = match registry.specs().get_or_create_volume_group(&spec_clone) {
+            Some(vg) => Some(vg.operation_guard_wait().await?),
+            _ => None,
+        };
+
         // Determine which replica is most suitable to be removed
         let result = volume_replica_remove_candidate(&spec_clone, &state, registry).await;
 
