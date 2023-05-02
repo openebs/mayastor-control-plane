@@ -413,9 +413,13 @@ pub(crate) struct NodeSorters {}
 impl NodeSorters {
     /// Sort nodes by the number of active nexus present per node.
     /// The lesser the number of active nexus on a node, the more would be its selection priority.
+    /// In case this is a volume group, then it would be spread on basis of number of vg targets and
+    /// then on basis of total targets on equal.
     pub(crate) fn number_targets(a: &NodeItem, b: &NodeItem) -> std::cmp::Ordering {
-        a.node_wrapper()
-            .nexus_count()
-            .cmp(&b.node_wrapper().nexus_count())
+        a.vg_nexus_count().cmp(&b.vg_nexus_count()).then_with(|| {
+            a.node_wrapper()
+                .nexus_count()
+                .cmp(&b.node_wrapper().nexus_count())
+        })
     }
 }

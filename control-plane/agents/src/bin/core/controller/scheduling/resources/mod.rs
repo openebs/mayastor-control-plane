@@ -256,12 +256,16 @@ impl ChildItem {
 #[derive(Clone)]
 pub(crate) struct NodeItem {
     node_wrapper: NodeWrapper,
+    vg_nexus_count: Option<u64>,
 }
 
 impl NodeItem {
     /// Create a new node item with given `node_wrapper`.
-    pub(crate) fn new(node_wrapper: NodeWrapper) -> Self {
-        Self { node_wrapper }
+    pub(crate) fn new(node_wrapper: NodeWrapper, vg_nexus_count: Option<u64>) -> Self {
+        Self {
+            node_wrapper,
+            vg_nexus_count,
+        }
     }
     /// Get the internal `node_wrapper` from `NodeItem`.
     pub(crate) fn node_wrapper(&self) -> &NodeWrapper {
@@ -270,5 +274,9 @@ impl NodeItem {
     /// Convert into internal `node_wrapper` from `NodeItem`.
     pub(crate) fn into_node_wrapper(self) -> NodeWrapper {
         self.node_wrapper
+    }
+    /// The number of nexuses present on the node.
+    pub(crate) fn vg_nexus_count(&self) -> u64 {
+        self.vg_nexus_count.unwrap_or(u64::MIN)
     }
 }

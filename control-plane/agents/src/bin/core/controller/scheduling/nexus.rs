@@ -8,7 +8,9 @@ use crate::controller::{
     },
 };
 use agents::errors::SvcError;
+use std::collections::HashMap;
 
+use crate::controller::scheduling::volume_group::get_node_vg_nexus_count;
 use std::ops::Deref;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
@@ -289,13 +291,24 @@ impl NexusTargetNode {
             registry: registry.clone(),
             spec: request.spec.clone(),
         };
+        let mut node_vg_nexus_count_map: Option<HashMap<NodeId, u64>> = None;
+        if let Some(volume_group) = &request.volume_group {
+            if let Ok(volume_group_spec) = registry.specs().volume_group_spec(volume_group.id()) {
+                node_vg_nexus_count_map =
+                    Some(get_node_vg_nexus_count(&volume_group_spec, registry).await);
+            }
+        }
+
         let list = {
             let nodes = registry.node_wrappers().await;
             let mut node_items = Vec::with_capacity(nodes.len());
             for node in nodes {
                 let node = node.read().await;
+                let vg_nexus_count = node_vg_nexus_count_map
+                    .as_ref()
+                    .and_then(|map| map.get(node.id()).cloned());
 
-                node_items.push(NodeItem::new(node.clone()));
+                node_items.push(NodeItem::new(node.clone(), vg_nexus_count));
             }
             node_items
         };
