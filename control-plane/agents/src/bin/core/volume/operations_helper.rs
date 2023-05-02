@@ -3,24 +3,22 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{ResourceLifecycle, ResourceOwnerUpdate},
-            operations_helper::GuardedOperationsHelper,
+            operations_helper::{
+                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
+            },
             OperationGuardArc, TraceSpan, TraceStrLog,
         },
         scheduling::resources::{HealthyChildItems, ReplicaItem},
     },
+    nexus::scheduling::target_node_candidate,
     volume::specs::{
         healthy_volume_replicas, nexus_attach_candidates, nexus_child_remove_candidates,
         volume_replica_candidates, volume_replica_remove_candidate,
-        volume_unused_replica_remove_candidates,
+        volume_unused_replica_remove_candidates, NexusNodeCandidate,
     },
 };
 use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
 use grpc::operations::volume::traits::PublishVolumeInfo;
-
-use crate::{
-    controller::resources::operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
-    nexus::scheduling::target_node_candidate,
-};
 use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
@@ -638,7 +636,21 @@ impl OperationGuardArc<VolumeSpec> {
         registry: &Registry,
         request: &impl PublishVolumeInfo,
         republish: bool,
-    ) -> Result<NodeId, SvcError> {
+    ) -> Result<NexusNodeCandidate, SvcError> {
+        // Create a vg guard to prevent candidate collision.
+        let volume_group = self.as_ref().volume_group.clone();
+        let vg_guard = match volume_group {
+            None => None,
+            Some(vg) => {
+                let vg_spec = registry.specs().get_volume_group(vg.id()).ok_or(
+                    SvcError::VolumeGroupNotFound {
+                        vol_grp_id: vg.id().to_string(),
+                    },
+                )?;
+                Some(vg_spec.operation_guard_wait().await?)
+            }
+        };
+
         if !republish {
             // We can't configure a new target_node if the volume is currently published
             if let Some(target) = self.as_ref().target() {
@@ -656,7 +668,7 @@ impl OperationGuardArc<VolumeSpec> {
                 // determine a suitable node for the same.
                 let candidate = target_node_candidate(self.as_ref(), registry).await?;
                 tracing::debug!(node.id=%candidate.id(), "Node selected for volume publish by the core-agent");
-                Ok(candidate.id().clone())
+                Ok(NexusNodeCandidate::new(candidate.id().clone(), vg_guard))
             }
             Some(node) => {
                 // make sure the requested node is available
@@ -664,7 +676,7 @@ impl OperationGuardArc<VolumeSpec> {
                 let node = registry.node_wrapper(node).await?;
                 let node = node.read().await;
                 if node.is_online() {
-                    Ok(node.id().clone())
+                    Ok(NexusNodeCandidate::new(node.id().clone(), vg_guard))
                 } else {
                     Err(SvcError::NodeNotOnline {
                         node: node.id().clone(),

@@ -58,3 +58,20 @@ pub(crate) async fn get_pool_vg_replica_count(
     }
     pool_vg_replica_count
 }
+
+/// Get the map of node to the number of the volume group nexuses on the node.
+pub(crate) async fn get_node_vg_nexus_count(
+    volume_group_spec: &VolumeGroupSpec,
+    registry: &Registry,
+) -> HashMap<NodeId, u64> {
+    let vg_vols = volume_group_spec.volumes();
+    let node_vg_nexus_count = vg_vols
+        .iter()
+        .flat_map(|vol_id| registry.specs().volume_nexuses(vol_id))
+        .map(|nexus| nexus.lock().node.clone())
+        .fold(HashMap::<NodeId, u64>::new(), |mut map, node| {
+            map.entry(node).and_modify(|count| *count += 1).or_insert(1);
+            map
+        });
+    node_vg_nexus_count
+}

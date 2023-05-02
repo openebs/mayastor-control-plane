@@ -71,6 +71,29 @@ impl CreateReplicaCandidate {
     }
 }
 
+/// NexusNodeCandidate for nexus node selection.
+pub(crate) struct NexusNodeCandidate {
+    candidate: NodeId,
+    _volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+}
+
+impl NexusNodeCandidate {
+    /// Create a new `NexusNodeCandidate` with candidate and optional vg guard.
+    pub(crate) fn new(
+        candidate: NodeId,
+        volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+    ) -> NexusNodeCandidate {
+        Self {
+            candidate,
+            _volume_group_guard: volume_group_guard,
+        }
+    }
+    /// Get the candidate.
+    pub(crate) fn candidate(&self) -> &NodeId {
+        &self.candidate
+    }
+}
+
 /// Select a replica to be removed from the volume
 pub(crate) async fn volume_replica_remove_candidate(
     spec: &VolumeSpec,
@@ -578,6 +601,15 @@ impl ResourceSpecsLocked {
                 vg_spec
             }
         })
+    }
+
+    /// Get or Create the resourced VolumeGroupSpec for the given request.
+    pub(crate) fn get_volume_group(
+        &self,
+        vol_grp_id: &VolumeGroupId,
+    ) -> Option<ResourceMutex<VolumeGroupSpec>> {
+        let specs = self.read();
+        specs.volume_groups.get(vol_grp_id).cloned()
     }
 
     /// Get or Create the resourced VolumeSpec for the given request

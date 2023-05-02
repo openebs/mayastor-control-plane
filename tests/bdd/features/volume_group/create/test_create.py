@@ -1,7 +1,6 @@
 """Replica Anti-Affinity for Volume Group feature tests."""
 
 from typing import Dict
-from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest

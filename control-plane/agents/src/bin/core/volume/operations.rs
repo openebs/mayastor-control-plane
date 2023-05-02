@@ -310,7 +310,12 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let last_target = self.as_ref().health_info_id().cloned();
         let frontend_nodes = &request.frontend_nodes;
         let target_cfg = self
-            .next_target_config(registry, &nexus_node, &request.share, frontend_nodes)
+            .next_target_config(
+                registry,
+                nexus_node.candidate(),
+                &request.share,
+                frontend_nodes,
+            )
             .await;
 
         let operation = VolumeOperation::Publish(PublishOperation::new(
@@ -471,7 +476,12 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let nexus_node = self.next_target_node(registry, request, true).await?;
         let nodes = target_cfg.frontend().node_names();
         let target_cfg = self
-            .next_target_config(registry, &nexus_node, &Some(request.share), &nodes)
+            .next_target_config(
+                registry,
+                nexus_node.candidate(),
+                &Some(request.share),
+                &nodes,
+            )
             .await;
         let operation = VolumeOperation::Republish(RepublishOperation::new(target_cfg.clone()));
 
