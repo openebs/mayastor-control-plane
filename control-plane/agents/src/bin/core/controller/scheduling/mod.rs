@@ -231,7 +231,11 @@ impl ChildSorters {
                     let childa_is_local = !a.spec().share.shared();
                     let childb_is_local = !b.spec().share.shared();
                     if childa_is_local == childb_is_local {
-                        std::cmp::Ordering::Equal
+                        match a.vg_replicas_on_pool().cmp(&b.vg_replicas_on_pool()) {
+                            Ordering::Less => Ordering::Greater,
+                            Ordering::Equal => Ordering::Equal,
+                            Ordering::Greater => Ordering::Less,
+                        }
                     } else if childa_is_local {
                         std::cmp::Ordering::Greater
                     } else {

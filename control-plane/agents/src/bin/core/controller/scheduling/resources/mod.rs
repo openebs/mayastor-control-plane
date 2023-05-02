@@ -99,6 +99,11 @@ pub(crate) struct ReplicaItem {
     child_state: Option<Child>,
     child_spec: Option<NexusChild>,
     child_info: Option<ChildInfo>,
+    /// Number of replicas of a vg present on the pool of this replica.
+    /// This would have a value if the volume is a part of
+    /// a volume group and the already created volumes have replicas
+    /// on this pool.
+    vg_replicas_on_pool: Option<u64>,
 }
 
 impl ReplicaItem {
@@ -110,6 +115,7 @@ impl ReplicaItem {
         child_state: Option<Child>,
         child_spec: Option<NexusChild>,
         child_info: Option<ChildInfo>,
+        vg_replicas_on_pool: Option<u64>,
     ) -> Self {
         Self {
             replica_spec: replica,
@@ -118,6 +124,7 @@ impl ReplicaItem {
             child_state,
             child_spec,
             child_info,
+            vg_replicas_on_pool,
         }
     }
     /// Get a reference to the replica spec.
@@ -144,6 +151,10 @@ impl ReplicaItem {
     /// Get a reference to the child info.
     pub(crate) fn child_info(&self) -> Option<&ChildInfo> {
         self.child_info.as_ref()
+    }
+    /// Count of vg replicas on the replica's pool.
+    pub(crate) fn vg_replicas_on_pool(&self) -> u64 {
+        self.vg_replicas_on_pool.unwrap_or(u64::MIN)
     }
 }
 

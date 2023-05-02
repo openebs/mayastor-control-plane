@@ -30,12 +30,11 @@ pub(crate) fn get_restricted_nodes(
             // for that volume.
             let node_ids = specs.get_volume_replica_nodes(registry, volume);
             // Add a new node in the list if it doesn't already exist.
-            if let Some(node_id) = node_ids
+            let filtered_nodes: Vec<NodeId> = node_ids
                 .into_iter()
-                .find(|node_id| !restricted_nodes.contains(node_id))
-            {
-                restricted_nodes.push(node_id.clone());
-            }
+                .filter(|id| !restricted_nodes.contains(id))
+                .collect();
+            restricted_nodes.extend(filtered_nodes);
         }
     }
     restricted_nodes

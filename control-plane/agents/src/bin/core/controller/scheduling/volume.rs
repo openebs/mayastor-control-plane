@@ -264,7 +264,7 @@ impl GetChildForRemovalContext {
         })
     }
 
-    async fn list(&self) -> Vec<ReplicaItem> {
+    async fn list(&self, pool_vg_rep: &Option<HashMap<PoolId, u64>>) -> Vec<ReplicaItem> {
         let replicas = self.registry.specs().volume_replicas(&self.spec.uuid);
         let nexus = self.registry.specs().volume_target_nexus_rsc(&self.spec);
         let replicas = replicas.iter().map(|r| r.lock().clone());
@@ -272,6 +272,9 @@ impl GetChildForRemovalContext {
         let replica_states = self.registry.replicas().await;
         replicas
             .map(|replica_spec| {
+                let vg_rep_count = pool_vg_rep
+                    .as_ref()
+                    .and_then(|map| map.get(replica_spec.pool_name()).cloned());
                 ReplicaItem::new(
                     replica_spec.clone(),
                     replica_states.iter().find(|r| r.uuid == replica_spec.uuid),
@@ -318,6 +321,7 @@ impl GetChildForRemovalContext {
                             .find(|child| child.uuid.as_str() == replica_spec.uuid.as_str())
                             .cloned()
                     }),
+                    vg_rep_count,
                 )
             })
             .collect::<Vec<_>>()
@@ -326,8 +330,15 @@ impl GetChildForRemovalContext {
 
 impl DecreaseVolumeReplica {
     async fn builder(request: &GetChildForRemoval, registry: &Registry) -> Result<Self, SvcError> {
+        let mut pool_vg_replica_count_map: Option<HashMap<PoolId, u64>> = None;
+        if let Some(volume_group) = &request.spec.volume_group {
+            let volume_group_spec = registry.specs().volume_group_spec(volume_group.id())?;
+            pool_vg_replica_count_map =
+                Some(get_pool_vg_replica_count(&volume_group_spec, registry).await);
+        }
+
         let context = GetChildForRemovalContext::new(registry, request).await?;
-        let list = context.list().await;
+        let list = context.list(&pool_vg_replica_count_map).await;
         Ok(Self {
             data: ResourceData::new(context, list),
         })

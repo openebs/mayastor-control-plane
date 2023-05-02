@@ -218,6 +218,12 @@ pub enum SvcError {
     NoOnlineReplicas { id: String },
     #[snafu(display("No healthy replicas are available for Volume '{}'", id))]
     NoHealthyReplicas { id: String },
+    #[snafu(display(
+        "Replica Count of {} is not attainable for {}",
+        count,
+        resource.to_string()
+    ))]
+    RestrictedReplicaCount { resource: ResourceKind, count: u8 },
     #[snafu(display("Entry with key '{}' not found in the persistent store.", key))]
     StoreMissingEntry { key: String },
     #[snafu(display("The uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
@@ -290,6 +296,7 @@ impl SvcError {
             Self::GrpcUdsConnect { .. } => tonic::Code::Unavailable,
             Self::Internal { .. } => tonic::Code::Internal,
             Self::Unimplemented { .. } => tonic::Code::Unimplemented,
+            Self::RestrictedReplicaCount { .. } => tonic::Code::FailedPrecondition,
             _ => tonic::Code::Internal,
         }
     }
@@ -745,6 +752,12 @@ impl From<SvcError> for ReplyError {
                 resource: ResourceKind::VolumeGroup,
                 source: desc.to_string(),
                 extra: error.full_string(),
+            },
+            SvcError::RestrictedReplicaCount { resource, .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource,
+                source: desc.to_string(),
+                extra: error_str,
             },
         }
     }

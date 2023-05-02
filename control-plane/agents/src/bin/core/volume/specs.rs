@@ -35,7 +35,7 @@ use stor_port::{
             nexus::NexusSpec,
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
-            volume::{VolumeGroupSpec, VolumeOperation, VolumeSpec},
+            volume::{VolumeGroupId, VolumeGroupSpec, VolumeOperation, VolumeSpec},
             SpecStatus, SpecTransaction,
         },
         transport::{
@@ -47,7 +47,6 @@ use stor_port::{
 
 use snafu::OptionExt;
 use std::convert::From;
-use stor_port::types::v0::store::volume::VolumeGroupId;
 
 /// CreateReplicaCandidate for volume and volume group.
 pub(crate) struct CreateReplicaCandidate {
@@ -244,7 +243,7 @@ pub(crate) async fn create_volume_replicas(
     volume: &VolumeSpec,
 ) -> Result<CreateReplicaCandidate, SvcError> {
     // Create a vg guard to prevent candidate collision.
-    let vg_guard = match registry.specs().get_or_create_volume_group(request) {
+    let vg_guard = match registry.specs().get_or_create_volume_group(volume) {
         Some(vg) => Some(vg.operation_guard_wait().await?),
         _ => None,
     };
@@ -564,17 +563,17 @@ impl ResourceSpecsLocked {
     /// Get or Create the resourced VolumeGroupSpec for the given request.
     pub(crate) fn get_or_create_volume_group(
         &self,
-        request: &CreateVolume,
+        volume_spec: &VolumeSpec,
     ) -> Option<ResourceMutex<VolumeGroupSpec>> {
-        request.volume_group.as_ref().map(|vg_info| {
+        volume_spec.volume_group.as_ref().map(|vg_info| {
             let mut specs = self.write();
             if let Some(vg_spec) = specs.volume_groups.get(vg_info.id()) {
-                vg_spec.lock().append(request.uuid.clone());
+                vg_spec.lock().append(volume_spec.uuid.clone());
                 vg_spec.clone()
             } else {
                 let vg_spec = specs.volume_groups.insert(VolumeGroupSpec::new(
                     vg_info.id().clone(),
-                    vec![request.uuid.clone()],
+                    vec![volume_spec.uuid.clone()],
                 ));
                 vg_spec
             }
@@ -773,7 +772,15 @@ impl SpecOperationsHelper for VolumeSpec {
                         volume_state: state.status.to_string(),
                     })
                 } else {
-                    Ok(())
+                    // Validation for volume group volume's replica count cannot go below 2.
+                    if self.volume_group.is_some() && *replica_count < 2 {
+                        Err(SvcError::RestrictedReplicaCount {
+                            resource: ResourceKind::VolumeGroup,
+                            count: *replica_count,
+                        })
+                    } else {
+                        Ok(())
+                    }
                 }
             }
 
