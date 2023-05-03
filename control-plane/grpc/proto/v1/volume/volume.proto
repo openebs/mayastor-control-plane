@@ -242,6 +242,8 @@ message RepublishVolumeRequest {
   bool reuse_existing = 4;
   // the node where front-end IO will be sent from
   string frontend_node = 5;
+  /// Allows reusing the existing target, but prefers a target move.
+  bool reuse_existing_fallback = 6;
 }
 
 // Unpublish a volume from any node where it may be published

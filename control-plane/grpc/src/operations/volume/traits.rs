@@ -1210,6 +1210,8 @@ pub trait RepublishVolumeInfo: Send + Sync + std::fmt::Debug {
     fn share(&self) -> VolumeShareProtocol;
     /// Republish reusing current target.
     fn reuse_existing(&self) -> bool;
+    /// Allows reusing the existing target, but prefers a target move.
+    fn reuse_existing_fallback(&self) -> bool;
 }
 
 impl RepublishVolumeInfo for RepublishVolume {
@@ -1232,6 +1234,10 @@ impl RepublishVolumeInfo for RepublishVolume {
     fn reuse_existing(&self) -> bool {
         self.reuse_existing
     }
+
+    fn reuse_existing_fallback(&self) -> bool {
+        self.reuse_existing_fallback
+    }
 }
 
 impl From<&dyn RepublishVolumeInfo> for RepublishVolume {
@@ -1242,6 +1248,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolume {
             frontend_node: data.frontend_node(),
             share: data.share(),
             reuse_existing: data.reuse_existing(),
+            reuse_existing_fallback: data.reuse_existing_fallback(),
         }
     }
 }
@@ -1255,6 +1262,7 @@ impl From<&dyn RepublishVolumeInfo> for RepublishVolumeRequest {
             share: protocol as i32,
             reuse_existing: data.reuse_existing(),
             frontend_node: data.frontend_node().to_string(),
+            reuse_existing_fallback: data.reuse_existing_fallback(),
         }
     }
 }
@@ -1289,6 +1297,10 @@ impl RepublishVolumeInfo for ValidatedRepublishVolumeRequest {
 
     fn reuse_existing(&self) -> bool {
         self.inner.reuse_existing
+    }
+
+    fn reuse_existing_fallback(&self) -> bool {
+        self.inner.reuse_existing_fallback
     }
 }
 

@@ -448,10 +448,26 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         let mut older_nexus = specs.nexus(target_cfg.target().nexus()).await?;
         let mut move_nexus = true;
-
+        let mut nexus_node = None;
         match healthy_volume_replicas(&spec, &older_nexus.as_ref().node, registry).await {
             Ok(_) => {
-                if request.reuse_existing
+                let reuse_existing =
+                    match request.reuse_existing_fallback && !request.reuse_existing {
+                        true => match self.next_target_node(registry, request, true).await {
+                            Ok(node) => {
+                                nexus_node = Some(Ok(node));
+                                false
+                            }
+                            // use older target as a fallback...
+                            Err(error @ SvcError::NotEnoughResources { .. }) => {
+                                nexus_node = Some(Err(error));
+                                true
+                            }
+                            Err(error) => return Err(error),
+                        },
+                        false => request.reuse_existing,
+                    };
+                if reuse_existing
                     && !older_nexus.as_ref().is_shutdown()
                     && older_nexus.missing_nexus_recreate(registry).await.is_ok()
                 {
@@ -473,7 +489,10 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         }
 
         // Get the newer target node for the new nexus creation.
-        let nexus_node = self.next_target_node(registry, request, true).await?;
+        let nexus_node = match nexus_node {
+            Some(result) => result,
+            None => self.next_target_node(registry, request, true).await,
+        }?;
         let nodes = target_cfg.frontend().node_names();
         let target_cfg = self
             .next_target_config(

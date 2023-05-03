@@ -75,6 +75,7 @@ async fn lazy_delete_shutdown_targets() {
                 share: VolumeShareProtocol::Nvmf,
                 reuse_existing: true,
                 frontend_node: cluster.node(0),
+                reuse_existing_fallback: false,
             },
             None,
         )
@@ -89,6 +90,7 @@ async fn lazy_delete_shutdown_targets() {
                 share: VolumeShareProtocol::Nvmf,
                 reuse_existing: true,
                 frontend_node: cluster.node(1),
+                reuse_existing_fallback: false,
             },
             None,
         )
@@ -236,6 +238,7 @@ async fn volume_republish_nexus_recreation() {
                 target_node: None,
                 reuse_existing: true,
                 frontend_node: cluster.node(1),
+                reuse_existing_fallback: false,
             },
             None,
         )
@@ -316,6 +319,7 @@ async fn node_exhaustion() {
                 target_node: None,
                 reuse_existing: false,
                 frontend_node: cluster.node(1),
+                reuse_existing_fallback: false,
             },
             None,
         )
@@ -331,6 +335,7 @@ async fn node_exhaustion() {
                 target_node: None,
                 reuse_existing: false,
                 frontend_node: cluster.node(1),
+                reuse_existing_fallback: false,
             },
             None,
         )
@@ -346,6 +351,7 @@ async fn node_exhaustion() {
                 target_node: None,
                 reuse_existing: false,
                 frontend_node: cluster.node(1),
+                reuse_existing_fallback: false,
             },
             None,
         )
