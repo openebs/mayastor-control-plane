@@ -1,10 +1,10 @@
 use super::ResourceFilter;
 use crate::controller::scheduling::{volume::AddVolumeReplica, NodeFilters};
 
+mod affinity_group;
 pub(crate) mod pool;
 mod simple;
 mod thick;
-mod volume_group;
 
 pub(super) use simple::SimplePolicy;
 pub(super) use thick::ThickPolicy;

@@ -10,7 +10,7 @@ use crate::controller::{
 use agents::errors::SvcError;
 use std::collections::HashMap;
 
-use crate::controller::scheduling::volume_group::get_node_vg_nexus_count;
+use crate::controller::scheduling::affinity_group::get_node_ag_nexus_count;
 use std::ops::Deref;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
@@ -291,11 +291,13 @@ impl NexusTargetNode {
             registry: registry.clone(),
             spec: request.spec.clone(),
         };
-        let mut node_vg_nexus_count_map: Option<HashMap<NodeId, u64>> = None;
-        if let Some(volume_group) = &request.volume_group {
-            if let Ok(volume_group_spec) = registry.specs().volume_group_spec(volume_group.id()) {
-                node_vg_nexus_count_map =
-                    Some(get_node_vg_nexus_count(&volume_group_spec, registry).await);
+        let mut node_ag_nexus_count_map: Option<HashMap<NodeId, u64>> = None;
+        if let Some(affinity_group) = &request.affinity_group {
+            if let Ok(affinity_group_spec) =
+                registry.specs().affinity_group_spec(affinity_group.id())
+            {
+                node_ag_nexus_count_map =
+                    Some(get_node_ag_nexus_count(&affinity_group_spec, registry).await);
             }
         }
 
@@ -304,11 +306,11 @@ impl NexusTargetNode {
             let mut node_items = Vec::with_capacity(nodes.len());
             for node in nodes {
                 let node = node.read().await;
-                let vg_nexus_count = node_vg_nexus_count_map
+                let ag_nexus_count = node_ag_nexus_count_map
                     .as_ref()
                     .and_then(|map| map.get(node.id()).cloned());
 
-                node_items.push(NodeItem::new(node.clone(), vg_nexus_count));
+                node_items.push(NodeItem::new(node.clone(), ag_nexus_count));
             }
             node_items
         };

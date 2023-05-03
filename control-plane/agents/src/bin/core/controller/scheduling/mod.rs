@@ -1,8 +1,8 @@
+pub(crate) mod affinity_group;
 pub(crate) mod nexus;
 pub(crate) mod pool;
 pub(crate) mod resources;
 pub(crate) mod volume;
-pub(crate) mod volume_group;
 mod volume_policy;
 
 use crate::controller::scheduling::{
@@ -231,7 +231,7 @@ impl ChildSorters {
                     let childa_is_local = !a.spec().share.shared();
                     let childb_is_local = !b.spec().share.shared();
                     if childa_is_local == childb_is_local {
-                        match a.vg_replicas_on_pool().cmp(&b.vg_replicas_on_pool()) {
+                        match a.ag_replicas_on_pool().cmp(&b.ag_replicas_on_pool()) {
                             Ordering::Less => Ordering::Greater,
                             Ordering::Equal => Ordering::Equal,
                             Ordering::Greater => Ordering::Less,
@@ -413,10 +413,10 @@ pub(crate) struct NodeSorters {}
 impl NodeSorters {
     /// Sort nodes by the number of active nexus present per node.
     /// The lesser the number of active nexus on a node, the more would be its selection priority.
-    /// In case this is a volume group, then it would be spread on basis of number of vg targets and
-    /// then on basis of total targets on equal.
+    /// In case this is a Affinity Group, then it would be spread on basis of number of ag targets
+    /// and then on basis of total targets on equal.
     pub(crate) fn number_targets(a: &NodeItem, b: &NodeItem) -> std::cmp::Ordering {
-        a.vg_nexus_count().cmp(&b.vg_nexus_count()).then_with(|| {
+        a.ag_nexus_count().cmp(&b.ag_nexus_count()).then_with(|| {
             a.node_wrapper()
                 .nexus_count()
                 .cmp(&b.node_wrapper().nexus_count())

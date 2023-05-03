@@ -29,7 +29,7 @@ use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         openapi::models::RestJsonError,
-        transport::{HostNqn, HostNqnParseError, VolumeGroup},
+        transport::{AffinityGroup, HostNqn, HostNqnParseError},
     },
 };
 
@@ -189,8 +189,8 @@ pub struct CreateVolumeBody {
     pub labels: Option<VolumeLabels>,
     /// Flag indicating whether the volume should be thin provisioned
     pub thin: bool,
-    /// Volume Group related information.
-    pub volume_group: Option<VolumeGroup>,
+    /// Affinity Group related information.
+    pub affinity_group: Option<AffinityGroup>,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -201,7 +201,7 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             topology: src.topology.into_opt(),
             labels: src.labels,
             thin: src.thin,
-            volume_group: src.volume_group.map(|vg| vg.into()),
+            affinity_group: src.affinity_group.map(|ag| ag.into()),
         }
     }
 }
@@ -214,7 +214,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             topology: create.topology,
             labels: create.labels,
             thin: create.thin,
-            volume_group: create.volume_group,
+            affinity_group: create.affinity_group,
         }
     }
 }
@@ -229,7 +229,7 @@ impl CreateVolumeBody {
             topology: self.topology.clone(),
             labels: self.labels.clone(),
             thin: self.thin,
-            volume_group: self.volume_group.clone(),
+            affinity_group: self.affinity_group.clone(),
         }
     }
 }

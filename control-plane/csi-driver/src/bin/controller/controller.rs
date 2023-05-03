@@ -2,8 +2,8 @@ use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineA
 
 use rpc::csi::{Topology as CsiTopology, *};
 use stor_port::types::v0::openapi::models::{
-    LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus, PoolTopology, SpecStatus, Volume,
-    VolumeGroup, VolumeShareProtocol,
+    AffinityGroup, LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus, PoolTopology,
+    SpecStatus, Volume, VolumeShareProtocol,
 };
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
@@ -218,7 +218,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     })),
                 );
 
-                let volume_group_name = context.volume_group();
+                let sts_affinity_group_name = context.sts_affinity_group();
 
                 IoEngineApiClient::get_client()
                     .create_volume(
@@ -227,14 +227,14 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                         size,
                         volume_topology,
                         thin,
-                        volume_group_name.clone().map(VolumeGroup::new),
+                        sts_affinity_group_name.clone().map(AffinityGroup::new),
                     )
                     .await?;
 
-                if let Some(vg_name) = volume_group_name {
+                if let Some(ag_name) = sts_affinity_group_name {
                     debug!(
                         volume.uuid = volume_uuid,
-                        volume.volume_group = vg_name,
+                        volume.affinity_group = ag_name,
                         "Volume successfully created"
                     );
                 } else {

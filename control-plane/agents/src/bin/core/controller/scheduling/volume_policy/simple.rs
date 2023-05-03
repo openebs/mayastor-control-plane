@@ -4,7 +4,7 @@ use crate::{
         scheduling::{
             resources::PoolItem,
             volume::{AddVolumeReplica, GetSuitablePoolsContext},
-            volume_policy::{pool::PoolBaseFilters, volume_group, DefaultBasePolicy},
+            volume_policy::{affinity_group, pool::PoolBaseFilters, DefaultBasePolicy},
             ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
         },
     },
@@ -37,7 +37,7 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
     fn apply(self, to: AddVolumeReplica) -> AddVolumeReplica {
         DefaultBasePolicy::filter(to)
             .filter(PoolBaseFilters::min_free_space)
-            .filter(volume_group::SingleReplicaPolicy::replica_anti_affinity)
+            .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             .filter_param(&self, SimplePolicy::min_free_space)
             .filter_param(&self, SimplePolicy::pool_overcommit)
             // sort pools in order of total weight of certain field values.
@@ -48,9 +48,9 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
 const TOTAL_REPLICA_COUNT_WEIGHT: Ranged = Ranged::new_const(25);
 const FREE_SPACE_WEIGHT: Ranged = Ranged::new_const(40);
 const OVER_COMMIT_WEIGHT: Ranged = Ranged::new_const(35);
-// Only for volume group multiple replica case.
-const VG_TOTAL_REPLICA_COUNT_WEIGHT: Ranged = Ranged::new_const(15);
-const VG_REPL_COUNT_WEIGHT: Ranged = Ranged::new_const(10);
+// Only for Affinity Group multiple replica case.
+const AG_TOTAL_REPLICA_COUNT_WEIGHT: Ranged = Ranged::new_const(15);
+const AG_REPL_COUNT_WEIGHT: Ranged = Ranged::new_const(10);
 
 impl SimplePolicy {
     /// SortCriteria for free space on pool.
@@ -61,26 +61,26 @@ impl SimplePolicy {
             |pool_item| pool_item.pool().free_space().into(),
         )
     }
-    /// SortCriteria for number of volume group replicas on pool only for volume group.
-    fn vg_replica_count() -> SortCriteria {
+    /// SortCriteria for number of Affinity Group replicas on pool only for Affinity Group.
+    fn ag_replica_count() -> SortCriteria {
         SortCriteria::new(
-            Criteria::new("vg_replica_count", VG_REPL_COUNT_WEIGHT),
+            Criteria::new("ag_replica_count", AG_REPL_COUNT_WEIGHT),
             ValueGrading::Lower,
-            |pool_item| pool_item.vg_replica_count().into(),
+            |pool_item| pool_item.ag_replica_count().into(),
         )
     }
-    /// SortCriteria for number of total replicas on pool only for volume group.
-    fn vg_total_replica_count() -> SortCriteria {
+    /// SortCriteria for number of total replicas on pool only for Affinity Group.
+    fn ag_total_replica_count() -> SortCriteria {
         SortCriteria::new(
-            Criteria::new("vg_total_replica_count", VG_TOTAL_REPLICA_COUNT_WEIGHT),
+            Criteria::new("ag_total_replica_count", AG_TOTAL_REPLICA_COUNT_WEIGHT),
             ValueGrading::Lower,
             |pool_item| pool_item.len().into(),
         )
     }
     /// SortCriteria for number of total replicas on pool.
-    fn non_vg_total_replica_count() -> SortCriteria {
+    fn non_ag_total_replica_count() -> SortCriteria {
         SortCriteria::new(
-            Criteria::new("non_vg_total_replica_count", TOTAL_REPLICA_COUNT_WEIGHT),
+            Criteria::new("non_ag_total_replica_count", TOTAL_REPLICA_COUNT_WEIGHT),
             ValueGrading::Lower,
             |item| item.len().into(),
         )
@@ -94,7 +94,7 @@ impl SimplePolicy {
         )
     }
     /// Sort pools using weights between:
-    /// 1. number of replicas or number of replicas of a vg (N_REPL_WEIGHT %)
+    /// 1. number of replicas or number of replicas of a ag (N_REPL_WEIGHT %)
     /// 2. free space         (FREE_SPACE_WEIGHT %)
     /// 3. overcommitment     (OVER_COMMIT_WEIGHT %)
     pub(crate) fn sort_by_weights(
@@ -107,16 +107,16 @@ impl SimplePolicy {
             Some(Ordering::Less) => Ordering::Less,
             None | Some(Ordering::Equal) => {
                 let builder = SortBuilder::new();
-                if request.volume_group.is_some() && request.num_replicas > 1 {
-                    if a.vg_replica_count.is_none() && b.vg_replica_count.is_none() {
-                        builder.with_criteria(SimplePolicy::non_vg_total_replica_count)
+                if request.affinity_group.is_some() && request.num_replicas > 1 {
+                    if a.ag_replica_count.is_none() && b.ag_replica_count.is_none() {
+                        builder.with_criteria(SimplePolicy::non_ag_total_replica_count)
                     } else {
                         builder
-                            .with_criteria(SimplePolicy::vg_replica_count)
-                            .with_criteria(SimplePolicy::vg_total_replica_count)
+                            .with_criteria(SimplePolicy::ag_replica_count)
+                            .with_criteria(SimplePolicy::ag_total_replica_count)
                     }
                 } else {
-                    builder.with_criteria(SimplePolicy::non_vg_total_replica_count)
+                    builder.with_criteria(SimplePolicy::non_ag_total_replica_count)
                 }
                 .with_criteria(SimplePolicy::free_space)
                 .with_criteria(SimplePolicy::over_commitment)
@@ -181,7 +181,7 @@ mod tests {
         pool: &str,
         free_space: u64,
         replicas: usize,
-        vg_replica_count: Option<u64>,
+        ag_replica_count: Option<u64>,
     ) -> PoolItem {
         let node_state = make_node(node);
         let used = 0; //10 * 1024 * 1024 * 1024;
@@ -204,16 +204,16 @@ mod tests {
                 .take(replicas)
                 .collect::<Vec<_>>(),
         );
-        PoolItem::new(node_state, pool, vg_replica_count)
+        PoolItem::new(node_state, pool, ag_replica_count)
     }
-    fn vg_sort_comparator(a: &PoolItem, b: &PoolItem) -> Ordering {
+    fn ag_sort_comparator(a: &PoolItem, b: &PoolItem) -> Ordering {
         let builder = SortBuilder::new();
-        if a.vg_replica_count.is_none() && b.vg_replica_count.is_none() {
-            builder.with_criteria(SimplePolicy::non_vg_total_replica_count)
+        if a.ag_replica_count.is_none() && b.ag_replica_count.is_none() {
+            builder.with_criteria(SimplePolicy::non_ag_total_replica_count)
         } else {
             builder
-                .with_criteria(SimplePolicy::vg_replica_count)
-                .with_criteria(SimplePolicy::vg_total_replica_count)
+                .with_criteria(SimplePolicy::ag_replica_count)
+                .with_criteria(SimplePolicy::ag_total_replica_count)
         }
         .with_criteria(SimplePolicy::free_space)
         .with_criteria(SimplePolicy::over_commitment)
@@ -224,7 +224,7 @@ mod tests {
         let gig = 1024 * 1024 * 1024;
 
         let sort_builder = SortBuilder::new()
-            .with_criteria(SimplePolicy::non_vg_total_replica_count)
+            .with_criteria(SimplePolicy::non_ag_total_replica_count)
             .with_criteria(SimplePolicy::free_space)
             .with_criteria(SimplePolicy::over_commitment);
 
@@ -277,7 +277,7 @@ mod tests {
             make_pool("3", "pool-6", gig, 549, Some(2)),
         ];
 
-        pools.sort_by(vg_sort_comparator);
+        pools.sort_by(ag_sort_comparator);
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(
             pool_names,
@@ -293,7 +293,7 @@ mod tests {
             make_pool("3", "pool-6", gig, 549, Some(2)),
         ];
 
-        pools.sort_by(vg_sort_comparator);
+        pools.sort_by(ag_sort_comparator);
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(
             pool_names,

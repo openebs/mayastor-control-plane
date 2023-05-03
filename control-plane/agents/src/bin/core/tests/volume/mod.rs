@@ -1,11 +1,11 @@
 #![cfg(test)]
 
+mod affinity_group;
 mod capacity;
 mod garbage_collection;
 mod helpers;
 mod hotspare;
 mod switchover;
-mod volume_group;
 
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{

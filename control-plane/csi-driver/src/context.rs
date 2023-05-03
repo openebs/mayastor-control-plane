@@ -47,8 +47,8 @@ pub enum Parameters {
     PvcName,
     #[strum(serialize = "csi.storage.k8s.io/pvc/namespace")]
     PvcNamespace,
-    #[strum(serialize = "volumeGroup")]
-    VolumeGroup,
+    #[strum(serialize = "stsAffinityGroup")]
+    StsAffinityGroup,
 }
 impl Parameters {
     fn parse_u32(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
@@ -79,8 +79,8 @@ impl Parameters {
     pub fn io_timeout(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
     }
-    /// Parse the value for `Self::VolumeGroup`
-    pub fn volume_group(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
+    /// Parse the value for `Self::StsAffinityGroup`
+    pub fn sts_affinity_group(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
         Self::parse_bool(value)
     }
 }
@@ -164,7 +164,7 @@ pub struct CreateParams {
     publish_params: PublishParams,
     share_protocol: VolumeShareProtocol,
     replica_count: u8,
-    volume_group: Option<String>,
+    sts_affinity_group: Option<String>,
 }
 impl CreateParams {
     /// Get the `Parameters::ShareProtocol` value.
@@ -175,10 +175,10 @@ impl CreateParams {
     pub fn replica_count(&self) -> u8 {
         self.replica_count
     }
-    /// Get the final volume group name, using the `Parameters::PvcName, Parameters::PvcNamespace,
-    /// Parameters::VolumeGroup` values.
-    pub fn volume_group(&self) -> &Option<String> {
-        &self.volume_group
+    /// Get the final affinity group name, using the `Parameters::PvcName, Parameters::PvcNamespace,
+    /// Parameters::AffinityGroup` values.
+    pub fn sts_affinity_group(&self) -> &Option<String> {
+        &self.sts_affinity_group
     }
 }
 impl TryFrom<&HashMap<String, String>> for CreateParams {
@@ -205,13 +205,16 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             None => 1,
         };
 
-        let volume_group = Parameters::volume_group(args.get(Parameters::VolumeGroup.as_ref()))
-            .map_err(|_| {
-                tonic::Status::invalid_argument("Invalid `volumeGroup` value, expected a bool")
-            })?;
+        let sts_affinity_group =
+            Parameters::sts_affinity_group(args.get(Parameters::StsAffinityGroup.as_ref()))
+                .map_err(|_| {
+                    tonic::Status::invalid_argument(
+                        "Invalid `stsAffinityGroup` value, expected a bool",
+                    )
+                })?;
 
-        let volume_group_name = if volume_group.unwrap_or(false) {
-            generate_volume_group_name(
+        let sts_affinity_group_name = if sts_affinity_group.unwrap_or(false) {
+            generate_sts_affinity_group_name(
                 &args.get(Parameters::PvcName.as_ref()).cloned(),
                 &args.get(Parameters::PvcNamespace.as_ref()).cloned(),
             )
@@ -223,15 +226,15 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             publish_params,
             share_protocol,
             replica_count,
-            volume_group: volume_group_name,
+            sts_affinity_group: sts_affinity_group_name,
         })
     }
 }
 
-// Generate a volume group name from the parameters.
+// Generate a affinity group name from the parameters.
 // 1. Both pvc name and ns should be valid.
 // 2. Pvc name should follow the sts pvc naming convention.
-fn generate_volume_group_name(
+fn generate_sts_affinity_group_name(
     pvc_name: &Option<String>,
     pvc_ns: &Option<String>,
 ) -> Option<String> {
@@ -259,7 +262,7 @@ fn generate_volume_group_name(
 
 #[cfg(test)]
 mod tests {
-    use crate::context::generate_volume_group_name;
+    use crate::context::generate_sts_affinity_group_name;
 
     struct VolGrpTestEntry {
         pvc_name: Option<String>,
@@ -278,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn vg_name_generator() {
+    fn ag_name_generator() {
         let vol_grp_test_entries: Vec<VolGrpTestEntry> = vec![
             VolGrpTestEntry::new(
                 Some("mongo-db-0"),
@@ -303,7 +306,7 @@ mod tests {
 
         for test_entry in vol_grp_test_entries {
             assert_eq!(
-                generate_volume_group_name(&test_entry.pvc_name, &test_entry.pvc_namespace),
+                generate_sts_affinity_group_name(&test_entry.pvc_name, &test_entry.pvc_namespace),
                 test_entry.result
             );
         }

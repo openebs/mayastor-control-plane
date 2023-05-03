@@ -166,9 +166,9 @@ impl OperationGuardArc<VolumeSpec> {
         state: VolumeState,
         spec_clone: VolumeSpec,
     ) -> Result<Volume, SvcError> {
-        // Create a vg guard to prevent candidate collision.
-        let _vg_guard = match registry.specs().get_or_create_volume_group(&spec_clone) {
-            Some(vg) => Some(vg.operation_guard_wait().await?),
+        // Create a ag guard to prevent candidate collision.
+        let _ag_guard = match registry.specs().get_or_create_affinity_group(&spec_clone) {
+            Some(ag) => Some(ag.operation_guard_wait().await?),
             _ => None,
         };
 
@@ -199,9 +199,9 @@ impl OperationGuardArc<VolumeSpec> {
         state: VolumeState,
         spec_clone: VolumeSpec,
     ) -> Result<Volume, SvcError> {
-        // Create a vg guard to prevent candidate collision.
-        let _vg_guard = match registry.specs().get_or_create_volume_group(&spec_clone) {
-            Some(vg) => Some(vg.operation_guard_wait().await?),
+        // Create a ag guard to prevent candidate collision.
+        let _ag_guard = match registry.specs().get_or_create_affinity_group(&spec_clone) {
+            Some(ag) => Some(ag.operation_guard_wait().await?),
             _ => None,
         };
 
@@ -637,17 +637,17 @@ impl OperationGuardArc<VolumeSpec> {
         request: &impl PublishVolumeInfo,
         republish: bool,
     ) -> Result<NexusNodeCandidate, SvcError> {
-        // Create a vg guard to prevent candidate collision.
-        let volume_group = self.as_ref().volume_group.clone();
-        let vg_guard = match volume_group {
+        // Create a ag guard to prevent candidate collision.
+        let affinity_group = self.as_ref().affinity_group.clone();
+        let ag_guard = match affinity_group {
             None => None,
-            Some(vg) => {
-                let vg_spec = registry.specs().get_volume_group(vg.id()).ok_or(
-                    SvcError::VolumeGroupNotFound {
-                        vol_grp_id: vg.id().to_string(),
+            Some(ag) => {
+                let ag_spec = registry.specs().get_affinity_group(ag.id()).ok_or(
+                    SvcError::AffinityGroupNotFound {
+                        vol_grp_id: ag.id().to_string(),
                     },
                 )?;
-                Some(vg_spec.operation_guard_wait().await?)
+                Some(ag_spec.operation_guard_wait().await?)
             }
         };
 
@@ -668,7 +668,7 @@ impl OperationGuardArc<VolumeSpec> {
                 // determine a suitable node for the same.
                 let candidate = target_node_candidate(self.as_ref(), registry).await?;
                 tracing::debug!(node.id=%candidate.id(), "Node selected for volume publish by the core-agent");
-                Ok(NexusNodeCandidate::new(candidate.id().clone(), vg_guard))
+                Ok(NexusNodeCandidate::new(candidate.id().clone(), ag_guard))
             }
             Some(node) => {
                 // make sure the requested node is available
@@ -676,7 +676,7 @@ impl OperationGuardArc<VolumeSpec> {
                 let node = registry.node_wrapper(node).await?;
                 let node = node.read().await;
                 if node.is_online() {
-                    Ok(NexusNodeCandidate::new(node.id().clone(), vg_guard))
+                    Ok(NexusNodeCandidate::new(node.id().clone(), ag_guard))
                 } else {
                     Err(SvcError::NodeNotOnline {
                         node: node.id().clone(),

@@ -1,10 +1,10 @@
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{registry::traits::RegistryOperations, volume::traits::VolumeOperations};
-use stor_port::types::v0::transport::{CreateVolume, GetSpecs, VolumeGroup, VolumeId};
+use stor_port::types::v0::transport::{AffinityGroup, CreateVolume, GetSpecs, VolumeId};
 use tracing::info;
 
 #[tokio::test]
-async fn volume_group() {
+async fn affinity_group() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_agents(vec!["core"])
@@ -20,9 +20,9 @@ async fn volume_group() {
 
 async fn startup_test(cluster: &Cluster) {
     let vols = vec![
-        (Some("vg1"), "eba487d9-0b57-407b-8b48-0b631a372183"),
-        (Some("vg1"), "359b7e1a-b724-443b-98b4-e6d97fabbb60"),
-        (Some("vg2"), "f2296d6a-77a6-401d-aad3-ccdc247b0a56"),
+        (Some("ag1"), "eba487d9-0b57-407b-8b48-0b631a372183"),
+        (Some("ag1"), "359b7e1a-b724-443b-98b4-e6d97fabbb60"),
+        (Some("ag2"), "f2296d6a-77a6-401d-aad3-ccdc247b0a56"),
         (None, "bdd3431c-0ccd-4a00-91cd-bb3d7cccb4b2"),
         (None, "52c8f1e9-8538-48ce-9906-adfe3623e032"),
     ];
@@ -37,7 +37,7 @@ async fn startup_test(cluster: &Cluster) {
                     uuid: VolumeId::try_from(item.1).unwrap(),
                     size: 5242880,
                     replicas: 1,
-                    volume_group: item.0.map(|val| VolumeGroup::new(val.to_string())),
+                    affinity_group: item.0.map(|val| AffinityGroup::new(val.to_string())),
                     ..Default::default()
                 },
                 None,
@@ -56,19 +56,19 @@ async fn startup_test(cluster: &Cluster) {
 
     let registry_client = cluster.grpc_client().registry();
 
-    // The volume group specs should now have been loaded in memory.
+    // The Affinity Group specs should now have been loaded in memory.
     // Fetch the specs.
     let specs = registry_client
         .get_specs(&GetSpecs {}, None)
         .await
         .expect("should be able to fetch specs");
 
-    info!("Volume Group Specs: {:?}", specs.volume_groups);
+    info!("Affinity Group Specs: {:?}", specs.affinity_groups);
 
-    // Check for the validity of the volume group specs.
-    for vol_grp_spec in specs.volume_groups {
+    // Check for the validity of the Affinity Group specs.
+    for vol_grp_spec in specs.affinity_groups {
         match vol_grp_spec.id().as_str() {
-            "vg1" => {
+            "ag1" => {
                 assert_eq!(vol_grp_spec.volumes().len(), 2);
                 assert!(vol_grp_spec
                     .volumes()
@@ -77,7 +77,7 @@ async fn startup_test(cluster: &Cluster) {
                     .volumes()
                     .contains(&VolumeId::try_from(vols[1].1).unwrap()));
             }
-            "vg2" => {
+            "ag2" => {
                 assert_eq!(vol_grp_spec.volumes().len(), 1);
                 assert!(vol_grp_spec
                     .volumes()

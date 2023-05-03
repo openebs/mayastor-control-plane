@@ -59,8 +59,8 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             .await?;
         let volume_clone = volume.start_create(registry, request).await?;
 
-        // If the volume is a part of the vg, create or update accordingly.
-        registry.specs().get_or_create_volume_group(&volume_clone);
+        // If the volume is a part of the ag, create or update accordingly.
+        registry.specs().get_or_create_affinity_group(&volume_clone);
 
         // todo: pick nodes and pools using the Node&Pool Topology
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
