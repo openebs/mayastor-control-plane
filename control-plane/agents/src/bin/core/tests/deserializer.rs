@@ -130,7 +130,7 @@ fn test_deserialization_v1_to_v2() {
                     Default::default()
                 )),
                 publish_context: None,
-                volume_group: None,
+                affinity_group: None,
             }),
         },
         TestEntry {

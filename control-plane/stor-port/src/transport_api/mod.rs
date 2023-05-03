@@ -142,8 +142,8 @@ pub enum ResourceKind {
     NvmeSubsystem,
     /// Nvme Controller Path
     NvmePath,
-    /// Volume Group
-    VolumeGroup,
+    /// Affinity Group
+    AffinityGroup,
 }
 
 /// Error type which is returned over the transport for any operation.

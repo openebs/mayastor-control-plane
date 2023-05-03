@@ -15,7 +15,7 @@ message Specs {
   repeated pool.PoolDefinition pools = 2;
   repeated nexus.NexusSpec nexuses = 3;
   repeated replica.ReplicaSpec replicas = 4;
-  repeated volume.VolumeGroupSpec volume_groups = 5;
+  repeated volume.AffinityGroupSpec affinity_groups = 5;
 }
 
 message States {

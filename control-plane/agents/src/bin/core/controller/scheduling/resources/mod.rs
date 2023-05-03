@@ -19,29 +19,29 @@ pub(crate) struct PoolItem {
     pub(crate) node: NodeWrapper,
     /// The pool.
     pub(crate) pool: PoolWrapper,
-    /// Number of replicas of a vg present on the pool.
+    /// Number of replicas of a ag present on the pool.
     /// This would have a value if the volume is a part of
-    /// a volume group and the already created volumes have replicas
+    /// a Affinity Group and the already created volumes have replicas
     /// on this pool.
-    pub(crate) vg_replica_count: Option<u64>,
+    pub(crate) ag_replica_count: Option<u64>,
 }
 
 impl PoolItem {
     /// Create a new `Self`.
-    pub(crate) fn new(node: NodeWrapper, pool: PoolWrapper, vg_replica_count: Option<u64>) -> Self {
+    pub(crate) fn new(node: NodeWrapper, pool: PoolWrapper, ag_replica_count: Option<u64>) -> Self {
         Self {
             node,
             pool,
-            vg_replica_count,
+            ag_replica_count,
         }
     }
     /// Get the number of replicas in the pool.
     pub(crate) fn len(&self) -> u64 {
         self.pool.replicas().len() as u64
     }
-    /// Get the number of volume group replicas in the pool.
-    pub(crate) fn vg_replica_count(&self) -> u64 {
-        self.vg_replica_count.unwrap_or(u64::MIN)
+    /// Get the number of Affinity Group replicas in the pool.
+    pub(crate) fn ag_replica_count(&self) -> u64 {
+        self.ag_replica_count.unwrap_or(u64::MIN)
     }
     /// Get a reference to the inner `PoolWrapper`.
     pub(crate) fn pool(&self) -> &PoolWrapper {
@@ -68,7 +68,7 @@ impl PoolItemLister {
     /// Get a list of pool items.
     pub(crate) async fn list(
         registry: &Registry,
-        pool_vg_rep: &Option<HashMap<PoolId, u64>>,
+        pool_ag_rep: &Option<HashMap<PoolId, u64>>,
     ) -> Vec<PoolItem> {
         let pools = Self::nodes(registry)
             .await
@@ -78,10 +78,10 @@ impl PoolItemLister {
                     .iter()
                     .filter(|p| registry.specs().pool(&p.id).is_ok())
                     .map(|p| {
-                        let vg_rep_count =
-                            pool_vg_rep.as_ref().and_then(|map| map.get(&p.id).cloned());
+                        let ag_rep_count =
+                            pool_ag_rep.as_ref().and_then(|map| map.get(&p.id).cloned());
 
-                        PoolItem::new(n.clone(), p.clone(), vg_rep_count)
+                        PoolItem::new(n.clone(), p.clone(), ag_rep_count)
                     })
                     .collect::<Vec<_>>()
             })
@@ -99,11 +99,11 @@ pub(crate) struct ReplicaItem {
     child_state: Option<Child>,
     child_spec: Option<NexusChild>,
     child_info: Option<ChildInfo>,
-    /// Number of replicas of a vg present on the pool of this replica.
+    /// Number of replicas of a ag present on the pool of this replica.
     /// This would have a value if the volume is a part of
-    /// a volume group and the already created volumes have replicas
+    /// a Affinity Group and the already created volumes have replicas
     /// on this pool.
-    vg_replicas_on_pool: Option<u64>,
+    ag_replicas_on_pool: Option<u64>,
 }
 
 impl ReplicaItem {
@@ -115,7 +115,7 @@ impl ReplicaItem {
         child_state: Option<Child>,
         child_spec: Option<NexusChild>,
         child_info: Option<ChildInfo>,
-        vg_replicas_on_pool: Option<u64>,
+        ag_replicas_on_pool: Option<u64>,
     ) -> Self {
         Self {
             replica_spec: replica,
@@ -124,7 +124,7 @@ impl ReplicaItem {
             child_state,
             child_spec,
             child_info,
-            vg_replicas_on_pool,
+            ag_replicas_on_pool,
         }
     }
     /// Get a reference to the replica spec.
@@ -152,9 +152,9 @@ impl ReplicaItem {
     pub(crate) fn child_info(&self) -> Option<&ChildInfo> {
         self.child_info.as_ref()
     }
-    /// Count of vg replicas on the replica's pool.
-    pub(crate) fn vg_replicas_on_pool(&self) -> u64 {
-        self.vg_replicas_on_pool.unwrap_or(u64::MIN)
+    /// Count of ag replicas on the replica's pool.
+    pub(crate) fn ag_replicas_on_pool(&self) -> u64 {
+        self.ag_replicas_on_pool.unwrap_or(u64::MIN)
     }
 }
 
@@ -256,15 +256,15 @@ impl ChildItem {
 #[derive(Clone)]
 pub(crate) struct NodeItem {
     node_wrapper: NodeWrapper,
-    vg_nexus_count: Option<u64>,
+    ag_nexus_count: Option<u64>,
 }
 
 impl NodeItem {
     /// Create a new node item with given `node_wrapper`.
-    pub(crate) fn new(node_wrapper: NodeWrapper, vg_nexus_count: Option<u64>) -> Self {
+    pub(crate) fn new(node_wrapper: NodeWrapper, ag_nexus_count: Option<u64>) -> Self {
         Self {
             node_wrapper,
-            vg_nexus_count,
+            ag_nexus_count,
         }
     }
     /// Get the internal `node_wrapper` from `NodeItem`.
@@ -276,7 +276,7 @@ impl NodeItem {
         self.node_wrapper
     }
     /// The number of nexuses present on the node.
-    pub(crate) fn vg_nexus_count(&self) -> u64 {
-        self.vg_nexus_count.unwrap_or(u64::MIN)
+    pub(crate) fn ag_nexus_count(&self) -> u64 {
+        self.ag_nexus_count.unwrap_or(u64::MIN)
     }
 }

@@ -53,8 +53,8 @@ message VolumeSpec {
   google.protobuf.StringValue last_nexus_id = 8;
   // Flag indicating thin provisioning.
   bool thin = 9;
-  // Volume Group related information.
-  optional VolumeGroup volume_group = 10;
+  // Affinity Group related information.
+  optional AffinityGroup affinity_group = 10;
 }
 
 message Metadata {
@@ -66,9 +66,9 @@ message Metadata {
   optional common.MapWrapper publish_context = 3;
 }
 
-// Volume Group related information.
-message VolumeGroup {
-  // Name of the volume group.
+// Affinity Group related information.
+message AffinityGroup {
+  // Name of the Affinity Group.
   string name = 1;
 }
 
@@ -210,8 +210,8 @@ message CreateVolumeRequest {
   optional Topology topology = 7;
   // flag indicating thin provisioning
   bool thin = 8;
-  // Volume Group related information.
-  optional VolumeGroup volume_group = 9;
+  // Affinity Group related information.
+  optional AffinityGroup affinity_group = 9;
 }
 
 // Publish a volume on a node
@@ -377,11 +377,11 @@ message DestroyShutdownTargetReply {
   optional common.ReplyError error = 1;
 }
 
-// VolumeGroup's representation in memory.
-message VolumeGroupSpec {
-  // Volume group id
+// AffinityGroup's representation in memory.
+message AffinityGroupSpec {
+  // Affinity Group id
   string id = 1;
-  // List of ids of volumes part of the volume group
+  // List of ids of volumes part of the Affinity Group
   repeated google.protobuf.StringValue volumes = 2;
 }
 

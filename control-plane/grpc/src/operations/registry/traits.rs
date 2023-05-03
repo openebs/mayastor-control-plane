@@ -12,7 +12,7 @@ use stor_port::{
             nexus::NexusSpec,
             pool::PoolSpec,
             replica::ReplicaSpec,
-            volume::{VolumeGroupSpec, VolumeSpec},
+            volume::{AffinityGroupSpec, VolumeSpec},
         },
         transport,
         transport::{GetSpecs, GetStates, Specs},
@@ -99,11 +99,11 @@ impl TryFrom<registry::Specs> for transport::Specs {
                 .into_iter()
                 .map(ReplicaSpec::try_from)
                 .collect::<Result<Vec<ReplicaSpec>, ReplyError>>()?,
-            volume_groups: value
-                .volume_groups
+            affinity_groups: value
+                .affinity_groups
                 .into_iter()
-                .map(VolumeGroupSpec::try_from)
-                .collect::<Result<Vec<VolumeGroupSpec>, ReplyError>>()?,
+                .map(AffinityGroupSpec::try_from)
+                .collect::<Result<Vec<AffinityGroupSpec>, ReplyError>>()?,
         })
     }
 }
@@ -131,10 +131,10 @@ impl From<transport::Specs> for registry::Specs {
                 .into_iter()
                 .map(|replica_spec| replica_spec.into())
                 .collect(),
-            volume_groups: value
-                .volume_groups
+            affinity_groups: value
+                .affinity_groups
                 .into_iter()
-                .map(|vg_spec| vg_spec.into())
+                .map(|ag_spec| ag_spec.into())
                 .collect(),
         }
     }

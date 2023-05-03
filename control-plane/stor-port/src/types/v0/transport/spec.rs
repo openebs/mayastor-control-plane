@@ -21,8 +21,8 @@ pub struct Specs {
     pub pools: Vec<pool::PoolSpec>,
     /// Replica specs.
     pub replicas: Vec<replica::ReplicaSpec>,
-    /// Volume group specs.
-    pub volume_groups: Vec<volume::VolumeGroupSpec>,
+    /// Affinity group specs.
+    pub affinity_groups: Vec<volume::AffinityGroupSpec>,
 }
 
 impl From<Specs> for models::Specs {

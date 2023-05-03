@@ -1,4 +1,4 @@
-"""Replica Anti-Affinity for Volume Group feature tests."""
+"""Anti-Affinity for Affinity Group feature tests."""
 
 from typing import Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,46 +22,48 @@ from openapi.model.volume_policy import VolumePolicy
 NODE_NAME_1 = "io-engine-1"
 NODE_NAME_2 = "io-engine-2"
 NODE_NAME_3 = "io-engine-3"
-NON_VG_VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-VG_VOLUME_UUID_1 = "c36f7453-ae65-43bb-8ee9-4b5a373a8ed4"
-VG_VOLUME_UUID_2 = "07805245-ec1c-43bd-a950-c42f4c3a9ac7"
-VG_VOLUME_UUID_3 = "6805e636-1986-4ab7-95d0-75597df1532b"
+NON_AG_VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
+AG_VOLUME_UUID_1 = "c36f7453-ae65-43bb-8ee9-4b5a373a8ed4"
+AG_VOLUME_UUID_2 = "07805245-ec1c-43bd-a950-c42f4c3a9ac7"
+AG_VOLUME_UUID_3 = "6805e636-1986-4ab7-95d0-75597df1532b"
 VOLUME_SIZE = 10485761
-VG_PARAM = {"id": "vg"}
+AG_PARAM = {"id": "ag"}
 
 
-@scenario("create.feature", "creating volume group with 3 volumes with 1 replica each")
-def test_creating_volume_group_with_3_volumes_with_1_replica_each():
-    """creating volume group with 3 volumes with 1 replica each."""
+@scenario(
+    "create.feature", "creating affinity group with 3 volumes with 1 replica each"
+)
+def test_creating_affinity_group_with_3_volumes_with_1_replica_each():
+    """creating affinity group with 3 volumes with 1 replica each."""
 
 
 @scenario(
     "create.feature",
-    "creating volume group with 3 volumes with 1 replica each with limited pools",
+    "creating affinity group with 3 volumes with 1 replica each with limited pools",
 )
-def test_creating_volume_group_with_3_volumes_with_1_replica_each_with_limited_pools():
-    """creating volume group with 3 volumes with 1 replica each with limited pools."""
+def test_creating_affinity_group_with_3_volumes_with_1_replica_each_with_limited_pools():
+    """creating affinity group with 3 volumes with 1 replica each with limited pools."""
 
 
 @scenario(
-    "create.feature", "creating volume group with 3 volumes with 3 replica on 3 pools"
+    "create.feature", "creating affinity group with 3 volumes with 3 replica on 3 pools"
 )
-def test_creating_volume_group_with_3_volumes_with_3_replica_on_3_pools():
-    """creating volume group with 3 volumes with 3 replica on 3 pools."""
+def test_creating_affinity_group_with_3_volumes_with_3_replica_on_3_pools():
+    """creating affinity group with 3 volumes with 3 replica on 3 pools."""
 
 
 @scenario(
-    "create.feature", "creating volume group with 3 volumes with 3 replica on 5 pools"
+    "create.feature", "creating affinity group with 3 volumes with 3 replica on 5 pools"
 )
-def test_creating_volume_group_with_3_volumes_with_3_replica_on_5_pools():
-    """creating volume group with 3 volumes with 3 replica on 5 pools."""
+def test_creating_affinity_group_with_3_volumes_with_3_replica_on_5_pools():
+    """creating affinity group with 3 volumes with 3 replica on 5 pools."""
 
 
 @scenario(
-    "create.feature", "creating volume group with 3 volumes with 3 replica on 9 pools"
+    "create.feature", "creating affinity group with 3 volumes with 3 replica on 9 pools"
 )
-def test_creating_volume_group_with_3_volumes_with_3_replica_on_9_pools():
-    """creating volume group with 3 volumes with 3 replica on 9 pools."""
+def test_creating_affinity_group_with_3_volumes_with_3_replica_on_9_pools():
+    """creating affinity group with 3 volumes with 3 replica on 9 pools."""
 
 
 @given("2 pools, 1 on node A, 0 on node B, 1 on node C")
@@ -99,36 +101,36 @@ def setup_io_engine_cluster():
     Deployer.start(
         io_engines=3,
     )
+    pytest.exception = ""
     yield
     Deployer.stop()
 
 
 @when(
     parsers.parse(
-        "the create volume request with volume group and {replicas:d} and {thin} executed"
+        "the create volume request with affinity group and {replicas:d} and {thin} executed"
     )
 )
-def execute_create_volume_request_with_volume_group_and_replicas_and_thin(
+def execute_create_volume_request_with_affinity_group_and_replicas_and_thin(
     replicas, thin
 ):
-    """the create volume request with volume group and `replicas` and `thin` executed."""
+    """the create volume request with affinity group and `replicas` and `thin` executed."""
     try:
-        create_volume_group(replicas, bool(thin))
+        create_affinity_group(replicas, bool(thin))
     except openapi.exceptions.ServiceException as e:
-        shared_context["exception"] = e.reason
+        pytest.exception = e.reason
 
 
 @then("1 volume creation should fail due to insufficient storage")
 def check_for_volume_creation():
     """1 volume creation should fail due to insufficient storage."""
-    assert "exception" in shared_context
-    assert shared_context["exception"] == "Insufficient Storage"
+    assert pytest.exception == "Insufficient Storage"
 
 
 @then("2 volumes should be created with 1 replica each")
 def two_volumes_created_with_single_replica():
     """2 volumes should be created with 1 replica each."""
-    filtered_volumes = get_volume_group_volumes()
+    filtered_volumes = get_affinity_group_volumes()
     assert len(filtered_volumes) == 2
     for volume in filtered_volumes:
         assert volume.spec.num_replicas == 1
@@ -137,7 +139,7 @@ def two_volumes_created_with_single_replica():
 @then("3 volumes should be created with 1 replica each")
 def three_volumes_created_with_single_replica():
     """3 volumes should be created with 1 replica each."""
-    filtered_volumes = get_volume_group_volumes()
+    filtered_volumes = get_affinity_group_volumes()
     assert len(filtered_volumes) == 3
     for volume in filtered_volumes:
         assert volume.spec.num_replicas == 1
@@ -146,7 +148,7 @@ def three_volumes_created_with_single_replica():
 @then("3 volumes should be created with 3 replica each")
 def three_volumes_created_with_three_replicas():
     """3 volumes should be created with 3 replica each."""
-    filtered_volumes = get_volume_group_volumes()
+    filtered_volumes = get_affinity_group_volumes()
     assert len(filtered_volumes) == 3
     for volume in filtered_volumes:
         assert volume.spec.num_replicas == 3
@@ -155,7 +157,7 @@ def three_volumes_created_with_three_replicas():
 @then("each replica of individual volume should be on a different node")
 def check_replicas_different_node_individual_volume():
     """each replica of individual volume should be on a different node."""
-    filtered_volumes = get_volume_group_volumes()
+    filtered_volumes = get_affinity_group_volumes()
     for volume in filtered_volumes:
         replica_topology = volume.state.replica_topology
         node_locations = [replica.node for replica in replica_topology.values()]
@@ -165,7 +167,7 @@ def check_replicas_different_node_individual_volume():
 @then("each replica should reside on a different node")
 def check_replicas_different_node():
     """each replica should reside on a different node."""
-    filtered_volumes = get_volume_group_volumes()
+    filtered_volumes = get_affinity_group_volumes()
     already_encountered_nodes = set()
     for volume in filtered_volumes:
         replica_topology = volume.state.replica_topology
@@ -179,7 +181,7 @@ def check_replicas_different_node():
 @then("each replica should reside on a different pool")
 def check_replicas_different_pool():
     """each replica should reside on a different pool."""
-    filtered_volumes = get_volume_group_volumes()
+    filtered_volumes = get_affinity_group_volumes()
     already_encountered_pools = set()
     for volume in filtered_volumes:
         replica_topology = volume.state.replica_topology
@@ -193,7 +195,7 @@ def check_replicas_different_pool():
 @then("pools can have more than one replicas all belonging to different volumes")
 def check_pool_replicas_different_volumes():
     """pools can have more than one replicas all belonging to different volumes."""
-    filtered_volumes = get_volume_group_volumes()
+    filtered_volumes = get_affinity_group_volumes()
     pool_replicas = {}
     for volume in filtered_volumes:
         replica_topology = volume.state.replica_topology
@@ -224,13 +226,13 @@ def create_node_pools(node_pool_map: Dict[str, int]):
             )
             pool_index += 1
     ApiClient.volumes_api().put_volume(
-        NON_VG_VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False)
+        NON_AG_VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False)
     )
 
 
-# Creates a 3 volume volume_group based on number of replica of each volume
+# Creates a 3 volume affinity_group based on number of replica of each volume
 # and thin provisioning enabled or not. Launches 3 threads in parallel to execute the request.
-def create_volume_group(replicas, thin):
+def create_affinity_group(replicas, thin):
     def put_volume(volume_uuid):
         ApiClient.volumes_api().put_volume(
             volume_uuid,
@@ -239,11 +241,11 @@ def create_volume_group(replicas, thin):
                 replicas=replicas,
                 size=VOLUME_SIZE,
                 thin=thin,
-                volume_group=VG_PARAM,
+                affinity_group=AG_PARAM,
             ),
         )
 
-    volume_uuids = [VG_VOLUME_UUID_1, VG_VOLUME_UUID_2, VG_VOLUME_UUID_3]
+    volume_uuids = [AG_VOLUME_UUID_1, AG_VOLUME_UUID_2, AG_VOLUME_UUID_3]
 
     with ThreadPoolExecutor(max_workers=len(volume_uuids)) as executor:
         futures = [
@@ -253,16 +255,12 @@ def create_volume_group(replicas, thin):
             future.result()
 
 
-# Get the volume group volumes based on uuids
-def get_volume_group_volumes():
+# Get the affinity group volumes based on uuids
+def get_affinity_group_volumes():
     volumes = ApiClient.volumes_api().get_volumes()
     return [
         volume
         for volume in volumes.entries
-        if hasattr(volume.spec, "volume_group")
-        and volume.spec.volume_group.id == VG_PARAM["id"]
+        if hasattr(volume.spec, "affinity_group")
+        and volume.spec.affinity_group["id"] == AG_PARAM["id"]
     ]
-
-
-# A global variable to share context in between method calls.
-shared_context = {}

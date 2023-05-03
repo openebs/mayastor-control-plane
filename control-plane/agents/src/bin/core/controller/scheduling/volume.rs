@@ -2,9 +2,9 @@ use crate::controller::{
     registry::Registry,
     resources::ResourceMutex,
     scheduling::{
+        affinity_group::{get_pool_ag_replica_count, get_restricted_nodes},
         pool::replica_rebuildable,
         resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},
-        volume_group::{get_pool_vg_replica_count, get_restricted_nodes},
         volume_policy::{SimplePolicy, ThickPolicy},
         AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceData, ResourceFilter,
     },
@@ -66,7 +66,7 @@ pub(crate) struct GetSuitablePoolsContext {
     spec: VolumeSpec,
     allocated_bytes: Option<u64>,
     move_repl: Option<MoveReplica>,
-    vg_restricted_nodes: Option<Vec<NodeId>>,
+    ag_restricted_nodes: Option<Vec<NodeId>>,
 }
 impl GetSuitablePoolsContext {
     /// Get the registry.
@@ -81,8 +81,8 @@ impl GetSuitablePoolsContext {
     pub(crate) fn move_repl(&self) -> Option<&MoveReplica> {
         self.move_repl.as_ref()
     }
-    pub(crate) fn vg_restricted_nodes(&self) -> &Option<Vec<NodeId>> {
-        &self.vg_restricted_nodes
+    pub(crate) fn ag_restricted_nodes(&self) -> &Option<Vec<NodeId>> {
+        &self.ag_restricted_nodes
     }
 }
 
@@ -132,18 +132,20 @@ impl AddVolumeReplica {
 
         let allocated_bytes = Self::allocated_bytes(registry, &volume_spec).await;
 
-        let mut vg_restricted_nodes: Option<Vec<NodeId>> = None;
-        let mut pool_vg_replica_count_map: Option<HashMap<PoolId, u64>> = None;
+        let mut ag_restricted_nodes: Option<Vec<NodeId>> = None;
+        let mut pool_ag_replica_count_map: Option<HashMap<PoolId, u64>> = None;
 
-        if let Some(volume_group) = &volume_spec.volume_group {
-            if let Ok(volume_group_spec) = registry.specs().volume_group_spec(volume_group.id()) {
-                vg_restricted_nodes = Some(get_restricted_nodes(
+        if let Some(affinity_group) = &volume_spec.affinity_group {
+            if let Ok(affinity_group_spec) =
+                registry.specs().affinity_group_spec(affinity_group.id())
+            {
+                ag_restricted_nodes = Some(get_restricted_nodes(
                     &volume_spec,
-                    &volume_group_spec,
+                    &affinity_group_spec,
                     registry,
                 ));
-                pool_vg_replica_count_map =
-                    Some(get_pool_vg_replica_count(&volume_group_spec, registry).await);
+                pool_ag_replica_count_map =
+                    Some(get_pool_ag_replica_count(&affinity_group_spec, registry).await);
             }
         }
 
@@ -154,9 +156,9 @@ impl AddVolumeReplica {
                     spec: volume_spec,
                     allocated_bytes,
                     move_repl: request.move_repl,
-                    vg_restricted_nodes,
+                    ag_restricted_nodes,
                 },
-                PoolItemLister::list(registry, &pool_vg_replica_count_map).await,
+                PoolItemLister::list(registry, &pool_ag_replica_count_map).await,
             ),
         }
     }
@@ -264,7 +266,7 @@ impl GetChildForRemovalContext {
         })
     }
 
-    async fn list(&self, pool_vg_rep: &Option<HashMap<PoolId, u64>>) -> Vec<ReplicaItem> {
+    async fn list(&self, pool_ag_rep: &Option<HashMap<PoolId, u64>>) -> Vec<ReplicaItem> {
         let replicas = self.registry.specs().volume_replicas(&self.spec.uuid);
         let nexus = self.registry.specs().volume_target_nexus_rsc(&self.spec);
         let replicas = replicas.iter().map(|r| r.lock().clone());
@@ -272,7 +274,7 @@ impl GetChildForRemovalContext {
         let replica_states = self.registry.replicas().await;
         replicas
             .map(|replica_spec| {
-                let vg_rep_count = pool_vg_rep
+                let ag_rep_count = pool_ag_rep
                     .as_ref()
                     .and_then(|map| map.get(replica_spec.pool_name()).cloned());
                 ReplicaItem::new(
@@ -321,7 +323,7 @@ impl GetChildForRemovalContext {
                             .find(|child| child.uuid.as_str() == replica_spec.uuid.as_str())
                             .cloned()
                     }),
-                    vg_rep_count,
+                    ag_rep_count,
                 )
             })
             .collect::<Vec<_>>()
@@ -330,15 +332,15 @@ impl GetChildForRemovalContext {
 
 impl DecreaseVolumeReplica {
     async fn builder(request: &GetChildForRemoval, registry: &Registry) -> Result<Self, SvcError> {
-        let mut pool_vg_replica_count_map: Option<HashMap<PoolId, u64>> = None;
-        if let Some(volume_group) = &request.spec.volume_group {
-            let volume_group_spec = registry.specs().volume_group_spec(volume_group.id())?;
-            pool_vg_replica_count_map =
-                Some(get_pool_vg_replica_count(&volume_group_spec, registry).await);
+        let mut pool_ag_replica_count_map: Option<HashMap<PoolId, u64>> = None;
+        if let Some(affinity_group) = &request.spec.affinity_group {
+            let affinity_group_spec = registry.specs().affinity_group_spec(affinity_group.id())?;
+            pool_ag_replica_count_map =
+                Some(get_pool_ag_replica_count(&affinity_group_spec, registry).await);
         }
 
         let context = GetChildForRemovalContext::new(registry, request).await?;
-        let list = context.list(&pool_vg_replica_count_map).await;
+        let list = context.list(&pool_ag_replica_count_map).await;
         Ok(Self {
             data: ResourceData::new(context, list),
         })

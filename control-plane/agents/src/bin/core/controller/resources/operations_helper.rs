@@ -18,7 +18,7 @@ use stor_port::{
             node::NodeSpec,
             pool::PoolSpec,
             replica::ReplicaSpec,
-            volume::{VolumeGroupSpec, VolumeSpec},
+            volume::{AffinityGroupSpec, VolumeSpec},
             AsOperationSequencer, OperationMode, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
@@ -827,7 +827,7 @@ pub(crate) struct ResourceSpecs {
     pub(crate) nexuses: ResourceMap<NexusId, NexusSpec>,
     pub(crate) pools: ResourceMap<PoolId, PoolSpec>,
     pub(crate) replicas: ResourceMap<ReplicaId, ReplicaSpec>,
-    pub(crate) volume_groups: ResourceMap<String, VolumeGroupSpec>,
+    pub(crate) affinity_groups: ResourceMap<String, AffinityGroupSpec>,
 }
 
 impl ResourceSpecsLocked {
@@ -932,11 +932,11 @@ impl ResourceSpecsLocked {
                     Self::deserialise_specs::<VolumeSpec>(store_values).context(Deserialise {
                         obj_type: StorableObjectType::VolumeSpec,
                     })?;
-                let vg_specs = get_volume_group_specs(&specs);
+                let ag_specs = get_affinity_group_specs(&specs);
                 resource_specs.volumes.populate(specs);
-                // Load the vg specs in memory, vg specs are not persisted in memory so we don't
+                // Load the ag specs in memory, ag specs are not persisted in memory so we don't
                 // have a StorableObjectType for it.
-                resource_specs.volume_groups.populate(vg_specs);
+                resource_specs.affinity_groups.populate(ag_specs);
             }
             StorableObjectType::NodeSpec => {
                 let specs =
@@ -975,22 +975,24 @@ impl ResourceSpecsLocked {
     }
 }
 
-/// Helper function to extract the volume groups from volumes on startup.
-fn get_volume_group_specs(volume_specs: &[VolumeSpec]) -> Vec<VolumeGroupSpec> {
-    let mut volume_group_specs: Vec<VolumeGroupSpec> = Vec::new();
+/// Helper function to extract the affinity groups from volumes on startup.
+fn get_affinity_group_specs(volume_specs: &[VolumeSpec]) -> Vec<AffinityGroupSpec> {
+    let mut affinity_group_specs: Vec<AffinityGroupSpec> = Vec::new();
     for volume_spec in volume_specs {
-        if let Some(volume_group) = &volume_spec.volume_group {
-            if let Some(existing_volume_group_spec) = volume_group_specs
+        if let Some(affinity_group) = &volume_spec.affinity_group {
+            if let Some(existing_affinity_group_spec) = affinity_group_specs
                 .iter_mut()
-                .find(|x| x.id() == volume_group.id())
+                .find(|spec| spec.id() == affinity_group.id())
             {
-                existing_volume_group_spec.append(volume_spec.uuid.clone());
+                existing_affinity_group_spec.append(volume_spec.uuid.clone());
             } else {
-                let volume_group_spec =
-                    VolumeGroupSpec::new(volume_group.id().clone(), vec![volume_spec.uuid.clone()]);
-                volume_group_specs.push(volume_group_spec);
+                let affinity_group_spec = AffinityGroupSpec::new(
+                    affinity_group.id().clone(),
+                    vec![volume_spec.uuid.clone()],
+                );
+                affinity_group_specs.push(affinity_group_spec);
             }
         }
     }
-    volume_group_specs
+    affinity_group_specs
 }

@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::{
-    types::v0::store::volume::{VolumeGroupId, VolumeSpec},
+    types::v0::store::volume::{AffinityGroupId, VolumeSpec},
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
@@ -401,37 +401,37 @@ pub struct CreateVolume {
     pub labels: Option<VolumeLabels>,
     /// The flag indicating whether the volume should be thin provisioned.
     pub thin: bool,
-    /// Volume Group related information.
-    pub volume_group: Option<VolumeGroup>,
+    /// Affinity Group related information.
+    pub affinity_group: Option<AffinityGroup>,
 }
 
-/// Volume Group related information.
+/// Affinity Group related information.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct VolumeGroup {
-    /// The name of the volume group.
-    id: VolumeGroupId,
+pub struct AffinityGroup {
+    /// The name of the Affinity Group.
+    id: AffinityGroupId,
 }
 
-impl VolumeGroup {
-    /// Create a new VolumeGroup from the params.
-    pub fn new(id: VolumeGroupId) -> Self {
+impl AffinityGroup {
+    /// Create a new AffinityGroup from the params.
+    pub fn new(id: AffinityGroupId) -> Self {
         Self { id }
     }
-    /// The name of the volume group.
-    pub fn id(&self) -> &VolumeGroupId {
+    /// The name of the Affinity Group.
+    pub fn id(&self) -> &AffinityGroupId {
         &self.id
     }
 }
 
-impl From<VolumeGroup> for models::VolumeGroup {
-    fn from(value: VolumeGroup) -> Self {
+impl From<AffinityGroup> for models::AffinityGroup {
+    fn from(value: AffinityGroup) -> Self {
         Self { id: value.id }
     }
 }
 
-impl From<models::VolumeGroup> for VolumeGroup {
-    fn from(value: models::VolumeGroup) -> Self {
+impl From<models::AffinityGroup> for AffinityGroup {
+    fn from(value: models::AffinityGroup) -> Self {
         Self { id: value.id }
     }
 }

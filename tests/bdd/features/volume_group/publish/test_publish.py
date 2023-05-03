@@ -1,4 +1,4 @@
-"""Anti-Affinity for Volume Group feature tests."""
+"""Anti-Affinity for Affinity Group feature tests."""
 
 from typing import Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,21 +22,21 @@ from openapi.model.volume_policy import VolumePolicy
 
 NODE_NAME_1 = "io-engine-1"
 NODE_NAME_2 = "io-engine-2"
-NON_VG_VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-VG_VOLUME_UUID_1 = "c36f7453-ae65-43bb-8ee9-4b5a373a8ed4"
-VG_VOLUME_UUID_2 = "07805245-ec1c-43bd-a950-c42f4c3a9ac7"
+NON_AG_VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
+AG_VOLUME_UUID_1 = "c36f7453-ae65-43bb-8ee9-4b5a373a8ed4"
+AG_VOLUME_UUID_2 = "07805245-ec1c-43bd-a950-c42f4c3a9ac7"
 VOLUME_SIZE = 10485761
-VG_PARAM = {"id": "vg"}
+AG_PARAM = {"id": "ag"}
 
 
-@scenario("feature.feature", "volume group target distribution")
-def test_volume_group_target_distribution():
-    """volume group target distribution."""
+@scenario("feature.feature", "affinity group target distribution")
+def test_affinity_group_target_distribution():
+    """affinity group target distribution."""
 
 
-@scenario("feature.feature", "volume group volume undergoes republish")
-def test_volume_group_volume_undergoes_republish():
-    """volume group volume undergoes republish."""
+@scenario("feature.feature", "affinity group volume undergoes republish")
+def test_affinity_group_volume_undergoes_republish():
+    """affinity group volume undergoes republish."""
 
 
 @pytest.fixture(autouse=True)
@@ -51,51 +51,51 @@ def a_deployer_cluster():
     Deployer.stop()
 
 
-@given("one non volume group volume with 2 replica published on node B")
-def one_non_volume_group_volume_with_2_replica_published_on_node_b():
-    """one non volume group volume with 2 replica published on node B."""
+@given("one non affinity group volume with 2 replica published on node B")
+def one_non_affinity_group_volume_with_2_replica_published_on_node_b():
+    """one non affinity group volume with 2 replica published on node B."""
     ApiClient.volumes_api().put_volume(
-        NON_VG_VOLUME_UUID,
+        NON_AG_VOLUME_UUID,
         CreateVolumeBody(VolumePolicy(False), replicas=2, size=VOLUME_SIZE, thin=True),
     )
     ApiClient.volumes_api().put_volume_target(
-        NON_VG_VOLUME_UUID,
+        NON_AG_VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
             {}, Protocol("nvmf"), node=NODE_NAME_2, frontend_node="app-node-1"
         ),
     )
 
 
-@given("one unpublished volume group volume with 2 replica")
-def one_unpublished_volume_group_volume_with_2_replica():
-    """one unpublished volume group volume with 2 replica."""
+@given("one unpublished affinity group volume with 2 replica")
+def one_unpublished_affinity_group_volume_with_2_replica():
+    """one unpublished affinity group volume with 2 replica."""
     ApiClient.volumes_api().put_volume(
-        VG_VOLUME_UUID_2,
+        AG_VOLUME_UUID_2,
         CreateVolumeBody(
             VolumePolicy(False),
             replicas=2,
             size=VOLUME_SIZE,
             thin=True,
-            volume_group=VG_PARAM,
+            affinity_group=AG_PARAM,
         ),
     )
 
 
-@given("one volume group volume with 2 replica published on node A")
-def one_volume_group_volume_with_2_replica_published_on_node_a():
-    """one volume group volume with 2 replica published on node A."""
+@given("one affinity group volume with 2 replica published on node A")
+def one_affinity_group_volume_with_2_replica_published_on_node_a():
+    """one affinity group volume with 2 replica published on node A."""
     ApiClient.volumes_api().put_volume(
-        VG_VOLUME_UUID_1,
+        AG_VOLUME_UUID_1,
         CreateVolumeBody(
             VolumePolicy(False),
             replicas=2,
             size=VOLUME_SIZE,
             thin=True,
-            volume_group=VG_PARAM,
+            affinity_group=AG_PARAM,
         ),
     )
     ApiClient.volumes_api().put_volume_target(
-        VG_VOLUME_UUID_1,
+        AG_VOLUME_UUID_1,
         publish_volume_body=PublishVolumeBody(
             {}, Protocol("nvmf"), node=NODE_NAME_1, frontend_node="app-node-1"
         ),
@@ -105,7 +105,7 @@ def one_volume_group_volume_with_2_replica_published_on_node_a():
 @given("the volume targets are on different nodes")
 def the_volume_targets_are_on_different_nodes():
     """the volume targets are on different nodes."""
-    volumes = get_volume_group_volumes()
+    volumes = get_affinity_group_volumes()
     assert volumes[0].state.target["node"] != volumes[1].state.target["node"]
 
 
@@ -119,8 +119,8 @@ def two_pools_one_on_node_a_and_another_on_node_b():
 @given("two published volumes with two replicas each")
 def two_published_volumes_with_two_replicas_each():
     """two published volumes with two replicas each."""
-    create_volume_group()
-    publish_volume_group()
+    create_affinity_group()
+    publish_affinity_group()
 
 
 @when("one volume is republished")
@@ -128,7 +128,7 @@ def one_volume_is_republished():
     """one volume is republished."""
     try:
         ApiClient.volumes_api().put_volume_target(
-            VG_VOLUME_UUID_2,
+            AG_VOLUME_UUID_2,
             publish_volume_body=PublishVolumeBody(
                 {},
                 Protocol("nvmf"),
@@ -146,7 +146,7 @@ def the_non_published_volume_is_published():
     """the non published volume is published."""
     try:
         ApiClient.volumes_api().put_volume_target(
-            VG_VOLUME_UUID_2,
+            AG_VOLUME_UUID_2,
             publish_volume_body=PublishVolumeBody(
                 {}, Protocol("nvmf"), frontend_node="app-node-1"
             ),
@@ -158,7 +158,7 @@ def the_non_published_volume_is_published():
 @then("both the targets should be on the same node")
 def both_the_targets_should_be_on_the_same_node():
     """both the targets should be on the same node."""
-    volumes = get_volume_group_volumes()
+    volumes = get_affinity_group_volumes()
     assert volumes[0].state.target["node"] == volumes[1].state.target["node"]
 
 
@@ -177,7 +177,7 @@ def the_republish_should_not_fail():
 @then("the target should land on node B")
 def the_target_should_land_on_node_b():
     """the target should land on node B."""
-    volume = ApiClient.volumes_api().get_volume(VG_VOLUME_UUID_2)
+    volume = ApiClient.volumes_api().get_volume(AG_VOLUME_UUID_2)
     assert volume.state.target["node"] == NODE_NAME_2
 
 
@@ -198,8 +198,8 @@ def create_node_pools(node_pool_map: Dict[str, int]):
             pool_index += 1
 
 
-# Create volume group volumes parallely.
-def create_volume_group():
+# Create affinity group volumes parallely.
+def create_affinity_group():
     def put_volume(volume_uuid):
         ApiClient.volumes_api().put_volume(
             volume_uuid,
@@ -208,11 +208,11 @@ def create_volume_group():
                 replicas=2,
                 size=VOLUME_SIZE,
                 thin=True,
-                volume_group=VG_PARAM,
+                affinity_group=AG_PARAM,
             ),
         )
 
-    volume_uuids = [VG_VOLUME_UUID_1, VG_VOLUME_UUID_2]
+    volume_uuids = [AG_VOLUME_UUID_1, AG_VOLUME_UUID_2]
 
     with ThreadPoolExecutor(max_workers=len(volume_uuids)) as executor:
         futures = [
@@ -222,8 +222,8 @@ def create_volume_group():
             future.result()
 
 
-# Publishes all the volume group volumes parallely.
-def publish_volume_group():
+# Publishes all the affinity group volumes parallely.
+def publish_affinity_group():
     def put_volume_target(volume_uuid):
         ApiClient.volumes_api().put_volume_target(
             volume_uuid,
@@ -232,7 +232,7 @@ def publish_volume_group():
             ),
         )
 
-    volume_uuids = [VG_VOLUME_UUID_1, VG_VOLUME_UUID_2]
+    volume_uuids = [AG_VOLUME_UUID_1, AG_VOLUME_UUID_2]
 
     with ThreadPoolExecutor(max_workers=len(volume_uuids)) as executor:
         futures = [
@@ -243,12 +243,12 @@ def publish_volume_group():
             future.result()
 
 
-# Get the volume group volumes based on uuids
-def get_volume_group_volumes():
+# Get the affinity group volumes based on uuids
+def get_affinity_group_volumes():
     volumes = ApiClient.volumes_api().get_volumes()
     return [
         volume
         for volume in volumes.entries
-        if hasattr(volume.spec, "volume_group")
-        and volume.spec.volume_group.id == VG_PARAM["id"]
+        if hasattr(volume.spec, "affinity_group")
+        and volume.spec.affinity_group["id"] == AG_PARAM["id"]
     ]

@@ -8,8 +8,9 @@ use crate::{
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
-            self, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId, ReplicaId, Topology,
-            VolumeGroup, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeStatus,
+            self, AffinityGroup, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId,
+            ReplicaId, Topology, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol,
+            VolumeStatus,
         },
     },
     IntoOption,
@@ -168,9 +169,9 @@ pub struct VolumeSpec {
     /// The publish context of the volume.
     #[serde(default)]
     pub publish_context: Option<HashMap<String, String>>,
-    /// Volume Group related information.
+    /// Affinity Group related information.
     #[serde(default)]
-    pub volume_group: Option<VolumeGroup>,
+    pub affinity_group: Option<AffinityGroup>,
 }
 
 /// The volume's Nvmf Configuration.
@@ -244,7 +245,7 @@ impl AsOperationSequencer for VolumeSpec {
     }
 }
 
-impl AsOperationSequencer for VolumeGroupSpec {
+impl AsOperationSequencer for AffinityGroupSpec {
     fn as_ref(&self) -> &OperationSequence {
         &self.sequencer
     }
@@ -561,7 +562,7 @@ impl From<&CreateVolume> for VolumeSpec {
             thin: request.thin,
             target_config: None,
             publish_context: None,
-            volume_group: request.volume_group.clone(),
+            affinity_group: request.affinity_group.clone(),
         }
     }
 }
@@ -612,40 +613,40 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.topology.into_opt(),
             src.policy,
             src.thin,
-            src.volume_group.into_opt(),
+            src.affinity_group.into_opt(),
         )
     }
 }
 
-/// VolumeGroupId type.
-pub type VolumeGroupId = String;
+/// AffinityGroupId type.
+pub type AffinityGroupId = String;
 
-/// In memory representation of volume group.
+/// In memory representation of Affinity Group.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct VolumeGroupSpec {
-    /// Name of the volume group.
-    id: VolumeGroupId,
-    /// List of ids of volumes that belong to the volume group.
+pub struct AffinityGroupSpec {
+    /// Name of the Affinity Group.
+    id: AffinityGroupId,
+    /// List of ids of volumes that belong to the Affinity Group.
     volumes: Vec<VolumeId>,
     /// The operation sequence resource is in.
     #[serde(skip)]
     sequencer: OperationSequence,
 }
 
-impl VolumeGroupSpec {
-    /// Create a new VolumeGroupSpec.
-    pub fn new(id: VolumeGroupId, volumes: Vec<VolumeId>) -> Self {
+impl AffinityGroupSpec {
+    /// Create a new AffinityGroupSpec.
+    pub fn new(id: AffinityGroupId, volumes: Vec<VolumeId>) -> Self {
         Self {
             id: id.clone(),
             volumes,
             sequencer: OperationSequence::new(id),
         }
     }
-    /// Name of the volume group.
-    pub fn id(&self) -> &VolumeGroupId {
+    /// Name of the Affinity Group.
+    pub fn id(&self) -> &AffinityGroupId {
         &self.id
     }
-    /// List of volumes in volume group.
+    /// List of volumes in Affinity Group.
     pub fn volumes(&self) -> &Vec<VolumeId> {
         &self.volumes
     }
@@ -659,7 +660,7 @@ impl VolumeGroupSpec {
     pub fn remove(&mut self, id: &VolumeId) {
         self.volumes.retain(|vol| vol != id)
     }
-    /// Check if the volume group has any more volumes.
+    /// Check if the Affinity Group has any more volumes.
     pub fn is_empty(&self) -> bool {
         self.volumes.is_empty()
     }

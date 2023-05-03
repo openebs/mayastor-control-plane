@@ -15,13 +15,15 @@ use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
-        store::volume::{FrontendConfig, TargetConfig, VolumeGroupSpec, VolumeSpec, VolumeTarget},
+        store::volume::{
+            AffinityGroupSpec, FrontendConfig, TargetConfig, VolumeSpec, VolumeTarget,
+        },
         transport::{
-            CreateVolume, DestroyShutdownTargets, DestroyVolume, ExplicitNodeTopology, Filter,
-            LabelledTopology, Nexus, NexusId, NexusNvmfConfig, NodeId, NodeTopology, PoolTopology,
-            PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, ReplicaUsage,
-            RepublishVolume, SetVolumeReplica, ShareVolume, Topology, UnpublishVolume,
-            UnshareVolume, Volume, VolumeGroup, VolumeId, VolumeLabels, VolumePolicy,
+            AffinityGroup, CreateVolume, DestroyShutdownTargets, DestroyVolume,
+            ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId, NexusNvmfConfig,
+            NodeId, NodeTopology, PoolTopology, PublishVolume, ReplicaId, ReplicaStatus,
+            ReplicaTopology, ReplicaUsage, RepublishVolume, SetVolumeReplica, ShareVolume,
+            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeLabels, VolumePolicy,
             VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
@@ -116,7 +118,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 topology: volume_spec.topology.map(|topology| topology.into()),
                 last_nexus_id: nexus_id.map(|id| id.to_string()),
                 thin: volume_spec.thin,
-                volume_group: volume_spec.volume_group.into_opt(),
+                affinity_group: volume_spec.affinity_group.into_opt(),
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -263,7 +265,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             publish_context: volume_meta
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
-            volume_group: volume_spec.volume_group.into_opt(),
+            affinity_group: volume_spec.affinity_group.into_opt(),
         };
         Ok(volume_spec)
     }
@@ -729,8 +731,8 @@ pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     fn labels(&self) -> Option<VolumeLabels>;
     /// Flag indicating whether the volume should be thin provisioned
     fn thin(&self) -> bool;
-    /// Volume Group related information.
-    fn volume_group(&self) -> Option<VolumeGroup>;
+    /// Affinity Group related information.
+    fn affinity_group(&self) -> Option<AffinityGroup>;
 }
 
 impl CreateVolumeInfo for CreateVolume {
@@ -762,8 +764,8 @@ impl CreateVolumeInfo for CreateVolume {
         self.thin
     }
 
-    fn volume_group(&self) -> Option<VolumeGroup> {
-        self.volume_group.clone()
+    fn affinity_group(&self) -> Option<AffinityGroup> {
+        self.affinity_group.clone()
     }
 }
 
@@ -810,8 +812,8 @@ impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
         self.inner.thin
     }
 
-    fn volume_group(&self) -> Option<VolumeGroup> {
-        self.inner.volume_group.clone().map(|vg| vg.into())
+    fn affinity_group(&self) -> Option<AffinityGroup> {
+        self.inner.affinity_group.clone().map(|ag| ag.into())
     }
 }
 
@@ -848,7 +850,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolume {
             topology: data.topology(),
             labels: data.labels(),
             thin: data.thin(),
-            volume_group: data.volume_group(),
+            affinity_group: data.affinity_group(),
         }
     }
 }
@@ -865,7 +867,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
                 .labels()
                 .map(|labels| crate::common::StringMapValue { value: labels }),
             thin: data.thin(),
-            volume_group: data.volume_group().map(|vg| vg.into()),
+            affinity_group: data.affinity_group().map(|ag| ag.into()),
         }
     }
 }
@@ -1551,22 +1553,22 @@ impl From<&dyn DestroyShutdownTargetsInfo> for DestroyShutdownTargets {
     }
 }
 
-impl From<volume::VolumeGroup> for VolumeGroup {
-    fn from(value: volume::VolumeGroup) -> Self {
-        VolumeGroup::new(value.name)
+impl From<volume::AffinityGroup> for AffinityGroup {
+    fn from(value: volume::AffinityGroup) -> Self {
+        AffinityGroup::new(value.name)
     }
 }
 
-impl From<VolumeGroup> for volume::VolumeGroup {
-    fn from(value: VolumeGroup) -> Self {
+impl From<AffinityGroup> for volume::AffinityGroup {
+    fn from(value: AffinityGroup) -> Self {
         Self {
             name: value.id().clone(),
         }
     }
 }
 
-impl From<VolumeGroupSpec> for volume::VolumeGroupSpec {
-    fn from(value: VolumeGroupSpec) -> Self {
+impl From<AffinityGroupSpec> for volume::AffinityGroupSpec {
+    fn from(value: AffinityGroupSpec) -> Self {
         Self {
             id: value.id().clone(),
             volumes: value.volumes().iter().map(|id| id.to_string()).collect(),
@@ -1574,10 +1576,10 @@ impl From<VolumeGroupSpec> for volume::VolumeGroupSpec {
     }
 }
 
-impl TryFrom<volume::VolumeGroupSpec> for VolumeGroupSpec {
+impl TryFrom<volume::AffinityGroupSpec> for AffinityGroupSpec {
     type Error = ReplyError;
 
-    fn try_from(value: volume::VolumeGroupSpec) -> Result<Self, Self::Error> {
+    fn try_from(value: volume::AffinityGroupSpec) -> Result<Self, Self::Error> {
         let mut volumes: Vec<VolumeId> = Vec::with_capacity(value.volumes.len());
         for volume in value.volumes {
             let volume_id = VolumeId::try_from(volume).map_err(|error| {
@@ -1585,6 +1587,6 @@ impl TryFrom<volume::VolumeGroupSpec> for VolumeGroupSpec {
             })?;
             volumes.push(volume_id)
         }
-        Ok(VolumeGroupSpec::new(value.id, volumes))
+        Ok(AffinityGroupSpec::new(value.id, volumes))
     }
 }

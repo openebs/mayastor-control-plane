@@ -2058,7 +2058,7 @@ components:
         size: 10485761
         thin: false
         topology: null
-        volume_group: null
+        affinity_group: null
       description: Create Volume Body
       type: object
       properties:
@@ -2085,23 +2085,23 @@ components:
           type: object
           additionalProperties:
             type: string
-        volume_group:
-          description: Volume Group related information.
+        affinity_group:
+          description: Affinity Group related information.
           allOf:
-            - $ref: '#/components/schemas/VolumeGroup'
+            - $ref: '#/components/schemas/AffinityGroup'
       required:
         - policy
         - replicas
         - size
         - thin
-    VolumeGroup:
+    AffinityGroup:
       example:
-        id: "vg"
-      description: Volume Group related information.
+        id: "ag"
+      description: Affinity Group related information.
       type: object
       properties:
         id:
-          description: Identification of the Volume Group.
+          description: Identification of the Affinity Group.
           type: string
       required:
         - id
@@ -2789,8 +2789,8 @@ components:
         thin:
           description: Thin provisioning flag
           type: boolean
-        volume_group:
-          $ref: '#/components/schemas/VolumeGroup'
+        affinity_group:
+          $ref: '#/components/schemas/AffinityGroup'
       required:
         - num_paths
         - num_replicas

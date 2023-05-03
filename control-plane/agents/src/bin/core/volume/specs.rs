@@ -35,7 +35,7 @@ use stor_port::{
             nexus::NexusSpec,
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
-            volume::{VolumeGroupId, VolumeGroupSpec, VolumeOperation, VolumeSpec},
+            volume::{AffinityGroupId, AffinityGroupSpec, VolumeOperation, VolumeSpec},
             SpecStatus, SpecTransaction,
         },
         transport::{
@@ -48,21 +48,21 @@ use stor_port::{
 use snafu::OptionExt;
 use std::convert::From;
 
-/// CreateReplicaCandidate for volume and volume group.
+/// CreateReplicaCandidate for volume and Affinity Group.
 pub(crate) struct CreateReplicaCandidate {
     candidates: Vec<CreateReplica>,
-    _volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+    _affinity_group_guard: Option<OperationGuardArc<AffinityGroupSpec>>,
 }
 
 impl CreateReplicaCandidate {
-    /// Create a new `CreateReplicaCandidate` with candidates and optional vg guard.
+    /// Create a new `CreateReplicaCandidate` with candidates and optional ag guard.
     pub(crate) fn new(
         candidates: Vec<CreateReplica>,
-        volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+        affinity_group_guard: Option<OperationGuardArc<AffinityGroupSpec>>,
     ) -> CreateReplicaCandidate {
         Self {
             candidates,
-            _volume_group_guard: volume_group_guard,
+            _affinity_group_guard: affinity_group_guard,
         }
     }
     /// Get the candidates.
@@ -74,18 +74,18 @@ impl CreateReplicaCandidate {
 /// NexusNodeCandidate for nexus node selection.
 pub(crate) struct NexusNodeCandidate {
     candidate: NodeId,
-    _volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+    _affinity_group_guard: Option<OperationGuardArc<AffinityGroupSpec>>,
 }
 
 impl NexusNodeCandidate {
-    /// Create a new `NexusNodeCandidate` with candidate and optional vg guard.
+    /// Create a new `NexusNodeCandidate` with candidate and optional ag guard.
     pub(crate) fn new(
         candidate: NodeId,
-        volume_group_guard: Option<OperationGuardArc<VolumeGroupSpec>>,
+        affinity_group_guard: Option<OperationGuardArc<AffinityGroupSpec>>,
     ) -> NexusNodeCandidate {
         Self {
             candidate,
-            _volume_group_guard: volume_group_guard,
+            _affinity_group_guard: affinity_group_guard,
         }
     }
     /// Get the candidate.
@@ -265,9 +265,9 @@ pub(crate) async fn create_volume_replicas(
     request: &CreateVolume,
     volume: &VolumeSpec,
 ) -> Result<CreateReplicaCandidate, SvcError> {
-    // Create a vg guard to prevent candidate collision.
-    let vg_guard = match registry.specs().get_or_create_volume_group(volume) {
-        Some(vg) => Some(vg.operation_guard_wait().await?),
+    // Create a ag guard to prevent candidate collision.
+    let ag_guard = match registry.specs().get_or_create_affinity_group(volume) {
+        Some(ag) => Some(ag.operation_guard_wait().await?),
         _ => None,
     };
 
@@ -286,7 +286,7 @@ pub(crate) async fn create_volume_replicas(
             need: request.replicas,
         }))
     } else {
-        Ok(CreateReplicaCandidate::new(node_replicas, vg_guard))
+        Ok(CreateReplicaCandidate::new(node_replicas, ag_guard))
     }
 }
 
@@ -324,9 +324,9 @@ impl ResourceSpecs {
         self.volumes.values().map(|v| v.lock().clone()).collect()
     }
 
-    /// Gets all VolumeGroupSpecs.
-    pub(crate) fn volume_groups(&self) -> Vec<VolumeGroupSpec> {
-        self.volume_groups
+    /// Gets all AffinityGroupSpecs.
+    pub(crate) fn affinity_groups(&self) -> Vec<AffinityGroupSpec> {
+        self.affinity_groups
             .values()
             .map(|v| v.lock().clone())
             .collect()
@@ -381,14 +381,14 @@ impl ResourceSpecsLocked {
         }
     }
 
-    /// Get the VolumeGroupSpec for the given volume group id.
-    pub(crate) fn volume_group_spec(
+    /// Get the AffinityGroupSpec for the given Affinity Group id.
+    pub(crate) fn affinity_group_spec(
         &self,
-        id: &VolumeGroupId,
-    ) -> Result<VolumeGroupSpec, SvcError> {
+        id: &AffinityGroupId,
+    ) -> Result<AffinityGroupSpec, SvcError> {
         let specs = self.read();
-        match specs.volume_groups.get(id) {
-            None => Err(SvcError::VolumeGroupNotFound {
+        match specs.affinity_groups.get(id) {
+            None => Err(SvcError::AffinityGroupNotFound {
                 vol_grp_id: id.to_string(),
             }),
             Some(vol_grp) => {
@@ -571,45 +571,45 @@ impl ResourceSpecsLocked {
         specs.volumes.remove(id);
     }
 
-    /// Remove volume group by its `id` only if the volume list becomes empty.
-    pub(super) fn remove_volume_group(&self, id: &VolumeId, vg_id: &String) {
+    /// Remove Affinity Group by its `id` only if the volume list becomes empty.
+    pub(super) fn remove_affinity_group(&self, id: &VolumeId, ag_id: &String) {
         let mut specs = self.write();
-        if let Some(vg_spec) = specs.volume_groups.get(vg_id).cloned() {
-            let mut vg_spec = vg_spec.lock();
-            vg_spec.remove(id);
-            if vg_spec.is_empty() {
-                specs.volume_groups.remove(vg_id);
+        if let Some(ag_spec) = specs.affinity_groups.get(ag_id).cloned() {
+            let mut ag_spec = ag_spec.lock();
+            ag_spec.remove(id);
+            if ag_spec.is_empty() {
+                specs.affinity_groups.remove(ag_id);
             }
         }
     }
 
-    /// Get or Create the resourced VolumeGroupSpec for the given request.
-    pub(crate) fn get_or_create_volume_group(
+    /// Get or Create the resourced AffinityGroupSpec for the given request.
+    pub(crate) fn get_or_create_affinity_group(
         &self,
         volume_spec: &VolumeSpec,
-    ) -> Option<ResourceMutex<VolumeGroupSpec>> {
-        volume_spec.volume_group.as_ref().map(|vg_info| {
+    ) -> Option<ResourceMutex<AffinityGroupSpec>> {
+        volume_spec.affinity_group.as_ref().map(|ag_info| {
             let mut specs = self.write();
-            if let Some(vg_spec) = specs.volume_groups.get(vg_info.id()) {
-                vg_spec.lock().append(volume_spec.uuid.clone());
-                vg_spec.clone()
+            if let Some(ag_spec) = specs.affinity_groups.get(ag_info.id()) {
+                ag_spec.lock().append(volume_spec.uuid.clone());
+                ag_spec.clone()
             } else {
-                let vg_spec = specs.volume_groups.insert(VolumeGroupSpec::new(
-                    vg_info.id().clone(),
+                let ag_spec = specs.affinity_groups.insert(AffinityGroupSpec::new(
+                    ag_info.id().clone(),
                     vec![volume_spec.uuid.clone()],
                 ));
-                vg_spec
+                ag_spec
             }
         })
     }
 
-    /// Get or Create the resourced VolumeGroupSpec for the given request.
-    pub(crate) fn get_volume_group(
+    /// Get or Create the resourced AffinityGroupSpec for the given request.
+    pub(crate) fn get_affinity_group(
         &self,
-        vol_grp_id: &VolumeGroupId,
-    ) -> Option<ResourceMutex<VolumeGroupSpec>> {
+        vol_grp_id: &AffinityGroupId,
+    ) -> Option<ResourceMutex<AffinityGroupSpec>> {
         let specs = self.read();
-        specs.volume_groups.get(vol_grp_id).cloned()
+        specs.affinity_groups.get(vol_grp_id).cloned()
     }
 
     /// Get or Create the resourced VolumeSpec for the given request
@@ -674,9 +674,9 @@ impl GuardedOperationsHelper for OperationGuardArc<VolumeSpec> {
     fn remove_spec(&self, registry: &Registry) {
         let uuid = self.lock().uuid.clone();
         registry.specs().remove_volume(&uuid);
-        let vg_info = self.lock().volume_group.clone();
-        if let Some(vg) = vg_info {
-            registry.specs().remove_volume_group(&uuid, vg.id())
+        let ag_info = self.lock().affinity_group.clone();
+        if let Some(ag) = ag_info {
+            registry.specs().remove_affinity_group(&uuid, ag.id())
         }
     }
 }
@@ -804,10 +804,10 @@ impl SpecOperationsHelper for VolumeSpec {
                         volume_state: state.status.to_string(),
                     })
                 } else {
-                    // Validation for volume group volume's replica count cannot go below 2.
-                    if self.volume_group.is_some() && *replica_count < 2 {
+                    // Validation for Affinity Group volume's replica count cannot go below 2.
+                    if self.affinity_group.is_some() && *replica_count < 2 {
                         Err(SvcError::RestrictedReplicaCount {
-                            resource: ResourceKind::VolumeGroup,
+                            resource: ResourceKind::AffinityGroup,
                             count: *replica_count,
                         })
                     } else {
