@@ -678,6 +678,12 @@ impl ClusterBuilder {
         self.opts = self.opts.with_reconcile_period(busy, idle);
         self
     }
+    #[must_use]
+    pub fn with_faulted_child_wait_period(mut self, twait: Duration) -> Self {
+        self.opts = self.opts.with_faulted_child_wait_period(twait);
+        self
+    }
+
     /// With store operation timeout.
     #[must_use]
     pub fn with_store_timeout(mut self, timeout: Duration) -> Self {
