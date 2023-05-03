@@ -43,27 +43,25 @@ POOL_4_UUID = "d5c5e3de-d77b-11ed-afa1-0242ac120002"
 VOLUME_SIZE = 524288000
 POOL_SIZE = 734003200
 NUM_VOLUME_REPLICAS = 3
-RECONCILE_PERIOD_SECS = "3s"
-FAULTED_CHILD_WAIT = "12s"
+RECONCILE_PERIOD_SECS = "1s"
+FAULTED_CHILD_WAIT_SECS = 10
 FIO_RUN = 15
 SLEEP_BEFORE_START = 5
-WAIT_FOR_FULL_REBUILD = 16
-REPUBLISH_WAIT = 12
 faulted_child_uri = None
 
 
 @pytest.fixture(autouse=True)
 def init(disks):
     Deployer.start(
-        io_engines="4",
+        io_engines=4,
         wait="10s",
         reconcile_period=RECONCILE_PERIOD_SECS,
-        faulted_child_wait_period=FAULTED_CHILD_WAIT,
+        faulted_child_wait_period=f"{FAULTED_CHILD_WAIT_SECS}s",
         cache_period="500ms",
     )
 
     assert len(disks) == (NUM_VOLUME_REPLICAS + 1)
-    # Only create 3 pools so we can control where the intial replicas are placed.
+    # Only create 3 pools, so we can control where the initial replicas are placed.
     ApiClient.pools_api().put_node_pool(
         NODE_1_NAME, POOL_1_UUID, CreatePoolBody([f"aio://{disks[0]}"])
     )
@@ -120,11 +118,11 @@ def test_faulted_child_is_online_again_within_timedwait_period():
     """Faulted child is online again within timed-wait period."""
 
 
+@pytest.mark.skip(reason="blocked due to GTM-684")
 @scenario(
     "log-based-rebuild.feature",
     "Node goes permanently down while log based rebuild running",
 )
-@pytest.mark.skip(reason="blocked due to GTM-684")
 def test_node_goes_permanently_down_while_log_based_rebuild_running():
     """Node goes permanently down while log based rebuild running."""
 
@@ -143,9 +141,7 @@ def a_volume_with_three_replicas_filled_with_user_data(disks):
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_1_NAME, frontend_node=""
-        ),
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
     )
 
     # Now the volume has been created, create an additional pool.
@@ -192,7 +188,7 @@ def a_non_local_child_becomes_faulted():
 def the_replica_is_not_online_again_within_the_timed_wait_period():
     """the replica is not online again within the timed-wait period."""
     # The replica shouldn't be available on this node still.
-    time.sleep(WAIT_FOR_FULL_REBUILD)
+    time.sleep(FAULTED_CHILD_WAIT_SECS)
     replica = ApiClient.replicas_api().get_node_replicas(NODE_2_NAME)
     assert len(replica) == 0, "Replica not expected to be available on " + NODE_2_NAME
 
@@ -207,7 +203,7 @@ def the_replica_is_online_again_within_the_timed_wait_period():
     check_replica_online()
 
 
-@retry(wait_fixed=500, stop_max_attempt_number=20)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
 def check_replica_online():
     replica = ApiClient.replicas_api().get_node_replicas(NODE_2_NAME)
     if len(replica) == 1:
@@ -217,7 +213,7 @@ def check_replica_online():
 
 
 @then("a full rebuild starts after some time")
-@retry(wait_fixed=500, stop_max_attempt_number=20)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
 def a_full_rebuild_starts_after_some_time():
     """a full rebuild starts after some time."""
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
@@ -232,7 +228,7 @@ def a_full_rebuild_starts_after_some_time():
 
 
 @then("log-based rebuild starts after some time")
-@retry(wait_fixed=500, stop_max_attempt_number=20)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
 def log_based_rebuild_starts_after_some_time():
     """log-based rebuild starts after some time."""
     # TODO: Check log-based rebuild is running.
@@ -268,7 +264,7 @@ def check_child_removal():
     ), f"child list is {child_list}, faulted child : {faulted_child_uri}"
 
 
-@retry(wait_fixed=500, stop_max_attempt_number=20)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
 def wait_for_degraded_volume():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert volume.state.status == VolumeStatus("Degraded")
