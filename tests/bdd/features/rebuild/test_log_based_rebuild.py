@@ -26,7 +26,6 @@ from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.protocol import Protocol
 from openapi.model.volume_status import VolumeStatus
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.pool_status import PoolStatus
 from openapi.model.replica_state import ReplicaState
 from openapi.model.child_state import ChildState
 from openapi.model.child_state_reason import ChildStateReason
@@ -45,15 +44,20 @@ POOL_SIZE = 734003200
 NUM_VOLUME_REPLICAS = 3
 RECONCILE_PERIOD_SECS = "1s"
 FAULTED_CHILD_WAIT_SECS = 10
-FIO_RUN = 15
+FIO_RUN = 20
 SLEEP_BEFORE_START = 5
 faulted_child_uri = None
+nexus_local_child = None
+new_target_node = None
 
 
 @pytest.fixture(autouse=True)
 def init(disks):
     Deployer.start(
         io_engines=4,
+        node_agent=True,
+        cluster_agent=True,
+        csi_node=True,
         wait="10s",
         reconcile_period=RECONCILE_PERIOD_SECS,
         faulted_child_wait_period=f"{FAULTED_CHILD_WAIT_SECS}s",
@@ -127,6 +131,14 @@ def test_node_goes_permanently_down_while_log_based_rebuild_running():
     """Node goes permanently down while log based rebuild running."""
 
 
+@scenario(
+    "log-based-rebuild.feature",
+    "Volume target is unreachable during log based rebuild",
+)
+def test_volume_target_is_unreachable_during_log_based_rebuild():
+    """Volume target is unreachable during log based rebuild"""
+
+
 @given("io-engine is installed and running")
 def io_engine_is_installed_and_running():
     """io-engine is installed and running."""
@@ -141,7 +153,9 @@ def a_volume_with_three_replicas_filled_with_user_data(disks):
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
+        publish_volume_body=PublishVolumeBody(
+            {}, Protocol("nvmf"), node=NODE_1_NAME, frontend_node="app-node-1"
+        ),
     )
 
     # Now the volume has been created, create an additional pool.
@@ -172,6 +186,7 @@ def a_child_becomes_faulted():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
     childlist = target["children"]
+    print(f"During first child fault {childlist}")
     for child in childlist:
         if child["state"] == ChildState("Faulted"):
             faulted_child_uri = child["uri"]
@@ -212,10 +227,10 @@ def check_replica_online():
         assert False, "Expected a replica to be available again on " + NODE_2_NAME
 
 
-@then("a full rebuild starts after some time")
+@then("a full rebuild starts for unhealthy child")
 @retry(wait_fixed=200, stop_max_attempt_number=20)
-def a_full_rebuild_starts_after_some_time():
-    """a full rebuild starts after some time."""
+def a_full_rebuild_starts_for_unhealthy_child():
+    """a full rebuild starts for unhealthy child"""
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
     childlist = target["children"]
@@ -227,10 +242,10 @@ def a_full_rebuild_starts_after_some_time():
             assert child["rebuild_progress"] != 0
 
 
-@then("log-based rebuild starts after some time")
+@then("a log-based rebuild starts for the unhealthy child")
 @retry(wait_fixed=200, stop_max_attempt_number=20)
-def log_based_rebuild_starts_after_some_time():
-    """log-based rebuild starts after some time."""
+def a_log_based_rebuild_starts_for_the_unhealthy_child():
+    """a log-based rebuild starts for the unhealthy child"""
     # TODO: Check log-based rebuild is running.
     # No direct way to check partial rebuild via openapi yet
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
@@ -250,7 +265,42 @@ def the_node_hosting_rebuilding_replica_crashes_permanently():
     check_child_removal()
 
 
-@retry(wait_fixed=500, stop_max_attempt_number=2)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
+@then("a full rebuild starts for both of the unhealthy children")
+def a_full_rebuild_starts_for_both_of_the_unhealthy_children():
+    """a full rebuild starts for both of the unhealthy children"""
+    children = []
+    new_nexus = ApiClient.volumes_api().get_volume(VOLUME_UUID).state.target
+    for child in new_nexus["children"]:
+        children.append(child["uri"])
+    assert nexus_local_child not in children
+    assert faulted_child_uri not in children
+    childs = new_nexus["children"]
+    print(f"child list during full rebuild: {childs}")
+
+
+@then("the volume target becomes unreachable along with its local child")
+def the_volume_target_becomes_unreachable_along_with_its_local_child():
+    """the volume target becomes unreachable along with its local child"""
+    nexus_local_child = ApiClient.replicas_api().get_node_replicas(NODE_1_NAME)[0][
+        "uri"
+    ]
+    Docker.stop_container(NODE_1_NAME)
+    # wait for nexus republish
+    verify_nexus_switchover()
+
+
+@retry(wait_fixed=500, stop_max_attempt_number=30)
+def verify_nexus_switchover():
+    vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    new_target = vol["state"].get("target", None)
+    if new_target is not None:
+        assert NODE_1_NAME != new_target["node"]
+    else:
+        assert False, "target not yet failed over"
+
+
+@retry(wait_fixed=500, stop_max_attempt_number=20)
 def check_child_removal():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     child_list = vol.state.target["children"]
