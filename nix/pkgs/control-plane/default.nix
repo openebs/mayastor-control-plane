@@ -1,6 +1,6 @@
-{ stdenv, git, lib, pkgs, allInOne, incremental }:
+{ stdenv, git, lib, pkgs, allInOne, incremental, tag ? "" }:
 let
-  versionDrv = import ../../lib/version.nix { inherit lib stdenv git; };
+  versionDrv = import ../../lib/version.nix { inherit lib stdenv git tag; };
   version = builtins.readFile "${versionDrv}";
   gitVersions = {
     "version" = version;

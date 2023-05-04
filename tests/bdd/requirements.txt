@@ -5,3 +5,4 @@ urllib3
 docker
 asyncssh
 etcd3
+requests==2.25.0

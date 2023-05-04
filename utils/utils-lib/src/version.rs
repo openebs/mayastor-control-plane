@@ -3,7 +3,7 @@ pub mod macros {
     #[macro_export]
     macro_rules! version_info {
         () => {{
-            $crate::version_info_inner!($crate::long_raw_version_str())
+            $crate::version_info_inner!(None, $crate::long_raw_version_str())
         }};
     }
 
