@@ -19,6 +19,7 @@ done
 submodule_init() {
   for mod in `git config --file .gitmodules --get-regexp path | awk '{ print $2 }'`; do
     if [ -n "$FORCE" ] || [ ! -f $mod/.git ]; then
+      git submodule deinit $FORCE $mod
       git submodule update $FORCE --init --recursive $mod
     fi
     pushd $mod 1>/dev/null
