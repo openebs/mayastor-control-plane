@@ -632,6 +632,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             controller_service_capability::rpc::Type::PublishUnpublishVolume,
             controller_service_capability::rpc::Type::ListVolumes,
             controller_service_capability::rpc::Type::GetCapacity,
+            controller_service_capability::rpc::Type::CreateDeleteSnapshot,
+            controller_service_capability::rpc::Type::ListSnapshots,
         ];
 
         Ok(Response::new(ControllerGetCapabilitiesResponse {
