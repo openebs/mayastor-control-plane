@@ -70,7 +70,7 @@ impl ComponentAction for CsiController {
                 .await
             {
                 Ok(channel) => break channel,
-                Err(_) => sleep(Duration::from_secs(1)).await,
+                Err(_) => sleep(Duration::from_millis(100)).await,
             }
         };
 
