@@ -83,7 +83,7 @@ async fn ping_rest_api() {
                 names,
             );
         }
-    };
+    }
 }
 
 impl CsiServer {

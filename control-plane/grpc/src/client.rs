@@ -91,7 +91,7 @@ impl CoreClient {
                 Ok(true) => return Ok(()),
                 _ => {
                     let delay = std::time::Duration::from_millis(100);
-                    tracing::trace!(%attempt, delay=?delay, "Not available, retrying after...");
+                    tracing::trace!(%attempt, delay=?delay, "CoreAgent not available, retrying after...");
                     tokio::time::sleep(delay).await;
                 }
             }

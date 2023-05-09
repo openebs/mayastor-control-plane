@@ -562,7 +562,9 @@ impl StopOptions {
             .with_clean(true)
             .build()
             .await?;
+        tracing::trace!("Stopping network containers");
         let _ = composer.stop_network_containers().await;
+        tracing::trace!("Removing network containers");
         composer
             .remove_network_containers(&self.cluster_label.name())
             .await?;
