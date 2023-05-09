@@ -5,6 +5,7 @@ use crate::{
         resources::{
             operations::{
                 ResourceLifecycle, ResourceOffspring, ResourceSharing, ResourceShutdownOperations,
+                ResourceSnapshotting,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, SpecOperationsHelper,
@@ -474,5 +475,38 @@ impl OperationGuardArc<NexusSpec> {
                 Err(error)
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceSnapshotting for OperationGuardArc<NexusSpec> {
+    type Create = ();
+    type CreateOutput = ();
+    type Destroy = ();
+    type List = ();
+    type ListOutput = ();
+
+    async fn create_snap(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Create,
+    ) -> Result<Self::CreateOutput, SvcError> {
+        todo!()
+    }
+
+    async fn list_snaps(
+        &self,
+        _registry: &Registry,
+        _request: &Self::List,
+    ) -> Result<Self::ListOutput, SvcError> {
+        todo!()
+    }
+
+    async fn destroy_snap(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
+        todo!()
     }
 }

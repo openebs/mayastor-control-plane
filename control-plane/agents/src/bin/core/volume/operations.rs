@@ -5,7 +5,7 @@ use crate::{
         resources::{
             operations::{
                 ResourceLifecycle, ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas,
-                ResourceSharing, ResourceShutdownOperations,
+                ResourceSharing, ResourceShutdownOperations, ResourceSnapshotting,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
@@ -31,16 +31,14 @@ use stor_port::{
         },
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
-            Nexus, Protocol, PublishVolume, Replica, ReplicaId, ReplicaOwners, RepublishVolume,
+            Protocol, PublishVolume, Replica, ReplicaId, ReplicaOwners, RepublishVolume,
             SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume,
             UnshareNexus, UnshareVolume, Volume,
         },
     },
 };
 
-use http::Uri;
 use std::ops::Deref;
-use tracing::info;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
@@ -483,7 +481,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         if !move_nexus {
             // The older nexus is back again, so completing republish without modifications.
-            info!(nexus.uuid=%older_nexus.as_ref().uuid, "Current target is back online, not moving nexus");
+            tracing::info!(nexus.uuid=%older_nexus.as_ref().uuid, "Current target is back online, not moving nexus");
             let volume = registry.volume(&request.uuid).await?;
             return Ok(volume);
         }
@@ -668,7 +666,7 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
             match nexus_res.operation_guard_wait().await {
                 Ok(mut guard) => {
                     if let Ok(nexus) = registry.nexus(nexus_res.uuid()).await {
-                        if target_registered(request.registered_targets(), nexus)? {
+                        if Self::target_registered(request.registered_targets(), nexus)? {
                             continue;
                         }
                     }
@@ -713,23 +711,35 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
     }
 }
 
-/// Checks if Nexus is present in registered target list. Returns true if yes.
-fn target_registered(
-    registered_target: Option<Vec<String>>,
-    nexus: Nexus,
-) -> Result<bool, SvcError> {
-    // let path = nexus.device_uri;
-    if let Some(targets) = registered_target {
-        let parsed_uri = nexus
-            .device_uri
-            .parse::<Uri>()
-            .map_err(|_| SvcError::InvalidArguments {})?;
-        let host = parsed_uri
-            .host()
-            .ok_or(SvcError::InvalidArguments {})?
-            .to_string();
-        Ok(targets.contains(&host))
-    } else {
-        Ok(false)
+#[async_trait::async_trait]
+impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
+    type Create = ();
+    type CreateOutput = ();
+    type Destroy = ();
+    type List = ();
+    type ListOutput = ();
+
+    async fn create_snap(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Create,
+    ) -> Result<Self::CreateOutput, SvcError> {
+        todo!()
+    }
+
+    async fn list_snaps(
+        &self,
+        _registry: &Registry,
+        _request: &Self::List,
+    ) -> Result<Self::ListOutput, SvcError> {
+        todo!()
+    }
+
+    async fn destroy_snap(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
+        todo!()
     }
 }

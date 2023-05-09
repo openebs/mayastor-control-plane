@@ -149,3 +149,34 @@ pub(crate) trait ResourceShutdownOperations {
         request: &Self::RemoveShutdownTargets,
     ) -> Result<(), SvcError>;
 }
+
+/// Resource Snapshot Operations.
+/// This can be used in combination with `ResourceLifecycle` where the parent resource can use
+/// the `ResourceLifecycle` to manage the snapshot resource.
+#[async_trait::async_trait]
+pub(crate) trait ResourceSnapshotting {
+    type Create: Sync + Send;
+    type CreateOutput: Sync + Send + Sized;
+    type Destroy: Sync + Send;
+    type List: Sync + Send;
+    type ListOutput: Sync + Send + Sized;
+
+    /// Create a snapshot for the `Self` resource.
+    async fn create_snap(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Create,
+    ) -> Result<Self::CreateOutput, SvcError>;
+    /// List snapshots from the `Self` resource.
+    async fn list_snaps(
+        &self,
+        registry: &Registry,
+        request: &Self::List,
+    ) -> Result<Self::ListOutput, SvcError>;
+    /// Destroy the snapshot from the `Self` resource.
+    async fn destroy_snap(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+    ) -> Result<(), SvcError>;
+}

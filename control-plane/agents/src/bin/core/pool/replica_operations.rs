@@ -2,7 +2,10 @@ use crate::controller::{
     io_engine::ReplicaApi,
     registry::Registry,
     resources::{
-        operations::{ResourceLifecycle, ResourceOffspring, ResourceOwnerUpdate, ResourceSharing},
+        operations::{
+            ResourceLifecycle, ResourceOffspring, ResourceOwnerUpdate, ResourceSharing,
+            ResourceSnapshotting,
+        },
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc, UpdateInnerValue,
     },
@@ -261,5 +264,38 @@ fn destroy_replica_request(
         uuid: spec.uuid.clone(),
         name: spec.name.clone().into(),
         disowners,
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceSnapshotting for OperationGuardArc<ReplicaSpec> {
+    type Create = ();
+    type CreateOutput = ();
+    type Destroy = ();
+    type List = ();
+    type ListOutput = ();
+
+    async fn create_snap(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Create,
+    ) -> Result<Self::CreateOutput, SvcError> {
+        todo!()
+    }
+
+    async fn list_snaps(
+        &self,
+        _registry: &Registry,
+        _request: &Self::List,
+    ) -> Result<Self::ListOutput, SvcError> {
+        todo!()
+    }
+
+    async fn destroy_snap(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Destroy,
+    ) -> Result<(), SvcError> {
+        todo!()
     }
 }
