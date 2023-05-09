@@ -1575,6 +1575,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/volumes/{volume_id}/snapshots/{snapshot_id}':
+    put:
+      tags:
+        - Volumes
+      operationId: put_volume_snapshot
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+        - in: path
+          name: snapshot_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeSnapshot'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/watches/volumes/{volume_id}':
     get:
       tags:
@@ -1662,6 +1691,10 @@ components:
   schemas:
     VolumeId:
       example: ec4e66fd-3b33-4439-b504-d49aba53da26
+      type: string
+      format: uuid
+    SnapshotId:
+      example: 25823425-41fa-434a-9efd-a356b70b5d7c
       type: string
       format: uuid
     NodeId:
@@ -2978,6 +3011,81 @@ components:
       required:
         - spec
         - state
+    VolumeSnapshot:
+      description: |-
+        Volume Snapshot Information.
+      type: object
+      properties:
+        definition:
+          $ref: '#/components/schemas/VolumeSnapshotDefinition'
+        state:
+          $ref: '#/components/schemas/VolumeSnapshotState'
+      required:
+        - definition
+        - state
+    VolumeSnapshotDefinition:
+      description: |-
+        Volume Snapshot Metadata and Spec information.
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/VolumeSnapshotMetadata'
+        spec:
+          $ref: '#/components/schemas/VolumeSnapshotSpec'
+      required:
+        - spec
+    VolumeSnapshotMetadata:
+      description: |-
+        Volume Snapshot Metadata information.
+      type: object
+      properties:
+        creation_timestamp:
+          description: Timestamp when snapshot is taken on the storage system.
+          type: string
+          format: date-time
+      required:
+        - creation_timestamp
+    VolumeSnapshotSpec:
+      description: |-
+        Volume Snapshot Spec information.
+      type: object
+      properties:
+        uuid:
+          $ref: '#/components/schemas/SnapshotId'
+        source_volume:
+          $ref: '#/components/schemas/VolumeId'
+      required:
+        - uuid
+        - source_volume
+    VolumeSnapshotState:
+      description: |-
+        Volume Snapshot State information.
+      type: object
+      properties:
+        uuid:
+          $ref: '#/components/schemas/SnapshotId'
+        size:
+          description: |-
+            Size in bytes of the snapshot (which is equivalent to its source size).
+          type: integer
+          format: int64
+          minimum: 0
+        source_volume:
+          $ref: '#/components/schemas/VolumeId'
+        creation_timestamp:
+          description: Timestamp when snapshot is taken on the storage system.
+          type: string
+          format: date-time
+        ready:
+          description: Indicates if a snapshot is ready to be used as a clone.
+          type: bool
+          default: false
+      required:
+        - uuid
+        - size
+        - source
+        - creation_timestamp
+        - ready
     ReplicaTopology:
       description: Volume Replica information.
       type: object
