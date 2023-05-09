@@ -70,6 +70,7 @@ macro_rules! nexus_span {
                 }
             }
             Some(_) => {
+                // todo: check for volume uuid as well!
                 $func();
             }
         }

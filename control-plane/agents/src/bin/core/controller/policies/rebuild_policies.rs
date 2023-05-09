@@ -69,7 +69,6 @@ impl RuleSet {
     }
 
     fn default_faulted_child_timewait() -> Duration {
-        tracing::info!("default timed-wait TWAIT_SPERF(10 mins)");
         TWAIT_SPERF
     }
 }
