@@ -4,7 +4,6 @@ let
   pkgs = import sources.nixpkgs {
     overlays = [ (_: _: { inherit sources; }) (import ./nix/overlay.nix { }) ];
   };
-  pkgs_22 = import sources.nixpkgs-22_11 { };
 in
 with pkgs;
 let
@@ -44,7 +43,7 @@ mkShell {
   ++ pkgs.lib.optionals (system != "aarch64-darwin") [
     e2fsprogs
     libxfs
-    pkgs_22.nvme-cli
+    nvme-cli
     # python3.9-pyopenssl-22.0.0 marked as broken but fixed on master..
     pytest_inputs
     tini
