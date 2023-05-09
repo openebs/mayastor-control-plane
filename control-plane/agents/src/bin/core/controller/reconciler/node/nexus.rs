@@ -7,10 +7,13 @@ use crate::controller::{
     task_poller::{PollEvent, PollResult, PollTimer, PollerState},
 };
 use agents::errors::SvcError;
+use std::{collections::HashSet, time::Duration};
 use stor_port::types::v0::{
     store::{node::NodeSpec, volume::VolumeSpec},
     transport::{NodeId, RepublishVolume, VolumeId, VolumeShareProtocol},
 };
+
+const DRAINING_VOLUME_TIMEOUT_SECONDS: u64 = 120;
 
 /// Node drain reconciler.
 #[derive(Debug)]
@@ -72,20 +75,77 @@ async fn republish_volume(
     Ok(())
 }
 
+async fn find_shutdown_volumes(context: &PollContext, node_id: &NodeId) -> Result<(), SvcError> {
+    let draining_starttime = context.specs().node_draining_timestamp(node_id).await?;
+
+    let Some(draining_starttime) = draining_starttime else {
+        return Ok(());
+    };
+    let elapsed = draining_starttime.elapsed();
+    if elapsed.is_ok() && elapsed.unwrap() < Duration::from_secs(DRAINING_VOLUME_TIMEOUT_SECONDS) {
+        let draining_volumes = context.specs().node_draining_volumes(node_id).await?;
+        let mut draining_volumes_to_remove: HashSet<VolumeId> = HashSet::new();
+
+        for vi in draining_volumes {
+            let shutdown_nexuses = context
+                .registry()
+                .specs()
+                .volume_shutdown_nexuses(&vi)
+                .await;
+            if !shutdown_nexuses.is_empty() {
+                // if it still has shutdown nexuses
+                tracing::info!(
+                    node.id = node_id.as_str(),
+                    volume.uuid = vi.as_str(),
+                    nexus.count = shutdown_nexuses.len(),
+                    "Shutdown nexuses remain"
+                );
+            } else {
+                tracing::info!(
+                    node.id = node_id.as_str(),
+                    volume.uuid = vi.as_str(),
+                    "Removing volume from the draining volume list"
+                );
+                draining_volumes_to_remove.insert(vi);
+            }
+        }
+        context
+            .specs()
+            .remove_node_draining_volumes(context.registry(), node_id, draining_volumes_to_remove)
+            .await?;
+    } else {
+        // else the drain operation is timed out
+        context
+            .specs()
+            .remove_all_node_draining_volumes(context.registry(), node_id)
+            .await?;
+    }
+    Ok(())
+}
+
 /// Drain the specified node if in draining state
 async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> PollResult {
     if !node_spec.is_draining() {
         return PollResult::Ok(PollerState::Idle);
     }
-
     let node_id = node_spec.id();
-    tracing::trace!(node.id = node_spec.id().as_str(), "Draining node");
+
+    // In case this pod has restarted, set the timestamp of the draining node to now.
+    context
+        .specs()
+        .set_draining_timestamp_if_none(node_id)
+        .await?;
+
+    tracing::trace!(node.id = node_id.as_str(), "Draining node");
     let vol_specs = context.specs().volumes_rsc();
 
     let mut move_failures = false;
 
+    let mut new_draining_volumes: HashSet<VolumeId> = HashSet::new();
+
     // Iterate through all the volumes, find those with a nexus hosted on the
-    // node and move each one away.
+    // node and move each one away via republish. Add each drained volume to the
+    // set of draining volumes stored in the node spec.
     for vol_spec in vol_specs {
         match vol_spec.operation_guard() {
             Ok(mut guarded_vol_spec) => {
@@ -136,6 +196,7 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
                         node.id = node_spec.id().as_str(),
                         "Moved volume"
                     );
+                    new_draining_volumes.insert(vol_id.clone());
                 }
             }
             Err(_) => {
@@ -144,21 +205,50 @@ async fn check_and_drain_node(context: &PollContext, node_spec: &NodeSpec) -> Po
             }
         };
     }
-    // Change the node state to "drained"
+    if let Err(error) = context
+        .specs()
+        .add_node_draining_volumes(context.registry(), node_spec.id(), new_draining_volumes)
+        .await
+    {
+        tracing::error!(
+            %error,
+            node.id = node_id.as_str(),
+            "Failed to add draining volumes"
+        );
+        return PollResult::Err(error);
+    }
     if !move_failures {
-        if let Err(error) = context
-            .specs()
-            .set_node_drained(context.registry(), node_spec.id())
-            .await
-        {
-            tracing::error!(
-                %error,
-                node.id = node_id.as_str(),
-                "Failed to set node to state drained"
-            );
-            return PollResult::Err(error);
+        // All volumes on the node are republished.
+        // Determine whether we can mark the node as drained by checking
+        // that all drained volumes do not have shutdown nexuses.
+        // If that is not the case, the next reconciliation loop will check again.
+        find_shutdown_volumes(context, node_id).await?;
+
+        match context.specs().node_draining_volume_count(node_id).await? {
+            // if there are no more shutdown volumes, change the node state to "drained"
+            0 => {
+                if let Err(error) = context
+                    .specs()
+                    .set_node_drained(context.registry(), node_id)
+                    .await
+                {
+                    tracing::error!(
+                        %error,
+                        node.id = node_id.as_str(),
+                        "Failed to set node to state drained"
+                    );
+                    return PollResult::Err(error);
+                }
+                tracing::info!(node.id = node_id.as_str(), "Set node to state drained");
+            }
+            remaining => {
+                tracing::info!(
+                    node.id = node_id.as_str(),
+                    nexus.count = remaining,
+                    "Shutdown nexuses remain"
+                );
+            }
         }
-        tracing::info!(node.id = node_id.as_str(), "Set node to state drained");
     }
     PollResult::Ok(PollerState::Idle)
 }
