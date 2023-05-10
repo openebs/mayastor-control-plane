@@ -47,11 +47,11 @@ pub struct Nexus {
     pub allowed_hosts: Vec<HostNqn>,
 }
 impl Nexus {
-    /// Check if the nexus contains the provided `ChildUri`
+    /// Check if the nexus contains the provided `ChildUri`.
     pub fn contains_child(&self, uri: &ChildUri) -> bool {
         self.children.iter().any(|c| &c.uri == uri)
     }
-    /// Check if the nexus contains the provided `ChildUri`
+    /// Check if the nexus contains the provided `ChildUri`.
     pub fn child(&self, uri: &str) -> Option<&Child> {
         self.children.iter().find(|c| c.uri.as_str() == uri)
     }
