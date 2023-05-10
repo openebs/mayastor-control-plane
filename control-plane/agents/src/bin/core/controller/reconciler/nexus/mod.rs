@@ -172,9 +172,16 @@ async fn handle_faulted_child(
         tracing::warn!(%child.uri, "Unknown Child found, a full rebuild is required");
         return faulted_children_remover(nexus_spec, child, context).await;
     };
+    let Some(faulted_at) = child.faulted_at else {
+        tracing::warn!(%child.uri, child.uuid=%child_uuid, "Child faulted without a timestamp set, a full rebuild required");
+        return faulted_children_remover(nexus_spec, child, context).await;
+    };
 
     let is_rebuild_failed = child.state_reason == ChildStateReason::RebuildFailed;
-    if !is_rebuild_failed && child_replica_online(child_uuid, context).await {
+    if is_rebuild_failed {
+        tracing::warn!(%child.uri, child.uuid=%child_uuid, "Previous rebuild failed, a new replica's full rebuild is required");
+        faulted_children_remover(nexus_spec, child, context).await?;
+    } else if child_replica_is_online(child_uuid, context).await {
         let child_uuid = child_uuid.clone();
         tracing::info!(%child.uri, child.uuid=%child_uuid, "Child's replica is back online within the partial rebuild window");
         if let Err(error) = online_nexus_child(nexus_spec, &child.uri, context).await {
@@ -186,14 +193,11 @@ async fn handle_faulted_child(
             );
             faulted_children_remover(nexus_spec, child, context).await?;
         }
-    } else if is_rebuild_failed {
-        tracing::warn!(%child.uri, child.uuid=%child_uuid, "Child rebuild failed, a full rebuild is required");
+    } else if let Some(elapsed) =
+        wait_duration_elapsed(&child.uri, child_uuid, faulted_at, wait_duration)
+    {
+        tracing::warn!(%child.uri, child.uuid=%child_uuid, ?elapsed, "Partial rebuild window elapsed, a full rebuild is required");
         faulted_children_remover(nexus_spec, child, context).await?;
-    } else if wait_duration_elapsed(child.faulted_at, wait_duration, &child.uri) {
-        tracing::warn!(%child.uri, child.uuid=%child_uuid, ?wait_duration, "Partial rebuild window elapsed, a full rebuild is required");
-        faulted_children_remover(nexus_spec, child, context).await?;
-    } else {
-        tracing::info!(%child.uri, child.uuid=%child_uuid, "Child's replica is not online yet");
     }
     Ok(())
 }
@@ -204,43 +208,55 @@ async fn faulted_children_remover(
     child: &Child,
     context: &PollContext,
 ) -> Result<(), SvcError> {
+    let faulted_at = child.faulted_at.map(chrono::DateTime::<chrono::Utc>::from);
     let nexus_uuid = nexus.uuid();
     let nexus_state = context.registry().nexus(nexus_uuid).await?;
     nexus.warn_span(|| {
-        tracing::warn!(%child.uri, %child.state, %child.state_reason, ?child.faulted_at, "Attempting to remove faulted child")
+        tracing::warn!(%child.uri, %child.state, %child.state_reason, ?faulted_at, "Attempting to remove faulted child")
     });
     nexus
         .remove_child_by_uri(context.registry(), &nexus_state, &child.uri, true)
         .await?;
 
     nexus.warn_span(|| {
-        tracing::warn!(%child.uri, %child.state, %child.state_reason, ?child.faulted_at, "Successfully removed faulted child")
+        tracing::warn!(%child.uri, %child.state, %child.state_reason, ?faulted_at, "Successfully removed faulted child")
     });
     Ok(())
 }
 
-/// Returns true if time elapsed from child fault time is greater or equal to wait time duration.
+/// Returns elapsed time, if time elapsed from child fault time is greater or equal to the
+/// wait time duration.
 fn wait_duration_elapsed(
-    fault_time: Option<SystemTime>,
+    child_uri: &ChildUri,
+    replica_uuid: &ReplicaId,
+    fault_time: SystemTime,
     wait_duration: Duration,
-    uri: &ChildUri,
-) -> bool {
-    if let Some(fault_time) = fault_time {
-        if let Ok(elapsed) = fault_time.elapsed() {
+) -> Option<Duration> {
+    match fault_time.elapsed() {
+        Ok(elapsed) if elapsed >= wait_duration => Some(elapsed),
+        Ok(elapsed) => {
             tracing::info!(
-                child.uri = %uri,
-                "waited {:?} for child to comeback. Wait time is {:?}",
-                elapsed, wait_duration
+                child.uri = %child_uri,
+                replica.uuid = %replica_uuid,
+                "Waited {elapsed:?} for the child's replica to come back (wait time is {wait_duration:?})"
             );
-            return elapsed >= wait_duration;
+            None
+        }
+        // if time drifts by this much then just keep waiting
+        Err(error) if error.duration() < Duration::from_secs(5) => None,
+        // otherwise just rebuild now anyway, assume wait_duration expired.
+        Err(error) => {
+            tracing::error!(
+                "SystemTime has drifted (time is -{error:?}), assuming wait-duration expired as worst-case"
+            );
+            Some(wait_duration)
         }
     }
-    false
 }
 
 /// Check if a child's replica is online.
 /// If the node has gone offline the replica will not be present in the registry.
-async fn child_replica_online(child_uuid: &ReplicaId, context: &PollContext) -> bool {
+async fn child_replica_is_online(child_uuid: &ReplicaId, context: &PollContext) -> bool {
     context.registry().replica(child_uuid).await.is_ok()
 }
 

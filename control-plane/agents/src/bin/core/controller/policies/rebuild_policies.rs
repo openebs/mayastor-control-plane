@@ -22,7 +22,6 @@ const TWAIT_SPERF: std::time::Duration = Duration::new(600, 0);
 /// A time period optimized for better redundancy and quicker rebuild decisions.
 const TWAIT_SAVAIL: std::time::Duration = Duration::new(300, 0);
 const TWAIT_ZERO: std::time::Duration = Duration::new(0, 0);
-// 100GiB = 100 * 1024 * 1024 * 1024 bytes
 const VOL_SIZE_100GIB: u64 = 107374182400;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
