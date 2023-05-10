@@ -800,7 +800,7 @@ impl DestroyShutdownTargets {
         &self.uuid
     }
     /// Get registered_targets.
-    pub fn registered_targets(&self) -> Option<Vec<String>> {
-        self.registered_targets.clone()
+    pub fn registered_targets(&self) -> &Option<Vec<String>> {
+        &self.registered_targets
     }
 }

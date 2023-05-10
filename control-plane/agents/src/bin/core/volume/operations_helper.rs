@@ -19,6 +19,7 @@ use crate::{
 };
 use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
 use grpc::operations::volume::traits::PublishVolumeInfo;
+
 use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
@@ -36,6 +37,8 @@ use stor_port::{
     },
     HostAccessControl,
 };
+
+use http::Uri;
 
 impl OperationGuardArc<VolumeSpec> {
     /// Check if the volume is published.
@@ -704,6 +707,26 @@ impl OperationGuardArc<VolumeSpec> {
                     .destroy(registry, &replica.destroy_request(destroy_by, &node))
                     .await
             }
+        }
+    }
+
+    /// Checks if Nexus is present in registered target list. Returns true if yes.
+    pub(super) fn target_registered(
+        registered_target: &Option<Vec<String>>,
+        nexus: Nexus,
+    ) -> Result<bool, SvcError> {
+        if let Some(targets) = registered_target {
+            let parsed_uri = nexus
+                .device_uri
+                .parse::<Uri>()
+                .map_err(|_| SvcError::InvalidArguments {})?;
+            let host = parsed_uri
+                .host()
+                .ok_or(SvcError::InvalidArguments {})?
+                .to_string();
+            Ok(targets.contains(&host))
+        } else {
+            Ok(false)
         }
     }
 }

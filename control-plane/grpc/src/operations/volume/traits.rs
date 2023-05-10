@@ -1515,7 +1515,7 @@ impl DestroyShutdownTargetsInfo for DestroyShutdownTargets {
         self.uuid()
     }
     fn registered_targets(&self) -> Option<Vec<String>> {
-        self.registered_targets()
+        self.registered_targets().clone()
     }
 }
 
