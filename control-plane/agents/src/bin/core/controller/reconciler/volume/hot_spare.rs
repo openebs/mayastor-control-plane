@@ -98,11 +98,14 @@ async fn hot_spare_nexus_reconcile(
     squash_results(results)
 }
 
-#[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.uuid(), volume.uuid = tracing::field::Empty, request.reconcile = true))]
 async fn generic_nexus_reconciler(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
+    if let Some(ref volume_uuid) = nexus.as_ref().owner {
+        tracing::Span::current().record("volume.uuid", volume_uuid.as_str());
+    }
     let mut results = vec![];
     results.push(handle_faulted_children(nexus, context).await);
     results.push(unknown_children_remover(nexus, context).await);
