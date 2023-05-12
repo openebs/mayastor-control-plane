@@ -1,15 +1,15 @@
 use crate::controller::registry::Registry;
 use agents::errors::SvcError;
 use stor_port::types::v0::transport::{
-    uri_with_hostnqn, Nexus, NexusStatus, ReplicaTopology, Volume, VolumeId, VolumeState,
-    VolumeStatus, VolumeUsage,
+    uri_with_hostnqn, Nexus, NexusStatus, ReplicaStatus, ReplicaTopology, Volume, VolumeId,
+    VolumeState, VolumeStatus, VolumeUsage,
 };
 
-use crate::controller::reconciler::PollTriggerEvent;
+use crate::controller::{reconciler::PollTriggerEvent, resources::ResourceMutex};
 use grpc::operations::{PaginatedResult, Pagination};
 use std::collections::HashMap;
 use stor_port::{
-    types::v0::store::{replica::ReplicaSpec, volume::VolumeSpec},
+    types::v0::store::{nexus::NexusSpec, replica::ReplicaSpec, volume::VolumeSpec},
     IntoOption,
 };
 
@@ -55,9 +55,7 @@ impl Registry {
         // Construct the topological information for the volume replicas.
         let mut replica_topology = HashMap::new();
         for replica_spec in &replica_specs {
-            let replica = self
-                .replica_topology(replica_spec, nexus.as_ref().map(|(_, n)| n))
-                .await;
+            let replica = self.replica_topology(replica_spec, &nexus).await;
             if let Some(usage) = replica.usage() {
                 total_usage += usage.allocated();
                 if usage.allocated() > largest_allocated {
@@ -115,10 +113,14 @@ impl Registry {
 
     /// Construct a replica topology from a replica spec.
     /// If the replica cannot be found, return the default replica topology.
-    async fn replica_topology(&self, spec: &ReplicaSpec, nexus: Option<&Nexus>) -> ReplicaTopology {
+    async fn replica_topology(
+        &self,
+        spec: &ReplicaSpec,
+        nexus: &Option<(ResourceMutex<NexusSpec>, Nexus)>,
+    ) -> ReplicaTopology {
         match self.replica(&spec.uuid).await {
             Ok(state) => {
-                let child = nexus.and_then(|n| n.child(&state.uri));
+                let child = nexus.as_ref().and_then(|(_, n)| n.child(&state.uri));
                 ReplicaTopology::new(
                     Some(state.node),
                     Some(state.pool_id),
@@ -130,7 +132,23 @@ impl Registry {
                 )
             }
             Err(_) => {
-                tracing::trace!(replica.uuid = %spec.uuid, "Replica not found. Constructing default replica topology");
+                if let Some((nexus_spec, state)) = nexus {
+                    if let Some(child) = nexus_spec
+                        .lock()
+                        .replica_uuid_uri(&spec.uuid)
+                        .and_then(|repl| state.child(repl.uri().as_str()))
+                    {
+                        return ReplicaTopology::new(
+                            None,
+                            Some(spec.pool_name().clone()),
+                            ReplicaStatus::Unknown,
+                            None,
+                            Some(child.state.clone()),
+                            Some(child.state_reason.clone()),
+                            child.rebuild_progress,
+                        );
+                    }
+                }
                 ReplicaTopology::default()
             }
         }
