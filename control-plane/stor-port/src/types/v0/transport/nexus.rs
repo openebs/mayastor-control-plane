@@ -8,7 +8,7 @@ use crate::{
     IntoVec,
 };
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Debug, ops::RangeInclusive};
+use std::{convert::TryFrom, fmt::Debug, ops::RangeInclusive, time::SystemTime};
 use strum_macros::{Display, EnumString};
 
 /// Volume Nexuses
@@ -78,6 +78,93 @@ impl From<Nexus> for models::Nexus {
 }
 
 rpc_impl_string_uuid!(NexusId, "UUID of a nexus");
+
+/// A gRPC request type for creating snapshot of a nexus, which essentially
+/// means a snapshot of all(or selected) replicas associated with that nexus.
+pub struct CreateNexusSnapshot {
+    /// UUID of the nexus.
+    nexus: NexusId,
+    /// Identity of the entity involved.
+    entity: String,
+    /// A transaction id for this request.
+    txn_id: String,
+    /// Name of the snapshot to be created.
+    name: String,
+    /// Replica list descriptor.
+    replica_desc: Vec<CreateNexusSnapReplDescr>,
+}
+
+impl CreateNexusSnapshot {
+    /// Create a new request.
+    pub fn new(
+        nexus: &NexusId,
+        entity: String,
+        txn_id: String,
+        name: String,
+        replica_desc: Vec<CreateNexusSnapReplDescr>,
+    ) -> Self {
+        Self {
+            nexus: nexus.clone(),
+            entity,
+            txn_id,
+            name,
+            replica_desc,
+        }
+    }
+    /// Get a reference to the nexus uuid.
+    pub fn nexus(&self) -> &NexusId {
+        &self.nexus
+    }
+    /// Get a reference to the entity id.
+    pub fn entity(&self) -> &str {
+        &self.entity
+    }
+    /// Get a reference to the transaction id.
+    pub fn txn_id(&self) -> &str {
+        &self.txn_id
+    }
+    /// Get a reference to the snapshot name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Get a reference to the replica descriptor.
+    pub fn replica_desc(&self) -> &Vec<CreateNexusSnapReplDescr> {
+        &self.replica_desc
+    }
+}
+
+/// A descriptor that specifies the replicas which need to taken snapshot
+/// of specifically.
+#[derive(Clone)]
+#[allow(unused)]
+pub struct CreateNexusSnapReplDescr {
+    /// UUID of the replica involved in snapshot operation.
+    pub replica: ReplicaId,
+    /// Optional UUID input for the snapshot to be created.
+    pub snap_uuid: Option<SnapshotId>,
+    /// Whether this replica is to be skipped from current snapshot operation.
+    pub skip: bool,
+}
+
+/// A response for the nexus snapshot request.
+pub struct CreateNexusSnapshotResp {
+    /// UUID of the nexus.
+    pub nexus: NexusId,
+    /// Timetamp of taking snapshot.
+    pub snap_time: SystemTime,
+    /// Results of snapping each replica as part of this snapshot request.
+    pub replicas_status: Vec<CreateNexusSnapshotReplicaStatus>,
+    /// Replicas that weren't snapped as part of this request.
+    pub skipped: Vec<ReplicaId>,
+}
+
+/// Per-replica status of the snapshot operation.
+pub struct CreateNexusSnapshotReplicaStatus {
+    /// UUID of replica.
+    pub replica_uuid: ReplicaId,
+    /// Result of snapping this replica.
+    pub status: u32,
+}
 
 /// Nexus State information
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]

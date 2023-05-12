@@ -1,10 +1,12 @@
 use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
+use crate::controller::io_engine::SnapshotApi;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::replica::ListReplicaOptions;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        CreateReplica, DestroyReplica, NodeId, Replica, ShareReplica, UnshareReplica,
+        CreateReplica, CreateReplicaSnapshot, CreateReplicaSnapshotResp, DestroyReplica, NodeId,
+        Replica, ShareReplica, UnshareReplica,
     },
 };
 
@@ -93,5 +95,21 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
             .into_inner()
             .uri;
         Ok(uri)
+    }
+}
+
+#[async_trait::async_trait]
+impl SnapshotApi for Replica {
+    type CreateIn = CreateReplicaSnapshot;
+    type CreateOutput = CreateReplicaSnapshotResp;
+    async fn create_snapshot(
+        &self,
+        _request: &Self::CreateIn,
+    ) -> Result<Self::CreateOutput, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Replica,
+            request: "create_snapshot".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 }

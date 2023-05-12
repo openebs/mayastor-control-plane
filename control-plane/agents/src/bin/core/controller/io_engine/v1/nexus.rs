@@ -1,13 +1,13 @@
 use super::translation::{rpc_nexus_to_agent, AgentToIoEngine};
-use crate::controller::io_engine::NexusListApi;
+use crate::controller::io_engine::{NexusListApi, SnapshotApi};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::nexus::ListNexusOptions;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        AddNexusChild, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusChildAction,
-        NexusChildActionContext, NexusId, NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus,
-        UnshareNexus,
+        AddNexusChild, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp, DestroyNexus,
+        FaultNexusChild, Nexus, NexusChildAction, NexusChildActionContext, NexusId, NodeId,
+        RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
 
@@ -310,5 +310,21 @@ impl super::RpcClient {
     async fn fetch_nexus(&self, node_id: &NodeId, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
         let fetcher = self.fetcher_client().await?;
         fetcher.get_nexus(node_id, nexus_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl SnapshotApi for Nexus {
+    type CreateIn = CreateNexusSnapshot;
+    type CreateOutput = CreateNexusSnapshotResp;
+    async fn create_snapshot(
+        &self,
+        _request: &Self::CreateIn,
+    ) -> Result<Self::CreateOutput, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Nexus,
+            request: "create_snapshot".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 }
