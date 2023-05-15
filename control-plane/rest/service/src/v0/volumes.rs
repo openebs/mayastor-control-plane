@@ -1,6 +1,5 @@
 use super::*;
 use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
-use rest_client::versions::v0::models::VolumeSnapshot;
 use stor_port::types::v0::{
     openapi::apis::Uuid,
     transport::{
@@ -150,12 +149,6 @@ impl apis::actix_server::Volumes for RestApi {
             )
             .await?;
         Ok(share_uri)
-    }
-
-    async fn put_volume_snapshot(
-        Path((_volume_id, _snapshot_id)): Path<(Uuid, Uuid)>,
-    ) -> Result<VolumeSnapshot, RestError<RestJsonError>> {
-        Err(ReplyError::unimplemented("Snapshot creation is not implemented".to_string()).into())
     }
 
     async fn put_volume_target(

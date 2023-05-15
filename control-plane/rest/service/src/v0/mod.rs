@@ -9,6 +9,7 @@ pub mod nexuses;
 pub mod nodes;
 pub mod pools;
 pub mod replicas;
+pub mod snapshots;
 pub mod specs;
 pub mod states;
 pub mod swagger_ui;

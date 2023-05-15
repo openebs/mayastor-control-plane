@@ -1578,7 +1578,7 @@ paths:
   '/volumes/{volume_id}/snapshots/{snapshot_id}':
     put:
       tags:
-        - Volumes
+        - Snapshots
       operationId: put_volume_snapshot
       parameters:
         - in: path
@@ -1603,7 +1603,51 @@ paths:
         '5XX':
           $ref: '#/components/responses/ServerError'
       security:
-        - JWT: [ ]
+        - JWT: []
+    delete:
+      tags:
+        - Snapshots
+      operationId: del_volume_snapshot
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+        - in: path
+          name: snapshot_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
+  '/snapshots/{snapshot_id}':
+    delete:
+      tags:
+        - Snapshots
+      operationId: del_snapshot
+      parameters:
+        - in: path
+          name: snapshot_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
   '/watches/volumes/{volume_id}':
     get:
       tags:
