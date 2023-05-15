@@ -25,7 +25,6 @@ use agents::{
     errors::{NotEnough, SvcError, SvcError::VolumeNotFound},
 };
 use grpc::operations::{PaginatedResult, Pagination};
-use std::collections::HashMap;
 
 use stor_port::{
     transport_api::ResourceKind,
@@ -46,7 +45,7 @@ use stor_port::{
 };
 
 use snafu::OptionExt;
-use std::convert::From;
+use std::{collections::HashMap, convert::From};
 
 /// CreateReplicaCandidate for volume and Affinity Group.
 pub(crate) struct CreateReplicaCandidate {
@@ -865,9 +864,10 @@ impl SpecOperationsHelper for VolumeSpec {
                     }
                 }
             }
-
             VolumeOperation::Create => unreachable!(),
             VolumeOperation::Destroy => unreachable!(),
+            VolumeOperation::CreateSnapshot(_) => Ok(()),
+            VolumeOperation::DestroySnapshot(_) => Ok(()),
         }?;
         self.start_op(operation);
         Ok(())

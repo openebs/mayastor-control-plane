@@ -7,6 +7,7 @@ pub mod node;
 pub mod pool;
 pub mod registry;
 pub mod replica;
+pub mod snapshots;
 pub mod switchover;
 pub mod volume;
 pub mod watch;
