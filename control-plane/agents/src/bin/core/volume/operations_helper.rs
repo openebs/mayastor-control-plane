@@ -56,17 +56,17 @@ impl OperationGuardArc<VolumeSpec> {
         let nexus = NexusId::new();
         let resv_key = nexus.as_u128() as u64;
         let range = match self.as_ref().config() {
-            None => NvmfControllerIdRange::new_min(),
+            None => NvmfControllerIdRange::new_min(2),
             Some(cfg) => {
                 // todo: should the cluster agent tell us which controller Id to use?
                 #[allow(clippy::if_same_then_else)]
                 if self.published() {
-                    cfg.config().controller_id_range().next()
+                    cfg.config().controller_id_range().next(2)
                 } else {
                     // if we're not published should we start over?
                     // for now let's carry on to next as there might some cases where we unpublish
                     // but the initiator doesn't disconnect properly.
-                    cfg.config().controller_id_range().next()
+                    cfg.config().controller_id_range().next(2)
                 }
             }
         };
