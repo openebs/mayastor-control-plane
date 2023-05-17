@@ -18,8 +18,8 @@ use crate::{
     },
 };
 use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
-use grpc::operations::volume::traits::PublishVolumeInfo;
 
+use grpc::operations::volume::traits::PublishVolumeInfo;
 use stor_port::{
     transport_api::ErrorChain,
     types::v0::{

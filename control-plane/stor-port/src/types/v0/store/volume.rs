@@ -9,8 +9,8 @@ use crate::{
         },
         transport::{
             self, AffinityGroup, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId,
-            ReplicaId, Topology, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol,
-            VolumeStatus,
+            ReplicaId, SnapshotId, Topology, VolumeId, VolumeLabels, VolumePolicy,
+            VolumeShareProtocol, VolumeStatus,
         },
     },
     IntoOption,
@@ -158,7 +158,7 @@ pub struct VolumeSpec {
     pub sequencer: OperationSequence,
     /// Id of the last Nexus used by the volume.
     pub last_nexus_id: Option<NexusId>,
-    /// Record of the operation in progress
+    /// Record of the operation in progress.
     pub operation: Option<VolumeOperationState>,
     /// Flag indicating whether the volume should be thin provisioned.
     #[serde(default)]
@@ -172,6 +172,18 @@ pub struct VolumeSpec {
     /// Affinity Group related information.
     #[serde(default)]
     pub affinity_group: Option<AffinityGroup>,
+    // /// Runtime volume information, useful to quick checks without having to read out from PSTOR
+    // /// or any other control-plane related registry.
+    // /// reviewer: is this something useful to keep?
+    // #[serde(skip)]
+    // runtime_info: VolumeRuntimeMetadata,
+}
+
+/// Runtime volume information.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct VolumeRuntimeMetadata {
+    /// Runtime list of all volume snapshots.
+    snapshots: super::snapshots::volume::VolumeSnapshotList,
 }
 
 /// The volume's Nvmf Configuration.
@@ -313,7 +325,7 @@ impl VolumeSpec {
     }
 }
 
-/// Operation State for a Nexus spec resource.
+/// Operation State for a Volume resource.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VolumeOperationState {
     /// Record of the operation.
@@ -334,7 +346,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
     }
 
     fn commit_op(&mut self) {
-        if let Some(op) = self.operation.clone() {
+        if let Some(op) = self.operation.take() {
             match op.operation {
                 VolumeOperation::Destroy => {
                     self.status = SpecStatus::Deleted;
@@ -376,6 +388,10 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::Unpublish => {
                     self.deactivate_target();
                 }
+                // we might not need to do anything here, depending on what we need to store as part
+                // of the operation, but we probably want to ensure we only take 1 snap at a time.
+                VolumeOperation::CreateSnapshot(_) => {}
+                VolumeOperation::DestroySnapshot(_) => {}
             }
         }
         self.clear_op();
@@ -414,6 +430,8 @@ pub enum VolumeOperation {
     Republish(RepublishOperation),
     Unpublish,
     RemoveUnusedReplica(ReplicaId),
+    CreateSnapshot(SnapshotId),
+    DestroySnapshot(SnapshotId),
 }
 
 #[test]
@@ -504,6 +522,10 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
             VolumeOperation::Republish(_) => models::volume_spec_operation::Operation::Republish,
             VolumeOperation::Unpublish => models::volume_spec_operation::Operation::Unpublish,
             VolumeOperation::RemoveUnusedReplica(_) => {
+                models::volume_spec_operation::Operation::RemoveUnusedReplica
+            }
+            VolumeOperation::CreateSnapshot(_) | VolumeOperation::DestroySnapshot(_) => {
+                // todo: update openapi
                 models::volume_spec_operation::Operation::RemoveUnusedReplica
             }
         }
