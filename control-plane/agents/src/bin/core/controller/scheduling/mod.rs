@@ -416,10 +416,13 @@ impl NodeSorters {
     /// In case this is a Affinity Group, then it would be spread on basis of number of ag targets
     /// and then on basis of total targets on equal.
     pub(crate) fn number_targets(a: &NodeItem, b: &NodeItem) -> std::cmp::Ordering {
-        a.ag_nexus_count().cmp(&b.ag_nexus_count()).then_with(|| {
-            a.node_wrapper()
-                .nexus_count()
-                .cmp(&b.node_wrapper().nexus_count())
-        })
+        a.ag_nexus_count()
+            .cmp(&b.ag_nexus_count())
+            .then_with(|| a.ag_preferred().cmp(&b.ag_preferred()).reverse())
+            .then_with(|| {
+                a.node_wrapper()
+                    .nexus_count()
+                    .cmp(&b.node_wrapper().nexus_count())
+            })
     }
 }

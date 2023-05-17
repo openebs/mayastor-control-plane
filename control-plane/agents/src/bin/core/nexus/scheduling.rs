@@ -10,7 +10,7 @@ use crate::controller::{
     wrapper::NodeWrapper,
 };
 use agents::errors::{NotEnough, SvcError};
-use stor_port::types::v0::store::nexus::NexusSpec;
+use stor_port::types::v0::{store::nexus::NexusSpec, transport::NodeId};
 
 /// Return healthy replicas for volume/nexus
 /// The persistent store has the latest information from io-engine, which tells us if any replica
@@ -54,9 +54,10 @@ pub(crate) async fn healthy_nexus_children(
 pub(crate) async fn target_node_candidate(
     request: impl Into<GetSuitableNodes>,
     registry: &Registry,
+    preferred_node: &Option<NodeId>,
 ) -> Result<NodeWrapper, SvcError> {
     let candidates: Vec<NodeWrapper> =
-        nexus::NexusTargetNode::builder_with_defaults(request, registry)
+        nexus::NexusTargetNode::builder_with_defaults(request, registry, preferred_node)
             .await
             .collect()
             .into_iter()
