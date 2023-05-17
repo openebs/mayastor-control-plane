@@ -3077,6 +3077,7 @@ components:
         spec:
           $ref: '#/components/schemas/VolumeSnapshotSpec'
       required:
+        - metadata
         - spec
     VolumeSnapshotMetadata:
       description: |-
@@ -3087,8 +3088,6 @@ components:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
           format: date-time
-      required:
-        - creation_timestamp
     VolumeSnapshotSpec:
       description: |-
         Volume Snapshot Spec information.
