@@ -285,7 +285,11 @@ impl ResourceFilter for NexusTargetNode {
 }
 
 impl NexusTargetNode {
-    async fn builder(request: impl Into<GetSuitableNodes>, registry: &Registry) -> Self {
+    async fn builder(
+        request: impl Into<GetSuitableNodes>,
+        registry: &Registry,
+        preferred_node: &Option<NodeId>,
+    ) -> Self {
         let request = request.into();
         let request = GetSuitableNodesContext {
             registry: registry.clone(),
@@ -310,7 +314,8 @@ impl NexusTargetNode {
                     .as_ref()
                     .and_then(|map| map.get(node.id()).cloned());
 
-                node_items.push(NodeItem::new(node.clone(), ag_nexus_count));
+                let preferred = preferred_node.as_ref() == Some(node.id());
+                node_items.push(NodeItem::new(node.clone(), ag_nexus_count, preferred));
             }
             node_items
         };
@@ -326,8 +331,9 @@ impl NexusTargetNode {
     pub(crate) async fn builder_with_defaults(
         request: impl Into<GetSuitableNodes>,
         registry: &Registry,
+        preferred_node: &Option<NodeId>,
     ) -> Self {
-        Self::builder(request, registry)
+        Self::builder(request, registry, preferred_node)
             .await
             .filter(NodeFilters::online)
             .filter(NodeFilters::cordoned)
