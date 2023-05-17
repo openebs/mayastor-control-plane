@@ -217,15 +217,87 @@ pub enum NexusNvmePreemption {
     Holder,
 }
 
+#[test]
+fn nvmf_controller_range() {
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    struct TestSpec {
+        nvmf: NvmfControllerIdRange,
+    }
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    struct Test<'a> {
+        input: &'a str,
+        expected: NvmfControllerIdRange,
+    }
+    let tests: Vec<Test> = vec![
+        Test {
+            input: r#"{"nvmf":{"start":1,"end":1}}"#,
+            expected: NvmfControllerIdRange::new_min(1),
+        },
+        Test {
+            input: r#"{"nvmf":{"start":1,"end":5}}"#,
+            expected: NvmfControllerIdRange::new_min(5),
+        },
+        Test {
+            input: r#"{"nvmf":{"start":1,"end":65519}}"#,
+            expected: NvmfControllerIdRange::new_min(0xffff),
+        },
+        Test {
+            input: r#"{"nvmf":{"start":1,"end":1}}"#,
+            expected: NvmfControllerIdRange::new(1, 0xffef).unwrap().next(1),
+        },
+        Test {
+            input: r#"{"nvmf":{"start":1,"end":2}}"#,
+            expected: NvmfControllerIdRange::new(1, 0xffef).unwrap().next(2),
+        },
+        Test {
+            input: r#"{"nvmf":{"start":65519,"end":65519}}"#,
+            expected: NvmfControllerIdRange::new(1, 0xffee).unwrap().next(1),
+        },
+        Test {
+            input: r#"{"nvmf":{"start":1,"end":2}}"#,
+            expected: NvmfControllerIdRange::new(1, 0xffee).unwrap().next(2),
+        },
+        Test {
+            input: r#"{"nvmf":{"start":6,"end":7}}"#,
+            expected: NvmfControllerIdRange::new_min(5).next(2),
+        },
+    ];
+
+    for test in &tests {
+        println!("{}", serde_json::to_string(&test.expected).unwrap());
+        let spec: TestSpec = serde_json::from_str(test.input).unwrap();
+        assert_eq!(test.expected, spec.nvmf);
+    }
+
+    let mut range = NvmfControllerIdRange::new_min(1);
+    loop {
+        range = range.next(8);
+        if range.min() == &1 {
+            break;
+        }
+    }
+}
+
 /// Nvmf Controller Id Range
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NvmfControllerIdRange(std::ops::RangeInclusive<u16>);
 impl NvmfControllerIdRange {
     /// Create `Self` with the minimum controller id.
-    pub fn new_min() -> Self {
+    pub fn new_min(width: u16) -> Self {
         let min = *Self::controller_id_range().start();
-        Self(min ..= min)
+        let max = Self::end_from_min(min, width);
+        Self(min ..= max)
+    }
+    fn end_from_min(min: u16, width: u16) -> u16 {
+        let width = width.min(*Self::controller_id_range().end());
+
+        if width > 0 {
+            let end = min as u32 + width as u32 - 1;
+            u16::try_from(end).unwrap_or(u16::MAX)
+        } else {
+            min
+        }
     }
     /// create `Self` with a random minimum controller id
     pub fn random_min() -> Self {
@@ -262,18 +334,20 @@ impl NvmfControllerIdRange {
             ))
         }
     }
-    /// Bump the controller id range by 1.
+    /// Bump the controller id range.
+    /// The new range shall use the given `width`.
     /// # Note: this will wrap around back to the minimum.
-    pub fn next(&self) -> Self {
+    pub fn next(&self, width: u16) -> Self {
         let range = self.0.clone();
-        let start = *range.start();
-        if start >= *Self::controller_id_range().end() {
+
+        let start = u16::try_from(*range.end() as u32 + 1).unwrap_or_default();
+        let end = Self::end_from_min(start, width);
+
+        if let Ok(range) = Self::new(start, end) {
             // wrap around to the start of the range
-            let start = *Self::controller_id_range().start();
-            Self(start ..= start)
+            range
         } else {
-            let start = start + 1;
-            Self(start ..= start)
+            Self::new_min(width)
         }
     }
 }
