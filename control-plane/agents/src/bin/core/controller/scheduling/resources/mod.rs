@@ -257,14 +257,20 @@ impl ChildItem {
 pub(crate) struct NodeItem {
     node_wrapper: NodeWrapper,
     ag_nexus_count: Option<u64>,
+    ag_preferred: bool,
 }
 
 impl NodeItem {
     /// Create a new node item with given `node_wrapper`.
-    pub(crate) fn new(node_wrapper: NodeWrapper, ag_nexus_count: Option<u64>) -> Self {
+    pub(crate) fn new(
+        node_wrapper: NodeWrapper,
+        ag_nexus_count: Option<u64>,
+        ag_preferred: bool,
+    ) -> Self {
         Self {
             node_wrapper,
             ag_nexus_count,
+            ag_preferred,
         }
     }
     /// Get the internal `node_wrapper` from `NodeItem`.
@@ -278,5 +284,9 @@ impl NodeItem {
     /// The number of nexuses present on the node.
     pub(crate) fn ag_nexus_count(&self) -> u64 {
         self.ag_nexus_count.unwrap_or(u64::MIN)
+    }
+    /// If a node is specified for target placement, mark it as preferred.
+    pub(crate) fn ag_preferred(&self) -> bool {
+        self.ag_preferred
     }
 }

@@ -641,7 +641,7 @@ impl OperationGuardArc<VolumeSpec> {
         republish: bool,
     ) -> Result<NexusNodeCandidate, SvcError> {
         // Create a ag guard to prevent candidate collision.
-        let affinity_group = self.as_ref().affinity_group.clone();
+        let affinity_group = self.as_ref().affinity_group.as_ref();
         let ag_guard = match affinity_group {
             None => None,
             Some(ag) => {
@@ -665,16 +665,22 @@ impl OperationGuardArc<VolumeSpec> {
             }
         }
 
-        match request.target_node().as_ref() {
-            None => {
-                // in case there is no target node specified, let the control-plane scheduling logic
-                // determine a suitable node for the same.
-                let candidate = target_node_candidate(self.as_ref(), registry).await?;
+        match request
+            .target_node()
+            .as_ref()
+            .map(|n| (n, affinity_group.is_some()))
+        {
+            None | Some((_, true)) => {
+                // In case there is no target node specified, let the control-plane scheduling logic
+                // determine a suitable node for the same and in case of affinity group, let
+                // control-plane decide with specified node as the preferred node.
+                let candidate =
+                    target_node_candidate(self.as_ref(), registry, &request.target_node()).await?;
                 tracing::debug!(node.id=%candidate.id(), "Node selected for volume publish by the core-agent");
                 Ok(NexusNodeCandidate::new(candidate.id().clone(), ag_guard))
             }
-            Some(node) => {
-                // make sure the requested node is available
+            Some((node, false)) => {
+                // Make sure the requested node is available.
                 // todo: check the max number of nexuses per node is respected
                 let node = registry.node_wrapper(node).await?;
                 let node = node.read().await;
