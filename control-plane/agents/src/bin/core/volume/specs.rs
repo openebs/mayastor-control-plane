@@ -46,6 +46,7 @@ use stor_port::{
 
 use snafu::OptionExt;
 use std::{collections::HashMap, convert::From};
+use stor_port::types::v0::{store::snapshots::volume::VolumeSnapshot, transport::SnapshotId};
 
 /// CreateReplicaCandidate for volume and Affinity Group.
 pub(crate) struct CreateReplicaCandidate {
@@ -517,7 +518,7 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
-    /// Get the resourced volume nexus target for the given volume
+    /// Get the resourced volume nexus target for the given volume.
     pub(crate) fn volume_target_nexus_rsc(
         &self,
         volume: &VolumeSpec,
@@ -527,7 +528,7 @@ impl ResourceSpecsLocked {
             Some(target) => self.nexus_rsc(target.nexus()),
         }
     }
-    /// Get the resourced volume nexus target for the given volume
+    /// Get the resourced volume nexus target for the given volume.
     pub(crate) async fn volume_target_nexus(
         &self,
         volume: &VolumeSpec,
@@ -564,10 +565,15 @@ impl ResourceSpecsLocked {
         }
     }
 
-    /// Remove volume by its `id`
+    /// Remove volume by its `id`.
     pub(super) fn remove_volume(&self, id: &VolumeId) {
         let mut specs = self.write();
         specs.volumes.remove(id);
+    }
+    /// Remove volume snapshot by its `id`.
+    pub(super) fn remove_volume_snapshot(&self, id: &SnapshotId) {
+        let mut specs = self.write();
+        specs.volume_snapshots.remove(id);
     }
 
     /// Remove Affinity Group by its `id` only if the volume list becomes empty.
@@ -611,7 +617,7 @@ impl ResourceSpecsLocked {
         specs.affinity_groups.get(vol_grp_id).cloned()
     }
 
-    /// Get or Create the resourced VolumeSpec for the given request
+    /// Get or Create the resourced VolumeSpec for the given request.
     pub(crate) fn get_or_create_volume(&self, request: &CreateVolume) -> ResourceMutex<VolumeSpec> {
         let mut specs = self.write();
         if let Some(volume) = specs.volumes.get(&request.uuid) {
@@ -658,6 +664,17 @@ impl ResourceSpecsLocked {
             .iter()
             .filter_map(|replica| pool_node_map.get(replica.lock().pool_name()).cloned())
             .collect()
+    }
+
+    /// Get or Create the resourced VolumeSnapshot for the given request.
+    pub(crate) fn get_or_create_snapshot(&self, _request: &()) -> ResourceMutex<VolumeSnapshot> {
+        let mut specs = self.write();
+        let uuid = SnapshotId::default();
+        if let Some(snapshot) = specs.volume_snapshots.get(&uuid) {
+            snapshot.clone()
+        } else {
+            specs.volume_snapshots.insert(Default::default())
+        }
     }
 }
 
@@ -872,7 +889,7 @@ impl SpecOperationsHelper for VolumeSpec {
         self.start_op(operation);
         Ok(())
     }
-    fn start_create_op(&mut self) {
+    fn start_create_op(&mut self, _request: &Self::Create) {
         self.start_op(VolumeOperation::Create);
     }
     fn start_destroy_op(&mut self) {

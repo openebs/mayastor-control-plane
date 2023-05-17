@@ -1,3 +1,5 @@
+mod snapshot;
+
 use super::{ResourceMutex, ResourceUid};
 use stor_port::types::v0::{
     store::volume::{AffinityGroupSpec, VolumeSpec},
@@ -6,7 +8,7 @@ use stor_port::types::v0::{
 
 impl ResourceMutex<VolumeSpec> {
     /// Get the resource uuid.
-    pub fn uuid(&self) -> &VolumeId {
+    pub(crate) fn uuid(&self) -> &VolumeId {
         &self.immutable_ref().uuid
     }
 }

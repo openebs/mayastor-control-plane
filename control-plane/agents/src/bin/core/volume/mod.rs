@@ -7,6 +7,8 @@ mod operations_helper;
 mod registry;
 mod scheduling;
 mod service;
+mod snapshot_helpers;
+mod snapshot_operations;
 mod specs;
 
 pub(crate) use operations::MoveReplicaRequest;

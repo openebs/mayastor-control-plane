@@ -33,6 +33,7 @@ use std::{fmt::Debug, ops::Deref, sync::Arc};
 use stor_port::{
     pstor::{product_v1_key_prefix, API_VERSION},
     transport_api::ErrorChain,
+    types::v0::{store::snapshots::volume::VolumeSnapshot, transport::SnapshotId},
 };
 
 #[derive(Debug, Snafu)]
@@ -629,7 +630,7 @@ pub(crate) trait SpecOperationsHelper:
                     request: format!("{request:?}"),
                 })
             } else {
-                self.start_create_op();
+                self.start_create_op(request);
                 Ok(())
             }
         } else if self.status().created() {
@@ -699,7 +700,7 @@ pub(crate) trait SpecOperationsHelper:
         self == state
     }
     /// Start a create transaction
-    fn start_create_op(&mut self);
+    fn start_create_op(&mut self, request: &Self::Create);
     /// Start a destroy transaction
     fn start_destroy_op(&mut self);
     /// Check if the object is dirty -> needs to be flushed to the persistent store
@@ -808,7 +809,7 @@ impl<T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid> Operat
     }
 }
 
-/// Locked Resource Specs
+/// Locked Resource Specs.
 #[derive(Default, Clone, Debug)]
 pub(crate) struct ResourceSpecsLocked(Arc<RwLock<ResourceSpecs>>);
 
@@ -819,7 +820,7 @@ impl Deref for ResourceSpecsLocked {
     }
 }
 
-/// Resource Specs
+/// Resource Specs.
 #[derive(Default, Debug)]
 pub(crate) struct ResourceSpecs {
     pub(crate) volumes: ResourceMap<VolumeId, VolumeSpec>,
@@ -828,6 +829,8 @@ pub(crate) struct ResourceSpecs {
     pub(crate) pools: ResourceMap<PoolId, PoolSpec>,
     pub(crate) replicas: ResourceMap<ReplicaId, ReplicaSpec>,
     pub(crate) affinity_groups: ResourceMap<String, AffinityGroupSpec>,
+    /// Top-level volume snapshots.
+    pub(crate) volume_snapshots: ResourceMap<SnapshotId, VolumeSnapshot>,
 }
 
 impl ResourceSpecsLocked {
@@ -847,6 +850,7 @@ impl ResourceSpecsLocked {
             StorableObjectType::NexusSpec,
             StorableObjectType::PoolSpec,
             StorableObjectType::ReplicaSpec,
+            StorableObjectType::VolumeSnapshot,
         ];
         for spec in &spec_types {
             self.populate_specs(store, *spec, legacy_prefix_present)
@@ -965,6 +969,14 @@ impl ResourceSpecsLocked {
                         obj_type: StorableObjectType::ReplicaSpec,
                     })?;
                 resource_specs.replicas.populate(specs);
+            }
+            StorableObjectType::VolumeSnapshot => {
+                let specs = Self::deserialise_specs::<VolumeSnapshot>(store_values).context(
+                    Deserialise {
+                        obj_type: StorableObjectType::VolumeSnapshot,
+                    },
+                )?;
+                resource_specs.volume_snapshots.populate(specs);
             }
             _ => {
                 // Not all spec types are persisted in the store.

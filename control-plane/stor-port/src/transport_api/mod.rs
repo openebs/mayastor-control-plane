@@ -128,6 +128,8 @@ pub enum ResourceKind {
     Child,
     /// Volume resource
     Volume,
+    /// Volume snapshot
+    VolumeSnapshot,
     /// Json Grpc methods
     JsonGrpc,
     /// Block devices
