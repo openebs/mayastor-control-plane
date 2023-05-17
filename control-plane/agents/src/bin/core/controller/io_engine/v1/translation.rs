@@ -5,9 +5,9 @@ use stor_port::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
-            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
-            Replica, ReplicaId, ReplicaName, ReplicaStatus,
+            self, ChildState, ChildStateReason, CreateNexusSnapReplDescr, Nexus, NexusId,
+            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState,
+            PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
         },
     },
 };
@@ -381,6 +381,43 @@ impl AgentToIoEngine for transport::NexusChildActionKind {
             transport::NexusChildActionKind::Offline => v1::nexus::ChildAction::Offline,
             transport::NexusChildActionKind::Online => v1::nexus::ChildAction::Online,
             transport::NexusChildActionKind::Retire => v1::nexus::ChildAction::FaultIoError,
+        }
+    }
+}
+
+impl AgentToIoEngine for transport::CreateNexusSnapshot {
+    type IoEngineMessage = v1::nexus::NexusCreateSnapshotRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::nexus::NexusCreateSnapshotRequest {
+            nexus_uuid: self.nexus().to_string(),
+            entity_id: self.entity().to_string(),
+            txn_id: self.txn_id().to_string(),
+            snapshot_name: self.name().to_string(),
+            replicas: self.replica_desc().iter().map(|r| r.to_rpc()).collect(),
+        }
+    }
+}
+
+impl AgentToIoEngine for CreateNexusSnapReplDescr {
+    type IoEngineMessage = v1::nexus::NexusCreateSnapshotReplicaDescriptor;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            replica_uuid: self.replica.to_string(),
+            snapshot_uuid: self.snap_uuid.as_ref().map(|u| u.to_string()),
+            skip: self.skip,
+        }
+    }
+}
+
+impl AgentToIoEngine for transport::CreateReplicaSnapshot {
+    type IoEngineMessage = v1::replica::CreateReplicaSnapshotRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::replica::CreateReplicaSnapshotRequest {
+            replica_uuid: self.replica().to_string(),
+            snapshot_uuid: self.snap_uuid().to_string(),
+            snapshot_name: self.name().to_string(),
+            entity_id: self.entity().to_string(),
+            txn_id: self.txn_id().to_string(),
         }
     }
 }

@@ -2,7 +2,7 @@ use super::*;
 
 use crate::{types::v0::store::nexus::ReplicaUri, IntoOption};
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Debug, ops::Deref};
+use std::{convert::TryFrom, fmt::Debug, ops::Deref, time::SystemTime};
 use strum_macros::{Display, EnumString};
 
 /// Get all the replicas from specific node and pool
@@ -72,6 +72,89 @@ impl Replica {
     pub fn online(&self) -> bool {
         self.status.online()
     }
+}
+
+/// The request type to create snapshot of a replica.
+pub struct CreateReplicaSnapshot {
+    /// UUID of the replica.
+    replica: ReplicaId,
+    /// Snapshot name.
+    snap_uuid: SnapshotId,
+    /// Identity of the entity involved.
+    entity: String,
+    /// Name of the snapshot to be created.
+    name: String,
+    /// A transaction id for this request.
+    txn_id: String,
+}
+
+impl CreateReplicaSnapshot {
+    /// Create new request.
+    pub fn new(
+        replica: ReplicaId,
+        snap_uuid: SnapshotId,
+        entity: String,
+        name: String,
+        txn_id: String,
+    ) -> Self {
+        Self {
+            replica,
+            snap_uuid,
+            entity,
+            name,
+            txn_id,
+        }
+    }
+    /// Get a reference to the replica uuid.
+    pub fn replica(&self) -> &ReplicaId {
+        &self.replica
+    }
+    /// Get a reference to the input snapshot uuid.
+    pub fn snap_uuid(&self) -> &SnapshotId {
+        &self.snap_uuid
+    }
+    /// Get a reference to the entity id.
+    pub fn entity(&self) -> &str {
+        &self.entity
+    }
+    /// Get a reference to the snapshot name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Get a reference to the transaction id.
+    pub fn txn_id(&self) -> &str {
+        &self.txn_id
+    }
+}
+
+pub struct CreateReplicaSnapshotResp {
+    /// UUID of the replica.
+    pub replica: ReplicaId,
+    /// Descriptor for created snaphot.
+    pub snap_describe: ReplicaSnapshotDescr,
+}
+
+#[allow(unused)]
+/// A single snapshot descriptor.
+pub struct ReplicaSnapshotDescr {
+    /// UUID of the snapshot.
+    snap_uuid: SnapshotId,
+    /// Name of the snapshot.
+    snap_name: String,
+    /// Amount of bytes referenced by snapshot.
+    snap_size: u64,
+    /// Number of clones created from this snapshot.
+    num_clones: u64,
+    /// Snapshot creation_timestamp.
+    snap_time: SystemTime,
+    /// UUID of the replica this snapshot is taken from.
+    replica_uuid: ReplicaId,
+    /// Amount of bytes referenced by replica.
+    replica_size: u64,
+    /// Identity of the entity under which snapshot is taken.
+    entity_id: String,
+    /// Unique transaction id for snapshot.
+    txn_id: String,
 }
 
 /// Name of a Replica.

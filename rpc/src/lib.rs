@@ -453,8 +453,9 @@ pub mod v1 {
     pub mod replica {
         pub use super::pb::{
             destroy_replica_request, replica_rpc_client, CreateReplicaRequest,
-            DestroyReplicaRequest, ListReplicaOptions, ListReplicasResponse, Replica,
-            ReplicaSpaceUsage, ShareReplicaRequest, UnshareReplicaRequest,
+            CreateReplicaSnapshotRequest, DestroyReplicaRequest, ListReplicaOptions,
+            ListReplicasResponse, Replica, ReplicaSpaceUsage, ShareReplicaRequest,
+            UnshareReplicaRequest,
         };
     }
 
@@ -464,7 +465,8 @@ pub mod v1 {
             nexus_rpc_client, AddChildNexusRequest, AddChildNexusResponse, Child, ChildAction,
             ChildOperationRequest, ChildState, ChildStateReason, CreateNexusRequest,
             CreateNexusResponse, DestroyNexusRequest, FaultNexusChildRequest, ListNexusOptions,
-            ListNexusResponse, Nexus, NexusNvmePreemption, NexusState, NvmeAnaState,
+            ListNexusResponse, Nexus, NexusCreateSnapshotReplicaDescriptor,
+            NexusCreateSnapshotRequest, NexusNvmePreemption, NexusState, NvmeAnaState,
             NvmeReservation, PublishNexusRequest, PublishNexusResponse, RemoveChildNexusRequest,
             RemoveChildNexusResponse, ShutdownNexusRequest, UnpublishNexusRequest,
             UnpublishNexusResponse,

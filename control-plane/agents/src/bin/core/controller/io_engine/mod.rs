@@ -135,6 +135,18 @@ where
     }
 }
 
+/// The trait for snapshot operations like create, remove, list.
+#[async_trait]
+pub(crate) trait SnapshotApi {
+    type CreateIn: Send + Sync;
+    type CreateOutput: Send + Sync + Sized;
+    /// Create a snapshot using the incoming request.
+    async fn create_snapshot(
+        &self,
+        request: &Self::CreateIn,
+    ) -> Result<Self::CreateOutput, SvcError>;
+}
+
 #[async_trait]
 pub(crate) trait HostApi {
     /// Probe node for liveness based on api version in context.
