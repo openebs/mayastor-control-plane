@@ -43,7 +43,7 @@ pub(crate) async fn enospc_children_onliner(
     PollResult::Ok(PollerState::Idle)
 }
 
-async fn online_enospc(
+pub(super) async fn child_enospc_onlineable(
     nexus: &mut OperationGuardArc<NexusSpec>,
     child: &Child,
     registry: &Registry,
@@ -119,6 +119,16 @@ async fn online_enospc(
             required: required_free_space,
         });
     }
+
+    Ok(())
+}
+
+async fn online_enospc(
+    nexus: &mut OperationGuardArc<NexusSpec>,
+    child: &Child,
+    registry: &Registry,
+) -> Result<(), SvcError> {
+    child_enospc_onlineable(nexus, child, registry).await?;
 
     let nexus_node = &nexus.as_ref().node;
     let node = registry.node_wrapper(nexus_node).await?;

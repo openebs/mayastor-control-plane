@@ -536,44 +536,65 @@ pub(super) async fn faulted_nexus_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let nexus_uuid = nexus.uuid();
+    let Ok(nexus_state) = context.registry().nexus(nexus.uuid()).await else {
+        return PollResult::Ok(PollerState::Idle);
+    };
 
-    if let Ok(nexus_state) = context.registry().nexus(nexus_uuid).await {
-        if nexus_state.status == NexusStatus::Faulted {
-            let nexus = nexus.lock().clone();
-            let healthy_children = healthy_nexus_children(&nexus, context.registry()).await?;
-            let node = context.registry().node_wrapper(&nexus.node).await?;
-
-            #[tracing::instrument(skip(nexus, node), fields(nexus.uuid = %nexus.uuid, request.reconcile = true))]
-            async fn faulted_nexus_remover(
-                nexus: NexusSpec,
-                node: Arc<RwLock<NodeWrapper>>,
-            ) -> PollResult {
-                nexus.warn(
-                    "Removing Faulted Nexus so it can be recreated with its healthy children",
-                );
-
-                // destroy the nexus - it will be recreated by the missing_nexus reconciler!
-                match node.destroy_nexus(&nexus.clone().into()).await {
-                    Ok(_) => {
-                        nexus.info("Faulted Nexus successfully removed");
-                    }
-                    Err(error) => {
-                        nexus.info_span(|| tracing::error!(error=%error.full_string(), "Failed to remove Faulted Nexus"));
-                        return Err(error);
-                    }
-                }
-
-                PollResult::Ok(PollerState::Idle)
-            }
-
-            let node_online = node.read().await.is_online();
-            // only remove the faulted nexus when the children are available again
-            if node_online && !healthy_children.candidates().is_empty() {
-                faulted_nexus_remover(nexus, node).await?;
-            }
-        }
+    if nexus_state.status != NexusStatus::Faulted {
+        return PollResult::Ok(PollerState::Idle);
     }
 
-    PollResult::Ok(PollerState::Idle)
+    let nexus_spec = nexus.as_ref();
+    let healthy_children = healthy_nexus_children(nexus_spec, context.registry()).await?;
+    let node = context.registry().node_wrapper(&nexus_spec.node).await?;
+
+    #[tracing::instrument(skip(nexus, node), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+    async fn faulted_nexus_remover(
+        nexus: &mut OperationGuardArc<NexusSpec>,
+        node: Arc<RwLock<NodeWrapper>>,
+    ) -> PollResult {
+        nexus.warn("Removing Faulted Nexus so it can be recreated with its healthy children");
+
+        // destroy the nexus - it will be recreated by the missing_nexus reconciler!
+        match node.destroy_nexus(&nexus.as_ref().clone().into()).await {
+            Ok(_) => {
+                nexus.info("Faulted Nexus successfully removed");
+            }
+            Err(error) => {
+                nexus.info_span(|| tracing::error!(error=%error.full_string(), "Failed to remove Faulted Nexus"));
+                return Err(error);
+            }
+        }
+
+        PollResult::Ok(PollerState::Idle)
+    }
+
+    let node_online = node.read().await.is_online();
+    // only remove the faulted nexus when the children are available again
+    if !node_online || healthy_children.candidates().is_empty() {
+        return PollResult::Ok(PollerState::Idle);
+    }
+
+    if nexus_state.children.iter().all(|c| c.enospc()) && !nexus_state.children.is_empty() {
+        let mut fault_nexus = false;
+        for child in nexus_state.children.iter().filter(|c| c.enospc()) {
+            if capacity::child_enospc_onlineable(nexus, child, context.registry())
+                .await
+                .is_ok()
+            {
+                fault_nexus = true;
+                break;
+            }
+        }
+        if !fault_nexus {
+            nexus.warn_span(|| tracing::warn!("Faulted ENOSPC Nexus has no onlineable children"));
+            return PollResult::Ok(PollerState::Idle);
+        }
+        nexus.warn_span(|| {
+            tracing::warn!(
+                "Removing faulted ENOSPC Nexus as one or more children are deemed to be onlineable"
+            )
+        });
+    }
+    faulted_nexus_remover(nexus, node).await
 }
