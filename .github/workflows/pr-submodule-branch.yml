@@ -22,3 +22,6 @@ jobs:
           ./scripts/git/set-submodule-branches.sh --branch "$check_branch"
           cat .gitmodules
           git diff --exit-code ".gitmodules"
+      - name: Check submodules HEAD points to branch
+        run: |
+          ./scripts/git/check-submodule-branches.sh
