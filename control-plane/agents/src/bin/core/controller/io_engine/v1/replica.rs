@@ -1,5 +1,4 @@
 use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
-use crate::controller::io_engine::SnapshotApi;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::replica::ListReplicaOptions;
 use stor_port::{
@@ -99,13 +98,11 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
 }
 
 #[async_trait::async_trait]
-impl SnapshotApi for Replica {
-    type CreateIn = CreateReplicaSnapshot;
-    type CreateOutput = CreateReplicaSnapshotResp;
-    async fn create_snapshot(
+impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
+    async fn create_repl_snapshot(
         &self,
-        _request: &Self::CreateIn,
-    ) -> Result<Self::CreateOutput, SvcError> {
+        _request: &CreateReplicaSnapshot,
+    ) -> Result<CreateReplicaSnapshotResp, SvcError> {
         Err(SvcError::GrpcRequestError {
             resource: ResourceKind::Replica,
             request: "create_snapshot".to_string(),

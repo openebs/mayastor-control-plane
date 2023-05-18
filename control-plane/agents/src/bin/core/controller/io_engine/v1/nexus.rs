@@ -1,5 +1,7 @@
-use super::translation::{rpc_nexus_to_agent, AgentToIoEngine};
-use crate::controller::io_engine::{NexusListApi, SnapshotApi};
+use super::{
+    super::NexusListApi,
+    translation::{rpc_nexus_to_agent, AgentToIoEngine},
+};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::nexus::ListNexusOptions;
 use stor_port::{
@@ -314,13 +316,11 @@ impl super::RpcClient {
 }
 
 #[async_trait::async_trait]
-impl SnapshotApi for Nexus {
-    type CreateIn = CreateNexusSnapshot;
-    type CreateOutput = CreateNexusSnapshotResp;
-    async fn create_snapshot(
+impl crate::controller::io_engine::NexusSnapshotApi for super::RpcClient {
+    async fn create_nexus_snapshot(
         &self,
-        _request: &Self::CreateIn,
-    ) -> Result<Self::CreateOutput, SvcError> {
+        _request: &CreateNexusSnapshot,
+    ) -> Result<CreateNexusSnapshotResp, SvcError> {
         Err(SvcError::GrpcRequestError {
             resource: ResourceKind::Nexus,
             request: "create_snapshot".to_string(),
