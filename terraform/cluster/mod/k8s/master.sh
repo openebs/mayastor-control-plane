@@ -1,5 +1,6 @@
 #!/bin/bash
-set -ex
+set -exo pipefail
+
 sudo kubeadm init --config /tmp/kubeadm_config.yaml \
   --ignore-preflight-errors=Swap,NumCPU,SystemVerification
 
