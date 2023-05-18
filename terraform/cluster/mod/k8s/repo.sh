@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x
+set -xo pipefail
 
 DISTRO=$(cat /etc/os-release | awk '/^NAME="/ {print $1}' | awk -F\" '{print $2}')
 if [ ! "$DISTRO" == "Ubuntu" ]; then
