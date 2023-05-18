@@ -84,7 +84,7 @@ impl SpecOperationsHelper for NexusSpec {
         self.start_op(op);
         Ok(())
     }
-    fn start_create_op(&mut self) {
+    fn start_create_op(&mut self, _request: &Self::Create) {
         self.start_op(NexusOperation::Create);
     }
     fn start_destroy_op(&mut self) {

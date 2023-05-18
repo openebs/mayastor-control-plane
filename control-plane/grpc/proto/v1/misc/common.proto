@@ -105,6 +105,8 @@ enum ResourceKind {
   NvmePath = 16;
   // Affinity Group
   AffinityGroup = 17;
+  // Volume Snapshot
+  VolumeSnapshot = 18;
 }
 
 // Filter by Node and Replica id

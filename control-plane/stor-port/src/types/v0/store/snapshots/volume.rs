@@ -15,6 +15,7 @@ pub type VolumeSnapshotUserSpec = SnapshotSpec<VolumeId>;
 /// State of the VolumeSnapshotSpec Spec.
 pub type VolumeSnapshotSpecStatus = SpecStatus<()>;
 
+/// The volume snapshot definition which is stored in the persistent store.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeSnapshot {
     /// Status of the volume snapshot.
@@ -24,7 +25,26 @@ pub struct VolumeSnapshot {
     /// Control-plane related information of the snapshot (book-keeping).
     metadata: VolumeSnapshotMeta,
 }
+impl VolumeSnapshot {
+    /// Get the snapshot status.
+    pub fn status(&self) -> &VolumeSnapshotSpecStatus {
+        &self.status
+    }
+    /// Set the snapshot status.
+    pub fn set_status(&mut self, status: VolumeSnapshotSpecStatus) {
+        self.status = status;
+    }
+    /// Get the snapshot spec.
+    pub fn spec(&self) -> &VolumeSnapshotUserSpec {
+        &self.spec
+    }
+    /// Get the snapshot metadata.
+    pub fn metadata(&self) -> &VolumeSnapshotMeta {
+        &self.metadata
+    }
+}
 
+/// Control-plane snapshot metadata, used for book-keeping.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeSnapshotMeta {
     #[serde(skip)]
@@ -44,14 +64,20 @@ pub struct VolumeSnapshotMeta {
     /// Failed transactions are any other key.
     transactions: HashMap<String, Vec<ReplicaSnapshot>>,
 }
+impl VolumeSnapshotMeta {
+    /// Get the snapshot operation state.
+    pub fn operation(&self) -> &Option<VolumeSnapshotOperationState> {
+        &self.operation
+    }
+}
 
 /// Operation State for a VolumeSnapshot resource.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VolumeSnapshotOperationState {
     /// Record of the operation.
-    operation: VolumeSnapshotOperation,
+    pub operation: VolumeSnapshotOperation,
     /// Result of the operation.
-    result: Option<bool>,
+    pub result: Option<bool>,
 }
 
 /// Available VolumeSnapshot Operations.
@@ -61,6 +87,8 @@ pub enum VolumeSnapshotOperation {
     Destroy,
 }
 
+/// Snapshot create information, used to set the initial data as part of the write log and also
+/// the completion channel that is used to get the resulting data.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VolumeSnapshotCreateInfo {
     txn_id: String,
@@ -69,13 +97,14 @@ pub struct VolumeSnapshotCreateInfo {
     complete: Option<std::sync::Arc<std::sync::Mutex<VolumeSnapshotCreateResult>>>,
 }
 impl VolumeSnapshotCreateInfo {
+    /// Get a new `Self` from the given parameters.
     pub fn new(
-        txn_id: String,
+        txn_id: impl Into<String>,
         replicas: Vec<ReplicaSnapshot>,
         complete: std::sync::Arc<std::sync::Mutex<VolumeSnapshotCreateResult>>,
     ) -> Self {
         Self {
-            txn_id,
+            txn_id: txn_id.into(),
             replicas,
             complete: Some(complete),
         }
@@ -87,9 +116,11 @@ impl PartialEq for VolumeSnapshotCreateInfo {
     }
 }
 
+/// The replica snapshot results from the creation operation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VolumeSnapshotCreateResult {
-    replicas: Vec<ReplicaSnapshot>,
+    /// The resulting replicas including their success status.
+    pub replicas: Vec<ReplicaSnapshot>,
 }
 
 impl AsOperationSequencer for VolumeSnapshot {
@@ -185,4 +216,10 @@ impl StorableObject for VolumeSnapshot {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct VolumeSnapshotList {
     snapshots: HashMap<SnapshotId, VolumeSnapshot>,
+}
+
+impl PartialEq<()> for VolumeSnapshot {
+    fn eq(&self, _other: &()) -> bool {
+        false
+    }
 }

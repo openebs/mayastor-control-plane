@@ -7,7 +7,6 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom, fmt::Debug};
 
-rpc_impl_string_uuid!(SnapshotId, "UUID of a snapshot");
 rpc_impl_string_uuid!(VolumeId, "UUID of a volume");
 
 /// Volumes

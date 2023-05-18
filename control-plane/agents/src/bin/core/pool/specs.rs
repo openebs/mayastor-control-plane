@@ -60,7 +60,7 @@ impl SpecOperationsHelper for PoolSpec {
     type State = PoolState;
     type UpdateOp = ();
 
-    fn start_create_op(&mut self) {
+    fn start_create_op(&mut self, _request: &Self::Create) {
         self.start_op(PoolOperation::Create);
     }
     fn start_destroy_op(&mut self) {
@@ -152,7 +152,7 @@ impl SpecOperationsHelper for ReplicaSpec {
         self.start_op(op);
         Ok(())
     }
-    fn start_create_op(&mut self) {
+    fn start_create_op(&mut self, _request: &Self::Create) {
         self.start_op(ReplicaOperation::Create);
     }
     fn start_destroy_op(&mut self) {
