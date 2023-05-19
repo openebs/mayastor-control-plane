@@ -390,9 +390,9 @@ impl AgentToIoEngine for transport::CreateNexusSnapshot {
     fn to_rpc(&self) -> Self::IoEngineMessage {
         v1::nexus::NexusCreateSnapshotRequest {
             nexus_uuid: self.nexus().to_string(),
-            entity_id: self.entity().to_string(),
-            txn_id: self.txn_id().to_string(),
-            snapshot_name: self.name().to_string(),
+            entity_id: self.params().entity().to_string(),
+            txn_id: self.params().txn_id().to_string(),
+            snapshot_name: self.params().name().to_string(),
             replicas: self.replica_desc().iter().map(|r| r.to_rpc()).collect(),
         }
     }
@@ -414,10 +414,10 @@ impl AgentToIoEngine for transport::CreateReplicaSnapshot {
     fn to_rpc(&self) -> Self::IoEngineMessage {
         v1::replica::CreateReplicaSnapshotRequest {
             replica_uuid: self.replica().to_string(),
-            snapshot_uuid: self.snap_uuid().to_string(),
-            snapshot_name: self.name().to_string(),
-            entity_id: self.entity().to_string(),
-            txn_id: self.txn_id().to_string(),
+            snapshot_uuid: self.params().uuid().to_string(),
+            snapshot_name: self.params().name().to_string(),
+            entity_id: self.params().entity().to_string(),
+            txn_id: self.params().txn_id().to_string(),
         }
     }
 }

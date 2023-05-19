@@ -76,54 +76,21 @@ impl Replica {
 
 /// The request type to create snapshot of a replica.
 pub struct CreateReplicaSnapshot {
-    /// UUID of the replica.
-    replica: ReplicaId,
-    /// Snapshot name.
-    snap_uuid: SnapshotId,
-    /// Identity of the entity involved.
-    entity: String,
-    /// Name of the snapshot to be created.
-    name: String,
-    /// A transaction id for this request.
-    txn_id: String,
+    params: SnapshotParameters<ReplicaId>,
 }
 
 impl CreateReplicaSnapshot {
     /// Create new request.
-    pub fn new(
-        replica: ReplicaId,
-        snap_uuid: SnapshotId,
-        entity: String,
-        name: String,
-        txn_id: String,
-    ) -> Self {
-        Self {
-            replica,
-            snap_uuid,
-            entity,
-            name,
-            txn_id,
-        }
+    pub fn new(params: SnapshotParameters<ReplicaId>) -> Self {
+        Self { params }
+    }
+    /// Get a reference to the transaction id.
+    pub fn params(&self) -> &SnapshotParameters<ReplicaId> {
+        &self.params
     }
     /// Get a reference to the replica uuid.
     pub fn replica(&self) -> &ReplicaId {
-        &self.replica
-    }
-    /// Get a reference to the input snapshot uuid.
-    pub fn snap_uuid(&self) -> &SnapshotId {
-        &self.snap_uuid
-    }
-    /// Get a reference to the entity id.
-    pub fn entity(&self) -> &str {
-        &self.entity
-    }
-    /// Get a reference to the snapshot name.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    /// Get a reference to the transaction id.
-    pub fn txn_id(&self) -> &str {
-        &self.txn_id
+        self.params.target()
     }
 }
 

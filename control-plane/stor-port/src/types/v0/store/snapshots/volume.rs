@@ -26,6 +26,13 @@ pub struct VolumeSnapshot {
     metadata: VolumeSnapshotMeta,
 }
 impl VolumeSnapshot {
+    pub fn new(spec: VolumeSnapshotUserSpec) -> Self {
+        Self {
+            status: VolumeSnapshotSpecStatus::Creating,
+            spec,
+            metadata: Default::default(),
+        }
+    }
     /// Get the snapshot status.
     pub fn status(&self) -> &VolumeSnapshotSpecStatus {
         &self.status
