@@ -3,7 +3,7 @@ use crate::controller::{
     resources::{
         operations::{
             ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing,
-            ResourceShutdownOperations,
+            ResourceShutdownOperations, ResourceSnapshotting,
         },
         operations_helper::ResourceSpecsLocked,
         OperationGuardArc,
@@ -24,10 +24,11 @@ use grpc::{
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError},
     types::v0::{
-        store::volume::VolumeSpec,
+        store::{snapshots::volume::VolumeSnapshotUserSpec, volume::VolumeSpec},
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume,
-            RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            RepublishVolume, SetVolumeReplica, ShareVolume, SnapshotId, UnpublishVolume,
+            UnshareVolume, Volume, VolumeId,
         },
     },
 };
@@ -284,7 +285,7 @@ impl Service {
         self.registry.volume(&request.uuid).await
     }
 
-    /// Set volume replica
+    /// Set volume replica.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn set_volume_replica(
         &self,
@@ -293,5 +294,20 @@ impl Service {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.set_replica(&self.registry, request).await?;
         self.registry.volume(&request.uuid).await
+    }
+
+    /// Create a volume snapshot.
+    #[allow(unused)]
+    async fn create_snapshot(&self) -> Result<Volume, SvcError> {
+        let volume = VolumeId::new();
+        let snap_id = SnapshotId::new();
+        let mut volume = self.specs().volume(&volume).await?;
+        volume
+            .create_snap(
+                &self.registry,
+                &VolumeSnapshotUserSpec::new(volume.uuid(), snap_id),
+            )
+            .await?;
+        self.registry.volume(volume.uuid()).await
     }
 }

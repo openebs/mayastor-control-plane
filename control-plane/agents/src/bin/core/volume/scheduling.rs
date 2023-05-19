@@ -13,7 +13,7 @@ use crate::controller::{
 use agents::errors::SvcError;
 use stor_port::types::v0::store::{nexus::NexusSpec, volume::VolumeSpec};
 
-/// Return a list of pre sorted pools to be used by a volume
+/// Return a list of pre sorted pools to be used by a volume.
 pub(crate) async fn volume_pool_candidates(
     request: impl Into<GetSuitablePools>,
     registry: &Registry,
@@ -26,9 +26,9 @@ pub(crate) async fn volume_pool_candidates(
         .collect()
 }
 
-/// Return a volume child candidate to be removed from a volume
+/// Return a volume child candidate to be removed from a volume.
 /// This list includes healthy and non_healthy candidates, so care must be taken to
-/// make sure we don't remove "too many healthy" candidates and make the volume degraded
+/// make sure we don't remove "too many healthy" candidates and make the volume degraded.
 pub(crate) async fn volume_replica_remove_candidates(
     request: &GetChildForRemoval,
     registry: &Registry,
@@ -36,7 +36,7 @@ pub(crate) async fn volume_replica_remove_candidates(
     volume::DecreaseVolumeReplica::builder_with_defaults(request, registry).await
 }
 
-/// Return a nexus child candidate to be removed from a nexus
+/// Return a nexus child candidate to be removed from a nexus.
 pub(crate) async fn nexus_child_remove_candidates(
     vol_spec: &VolumeSpec,
     nexus_spec: &NexusSpec,
@@ -55,7 +55,7 @@ pub(crate) async fn nexus_child_remove_candidates(
     )
 }
 
-/// Return healthy replicas for volume nexus creation
+/// Return healthy replicas for volume nexus creation.
 pub(crate) async fn healthy_volume_replicas(
     request: &GetPersistedNexusChildren,
     registry: &Registry,
@@ -64,6 +64,27 @@ pub(crate) async fn healthy_volume_replicas(
     let info = builder.context().nexus_info().clone();
     if let Some(info_inner) = &builder.context().nexus_info() {
         if !info_inner.clean_shutdown {
+            return Ok(HealthyChildItems::One(info, builder.collect()));
+        }
+    }
+    let items = builder.collect();
+    Ok(HealthyChildItems::All(info, items))
+}
+
+/// Return healthy replicas for volume snapshotting.
+pub(crate) async fn snapshoteable_replica(
+    request: &GetPersistedNexusChildren,
+    registry: &Registry,
+) -> Result<HealthyChildItems, SvcError> {
+    let published = request.snapshot_target_published();
+
+    let builder = nexus::CreateVolumeNexus::builder_with_defaults(request, registry).await?;
+    let info = builder.context().nexus_info().clone();
+
+    if let Some(info_inner) = &builder.context().nexus_info() {
+        // if it's published then we of course we don't have a clean shutdown if the target
+        // is still up..
+        if !published && !info_inner.clean_shutdown {
             return Ok(HealthyChildItems::One(info, builder.collect()));
         }
     }

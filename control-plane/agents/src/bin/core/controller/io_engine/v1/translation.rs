@@ -403,8 +403,8 @@ impl AgentToIoEngine for CreateNexusSnapReplDescr {
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             replica_uuid: self.replica.to_string(),
-            snapshot_uuid: self.snap_uuid.as_ref().map(|u| u.to_string()),
-            skip: self.skip,
+            snapshot_uuid: Some(self.snap_uuid.to_string()),
+            skip: false,
         }
     }
 }

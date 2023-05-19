@@ -13,10 +13,10 @@ pub struct SnapshotSpec<SourceId: Clone> {
 
 impl<SourceId: Clone> SnapshotSpec<SourceId> {
     /// Create a new `Self` from the given parameters.
-    pub fn new(source_id: &SourceId, uuid: &SnapshotId) -> Self {
+    pub fn new(source_id: &SourceId, uuid: SnapshotId) -> Self {
         Self {
             source_id: source_id.clone(),
-            uuid: uuid.clone(),
+            uuid,
         }
     }
     /// Get the snapshot source id.

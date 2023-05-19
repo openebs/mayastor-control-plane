@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::{types::v0::store::nexus::ReplicaUri, IntoOption};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, ops::Deref, time::SystemTime};
 use strum_macros::{Display, EnumString};
@@ -101,8 +102,8 @@ pub struct CreateReplicaSnapshotResp {
     pub snap_describe: ReplicaSnapshotDescr,
 }
 
-#[allow(unused)]
 /// A single snapshot descriptor.
+#[allow(unused)]
 pub struct ReplicaSnapshotDescr {
     /// UUID of the snapshot.
     snap_uuid: SnapshotId,
@@ -122,6 +123,12 @@ pub struct ReplicaSnapshotDescr {
     entity_id: String,
     /// Unique transaction id for snapshot.
     txn_id: String,
+}
+impl ReplicaSnapshotDescr {
+    /// Returns the snapshot timestamp.
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.snap_time.into()
+    }
 }
 
 /// Name of a Replica.

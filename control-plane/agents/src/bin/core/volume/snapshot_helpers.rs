@@ -2,21 +2,40 @@ use crate::controller::{
     registry::Registry,
     resources::{
         operations_helper::{GuardedOperationsHelper, SpecOperationsHelper},
-        OperationGuardArc, ResourceUid,
+        OperationGuardArc, ResourceUid, TraceStrLog,
     },
+    scheduling::{nexus::GetPersistedNexusChildren, resources::ChildItem},
 };
 use agents::errors::SvcError;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::store::{
-        snapshots::volume::{VolumeSnapshot, VolumeSnapshotCreateInfo, VolumeSnapshotOperation},
-        SpecStatus, SpecTransaction,
+    types::v0::{
+        store::{
+            snapshots::{
+                replica::ReplicaSnapshot,
+                volume::{
+                    VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
+                    VolumeSnapshotOperation,
+                },
+            },
+            volume::VolumeSpec,
+            SpecStatus, SpecTransaction,
+        },
+        transport::{SnapshotParameters, VolumeId},
     },
 };
 
+/// A request type for creating snapshot of a volume, which essentially
+/// means a snapshot of all(or selected) healthy replicas associated with that volume.
+pub(super) struct PrepareVolumeSnapshot {
+    pub(super) parameters: SnapshotParameters<VolumeId>,
+    pub(super) replica_snapshot: ReplicaSnapshot,
+    pub(super) completer: VolumeSnapshotCompleter,
+}
+
 #[async_trait::async_trait]
 impl GuardedOperationsHelper for OperationGuardArc<VolumeSnapshot> {
-    type Create = CreateVolumeSnapshot;
+    type Create = VolumeSnapshotCreateInfo;
     type Owners = ();
     type Status = ();
     type State = ();
@@ -29,28 +48,9 @@ impl GuardedOperationsHelper for OperationGuardArc<VolumeSnapshot> {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct CreateVolumeSnapshot {
-    /// The user spec request
-    #[allow(dead_code)]
-    pub(crate) request: (),
-    /// The info used by the control-plane agent.
-    pub(crate) info: VolumeSnapshotCreateInfo,
-}
-impl PartialEq for CreateVolumeSnapshot {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-impl PartialEq<CreateVolumeSnapshot> for VolumeSnapshot {
-    fn eq(&self, _other: &CreateVolumeSnapshot) -> bool {
-        false
-    }
-}
-
 #[async_trait::async_trait]
 impl SpecOperationsHelper for VolumeSnapshot {
-    type Create = CreateVolumeSnapshot;
+    type Create = VolumeSnapshotCreateInfo;
     type Owners = ();
     type Status = ();
     type State = ();
@@ -65,7 +65,7 @@ impl SpecOperationsHelper for VolumeSnapshot {
         unreachable!("No updates allowed")
     }
     fn start_create_op(&mut self, request: &Self::Create) {
-        self.start_op(VolumeSnapshotOperation::Create(request.info.clone()));
+        self.start_op(VolumeSnapshotOperation::Create(request.clone()));
     }
     fn start_destroy_op(&mut self) {
         self.start_op(VolumeSnapshotOperation::Destroy);
@@ -87,5 +87,27 @@ impl SpecOperationsHelper for VolumeSnapshot {
     }
     fn operation_result(&self) -> Option<Option<bool>> {
         self.metadata().operation().as_ref().map(|r| r.result)
+    }
+}
+
+/// Return healthy replicas for volume snapshotting.
+pub(crate) async fn snapshoteable_replica(
+    volume: &VolumeSpec,
+    registry: &Registry,
+) -> Result<ChildItem, SvcError> {
+    let children = super::scheduling::snapshoteable_replica(
+        &GetPersistedNexusChildren::new_snapshot(volume),
+        registry,
+    )
+    .await?;
+
+    volume.trace(&format!("Snapshoteable replicas for volume: {children:?}"));
+
+    match children.candidates().as_slice() {
+        [item] => Ok(item.clone()),
+        [] => Err(SvcError::NoHealthyReplicas {
+            id: volume.uuid_str(),
+        }),
+        _ => Err(SvcError::NReplSnapshotNotAllowed {}),
     }
 }

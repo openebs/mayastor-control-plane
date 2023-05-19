@@ -10,7 +10,9 @@ use crate::controller::{
 use agents::errors::SvcError;
 use std::collections::HashMap;
 
-use crate::controller::scheduling::affinity_group::get_node_ag_nexus_count;
+use crate::controller::{
+    resources::ResourceUid, scheduling::affinity_group::get_node_ag_nexus_count,
+};
 use std::ops::Deref;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
@@ -24,6 +26,7 @@ use stor_port::types::v0::{
 pub(crate) enum GetPersistedNexusChildren {
     Create((VolumeSpec, NodeId)),
     ReCreate(NexusSpec),
+    Snapshot(VolumeSpec),
 }
 
 impl GetPersistedNexusChildren {
@@ -35,18 +38,32 @@ impl GetPersistedNexusChildren {
     pub(crate) fn new_recreate(spec: &NexusSpec) -> Self {
         Self::ReCreate(spec.clone())
     }
+    /// Retrieve a list of children for a snapshot.
+    pub(crate) fn new_snapshot(spec: &VolumeSpec) -> Self {
+        Self::Snapshot(spec.clone())
+    }
+    /// Check if the snapshotting volume is published.
+    pub(crate) fn snapshot_target_published(&self) -> bool {
+        match self {
+            Self::Create(_) => false,
+            Self::ReCreate(_) => false,
+            Self::Snapshot(vol) => vol.target().is_some(),
+        }
+    }
     /// Get the optional volume spec (used for nexus creation).
     pub(crate) fn vol_spec(&self) -> Option<&VolumeSpec> {
         match self {
             Self::Create((spec, _)) => Some(spec),
             Self::ReCreate(_) => None,
+            Self::Snapshot(_) => None,
         }
     }
     /// Get the target node where the nexus will be created/recreated on.
-    pub(crate) fn target_node(&self) -> &NodeId {
+    pub(crate) fn target_node(&self) -> Option<&NodeId> {
         match self {
-            Self::Create((_, node)) => node,
-            Self::ReCreate(nexus) => &nexus.node,
+            Self::Create((_, node)) => Some(node),
+            Self::ReCreate(nexus) => Some(&nexus.node),
+            Self::Snapshot(_) => None,
         }
     }
     /// Get the current nexus persistent information Id.
@@ -54,17 +71,19 @@ impl GetPersistedNexusChildren {
         match self {
             Self::Create((vol, _)) => vol.health_info_id(),
             Self::ReCreate(nexus) => Some(&nexus.uuid),
+            Self::Snapshot(vol) => vol.health_info_id(),
         }
     }
 
     /// Get the volume ID associated with the persisted nexus info.
     pub(crate) fn volume_id(&self) -> Option<&VolumeId> {
         match self {
-            GetPersistedNexusChildren::Create((vol, _)) => Some(&vol.uuid),
-            GetPersistedNexusChildren::ReCreate(nexus) => match nexus.owner.as_ref() {
+            Self::Create((vol, _)) => Some(&vol.uuid),
+            Self::ReCreate(nexus) => match nexus.owner.as_ref() {
                 Some(volume_id) => Some(volume_id),
                 None => None,
             },
+            Self::Snapshot(vol) => Some(&vol.uuid),
         }
     }
 }
@@ -84,7 +103,7 @@ impl GetPersistedNexusChildrenCtx {
         self.request.vol_spec()
     }
     /// Get the target node where the nexus will be created on.
-    pub(crate) fn target_node(&self) -> &NodeId {
+    pub(crate) fn target_node(&self) -> Option<&NodeId> {
         self.request.target_node()
     }
     /// Get the current nexus persistent information.
@@ -125,13 +144,16 @@ impl GetPersistedNexusChildrenCtx {
 
         let spec_replicas = match &self.request {
             GetPersistedNexusChildren::Create((vol_spec, _)) => {
-                self.registry.specs().volume_replicas(&vol_spec.uuid)
+                self.registry.specs().volume_replicas(vol_spec.uid())
             }
             GetPersistedNexusChildren::ReCreate(nexus_spec) => {
                 // replicas used by the nexus
                 // note: if the nexus was somehow created without using replicas (eg: directly using
                 // aio:// etc) then we will not recreate it with those devices...
                 self.registry.specs().nexus_replicas(nexus_spec)
+            }
+            GetPersistedNexusChildren::Snapshot(vol_spec) => {
+                self.registry.specs().volume_replicas(vol_spec.uid())
             }
         };
 

@@ -46,7 +46,10 @@ use stor_port::{
 
 use snafu::OptionExt;
 use std::{collections::HashMap, convert::From};
-use stor_port::types::v0::{store::snapshots::volume::VolumeSnapshot, transport::SnapshotId};
+use stor_port::types::v0::{
+    store::snapshots::volume::{VolumeSnapshot, VolumeSnapshotUserSpec},
+    transport::SnapshotId,
+};
 
 /// CreateReplicaCandidate for volume and Affinity Group.
 pub(crate) struct CreateReplicaCandidate {
@@ -94,7 +97,7 @@ impl NexusNodeCandidate {
     }
 }
 
-/// Select a replica to be removed from the volume
+/// Select a replica to be removed from the volume.
 pub(crate) async fn volume_replica_remove_candidate(
     spec: &VolumeSpec,
     state: &VolumeState,
@@ -116,9 +119,9 @@ pub(crate) async fn volume_replica_remove_candidate(
         })
 }
 
-/// Get replica candidates to be removed from the volume
+/// Get replica candidates to be removed from the volume.
 /// This list includes healthy and non_healthy candidates, so care must be taken to
-/// make sure we don't remove "too many healthy" candidates
+/// make sure we don't remove "too many healthy" candidates.
 pub(crate) async fn volume_unused_replica_remove_candidates(
     spec: &VolumeSpec,
     state: &VolumeState,
@@ -138,7 +141,7 @@ pub(crate) async fn volume_unused_replica_remove_candidates(
     Ok(candidates)
 }
 
-/// Get a list of nexus children to be removed from a nexus
+/// Get a list of nexus children to be removed from a nexus.
 pub(crate) async fn nexus_child_remove_candidates(
     vol_spec: &VolumeSpec,
     nexus_spec: &NexusSpec,
@@ -153,9 +156,9 @@ pub(crate) async fn nexus_child_remove_candidates(
     Ok(candidates)
 }
 
-/// Get a list of existing candidate volume replicas to attach to a given nexus
+/// Get a list of existing candidate volume replicas to attach to a given nexus.
 /// Useful to attach replicas to a nexus when the number of nexus children does not match
-/// the volume's replica count
+/// the volume's replica count.
 pub(crate) async fn nexus_attach_candidates(
     vol_spec: &VolumeSpec,
     nexus_spec: &NexusSpec,
@@ -172,7 +175,7 @@ pub(crate) async fn nexus_attach_candidates(
 
 /// Return a list of appropriate requests which can be used to create a replica on a pool.
 /// This can be used when the volume's current replica count is smaller than the desired volume's
-/// replica count
+/// replica count.
 pub(crate) async fn volume_replica_candidates(
     registry: &Registry,
     volume_spec: &VolumeSpec,
@@ -258,8 +261,8 @@ pub(crate) async fn volume_move_replica_candidates(
         .collect::<Vec<_>>())
 }
 
-/// Return a list of appropriate requests which can be used to create a a replica on a pool
-/// This can be used when creating a volume
+/// Return a list of appropriate requests which can be used to create a a replica on a pool.
+/// This can be used when creating a volume.
 pub(crate) async fn create_volume_replicas(
     registry: &Registry,
     request: &CreateVolume,
@@ -290,8 +293,8 @@ pub(crate) async fn create_volume_replicas(
     }
 }
 
-/// Get all usable healthy replicas for volume nexus creation
-/// If no usable replica is available, return an error
+/// Get all usable healthy replicas for volume nexus creation.
+/// If no usable replica is available, return an error.
 pub(crate) async fn healthy_volume_replicas(
     spec: &VolumeSpec,
     target_node: &NodeId,
@@ -316,8 +319,8 @@ pub(crate) async fn healthy_volume_replicas(
     }
 }
 
-/// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked
-/// During these calls, no other thread can add/remove elements from the list
+/// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked.
+/// During these calls, no other thread can add/remove elements from the list.
 impl ResourceSpecs {
     /// Gets all VolumeSpec's
     pub(crate) fn volumes(&self) -> Vec<VolumeSpec> {
@@ -350,7 +353,7 @@ impl ResourceSpecs {
     }
 }
 impl ResourceSpecsLocked {
-    /// Get the resourced VolumeSpec for the given volume `id`, if any exists
+    /// Get the resourced VolumeSpec for the given volume `id`, if any exists.
     pub(crate) fn volume_rsc(&self, id: &VolumeId) -> Option<ResourceMutex<VolumeSpec>> {
         let specs = self.read();
         specs.volumes.get(id).cloned()
@@ -398,7 +401,7 @@ impl ResourceSpecsLocked {
         }
     }
 
-    /// Gets a copy of all VolumeSpec's
+    /// Gets a copy of all VolumeSpec's.
     pub(crate) fn volumes(&self) -> Vec<VolumeSpec> {
         let specs = self.read();
         specs.volumes()
@@ -410,13 +413,13 @@ impl ResourceSpecsLocked {
         specs.paginated_volumes(pagination)
     }
 
-    /// Gets a copy of all locked VolumeSpec's
+    /// Gets a copy of all locked VolumeSpec's.
     pub(crate) fn volumes_rsc(&self) -> Vec<ResourceMutex<VolumeSpec>> {
         let specs = self.read();
         specs.volumes.to_vec()
     }
 
-    /// Get a list of nodes currently used as replicas
+    /// Get a list of nodes currently used as replicas.
     pub(crate) fn volume_data_nodes(&self, id: &VolumeId) -> Vec<NodeId> {
         let used_pools = self
             .read()
@@ -433,7 +436,7 @@ impl ResourceSpecsLocked {
             .collect::<Vec<_>>()
     }
 
-    /// Get a list of resourced ReplicaSpec's for the given volume `id`
+    /// Get a list of resourced ReplicaSpec's for the given volume `id`.
     /// todo: we could also get the replicas from the volume nexuses?
     pub(crate) fn volume_replicas(&self, id: &VolumeId) -> Vec<ResourceMutex<ReplicaSpec>> {
         self.read()
@@ -460,7 +463,7 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
-    /// Get the `NodeId` where `replica` lives
+    /// Get the `NodeId` where `replica` lives.
     pub(crate) async fn replica_node(registry: &Registry, replica: &ReplicaSpec) -> Option<NodeId> {
         Self::pool_node(registry, replica.pool.pool_name()).await
     }
@@ -667,13 +670,15 @@ impl ResourceSpecsLocked {
     }
 
     /// Get or Create the resourced VolumeSnapshot for the given request.
-    pub(crate) fn get_or_create_snapshot(&self, _request: &()) -> ResourceMutex<VolumeSnapshot> {
+    pub(crate) fn get_or_create_snapshot(
+        &self,
+        request: &VolumeSnapshotUserSpec,
+    ) -> ResourceMutex<VolumeSnapshot> {
         let mut specs = self.write();
-        let uuid = SnapshotId::default();
-        if let Some(snapshot) = specs.volume_snapshots.get(&uuid) {
+        if let Some(snapshot) = specs.volume_snapshots.get(request.uuid()) {
             snapshot.clone()
         } else {
-            specs.volume_snapshots.insert(Default::default())
+            specs.volume_snapshots.insert(VolumeSnapshot::from(request))
         }
     }
 }
