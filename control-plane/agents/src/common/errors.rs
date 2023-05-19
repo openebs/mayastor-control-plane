@@ -276,6 +276,8 @@ pub enum SvcError {
         request: String,
         source: tonic::Status,
     },
+    #[snafu(display("Snapshots for multi-replica volumes are not allowed"))]
+    NReplSnapshotNotAllowed {},
 }
 
 impl SvcError {
@@ -756,6 +758,12 @@ impl From<SvcError> for ReplyError {
             SvcError::RestrictedReplicaCount { resource, .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::NReplSnapshotNotAllowed {} => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::VolumeSnapshot,
                 source: desc.to_string(),
                 extra: error_str,
             },

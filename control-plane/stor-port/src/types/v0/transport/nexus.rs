@@ -82,50 +82,28 @@ rpc_impl_string_uuid!(NexusId, "UUID of a nexus");
 /// A gRPC request type for creating snapshot of a nexus, which essentially
 /// means a snapshot of all(or selected) replicas associated with that nexus.
 pub struct CreateNexusSnapshot {
-    /// UUID of the nexus.
-    nexus: NexusId,
-    /// Identity of the entity involved.
-    entity: String,
-    /// A transaction id for this request.
-    txn_id: String,
-    /// Name of the snapshot to be created.
-    name: String,
-    /// Replica list descriptor.
+    params: SnapshotParameters<NexusId>,
     replica_desc: Vec<CreateNexusSnapReplDescr>,
 }
 
 impl CreateNexusSnapshot {
     /// Create a new request.
     pub fn new(
-        nexus: &NexusId,
-        entity: String,
-        txn_id: String,
-        name: String,
+        params: SnapshotParameters<NexusId>,
         replica_desc: Vec<CreateNexusSnapReplDescr>,
     ) -> Self {
         Self {
-            nexus: nexus.clone(),
-            entity,
-            txn_id,
-            name,
+            params,
             replica_desc,
         }
     }
+    /// Get a reference to the transaction id.
+    pub fn params(&self) -> &SnapshotParameters<NexusId> {
+        &self.params
+    }
     /// Get a reference to the nexus uuid.
     pub fn nexus(&self) -> &NexusId {
-        &self.nexus
-    }
-    /// Get a reference to the entity id.
-    pub fn entity(&self) -> &str {
-        &self.entity
-    }
-    /// Get a reference to the transaction id.
-    pub fn txn_id(&self) -> &str {
-        &self.txn_id
-    }
-    /// Get a reference to the snapshot name.
-    pub fn name(&self) -> &str {
-        &self.name
+        self.params.target()
     }
     /// Get a reference to the replica descriptor.
     pub fn replica_desc(&self) -> &Vec<CreateNexusSnapReplDescr> {

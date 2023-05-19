@@ -19,18 +19,13 @@ use std::fmt::Debug;
 use strum_macros::Display;
 
 /// Enum defining the various states that a resource spec can be in.
-#[derive(Serialize, Deserialize, Debug, Clone, Display, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Display, PartialEq, Default)]
 pub enum SpecStatus<T> {
+    #[default]
     Creating,
     Created(T),
     Deleting,
     Deleted,
-}
-
-impl<T> Default for SpecStatus<T> {
-    fn default() -> Self {
-        Self::Creating
-    }
 }
 
 // todo: change openapi spec to support enum variants
