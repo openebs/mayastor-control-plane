@@ -4,7 +4,8 @@ use rpc::io_engine::Null;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        CreateReplica, DestroyReplica, NodeId, Replica, ShareReplica, UnshareReplica,
+        CreateReplica, CreateReplicaSnapshot, CreateReplicaSnapshotResp, DestroyReplica, NodeId,
+        Replica, ShareReplica, UnshareReplica,
     },
 };
 
@@ -92,5 +93,19 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
             .into_inner()
             .uri;
         Ok(uri)
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
+    async fn create_repl_snapshot(
+        &self,
+        _request: &CreateReplicaSnapshot,
+    ) -> Result<CreateReplicaSnapshotResp, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Replica,
+            request: "create_snapshot".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 }

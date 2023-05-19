@@ -11,7 +11,8 @@ use async_trait::async_trait;
 use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
-        AddNexusChild, ApiVersion, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
+        AddNexusChild, ApiVersion, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp,
+        CreatePool, CreateReplica, CreateReplicaSnapshot, CreateReplicaSnapshotResp, DestroyNexus,
         DestroyPool, DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus,
         NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
         PoolState, Register, RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus,
@@ -32,6 +33,8 @@ pub(crate) trait NodeApi:
     + NexusChildApi<Nexus, Nexus, ()>
     + NexusChildActionApi<NexusChildActionContext>
     + HostApi
+    + NexusSnapshotApi
+    + ReplicaSnapshotApi
     + Sync
     + Send
     + Clone
@@ -135,16 +138,24 @@ where
     }
 }
 
-/// The trait for snapshot operations like create, remove, list.
+/// The trait for nexus snapshot operations like create, remove, list.
 #[async_trait]
-pub(crate) trait SnapshotApi {
-    type CreateIn: Send + Sync;
-    type CreateOutput: Send + Sync + Sized;
+pub(crate) trait NexusSnapshotApi {
     /// Create a snapshot using the incoming request.
-    async fn create_snapshot(
+    async fn create_nexus_snapshot(
         &self,
-        request: &Self::CreateIn,
-    ) -> Result<Self::CreateOutput, SvcError>;
+        request: &CreateNexusSnapshot,
+    ) -> Result<CreateNexusSnapshotResp, SvcError>;
+}
+
+/// The trait for replica snapshot operations like create, remove, list.
+#[async_trait]
+pub(crate) trait ReplicaSnapshotApi {
+    /// Create a snapshot using the incoming request.
+    async fn create_repl_snapshot(
+        &self,
+        request: &CreateReplicaSnapshot,
+    ) -> Result<CreateReplicaSnapshotResp, SvcError>;
 }
 
 #[async_trait]

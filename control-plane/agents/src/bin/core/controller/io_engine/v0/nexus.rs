@@ -5,9 +5,9 @@ use rpc::io_engine::Null;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        AddNexusChild, Child, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusChildAction,
-        NexusChildActionContext, NexusId, NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus,
-        UnshareNexus,
+        AddNexusChild, Child, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp,
+        DestroyNexus, FaultNexusChild, Nexus, NexusChildAction, NexusChildActionContext, NexusId,
+        NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
 
@@ -251,5 +251,19 @@ impl super::RpcClient {
                 id: nexus.to_string(),
             }),
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::controller::io_engine::NexusSnapshotApi for super::RpcClient {
+    async fn create_nexus_snapshot(
+        &self,
+        _request: &CreateNexusSnapshot,
+    ) -> Result<CreateNexusSnapshotResp, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Nexus,
+            request: "create_snapshot".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 }

@@ -26,7 +26,9 @@ use stor_port::{
 };
 
 use crate::controller::{
-    io_engine::{NexusChildActionApi, NexusChildApi, NexusShareApi},
+    io_engine::{
+        NexusChildActionApi, NexusChildApi, NexusShareApi, NexusSnapshotApi, ReplicaSnapshotApi,
+    },
     registry::Registry,
     states::Either,
 };
@@ -34,6 +36,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
 use stor_port::types::v0::transport::{
+    CreateNexusSnapshot, CreateNexusSnapshotResp, CreateReplicaSnapshot, CreateReplicaSnapshotResp,
     ImportPool, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
 };
 use tracing::{debug, trace, warn};
@@ -1374,6 +1377,26 @@ impl NexusChildActionApi<NexusChildActionContextNode> for Arc<tokio::sync::RwLoc
         let nexus = dataplane.child_action(request).await?;
         self.update_nexus_state(Either::Insert(nexus.clone())).await;
         Ok(nexus)
+    }
+}
+
+#[async_trait]
+impl NexusSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    async fn create_nexus_snapshot(
+        &self,
+        _request: &CreateNexusSnapshot,
+    ) -> Result<CreateNexusSnapshotResp, SvcError> {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    async fn create_repl_snapshot(
+        &self,
+        _request: &CreateReplicaSnapshot,
+    ) -> Result<CreateReplicaSnapshotResp, SvcError> {
+        todo!()
     }
 }
 
