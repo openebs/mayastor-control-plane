@@ -2,11 +2,13 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::{volume::traits::VolumeOperations, Pagination},
     volume::{
-        create_volume_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
-        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
+        create_snapshot_reply, create_volume_reply, get_snapshots_reply, get_volumes_reply,
+        publish_volume_reply, republish_volume_reply, set_volume_replica_reply, share_volume_reply,
+        unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
-        CreateVolumeReply, CreateVolumeRequest, DestroyShutdownTargetReply,
-        DestroyShutdownTargetRequest, DestroyVolumeReply, DestroyVolumeRequest, GetVolumesReply,
+        CreateSnapshotReply, CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest,
+        DestroyShutdownTargetReply, DestroyShutdownTargetRequest, DestroyVolumeReply,
+        DestroyVolumeRequest, GetSnapshotsReply, GetSnapshotsRequest, GetVolumesReply,
         GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply, PublishVolumeRequest,
         RepublishVolumeReply, RepublishVolumeRequest, SetVolumeReplicaReply,
         SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest, UnpublishVolumeReply,
@@ -198,6 +200,53 @@ impl VolumeGrpc for VolumeServer {
         match self.service.probe(None).await {
             Ok(resp) => Ok(Response::new(ProbeResponse { ready: resp })),
             Err(_) => Ok(Response::new(ProbeResponse { ready: false })),
+        }
+    }
+
+    async fn create_snapshot(
+        &self,
+        request: tonic::Request<CreateSnapshotRequest>,
+    ) -> Result<tonic::Response<CreateSnapshotReply>, tonic::Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.create_snapshot(&req, None).await {
+            Ok(snapshot) => Ok(Response::new(CreateSnapshotReply {
+                reply: Some(create_snapshot_reply::Reply::Snapshot(snapshot.try_into()?)),
+            })),
+            Err(err) => Ok(Response::new(CreateSnapshotReply {
+                reply: Some(create_snapshot_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn get_snapshots(
+        &self,
+        request: tonic::Request<GetSnapshotsRequest>,
+    ) -> Result<tonic::Response<GetSnapshotsReply>, tonic::Status> {
+        let req: GetSnapshotsRequest = request.into_inner();
+        let filter = match req.filter {
+            Some(filter) => match Filter::try_from(filter) {
+                Ok(filter) => filter,
+                Err(err) => {
+                    return Ok(Response::new(GetSnapshotsReply {
+                        reply: Some(get_snapshots_reply::Reply::Error(err.into())),
+                    }))
+                }
+            },
+            None => Filter::None,
+        };
+
+        let pagination: Option<Pagination> = req.pagination.map(|p| p.into());
+        match self
+            .service
+            .get_snapshots(filter, req.ignore_notfound, pagination, None)
+            .await
+        {
+            Ok(snapshots) => Ok(Response::new(GetSnapshotsReply {
+                reply: Some(get_snapshots_reply::Reply::Response(snapshots.try_into()?)),
+            })),
+            Err(error) => Ok(Response::new(GetSnapshotsReply {
+                reply: Some(get_snapshots_reply::Reply::Error(error.into())),
+            })),
         }
     }
 }

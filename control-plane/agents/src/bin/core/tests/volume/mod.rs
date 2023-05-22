@@ -5,6 +5,7 @@ mod capacity;
 mod garbage_collection;
 mod helpers;
 mod hotspare;
+mod snapshot;
 mod switchover;
 
 use deployer_cluster::{Cluster, ClusterBuilder};

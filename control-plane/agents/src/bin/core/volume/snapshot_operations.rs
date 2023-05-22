@@ -39,7 +39,7 @@ use stor_port::types::v0::{
 #[async_trait::async_trait]
 impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
     type Create = VolumeSnapshotUserSpec;
-    type CreateOutput = ();
+    type CreateOutput = OperationGuardArc<VolumeSnapshot>;
     type Destroy = ();
     type List = ();
     type ListOutput = ();
@@ -64,9 +64,7 @@ impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
         .await;
 
         self.complete_update(registry, snap_result, spec_clone)
-            .await?;
-
-        Ok(())
+            .await
     }
 
     async fn list_snaps(
@@ -99,7 +97,7 @@ pub(crate) struct CreateVolumeSnapshotRequest<'a> {
 #[async_trait::async_trait]
 impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
     type Create<'a> = CreateVolumeSnapshotRequest<'a>;
-    type CreateOutput = ();
+    type CreateOutput = Self;
     type Destroy<'a> = ();
 
     async fn create(
@@ -149,7 +147,7 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
             .complete_create(result, registry, OnCreateFail::LeaveAsIs)
             .await?;
 
-        Ok(())
+        Ok(snapshot)
     }
 
     async fn destroy(

@@ -14,9 +14,10 @@ use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
-            RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
-            UnshareVolumeInfo, VolumeOperations,
+            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, IVolumeSnapshot,
+            PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
+            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
+            VolumeSnapshotInfo, VolumeSnapshots,
         },
         Pagination,
     },
@@ -27,8 +28,7 @@ use stor_port::{
         store::{snapshots::volume::VolumeSnapshotUserSpec, volume::VolumeSpec},
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume,
-            RepublishVolume, SetVolumeReplica, ShareVolume, SnapshotId, UnpublishVolume,
-            UnshareVolume, Volume, VolumeId,
+            RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
         },
     },
 };
@@ -165,6 +165,28 @@ impl VolumeOperations for Service {
             .await??;
         Ok(())
     }
+
+    async fn create_snapshot(
+        &self,
+        request: &dyn IVolumeSnapshot,
+        _ctx: Option<Context>,
+    ) -> Result<VolumeSnapshot, ReplyError> {
+        let service = self.clone();
+        let request = request.info();
+        let snapshot =
+            Context::spawn(async move { service.create_snapshot(request).await }).await??;
+        Ok(snapshot)
+    }
+
+    async fn get_snapshots(
+        &self,
+        _filter: Filter,
+        _ignore_notfound: bool,
+        _pagination: Option<Pagination>,
+        _ctx: Option<Context>,
+    ) -> Result<VolumeSnapshots, ReplyError> {
+        todo!()
+    }
 }
 
 impl Service {
@@ -297,17 +319,15 @@ impl Service {
     }
 
     /// Create a volume snapshot.
-    #[allow(unused)]
-    async fn create_snapshot(&self) -> Result<Volume, SvcError> {
-        let volume = VolumeId::new();
-        let snap_id = SnapshotId::new();
-        let mut volume = self.specs().volume(&volume).await?;
-        volume
+    async fn create_snapshot(&self, info: VolumeSnapshotInfo) -> Result<VolumeSnapshot, SvcError> {
+        let mut volume = self.specs().volume(&info.source_id).await?;
+        let snapshot = volume
             .create_snap(
                 &self.registry,
-                &VolumeSnapshotUserSpec::new(volume.uuid(), snap_id),
+                &VolumeSnapshotUserSpec::new(volume.uuid(), info.snap_id),
             )
             .await?;
-        self.registry.volume(volume.uuid()).await
+
+        Ok(snapshot.as_ref().into())
     }
 }

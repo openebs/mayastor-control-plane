@@ -3,24 +3,27 @@ use crate::{
     context::{Client, Context, TracedChannel},
     operations::{
         volume::traits::{
-            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
-            RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
-            UnshareVolumeInfo, VolumeOperations,
+            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, IVolumeSnapshot,
+            PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
+            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
+            VolumeSnapshots,
         },
         Pagination,
     },
     volume::{
-        create_volume_reply, get_volumes_reply, get_volumes_request, publish_volume_reply,
-        republish_volume_reply, set_volume_replica_reply, share_volume_reply,
-        unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetVolumesRequest,
-        ProbeRequest,
+        create_snapshot_reply, create_volume_reply, get_snapshots_reply, get_snapshots_request,
+        get_volumes_reply, get_volumes_request, publish_volume_reply, republish_volume_reply,
+        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
+        volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
     },
 };
-use std::{convert::TryFrom, ops::Deref};
+
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{Filter, MessageIdVs, Volume},
 };
+
+use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 /// RPC Volume Client
@@ -233,6 +236,58 @@ impl VolumeOperations for VolumeClient {
         match response.error {
             None => Ok(()),
             Some(err) => Err(err.into()),
+        }
+    }
+
+    #[tracing::instrument(name = "VolumeClient::create_snapshot", level = "debug", skip(self))]
+    async fn create_snapshot(
+        &self,
+        request: &dyn IVolumeSnapshot,
+        ctx: Option<Context>,
+    ) -> Result<VolumeSnapshot, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::CreateVolumeSnapshot);
+        let response = self.client().create_snapshot(req).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                create_snapshot_reply::Reply::Snapshot(snap) => Ok(VolumeSnapshot::try_from(snap)?),
+                create_snapshot_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::VolumeSnapshot)),
+        }
+    }
+
+    #[tracing::instrument(name = "VolumeClient::get_snapshots", level = "debug", skip(self))]
+    async fn get_snapshots(
+        &self,
+        filter: Filter,
+        ignore_notfound: bool,
+        pagination: Option<Pagination>,
+        ctx: Option<Context>,
+    ) -> Result<VolumeSnapshots, ReplyError> {
+        let req: GetSnapshotsRequest = match filter {
+            Filter::Volume(volume_id) => GetSnapshotsRequest {
+                filter: Some(get_snapshots_request::Filter::Volume(VolumeFilter {
+                    volume_id: volume_id.to_string(),
+                })),
+                pagination: pagination.map(|p| p.into()),
+                ignore_notfound,
+            },
+            _ => GetSnapshotsRequest {
+                filter: None,
+                pagination: pagination.map(|p| p.into()),
+                ignore_notfound,
+            },
+        };
+        let req = self.request(req, ctx, MessageIdVs::GetVolumeSnapshots);
+        let response = self.client().get_snapshots(req).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                get_snapshots_reply::Reply::Response(snaps) => {
+                    Ok(VolumeSnapshots::try_from(snaps)?)
+                }
+                get_snapshots_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::VolumeSnapshot)),
         }
     }
 }

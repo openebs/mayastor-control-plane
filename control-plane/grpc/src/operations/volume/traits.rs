@@ -1,3 +1,4 @@
+pub use super::traits_snapshots::*;
 use crate::{
     common,
     context::Context,
@@ -11,7 +12,6 @@ use crate::{
         SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
-use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
@@ -29,6 +29,8 @@ use stor_port::{
     },
     IntoOption,
 };
+
+use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]
@@ -97,6 +99,20 @@ pub trait VolumeOperations: Send + Sync {
         req: &dyn DestroyShutdownTargetsInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
+    /// Create a volume snapshot.
+    async fn create_snapshot(
+        &self,
+        request: &dyn IVolumeSnapshot,
+        ctx: Option<Context>,
+    ) -> Result<VolumeSnapshot, ReplyError>;
+    /// List volume snapshots.
+    async fn get_snapshots(
+        &self,
+        filter: Filter,
+        ignore_notfound: bool,
+        pagination: Option<Pagination>,
+        ctx: Option<Context>,
+    ) -> Result<VolumeSnapshots, ReplyError>;
 }
 
 impl From<VolumeSpec> for volume::VolumeDefinition {

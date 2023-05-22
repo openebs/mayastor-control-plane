@@ -263,11 +263,11 @@ impl ReplyError {
         }
     }
     /// Used when we get an invalid argument.
-    pub fn invalid_argument(resource: ResourceKind, arg_name: &str, error: String) -> Self {
+    pub fn invalid_argument(resource: ResourceKind, arg_name: &str, error: impl ToString) -> Self {
         Self {
             kind: ReplyErrorKind::InvalidArgument,
             resource,
-            source: error,
+            source: error.to_string(),
             extra: format!("Invalid {arg_name} was provided"),
         }
     }

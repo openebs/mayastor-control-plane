@@ -101,6 +101,14 @@ impl VolumeSnapshotMeta {
     pub fn operation(&self) -> &Option<VolumeSnapshotOperationState> {
         &self.operation
     }
+    /// Get the snapshot timestamp.
+    pub fn timestamp(&self) -> &Option<DateTime<Utc>> {
+        &self.creation_timestamp
+    }
+    /// Get the snapshot transaction id.
+    pub fn txn_id(&self) -> &SnapshotTxId {
+        &self.txn_id
+    }
 
     pub fn prepare(&self) -> SnapshotTxId {
         // If this is a create retry, then we must allocate a new transaction id, and prepare
@@ -172,7 +180,7 @@ impl PartialEq<VolumeSnapshotCreateInfo> for VolumeSnapshot {
         // This is a bit nuanced, actually we simply expect that the txn_id is not the
         // same as we don't allow reusing the txn_id. Instead, if we have the same txn_id then
         // we should check if all is created and ready!
-        !self.metadata.txn_id.eq(&other.txn_id)
+        self.metadata.txn_id.eq(&other.txn_id)
     }
 }
 
