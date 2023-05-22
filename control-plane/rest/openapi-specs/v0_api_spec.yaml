@@ -1576,6 +1576,34 @@ paths:
       security:
         - JWT: []
   '/volumes/{volume_id}/snapshots/{snapshot_id}':
+    get:
+      tags:
+        - Snapshots
+      operationId: get_volume_snapshot
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+        - in: path
+          name: snapshot_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeSnapshot'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
     put:
       tags:
         - Snapshots
@@ -1628,6 +1656,32 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/volumes/{volume_id}/snapshots':
+    get:
+      tags:
+        - Snapshots
+      operationId: get_volume_snapshots
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VolumeSnapshot'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
   '/snapshots/{snapshot_id}':
     delete:
       tags:
@@ -1642,6 +1696,26 @@ paths:
       responses:
         '204':
           description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
+  '/snapshots':
+    get:
+      tags:
+        - Snapshots
+      operationId: get_snapshots
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VolumeSnapshot'
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
