@@ -79,8 +79,8 @@ impl From<Nexus> for models::Nexus {
 
 rpc_impl_string_uuid!(NexusId, "UUID of a nexus");
 
-/// A gRPC request type for creating snapshot of a nexus, which essentially
-/// means a snapshot of all(or selected) replicas associated with that nexus.
+/// A request for creating snapshot of a nexus, which essentially means a snapshot
+/// of all(or selected) replicas associated with that nexus.
 pub struct CreateNexusSnapshot {
     params: SnapshotParameters<NexusId>,
     replica_desc: Vec<CreateNexusSnapReplDescr>,
@@ -118,10 +118,17 @@ impl CreateNexusSnapshot {
 pub struct CreateNexusSnapReplDescr {
     /// UUID of the replica involved in snapshot operation.
     pub replica: ReplicaId,
-    /// Optional UUID input for the snapshot to be created.
-    pub snap_uuid: Option<SnapshotId>,
-    /// Whether this replica is to be skipped from current snapshot operation.
-    pub skip: bool,
+    /// UUID input for the snapshot to be created.
+    pub snap_uuid: SnapshotId,
+}
+impl CreateNexusSnapReplDescr {
+    /// Return a new `Self` from the given parameters.
+    pub fn new(replica: &ReplicaId, snap_uuid: SnapshotId) -> Self {
+        Self {
+            replica: replica.clone(),
+            snap_uuid,
+        }
+    }
 }
 
 /// A response for the nexus snapshot request.

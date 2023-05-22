@@ -7,22 +7,38 @@ use crate::controller::{
     },
 };
 use agents::errors::SvcError;
+use chrono::{DateTime, Utc};
+use stor_port::transport_api::ResourceKind;
 
-use stor_port::types::v0::store::volume::VolumeSpec;
+use stor_port::types::v0::store::volume::{VolumeOperation, VolumeSpec, VolumeTarget};
 
 use crate::{
-    controller::resources::{
-        operations::ResourceLifecycleWithLifetime, operations_helper::OnCreateFail,
+    controller::{
+        io_engine::{NexusSnapshotApi, ReplicaSnapshotApi},
+        resources::{
+            operations::ResourceLifecycleWithLifetime, operations_helper::OnCreateFail, ResourceUid,
+        },
+        scheduling::resources::ChildItem,
     },
-    volume::snapshot_helpers::CreateVolumeSnapshot,
+    volume::snapshot_helpers::{snapshoteable_replica, PrepareVolumeSnapshot},
 };
-use stor_port::types::v0::store::snapshots::volume::{
-    VolumeSnapshot, VolumeSnapshotCreateInfo, VolumeSnapshotCreateResult,
+use stor_port::types::v0::{
+    store::snapshots::{
+        replica::{ReplicaSnapshot, ReplicaSnapshotSpec},
+        volume::{
+            VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
+            VolumeSnapshotCreateResult, VolumeSnapshotUserSpec,
+        },
+    },
+    transport::{
+        CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateReplicaSnapshot, ReplicaId,
+        SnapshotId, SnapshotParameters,
+    },
 };
 
 #[async_trait::async_trait]
 impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
-    type Create = ();
+    type Create = VolumeSnapshotUserSpec;
     type CreateOutput = ();
     type Destroy = ();
     type List = ();
@@ -31,16 +47,24 @@ impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
     async fn create_snap(
         &mut self,
         registry: &Registry,
-        _request: &Self::Create,
+        request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError> {
-        OperationGuardArc::<VolumeSnapshot>::create(
+        let state = registry.volume_state(request.source_id()).await?;
+
+        let operation = VolumeOperation::CreateSnapshot(request.uuid().clone());
+        let spec_clone = self.start_update(registry, &state, operation).await?;
+
+        let snap_result = OperationGuardArc::<VolumeSnapshot>::create(
             registry,
             &CreateVolumeSnapshotRequest {
                 volume: self,
-                request: (),
+                request: request.clone(),
             },
         )
-        .await?;
+        .await;
+
+        self.complete_update(registry, snap_result, spec_clone)
+            .await?;
 
         Ok(())
     }
@@ -69,7 +93,7 @@ pub(crate) struct CreateVolumeSnapshotRequest<'a> {
     /// the volume.
     volume: &'a mut OperationGuardArc<VolumeSpec>,
     /// Any request specific info - TBD.
-    request: (),
+    request: VolumeSnapshotUserSpec,
 }
 
 #[async_trait::async_trait]
@@ -82,37 +106,43 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         registry: &Registry,
         request: &Self::Create<'_>,
     ) -> Result<Self::CreateOutput, SvcError> {
-        // we have the guard, so we may create the snapshot..
-        if request.volume.published() {
-            tracing::trace!("snapshot through the nexus");
-        } else {
-            tracing::trace!("snapshot through the replicas directly");
-        }
+        let volume = &request.volume;
         let request = &request.request;
+
+        if volume.as_ref().num_replicas != 1 {
+            return Err(SvcError::NReplSnapshotNotAllowed {});
+        }
+
+        let replica = snapshoteable_replica(volume.as_ref(), registry).await?;
+        let target_node = if let Some(target) = volume.as_ref().target() {
+            registry.node_wrapper(target.node()).await
+        } else {
+            registry.node_wrapper(&replica.state().node).await
+        }?;
 
         let specs = registry.specs();
         let snapshot = specs
             .get_or_create_snapshot(request)
             .operation_guard_wait()
             .await?;
-        let complete = std::sync::Arc::new(std::sync::Mutex::new(VolumeSnapshotCreateResult {
-            replicas: vec![],
-        }));
-        let _snapshot_cln = snapshot
+
+        let prepare_snapshot = snapshot.snapshot_params(&replica)?;
+        snapshot
             .start_create(
                 registry,
-                &CreateVolumeSnapshot {
-                    request: *request,
-                    info: VolumeSnapshotCreateInfo::new("", vec![], complete.clone()),
-                },
+                &VolumeSnapshotCreateInfo::new(
+                    prepare_snapshot.parameters.txn_id(),
+                    prepare_snapshot.replica_snapshot.clone(),
+                    &prepare_snapshot.completer,
+                ),
             )
             .await?;
 
-        // create snapshots..
-        let result = Ok(());
-        if let Ok(ref _result) = result {
-            // update replica snapshot result
-            complete.lock().unwrap().replicas = vec![];
+        let result = snapshot
+            .snapshot(volume, &prepare_snapshot, target_node)
+            .await;
+        if let Ok(ref result) = result {
+            *prepare_snapshot.completer.lock().unwrap() = Some(result.clone());
         }
 
         snapshot
@@ -130,5 +160,85 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         self.start_destroy_by(registry, &()).await?;
         let result = Ok(());
         self.complete_destroy(result, registry).await
+    }
+}
+
+impl OperationGuardArc<VolumeSnapshot> {
+    fn snapshot_params(&self, replica: &ChildItem) -> Result<PrepareVolumeSnapshot, SvcError> {
+        let Some(parameters) = self.as_ref().prepare() else {
+            return Err(SvcError::AlreadyExists {
+                id: self.uuid().to_string(),
+                kind: ResourceKind::VolumeSnapshot
+            })
+        };
+        let volume = self.as_ref().spec().source_id();
+        let generic_params = parameters.params().clone();
+        let replica_snapshot = ReplicaSnapshot::new_vol(
+            ReplicaSnapshotSpec::new(replica.spec().uid(), SnapshotId::new()),
+            SnapshotParameters::new(volume, generic_params),
+            replica.spec().size,
+        );
+        Ok(PrepareVolumeSnapshot {
+            parameters,
+            replica_snapshot,
+            completer: VolumeSnapshotCompleter::default(),
+        })
+    }
+    async fn snapshot<N: NexusSnapshotApi + ReplicaSnapshotApi>(
+        &self,
+        volume: &OperationGuardArc<VolumeSpec>,
+        prep_params: &PrepareVolumeSnapshot,
+        target_node: N,
+    ) -> Result<VolumeSnapshotCreateResult, SvcError> {
+        if let Some(target) = volume.as_ref().target() {
+            self.snapshot_nexus(prep_params, target, target_node).await
+        } else {
+            self.snapshot_replica(prep_params, target_node).await
+        }
+    }
+
+    async fn snapshot_nexus<N: NexusSnapshotApi>(
+        &self,
+        prep_params: &PrepareVolumeSnapshot,
+        target: &VolumeTarget,
+        target_node: N,
+    ) -> Result<VolumeSnapshotCreateResult, SvcError> {
+        let mut replica_snap = prep_params.replica_snapshot.clone();
+        let generic_params = prep_params.parameters.params();
+
+        let response = target_node
+            .create_nexus_snapshot(&CreateNexusSnapshot::new(
+                SnapshotParameters::new(target.nexus(), generic_params.clone()),
+                vec![CreateNexusSnapReplDescr::new(
+                    replica_snap.spec().source_id(),
+                    replica_snap.spec().uuid().clone(),
+                )],
+            ))
+            .await?;
+
+        let timestamp = DateTime::<Utc>::from(response.snap_time);
+        replica_snap.complete_vol(timestamp);
+
+        Ok(VolumeSnapshotCreateResult::new(replica_snap, timestamp))
+    }
+    async fn snapshot_replica<N: ReplicaSnapshotApi>(
+        &self,
+        prep_params: &PrepareVolumeSnapshot,
+        target_node: N,
+    ) -> Result<VolumeSnapshotCreateResult, SvcError> {
+        let mut replica_snap = prep_params.replica_snapshot.clone();
+        let generic_params = prep_params.parameters.params();
+
+        let response = target_node
+            .create_repl_snapshot(&CreateReplicaSnapshot::new(SnapshotParameters::new(
+                ReplicaId::new(),
+                generic_params.clone(),
+            )))
+            .await?;
+
+        let timestamp = response.snap_describe.timestamp();
+        replica_snap.complete_vol(timestamp);
+
+        Ok(VolumeSnapshotCreateResult::new(replica_snap, timestamp))
     }
 }

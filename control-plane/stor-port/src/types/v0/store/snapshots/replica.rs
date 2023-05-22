@@ -1,7 +1,7 @@
 use super::{SnapshotId, SnapshotSpec};
 use crate::types::v0::{
     store::{AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction},
-    transport::ReplicaId,
+    transport::{ReplicaId, SnapshotParameters, SnapshotTxId, VolumeId},
 };
 use chrono::{DateTime, Utc};
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
@@ -12,6 +12,7 @@ pub type ReplicaSnapshotSpec = SnapshotSpec<ReplicaId>;
 /// State of the ReplicaSnapshotSpec Spec.
 pub type ReplicaSnapshotSpecStatus = SpecStatus<()>;
 
+/// Replica snapshot definition for the pstor.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ReplicaSnapshot {
     /// Status of the replica snapshot.
@@ -21,7 +22,41 @@ pub struct ReplicaSnapshot {
     /// Control-plane related information of the snapshot (book-keeping).
     metadata: ReplicaSnapshotMeta,
 }
+impl ReplicaSnapshot {
+    /// Return a new `Self` as a volume replica snapshot.
+    pub fn new_vol(
+        spec: ReplicaSnapshotSpec,
+        vol_params: SnapshotParameters<VolumeId>,
+        size: u64,
+    ) -> Self {
+        Self {
+            status: ReplicaSnapshotSpecStatus::Creating,
+            metadata: ReplicaSnapshotMeta::new(
+                spec.uuid(),
+                vol_params.uuid(),
+                vol_params.txn_id(),
+                size,
+            ),
+            spec,
+        }
+    }
+    /// Get a reference to the replica spec.
+    pub fn spec(&self) -> &ReplicaSnapshotSpec {
+        &self.spec
+    }
+    /// Get a reference to the replica metadata.
+    pub fn meta(&self) -> &ReplicaSnapshotMeta {
+        &self.metadata
+    }
+    /// Complete the volume operation on the replica.
+    pub fn complete_vol(&mut self, timestamp: DateTime<Utc>) {
+        self.commit_op();
+        self.metadata.creation_timestamp = Some(timestamp);
+    }
+}
 
+/// Replica snapshot metadata, which is control-plane specific data that allows it
+/// to manage a replica snapshot.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ReplicaSnapshotMeta {
     #[serde(skip)]
@@ -36,6 +71,25 @@ pub struct ReplicaSnapshotMeta {
     /// Information about the snapshot which is specific to how the snapshot was created,
     /// either as stand-alone snapshot or part of a volume snapshot transaction.
     meta: SnapshotMeta,
+}
+impl ReplicaSnapshotMeta {
+    /// Return a new `Self` from the given parameters.
+    pub fn new(uuid: &SnapshotId, parent: &SnapshotId, txn_id: &SnapshotTxId, size: u64) -> Self {
+        Self {
+            sequencer: OperationSequence::new(uuid.to_string()),
+            operation: None,
+            creation_timestamp: None,
+            size,
+            meta: SnapshotMeta::Volume {
+                parent: parent.clone(),
+                txn_id: txn_id.clone(),
+            },
+        }
+    }
+    /// Get the snapshot size.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
 }
 
 /// Snapshot meta information.

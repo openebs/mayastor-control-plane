@@ -346,8 +346,8 @@ impl ChildItemSorters {
         a: &ChildItem,
         b: &ChildItem,
     ) -> std::cmp::Ordering {
-        let a_is_local = &a.state().node == request.target_node();
-        let b_is_local = &b.state().node == request.target_node();
+        let a_is_local = Some(&a.state().node) == request.target_node();
+        let b_is_local = Some(&b.state().node) == request.target_node();
         match (a_is_local, b_is_local) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,

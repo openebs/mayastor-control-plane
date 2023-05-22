@@ -169,7 +169,7 @@ impl OperationGuardArc<VolumeSpec> {
         state: VolumeState,
         spec_clone: VolumeSpec,
     ) -> Result<Volume, SvcError> {
-        // Create a ag guard to prevent candidate collision.
+        // Create an ag guard to prevent candidate collision.
         let _ag_guard = match registry.specs().get_or_create_affinity_group(&spec_clone) {
             Some(ag) => Some(ag.operation_guard_wait().await?),
             _ => None,
@@ -227,7 +227,7 @@ impl OperationGuardArc<VolumeSpec> {
                 .await?;
 
             // todo: we could ignore it here, since we've already removed it from the nexus
-            // now remove the replica from the pool
+            //  now remove the replica from the pool
             let result = self.destroy_replica(registry, remove.spec()).await;
 
             self.complete_update(registry, result, spec_clone).await?;
