@@ -369,7 +369,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             status: ReplicaSpecStatus::Creating,
             managed: request.managed,
             owners: request.owners.clone(),
-            sequencer: OperationSequence::new(request.uuid.clone()),
+            sequencer: OperationSequence::new(),
             operation: None,
             allowed_hosts: request.allowed_hosts.clone(),
         }

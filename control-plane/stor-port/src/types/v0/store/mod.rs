@@ -84,17 +84,24 @@ pub trait SpecTransaction<Operation> {
 /// Sequence operations for a resource without locking it
 /// Allows for multiple reconciliation operation steps to be executed in sequence whilst
 /// blocking access from front-end operations (rest)
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct OperationSequence {
-    uuid: String,
     state: OperationSequenceState,
     log_error: bool,
 }
 impl OperationSequence {
     /// Create new `Self` with a uuid for observability
-    pub fn new(uuid: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Self {
-            uuid: uuid.into(),
+            state: Default::default(),
+            log_error: true,
+        }
+    }
+}
+
+impl Default for OperationSequence {
+    fn default() -> Self {
+        Self {
             state: Default::default(),
             log_error: true,
         }

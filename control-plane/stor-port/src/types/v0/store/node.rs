@@ -182,17 +182,18 @@ impl NodeSpec {
         node_nqn: Option<HostNqn>,
     ) -> Self {
         Self {
-            id: id.clone(),
+            id,
             endpoint,
             labels,
             cordon_drain_state,
             node_nqn,
             draining_volumes: HashSet::new(),
             draining_timestamp: None,
-            sequencer: OperationSequence::new(id),
+            sequencer: OperationSequence::new(),
             operation: None,
         }
     }
+
     /// Node Nvme HOSTNQN.
     pub fn node_nqn(&self) -> &Option<HostNqn> {
         &self.node_nqn

@@ -51,7 +51,7 @@ impl From<&CreatePool> for PoolSpec {
             disks: request.disks.clone(),
             status: PoolSpecStatus::Creating,
             labels: request.labels.clone(),
-            sequencer: OperationSequence::new(request.id.clone()),
+            sequencer: OperationSequence::new(),
             operation: None,
         }
     }
