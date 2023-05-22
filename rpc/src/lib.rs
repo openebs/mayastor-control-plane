@@ -453,9 +453,10 @@ pub mod v1 {
     pub mod replica {
         pub use super::pb::{
             destroy_replica_request, replica_rpc_client, CreateReplicaRequest,
-            CreateReplicaSnapshotRequest, CreateReplicaSnapshotResponse, DestroyReplicaRequest,
-            ListReplicaOptions, ListReplicasResponse, Replica, ReplicaSnapshot, ReplicaSpaceUsage,
-            ShareReplicaRequest, UnshareReplicaRequest,
+            CreateReplicaSnapshotRequest, CreateReplicaSnapshotResponse,
+            DeleteReplicaSnapshotRequest, DestroyReplicaRequest, ListReplicaOptions,
+            ListReplicasResponse, Replica, ReplicaSnapshot, ReplicaSpaceUsage, ShareReplicaRequest,
+            UnshareReplicaRequest,
         };
     }
 

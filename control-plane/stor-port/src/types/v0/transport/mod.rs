@@ -85,6 +85,8 @@ pub enum MessageIdVs {
     UnshareReplica,
     /// Create replica snapshot.
     CreateReplicaSnapshot,
+    /// Delete Replica Snapshot.
+    DestroyReplicaSnapshot,
     /// Volume Service
     ///
     /// Get nexuses with filter.
@@ -105,7 +107,7 @@ pub enum MessageIdVs {
     FaultNexusChild,
     /// Nexus Child actions.
     NexusChildAction,
-    /// Create nexus snapshot.
+    /// Create Nexus Snapshot.
     CreateNexusSnapshot,
     /// Get all volumes.
     GetVolumes,

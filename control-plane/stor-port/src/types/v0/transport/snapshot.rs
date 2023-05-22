@@ -99,3 +99,9 @@ impl GenericSnapshotParameters {
         &self.name
     }
 }
+
+/// The request type to delete a snapshot of a replica.
+pub struct DestroyReplicaSnapshot {
+    /// Incoming snapshot id to be deleted.
+    pub snap_id: SnapshotId,
+}

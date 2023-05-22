@@ -40,6 +40,7 @@ impl_message!(DestroyReplica);
 impl_message!(ShareReplica);
 impl_message!(UnshareReplica);
 impl_message!(CreateReplicaSnapshot);
+impl_message!(DestroyReplicaSnapshot);
 
 impl_vector_request!(Nexuses, Nexus);
 impl_message!(GetNexuses);
