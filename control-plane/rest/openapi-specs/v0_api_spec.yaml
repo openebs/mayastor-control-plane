@@ -1741,6 +1741,10 @@ components:
       example: 25823425-41fa-434a-9efd-a356b70b5d7c
       type: string
       format: uuid
+    ReplicaId:
+      example: bcf680de-4714-4c4a-aa6e-1e23fa3e87fe
+      type: string
+      format: uuid
     NodeId:
       description: storage node identifier
       example: io-engine-1
@@ -2908,6 +2912,13 @@ components:
         - Degraded
         - Faulted
         - Shutdown
+    ReplicaSnapshotStatus:
+      description: Current ReplicaSnapshot status
+      type: string
+      enum:
+        - Unknown
+        - Online
+        - Offline
     VolumeShareProtocol:
       description: Volume Share Protocol
       type: string
@@ -3088,6 +3099,17 @@ components:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
           format: date-time
+        txn_id:
+          type: string
+        transactions:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/ReplicaSnapshot'
+      required:
+        - txn_id
+        - transactions
     VolumeSnapshotSpec:
       description: |-
         Volume Snapshot Spec information.
@@ -3119,16 +3141,67 @@ components:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
           format: date-time
-        ready:
+        clone_ready:
           description: Indicates if a snapshot is ready to be used as a clone.
           type: bool
           default: false
+        replica_snapshots:
+          description: List of individual ReplicaSnapshotStates.
+          type: array
+          items:
+            $ref: '#/components/schemas/ReplicaSnapshotState'
       required:
         - uuid
         - size
         - source
         - creation_timestamp
         - ready
+        - replica_snapshots
+    ReplicaSnapshot:
+      description: |-
+        Replica Snapshot information.
+      type: object
+      properties:
+        uuid:
+          $ref: '#/components/schemas/SnapshotId'
+        source_id:
+          $ref: '#/components/schemas/ReplicaId'
+        status:
+          $ref: '#/components/schemas/SpecStatus'
+      required:
+        - uuid
+        - source_id
+        - status
+    ReplicaSnapshotState:
+      description: |-
+        Replica Snapshot state information.
+      type: object
+      properties:
+        uuid:
+          $ref: '#/components/schemas/SnapshotId'
+        source_id:
+          $ref: '#/components/schemas/ReplicaId'
+        creation_timestamp:
+          description: Timestamp when replica snapshot is taken on the storage system.
+          type: string
+          format: date-time
+        size:
+          description: Replica snapshot size.
+          type: integer
+          format: int64
+        referenced_size:
+          description: Replica snapshot referenced size.
+          type: integer
+          format: int64
+        state:
+          $ref: '#/components/schemas/ReplicaSnapshotStatus'
+      required:
+        - uuid
+        - source_id
+        - creation_timestamp
+        - size
+        - referenced_size
+        - state
     ReplicaTopology:
       description: Volume Replica information.
       type: object
