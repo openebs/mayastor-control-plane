@@ -126,8 +126,8 @@ pub struct CreateNexusSnapReplDescr {
 
 /// A response for the nexus snapshot request.
 pub struct CreateNexusSnapshotResp {
-    /// UUID of the nexus.
-    pub nexus: NexusId,
+    /// The nexus involved in the snapshot operation.
+    pub nexus: Option<Nexus>,
     /// Timetamp of taking snapshot.
     pub snap_time: SystemTime,
     /// Results of snapping each replica as part of this snapshot request.

@@ -2,6 +2,7 @@ use super::{
     super::NexusListApi,
     translation::{rpc_nexus_to_agent, AgentToIoEngine},
 };
+use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::nexus::ListNexusOptions;
 use stor_port::{
@@ -319,12 +320,16 @@ impl super::RpcClient {
 impl crate::controller::io_engine::NexusSnapshotApi for super::RpcClient {
     async fn create_nexus_snapshot(
         &self,
-        _request: &CreateNexusSnapshot,
+        request: &CreateNexusSnapshot,
     ) -> Result<CreateNexusSnapshotResp, SvcError> {
-        Err(SvcError::GrpcRequestError {
-            resource: ResourceKind::Nexus,
-            request: "create_snapshot".to_string(),
-            source: tonic::Status::unimplemented(""),
-        })
+        let response = self
+            .nexus()
+            .create_snapshot(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Nexus,
+                request: "create_snapshot",
+            })?;
+        response.into_inner().try_to_agent()
     }
 }
