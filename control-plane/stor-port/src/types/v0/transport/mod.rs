@@ -105,6 +105,8 @@ pub enum MessageIdVs {
     FaultNexusChild,
     /// Nexus Child actions.
     NexusChildAction,
+    /// Create nexus snapshot.
+    CreateNexusSnapshot,
     /// Get all volumes.
     GetVolumes,
     /// Create Volume.

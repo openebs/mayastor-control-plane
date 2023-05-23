@@ -134,12 +134,12 @@ impl CreateNexusSnapReplDescr {
 /// A response for the nexus snapshot request.
 pub struct CreateNexusSnapshotResp {
     /// The nexus involved in the snapshot operation.
-    pub nexus: Option<Nexus>,
-    /// Timetamp of taking snapshot.
+    pub nexus: Nexus,
+    /// Timestamp when the nexus was paused to take the snapshot on all replicas.
     pub snap_time: SystemTime,
     /// Results of snapping each replica as part of this snapshot request.
     pub replicas_status: Vec<CreateNexusSnapshotReplicaStatus>,
-    /// Replicas that weren't snapped as part of this request.
+    /// Replicas which weren't snapped as part of this request.
     pub skipped: Vec<ReplicaId>,
 }
 

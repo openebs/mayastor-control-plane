@@ -130,14 +130,14 @@ impl IoEngineToAgent for v1::replica::ReplicaSpaceUsage {
 impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotResponse {
     type AgentMessage = transport::CreateNexusSnapshotResp;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
-        let tx_nexus = if let Some(n) = &self.nexus {
-            Some(n.try_to_agent()?)
-        } else {
-            None
-        };
+        let nexus = self
+            .nexus
+            .as_ref()
+            .map(TryIoEngineToAgent::try_to_agent)
+            .unwrap_or(Err(SvcError::InvalidArguments {}))?;
 
         Ok(Self::AgentMessage {
-            nexus: tx_nexus,
+            nexus,
             snap_time: self
                 .snapshot_timestamp
                 .clone()
