@@ -45,7 +45,7 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
                     .metadata()
                     .timestamp()
                     .map(|t| std::time::SystemTime::from(t).into()),
-                txn_id: value.metadata().txn_id().to_string(),
+                txn_id: value.metadata().txn_id().clone(),
                 transactions: Default::default(),
             },
             state: VolumeSnapshotState {},

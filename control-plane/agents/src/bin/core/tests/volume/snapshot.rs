@@ -37,8 +37,7 @@ async fn snapshot() {
             None,
         )
         .await
-        // dataplane api not implemented yet..
-        .expect_err("error");
+        .unwrap();
 
     tracing::info!("Snapshot: {snapshot:?}");
 }

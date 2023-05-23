@@ -83,6 +83,8 @@ pub enum MessageIdVs {
     ShareReplica,
     /// Unshare Replica.
     UnshareReplica,
+    /// Create replica snapshot.
+    CreateReplicaSnapshot,
     /// Volume Service
     ///
     /// Get nexuses with filter.

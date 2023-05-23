@@ -36,24 +36,36 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
 use stor_port::types::v0::transport::{
-    CreateNexusSnapshot, CreateNexusSnapshotResp, CreateReplicaSnapshot, CreateReplicaSnapshotResp,
-    ImportPool, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
+    CreateNexusSnapshot, CreateNexusSnapshotResp, CreateReplicaSnapshot, ImportPool,
+    NexusChildAction, NexusChildActionContext, NexusChildActionKind, ReplicaSnapshot, SnapshotId,
 };
 use tracing::{debug, trace, warn};
 
-type NodeResourceStates = (Vec<Replica>, Vec<PoolState>, Vec<Nexus>);
+type NodeResourceStates = (
+    Vec<Replica>,
+    Vec<PoolState>,
+    Vec<Nexus>,
+    Vec<ReplicaSnapshot>,
+);
 
 /// Default timeout for GET* gRPC requests (ex: GetPools, GetNexuses, etc..)
 const GETS_TIMEOUT: MessageId = MessageId::v0(MessageIdVs::Default);
 
 enum ResourceType {
-    All(Vec<PoolState>, Vec<Replica>, Vec<Nexus>),
+    All(
+        Vec<PoolState>,
+        Vec<Replica>,
+        Vec<Nexus>,
+        Vec<ReplicaSnapshot>,
+    ),
     Nexuses(Vec<Nexus>),
     Nexus(Either<Nexus, NexusId>),
     Pools(Vec<PoolState>),
     Pool(Either<PoolState, PoolId>),
     Replicas(Vec<Replica>),
     Replica(Either<Replica, ReplicaId>),
+    Snapshots(Vec<ReplicaSnapshot>),
+    Snapshot(Either<ReplicaSnapshot, SnapshotId>),
 }
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
@@ -558,9 +570,9 @@ impl NodeWrapper {
 
         let mut client = self.grpc_client().await?;
         match self.fetcher().fetch_resources(&mut client).await {
-            Ok((replicas, pools, nexuses)) => {
+            Ok((replicas, pools, nexuses, snapshots)) => {
                 let mut states = self.resources_mut();
-                states.update(pools, replicas, nexuses);
+                states.update(pools, replicas, nexuses, snapshots);
                 Ok(())
             }
             Err(error) => {
@@ -590,8 +602,8 @@ impl NodeWrapper {
             );
 
             match fetch_result {
-                Ok((replicas, pools, nexuses)) => {
-                    self.update_resources(ResourceType::All(pools, replicas, nexuses));
+                Ok((replicas, pools, nexuses, snapshots)) => {
+                    self.update_resources(ResourceType::All(pools, replicas, nexuses, snapshots));
                     if setting_online {
                         // we only set it as online after we've updated the resource states
                         // so an online node should be "up-to-date"
@@ -706,12 +718,36 @@ impl NodeWrapper {
             .update_resources(ResourceType::Replica(state));
     }
 
+    /// Update all the snapshot states.
+    async fn update_snapshot_states(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        client: &mut GrpcClient,
+    ) -> Result<(), SvcError> {
+        let fetcher = node.read().await.fetcher();
+        let snapshots = fetcher.fetch_snapshots(client).await?;
+        node.write()
+            .await
+            .update_resources(ResourceType::Snapshots(snapshots));
+        Ok(())
+    }
+
+    /// Update the given snapshot state.
+    async fn update_snapshot_state(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        state: Either<ReplicaSnapshot, SnapshotId>,
+    ) {
+        node.write()
+            .await
+            .update_resources(ResourceType::Snapshot(state));
+    }
+
     /// Update the states of the specified resource type.
     /// Whenever the nexus states are updated the number of rebuilds must be updated.
     fn update_resources(&self, resource_type: ResourceType) {
         match resource_type {
-            ResourceType::All(pools, replicas, nexuses) => {
-                self.resources_mut().update(pools, replicas, nexuses);
+            ResourceType::All(pools, replicas, nexuses, snapshots) => {
+                self.resources_mut()
+                    .update(pools, replicas, nexuses, snapshots);
                 self.update_num_rebuilds();
             }
             ResourceType::Nexuses(nexuses) => {
@@ -727,6 +763,10 @@ impl NodeWrapper {
                 self.resources_mut().update_replicas(replicas);
             }
             ResourceType::Replica(replica) => self.resources_mut().update_replica(replica),
+            ResourceType::Snapshots(snapshots) => {
+                self.resources_mut().update_snapshots(snapshots);
+            }
+            ResourceType::Snapshot(snapshot) => self.resources_mut().update_snapshot(snapshot),
         }
     }
 
@@ -781,24 +821,33 @@ impl NodeStateFetcher {
         let replicas = self.fetch_replicas(client).await?;
         let pools = self.fetch_pools(client).await?;
         let nexuses = self.fetch_nexuses(client).await?;
-        Ok((replicas, pools, nexuses))
+        let snapshots = self.fetch_snapshots(client).await?;
+        Ok((replicas, pools, nexuses, snapshots))
     }
 
-    /// Fetch all replicas from this node via gRPC
+    /// Fetch all snapshots from this node via gRPC.
+    pub(crate) async fn fetch_snapshots(
+        &self,
+        _client: &mut GrpcClient,
+    ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
+        // todo: implement this
+        Ok(vec![])
+    }
+    /// Fetch all replicas from this node via gRPC.
     pub(crate) async fn fetch_replicas(
         &self,
         client: &mut GrpcClient,
     ) -> Result<Vec<Replica>, SvcError> {
         client.list_replicas(self.id()).await
     }
-    /// Fetch all pools from this node via gRPC
+    /// Fetch all pools from this node via gRPC.
     pub(crate) async fn fetch_pools(
         &self,
         client: &mut GrpcClient,
     ) -> Result<Vec<PoolState>, SvcError> {
         client.list_pools(self.id()).await
     }
-    /// Fetch all nexuses from the node via gRPC
+    /// Fetch all nexuses from the node via gRPC.
     pub(crate) async fn fetch_nexuses(
         &self,
         client: &mut GrpcClient,
@@ -836,6 +885,10 @@ pub(crate) trait InternalOps {
     async fn update_replica_states(&self, ctx: &mut GrpcClient) -> Result<(), SvcError>;
     /// Update a node's replica state information.
     async fn update_replica_state(&self, state: Either<Replica, ReplicaId>);
+    /// Update the node's snapshot state information.
+    async fn update_snapshot_states(&self, ctx: &mut GrpcClient) -> Result<(), SvcError>;
+    /// Update a node's snapshot state information.
+    async fn update_snapshot_state(&self, state: Either<ReplicaSnapshot, SnapshotId>);
     /// Update all node state information.
     async fn update_all(&self, setting_online: bool) -> Result<(), SvcError>;
     /// OnRegister callback when a node is re-registered with the registry via its heartbeat
@@ -931,6 +984,14 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
     async fn update_replica_state(&self, state: Either<Replica, ReplicaId>) {
         NodeWrapper::update_replica_state(self, state).await;
+    }
+
+    async fn update_snapshot_states(&self, mut ctx: &mut GrpcClient) -> Result<(), SvcError> {
+        NodeWrapper::update_snapshot_states(self, ctx.deref_mut()).await
+    }
+
+    async fn update_snapshot_state(&self, state: Either<ReplicaSnapshot, SnapshotId>) {
+        NodeWrapper::update_snapshot_state(self, state).await;
     }
 
     async fn update_all(&self, setting_online: bool) -> Result<(), SvcError> {
@@ -1394,9 +1455,13 @@ impl NexusSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
 impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn create_repl_snapshot(
         &self,
-        _request: &CreateReplicaSnapshot,
-    ) -> Result<CreateReplicaSnapshotResp, SvcError> {
-        todo!()
+        request: &CreateReplicaSnapshot,
+    ) -> Result<ReplicaSnapshot, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let snapshot = dataplane.create_repl_snapshot(request).await?;
+        self.update_snapshot_state(Either::Insert(snapshot.clone()))
+            .await;
+        Ok(snapshot)
     }
 }
 

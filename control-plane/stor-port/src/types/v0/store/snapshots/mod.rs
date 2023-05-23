@@ -1,7 +1,7 @@
 pub mod replica;
 pub mod volume;
 
-use crate::types::v0::transport::SnapshotId;
+use crate::types::v0::{transport, transport::SnapshotId};
 use serde::{Deserialize, Serialize};
 
 /// User specification of a snapshot.
@@ -26,5 +26,18 @@ impl<SourceId: Clone> SnapshotSpec<SourceId> {
     /// Get the snapshot id.
     pub fn uuid(&self) -> &SnapshotId {
         &self.uuid
+    }
+}
+
+/// Runtime state of a replica snapshot.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ReplicaSnapshotState {
+    /// Replica snapshot information.
+    pub snapshot: transport::ReplicaSnapshot,
+}
+
+impl From<transport::ReplicaSnapshot> for ReplicaSnapshotState {
+    fn from(snapshot: transport::ReplicaSnapshot) -> Self {
+        Self { snapshot }
     }
 }

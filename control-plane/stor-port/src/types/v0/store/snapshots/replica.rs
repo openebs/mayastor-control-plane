@@ -82,7 +82,7 @@ impl ReplicaSnapshotMeta {
             size,
             meta: SnapshotMeta::Volume {
                 parent: parent.clone(),
-                txn_id: txn_id.clone(),
+                txn_id: txn_id.to_string(),
             },
         }
     }

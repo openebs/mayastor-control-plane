@@ -31,8 +31,8 @@ use stor_port::types::v0::{
         },
     },
     transport::{
-        CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateReplicaSnapshot, ReplicaId,
-        SnapshotId, SnapshotParameters,
+        CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateReplicaSnapshot, SnapshotId,
+        SnapshotParameters,
     },
 };
 
@@ -229,12 +229,12 @@ impl OperationGuardArc<VolumeSnapshot> {
 
         let response = target_node
             .create_repl_snapshot(&CreateReplicaSnapshot::new(SnapshotParameters::new(
-                ReplicaId::new(),
+                prep_params.replica_snapshot.spec().source_id(),
                 generic_params.clone(),
             )))
             .await?;
 
-        let timestamp = response.snap_describe.timestamp();
+        let timestamp = response.timestamp();
         replica_snap.complete_vol(timestamp);
 
         Ok(VolumeSnapshotCreateResult::new(replica_snap, timestamp))
