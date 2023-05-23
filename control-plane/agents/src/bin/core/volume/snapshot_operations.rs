@@ -40,7 +40,7 @@ use stor_port::types::v0::{
 impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
     type Create = VolumeSnapshotUserSpec;
     type CreateOutput = OperationGuardArc<VolumeSnapshot>;
-    type Destroy = ();
+    type Destroy = VolumeSnapshotUserSpec;
     type List = ();
     type ListOutput = ();
 

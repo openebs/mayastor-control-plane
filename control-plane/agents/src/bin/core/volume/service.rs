@@ -178,14 +178,29 @@ impl VolumeOperations for Service {
         Ok(snapshot)
     }
 
+    async fn delete_snapshot(
+        &self,
+        request: &dyn IVolumeSnapshot,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let service = self.clone();
+        let request = request.info();
+
+        Context::spawn(async move { service.delete_snapshot(request).await }).await??;
+        Ok(())
+    }
+
     async fn get_snapshots(
         &self,
-        _filter: Filter,
-        _ignore_notfound: bool,
-        _pagination: Option<Pagination>,
+        filter: Filter,
+        ignore_notfound: bool,
+        pagination: Option<Pagination>,
         _ctx: Option<Context>,
     ) -> Result<VolumeSnapshots, ReplyError> {
-        todo!()
+        let snapshots = self
+            .get_snapshots(filter, ignore_notfound, pagination)
+            .await?;
+        Ok(snapshots)
     }
 }
 
@@ -329,5 +344,27 @@ impl Service {
             .await?;
 
         Ok(snapshot.as_ref().into())
+    }
+
+    /// Delete a volume snapshot.
+    async fn delete_snapshot(&self, info: VolumeSnapshotInfo) -> Result<(), SvcError> {
+        let mut volume = self.specs().volume(&info.source_id).await?;
+        volume
+            .destroy_snap(
+                &self.registry,
+                &VolumeSnapshotUserSpec::new(volume.uuid(), info.snap_id),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Get snapshots.
+    pub(super) async fn get_snapshots(
+        &self,
+        _filter: Filter,
+        _ignore_notfound: bool,
+        _pagination: Option<Pagination>,
+    ) -> Result<VolumeSnapshots, SvcError> {
+        todo!()
     }
 }

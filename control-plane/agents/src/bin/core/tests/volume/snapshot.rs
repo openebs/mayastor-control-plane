@@ -1,5 +1,7 @@
 use deployer_cluster::ClusterBuilder;
-use grpc::operations::volume::traits::{CreateVolumeSnapshot, VolumeOperations};
+use grpc::operations::volume::traits::{
+    CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations,
+};
 use stor_port::types::v0::transport::{CreateVolume, PublishVolume, SnapshotId};
 
 use std::time::Duration;
@@ -61,4 +63,15 @@ async fn snapshot() {
         .expect_err("unimplemented");
 
     tracing::info!("Snapshot: {nexus_snapshot:?}");
+
+    let error = vol_cli
+        .delete_snapshot(
+            &DeleteVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        // dataplane and control-plane api not implemented yet..
+        .expect_err("error");
+
+    tracing::info!("Delete Snapshot error: {error:?}");
 }

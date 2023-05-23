@@ -403,6 +403,19 @@ message CreateSnapshotReply {
     common.ReplyError error = 2;
   }
 }
+
+// Delete a snapshot of the volume
+message DeleteSnapshotRequest {
+  // uuid of the volume
+  string   volume_id = 1;
+  // uuid of the snapshot
+  string snapshot_id = 2;
+}
+// Reply type for a DeleteSnapshotRequest request
+message DeleteSnapshotReply {
+  optional common.ReplyError error = 1;
+}
+
 message GetSnapshotsRequest {
   // filter snapshots
   oneof filter {
@@ -485,5 +498,6 @@ service VolumeGrpc {
 
   // Snapshots
   rpc CreateSnapshot (CreateSnapshotRequest) returns (CreateSnapshotReply) {}
+  rpc DeleteSnapshot (DeleteSnapshotRequest) returns (DeleteSnapshotReply) {}
   rpc GetSnapshots (GetSnapshotsRequest) returns (GetSnapshotsReply) {}
 }
