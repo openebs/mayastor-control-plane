@@ -7,13 +7,13 @@ use stor_port::{
         transport::{
             self, ChildState, ChildStateReason, CreateNexusSnapReplDescr, Nexus, NexusId,
             NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState,
-            PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
+            PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
         },
     },
 };
 
 use rpc::v1;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, time::UNIX_EPOCH};
 
 /// Trait for converting agent messages to io-engine messages.
 pub(super) trait AgentToIoEngine {
@@ -124,6 +124,111 @@ impl IoEngineToAgent for v1::replica::ReplicaSpaceUsage {
             clusters: self.num_clusters,
             allocated_clusters: self.num_allocated_clusters,
         }
+    }
+}
+
+impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotResponse {
+    type AgentMessage = transport::CreateNexusSnapshotResp;
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        let tx_nexus = if let Some(n) = &self.nexus {
+            Some(n.try_to_agent()?)
+        } else {
+            None
+        };
+
+        Ok(Self::AgentMessage {
+            nexus: tx_nexus,
+            snap_time: self
+                .snapshot_timestamp
+                .clone()
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .unwrap_or(UNIX_EPOCH),
+            replicas_status: self
+                .replicas_done
+                .iter()
+                .map(|s| s.try_to_agent())
+                .collect::<Result<_, _>>()?,
+            skipped: self
+                .replicas_skipped
+                .iter()
+                .map(|s| {
+                    ReplicaId::try_from(s.as_str()).map_err(|_| SvcError::InvalidUuid {
+                        uuid: s.to_owned(),
+                        kind: ResourceKind::Replica,
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+/// Helper implementation to be used as part of nexus snapshot
+/// response translation.
+impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotReplicaStatus {
+    type AgentMessage = transport::CreateNexusSnapshotReplicaStatus;
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        Ok(Self::AgentMessage {
+            replica_uuid: ReplicaId::try_from(self.replica_uuid.as_str()).map_err(|_| {
+                SvcError::InvalidUuid {
+                    uuid: self.replica_uuid.to_owned(),
+                    kind: ResourceKind::Replica,
+                }
+            })?,
+            status: self.status_code,
+        })
+    }
+}
+
+impl TryIoEngineToAgent for v1::replica::CreateReplicaSnapshotResponse {
+    type AgentMessage = transport::CreateReplicaSnapshotResp;
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        let descriptor = if let Some(d) = self.snapshot.as_ref() {
+            d.try_to_agent()?
+        } else {
+            return Err(SvcError::InvalidArguments {});
+        };
+        Ok(Self::AgentMessage {
+            replica: ReplicaId::try_from(self.replica_uuid.clone()).map_err(|_| {
+                SvcError::InvalidUuid {
+                    uuid: self.replica_uuid.to_owned(),
+                    kind: ResourceKind::Replica,
+                }
+            })?,
+            snap_describe: descriptor,
+        })
+    }
+}
+
+/// Translate gRPC single snapshot representation to snapshot
+/// descriptor single snapshot representation in control-plane.
+impl TryIoEngineToAgent for v1::replica::ReplicaSnapshot {
+    type AgentMessage = transport::ReplicaSnapshotDescr;
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        Ok(Self::AgentMessage {
+            snap_uuid: SnapshotId::try_from(self.snapshot_uuid.as_str()).map_err(|_| {
+                SvcError::InvalidUuid {
+                    uuid: self.snapshot_uuid.to_owned(),
+                    kind: ResourceKind::VolumeSnapshot,
+                }
+            })?,
+            snap_name: self.snapshot_name.clone(),
+            snap_size: self.snapshot_size,
+            num_clones: self.num_clones,
+            snap_time: self
+                .timestamp
+                .clone()
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .unwrap_or(UNIX_EPOCH),
+            replica_uuid: ReplicaId::try_from(self.replica_uuid.as_str()).map_err(|_| {
+                SvcError::InvalidUuid {
+                    uuid: self.replica_uuid.to_owned(),
+                    kind: ResourceKind::Replica,
+                }
+            })?,
+            replica_size: self.replica_size,
+            entity_id: self.entity_id.clone(),
+            txn_id: self.txn_id.clone(),
+        })
     }
 }
 

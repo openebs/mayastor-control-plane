@@ -1,4 +1,5 @@
 use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
+use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::replica::ListReplicaOptions;
 use stor_port::{
@@ -101,12 +102,16 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
 impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
     async fn create_repl_snapshot(
         &self,
-        _request: &CreateReplicaSnapshot,
+        request: &CreateReplicaSnapshot,
     ) -> Result<CreateReplicaSnapshotResp, SvcError> {
-        Err(SvcError::GrpcRequestError {
-            resource: ResourceKind::Replica,
-            request: "create_snapshot".to_string(),
-            source: tonic::Status::unimplemented(""),
-        })
+        let response = self
+            .replica()
+            .create_replica_snapshot(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "create_snapshot",
+            })?;
+        response.into_inner().try_to_agent()
     }
 }

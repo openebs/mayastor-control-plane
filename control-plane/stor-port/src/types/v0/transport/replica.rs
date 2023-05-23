@@ -106,23 +106,23 @@ pub struct CreateReplicaSnapshotResp {
 #[allow(unused)]
 pub struct ReplicaSnapshotDescr {
     /// UUID of the snapshot.
-    snap_uuid: SnapshotId,
+    pub snap_uuid: SnapshotId,
     /// Name of the snapshot.
-    snap_name: String,
+    pub snap_name: String,
     /// Amount of bytes referenced by snapshot.
-    snap_size: u64,
+    pub snap_size: u64,
     /// Number of clones created from this snapshot.
-    num_clones: u64,
+    pub num_clones: u64,
     /// Snapshot creation_timestamp.
-    snap_time: SystemTime,
+    pub snap_time: SystemTime,
     /// UUID of the replica this snapshot is taken from.
-    replica_uuid: ReplicaId,
+    pub replica_uuid: ReplicaId,
     /// Amount of bytes referenced by replica.
-    replica_size: u64,
+    pub replica_size: u64,
     /// Identity of the entity under which snapshot is taken.
-    entity_id: String,
+    pub entity_id: String,
     /// Unique transaction id for snapshot.
-    txn_id: String,
+    pub txn_id: String,
 }
 impl ReplicaSnapshotDescr {
     /// Returns the snapshot timestamp.
