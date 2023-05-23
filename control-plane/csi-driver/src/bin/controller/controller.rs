@@ -8,8 +8,9 @@ use stor_port::types::v0::openapi::models::{
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
 use csi_driver::context::{CreateParams, PublishParams};
+use k8s_openapi::chrono;
 use regex::Regex;
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 use tonic::{Response, Status};
 use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
@@ -17,6 +18,8 @@ use uuid::Uuid;
 const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
+const SNAPSHOT_NAME_PATTERN: &str =
+    r"snapshot-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 
 #[derive(Debug, Default)]
 pub(crate) struct CsiControllerSvc {}
@@ -130,7 +133,7 @@ impl VolumeTopologyMapper {
 
 #[tonic::async_trait]
 impl rpc::csi::controller_server::Controller for CsiControllerSvc {
-    #[instrument(error, fields(volume.uuid = tracing::field::Empty))]
+    #[instrument(error, fields(volume.uuid = tracing::field::Empty), skip(self))]
     async fn create_volume(
         &self,
         request: tonic::Request<CreateVolumeRequest>,
@@ -256,7 +259,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             volume: Some(volume),
         }))
     }
-    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id), skip(self))]
     async fn delete_volume(
         &self,
         request: tonic::Request<DeleteVolumeRequest>,
@@ -280,7 +283,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Ok(Response::new(DeleteVolumeResponse {}))
     }
 
-    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id), skip(self))]
     async fn controller_publish_volume(
         &self,
         request: tonic::Request<ControllerPublishVolumeRequest>,
@@ -415,7 +418,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id), skip(self))]
     async fn controller_unpublish_volume(
         &self,
         request: tonic::Request<ControllerUnpublishVolumeRequest>,
@@ -464,7 +467,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Ok(Response::new(ControllerUnpublishVolumeResponse {}))
     }
 
-    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id))]
+    #[instrument(error, fields(volume.uuid = %request.get_ref().volume_id), skip(self))]
     async fn validate_volume_capabilities(
         &self,
         request: tonic::Request<ValidateVolumeCapabilitiesRequest>,
@@ -516,7 +519,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Ok(Response::new(response))
     }
 
-    #[instrument(error)]
+    #[instrument(error, skip(self))]
     async fn list_volumes(
         &self,
         request: tonic::Request<ListVolumesRequest>,
@@ -563,7 +566,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument(error)]
+    #[instrument(error, skip(self))]
     async fn get_capacity(
         &self,
         request: tonic::Request<GetCapacityRequest>,
@@ -622,7 +625,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument(error)]
+    #[instrument(error, skip(self))]
     async fn controller_get_capabilities(
         &self,
         _request: tonic::Request<ControllerGetCapabilitiesRequest>,
@@ -648,15 +651,60 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument(error)]
+    #[instrument(error, fields(volume.uuid = request.get_ref().source_volume_id, snapshot.source_uuid = request.get_ref().source_volume_id, snapshot.uuid), skip(self))]
     async fn create_snapshot(
         &self,
-        _request: tonic::Request<CreateSnapshotRequest>,
+        request: tonic::Request<CreateSnapshotRequest>,
     ) -> Result<tonic::Response<CreateSnapshotResponse>, tonic::Status> {
-        Err(Status::unimplemented("Not implemented"))
+        let request = request.into_inner();
+        tracing::trace!(volume.uuid = %request.source_volume_id, snapshot.uuid = %request.name, ?request);
+
+        let volume_uuid = Uuid::parse_str(&request.source_volume_id).map_err(|_e| {
+            Status::invalid_argument(format!(
+                "Malformed volume UUID: {}",
+                request.source_volume_id
+            ))
+        })?;
+
+        // k8s side-car uses name as snapshot-{uuid} and we use uuid for idempotency.
+        let re = Regex::new(SNAPSHOT_NAME_PATTERN).unwrap();
+        let snapshot_uuid_str = match re.captures(&request.name) {
+            Some(captures) => captures.get(1).unwrap().as_str().to_string(),
+            None => {
+                return Err(Status::invalid_argument(format!(
+                    "Expected the snapshot name in snapshot-<UUID> format: {}",
+                    request.name
+                )))
+            }
+        };
+        tracing::Span::current().record("snapshot.uuid", snapshot_uuid_str.as_str());
+        let snap_uuid = Uuid::parse_str(&snapshot_uuid_str).map_err(|_e| {
+            Status::invalid_argument(format!("Malformed volume UUID: {}", request.name))
+        })?;
+
+        let snapshot = IoEngineApiClient::get_client()
+            .create_volume_snapshot(&volume_uuid, &snap_uuid)
+            .await?;
+
+        let snapshot = Snapshot {
+            size_bytes: snapshot.state.size as i64,
+            snapshot_id: snapshot.definition.spec.uuid.to_string(),
+            source_volume_id: snapshot.definition.spec.source_volume.to_string(),
+            creation_time: chrono::DateTime::<chrono::Utc>::from_str(
+                &snapshot.state.creation_timestamp,
+            )
+            .map(std::time::SystemTime::from)
+            .map(Into::into)
+            .ok(),
+            ready_to_use: snapshot.state.clone_ready.unwrap_or_default(),
+        };
+
+        Ok(tonic::Response::new(CreateSnapshotResponse {
+            snapshot: Some(snapshot),
+        }))
     }
 
-    #[instrument(error)]
+    #[instrument(error, skip(self))]
     async fn delete_snapshot(
         &self,
         _request: tonic::Request<DeleteSnapshotRequest>,
@@ -664,7 +712,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Err(Status::unimplemented("Not implemented"))
     }
 
-    #[instrument(error)]
+    #[instrument(error, skip(self))]
     async fn list_snapshots(
         &self,
         _request: tonic::Request<ListSnapshotsRequest>,
@@ -672,7 +720,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Err(Status::unimplemented("Not implemented"))
     }
 
-    #[instrument(error)]
+    #[instrument(error, skip(self))]
     async fn controller_expand_volume(
         &self,
         _request: tonic::Request<ControllerExpandVolumeRequest>,
@@ -680,7 +728,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Err(Status::unimplemented("Not implemented"))
     }
 
-    #[instrument(error)]
+    #[instrument(error, skip(self))]
     async fn controller_get_volume(
         &self,
         _request: tonic::Request<ControllerGetVolumeRequest>,
