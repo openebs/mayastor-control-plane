@@ -110,59 +110,65 @@ enum ResourceKind {
 }
 
 // Filter by Node and Replica id
-message NodeReplicaFilter{
+message NodeReplicaFilter {
   string node_id = 1;
   string replica_id = 2;
 }
 
 // Filter by Node and Replica id
-message NodePoolReplicaFilter{
+message NodePoolReplicaFilter {
   string node_id = 1;
   string pool_id = 2;
   string replica_id = 3;
 }
 
 // Filter by Node and Replica id
-message PoolReplicaFilter{
+message PoolReplicaFilter {
   string pool_id = 1;
   string replica_id = 2;
 }
 
 // Filter by Node and Replica id
-message ReplicaFilter{
+message ReplicaFilter {
   string replica_id = 1;
 }
 
 // Filter by VolumeId
-message VolumeFilter{
+message VolumeFilter {
   string volume_id = 1;
 }
 
 // Filter by Node id
-message NodeFilter{
+message NodeFilter {
   string node_id = 1;
 }
 
 // Filter by Pool id
-message PoolFilter{
+message PoolFilter {
   string pool_id = 1;
 }
 
 // Filter by Node and Pool id
-message NodePoolFilter{
+message NodePoolFilter {
   string node_id = 1;
   string pool_id = 2;
 }
 
 // Filter by Nexus Id
-message NexusFilter{
+message NexusFilter {
   string nexus_id = 1;
 }
 
 // Filter by Node and Nexus id
-message NodeNexusFilter{
+message NodeNexusFilter {
   string node_id = 1;
   string nexus_id = 2;
+}
+
+// Filter by Volume Snapshot id
+message VolumeSnapshotFilter {
+  string volume_id = 1;
+  string snapshot_id = 2;
 }
 
 // Pagination related parameters.

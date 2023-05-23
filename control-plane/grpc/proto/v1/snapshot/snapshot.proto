@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package v1.snapshot;
+
+enum SnapshotStatus {
+  Unknown = 0;
+  Online  = 1;
+}
+
+message SnapshotState {
+  string                         uuid = 1;
+  SnapshotStatus               status = 2;
+  // Creation timestamp of the snapshot.
+  google.protobuf.Timestamp timestamp = 3;
+  // Size of the snapshot (typically follows source size).
+  uint64                         size = 4;
+  // Runtime size taken by the snapshot.
+  uint64              size_referenced = 5;
+  string                    source_id = 6;
+}

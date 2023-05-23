@@ -3,7 +3,9 @@ syntax = "proto3";
 import "v1/misc/common.proto";
 import "v1/nexus/nexus.proto";
 import "v1/replica/replica.proto";
+import "v1/snapshot/snapshot.proto";
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
 
 package v1.volume;
 
@@ -387,6 +389,87 @@ message AffinityGroupSpec {
   repeated google.protobuf.StringValue volumes = 2;
 }
 
+// Take a snapshot of the volume
+message CreateSnapshotRequest {
+  // uuid of the volume
+  string   volume_id = 1;
+  // uuid of the snapshot
+  string snapshot_id = 2;
+}
+// Reply type for a SnapshotVolumeRequest request
+message CreateSnapshotReply {
+  oneof reply {
+    VolumeSnapshot snapshot = 1;
+    common.ReplyError error = 2;
+  }
+}
+message GetSnapshotsRequest {
+  // filter snapshots
+  oneof filter {
+    common.VolumeFilter           volume = 1;
+    common.VolumeSnapshotFilter snapshot = 2;
+  }
+  // pagination to allow for multiple requests to get all snapshots
+  common.Pagination           pagination = 3;
+  // ignore 404 not found errors
+  bool                   ignore_notfound = 4;
+}
+// Reply type for a GetVolumeSnapshots request
+message GetSnapshotsReply {
+  oneof reply {
+    VolumeSnapshots response = 1;
+    common.ReplyError  error = 2;
+  }
+}
+message VolumeSnapshots {
+  repeated VolumeSnapshot snapshots = 1;
+}
+
+message VolumeSnapshot {
+  VolumeSnapshotSpec      spec = 1;
+  VolumeSnapshotMeta      meta = 2;
+  VolumeSnapshotState    state = 3;
+}
+message VolumeSnapshotState {
+  snapshot.SnapshotState             state = 1;
+  // allows us to grow volume snapshot-specific state
+  repeated snapshot.SnapshotState replicas = 2;
+}
+
+message VolumeSnapshotSpec {
+  // uuid of the volume
+  string   volume_id = 1;
+  // uuid of the snapshot
+  string snapshot_id = 2;
+}
+message VolumeSnapshotMeta {
+  common.SpecStatus                spec_status = 1;
+  // Creation timestamp of the snapshot (set after creation time).
+  optional google.protobuf.Timestamp timestamp = 2;
+  // Transaction Id that defines this snapshot when it is created.
+  string                                txn_id = 3;
+  // Replicas which "reference" to this snapshot as its parent, indexed by the transaction
+  // id when they were attempted.
+  // The "actual" snapshots can be accessed by the key `txn_id`.
+  // Failed transactions are any other key.
+  map<string, ReplicaSnapshots>   transactions = 4;
+
+  message ReplicaSnapshots {
+    repeated ReplicaSnapshot         snapshots = 1;
+  }
+}
+message ReplicaSnapshot {
+  string                                  uuid = 1;
+  common.SpecStatus                spec_status = 2;
+  // Creation timestamp of the snapshot (set after creation time).
+  optional google.protobuf.Timestamp timestamp = 3;
+  // Transaction Id that defines this snapshot when it is created.
+  string                                txn_id = 4;
+  // The source replica which was snapped to create this snapshot.
+  string                             source_id = 5;
+}
+
+
 service VolumeGrpc {
   rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
   rpc DestroyVolume (DestroyVolumeRequest) returns (DestroyVolumeReply) {}
@@ -399,4 +482,8 @@ service VolumeGrpc {
   rpc UnshareVolume (UnshareVolumeRequest) returns (UnshareVolumeReply) {}
   rpc SetVolumeReplica (SetVolumeReplicaRequest) returns (SetVolumeReplicaReply) {}
   rpc Probe (ProbeRequest) returns (ProbeResponse) {}
+
+  // Snapshots
+  rpc CreateSnapshot (CreateSnapshotRequest) returns (CreateSnapshotReply) {}
+  rpc GetSnapshots (GetSnapshotsRequest) returns (GetSnapshotsReply) {}
 }

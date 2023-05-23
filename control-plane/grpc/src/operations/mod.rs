@@ -1,34 +1,40 @@
 #![warn(missing_docs)]
 
-/// module for all corresponding client, server, traits for nexus rpc transport
+use crate::common;
+use stor_port::types::v0::store::SpecStatus;
+
+/// Module for all corresponding client, server, traits for nexus rpc transport.
 pub mod nexus;
 
-/// module for all corresponding client, server, traits for pool rpc transport
+/// Module for all corresponding client, server, traits for pool rpc transport.
 pub mod pool;
 
-/// module for all corresponding client, server, traits for replica rpc transport
+/// Module for all corresponding client, server, traits for replica rpc transport.
 pub mod replica;
 
-/// module for all corresponding client, server, traits for volume transport
+/// Module for all corresponding client, server, traits for volume transport.
 pub mod volume;
 
-/// module for all corresponding client, server, traits for node transport
+/// Module for all corresponding client, server, traits for node transport.
 pub mod node;
 
-/// module for all corresponding client, server, traits for registration transport
+/// Module for all corresponding client, server, traits for registration transport.
 pub mod registration;
 
-/// module for all corresponding client, server, traits for registry transport
+/// Module for all corresponding client, server, traits for registry transport.
 pub mod registry;
 
-/// module for all corresponding client, server, traits for jsongrpc transport
+/// Module for all corresponding client, server, traits for jsongrpc transport.
 pub mod jsongrpc;
 
-/// module for all corresponding client, server, traits for watch transport
+/// Module for all corresponding client, server, traits for watch transport.
 pub mod watch;
 
-/// module for all corresponding client, server, traits for HA node-agent transport
+/// Module for all corresponding client, server, traits for HA node-agent transport.
 pub mod ha_node;
+
+/// Module for all corresponding client, server, traits for snapshot transport.
+pub mod snapshot;
 
 /// The type of max entries.
 pub type MaxEntries = u64;
@@ -117,6 +123,17 @@ impl From<crate::common::Pagination> for Pagination {
         Self {
             max_entries: p.max_entries,
             starting_token: p.starting_token,
+        }
+    }
+}
+
+impl From<common::SpecStatus> for SpecStatus<()> {
+    fn from(value: common::SpecStatus) -> Self {
+        match value {
+            common::SpecStatus::Creating => SpecStatus::Creating,
+            common::SpecStatus::Created => SpecStatus::Created(()),
+            common::SpecStatus::Deleting => SpecStatus::Deleting,
+            common::SpecStatus::Deleted => SpecStatus::Deleted,
         }
     }
 }

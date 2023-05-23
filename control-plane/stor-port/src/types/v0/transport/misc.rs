@@ -42,6 +42,8 @@ pub enum Filter {
     Nexus(NexusId),
     /// Filter by Volume.
     Volume(VolumeId),
+    /// Filter by Volume and Snapshot.
+    VolumeSnapshot(VolumeId, SnapshotId),
 }
 impl Default for Filter {
     fn default() -> Self {
@@ -225,7 +227,7 @@ macro_rules! rpc_impl_string_uuid_inner {
             type Error = uuid::Error;
             fn try_from(value: String) -> Result<Self, Self::Error> {
                 let uuid: uuid::Uuid = std::str::FromStr::from_str(&value)?;
-                Ok($Name::from(uuid))
+                Ok($Name(uuid, value))
             }
         }
     };
