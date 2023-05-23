@@ -4,8 +4,8 @@ use rpc::io_engine::Null;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        CreateReplica, CreateReplicaSnapshot, CreateReplicaSnapshotResp, DestroyReplica, NodeId,
-        Replica, ShareReplica, UnshareReplica,
+        CreateReplica, CreateReplicaSnapshot, DestroyReplica, NodeId, Replica, ReplicaSnapshot,
+        ShareReplica, UnshareReplica,
     },
 };
 
@@ -101,7 +101,7 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
     async fn create_repl_snapshot(
         &self,
         _request: &CreateReplicaSnapshot,
-    ) -> Result<CreateReplicaSnapshotResp, SvcError> {
+    ) -> Result<ReplicaSnapshot, SvcError> {
         Err(SvcError::GrpcRequestError {
             resource: ResourceKind::Replica,
             request: "create_snapshot".to_string(),

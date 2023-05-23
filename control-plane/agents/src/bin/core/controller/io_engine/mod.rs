@@ -12,10 +12,10 @@ use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, ApiVersion, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp,
-        CreatePool, CreateReplica, CreateReplicaSnapshot, CreateReplicaSnapshotResp, DestroyNexus,
-        DestroyPool, DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus,
-        NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
-        PoolState, Register, RemoveNexusChild, Replica, ShareNexus, ShareReplica, ShutdownNexus,
+        CreatePool, CreateReplica, CreateReplicaSnapshot, DestroyNexus, DestroyPool,
+        DestroyReplica, FaultNexusChild, GetBlockDevices, ImportPool, Nexus, NexusChildAction,
+        NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, PoolState, Register,
+        RemoveNexusChild, Replica, ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus,
         UnshareNexus, UnshareReplica,
     },
 };
@@ -155,7 +155,7 @@ pub(crate) trait ReplicaSnapshotApi {
     async fn create_repl_snapshot(
         &self,
         request: &CreateReplicaSnapshot,
-    ) -> Result<CreateReplicaSnapshotResp, SvcError>;
+    ) -> Result<ReplicaSnapshot, SvcError>;
 }
 
 #[async_trait]

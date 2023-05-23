@@ -95,14 +95,11 @@ impl CreateReplicaSnapshot {
     }
 }
 
-pub struct CreateReplicaSnapshotResp {
-    /// UUID of the replica.
-    pub replica: ReplicaId,
-    /// Descriptor for created snaphot.
-    pub snap_describe: ReplicaSnapshotDescr,
-}
+/// A replica's snapshot.
+pub type ReplicaSnapshot = ReplicaSnapshotDescr;
 
 /// A single snapshot descriptor.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[allow(unused)]
 pub struct ReplicaSnapshotDescr {
     /// UUID of the snapshot.

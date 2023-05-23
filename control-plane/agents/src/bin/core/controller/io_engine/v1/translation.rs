@@ -180,22 +180,12 @@ impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotReplicaStatus {
 }
 
 impl TryIoEngineToAgent for v1::replica::CreateReplicaSnapshotResponse {
-    type AgentMessage = transport::CreateReplicaSnapshotResp;
+    type AgentMessage = transport::ReplicaSnapshot;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
-        let descriptor = if let Some(d) = self.snapshot.as_ref() {
-            d.try_to_agent()?
-        } else {
-            return Err(SvcError::InvalidArguments {});
-        };
-        Ok(Self::AgentMessage {
-            replica: ReplicaId::try_from(self.replica_uuid.clone()).map_err(|_| {
-                SvcError::InvalidUuid {
-                    uuid: self.replica_uuid.to_owned(),
-                    kind: ResourceKind::Replica,
-                }
-            })?,
-            snap_describe: descriptor,
-        })
+        self.snapshot
+            .as_ref()
+            .map(TryIoEngineToAgent::try_to_agent)
+            .unwrap_or(Err(SvcError::InvalidArguments {}))
     }
 }
 

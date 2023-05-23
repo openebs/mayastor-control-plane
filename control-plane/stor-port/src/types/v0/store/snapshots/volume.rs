@@ -59,9 +59,9 @@ impl VolumeSnapshot {
             self.spec().source_id(),
             GenericSnapshotParameters::new(
                 self.spec().uuid(),
-                "my-entity",
+                self.spec.source_id.to_string(),
                 self.metadata.prepare(),
-                "my-name",
+                "what's-my-name?",
             ),
         );
         Some(params)
@@ -94,7 +94,7 @@ pub struct VolumeSnapshotMeta {
     /// id when they were attempted.
     /// The "actual" snapshots can be accessed by the key `txn_id`.
     /// Failed transactions are any other key.
-    transactions: HashMap<String, Vec<ReplicaSnapshot>>,
+    transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
 }
 impl VolumeSnapshotMeta {
     /// Get the snapshot operation state.
@@ -113,13 +113,8 @@ impl VolumeSnapshotMeta {
     pub fn prepare(&self) -> SnapshotTxId {
         // If this is a create retry, then we must allocate a new transaction id, and prepare
         // replicas
-        if !self.txn_id.is_empty() {
-            let _ = 1;
-            SnapshotTxId::new()
-        } else {
-            // Otherwise, then it's our first time, right?
-            SnapshotTxId::new()
-        }
+        let txn_id: u64 = self.txn_id.parse().unwrap_or_default();
+        (txn_id + 1).to_string()
     }
 }
 
@@ -180,7 +175,7 @@ impl PartialEq<VolumeSnapshotCreateInfo> for VolumeSnapshot {
         // This is a bit nuanced, actually we simply expect that the txn_id is not the
         // same as we don't allow reusing the txn_id. Instead, if we have the same txn_id then
         // we should check if all is created and ready!
-        self.metadata.txn_id.eq(&other.txn_id)
+        self.metadata.txn_id.ne(&other.txn_id)
     }
 }
 

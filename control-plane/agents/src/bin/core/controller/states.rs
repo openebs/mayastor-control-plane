@@ -7,6 +7,10 @@ use stor_port::types::v0::{
 use indexmap::map::Values;
 use parking_lot::RwLock;
 use std::{ops::Deref, sync::Arc};
+use stor_port::types::v0::{
+    store::snapshots::ReplicaSnapshotState,
+    transport::{ReplicaSnapshot, SnapshotId},
+};
 
 /// Locked Resource States.
 #[derive(Clone, Default, Debug)]
@@ -32,6 +36,7 @@ pub(crate) struct ResourceStates {
     nexuses: ResourceMap<NexusId, NexusState>,
     pools: ResourceMap<PoolId, PoolState>,
     replicas: ResourceMap<ReplicaId, ReplicaState>,
+    snapshots: ResourceMap<SnapshotId, ReplicaSnapshotState>,
 }
 
 /// Add/Update or remove resource from the registry.
@@ -49,10 +54,12 @@ impl ResourceStates {
         pools: Vec<transport::PoolState>,
         replicas: Vec<Replica>,
         nexuses: Vec<Nexus>,
+        snapshots: Vec<ReplicaSnapshot>,
     ) {
         self.update_replicas(replicas);
         self.update_pools(pools);
         self.update_nexuses(nexuses);
+        self.update_snapshots(snapshots);
     }
 
     /// Update nexus states.
@@ -136,6 +143,24 @@ impl ResourceStates {
             }
             Either::Remove(replica) => {
                 self.replicas.remove(&replica);
+            }
+        }
+    }
+
+    /// Update snapshot states.
+    pub(crate) fn update_snapshots(&mut self, snapshots: Vec<ReplicaSnapshot>) {
+        self.snapshots.clear();
+        self.snapshots.populate(snapshots);
+    }
+
+    /// Update snapshot state.
+    pub(crate) fn update_snapshot(&mut self, state: Either<ReplicaSnapshot, SnapshotId>) {
+        match state {
+            Either::Insert(snapshot) => {
+                self.snapshots.insert(snapshot.into());
+            }
+            Either::Remove(snapshot) => {
+                self.snapshots.remove(&snapshot);
             }
         }
     }

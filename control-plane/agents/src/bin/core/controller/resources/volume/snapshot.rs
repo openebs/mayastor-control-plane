@@ -1,5 +1,8 @@
 use super::{ResourceMutex, ResourceUid};
-use stor_port::types::v0::{store::snapshots::volume::VolumeSnapshot, transport::SnapshotId};
+use stor_port::types::v0::{
+    store::snapshots::{volume::VolumeSnapshot, ReplicaSnapshotState},
+    transport::SnapshotId,
+};
 
 impl ResourceMutex<VolumeSnapshot> {
     /// Get the resource uuid.
@@ -12,5 +15,11 @@ impl ResourceUid for VolumeSnapshot {
     type Uid = SnapshotId;
     fn uid(&self) -> &Self::Uid {
         self.spec().uuid()
+    }
+}
+impl ResourceUid for ReplicaSnapshotState {
+    type Uid = SnapshotId;
+    fn uid(&self) -> &Self::Uid {
+        &self.snapshot.snap_uuid
     }
 }
