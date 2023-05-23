@@ -1445,9 +1445,11 @@ impl NexusChildActionApi<NexusChildActionContextNode> for Arc<tokio::sync::RwLoc
 impl NexusSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn create_nexus_snapshot(
         &self,
-        _request: &CreateNexusSnapshot,
+        request: &CreateNexusSnapshot,
     ) -> Result<CreateNexusSnapshotResp, SvcError> {
-        todo!()
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let snapshot = dataplane.create_nexus_snapshot(request).await?;
+        Ok(snapshot)
     }
 }
 

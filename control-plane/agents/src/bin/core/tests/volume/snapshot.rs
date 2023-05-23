@@ -1,6 +1,6 @@
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::volume::traits::{CreateVolumeSnapshot, VolumeOperations};
-use stor_port::types::v0::transport::{CreateVolume, SnapshotId};
+use stor_port::types::v0::transport::{CreateVolume, PublishVolume, SnapshotId};
 
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ async fn snapshot() {
         .await
         .unwrap();
 
-    let snapshot = vol_cli
+    let replica_snapshot = vol_cli
         .create_snapshot(
             &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
             None,
@@ -39,5 +39,26 @@ async fn snapshot() {
         .await
         .unwrap();
 
-    tracing::info!("Snapshot: {snapshot:?}");
+    tracing::info!("Snapshot: {replica_snapshot:?}");
+
+    let volume = vol_cli
+        .publish(
+            &PublishVolume {
+                uuid: volume.uuid().clone(),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let nexus_snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .expect_err("unimplemented");
+
+    tracing::info!("Snapshot: {nexus_snapshot:?}");
 }
