@@ -33,8 +33,8 @@ use stor_port::{
             nexus_child::NexusChild,
         },
         transport::{
-            Child, ChildStateReason, ChildUri, CreateNexus, Nexus, NexusChildActionContext,
-            NexusShareProtocol, NexusStatus, NodeStatus, ReplicaId, ShareNexus, UnshareNexus,
+            Child, ChildUri, CreateNexus, Nexus, NexusChildActionContext, NexusShareProtocol,
+            NexusStatus, NodeStatus, ReplicaId, ShareNexus, UnshareNexus,
         },
     },
 };
@@ -167,6 +167,7 @@ async fn handle_faulted_child(
     context: &PollContext,
 ) -> Result<(), SvcError> {
     let wait_duration = RuleSet::faulted_child_wait(nexus, context.registry());
+    let can_partial_rebuild = child.has_io_log == Some(true);
 
     let Some(child_uuid) = nexus_spec.as_ref().replica_uri(&child.uri).map(|r| r.uuid()) else {
         tracing::warn!(%child.uri, "Unknown Child found, a full rebuild is required");
@@ -177,9 +178,8 @@ async fn handle_faulted_child(
         return faulted_children_remover(nexus_spec, child, context).await;
     };
 
-    let is_rebuild_failed = child.state_reason == ChildStateReason::RebuildFailed;
-    if is_rebuild_failed {
-        tracing::warn!(%child.uri, child.uuid=%child_uuid, "Previous rebuild failed, a new replica's full rebuild is required");
+    if !can_partial_rebuild {
+        tracing::warn!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, "No IO log available, this child cannot be partially rebuilt");
         faulted_children_remover(nexus_spec, child, context).await?;
     } else if child_replica_is_online(child_uuid, context).await {
         let child_uuid = child_uuid.clone();
