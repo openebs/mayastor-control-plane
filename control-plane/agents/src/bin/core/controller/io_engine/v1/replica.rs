@@ -1,12 +1,14 @@
 use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
 use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
-use rpc::v1::replica::{DeleteReplicaSnapshotRequest, ListReplicaOptions};
+use rpc::v1::replica::{
+    DeleteReplicaSnapshotRequest, ListReplicaOptions, ListReplicaSnapshotsRequest,
+};
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot, NodeId,
-        Replica, ReplicaSnapshot, ShareReplica, UnshareReplica,
+        CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
+        ListReplicaSnapshots, NodeId, Replica, ReplicaSnapshot, ShareReplica, UnshareReplica,
     },
 };
 
@@ -130,5 +132,25 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
             })?;
 
         Ok(())
+    }
+
+    async fn list_repl_snapshots(
+        &self,
+        request: &ListReplicaSnapshots,
+    ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
+        let response = self
+            .replica()
+            .list_replica_snapshot(ListReplicaSnapshotsRequest {
+                replica_uuid: request.replica.as_ref().map(|r| r.to_string()),
+            })
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "list_snapshots",
+            })?;
+
+        let ret = response.into_inner();
+        let ret_vec = ret.snapshots.iter().map(|s| s.try_to_agent()).collect();
+        ret_vec
     }
 }
