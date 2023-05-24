@@ -141,7 +141,7 @@ async fn nexus_reconciler(
 
 /// Checks if nexus is Degraded and any child is Faulted. If yes, Depending on rebuild policy for
 /// child it performs rebuild operation.
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, request.reconcile = true))]
 pub(super) async fn handle_faulted_children(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
@@ -183,11 +183,12 @@ async fn handle_faulted_child(
         faulted_children_remover(nexus_spec, child, context).await?;
     } else if child_replica_is_online(child_uuid, context).await {
         let child_uuid = child_uuid.clone();
-        tracing::info!(%child.uri, child.uuid=%child_uuid, "Child's replica is back online within the partial rebuild window");
+        tracing::info!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, "Child's replica is back online within the partial rebuild window");
         if let Err(error) = online_nexus_child(nexus_spec, &child.uri, context).await {
             tracing::warn!(
                 %child.uri,
                 child.uuid=%child_uuid,
+                ?child.state_reason,
                 %error,
                 "Failed to online child, a full rebuild is required"
             );
@@ -196,7 +197,7 @@ async fn handle_faulted_child(
     } else if let Some(elapsed) =
         wait_duration_elapsed(&child.uri, child_uuid, faulted_at, wait_duration)
     {
-        tracing::warn!(%child.uri, child.uuid=%child_uuid, ?elapsed, "Partial rebuild window elapsed, a full rebuild is required");
+        tracing::warn!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, ?elapsed, "Partial rebuild window elapsed, a full rebuild is required");
         faulted_children_remover(nexus_spec, child, context).await?;
     }
     Ok(())
