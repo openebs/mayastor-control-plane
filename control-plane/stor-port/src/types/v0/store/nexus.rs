@@ -370,6 +370,7 @@ impl From<&NexusSpec> for transport::Nexus {
                     rebuild_progress: None,
                     state_reason: ChildStateReason::Unknown,
                     faulted_at: None,
+                    has_io_log: None,
                 })
                 .collect(),
             device_uri: "".to_string(),

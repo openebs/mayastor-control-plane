@@ -367,6 +367,7 @@ impl IoEngineToAgent for v1::nexus::Child {
                 .fault_timestamp
                 .clone()
                 .and_then(|t| std::time::SystemTime::try_from(t).ok()),
+            has_io_log: Some(self.has_io_log),
         }
     }
 }
