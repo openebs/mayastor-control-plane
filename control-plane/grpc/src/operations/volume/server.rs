@@ -7,12 +7,12 @@ use crate::{
         unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
         CreateSnapshotReply, CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest,
-        DestroyShutdownTargetReply, DestroyShutdownTargetRequest, DestroyVolumeReply,
-        DestroyVolumeRequest, GetSnapshotsReply, GetSnapshotsRequest, GetVolumesReply,
-        GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply, PublishVolumeRequest,
-        RepublishVolumeReply, RepublishVolumeRequest, SetVolumeReplicaReply,
-        SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest, UnpublishVolumeReply,
-        UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
+        DeleteSnapshotReply, DeleteSnapshotRequest, DestroyShutdownTargetReply,
+        DestroyShutdownTargetRequest, DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply,
+        GetSnapshotsRequest, GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse,
+        PublishVolumeReply, PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest,
+        SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest,
+        UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
@@ -214,6 +214,19 @@ impl VolumeGrpc for VolumeServer {
             })),
             Err(err) => Ok(Response::new(CreateSnapshotReply {
                 reply: Some(create_snapshot_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn delete_snapshot(
+        &self,
+        request: tonic::Request<DeleteSnapshotRequest>,
+    ) -> Result<tonic::Response<DeleteSnapshotReply>, tonic::Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.delete_snapshot(&req, None).await {
+            Ok(()) => Ok(Response::new(DeleteSnapshotReply { error: None })),
+            Err(e) => Ok(Response::new(DeleteSnapshotReply {
+                error: Some(e.into()),
             })),
         }
     }

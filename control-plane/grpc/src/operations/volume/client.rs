@@ -256,6 +256,19 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    async fn delete_snapshot(
+        &self,
+        request: &dyn IVolumeSnapshot,
+        ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::DeleteVolumeSnapshot);
+        let response = self.client().delete_snapshot(req).await?.into_inner();
+        match response.error {
+            None => Ok(()),
+            Some(err) => Err(err.into()),
+        }
+    }
+
     #[tracing::instrument(name = "VolumeClient::get_snapshots", level = "debug", skip(self))]
     async fn get_snapshots(
         &self,

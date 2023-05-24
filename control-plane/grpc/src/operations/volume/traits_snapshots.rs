@@ -98,8 +98,11 @@ pub struct VolumeSnapshots {
     snapshots: Vec<VolumeSnapshot>,
 }
 
-/// Validated create volume snapshot parameters.
+/// Validated create/delete volume snapshot parameters.
 pub type CreateVolumeSnapshot = VolumeSnapshotInfo;
+
+/// Validated delete volume snapshot parameters.
+pub type DeleteVolumeSnapshot = VolumeSnapshotInfo;
 
 impl ValidateRequestTypes for volume::CreateSnapshotRequest {
     type Validated = CreateVolumeSnapshot;
@@ -114,11 +117,26 @@ impl ValidateRequestTypes for volume::CreateSnapshotRequest {
         })
     }
 }
-impl IVolumeSnapshot for CreateVolumeSnapshot {
+impl ValidateRequestTypes for volume::DeleteSnapshotRequest {
+    type Validated = DeleteVolumeSnapshot;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(VolumeSnapshotInfo {
+            source_id: self.volume_id.try_into().map_err(|error| {
+                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
+            })?,
+            snap_id: self.snapshot_id.try_into().map_err(|error| {
+                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
+            })?,
+        })
+    }
+}
+
+impl IVolumeSnapshot for VolumeSnapshotInfo {
     fn info(&self) -> VolumeSnapshotInfo {
         self.clone()
     }
 }
+
 impl From<&dyn IVolumeSnapshot> for volume::CreateSnapshotRequest {
     fn from(value: &dyn IVolumeSnapshot) -> Self {
         let info = value.info();
@@ -128,6 +146,16 @@ impl From<&dyn IVolumeSnapshot> for volume::CreateSnapshotRequest {
         }
     }
 }
+impl From<&dyn IVolumeSnapshot> for volume::DeleteSnapshotRequest {
+    fn from(value: &dyn IVolumeSnapshot) -> Self {
+        let info = value.info();
+        Self {
+            volume_id: info.source_id.to_string(),
+            snapshot_id: info.snap_id.to_string(),
+        }
+    }
+}
+
 impl TryFrom<volume::VolumeSnapshots> for VolumeSnapshots {
     type Error = ReplyError;
     fn try_from(value: volume::VolumeSnapshots) -> Result<Self, Self::Error> {

@@ -133,6 +133,8 @@ pub enum MessageIdVs {
     SetVolumeReplica,
     /// Create volume snapshot.
     CreateVolumeSnapshot,
+    /// Delete volume snapshot.
+    DeleteVolumeSnapshot,
     /// Get volume snapshots.
     GetVolumeSnapshots,
     /// Generic JSON gRPC message.
