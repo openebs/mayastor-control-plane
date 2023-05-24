@@ -237,6 +237,7 @@ impl IoEngineToAgent for v0::Child {
                 .map(|f| From::from(ExternalType(f)))
                 .unwrap_or(ChildStateReason::Unknown),
             faulted_at: None,
+            has_io_log: None,
         }
     }
 }
