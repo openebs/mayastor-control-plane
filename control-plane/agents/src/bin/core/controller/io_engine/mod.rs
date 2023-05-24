@@ -14,9 +14,9 @@ use stor_port::{
         AddNexusChild, ApiVersion, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp,
         CreatePool, CreateReplica, CreateReplicaSnapshot, DestroyNexus, DestroyPool,
         DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild, GetBlockDevices, ImportPool,
-        Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
-        PoolState, Register, RemoveNexusChild, Replica, ReplicaSnapshot, ShareNexus, ShareReplica,
-        ShutdownNexus, UnshareNexus, UnshareReplica,
+        ListReplicaSnapshots, Nexus, NexusChildAction, NexusChildActionContext,
+        NexusChildActionKind, NexusId, NodeId, PoolState, Register, RemoveNexusChild, Replica,
+        ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica,
     },
 };
 
@@ -160,6 +160,12 @@ pub(crate) trait ReplicaSnapshotApi {
     /// Remove a snapshot using the incoming id.
     async fn destroy_repl_snapshot(&self, request: &DestroyReplicaSnapshot)
         -> Result<(), SvcError>;
+
+    /// List snapshots for a replica.
+    async fn list_repl_snapshots(
+        &self,
+        request: &ListReplicaSnapshots,
+    ) -> Result<Vec<ReplicaSnapshot>, SvcError>;
 }
 
 #[async_trait]

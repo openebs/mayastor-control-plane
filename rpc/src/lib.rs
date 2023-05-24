@@ -455,8 +455,8 @@ pub mod v1 {
             destroy_replica_request, replica_rpc_client, CreateReplicaRequest,
             CreateReplicaSnapshotRequest, CreateReplicaSnapshotResponse,
             DeleteReplicaSnapshotRequest, DestroyReplicaRequest, ListReplicaOptions,
-            ListReplicasResponse, Replica, ReplicaSnapshot, ReplicaSpaceUsage, ShareReplicaRequest,
-            UnshareReplicaRequest,
+            ListReplicaSnapshotsRequest, ListReplicasResponse, Replica, ReplicaSnapshot,
+            ReplicaSpaceUsage, ShareReplicaRequest, UnshareReplicaRequest,
         };
     }
 

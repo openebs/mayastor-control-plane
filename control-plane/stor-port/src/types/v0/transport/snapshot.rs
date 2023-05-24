@@ -105,3 +105,9 @@ pub struct DestroyReplicaSnapshot {
     /// Incoming snapshot id to be deleted.
     pub snap_id: SnapshotId,
 }
+
+/// The request type to list the snapshots of a replica.
+pub struct ListReplicaSnapshots {
+    /// Incoming replica id to list snapshots for.
+    pub replica: Option<ReplicaId>,
+}

@@ -17,10 +17,10 @@ use stor_port::{
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
-            DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild, MessageIdVs,
-            Nexus, NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState, Register,
-            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ShareNexus, ShareReplica,
-            ShutdownNexus, UnshareNexus, UnshareReplica, VolumeId,
+            DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
+            ListReplicaSnapshots, MessageIdVs, Nexus, NexusId, NodeId, NodeState, NodeStatus,
+            PoolId, PoolState, Register, RemoveNexusChild, Replica, ReplicaId, ReplicaName,
+            ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -1472,6 +1472,14 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     ) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         dataplane.destroy_repl_snapshot(request).await
+    }
+
+    async fn list_repl_snapshots(
+        &self,
+        request: &ListReplicaSnapshots,
+    ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        dataplane.list_repl_snapshots(request).await
     }
 }
 
