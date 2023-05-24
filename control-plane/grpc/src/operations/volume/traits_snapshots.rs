@@ -32,7 +32,37 @@ pub struct VolumeSnapshot {
     meta: VolumeSnapshotMeta,
     state: VolumeSnapshotState,
 }
-impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for VolumeSnapshot {
+impl VolumeSnapshot {
+    /// Create a new `Self` from the given definition and state.
+    pub fn new(def: VolumeSnapshotDef, state: VolumeSnapshotState) -> Self {
+        Self {
+            spec: def.spec,
+            meta: def.meta,
+            state,
+        }
+    }
+    /// Get the volume snapshot specification.
+    pub fn spec(&self) -> &VolumeSnapshotSpec {
+        &self.spec
+    }
+    /// Get the volume snapshot metadata.
+    pub fn meta(&self) -> &VolumeSnapshotMeta {
+        &self.meta
+    }
+    /// Get the volume snapshot state.
+    pub fn state(&self) -> &VolumeSnapshotState {
+        &self.state
+    }
+}
+
+/// A volume snapshot definition.
+#[derive(Debug)]
+pub struct VolumeSnapshotDef {
+    spec: VolumeSnapshotSpec,
+    meta: VolumeSnapshotMeta,
+}
+
+impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for VolumeSnapshotDef {
     fn from(value: &stor_port::types::v0::store::snapshots::volume::VolumeSnapshot) -> Self {
         Self {
             spec: SnapshotInfo {
@@ -46,9 +76,9 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
                     .timestamp()
                     .map(|t| std::time::SystemTime::from(t).into()),
                 txn_id: value.metadata().txn_id().clone(),
+                // todo: add replica transactions..
                 transactions: Default::default(),
             },
-            state: VolumeSnapshotState {},
         }
     }
 }
@@ -74,6 +104,17 @@ pub struct VolumeSnapshotMeta {
     /// Failed transactions are any other key.
     transactions: HashMap<String, Vec<ReplicaSnapshot>>,
 }
+impl VolumeSnapshotMeta {
+    /// Get the volume snapshot timestamp.
+    pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
+        self.creation_timestamp.as_ref()
+    }
+    /// Get the volume snapshot transaction id.
+    pub fn txn_id(&self) -> &SnapshotTxId {
+        &self.txn_id
+    }
+}
+
 /// Volume replica snapshot information.
 #[derive(Debug)]
 #[allow(unused)]
@@ -91,7 +132,45 @@ pub struct ReplicaSnapshot {
 
 /// Volume snapshot state information.
 #[derive(Debug)]
-pub struct VolumeSnapshotState {}
+pub struct VolumeSnapshotState {
+    info: VolumeSnapshotInfo,
+    size: u64,
+    timestamp: Option<prost_types::Timestamp>,
+}
+impl VolumeSnapshotState {
+    /// Create a new `Self` with the given parameters.
+    pub fn new(
+        info: VolumeSnapshotInfo,
+        size: u64,
+        timestamp: Option<prost_types::Timestamp>,
+    ) -> Self {
+        Self {
+            info,
+            size,
+            timestamp,
+        }
+    }
+    /// Get the volume snapshot state.
+    pub fn uuid(&self) -> &SnapshotId {
+        self.info.snap_id()
+    }
+    /// Get the volume snapshot state.
+    pub fn source_id(&self) -> &VolumeId {
+        self.info.source_id()
+    }
+    /// Get the volume snapshot state.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+    /// Get the volume snapshot state.
+    pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
+        self.timestamp.as_ref()
+    }
+    /// Get the volume snapshot state.
+    pub fn clone_ready(&self) -> bool {
+        false
+    }
+}
 
 /// Collection of volume snapshots.
 pub struct VolumeSnapshots {
@@ -177,23 +256,20 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
         let meta = value
             .meta
             .ok_or_else(|| ReplyError::missing_argument(ResourceKind::VolumeSnapshot, "meta"))?;
-        let _state = value
+        let state = value
             .state
             .ok_or_else(|| ReplyError::missing_argument(ResourceKind::VolumeSnapshot, "state"))?;
 
+        let info = VolumeSnapshotSpec {
+            source_id: VolumeId::try_from(spec.volume_id).map_err(|e| {
+                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "spec.volume_id", e)
+            })?,
+            snap_id: SnapshotId::try_from(spec.snapshot_id).map_err(|e| {
+                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "spec.snapshot_id", e)
+            })?,
+        };
         Ok(Self {
-            spec: VolumeSnapshotSpec {
-                source_id: VolumeId::try_from(spec.volume_id).map_err(|e| {
-                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "spec.volume_id", e)
-                })?,
-                snap_id: SnapshotId::try_from(spec.snapshot_id).map_err(|e| {
-                    ReplyError::invalid_argument(
-                        ResourceKind::VolumeSnapshot,
-                        "spec.snapshot_id",
-                        e,
-                    )
-                })?,
-            },
+            spec: info.clone(),
             meta: VolumeSnapshotMeta {
                 status: common::SpecStatus::from_i32(meta.spec_status)
                     .unwrap_or_default()
@@ -213,7 +289,11 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
                     })
                     .collect::<Result<HashMap<_, _>, _>>()?,
             },
-            state: VolumeSnapshotState {},
+            state: VolumeSnapshotState {
+                info,
+                size: state.state.as_ref().map(|s| s.size).unwrap_or_default(),
+                timestamp: state.state.as_ref().and_then(|s| s.timestamp.clone()),
+            },
         })
     }
 }

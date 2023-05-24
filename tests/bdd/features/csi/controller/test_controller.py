@@ -46,9 +46,6 @@ OPENEBS_TOPOLOGY_KEY = "openebs.io/nodename"
 @pytest.fixture(scope="module")
 def setup():
     Deployer.start(2, csi_controller=True)
-    subprocess.run(
-        ["sudo", "chmod", "go+rw", "/var/tmp/csi-controller.sock"], check=True
-    )
 
     # Create 2 pools.
     pool_labels = {"openebs.io/created-by": "operator-diskpool"}

@@ -3227,7 +3227,7 @@ components:
       required:
         - uuid
         - size
-        - source
+        - source_volume
         - creation_timestamp
         - ready
         - replica_snapshots

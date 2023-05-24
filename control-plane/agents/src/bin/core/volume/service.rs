@@ -14,10 +14,10 @@ use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, IVolumeSnapshot,
-            PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
-            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
-            VolumeSnapshotInfo, VolumeSnapshots,
+            CreateVolumeInfo, CreateVolumeSnapshot, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
+            IVolumeSnapshot, PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo,
+            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+            VolumeSnapshot, VolumeSnapshotInfo, VolumeSnapshotState, VolumeSnapshots,
         },
         Pagination,
     },
@@ -334,16 +334,24 @@ impl Service {
     }
 
     /// Create a volume snapshot.
-    async fn create_snapshot(&self, info: VolumeSnapshotInfo) -> Result<VolumeSnapshot, SvcError> {
-        let mut volume = self.specs().volume(&info.source_id).await?;
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.source_id, snapshot.source_uuid = %request.source_id, snapshot.uuid = %request.snap_id))]
+    async fn create_snapshot(
+        &self,
+        request: CreateVolumeSnapshot,
+    ) -> Result<VolumeSnapshot, SvcError> {
+        let mut volume = self.specs().volume(&request.source_id).await?;
         let snapshot = volume
             .create_snap(
                 &self.registry,
-                &VolumeSnapshotUserSpec::new(volume.uuid(), info.snap_id),
+                &VolumeSnapshotUserSpec::new(volume.uuid(), request.snap_id),
             )
             .await?;
 
-        Ok(snapshot.as_ref().into())
+        let spec = snapshot.as_ref().spec();
+        let info = VolumeSnapshotInfo::new(spec.source_id(), spec.uuid().clone());
+        // todo: get state from registry..
+        let state = VolumeSnapshotState::new(info, 0, None);
+        Ok(VolumeSnapshot::new(snapshot.as_ref().into(), state))
     }
 
     /// Delete a volume snapshot.

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use stor_port::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
+    models,
     models::{
         AffinityGroup, CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology, PublishVolumeBody,
         RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol, Volumes,
@@ -188,7 +189,7 @@ impl IoEngineApiClient {
     /// Create a volume of target size and provision storage resources for it.
     /// This operation is not idempotent, so the caller is responsible for taking
     /// all actions with regards to idempotency.
-    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
     pub(crate) async fn create_volume(
         &self,
         volume_id: &uuid::Uuid,
@@ -222,7 +223,7 @@ impl IoEngineApiClient {
     /// Delete volume and reclaim all storage resources associated with it.
     /// This operation is idempotent, so the caller does not see errors indicating
     /// absence of the resource.
-    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
     pub(crate) async fn delete_volume(&self, volume_id: &uuid::Uuid) -> Result<(), ApiClientError> {
         Self::delete_idempotent(
             self.rest_client.volumes_api().del_volume(volume_id).await,
@@ -259,7 +260,7 @@ impl IoEngineApiClient {
     }
 
     /// Get specific volume.
-    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
     pub(crate) async fn get_volume(
         &self,
         volume_id: &uuid::Uuid,
@@ -269,7 +270,7 @@ impl IoEngineApiClient {
     }
 
     /// Get specific volume.
-    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
     pub(crate) async fn get_volume_for_create(
         &self,
         volume_id: &uuid::Uuid,
@@ -287,7 +288,7 @@ impl IoEngineApiClient {
     }
 
     /// Unpublish volume (i.e. destroy a target which exposes the volume).
-    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
     pub(crate) async fn unpublish_volume(
         &self,
         volume_id: &uuid::Uuid,
@@ -305,7 +306,7 @@ impl IoEngineApiClient {
     }
 
     /// Publish volume (i.e. make it accessible via specified protocol by creating a target).
-    #[instrument(fields(volume.uuid = %volume_id), skip(volume_id))]
+    #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
     pub(crate) async fn publish_volume(
         &self,
         volume_id: &uuid::Uuid,
@@ -328,5 +329,21 @@ impl IoEngineApiClient {
             .put_volume_target(volume_id, publish_volume_body)
             .await?;
         Ok(volume.into_body())
+    }
+
+    /// Create a volume snapshot.
+    #[instrument(fields(volume.uuid = %volume_id, snapshot.source_uuid = %volume_id, snapshot.uuid = %snapshot_id), skip(self, volume_id, snapshot_id))]
+    pub(crate) async fn create_volume_snapshot(
+        &self,
+        volume_id: &uuid::Uuid,
+        snapshot_id: &uuid::Uuid,
+    ) -> Result<models::VolumeSnapshot, ApiClientError> {
+        let snapshot = self
+            .rest_client
+            .snapshots_api()
+            .put_volume_snapshot(volume_id, snapshot_id)
+            .await?;
+
+        Ok(snapshot.into_body())
     }
 }
