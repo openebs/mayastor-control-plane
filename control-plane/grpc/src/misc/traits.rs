@@ -30,6 +30,7 @@ impl From<ResourceKind> for common::ResourceKind {
             ResourceKind::NvmePath => Self::NvmePath,
             ResourceKind::AffinityGroup => Self::AffinityGroup,
             ResourceKind::VolumeSnapshot => Self::VolumeSnapshot,
+            ResourceKind::ReplicaSnapshot => Self::ReplicaSnapshot,
         }
     }
 }
@@ -55,6 +56,7 @@ impl From<common::ResourceKind> for ResourceKind {
             common::ResourceKind::NvmePath => Self::NvmePath,
             common::ResourceKind::AffinityGroup => Self::AffinityGroup,
             common::ResourceKind::VolumeSnapshot => Self::VolumeSnapshot,
+            common::ResourceKind::ReplicaSnapshot => Self::ReplicaSnapshot,
         }
     }
 }

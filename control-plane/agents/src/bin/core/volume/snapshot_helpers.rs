@@ -21,7 +21,7 @@ use stor_port::{
             volume::VolumeSpec,
             SpecStatus, SpecTransaction,
         },
-        transport::{SnapshotParameters, VolumeId},
+        transport::{Replica, SnapshotParameters, VolumeId},
     },
 };
 
@@ -29,7 +29,7 @@ use stor_port::{
 /// means a snapshot of all(or selected) healthy replicas associated with that volume.
 pub(super) struct PrepareVolumeSnapshot {
     pub(super) parameters: SnapshotParameters<VolumeId>,
-    pub(super) replica_snapshot: ReplicaSnapshot,
+    pub(super) replica_snapshot: (Replica, ReplicaSnapshot),
     pub(super) completer: VolumeSnapshotCompleter,
 }
 

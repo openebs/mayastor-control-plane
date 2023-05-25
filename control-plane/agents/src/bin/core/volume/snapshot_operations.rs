@@ -20,6 +20,7 @@ use crate::{
         },
         scheduling::resources::ChildItem,
     },
+    node::wrapper::{NodeWrapper, ReplicaSnapshotInfo},
     volume::snapshot_helpers::{snapshoteable_replica, PrepareVolumeSnapshot},
 };
 use stor_port::types::v0::{
@@ -119,25 +120,25 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         }?;
 
         let specs = registry.specs();
-        let snapshot = specs
+        let mut snapshot = specs
             .get_or_create_snapshot(request)
             .operation_guard_wait()
             .await?;
 
         let prepare_snapshot = snapshot.snapshot_params(&replica)?;
         snapshot
-            .start_create(
+            .start_create_update(
                 registry,
                 &VolumeSnapshotCreateInfo::new(
                     prepare_snapshot.parameters.txn_id(),
-                    prepare_snapshot.replica_snapshot.clone(),
+                    prepare_snapshot.replica_snapshot.1.clone(),
                     &prepare_snapshot.completer,
                 ),
             )
             .await?;
 
         let result = snapshot
-            .snapshot(volume, &prepare_snapshot, target_node)
+            .snapshot(volume, &prepare_snapshot, registry, target_node)
             .await;
         if let Ok(ref result) = result {
             *prepare_snapshot.completer.lock().unwrap() = Some(result.clone());
@@ -176,9 +177,10 @@ impl OperationGuardArc<VolumeSnapshot> {
             SnapshotParameters::new(volume, generic_params),
             replica.spec().size,
         );
+        let replica = replica.state().clone();
         Ok(PrepareVolumeSnapshot {
             parameters,
-            replica_snapshot,
+            replica_snapshot: (replica, replica_snapshot),
             completer: VolumeSnapshotCompleter::default(),
         })
     }
@@ -186,10 +188,12 @@ impl OperationGuardArc<VolumeSnapshot> {
         &self,
         volume: &OperationGuardArc<VolumeSpec>,
         prep_params: &PrepareVolumeSnapshot,
+        registry: &Registry,
         target_node: N,
     ) -> Result<VolumeSnapshotCreateResult, SvcError> {
         if let Some(target) = volume.as_ref().target() {
-            self.snapshot_nexus(prep_params, target, target_node).await
+            self.snapshot_nexus(prep_params, target, registry, target_node)
+                .await
         } else {
             self.snapshot_replica(prep_params, target_node).await
         }
@@ -199,9 +203,11 @@ impl OperationGuardArc<VolumeSnapshot> {
         &self,
         prep_params: &PrepareVolumeSnapshot,
         target: &VolumeTarget,
+        registry: &Registry,
         target_node: N,
     ) -> Result<VolumeSnapshotCreateResult, SvcError> {
-        let mut replica_snap = prep_params.replica_snapshot.clone();
+        let mut replica_snap = prep_params.replica_snapshot.1.clone();
+        let replica = &prep_params.replica_snapshot.0;
         let generic_params = prep_params.parameters.params();
 
         let response = target_node
@@ -214,9 +220,47 @@ impl OperationGuardArc<VolumeSnapshot> {
             ))
             .await?;
 
-        let timestamp = DateTime::<Utc>::from(response.snap_time);
-        replica_snap.complete_vol(timestamp);
+        if response.skipped.contains(replica_snap.spec().source_id())
+            || !response.skipped.is_empty()
+        {
+            return Err(SvcError::ReplicaSnapSkipped {
+                replica: replica_snap.spec().uuid().to_string(),
+            });
+        }
 
+        let snapped = match response.replicas_status.as_slice() {
+            [snapped] if &snapped.replica_uuid == replica_snap.spec().source_id() => Ok(snapped),
+            _ => Err(SvcError::ReplicaSnapMiss {
+                replica: replica_snap.spec().uuid().to_string(),
+            }),
+        }?;
+
+        if snapped.status != 0 {
+            return Err(SvcError::ReplicaSnapError {
+                replica: replica_snap.spec().uuid().to_string(),
+                status: snapped.status,
+            });
+        }
+
+        let timestamp = DateTime::<Utc>::from(response.snap_time);
+        let mut replica_timestamp = timestamp;
+        // What if snapshot succeeds but we can't fetch the replica snapshot, should we carry
+        // on as following, or should we bail out?
+        if let Ok(node) = registry.node_wrapper(&replica.node).await {
+            if let Ok(snapshot) = NodeWrapper::fetch_update_snapshot_state(
+                &node,
+                ReplicaSnapshotInfo::new(
+                    replica_snap.spec().source_id(),
+                    replica_snap.spec().uuid().clone(),
+                ),
+            )
+            .await
+            {
+                replica_timestamp = snapshot.timestamp();
+            }
+        }
+
+        replica_snap.complete_vol(replica_timestamp);
         Ok(VolumeSnapshotCreateResult::new(replica_snap, timestamp))
     }
     async fn snapshot_replica<N: ReplicaSnapshotApi>(
@@ -229,14 +273,14 @@ impl OperationGuardArc<VolumeSnapshot> {
 
         let response = target_node
             .create_repl_snapshot(&CreateReplicaSnapshot::new(SnapshotParameters::new(
-                prep_params.replica_snapshot.spec().source_id(),
+                prep_params.replica_snapshot.1.spec().source_id(),
                 generic_params.clone(),
             )))
             .await?;
 
         let timestamp = response.timestamp();
-        replica_snap.complete_vol(timestamp);
+        replica_snap.1.complete_vol(timestamp);
 
-        Ok(VolumeSnapshotCreateResult::new(replica_snap, timestamp))
+        Ok(VolumeSnapshotCreateResult::new(replica_snap.1, timestamp))
     }
 }

@@ -100,6 +100,24 @@ pub(crate) trait GuardedOperationsHelper:
 
     /// Start a create operation and attempt to log the transaction to the store.
     /// In case of error, the log is undone and an error is returned.
+    /// Also updates it's inner value to the operation.
+    async fn start_create_update<O>(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Create,
+    ) -> Result<Self::Inner, SvcError>
+    where
+        Self::Inner: PartialEq<Self::Create>,
+        Self::Inner: SpecTransaction<O>,
+        Self::Inner: StorableObject,
+    {
+        let result = self.start_create(registry, request).await?;
+        self.update();
+        Ok(result)
+    }
+
+    /// Start a create operation and attempt to log the transaction to the store.
+    /// In case of error, the log is undone and an error is returned.
     async fn start_create<O>(
         &self,
         registry: &Registry,

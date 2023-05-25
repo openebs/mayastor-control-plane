@@ -75,7 +75,7 @@ impl Replica {
     }
 }
 
-/// The request type to create snapshot of a replica.
+/// The request type to create a replica's snapshot.
 pub struct CreateReplicaSnapshot {
     params: SnapshotParameters<ReplicaId>,
 }
@@ -120,6 +120,8 @@ pub struct ReplicaSnapshotDescr {
     pub entity_id: String,
     /// Unique transaction id for snapshot.
     pub txn_id: String,
+    /// Validity of the snapshot: the xattr metadata might be corrupted
+    pub valid: bool,
 }
 impl ReplicaSnapshotDescr {
     /// Returns the snapshot timestamp.
