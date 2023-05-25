@@ -53,19 +53,16 @@ resource "libvirt_volume" "pool-disk" {
   size   = var.pooldisk_size
 }
 
-# user data that we pass to cloud init that reads variables from variables.tf and
-# passes them to a template file to be filled in.
-
-data "template_file" "user_data" {
-  count = var.num_nodes
-  template = templatefile("${path.module}/cloud_init.tmpl",
-    { ssh_user = var.ssh_user, ssh_key = var.ssh_key,
-  hostname = format(var.hostname_formatter, count.index + 1) })
-}
-
-# likewise for networking
-data "template_file" "network_config" {
-  template = file("${path.module}/network_config.cfg")
+locals {
+  # user data that we pass to cloud init that reads variables from variables.tf and
+  # passes them to a template file to be filled in
+  user_data = [
+    for node_index in range(var.num_nodes) : templatefile("${path.module}/cloud_init.tmpl", {
+      ssh_user = var.ssh_user, ssh_key = var.ssh_key, hostname = format(var.hostname_formatter, node_index + 1)
+    })
+  ]
+  # likewise for networking
+  network_config = templatefile("${path.module}/network_config.cfg", {})
 }
 
 resource "libvirt_network" "kube_network_nat" {
@@ -118,8 +115,8 @@ resource "libvirt_network" "kube_network_bridge" {
 resource "libvirt_cloudinit_disk" "commoninit" {
   name           = format("commoninit-%d.iso", count.index + 1)
   count          = var.num_nodes
-  user_data      = data.template_file.user_data[count.index].rendered
-  network_config = data.template_file.network_config.rendered
+  user_data      = local.user_data[count.index]
+  network_config = local.network_config
   pool           = libvirt_pool.ubuntu-pool.name
 }
 

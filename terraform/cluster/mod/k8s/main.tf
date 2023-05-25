@@ -13,6 +13,8 @@ variable "node_list" {}
 variable "nr_hugepages" {}
 
 variable "kubernetes_version" {}
+variable "kubernetes_runtime" {}
+variable "kubernetes_cni" {}
 
 
 resource "null_resource" "k8s" {
@@ -25,50 +27,41 @@ resource "null_resource" "k8s" {
   }
 
   provisioner "file" {
-    content     = data.template_file.master-configuration.rendered
+    content     = local.master-configuration
     destination = "/tmp/kubeadm_config.yaml"
   }
 
 
   provisioner "remote-exec" {
-    inline = [element(data.template_file.install.*.rendered, count.index)]
+    inline = [element(local.install, count.index)]
   }
 
   provisioner "remote-exec" {
     inline = [
-      count.index == 0 ? data.template_file.master.rendered : data.template_file.node.rendered
+      count.index == 0 ? local.master : local.node
     ]
   }
 }
 
-data "template_file" "master-configuration" {
-  template = file("${path.module}/kubeadm_config.yaml")
-
-  vars = {
+locals {
+  master-configuration = templatefile("${path.module}/kubeadm_config.yaml", {
     master_ip = element(var.node_list, 0)
     token     = var.k8s_cluster_token
     cert_sans = element(var.node_list, 0)
     pod_cidr  = var.overlay_cidr
-  }
-}
-
-data "template_file" "install" {
-  count    = var.num_nodes
-  template = file("${path.module}/repo.sh")
-  vars = {
-    kube_version = var.kubernetes_version
-  }
-}
-
-data "template_file" "master" {
-  template = file("${path.module}/master.sh")
-}
-
-data "template_file" "node" {
-  template = file("${path.module}/node.sh")
-  vars = {
+  })
+  install = [
+    for _ in range(var.num_nodes) : templatefile("${path.module}/repo.sh", {
+      kube_version = var.kubernetes_version
+      kube_runtime = var.kubernetes_runtime
+    })
+  ]
+  master = templatefile("${path.module}/master.sh", {
+    cni_url = var.kubernetes_cni
+  })
+  node = templatefile("${path.module}/node.sh", {
     master_ip    = element(var.node_list, 0)
     token        = var.k8s_cluster_token
     nr_hugepages = var.nr_hugepages
-  }
+  })
 }

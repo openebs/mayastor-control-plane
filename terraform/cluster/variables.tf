@@ -60,8 +60,8 @@ variable "bridge_name" {
 variable "qcow2_image" {
   type        = string
   description = "Ubuntu image for VMs - only needed for libvirt provider"
-  default     = "~/terraform_images/ubuntu-20.04-server-cloudimg-amd64.img"
-  #default = "~/terraform_images/ubuntu-22.04-server-cloudimg-amd64.img"
+  #default     = "~/terraform_images/ubuntu-20.04-server-cloudimg-amd64.img"
+  default = "~/terraform_images/ubuntu-22.04-server-cloudimg-amd64.img"
 }
 
 variable "overlay_cidr" {
@@ -110,4 +110,18 @@ variable "kubeconfig_output" {
   type        = string
   description = "Where to copy the kube configuration file to."
   default     = "~/.kube/config"
+}
+
+variable "kubernetes_runtime" {
+  type        = string
+  description = "Container runtime (crio or containerd)"
+  # crio is not currently fully working, we are able to create a cluster but our pods can't seem to reach service ips...
+  default     = "containerd"
+}
+
+variable "kubernetes_cni" {
+  type        = string
+  description = "URL containing the CNI plugin yaml"
+  # default = "https://raw.githubusercontent.com/cloudnativelabs/kube-router/v1.5.4/daemonset/kubeadm-kuberouter.yaml"
+  default     = "https://raw.githubusercontent.com/flannel-io/flannel/v0.21.5/Documentation/kube-flannel.yml"
 }
