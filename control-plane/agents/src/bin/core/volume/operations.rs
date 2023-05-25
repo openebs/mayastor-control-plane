@@ -149,7 +149,9 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             let nexus = nexus_arc.lock().deref().clone();
             match nexus_arc.operation_guard_wait().await {
                 Ok(mut guard) => {
-                    let destroy = DestroyNexus::from(&nexus).with_disown(&request.uuid);
+                    let destroy = DestroyNexus::from(&nexus)
+                        .with_disown(&request.uuid)
+                        .with_lazy(true);
                     if let Err(error) = guard.destroy(registry, &destroy).await {
                         nexus.warn_span(|| {
                             tracing::warn!(

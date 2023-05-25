@@ -33,10 +33,7 @@ impl TaskPoller for GarbageCollector {
                 Ok(guard) => guard,
                 Err(_) => continue,
             };
-            // if the nexus is in shutdown state don't let the reconcilers act on it.
-            if !nexus.lock().is_shutdown() {
-                let _ = nexus.garbage_collect(context).await;
-            }
+            let _ = nexus.garbage_collect(context).await;
         }
         PollResult::Ok(PollerState::Idle)
     }
