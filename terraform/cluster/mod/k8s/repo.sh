@@ -1,8 +1,7 @@
 #!/bin/bash
 set -xeuo pipefail
 
-# crio is not currently fully working, we are able to create a cluster but our pods can't seem to reach service ips...
-RUNTIME="containerd"
+RUNTIME="${kube_runtime}"
 DISTRO=$(cat /etc/os-release | awk '/^NAME="/ {print $1}' | awk -F\" '{print $2}')
 if [ ! "$DISTRO" = "Ubuntu" ]; then
   echo "Script only supports Ubuntu"

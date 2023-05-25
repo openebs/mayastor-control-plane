@@ -8,6 +8,8 @@ module "k8s" {
   overlay_cidr       = var.overlay_cidr
   nr_hugepages       = var.nr_hugepages
   kubernetes_version = var.kubernetes_version
+  kubernetes_cni     = var.kubernetes_cni
+  kubernetes_runtime = var.kubernetes_runtime
 }
 
 module "provider" {

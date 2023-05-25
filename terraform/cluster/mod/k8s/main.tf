@@ -13,6 +13,8 @@ variable "node_list" {}
 variable "nr_hugepages" {}
 
 variable "kubernetes_version" {}
+variable "kubernetes_runtime" {}
+variable "kubernetes_cni" {}
 
 
 resource "null_resource" "k8s" {
@@ -51,9 +53,12 @@ locals {
   install = [
     for _ in range(var.num_nodes) : templatefile("${path.module}/repo.sh", {
       kube_version = var.kubernetes_version
+      kube_runtime = var.kubernetes_runtime
     })
   ]
-  master = templatefile("${path.module}/master.sh", {})
+  master = templatefile("${path.module}/master.sh", {
+    cni_url = var.kubernetes_cni
+  })
   node = templatefile("${path.module}/node.sh", {
     master_ip    = element(var.node_list, 0)
     token        = var.k8s_cluster_token

@@ -111,3 +111,17 @@ variable "kubeconfig_output" {
   description = "Where to copy the kube configuration file to."
   default     = "~/.kube/config"
 }
+
+variable "kubernetes_runtime" {
+  type        = string
+  description = "Container runtime (crio or containerd)"
+  # crio is not currently fully working, we are able to create a cluster but our pods can't seem to reach service ips...
+  default     = "containerd"
+}
+
+variable "kubernetes_cni" {
+  type        = string
+  description = "URL containing the CNI plugin yaml"
+  # default = "https://raw.githubusercontent.com/cloudnativelabs/kube-router/v1.5.4/daemonset/kubeadm-kuberouter.yaml"
+  default     = "https://raw.githubusercontent.com/flannel-io/flannel/v0.21.5/Documentation/kube-flannel.yml"
+}
