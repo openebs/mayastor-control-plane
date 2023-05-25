@@ -13,4 +13,4 @@ while ! nc -z localhost 6443; do
   sleep 5
 done
 
-kubectl apply -f https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
+kubectl apply -f https://raw.githubusercontent.com/cloudnativelabs/kube-router/v1.5.4/daemonset/kubeadm-kuberouter.yaml

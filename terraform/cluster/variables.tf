@@ -60,8 +60,8 @@ variable "bridge_name" {
 variable "qcow2_image" {
   type        = string
   description = "Ubuntu image for VMs - only needed for libvirt provider"
-  default     = "~/terraform_images/ubuntu-20.04-server-cloudimg-amd64.img"
-  #default = "~/terraform_images/ubuntu-22.04-server-cloudimg-amd64.img"
+  #default     = "~/terraform_images/ubuntu-20.04-server-cloudimg-amd64.img"
+  default = "~/terraform_images/ubuntu-22.04-server-cloudimg-amd64.img"
 }
 
 variable "overlay_cidr" {

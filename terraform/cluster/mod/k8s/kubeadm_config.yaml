@@ -11,6 +11,9 @@ kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: ${master_ip}
   bindPort: 6443
+nodeRegistration:
+  #criSocket: "/var/run/crio/crio.sock"
+  #criSocket: "unix:///var/run/containerd/containerd.sock"
 ---
 apiVersion: kubeadm.k8s.io/v1beta3
 apiServer:
@@ -27,6 +30,9 @@ kind: ClusterConfiguration
 networking:
   #serviceSubnet: "10.96.0.0/12"
   podSubnet: ${pod_cidr}
+imageRepository: "registry.k8s.io"
+dns:
+  imageRepository: "registry.k8s.io/coredns"
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration

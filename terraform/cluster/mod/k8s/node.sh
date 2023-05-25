@@ -1,5 +1,5 @@
 #!/bin/bash
-set -exo pipefail
+set -xeuo pipefail
 
 function addKernelModules() {
     for module in $@; do
@@ -21,7 +21,12 @@ sudo grep -qa container=lxc /proc/1/environ || (
     case $DISTRO in
         Ubuntu)
             echo "loading nvme kernel modules"
-            sudo apt -y install `apt search linux-modules-extra | fgrep \`uname -r\` | sed -e "s/,.*//"`
+            kernel_extra=$(apt-cache search linux-modules-extra | fgrep $(uname -r) | sed -e "s/,.*//" -e "s/ -.*//")
+            if [ -z "$kernel_extra" ]; then
+              echo "Can't find kernel modules!"
+            else
+              sudo apt-get -y install $kernel_extra
+            fi
             addKernelModules nvme-tcp
             ;;
         *)
