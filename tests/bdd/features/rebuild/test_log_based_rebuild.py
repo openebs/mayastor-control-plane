@@ -46,9 +46,6 @@ RECONCILE_PERIOD_SECS = "1s"
 FAULTED_CHILD_WAIT_SECS = 10
 FIO_RUN = 20
 SLEEP_BEFORE_START = 5
-faulted_child_uri = None
-nexus_local_child = None
-new_target_node = None
 
 
 @pytest.fixture(autouse=True)
@@ -122,13 +119,12 @@ def test_faulted_child_is_online_again_within_timedwait_period():
     """Faulted child is online again within timed-wait period."""
 
 
-@pytest.mark.skip(reason="blocked due to GTM-684")
 @scenario(
     "log-based-rebuild.feature",
-    "Node goes permanently down while log based rebuild running",
+    "Node goes down while log based rebuild running",
 )
-def test_node_goes_permanently_down_while_log_based_rebuild_running():
-    """Node goes permanently down while log based rebuild running."""
+def test_node_goes_down_while_log_based_rebuild_running():
+    """Node goes down while log based rebuild running."""
 
 
 @scenario(
@@ -183,14 +179,19 @@ def a_child_becomes_faulted():
     # Check the replica becomes unhealthy by waiting for the volume to become degraded.
     Docker.stop_container(NODE_2_NAME)
     wait_for_degraded_volume()
+    wait_child_faulted()
+
+
+@retry(wait_fixed=100, stop_max_attempt_number=20)
+def wait_child_faulted():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
     childlist = target["children"]
-    print(f"During first child fault {childlist}")
+    pytest.faulted_child_uri = None
     for child in childlist:
-        if child["state"] == ChildState("Faulted"):
-            faulted_child_uri = child["uri"]
-            assert faulted_child_uri is not None
+        if ChildState(child["state"]) == ChildState("Faulted"):
+            pytest.faulted_child_uri = child["uri"]
+    assert pytest.faulted_child_uri is not None, "Failed to find Faulted child!"
 
 
 @when("a non-local child becomes faulted")
@@ -235,11 +236,10 @@ def a_full_rebuild_starts_for_unhealthy_child():
     target = vol.state.target
     childlist = target["children"]
     assert len(childlist) == NUM_VOLUME_REPLICAS
-    check_child_removal()
     for child in childlist:
-        if child["state"] == ChildState("Degraded"):
-            assert child["uri"] != faulted_child_uri
-            assert child["rebuild_progress"] != 0
+        if ChildState(child["state"]) == ChildState("Degraded"):
+            assert child["uri"] != pytest.faulted_child_uri
+            assert child["rebuildProgress"] != 0
 
 
 @then("a log-based rebuild starts for the unhealthy child")
@@ -252,17 +252,38 @@ def a_log_based_rebuild_starts_for_the_unhealthy_child():
     target = vol.state.target
     childlist = target["children"]
     assert len(childlist) == NUM_VOLUME_REPLICAS
+    assert pytest.faulted_child_uri is not None
     for child in childlist:
-        if child["uri"] == faulted_child_uri:
-            assert child["state"] == ChildState("Degraded")
-            assert child["state_reason"] == ChildStateReason("OutOfSync")
+        if child["uri"] == pytest.faulted_child_uri:
+            assert ChildState(child["state"]) == ChildState("Degraded")
 
 
-@then("the node hosting rebuilding replica crashes permanently")
-def the_node_hosting_rebuilding_replica_crashes_permanently():
-    """the node hosting rebuilding replica crashes permanently."""
+@then("a full rebuild starts before the timed-wait period")
+def a_full_rebuild_starts_before_the_timedwait_period():
+    """a full rebuild starts before the timed-wait period."""
+    rebuild_ongoing_before_timed_wait()
+
+
+@retry(wait_fixed=200, stop_max_attempt_number=10)
+def rebuild_ongoing_before_timed_wait():
+    vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    target = vol.state.target
+    childlist = target["children"]
+    assert len(childlist) == NUM_VOLUME_REPLICAS
+    degraded = list(
+        filter(
+            lambda child: str(child["state"]) == "Degraded",
+            childlist,
+        )
+    )
+    print(degraded)
+    assert len(degraded) is 1, "Should find one degraded child"
+
+
+@then("the node hosting rebuilding replica crashes")
+def the_node_hosting_rebuilding_replica_crashes():
+    """the node hosting rebuilding replica crashes."""
     Docker.kill_container(NODE_2_NAME)
-    check_child_removal()
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=20)
@@ -273,8 +294,8 @@ def a_full_rebuild_starts_for_both_of_the_unhealthy_children():
     new_nexus = ApiClient.volumes_api().get_volume(VOLUME_UUID).state.target
     for child in new_nexus["children"]:
         children.append(child["uri"])
-    assert nexus_local_child not in children
-    assert faulted_child_uri not in children
+    assert pytest.nexus_local_child not in children
+    assert pytest.faulted_child_uri not in children
     childs = new_nexus["children"]
     print(f"child list during full rebuild: {childs}")
 
@@ -282,9 +303,9 @@ def a_full_rebuild_starts_for_both_of_the_unhealthy_children():
 @then("the volume target becomes unreachable along with its local child")
 def the_volume_target_becomes_unreachable_along_with_its_local_child():
     """the volume target becomes unreachable along with its local child"""
-    nexus_local_child = ApiClient.replicas_api().get_node_replicas(NODE_1_NAME)[0][
-        "uri"
-    ]
+    pytest.nexus_local_child = ApiClient.replicas_api().get_node_replicas(NODE_1_NAME)[
+        0
+    ]["uri"]
     Docker.stop_container(NODE_1_NAME)
     # wait for nexus republish
     verify_nexus_switchover()
@@ -306,12 +327,12 @@ def check_child_removal():
     child_list = vol.state.target["children"]
     child_removed = True
     for child in child_list:
-        if faulted_child_uri == child["uri"]:
+        if pytest.faulted_child_uri == child["uri"]:
             child_removed = False
             break
     assert (
         child_removed
-    ), f"child list is {child_list}, faulted child : {faulted_child_uri}"
+    ), f"child list is {child_list}, faulted child : {pytest.faulted_child_uri}"
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=20)

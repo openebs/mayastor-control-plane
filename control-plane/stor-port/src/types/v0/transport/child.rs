@@ -18,6 +18,9 @@ pub struct Child {
     pub state_reason: ChildStateReason,
     /// Last faulted timestamp of this child.
     pub faulted_at: Option<SystemTime>,
+    /// Indicates whether the nexus has an IO log for this child, which can be used for
+    /// partially rebuilding the child.
+    pub has_io_log: Option<bool>,
 }
 impl Child {
     /// If if the state reason is lack of space.

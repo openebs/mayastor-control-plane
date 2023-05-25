@@ -98,7 +98,7 @@ async fn hot_spare_nexus_reconcile(
     squash_results(results)
 }
 
-#[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.uuid(), volume.uuid = tracing::field::Empty, request.reconcile = true))]
+#[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, volume.uuid = tracing::field::Empty, request.reconcile = true))]
 async fn generic_nexus_reconciler(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,

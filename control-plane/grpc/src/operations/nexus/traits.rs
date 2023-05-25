@@ -279,6 +279,7 @@ impl TryFrom<nexus::Child> for Child {
                 .map(ChildStateReason::from)
                 .unwrap_or(ChildStateReason::Unknown),
             faulted_at: None,
+            has_io_log: None,
         };
         Ok(child)
     }
