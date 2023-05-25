@@ -12,7 +12,7 @@ mkShell {
     jq
     utillinux
     which
-    (terraform.withPlugins (p: [ p.libvirt p.null p.template p.lxd p.kubernetes p.helm p.local ]))
+    (terraform.withPlugins (p: [ p.libvirt p.null p.lxd p.kubernetes p.helm p.local ]))
     tflint
   ];
 }

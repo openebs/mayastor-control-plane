@@ -18,15 +18,16 @@ variable "ssh_key" {}
 
 variable "ssh_user" {}
 
-data "template_file" "user_data" {
-  count = var.num_nodes
-  template = templatefile("${path.module}/cloud_init.tmpl",
-  { ssh_user = var.ssh_user, ssh_key = var.ssh_key, hostname = format("ksnode-%d", count.index + 1) })
-}
-
-# likewise for networking
-data "template_file" "network_config" {
-  template = file("${path.module}/network_config.cfg")
+locals {
+  # user data that we pass to cloud init that reads variables from variables.tf and
+  # passes them to a template file to be filled in
+  user_data = [
+    for node_index in range(var.num_nodes) : templatefile("${path.module}/cloud_init.tmpl", {
+      ssh_user = var.ssh_user, ssh_key = var.ssh_key, hostname = format(var.hostname_formatter, node_index + 1)
+    })
+  ]
+  # likewise for networking
+  network_config = templatefile("${path.module}/network_config.cfg", {})
 }
 
 resource "lxd_container" "c8s" {
@@ -43,7 +44,7 @@ resource "lxd_container" "c8s" {
     "linux.kernel_modules" = "ip_tables,ip6_tables,nf_nat,overlay,netlink_diag,br_netfilter,nvme_tcp"
     "security.nesting"     = true
     "security.privileged"  = true
-    "user.user-data"       = data.template_file.user_data[count.index].rendered
+    "user.user-data"       = local.user_data[count.index]
   }
 
   device {
