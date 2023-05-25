@@ -2,21 +2,176 @@
 
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
-    pool::traits::PoolOperations, registry::traits::RegistryOperations,
-    replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
+    nexus::traits::NexusOperations, pool::traits::PoolOperations,
+    registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
+    volume::traits::VolumeOperations,
 };
 use std::{collections::HashMap, time::Duration};
 use stor_port::{
     transport_api::{ReplyErrorKind, ResourceKind},
     types::v0::{
+        openapi::models::SpecStatus,
         store::nexus::NexusSpec,
         transport::{
-            CreateVolume, DestroyShutdownTargets, Filter, GetSpecs, Nexus, PublishVolume,
-            RepublishVolume, VolumeShareProtocol,
+            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, GetSpecs, Nexus,
+            PublishVolume, RepublishVolume, VolumeShareProtocol,
         },
     },
 };
 use tokio::time::sleep;
+
+// This test: Creates a three io engine cluster
+// Creates volume with 2 replicas and publishes it to create nexus
+// Republishes nexus to a new node
+// Stops node housing a previous nexus
+// Destroys volume
+// Starts node which was stopped and expects old nexus cleanup.
+#[tokio::test]
+async fn old_nexus_delete_after_vol_destroy() {
+    let reconcile_period = Duration::from_secs(1);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(3)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_cache_period("1s")
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .build()
+        .await
+        .unwrap();
+
+    let vol_client = cluster.grpc_client().volume();
+    let nexus_client = cluster.grpc_client().nexus();
+    let rest_client = cluster.rest_v00();
+    let spec_client = rest_client.specs_api();
+
+    let vol = vol_client
+        .create(
+            &CreateVolume {
+                uuid: "ec4e66fd-3b33-4439-b504-d49aba53da26".try_into().unwrap(),
+                size: 5242880,
+                replicas: 2,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("unable to create volume");
+
+    let vol = vol_client
+        .publish(
+            &PublishVolume {
+                uuid: vol.uuid().clone(),
+                share: None,
+                target_node: Some(cluster.node(0)),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec![cluster.node(1).to_string()],
+            },
+            None,
+        )
+        .await
+        .expect("failed to publish volume");
+
+    let target_node = vol.state().target.unwrap().node;
+    assert_eq!(target_node, cluster.node(0));
+
+    let vol = vol_client
+        .republish(
+            &RepublishVolume {
+                uuid: vol.uuid().clone(),
+                target_node: Some(cluster.node(1)),
+                share: VolumeShareProtocol::Nvmf,
+                reuse_existing: false,
+                frontend_node: cluster.node(1),
+                reuse_existing_fallback: false,
+            },
+            None,
+        )
+        .await
+        .expect("unable to republish volume");
+
+    let republished_node = vol.state().target.unwrap().node;
+    assert_ne!(
+        republished_node, target_node,
+        "expected nexus node to change post republish"
+    );
+
+    let nexuses = nexus_client
+        .get(Filter::None, None)
+        .await
+        .expect("Could not list nexuses");
+    assert_eq!(nexuses.0.len(), 2, "expected two nexuses after republish");
+
+    cluster
+        .composer()
+        .stop(cluster.node(0).as_str())
+        .await
+        .expect("failed to stop container");
+
+    let nexuses_after_pause = nexus_client
+        .get(Filter::None, None)
+        .await
+        .expect("could not list nexuses");
+    sleep(Duration::from_secs(2)).await;
+
+    assert_eq!(
+        nexuses_after_pause.0.len(),
+        1,
+        "expected 1 nexus after stop"
+    );
+
+    let spec = spec_client
+        .get_specs()
+        .await
+        .expect("expected to retrieve specs");
+
+    let nexus_spec = spec.nexuses;
+    assert_eq!(nexus_spec.len(), 2, "spec should contain 2 nexuses");
+
+    vol_client
+        .destroy(
+            &DestroyVolume {
+                uuid: vol.uuid().clone(),
+            },
+            None,
+        )
+        .await
+        .expect("failed to delete volume");
+
+    let spec = spec_client
+        .get_specs()
+        .await
+        .expect("expected to retrieve specs");
+
+    let nexus_spec = spec.nexuses;
+    assert_eq!(
+        nexus_spec.len(),
+        1,
+        "spec should contain one nexus after vol destroy with old target node unreachable"
+    );
+
+    let n = nexus_spec.get(0).unwrap();
+    assert_eq!(
+        n.status,
+        SpecStatus::Deleting,
+        "failed to mark nexus spec as Deleting"
+    );
+
+    cluster
+        .composer()
+        .start(cluster.node(0).as_str())
+        .await
+        .expect("failed to start container");
+    sleep(Duration::from_secs(5)).await;
+
+    let spec = spec_client
+        .get_specs()
+        .await
+        .expect("expected to retrieve specs");
+
+    let nexus_spec = spec.nexuses;
+    assert_eq!(nexus_spec.len(), 0, "spec should not contain any nexus");
+}
 
 #[tokio::test]
 async fn lazy_delete_shutdown_targets() {
