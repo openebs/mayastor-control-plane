@@ -31,12 +31,7 @@ impl ReplicaSnapshot {
     ) -> Self {
         Self {
             status: ReplicaSnapshotSpecStatus::Creating,
-            metadata: ReplicaSnapshotMeta::new(
-                spec.uuid(),
-                vol_params.uuid(),
-                vol_params.txn_id(),
-                size,
-            ),
+            metadata: ReplicaSnapshotMeta::new(vol_params.uuid(), vol_params.txn_id(), size),
             spec,
         }
     }
@@ -74,9 +69,9 @@ pub struct ReplicaSnapshotMeta {
 }
 impl ReplicaSnapshotMeta {
     /// Return a new `Self` from the given parameters.
-    pub fn new(uuid: &SnapshotId, parent: &SnapshotId, txn_id: &SnapshotTxId, size: u64) -> Self {
+    pub fn new(parent: &SnapshotId, txn_id: &SnapshotTxId, size: u64) -> Self {
         Self {
-            sequencer: OperationSequence::new(uuid.to_string()),
+            sequencer: OperationSequence::new(),
             operation: None,
             creation_timestamp: None,
             size,

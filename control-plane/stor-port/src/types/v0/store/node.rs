@@ -2,7 +2,10 @@
 use crate::{
     types::v0::{
         openapi::models,
-        store::definitions::{ObjectKey, StorableObject, StorableObjectType},
+        store::{
+            definitions::{ObjectKey, StorableObject, StorableObjectType},
+            AsOperationSequencer, OperationSequence, SpecTransaction,
+        },
         transport::{self, HostNqn, NodeId, VolumeId},
     },
     IntoOption,
@@ -161,6 +164,12 @@ pub struct NodeSpec {
     draining_volumes: HashSet<VolumeId>,
     #[serde(skip)] // Do not store.
     draining_timestamp: Option<SystemTime>,
+    /// The operation sequence resource is in.
+    #[serde(skip)]
+    sequencer: OperationSequence,
+    /// Record of the operation in progress.
+    #[serde(default)] // Ensure backwards compatibility.
+    pub operation: Option<NodeOperationState>,
 }
 
 impl NodeSpec {
@@ -180,8 +189,11 @@ impl NodeSpec {
             node_nqn,
             draining_volumes: HashSet::new(),
             draining_timestamp: None,
+            sequencer: OperationSequence::new(),
+            operation: None,
         }
     }
+
     /// Node Nvme HOSTNQN.
     pub fn node_nqn(&self) -> &Option<HostNqn> {
         &self.node_nqn
@@ -414,6 +426,16 @@ impl From<NodeSpec> for models::NodeSpec {
     }
 }
 
+impl AsOperationSequencer for NodeSpec {
+    fn as_ref(&self) -> &OperationSequence {
+        &self.sequencer
+    }
+
+    fn as_mut(&mut self) -> &mut OperationSequence {
+        &mut self.sequencer
+    }
+}
+
 impl From<CordonDrainState> for models::CordonDrainState {
     fn from(node_ds: CordonDrainState) -> Self {
         match node_ds {
@@ -471,5 +493,90 @@ impl StorableObject for NodeSpec {
 
     fn key(&self) -> Self::Key {
         NodeSpecKey(self.id.clone())
+    }
+}
+
+/// Parameter for changing the set of draining volumes.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct DrainingVolumes {
+    volumes: HashSet<VolumeId>,
+}
+impl DrainingVolumes {
+    /// Create a new DrainingVolumes object.
+    pub fn new(volumes: HashSet<VolumeId>) -> Self {
+        Self { volumes }
+    }
+}
+
+/// Available Node Operations.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum NodeOperation {
+    Cordon(String),
+    Uncordon(String),
+    Drain(String),
+    AddDrainingVolumes(DrainingVolumes),
+    RemoveDrainingVolumes(DrainingVolumes),
+    RemoveAllDrainingVolumes(),
+    SetDrained(),
+}
+
+/// Operation State for a Node spec resource.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NodeOperationState {
+    /// Record of the operation
+    pub operation: NodeOperation,
+    /// Result of the operation
+    pub result: Option<bool>,
+}
+
+impl SpecTransaction<NodeOperation> for NodeSpec {
+    fn pending_op(&self) -> bool {
+        self.operation.is_some()
+    }
+
+    fn commit_op(&mut self) {
+        if let Some(op) = self.operation.clone() {
+            match op.operation {
+                NodeOperation::Cordon(label) => {
+                    self.cordon(label);
+                }
+                NodeOperation::Drain(label) => {
+                    self.set_drain(label);
+                }
+                NodeOperation::Uncordon(label) => {
+                    self.uncordon(label);
+                }
+                NodeOperation::AddDrainingVolumes(volumes) => {
+                    self.add_draining_volumes(volumes.volumes);
+                }
+                NodeOperation::RemoveDrainingVolumes(volumes) => {
+                    self.remove_draining_volumes(volumes.volumes);
+                }
+                NodeOperation::RemoveAllDrainingVolumes() => {
+                    self.remove_all_draining_volumes();
+                }
+                NodeOperation::SetDrained() => {
+                    self.set_drained();
+                }
+            }
+        }
+        self.clear_op();
+    }
+
+    fn clear_op(&mut self) {
+        self.operation = None;
+    }
+
+    fn start_op(&mut self, operation: NodeOperation) {
+        self.operation = Some(NodeOperationState {
+            operation,
+            result: None,
+        })
+    }
+
+    fn set_op_result(&mut self, result: bool) {
+        if let Some(op) = &mut self.operation {
+            op.result = Some(result);
+        }
     }
 }

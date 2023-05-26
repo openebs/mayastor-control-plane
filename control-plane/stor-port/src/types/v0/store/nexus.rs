@@ -330,7 +330,7 @@ impl From<&CreateNexus> for NexusSpec {
             share: Protocol::None,
             managed: request.managed,
             owner: request.owner.clone(),
-            sequencer: OperationSequence::new(request.uuid.clone()),
+            sequencer: OperationSequence::new(),
             operation: None,
             nvmf_config: request.config.clone(),
             status_info: NexusStatusInfo::new(false),

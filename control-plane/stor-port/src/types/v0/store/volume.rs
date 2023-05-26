@@ -578,7 +578,7 @@ impl From<&CreateVolume> for VolumeSpec {
             status: VolumeSpecStatus::Creating,
             policy: request.policy.clone(),
             topology: request.topology.clone(),
-            sequencer: OperationSequence::new(request.uuid.clone()),
+            sequencer: OperationSequence::new(),
             last_nexus_id: None,
             operation: None,
             thin: request.thin,
@@ -659,9 +659,9 @@ impl AffinityGroupSpec {
     /// Create a new AffinityGroupSpec.
     pub fn new(id: AffinityGroupId, volumes: Vec<VolumeId>) -> Self {
         Self {
-            id: id.clone(),
+            id,
             volumes,
-            sequencer: OperationSequence::new(id),
+            sequencer: OperationSequence::new(),
         }
     }
     /// Name of the Affinity Group.
