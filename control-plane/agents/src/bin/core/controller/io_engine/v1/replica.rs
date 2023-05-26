@@ -150,7 +150,6 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
             })?;
 
         let ret = response.into_inner();
-        let ret_vec = ret.snapshots.iter().map(|s| s.try_to_agent()).collect();
-        ret_vec
+        ret.snapshots.iter().map(|s| s.try_to_agent()).collect()
     }
 }

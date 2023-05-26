@@ -278,6 +278,12 @@ pub enum SvcError {
     },
     #[snafu(display("Snapshots for multi-replica volumes are not allowed"))]
     NReplSnapshotNotAllowed {},
+    #[snafu(display("Replica's {} snapshot was unexpectedly skipped", replica))]
+    ReplicaSnapSkipped { replica: String },
+    #[snafu(display("Replica's {} snapshot was unexpectedly not taken", replica))]
+    ReplicaSnapMiss { replica: String },
+    #[snafu(display("Replica's {} snapshot failed with status {}", replica, status))]
+    ReplicaSnapError { replica: String, status: u32 },
 }
 
 impl SvcError {
@@ -763,6 +769,24 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::NReplSnapshotNotAllowed {} => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::VolumeSnapshot,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::ReplicaSnapSkipped { .. } => ReplyError {
+                kind: ReplyErrorKind::Aborted,
+                resource: ResourceKind::VolumeSnapshot,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::ReplicaSnapMiss { .. } => ReplyError {
+                kind: ReplyErrorKind::Aborted,
+                resource: ResourceKind::VolumeSnapshot,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::ReplicaSnapError { .. } => ReplyError {
+                kind: ReplyErrorKind::Aborted,
                 resource: ResourceKind::VolumeSnapshot,
                 source: desc.to_string(),
                 extra: error_str,

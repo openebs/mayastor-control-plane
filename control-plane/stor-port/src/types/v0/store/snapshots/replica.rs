@@ -72,7 +72,10 @@ impl ReplicaSnapshotMeta {
     pub fn new(parent: &SnapshotId, txn_id: &SnapshotTxId, size: u64) -> Self {
         Self {
             sequencer: OperationSequence::new(),
-            operation: None,
+            operation: Some(ReplicaSnapshotOperationState {
+                operation: ReplicaSnapshotOperation::Create,
+                result: None,
+            }),
             creation_timestamp: None,
             size,
             meta: SnapshotMeta::Volume {

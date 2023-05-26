@@ -107,6 +107,8 @@ enum ResourceKind {
   AffinityGroup = 17;
   // Volume Snapshot
   VolumeSnapshot = 18;
+  // Replica Snapshot
+  ReplicaSnapshot = 19;
 }
 
 // Filter by Node and Replica id

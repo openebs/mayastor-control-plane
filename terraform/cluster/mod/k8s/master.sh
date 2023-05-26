@@ -14,3 +14,5 @@ while ! nc -z localhost 6443; do
 done
 
 kubectl apply -f ${cni_url}
+wget https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.6.3/components.yaml
+sed 's/- --secure-port=4443/- --secure-port=4443\n        - --kubelet-insecure-tls/' components.yaml | kubectl apply -f -

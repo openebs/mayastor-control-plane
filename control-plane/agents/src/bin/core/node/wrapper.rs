@@ -1,44 +1,41 @@
 use crate::{
     controller::{
-        io_engine::{GrpcClient, GrpcClientLocked, GrpcContext, NexusApi, PoolApi, ReplicaApi},
+        io_engine::{
+            GrpcClient, GrpcClientLocked, GrpcContext, NexusApi, NexusChildActionApi,
+            NexusChildApi, NexusShareApi, NexusSnapshotApi, PoolApi, ReplicaApi,
+            ReplicaSnapshotApi,
+        },
+        registry::Registry,
         resources::ResourceUid,
-        states::{ResourceStates, ResourceStatesLocked},
+        states::{Either, ResourceStates, ResourceStatesLocked},
     },
     node::{service::NodeCommsTimeout, watchdog::Watchdog},
     pool::wrapper::PoolWrapper,
     NumRebuilds,
 };
-
 use agents::errors::SvcError;
+use grpc::operations::snapshot::SnapshotInfo;
 use stor_port::{
     transport_api::{Message, MessageId, ResourceKind},
     types::v0::{
         store,
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
-            AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica, DestroyNexus,
-            DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
-            ListReplicaSnapshots, MessageIdVs, Nexus, NexusId, NodeId, NodeState, NodeStatus,
+            AddNexusChild, ApiVersion, Child, CreateNexus, CreateNexusSnapshot,
+            CreateNexusSnapshotResp, CreatePool, CreateReplica, CreateReplicaSnapshot,
+            DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
+            ImportPool, ListReplicaSnapshots, MessageIdVs, Nexus, NexusChildAction,
+            NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, NodeState, NodeStatus,
             PoolId, PoolState, Register, RemoveNexusChild, Replica, ReplicaId, ReplicaName,
-            ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica, VolumeId,
+            ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus,
+            UnshareReplica, VolumeId,
         },
     },
 };
 
-use crate::controller::{
-    io_engine::{
-        NexusChildActionApi, NexusChildApi, NexusShareApi, NexusSnapshotApi, ReplicaSnapshotApi,
-    },
-    registry::Registry,
-    states::Either,
-};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{ops::DerefMut, sync::Arc};
-use stor_port::types::v0::transport::{
-    CreateNexusSnapshot, CreateNexusSnapshotResp, CreateReplicaSnapshot, ImportPool,
-    NexusChildAction, NexusChildActionContext, NexusChildActionKind, ReplicaSnapshot, SnapshotId,
-};
 use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (
@@ -67,6 +64,9 @@ enum ResourceType {
     Snapshots(Vec<ReplicaSnapshot>),
     Snapshot(Either<ReplicaSnapshot, SnapshotId>),
 }
+
+/// A replica's snapshot information (source+uuid).
+pub(crate) type ReplicaSnapshotInfo = SnapshotInfo<ReplicaId>;
 
 /// Wrapper over a `Node` plus a few useful methods/properties. Includes:
 /// all pools and replicas from the node
@@ -741,6 +741,19 @@ impl NodeWrapper {
             .update_resources(ResourceType::Snapshot(state));
     }
 
+    /// Fetch and Update the given snapshot's state.
+    pub(crate) async fn fetch_update_snapshot_state(
+        node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
+        snapshot: ReplicaSnapshotInfo,
+    ) -> Result<ReplicaSnapshot, SvcError> {
+        let mut dataplane = node.grpc_client_locked(GETS_TIMEOUT).await?;
+        let fetcher = node.read().await.fetcher();
+        let snapshot = fetcher.fetch_snapshot(&mut dataplane, snapshot).await?;
+        node.update_snapshot_state(Either::Insert(snapshot.clone()))
+            .await;
+        Ok(snapshot)
+    }
+
     /// Update the states of the specified resource type.
     /// Whenever the nexus states are updated the number of rebuilds must be updated.
     fn update_resources(&self, resource_type: ResourceType) {
@@ -830,8 +843,31 @@ impl NodeStateFetcher {
         &self,
         _client: &mut GrpcClient,
     ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
-        // todo: implement this
+        // client
+        //     .list_repl_snapshots(&ListReplicaSnapshots::default())
+        //     .await
         Ok(vec![])
+    }
+    /// Fetch all snapshots from this node via gRPC.
+    pub(crate) async fn fetch_snapshot(
+        &self,
+        client: &mut GrpcClient,
+        snapshot: ReplicaSnapshotInfo,
+    ) -> Result<ReplicaSnapshot, SvcError> {
+        // todo: list only our snapshot!
+        let snap_id = snapshot.snap_id;
+        let replicas = client
+            .list_repl_snapshots(&ListReplicaSnapshots {
+                replica: Some(snapshot.source_id),
+            })
+            .await?;
+        match replicas.into_iter().find(|r| r.snap_uuid == snap_id) {
+            Some(replica) => Ok(replica),
+            None => Err(SvcError::NotFound {
+                kind: ResourceKind::ReplicaSnapshot,
+                id: snap_id.to_string(),
+            }),
+        }
     }
     /// Fetch all replicas from this node via gRPC.
     pub(crate) async fn fetch_replicas(
@@ -1471,7 +1507,10 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         request: &DestroyReplicaSnapshot,
     ) -> Result<(), SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        dataplane.destroy_repl_snapshot(request).await
+        dataplane.destroy_repl_snapshot(request).await?;
+        self.update_snapshot_state(Either::Remove(request.snap_id.clone()))
+            .await;
+        Ok(())
     }
 
     async fn list_repl_snapshots(

@@ -218,16 +218,18 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 self.status = SpecStatus::Deleted;
             }
             VolumeSnapshotOperation::Create(info) => {
-                if let Some(result) = info.complete.lock().unwrap().take() {
+                if let Some(result) = info.complete.lock().unwrap().as_ref() {
                     self.metadata.size = result.replica.meta().size();
                     // replace-in-place the logged replica specs.
                     self.metadata
                         .transactions
-                        .insert(info.txn_id, vec![result.replica]);
+                        .insert(info.txn_id, vec![result.replica.clone()]);
                     self.status = SpecStatus::Created(());
+                } else {
+                    // means we've restarted with the op in progress... and the snapshot was not
+                    // successful!
+                    tracing::error!(?self, "Snapshot Create completion without the result");
                 }
-                // else means we've restarted with the op in progress... and the snapshot was not
-                // successful!
             }
         }
         self.clear_op();

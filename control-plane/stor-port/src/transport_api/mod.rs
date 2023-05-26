@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 //! All the different messages which can be sent/received to/from the control
-//! plane services and io-engine
-//! We could split these out further into categories when they start to grow
+//! plane services and io-engine.
+//! We could split these out further into categories when they start to grow.
 
-/// send messages traits
+/// Send messages traits.
 pub mod macros;
-/// Version 0 of the messages
+/// Version 0 of the messages.
 pub mod v0;
 
 pub use macros::*;
@@ -21,9 +21,9 @@ use strum_macros::{AsRefStr, Display};
 use tokio::task::JoinError;
 use tonic::Code;
 
-/// Report error chain
+/// Report error chain.
 pub trait ErrorChain {
-    /// full error chain as a string separated by ':'
+    /// Full error chain as a string separated by ':'.
     fn full_string(&self) -> String;
 }
 
@@ -32,7 +32,7 @@ where
     T: std::error::Error,
 {
     /// loops through the error chain and formats into a single string
-    /// containing all the lower level errors
+    /// containing all the lower level errors.
     fn full_string(&self) -> String {
         let mut msg = format!("{self}");
         let mut opt_source = self.source();
@@ -44,13 +44,13 @@ where
     }
 }
 
-/// Message id which uniquely identifies every type of unsolicited message
+/// Message id which uniquely identifies every type of unsolicited message.
 /// The solicited (replies) message do not currently carry an id as they
-/// are sent to a specific requested channel
+/// are sent to a specific requested channel.
 #[derive(Debug, PartialEq, Clone)]
 #[allow(non_camel_case_types)]
 pub enum MessageId {
-    /// Version 0
+    /// Version 0.
     v0(MessageIdVs),
 }
 
@@ -107,44 +107,46 @@ pub trait Message {
     fn id(&self) -> MessageId;
 }
 
-/// All the different variants of Resources
+/// All the different variants of Resources.
 #[derive(Serialize, Deserialize, Debug, Clone, AsRefStr, Display, Eq, PartialEq)]
 pub enum ResourceKind {
-    /// Unknown or unspecified resource
+    /// Unknown or unspecified resource.
     Unknown,
-    /// Node resource
+    /// Node resource.
     Node,
-    /// Pool resource
+    /// Pool resource.
     Pool,
-    /// Replica resource
+    /// Replica resource.
     Replica,
-    /// Replica state
+    /// Replica state.
     ReplicaState,
-    /// Replica spec
+    /// Replica spec.
     ReplicaSpec,
-    /// Nexus resource
+    /// Replica snapshot.
+    ReplicaSnapshot,
+    /// Nexus resource.
     Nexus,
-    /// Child resource
+    /// Child resource.
     Child,
-    /// Volume resource
+    /// Volume resource.
     Volume,
-    /// Volume snapshot
+    /// Volume snapshot.
     VolumeSnapshot,
-    /// Json Grpc methods
+    /// Json Grpc methods.
     JsonGrpc,
-    /// Block devices
+    /// Block devices.
     Block,
-    /// Watch
+    /// Watch.
     Watch,
-    /// Spec
+    /// Spec.
     Spec,
-    /// State
+    /// State.
     State,
-    /// Nvme Subsystem
+    /// Nvme Subsystem.
     NvmeSubsystem,
-    /// Nvme Controller Path
+    /// Nvme Controller Path.
     NvmePath,
-    /// Affinity Group
+    /// Affinity Group.
     AffinityGroup,
 }
 

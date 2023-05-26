@@ -100,14 +100,15 @@ impl GenericSnapshotParameters {
     }
 }
 
-/// The request type to delete a snapshot of a replica.
+/// The request type to delete a replica's snapshot.
 pub struct DestroyReplicaSnapshot {
-    /// Incoming snapshot id to be deleted.
+    /// Id of the snapshot to be deleted.
     pub snap_id: SnapshotId,
 }
 
-/// The request type to list the snapshots of a replica.
+/// The request type to list replica's snapshots.
+#[derive(Default)]
 pub struct ListReplicaSnapshots {
-    /// Incoming replica id to list snapshots for.
+    /// If Some, list snapshots from this replica only.
     pub replica: Option<ReplicaId>,
 }
