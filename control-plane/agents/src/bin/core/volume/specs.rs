@@ -629,6 +629,12 @@ impl ResourceSpecsLocked {
         specs.volume_snapshots.get(snapshot_id).cloned()
     }
 
+    /// Gets a copy of all resourced VolumeSnapshots.
+    pub(crate) fn volume_snapshots_rsc(&self) -> Vec<ResourceMutex<VolumeSnapshot>> {
+        let specs = self.read();
+        specs.volume_snapshots.to_vec()
+    }
+
     /// Get or Create the resourced VolumeSpec for the given request.
     pub(crate) fn get_or_create_volume(&self, request: &CreateVolume) -> ResourceMutex<VolumeSpec> {
         let mut specs = self.write();

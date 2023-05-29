@@ -116,7 +116,7 @@ pub(crate) struct DestroyVolumeSnapshotRequest {
 
 impl DestroyVolumeSnapshotRequest {
     /// Create a new DestroyVolumeSnapshotRequest.
-    pub fn new(
+    pub(crate) fn new(
         volume_snapshot: ResourceMutex<VolumeSnapshot>,
         info: VolumeSnapshotUserSpec,
     ) -> Self {
