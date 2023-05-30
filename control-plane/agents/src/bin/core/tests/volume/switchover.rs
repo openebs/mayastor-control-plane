@@ -1,5 +1,5 @@
 #![cfg(test)]
-
+use crate::volume::helpers::is_node_online;
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     nexus::traits::NexusOperations, pool::traits::PoolOperations,
@@ -44,6 +44,7 @@ async fn old_nexus_delete_after_vol_destroy() {
     let nexus_client = cluster.grpc_client().nexus();
     let rest_client = cluster.rest_v00();
     let spec_client = rest_client.specs_api();
+    let node_client = cluster.grpc_client().node();
 
     let vol = vol_client
         .create(
@@ -162,6 +163,13 @@ async fn old_nexus_delete_after_vol_destroy() {
         .start(cluster.node(0).as_str())
         .await
         .expect("failed to start container");
+
+    // Giving 7 seconds for node to come back. checking every 250 ms.
+
+    is_node_online(&node_client, cluster.node(0))
+        .await
+        .expect("node node online");
+
     sleep(Duration::from_secs(5)).await;
 
     let spec = spec_client

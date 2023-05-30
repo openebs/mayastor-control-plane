@@ -1,7 +1,12 @@
 use super::RECONCILE_TIMEOUT_SECS;
-use grpc::operations::{registry::traits::RegistryOperations, volume::traits::VolumeOperations};
+use grpc::operations::{
+    node::traits::NodeOperations, registry::traits::RegistryOperations,
+    volume::traits::VolumeOperations,
+};
 use std::time::Duration;
-use stor_port::types::v0::transport::{Child, ChildUri, GetSpecs, GetVolumes, Volume, VolumeId};
+use stor_port::types::v0::transport::{
+    Child, ChildUri, Filter, GetSpecs, GetVolumes, NodeId, NodeStatus, Volume, VolumeId,
+};
 
 /// Wait for the published volume to have the specified replicas and to not having the specified
 /// child. Wait up to the specified timeout.
@@ -139,4 +144,29 @@ pub(crate) async fn wait_till_volume_children(
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
+}
+
+/// Checks if node is online, returns true if yes.
+pub(crate) async fn is_node_online(
+    node_client: &impl NodeOperations,
+    node_id: NodeId,
+) -> Result<(), ()> {
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let start = std::time::Instant::now();
+    loop {
+        let node = node_client
+            .get(Filter::Node(node_id.clone()), None)
+            .await
+            .expect("Cant get node object");
+        if let Some(node) = node.0.get(0) {
+            if node.state().unwrap().status == NodeStatus::Online {
+                return Ok(());
+            };
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    Err(())
 }
