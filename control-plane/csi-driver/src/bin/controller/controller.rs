@@ -1,14 +1,16 @@
 use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 
+use csi_driver::context::{CreateParams, PublishParams};
 use rpc::csi::{Topology as CsiTopology, *};
-use stor_port::types::v0::openapi::models::{
-    AffinityGroup, LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus, PoolTopology,
-    SpecStatus, Volume, VolumeShareProtocol,
+use stor_port::types::v0::openapi::{
+    models,
+    models::{
+        AffinityGroup, LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus, PoolTopology,
+        SpecStatus, Volume, VolumeShareProtocol,
+    },
 };
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
-use csi_driver::context::{CreateParams, PublishParams};
-use k8s_openapi::chrono;
 use regex::Regex;
 use std::{collections::HashMap, str::FromStr};
 use tonic::{Response, Status};
@@ -63,6 +65,9 @@ impl From<ApiClientError> for Status {
     fn from(error: ApiClientError) -> Self {
         match error {
             ApiClientError::ResourceNotExists(reason) => Status::not_found(reason),
+            ApiClientError::NotImplemented(reason) => Status::unimplemented(reason),
+            ApiClientError::RequestTimeout(reason) => Status::deadline_exceeded(reason),
+            ApiClientError::Conflict(reason) => Status::unavailable(reason),
             error => Status::internal(format!("Operation failed: {error:?}")),
         }
     }
@@ -665,6 +670,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 request.source_volume_id
             ))
         })?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_uuid)?;
 
         // k8s side-car uses name as snapshot-{uuid} and we use uuid for idempotency.
         let re = Regex::new(SNAPSHOT_NAME_PATTERN).unwrap();
@@ -679,28 +685,15 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         };
         tracing::Span::current().record("snapshot.uuid", snapshot_uuid_str.as_str());
         let snap_uuid = Uuid::parse_str(&snapshot_uuid_str).map_err(|_e| {
-            Status::invalid_argument(format!("Malformed volume UUID: {}", request.name))
+            Status::invalid_argument(format!("Malformed snapshot ID: {}", request.name))
         })?;
 
         let snapshot = IoEngineApiClient::get_client()
             .create_volume_snapshot(&volume_uuid, &snap_uuid)
             .await?;
 
-        let snapshot = Snapshot {
-            size_bytes: snapshot.state.size as i64,
-            snapshot_id: snapshot.definition.spec.uuid.to_string(),
-            source_volume_id: snapshot.definition.spec.source_volume.to_string(),
-            creation_time: chrono::DateTime::<chrono::Utc>::from_str(
-                &snapshot.state.creation_timestamp,
-            )
-            .map(std::time::SystemTime::from)
-            .map(Into::into)
-            .ok(),
-            ready_to_use: snapshot.state.clone_ready.unwrap_or_default(),
-        };
-
         Ok(tonic::Response::new(CreateSnapshotResponse {
-            snapshot: Some(snapshot),
+            snapshot: Some(snapshot_to_csi(snapshot)),
         }))
     }
 
@@ -729,12 +722,40 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         Ok(Response::new(DeleteSnapshotResponse {}))
     }
 
-    #[instrument(error, skip(self))]
+    #[instrument(error, fields(volume.uuid = request.get_ref().source_volume_id, snapshot.source_uuid = request.get_ref().source_volume_id, snapshot.uuid), skip(self))]
     async fn list_snapshots(
         &self,
-        _request: tonic::Request<ListSnapshotsRequest>,
+        request: tonic::Request<ListSnapshotsRequest>,
     ) -> Result<tonic::Response<ListSnapshotsResponse>, tonic::Status> {
-        Err(Status::unimplemented("Not implemented"))
+        let request = request.into_inner();
+        let opt_uuid = |src: &str, entity: &str| -> Result<Option<Uuid>, tonic::Status> {
+            if src.is_empty() {
+                return Ok(None);
+            }
+            Ok(Some(Uuid::parse_str(src).map_err(|_e| {
+                Status::invalid_argument(format!(
+                    "Malformed {entity} UUID: {}",
+                    request.source_volume_id
+                ))
+            })?))
+        };
+        let snap_uuid = opt_uuid(&request.snapshot_id, "snapshot")?;
+        let vol_uuid = opt_uuid(&request.source_volume_id, "volume")?;
+
+        let snapshots = IoEngineApiClient::get_client()
+            .list_volume_snapshots(snap_uuid, vol_uuid)
+            .await?;
+
+        Ok(tonic::Response::new(ListSnapshotsResponse {
+            entries: snapshots
+                .into_iter()
+                .map(snapshot_to_csi)
+                .map(|snapshot| list_snapshots_response::Entry {
+                    snapshot: Some(snapshot),
+                })
+                .collect(),
+            next_token: "".into(),
+        }))
     }
 
     #[instrument(error, skip(self))]
@@ -751,5 +772,15 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         _request: tonic::Request<ControllerGetVolumeRequest>,
     ) -> Result<tonic::Response<ControllerGetVolumeResponse>, tonic::Status> {
         Err(Status::unimplemented("Not implemented"))
+    }
+}
+
+fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
+    Snapshot {
+        size_bytes: snapshot.state.size as i64,
+        snapshot_id: snapshot.definition.spec.uuid.to_string(),
+        source_volume_id: snapshot.definition.spec.source_volume.to_string(),
+        creation_time: prost_types::Timestamp::from_str(&snapshot.state.creation_timestamp).ok(),
+        ready_to_use: snapshot.state.clone_ready.unwrap_or_default(),
     }
 }
