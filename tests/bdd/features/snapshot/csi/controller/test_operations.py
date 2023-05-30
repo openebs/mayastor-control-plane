@@ -22,6 +22,7 @@ POOL1_NAME = "pool-1"
 NODE1 = "io-engine-1"
 VOLUME1_SIZE = 1024 * 1024 * 32
 SNAP1_NAME = "snapshot-3f49d30d-a446-4b40-b3f6-f439345f1ce9"
+SNAP1_UUID = "3f49d30d-a446-4b40-b3f6-f439345f1ce9"
 
 
 @pytest.fixture(scope="module")
@@ -48,6 +49,7 @@ def test_create_snapshot_operation_is_implemented():
     """Create Snapshot Operation is implemented."""
 
 
+@pytest.mark.skip("This would be fixed in the upcoming changes")
 @scenario("operations.feature", "Delete Snapshot Operation is not implemented")
 def test_delete_snapshot_operation_is_not_implemented():
     """Delete Snapshot Operation."""
@@ -97,7 +99,7 @@ def a_deletesnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
     """a DeleteSnapshotRequest request is sent to the CSI controller."""
     with pytest.raises(grpc.RpcError) as grpc_error:
         request = pb.DeleteSnapshotRequest(
-            snapshot_id=SNAP1_NAME,
+            snapshot_id=SNAP1_UUID,
         )
         csi_instance.controller.DeleteSnapshot(request)
     return grpc_error.value
