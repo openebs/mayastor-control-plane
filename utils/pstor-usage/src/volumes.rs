@@ -70,7 +70,7 @@ impl ResourceDelete for Vec<models::Volume> {
 #[async_trait::async_trait]
 impl ResourceUpdates for Vec<models::Volume> {
     async fn modify(&self, client: &ApiClient, count: u32) -> anyhow::Result<()> {
-        let nodes = client.nodes_api().get_nodes().await?;
+        let nodes = client.nodes_api().get_nodes(None).await?;
         let node_ids = nodes.into_iter().map(|n| n.id).collect::<Vec<_>>();
         let mut node_index = 0;
 

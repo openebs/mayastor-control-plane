@@ -33,27 +33,36 @@ pub struct Deregister {
 
 /// Node Service
 ///
-/// Get storage nodes by filter
+/// Get storage nodes by filter.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct GetNodes {
     filter: Filter,
+    ignore_notfound: bool,
 }
 
 impl GetNodes {
-    /// New get nodes request
-    pub fn new(filter: Filter) -> Self {
-        Self { filter }
+    /// New get nodes request.
+    pub fn new(filter: Filter, ignore_notfound: bool) -> Self {
+        Self {
+            filter,
+            ignore_notfound,
+        }
     }
-    /// Return `Self` to request all nodes (`None`) or a specific node (`NodeId`)
+    /// Return `Self` to request all nodes (`None`) or a specific node (`NodeId`).
     pub fn from(node_id: impl Into<Option<NodeId>>) -> Self {
         let node_id = node_id.into();
         Self {
             filter: node_id.map_or(Filter::None, Filter::Node),
+            ignore_notfound: true,
         }
     }
-    /// Get the inner `Filter`
+    /// Get the inner `Filter`.
     pub fn filter(&self) -> &Filter {
         &self.filter
+    }
+    /// Check to ignore error when not found.
+    pub fn ignore_notfound(&self) -> bool {
+        self.ignore_notfound
     }
 }
 

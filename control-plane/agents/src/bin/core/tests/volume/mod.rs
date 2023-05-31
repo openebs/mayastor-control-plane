@@ -50,7 +50,7 @@ async fn volume() {
         .unwrap();
 
     let node_client = cluster.grpc_client().node();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     test_volume(&cluster).await;

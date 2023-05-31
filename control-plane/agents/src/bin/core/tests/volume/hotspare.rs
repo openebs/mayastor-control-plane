@@ -33,7 +33,7 @@ async fn hotspare() {
         .unwrap();
 
     let node_client = cluster.grpc_client().node();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     hotspare_faulty_children(&cluster).await;
@@ -257,7 +257,12 @@ async fn hotspare_missing_children(cluster: &Cluster) {
 /// When more than 1 replicas are faulted at the same time, the new replicas should be spread
 /// across the existing pools, and no pool nor any node should be reused
 async fn hotspare_replica_count_spread(cluster: &Cluster) {
-    let nodes = cluster.rest_v00().nodes_api().get_nodes().await.unwrap();
+    let nodes = cluster
+        .rest_v00()
+        .nodes_api()
+        .get_nodes(None)
+        .await
+        .unwrap();
     assert!(
         nodes.len() >= 3,
         "We need enough nodes to be able to add at least 2 replicas"

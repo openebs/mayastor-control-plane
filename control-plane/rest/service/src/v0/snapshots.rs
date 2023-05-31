@@ -38,10 +38,6 @@ impl apis::actix_server::Snapshots for RestApi {
         Ok(())
     }
 
-    async fn get_snapshots() -> Result<Vec<VolumeSnapshot>, RestError<RestJsonError>> {
-        Err(ReplyError::unimplemented("Snapshot service is not implemented".to_string()).into())
-    }
-
     async fn get_volume_snapshot(
         Path((_volume_id, _snapshot_id)): Path<(Uuid, Uuid)>,
     ) -> Result<VolumeSnapshot, RestError<RestJsonError>> {
@@ -50,6 +46,18 @@ impl apis::actix_server::Snapshots for RestApi {
 
     async fn get_volume_snapshots(
         Path(_volume_id): Path<Uuid>,
+    ) -> Result<Vec<VolumeSnapshot>, RestError<RestJsonError>> {
+        Err(ReplyError::unimplemented("Snapshot service is not implemented".to_string()).into())
+    }
+
+    async fn get_volumes_snapshot(
+        Path(_snapshot_id): Path<Uuid>,
+    ) -> Result<VolumeSnapshot, RestError<RestJsonError>> {
+        Err(ReplyError::unimplemented("Snapshot service is not implemented".to_string()).into())
+    }
+
+    async fn get_volumes_snapshots(
+        Query((_snapshot_id, _volume_id)): Query<(Option<Uuid>, Option<Uuid>)>,
     ) -> Result<Vec<VolumeSnapshot>, RestError<RestJsonError>> {
         Err(ReplyError::unimplemented("Snapshot service is not implemented".to_string()).into())
     }

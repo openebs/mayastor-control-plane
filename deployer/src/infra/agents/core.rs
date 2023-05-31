@@ -104,7 +104,7 @@ impl CoreAgent {
 
         loop {
             let filter = Filter::Node(node.into());
-            if let Ok(nodes) = core.node().get(filter, None).await {
+            if let Ok(nodes) = core.node().get(filter, false, None).await {
                 if let Some(node) = nodes.0.into_iter().find(|n| n.id().as_str() == node) {
                     if node.state().map(|s| &s.status) == Some(&NodeStatus::Online) {
                         return;

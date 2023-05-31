@@ -81,7 +81,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     .unwrap()
     .v00();
 
-    let nodes = client.nodes_api().get_nodes().await.unwrap();
+    let nodes = client.nodes_api().get_nodes(None).await.unwrap();
     info!("Nodes: {:#?}", nodes);
     assert_eq!(nodes.len(), 2);
     let io_engine1 = cluster.node(0);
@@ -454,7 +454,7 @@ async fn client_invalid_token() {
 
     let error = client
         .nodes_api()
-        .get_nodes()
+        .get_nodes(None)
         .await
         .expect_err("Request should fail with invalid token");
 

@@ -23,7 +23,7 @@ impl PoolMgr {
         size_bytes: u64,
         use_malloc: bool,
     ) -> anyhow::Result<impl ResourceMgr> {
-        let node_ids = client.nodes_api().get_nodes().await?;
+        let node_ids = client.nodes_api().get_nodes(None).await?;
         let node_ids = node_ids.into_iter().map(|n| n.id).collect::<Vec<_>>();
 
         if let Some((dir, _)) = Self::pool_dir(use_malloc) {

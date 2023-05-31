@@ -23,8 +23,12 @@ pub enum ApiClientError {
     ResourceAlreadyExists(String),
     // No resource instance exists.
     ResourceNotExists(String),
+    NotImplemented(String),
+    RequestTimeout(String),
+    Conflict(String),
+    ResourceExhausted(String),
     // Generic operation errors.
-    GenericOperation(String),
+    GenericOperation(StatusCode, String),
     // Problems with parsing response body.
     InvalidResponse(String),
     /// URL is malformed.
@@ -59,12 +63,15 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
                 clients::tower::ResponseError::Expected(_) => {
                     // TODO: Revisit status codes checks after improving REST API HTTP codes
                     // (CAS-1124).
-                    if response.status() == StatusCode::NOT_FOUND {
-                        Self::ResourceNotExists(response.to_string())
-                    } else if response.status() == StatusCode::UNPROCESSABLE_ENTITY {
-                        Self::ResourceAlreadyExists(response.to_string())
-                    } else {
-                        Self::GenericOperation(response.to_string())
+                    let detailed = response.to_string();
+                    match response.status() {
+                        StatusCode::NOT_FOUND => Self::ResourceNotExists(detailed),
+                        StatusCode::UNPROCESSABLE_ENTITY => Self::ResourceAlreadyExists(detailed),
+                        StatusCode::NOT_IMPLEMENTED => Self::NotImplemented(detailed),
+                        StatusCode::REQUEST_TIMEOUT => Self::RequestTimeout(detailed),
+                        StatusCode::CONFLICT => Self::Conflict(detailed),
+                        StatusCode::INSUFFICIENT_STORAGE => Self::ResourceExhausted(detailed),
+                        status => Self::GenericOperation(status, detailed),
                     }
                 }
                 clients::tower::ResponseError::PayloadError { .. } => {
@@ -139,14 +146,21 @@ impl IoEngineApiClient {
 impl IoEngineApiClient {
     /// List all nodes available in IoEngine cluster.
     pub(crate) async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
-        let response = self.rest_client.nodes_api().get_nodes().await?;
+        let response = self.rest_client.nodes_api().get_nodes(None).await?;
         Ok(response.into_body())
     }
 
     /// Get a particular node available in IoEngine cluster.
     pub(crate) async fn get_node(&self, node_id: &str) -> Result<Node, ApiClientError> {
-        let response = self.rest_client.nodes_api().get_node(node_id).await?;
-        Ok(response.into_body())
+        let response = self
+            .rest_client
+            .nodes_api()
+            .get_nodes(Some(node_id))
+            .await?;
+        match response.into_body().pop() {
+            Some(node) => Ok(node),
+            None => Err(ApiClientError::ResourceNotExists("Node not found".into())),
+        }
     }
 
     /// List all pools available in IoEngine cluster.
@@ -362,5 +376,21 @@ impl IoEngineApiClient {
         )?;
         debug!(snapshot.uuid=%snapshot_id, "Volume Snapshot successfully deleted");
         Ok(())
+    }
+
+    /// List volume snapshots.
+    #[instrument(fields(snapshot.source_uuid = ?volume_id, snapshot.uuid = ?snapshot_id), skip(self, volume_id, snapshot_id))]
+    pub(crate) async fn list_volume_snapshots(
+        &self,
+        volume_id: Option<uuid::Uuid>,
+        snapshot_id: Option<uuid::Uuid>,
+    ) -> Result<Vec<models::VolumeSnapshot>, ApiClientError> {
+        let snapshots = self
+            .rest_client
+            .snapshots_api()
+            .get_volumes_snapshots(volume_id.as_ref(), snapshot_id.as_ref())
+            .await?;
+
+        Ok(snapshots.into_body())
     }
 }

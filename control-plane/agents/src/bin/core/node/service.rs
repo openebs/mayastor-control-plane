@@ -76,8 +76,13 @@ impl NodeCommsTimeout {
 #[tonic::async_trait]
 impl NodeOperations for Service {
     /// Get the nodes as specified in the filter.
-    async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Nodes, ReplyError> {
-        let req = GetNodes::new(filter);
+    async fn get(
+        &self,
+        filter: Filter,
+        ignore_notfound: bool,
+        _ctx: Option<Context>,
+    ) -> Result<Nodes, ReplyError> {
+        let req = GetNodes::new(filter, ignore_notfound);
         let nodes = self.get_nodes(&req).await?;
         Ok(nodes)
     }
@@ -303,9 +308,13 @@ impl Service {
                 let node_state = self.registry.node_state(node_id).await.ok();
                 let node_spec = self.specs().node(node_id).ok();
                 if node_state.is_none() && node_spec.is_none() {
-                    Err(SvcError::NodeNotFound {
-                        node_id: node_id.to_owned(),
-                    })
+                    if request.ignore_notfound() {
+                        Ok(Nodes::default())
+                    } else {
+                        Err(SvcError::NodeNotFound {
+                            node_id: node_id.to_owned(),
+                        })
+                    }
                 } else {
                     Ok(Nodes(vec![Node::new(
                         node_id.clone(),

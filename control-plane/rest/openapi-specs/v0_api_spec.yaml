@@ -189,6 +189,11 @@ paths:
       tags:
         - Nodes
       operationId: get_nodes
+      parameters:
+        - in: query
+          name: node_id
+          schema:
+            $ref: '#/components/schemas/NodeId'
       responses:
         '200':
           description: OK
@@ -256,7 +261,7 @@ paths:
         '5XX':
           $ref: '#/components/responses/ServerError'
       security:
-        - JWT: [ ]
+        - JWT: []
     delete:
       tags:
         - Nodes
@@ -284,7 +289,7 @@ paths:
         '5XX':
           $ref: '#/components/responses/ServerError'
       security:
-        - JWT: [ ]
+        - JWT: []
   '/nodes/{id}/drain/{label}':
     put:
       tags:
@@ -313,7 +318,7 @@ paths:
         '5XX':
           $ref: '#/components/responses/ServerError'
       security:
-        - JWT: [ ]
+        - JWT: []
   '/nodes/{id}/nexuses':
     get:
       tags:
@@ -1497,7 +1502,7 @@ paths:
         '5XX':
           $ref: '#/components/responses/ServerError'
       security:
-        - JWT: [ ]
+        - JWT: []
   '/volumes/{volume_id}/shutdown_targets':
     delete:
       tags:
@@ -1682,7 +1687,30 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
-  '/snapshots/{snapshot_id}':
+  '/volumes/snapshots/{snapshot_id}':
+    get:
+      tags:
+        - Snapshots
+      operationId: get_volumes_snapshot
+      parameters:
+        - in: path
+          name: snapshot_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeSnapshot'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
     delete:
       tags:
         - Snapshots
@@ -1702,11 +1730,24 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
-  '/snapshots':
+  '/volumes/snapshots':
     get:
       tags:
         - Snapshots
-      operationId: get_snapshots
+      operationId: get_volumes_snapshots
+      parameters:
+        - in: query
+          name: snapshot_id
+          description: The uuid of the snapshot to retrieve.
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+          required: false
+        - in: query
+          name: volume_id
+          description: The uuid of the snapshots source volume.
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+          required: false
       responses:
         '200':
           description: OK

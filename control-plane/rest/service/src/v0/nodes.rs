@@ -11,7 +11,7 @@ impl apis::actix_server::Nodes for RestApi {
         let node = node(
             id.clone(),
             client()
-                .get(Filter::Node(id.into()), None)
+                .get(Filter::Node(id.into()), false, None)
                 .await?
                 .into_inner()
                 .get(0),
@@ -19,9 +19,21 @@ impl apis::actix_server::Nodes for RestApi {
         Ok(node.into())
     }
 
-    async fn get_nodes() -> Result<Vec<models::Node>, RestError<RestJsonError>> {
-        let nodes = client().get(Filter::None, None).await?;
-        Ok(nodes.into_inner().into_vec())
+    async fn get_nodes(
+        Query(node_id): Query<Option<String>>,
+    ) -> Result<Vec<models::Node>, RestError<RestJsonError>> {
+        match node_id {
+            Some(node_id) => {
+                let nodes = client()
+                    .get(Filter::Node(node_id.into()), true, None)
+                    .await?;
+                Ok(nodes.into_inner().into_vec())
+            }
+            None => {
+                let nodes = client().get(Filter::None, false, None).await?;
+                Ok(nodes.into_inner().into_vec())
+            }
+        }
     }
 
     async fn put_node_cordon(

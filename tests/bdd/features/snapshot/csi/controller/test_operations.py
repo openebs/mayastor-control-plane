@@ -22,7 +22,7 @@ POOL1_NAME = "pool-1"
 NODE1 = "io-engine-1"
 VOLUME1_SIZE = 1024 * 1024 * 32
 SNAP1_NAME = "snapshot-3f49d30d-a446-4b40-b3f6-f439345f1ce9"
-SNAP1_UUID = "3f49d30d-a446-4b40-b3f6-f439345f1ce9"
+SNAP1_UUID = SNAP1_NAME.strip("snapshot-")
 
 
 @pytest.fixture(scope="module")
@@ -113,7 +113,7 @@ def a_deletesnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
 def a_listsnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
     """a ListSnapshotRequest request is sent to the CSI controller."""
     with pytest.raises(grpc.RpcError) as grpc_error:
-        request = pb.ListSnapshotsRequest(snapshot_id=SNAP1_NAME)
+        request = pb.ListSnapshotsRequest(snapshot_id=SNAP1_UUID)
         csi_instance.controller.ListSnapshots(request)
     return grpc_error.value
 

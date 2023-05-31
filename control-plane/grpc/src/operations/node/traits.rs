@@ -21,11 +21,16 @@ use stor_port::{
 /// Trait implemented by services which support node operations.
 #[tonic::async_trait]
 pub trait NodeOperations: Send + Sync {
-    /// Get nodes based on the filters
-    async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Nodes, ReplyError>;
-    /// Liveness probe for node service
+    /// Get nodes based on the filters.
+    async fn get(
+        &self,
+        filter: Filter,
+        ignore_notfound: bool,
+        ctx: Option<Context>,
+    ) -> Result<Nodes, ReplyError>;
+    /// Liveness probe for node service.
     async fn probe(&self, ctx: Option<Context>) -> Result<bool, ReplyError>;
-    /// Get the all or usable blockdevices from a particular node
+    /// Get the all or usable blockdevices from a particular node.
     async fn get_block_devices(
         &self,
         get_blockdevice: &dyn GetBlockDeviceInfo,

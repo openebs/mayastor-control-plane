@@ -42,14 +42,23 @@ impl NodeClient {
 #[tonic::async_trait]
 impl NodeOperations for NodeClient {
     #[tracing::instrument(name = "NodeClient::get", level = "debug", skip(self), err)]
-    async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Nodes, ReplyError> {
+    async fn get(
+        &self,
+        filter: Filter,
+        ignore_notfound: bool,
+        ctx: Option<Context>,
+    ) -> Result<Nodes, ReplyError> {
         let req: GetNodesRequest = match filter {
             Filter::Node(id) => GetNodesRequest {
                 filter: Some(get_nodes_request::Filter::Node(NodeFilter {
                     node_id: id.into(),
                 })),
+                ignore_notfound,
             },
-            _ => GetNodesRequest { filter: None },
+            _ => GetNodesRequest {
+                filter: None,
+                ignore_notfound,
+            },
         };
         let req = self.request(req, ctx, MessageIdVs::GetNodes);
         let response = self.client().get_nodes(req).await?.into_inner();
