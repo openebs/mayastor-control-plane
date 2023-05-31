@@ -704,12 +704,29 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }))
     }
 
-    #[instrument(error, skip(self))]
+    #[instrument(error, fields(snapshot.uuid = request.get_ref().snapshot_id), skip(self))]
     async fn delete_snapshot(
         &self,
-        _request: tonic::Request<DeleteSnapshotRequest>,
+        request: tonic::Request<DeleteSnapshotRequest>,
     ) -> Result<tonic::Response<DeleteSnapshotResponse>, tonic::Status> {
-        Err(Status::unimplemented("Not implemented"))
+        let args = request.into_inner();
+        tracing::trace!(snapshot.uuid = %args.snapshot_id, ?args);
+
+        let snapshot_uuid = Uuid::parse_str(&args.snapshot_id).map_err(|_e| {
+            Status::invalid_argument(format!("Malformed snapshot UUID: {}", args.snapshot_id))
+        })?;
+
+        IoEngineApiClient::get_client()
+            .delete_volume_snapshot(&snapshot_uuid)
+            .await
+            .map_err(|e| {
+                Status::internal(format!(
+                    "Failed to delete snapshot {}, error = {:?}",
+                    args.snapshot_id, e
+                ))
+            })?;
+
+        Ok(Response::new(DeleteSnapshotResponse {}))
     }
 
     #[instrument(error, skip(self))]

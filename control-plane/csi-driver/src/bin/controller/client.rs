@@ -346,4 +346,21 @@ impl IoEngineApiClient {
 
         Ok(snapshot.into_body())
     }
+
+    /// Delete a volume snapshot.
+    #[instrument(fields(snapshot.uuid = %snapshot_id), skip(self, snapshot_id))]
+    pub(crate) async fn delete_volume_snapshot(
+        &self,
+        snapshot_id: &uuid::Uuid,
+    ) -> Result<(), ApiClientError> {
+        Self::delete_idempotent(
+            self.rest_client
+                .snapshots_api()
+                .del_snapshot(snapshot_id)
+                .await,
+            true,
+        )?;
+        debug!(snapshot.uuid=%snapshot_id, "Volume Snapshot successfully deleted");
+        Ok(())
+    }
 }
