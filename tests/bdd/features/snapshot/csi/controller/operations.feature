@@ -10,7 +10,7 @@ Feature: Snapshot - CSI Controller Operations
 
     Scenario: Delete Snapshot Operation is not implemented
         When a DeleteSnapshotRequest request is sent to the CSI controller
-        Then it should fail with status NOT_IMPLEMENTED
+        Then the deletion should succeed
 
     Scenario: List Snapshot Operation is not implemented
         When a ListSnapshotRequest request is sent to the CSI controller

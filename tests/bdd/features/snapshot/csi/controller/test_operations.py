@@ -49,7 +49,7 @@ def test_create_snapshot_operation_is_implemented():
     """Create Snapshot Operation is implemented."""
 
 
-@pytest.mark.skip("This would be fixed in the upcoming changes")
+# @pytest.mark.skip("This would be fixed in the upcoming changes")
 @scenario("operations.feature", "Delete Snapshot Operation is not implemented")
 def test_delete_snapshot_operation_is_not_implemented():
     """Delete Snapshot Operation."""
@@ -97,12 +97,13 @@ def a_createsnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance, 
 )
 def a_deletesnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
     """a DeleteSnapshotRequest request is sent to the CSI controller."""
-    with pytest.raises(grpc.RpcError) as grpc_error:
+    try:
         request = pb.DeleteSnapshotRequest(
             snapshot_id=SNAP1_UUID,
         )
         csi_instance.controller.DeleteSnapshot(request)
-    return grpc_error.value
+    except grpc.RpcError as grpc_error:
+        return grpc_error.value
 
 
 @when(
@@ -112,9 +113,14 @@ def a_deletesnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
 def a_listsnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
     """a ListSnapshotRequest request is sent to the CSI controller."""
     with pytest.raises(grpc.RpcError) as grpc_error:
-        request = pb.ListSnapshotsRequest()
+        request = pb.ListSnapshotsRequest(snapshot_id=SNAP1_NAME)
         csi_instance.controller.ListSnapshots(request)
     return grpc_error.value
+
+
+@then("the deletion should succeed")
+def the_deletion_should_succeed(grpc_error):
+    assert grpc_error is None
 
 
 @then("it should fail with status NOT_IMPLEMENTED")
