@@ -48,6 +48,10 @@ impl ReplicaSnapshot {
         self.commit_op();
         self.metadata.creation_timestamp = Some(timestamp);
     }
+    /// Mark the status as deleting.
+    pub fn set_status_deleting(&mut self) {
+        self.status = ReplicaSnapshotSpecStatus::Deleting
+    }
 }
 
 /// Replica snapshot metadata, which is control-plane specific data that allows it

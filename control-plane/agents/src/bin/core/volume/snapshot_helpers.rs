@@ -38,7 +38,7 @@ impl GuardedOperationsHelper for OperationGuardArc<VolumeSnapshot> {
     type Create = VolumeSnapshotCreateInfo;
     type Owners = ();
     type Status = ();
-    type State = ();
+    type State = VolumeSnapshot;
     type UpdateOp = VolumeSnapshotOperation;
     type Inner = VolumeSnapshot;
 
@@ -53,16 +53,17 @@ impl SpecOperationsHelper for VolumeSnapshot {
     type Create = VolumeSnapshotCreateInfo;
     type Owners = ();
     type Status = ();
-    type State = ();
+    type State = VolumeSnapshot;
     type UpdateOp = VolumeSnapshotOperation;
 
     async fn start_update_op(
         &mut self,
         _registry: &Registry,
         _state: &Self::State,
-        _operation: Self::UpdateOp,
+        operation: Self::UpdateOp,
     ) -> Result<(), SvcError> {
-        unreachable!("No updates allowed")
+        self.start_op(operation);
+        Ok(())
     }
     fn start_create_op(&mut self, request: &Self::Create) {
         self.start_op(VolumeSnapshotOperation::Create(request.clone()));

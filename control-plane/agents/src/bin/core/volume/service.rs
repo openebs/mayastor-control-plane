@@ -1,23 +1,27 @@
-use crate::controller::{
-    registry::Registry,
-    resources::{
-        operations::{
-            ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing,
-            ResourceShutdownOperations, ResourceSnapshotting,
+use crate::{
+    controller::{
+        registry::Registry,
+        resources::{
+            operations::{
+                ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing,
+                ResourceShutdownOperations, ResourceSnapshotting,
+            },
+            operations_helper::ResourceSpecsLocked,
+            OperationGuardArc,
         },
-        operations_helper::ResourceSpecsLocked,
-        OperationGuardArc,
     },
+    volume::snapshot_operations::DestroyVolumeSnapshotRequest,
 };
 use agents::errors::SvcError;
 use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateVolumeInfo, CreateVolumeSnapshot, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
-            IVolumeSnapshot, PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo,
-            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
-            VolumeSnapshot, VolumeSnapshotInfo, VolumeSnapshotState, VolumeSnapshots,
+            CreateVolumeInfo, CreateVolumeSnapshot, CreateVolumeSnapshotInfo, DeleteVolumeSnapshot,
+            DeleteVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
+            PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
+            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
+            VolumeSnapshotState, VolumeSnapshots,
         },
         Pagination,
     },
@@ -168,7 +172,7 @@ impl VolumeOperations for Service {
 
     async fn create_snapshot(
         &self,
-        request: &dyn IVolumeSnapshot,
+        request: &dyn CreateVolumeSnapshotInfo,
         _ctx: Option<Context>,
     ) -> Result<VolumeSnapshot, ReplyError> {
         let service = self.clone();
@@ -180,12 +184,11 @@ impl VolumeOperations for Service {
 
     async fn delete_snapshot(
         &self,
-        request: &dyn IVolumeSnapshot,
+        request: &dyn DeleteVolumeSnapshotInfo,
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let service = self.clone();
         let request = request.info();
-
         Context::spawn(async move { service.delete_snapshot(request).await }).await??;
         Ok(())
     }
@@ -348,19 +351,49 @@ impl Service {
             .await?;
 
         let spec = snapshot.as_ref().spec();
-        let info = VolumeSnapshotInfo::new(spec.source_id(), spec.uuid().clone());
+        let info = CreateVolumeSnapshot::new(spec.source_id(), spec.uuid().clone());
         // todo: get state from registry..
         let state = VolumeSnapshotState::new(info, 0, None);
         Ok(VolumeSnapshot::new(snapshot.as_ref().into(), state))
     }
 
     /// Delete a volume snapshot.
-    async fn delete_snapshot(&self, info: VolumeSnapshotInfo) -> Result<(), SvcError> {
-        let mut volume = self.specs().volume(&info.source_id).await?;
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = ?request.source_id, snapshot.source_uuid = ?request.source_id, snapshot.uuid = %request.snap_id))]
+    async fn delete_snapshot(&self, request: DeleteVolumeSnapshot) -> Result<(), SvcError> {
+        // Fetch the snapshot spec.
+        let snapshot = self.specs().volume_snapshot_rsc(request.snap_id()).ok_or(
+            SvcError::VolSnapshotNotFound {
+                snap_id: request.snap_id().to_string(),
+                source_id: request.source_id().as_ref().map(|id| id.to_string()),
+            },
+        )?;
+        let source_id = snapshot.lock().spec().source_id().clone();
+
+        // Fetch the volume using the snapshot source.
+        let mut volume = match request.source_id() {
+            None => self.specs().volume(&source_id).await,
+            Some(vol_id) => {
+                if &source_id == vol_id {
+                    self.specs().volume(vol_id).await
+                } else {
+                    // Source id did not match, different snapshot.
+                    Err(SvcError::InvalidSnapshotSource {
+                        snap_id: request.snap_id().to_string(),
+                        invalid_source_id: vol_id.to_string(),
+                        correct_source_id: source_id.to_string(),
+                    })
+                }
+            }
+        }?;
+
+        // Execute the destroy.
         volume
             .destroy_snap(
                 &self.registry,
-                &VolumeSnapshotUserSpec::new(volume.uuid(), info.snap_id),
+                &DestroyVolumeSnapshotRequest::new(
+                    snapshot,
+                    VolumeSnapshotUserSpec::new(volume.uuid(), request.snap_id),
+                ),
             )
             .await?;
         Ok(())

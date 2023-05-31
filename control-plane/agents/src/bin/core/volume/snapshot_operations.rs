@@ -1,47 +1,46 @@
-use crate::controller::{
-    registry::Registry,
-    resources::{
-        operations::ResourceSnapshotting,
-        operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
-        OperationGuardArc,
-    },
-};
-use agents::errors::SvcError;
-use chrono::{DateTime, Utc};
-use stor_port::transport_api::ResourceKind;
-
-use stor_port::types::v0::store::volume::{VolumeOperation, VolumeSpec, VolumeTarget};
-
 use crate::{
     controller::{
         io_engine::{NexusSnapshotApi, ReplicaSnapshotApi},
+        registry::Registry,
         resources::{
-            operations::ResourceLifecycleWithLifetime, operations_helper::OnCreateFail, ResourceUid,
+            operations::{ResourceLifecycleWithLifetime, ResourceSnapshotting},
+            operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
+            OperationGuardArc, ResourceMutex, ResourceUid, UpdateInnerValue,
         },
         scheduling::resources::ChildItem,
     },
     node::wrapper::{NodeWrapper, ReplicaSnapshotInfo},
     volume::snapshot_helpers::{snapshoteable_replica, PrepareVolumeSnapshot},
 };
-use stor_port::types::v0::{
-    store::snapshots::{
-        replica::{ReplicaSnapshot, ReplicaSnapshotSpec},
-        volume::{
-            VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
-            VolumeSnapshotCreateResult, VolumeSnapshotUserSpec,
+use agents::errors::SvcError;
+use stor_port::{
+    transport_api::ResourceKind,
+    types::v0::{
+        store::{
+            snapshots::{
+                replica::{ReplicaSnapshot, ReplicaSnapshotSpec},
+                volume::{
+                    VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
+                    VolumeSnapshotCreateResult, VolumeSnapshotUserSpec,
+                },
+            },
+            volume::{VolumeOperation, VolumeSpec, VolumeTarget},
+        },
+        transport::{
+            CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateReplicaSnapshot,
+            DestroyReplicaSnapshot, SnapshotId, SnapshotParameters, SnapshotTxId,
         },
     },
-    transport::{
-        CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateReplicaSnapshot, SnapshotId,
-        SnapshotParameters,
-    },
 };
+
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 #[async_trait::async_trait]
 impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
     type Create = VolumeSnapshotUserSpec;
     type CreateOutput = OperationGuardArc<VolumeSnapshot>;
-    type Destroy = VolumeSnapshotUserSpec;
+    type Destroy = DestroyVolumeSnapshotRequest;
     type List = ();
     type ListOutput = ();
 
@@ -78,10 +77,22 @@ impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
 
     async fn destroy_snap(
         &mut self,
-        _registry: &Registry,
-        _request: &Self::Destroy,
+        registry: &Registry,
+        request: &Self::Destroy,
     ) -> Result<(), SvcError> {
-        todo!()
+        // Get the snapshot operation guard
+        let mut snapshot_guard = request.volume_snapshot.operation_guard_wait().await?;
+
+        // Get the volume state and start update.
+        let state = registry.volume_state(request.info.source_id()).await?;
+        let operation = VolumeOperation::DestroySnapshot(request.info.uuid().clone());
+        let spec_clone = self.start_update(registry, &state, operation).await?;
+
+        // Execute snapshot destroy using snapshot guard.
+        let result = snapshot_guard.destroy(registry, request).await;
+
+        // Complete volume spec update.
+        self.complete_update(registry, result, spec_clone).await
     }
 }
 
@@ -95,11 +106,32 @@ pub(crate) struct CreateVolumeSnapshotRequest<'a> {
     request: VolumeSnapshotUserSpec,
 }
 
+/// Local delete a volume snapshot request.
+pub(crate) struct DestroyVolumeSnapshotRequest {
+    /// A mutable reference to the volume snapshot which will own this snapshot.
+    volume_snapshot: ResourceMutex<VolumeSnapshot>,
+    /// Request specific info.
+    info: VolumeSnapshotUserSpec,
+}
+
+impl DestroyVolumeSnapshotRequest {
+    /// Create a new DestroyVolumeSnapshotRequest.
+    pub fn new(
+        volume_snapshot: ResourceMutex<VolumeSnapshot>,
+        info: VolumeSnapshotUserSpec,
+    ) -> Self {
+        Self {
+            volume_snapshot,
+            info,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
     type Create<'a> = CreateVolumeSnapshotRequest<'a>;
     type CreateOutput = Self;
-    type Destroy<'a> = ();
+    type Destroy = DestroyVolumeSnapshotRequest;
 
     async fn create(
         registry: &Registry,
@@ -154,11 +186,54 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
     async fn destroy(
         &mut self,
         registry: &Registry,
-        _request: &Self::Destroy<'_>,
+        request: &Self::Destroy,
     ) -> Result<(), SvcError> {
-        self.start_destroy_by(registry, &()).await?;
-        let result = Ok(());
-        self.complete_destroy(result, registry).await
+        self.start_destroy(registry).await?;
+        // Get the volume snapshot persisted info.
+        let volume_snapshot = request.volume_snapshot.lock().clone();
+
+        // Create a map to track the transactions upon deletion.
+        let mut updated_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> = HashMap::new();
+
+        // Iterate over current transactions and destroy each replica snapshot in a transaction,
+        // store the transactions and replica snapshots whose deletion failed.
+        for (txn_id, snap_list) in volume_snapshot.metadata().transactions() {
+            for snap in snap_list {
+                if let Err(err) =
+                    OperationGuardArc::<VolumeSnapshot>::destroy_replica_snapshot(snap, registry)
+                        .await
+                {
+                    if !matches!(err.tonic_code(), tonic::Code::NotFound) {
+                        let mut snap = snap.clone();
+                        // If it was an error mark the spec as deleting and push it in a map.
+                        snap.set_status_deleting();
+                        updated_transactions
+                            .entry(txn_id.clone())
+                            .or_insert_with(Vec::new)
+                            .push(snap);
+                    }
+                }
+            }
+        }
+
+        if updated_transactions.is_empty() {
+            // If there we no errors remove the persisted spec and complete destroy.
+            self.lock().set_transactions(updated_transactions);
+            self.update();
+            self.complete_destroy(Ok(()), registry).await?;
+        } else {
+            // If errors were encountered then update the persisted spec with updated transactions.
+            self.lock().set_transactions(updated_transactions);
+            self.update();
+            self.complete_destroy(
+                Err(SvcError::Deleting {
+                    kind: ResourceKind::VolumeSnapshot,
+                }),
+                registry,
+            )
+            .await?;
+        }
+        Ok(())
     }
 }
 
@@ -282,5 +357,36 @@ impl OperationGuardArc<VolumeSnapshot> {
         replica_snap.1.complete_vol(timestamp);
 
         Ok(VolumeSnapshotCreateResult::new(replica_snap.1, timestamp))
+    }
+
+    async fn destroy_replica_snapshot(
+        replica_snapshot: &ReplicaSnapshot,
+        registry: &Registry,
+    ) -> Result<(), SvcError> {
+        let specs = registry.specs();
+
+        // Fetch the replica spec for the snapshot's source replica.
+        let replica_spec = specs
+            .replica_rsc(replica_snapshot.spec().source_id())
+            .ok_or(SvcError::ReplicaNotFound {
+                replica_id: replica_snapshot.spec().source_id().clone(),
+            })?
+            .lock()
+            .clone();
+
+        // Get the pool using the replica spec and extract the node_id.
+        let node_id = specs.pool(replica_spec.pool_name())?.node;
+
+        // Get the corresponding node wrapper for the same.
+        let node_wrapper = registry.node_wrapper(&node_id).await?;
+
+        // Execute the call for corresponding dataplane node.
+        node_wrapper
+            .destroy_repl_snapshot(&DestroyReplicaSnapshot::new(
+                replica_snapshot.spec().uuid().clone(),
+            ))
+            .await?;
+
+        Ok(())
     }
 }
