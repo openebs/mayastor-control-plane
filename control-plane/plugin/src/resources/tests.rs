@@ -191,7 +191,7 @@ async fn get_nodes() {
         .await
         .rest_v00()
         .nodes_api()
-        .get_nodes()
+        .get_nodes(None)
         .await
         .unwrap();
     let node_state = nodes[0].state.as_ref().unwrap().clone();

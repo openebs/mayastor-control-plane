@@ -189,6 +189,11 @@ paths:
       tags:
         - Nodes
       operationId: get_nodes
+      parameters:
+        - in: query
+          name: node_id
+          schema:
+            $ref: '#/components/schemas/NodeId'
       responses:
         '200':
           description: OK

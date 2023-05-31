@@ -38,7 +38,7 @@ impl JsonGrpcSvc {
             .get()
             .expect("Client is not initialised")
             .node() // get node client
-            .get(Filter::Node(request.clone().node), None)
+            .get(Filter::Node(request.clone().node), false, None)
             .await
         {
             Ok(response) => response,

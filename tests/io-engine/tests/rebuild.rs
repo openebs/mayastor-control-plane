@@ -147,7 +147,12 @@ async fn concurrent_rebuilds() {
                 // if the nodes are still responsive allow for a bit more slack if the CI
                 // performance is slow.
                 let mut nodes_ok = true;
-                let nodes = cluster.rest_v00().nodes_api().get_nodes().await.unwrap();
+                let nodes = cluster
+                    .rest_v00()
+                    .nodes_api()
+                    .get_nodes(None)
+                    .await
+                    .unwrap();
                 for node in nodes {
                     if let Ok(mut handle) = cluster.grpc_handle(&node.id).await {
                         if handle.ping().await.is_err() {

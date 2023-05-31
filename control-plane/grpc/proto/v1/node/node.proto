@@ -64,6 +64,8 @@ message GetNodesRequest {
     // filter by node id
     common.NodeFilter node = 1;
   }
+  // ignore 404 not found errors
+  bool ignore_notfound = 2;
 }
 
 // Reponse to the GetNodes request

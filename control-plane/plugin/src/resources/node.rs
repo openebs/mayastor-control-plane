@@ -65,7 +65,7 @@ impl GetHeaderRow for openapi::models::Node {
 #[async_trait(?Send)]
 impl List for Nodes {
     async fn list(output: &utils::OutputFormat) {
-        match RestClient::client().nodes_api().get_nodes().await {
+        match RestClient::client().nodes_api().get_nodes(None).await {
             Ok(nodes) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, nodes.into_body());

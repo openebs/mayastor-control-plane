@@ -155,13 +155,13 @@ pub(crate) async fn is_node_online(
     let start = std::time::Instant::now();
     loop {
         let node = node_client
-            .get(Filter::Node(node_id.clone()), None)
+            .get(Filter::Node(node_id.clone()), true, None)
             .await
             .expect("Cant get node object");
         if let Some(node) = node.0.get(0) {
             if node.state().unwrap().status == NodeStatus::Online {
                 return Ok(());
-            };
+            }
         }
         if std::time::Instant::now() > (start + timeout) {
             break;

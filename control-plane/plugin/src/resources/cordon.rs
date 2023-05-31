@@ -32,7 +32,7 @@ impl Get for NodeCordon {
 #[async_trait(?Send)]
 impl List for NodeCordons {
     async fn list(output: &OutputFormat) {
-        match RestClient::client().nodes_api().get_nodes().await {
+        match RestClient::client().nodes_api().get_nodes(None).await {
             Ok(nodes) => {
                 // iterate through the nodes and filter for only those that have cordon or drain
                 // labels

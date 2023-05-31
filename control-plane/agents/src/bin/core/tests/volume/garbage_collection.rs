@@ -34,7 +34,7 @@ async fn garbage_collection() {
         .unwrap();
 
     let node_client = cluster.grpc_client().node();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     unused_nexus_reconcile(&cluster).await;
@@ -132,7 +132,7 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
         .await
         .unwrap();
 
-    let nodes = rest_api.nodes_api().get_nodes().await.unwrap();
+    let nodes = rest_api.nodes_api().get_nodes(None).await.unwrap();
     let replica_nodes = rest_api.replicas_api().get_replicas().await.unwrap();
     let replica_nodes = replica_nodes
         .into_iter()
@@ -281,7 +281,7 @@ async fn unused_reconcile(cluster: &Cluster) {
         .values()
         .map(|r| r.node.clone().unwrap())
         .collect::<Vec<_>>();
-    let nodes = rest_api.nodes_api().get_nodes().await.unwrap();
+    let nodes = rest_api.nodes_api().get_nodes(None).await.unwrap();
     let unused_node = nodes
         .iter()
         .find(|r| !data_replicas_nodes.contains(&r.id))
@@ -525,7 +525,7 @@ async fn volume_nexus_reconcile() {
         .unwrap();
 
     let node_client = cluster.grpc_client().node();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     missing_nexus_reconcile(&cluster).await;

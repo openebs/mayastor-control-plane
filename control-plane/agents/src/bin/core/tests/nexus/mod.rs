@@ -29,7 +29,7 @@ async fn nexus() {
 
     let io_engine = cluster.node(0);
     let node_client = cluster.grpc_client().node();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let rep_client = cluster.grpc_client().replica();
@@ -150,7 +150,7 @@ async fn nexus_share_transaction() {
     let node_client = cluster.grpc_client().node();
     let registry_client = cluster.grpc_client().registry();
     let nexus_client = cluster.grpc_client().nexus();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let local = "malloc:///local?size_mb=12&uuid=281b87d3-0401-459c-a594-60f76d0ce0da".into();
@@ -417,7 +417,7 @@ async fn nexus_child_transaction() {
     let node_client = cluster.grpc_client().node();
     let registry_client = cluster.grpc_client().registry();
     let nexus_client = cluster.grpc_client().nexus();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let child2 = "malloc:///ch2?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b";

@@ -39,7 +39,7 @@ impl NodeGrpc for NodeServer {
     ) -> Result<tonic::Response<node::GetNodesReply>, tonic::Status> {
         let req: GetNodesRequest = request.into_inner();
         let filter = req.filter.map(Into::into).unwrap_or_default();
-        match self.service.get(filter, None).await {
+        match self.service.get(filter, false, None).await {
             Ok(nodes) => Ok(Response::new(GetNodesReply {
                 reply: Some(get_nodes_reply::Reply::Nodes(nodes.into())),
             })),

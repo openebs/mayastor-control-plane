@@ -53,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
                 .short('t')
                 .long("rest-timeout")
                 .env("REST_TIMEOUT")
-                .default_value("5s"),
+                .default_value("30s"),
         )
         .arg(
             Arg::new("node-selector")

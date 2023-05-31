@@ -146,14 +146,21 @@ impl IoEngineApiClient {
 impl IoEngineApiClient {
     /// List all nodes available in IoEngine cluster.
     pub(crate) async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
-        let response = self.rest_client.nodes_api().get_nodes().await?;
+        let response = self.rest_client.nodes_api().get_nodes(None).await?;
         Ok(response.into_body())
     }
 
     /// Get a particular node available in IoEngine cluster.
     pub(crate) async fn get_node(&self, node_id: &str) -> Result<Node, ApiClientError> {
-        let response = self.rest_client.nodes_api().get_node(node_id).await?;
-        Ok(response.into_body())
+        let response = self
+            .rest_client
+            .nodes_api()
+            .get_nodes(Some(node_id))
+            .await?;
+        match response.into_body().pop() {
+            Some(node) => Ok(node),
+            None => Err(ApiClientError::ResourceNotExists("Node not found".into())),
+        }
     }
 
     /// List all pools available in IoEngine cluster.

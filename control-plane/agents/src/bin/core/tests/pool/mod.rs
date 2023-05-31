@@ -44,7 +44,7 @@ async fn pool() {
     let rep_client = cluster.grpc_client().replica();
 
     let io_engine = cluster.node(0);
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pool = pool_client
@@ -302,7 +302,7 @@ async fn replica_transaction() {
     let pool_client = cluster.grpc_client().pool();
     let rep_client = cluster.grpc_client().replica();
 
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pools = pool_client.get(Filter::None, None).await.unwrap();
@@ -557,7 +557,7 @@ async fn reconciler_missing_pool_state() {
 
     let node_client = cluster.grpc_client().node();
 
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let client = cluster.rest_v00();
@@ -681,7 +681,7 @@ async fn reconciler_deleting_pool_on_node_down() {
         .unwrap();
 
     let node_client = cluster.grpc_client().node();
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pool_1_id = cluster.pool(0, 0);
@@ -785,7 +785,7 @@ async fn reconciler_deleting_dirty_pool() {
     let node_client = cluster.grpc_client().node();
     let pool_client = cluster.grpc_client().pool();
 
-    let nodes = node_client.get(Filter::None, None).await.unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
     let pools = pool_client.get(Filter::None, None).await.unwrap();
