@@ -147,7 +147,7 @@ pub(crate) async fn wait_till_volume_children(
 }
 
 /// Checks if node is online, returns true if yes.
-pub(crate) async fn is_node_online(
+pub(crate) async fn wait_node_online(
     node_client: &impl NodeOperations,
     node_id: NodeId,
 ) -> Result<(), ()> {
@@ -159,7 +159,7 @@ pub(crate) async fn is_node_online(
             .await
             .expect("Cant get node object");
         if let Some(node) = node.0.get(0) {
-            if node.state().unwrap().status == NodeStatus::Online {
+            if node.state().map(|n| &n.status) == Some(&NodeStatus::Online) {
                 return Ok(());
             };
         }

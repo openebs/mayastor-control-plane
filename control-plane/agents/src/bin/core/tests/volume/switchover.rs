@@ -1,5 +1,5 @@
 #![cfg(test)]
-use crate::volume::helpers::is_node_online;
+use crate::volume::helpers::wait_node_online;
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     nexus::traits::NexusOperations, pool::traits::PoolOperations,
@@ -10,7 +10,7 @@ use std::{collections::HashMap, time::Duration};
 use stor_port::{
     transport_api::{ReplyErrorKind, ResourceKind},
     types::v0::{
-        openapi::models::SpecStatus,
+        openapi::{apis::specs_api::tower::client::direct::Specs, models::SpecStatus},
         store::nexus::NexusSpec,
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, GetSpecs, Nexus,
@@ -28,13 +28,13 @@ use tokio::time::sleep;
 // Starts node which was stopped and expects old nexus cleanup.
 #[tokio::test]
 async fn old_nexus_delete_after_vol_destroy() {
-    let reconcile_period = Duration::from_secs(1);
+    let reconcile_period = Duration::from_millis(200);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .with_cache_period("1s")
+        .with_cache_period("100ms")
         .with_reconcile_period(reconcile_period, reconcile_period)
         .build()
         .await
@@ -113,8 +113,6 @@ async fn old_nexus_delete_after_vol_destroy() {
         .get(Filter::None, None)
         .await
         .expect("could not list nexuses");
-    sleep(Duration::from_secs(2)).await;
-
     assert_eq!(
         nexuses_after_pause.0.len(),
         1,
@@ -164,21 +162,33 @@ async fn old_nexus_delete_after_vol_destroy() {
         .await
         .expect("failed to start container");
 
-    // Giving 7 seconds for node to come back. checking every 250 ms.
+    tracing::info!("Waiting for node online");
 
-    is_node_online(&node_client, cluster.node(0))
+    wait_node_online(&node_client, cluster.node(0))
         .await
-        .expect("node node online");
-
-    sleep(Duration::from_secs(5)).await;
-
-    let spec = spec_client
-        .get_specs()
+        .expect("Node to be online");
+    wait_nexus_spec_empty(spec_client)
         .await
-        .expect("expected to retrieve specs");
+        .expect("No nexus specs");
+}
 
-    let nexus_spec = spec.nexuses;
-    assert_eq!(nexus_spec.len(), 0, "spec should not contain any nexus");
+async fn wait_nexus_spec_empty(spec_client: &dyn Specs) -> Result<(), ()> {
+    let timeout = Duration::from_secs(5);
+    let start = std::time::Instant::now();
+    loop {
+        let specs = spec_client
+            .get_specs()
+            .await
+            .expect("expected to retrieve specs");
+        if specs.nexuses.is_empty() {
+            return Ok(());
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    Err(())
 }
 
 #[tokio::test]
