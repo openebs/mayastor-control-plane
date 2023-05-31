@@ -407,9 +407,9 @@ message CreateSnapshotReply {
 // Delete a snapshot of the volume
 message DeleteSnapshotRequest {
   // uuid of the volume
-  string   volume_id = 1;
+  optional string   volume_id = 1;
   // uuid of the snapshot
-  string snapshot_id = 2;
+  string          snapshot_id = 2;
 }
 // Reply type for a DeleteSnapshotRequest request
 message DeleteSnapshotReply {

@@ -5,24 +5,26 @@ use crate::{
 
 use stor_port::{
     transport_api::{ReplyError, ResourceKind},
-    types::v0::transport::{Filter, ReplicaId, VolumeId},
+    types::v0::{
+        store::SpecStatus,
+        transport::{Filter, ReplicaId, SnapshotId, SnapshotTxId, VolumeId},
+    },
     IntoOption,
 };
 
 use std::{collections::HashMap, convert::TryFrom};
-use stor_port::types::v0::{
-    store::SpecStatus,
-    transport::{SnapshotId, SnapshotTxId},
-};
 
-/// Volume snapshot information.
-pub trait IVolumeSnapshot: Send + Sync + std::fmt::Debug {
+/// Volume snapshot creation information.
+pub trait CreateVolumeSnapshotInfo: Send + Sync + std::fmt::Debug {
     /// Snapshot creation information.
-    fn info(&self) -> VolumeSnapshotInfo;
+    fn info(&self) -> SnapshotInfo<VolumeId>;
 }
 
-/// Volume snapshot create information.
-pub type VolumeSnapshotInfo = SnapshotInfo<VolumeId>;
+/// Volume snapshot deletion information.
+pub trait DeleteVolumeSnapshotInfo: Send + Sync + std::fmt::Debug {
+    /// Snapshot creation information.
+    fn info(&self) -> SnapshotInfo<Option<VolumeId>>;
+}
 
 /// A volume snapshot.
 #[derive(Debug)]
@@ -84,7 +86,7 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
 }
 
 /// Volume snapshot specification.
-pub type VolumeSnapshotSpec = VolumeSnapshotInfo;
+pub type VolumeSnapshotSpec = SnapshotInfo<VolumeId>;
 
 /// Volume snapshot meta information.
 #[derive(Debug)]
@@ -133,14 +135,14 @@ pub struct ReplicaSnapshot {
 /// Volume snapshot state information.
 #[derive(Debug)]
 pub struct VolumeSnapshotState {
-    info: VolumeSnapshotInfo,
+    info: SnapshotInfo<VolumeId>,
     size: u64,
     timestamp: Option<prost_types::Timestamp>,
 }
 impl VolumeSnapshotState {
     /// Create a new `Self` with the given parameters.
     pub fn new(
-        info: VolumeSnapshotInfo,
+        info: SnapshotInfo<VolumeId>,
         size: u64,
         timestamp: Option<prost_types::Timestamp>,
     ) -> Self {
@@ -178,15 +180,15 @@ pub struct VolumeSnapshots {
 }
 
 /// Validated create/delete volume snapshot parameters.
-pub type CreateVolumeSnapshot = VolumeSnapshotInfo;
+pub type CreateVolumeSnapshot = SnapshotInfo<VolumeId>;
 
 /// Validated delete volume snapshot parameters.
-pub type DeleteVolumeSnapshot = VolumeSnapshotInfo;
+pub type DeleteVolumeSnapshot = SnapshotInfo<Option<VolumeId>>;
 
 impl ValidateRequestTypes for volume::CreateSnapshotRequest {
     type Validated = CreateVolumeSnapshot;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
-        Ok(VolumeSnapshotInfo {
+        Ok(CreateVolumeSnapshot {
             source_id: self.volume_id.try_into().map_err(|error| {
                 ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
             })?,
@@ -199,10 +201,13 @@ impl ValidateRequestTypes for volume::CreateSnapshotRequest {
 impl ValidateRequestTypes for volume::DeleteSnapshotRequest {
     type Validated = DeleteVolumeSnapshot;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
-        Ok(VolumeSnapshotInfo {
-            source_id: self.volume_id.try_into().map_err(|error| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
-            })?,
+        Ok(DeleteVolumeSnapshot {
+            source_id: match self.volume_id {
+                None => None,
+                Some(id) => Some(id.try_into().map_err(|error| {
+                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
+                })?),
+            },
             snap_id: self.snapshot_id.try_into().map_err(|error| {
                 ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
             })?,
@@ -210,14 +215,19 @@ impl ValidateRequestTypes for volume::DeleteSnapshotRequest {
     }
 }
 
-impl IVolumeSnapshot for VolumeSnapshotInfo {
-    fn info(&self) -> VolumeSnapshotInfo {
+impl CreateVolumeSnapshotInfo for CreateVolumeSnapshot {
+    fn info(&self) -> CreateVolumeSnapshot {
+        self.clone()
+    }
+}
+impl DeleteVolumeSnapshotInfo for DeleteVolumeSnapshot {
+    fn info(&self) -> DeleteVolumeSnapshot {
         self.clone()
     }
 }
 
-impl From<&dyn IVolumeSnapshot> for volume::CreateSnapshotRequest {
-    fn from(value: &dyn IVolumeSnapshot) -> Self {
+impl From<&dyn CreateVolumeSnapshotInfo> for volume::CreateSnapshotRequest {
+    fn from(value: &dyn CreateVolumeSnapshotInfo) -> Self {
         let info = value.info();
         Self {
             volume_id: info.source_id.to_string(),
@@ -225,11 +235,11 @@ impl From<&dyn IVolumeSnapshot> for volume::CreateSnapshotRequest {
         }
     }
 }
-impl From<&dyn IVolumeSnapshot> for volume::DeleteSnapshotRequest {
-    fn from(value: &dyn IVolumeSnapshot) -> Self {
+impl From<&dyn DeleteVolumeSnapshotInfo> for volume::DeleteSnapshotRequest {
+    fn from(value: &dyn DeleteVolumeSnapshotInfo) -> Self {
         let info = value.info();
         Self {
-            volume_id: info.source_id.to_string(),
+            volume_id: info.source_id.map(|id| id.to_string()),
             snapshot_id: info.snap_id.to_string(),
         }
     }

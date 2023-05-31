@@ -43,6 +43,19 @@ async fn snapshot() {
 
     tracing::info!("Snapshot: {replica_snapshot:?}");
 
+    let del_error = vol_cli
+        .delete_snapshot(
+            &DeleteVolumeSnapshot::new(
+                &Some(replica_snapshot.spec().source_id.clone()),
+                replica_snapshot.spec().snap_id.clone(),
+            ),
+            None,
+        )
+        .await
+        .expect_err("Delete is expected to fail");
+
+    tracing::error!("Delete Snapshot Error: {del_error:?}");
+
     let volume = vol_cli
         .publish(
             &PublishVolume {
@@ -63,15 +76,4 @@ async fn snapshot() {
         .expect_err("unimplemented");
 
     tracing::info!("Snapshot: {nexus_snapshot:?}");
-
-    let error = vol_cli
-        .delete_snapshot(
-            &DeleteVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
-            None,
-        )
-        .await
-        // dataplane and control-plane api not implemented yet..
-        .expect_err("error");
-
-    tracing::info!("Delete Snapshot error: {error:?}");
 }

@@ -620,6 +620,15 @@ impl ResourceSpecsLocked {
         specs.affinity_groups.get(vol_grp_id).cloned()
     }
 
+    /// Get or Create the resourced AffinityGroupSpec for the given request.
+    pub(crate) fn volume_snapshot_rsc(
+        &self,
+        snapshot_id: &SnapshotId,
+    ) -> Option<ResourceMutex<VolumeSnapshot>> {
+        let specs = self.read();
+        specs.volume_snapshots.get(snapshot_id).cloned()
+    }
+
     /// Get or Create the resourced VolumeSpec for the given request.
     pub(crate) fn get_or_create_volume(&self, request: &CreateVolume) -> ResourceMutex<VolumeSpec> {
         let mut specs = self.write();

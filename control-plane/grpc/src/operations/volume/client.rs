@@ -2,11 +2,14 @@ use crate::{
     common::VolumeFilter,
     context::{Client, Context, TracedChannel},
     operations::{
-        volume::traits::{
-            CreateVolumeInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo, IVolumeSnapshot,
-            PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
-            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
-            VolumeSnapshots,
+        volume::{
+            traits::{
+                CreateVolumeInfo, CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo,
+                DestroyVolumeInfo, PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo,
+                ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+                VolumeSnapshot, VolumeSnapshots,
+            },
+            traits_snapshots::DeleteVolumeSnapshotInfo,
         },
         Pagination,
     },
@@ -242,7 +245,7 @@ impl VolumeOperations for VolumeClient {
     #[tracing::instrument(name = "VolumeClient::create_snapshot", level = "debug", skip(self))]
     async fn create_snapshot(
         &self,
-        request: &dyn IVolumeSnapshot,
+        request: &dyn CreateVolumeSnapshotInfo,
         ctx: Option<Context>,
     ) -> Result<VolumeSnapshot, ReplyError> {
         let req = self.request(request, ctx, MessageIdVs::CreateVolumeSnapshot);
@@ -256,9 +259,10 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::delete_snapshot", level = "debug", skip(self))]
     async fn delete_snapshot(
         &self,
-        request: &dyn IVolumeSnapshot,
+        request: &dyn DeleteVolumeSnapshotInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let req = self.request(request, ctx, MessageIdVs::DeleteVolumeSnapshot);

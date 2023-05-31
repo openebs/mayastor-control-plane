@@ -657,7 +657,7 @@ pub(crate) trait SpecOperationsHelper:
                 id: self.uuid_str(),
             })
         } else {
-            Err(SvcError::Deleting {})
+            Err(SvcError::Deleting { kind: self.kind() })
         }
     }
 

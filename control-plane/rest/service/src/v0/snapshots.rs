@@ -1,5 +1,7 @@
 use super::*;
-use grpc::operations::volume::traits::{CreateVolumeSnapshot, VolumeOperations};
+use grpc::operations::volume::traits::{
+    CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations,
+};
 use rest_client::versions::v0::{apis::Uuid, models::VolumeSnapshot};
 
 fn client() -> impl VolumeOperations {
@@ -8,14 +10,32 @@ fn client() -> impl VolumeOperations {
 
 #[async_trait::async_trait]
 impl apis::actix_server::Snapshots for RestApi {
-    async fn del_snapshot(Path(_snapshot_id): Path<Uuid>) -> Result<(), RestError<RestJsonError>> {
-        Err(ReplyError::unimplemented("Snapshot deletion is not implemented".to_string()).into())
+    async fn del_snapshot(Path(snapshot_id): Path<Uuid>) -> Result<(), RestError<RestJsonError>> {
+        client()
+            .delete_snapshot(
+                &DeleteVolumeSnapshot {
+                    source_id: None,
+                    snap_id: snapshot_id.into(),
+                },
+                None,
+            )
+            .await?;
+        Ok(())
     }
 
     async fn del_volume_snapshot(
-        Path((_volume_id, _snapshot_id)): Path<(Uuid, Uuid)>,
+        Path((volume_id, snapshot_id)): Path<(Uuid, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
-        Err(ReplyError::unimplemented("Snapshot deletion is not implemented".to_string()).into())
+        client()
+            .delete_snapshot(
+                &DeleteVolumeSnapshot {
+                    source_id: Some(volume_id.into()),
+                    snap_id: snapshot_id.into(),
+                },
+                None,
+            )
+            .await?;
+        Ok(())
     }
 
     async fn get_snapshots() -> Result<Vec<VolumeSnapshot>, RestError<RestJsonError>> {

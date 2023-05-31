@@ -8,6 +8,7 @@ pub struct SnapshotInfo<SourceId: Clone> {
     /// The snapshot id.
     pub snap_id: SnapshotId,
 }
+
 impl<SourceId: Clone> SnapshotInfo<SourceId> {
     /// Create a new `Self` from the given parameters.
     pub fn new(source_id: &SourceId, snap_id: SnapshotId) -> Self {

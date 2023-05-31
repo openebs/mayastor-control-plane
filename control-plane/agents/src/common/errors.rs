@@ -88,6 +88,22 @@ pub enum SvcError {
     InvalidPoolDeviceNum { disks: Vec<PoolDeviceUri> },
     #[snafu(display("Nexus '{}' not found", nexus_id))]
     NexusNotFound { nexus_id: String },
+    #[snafu(display("VolumeSnapshot '{}' for volume `{:?}` not found", snap_id, source_id))]
+    VolSnapshotNotFound {
+        snap_id: String,
+        source_id: Option<String>,
+    },
+    #[snafu(display(
+        "Invalid source Volume: {} for VolumeSnapshot: {}, expected source Volume: {}",
+        invalid_source_id,
+        snap_id,
+        correct_source_id
+    ))]
+    InvalidSnapshotSource {
+        snap_id: String,
+        invalid_source_id: String,
+        correct_source_id: String,
+    },
     #[snafu(display("{} '{}' not found", kind.to_string(), id))]
     NotFound { kind: ResourceKind, id: String },
     #[snafu(display("{} '{}' is still being created..", kind.to_string(), id))]
@@ -168,8 +184,8 @@ pub enum SvcError {
     WatchAlreadyExists {},
     #[snafu(display("Conflicts with existing operation - please retry"))]
     Conflict {},
-    #[snafu(display("Pending deletion - please retry"))]
-    Deleting {},
+    #[snafu(display("{} Resource pending deletion - please retry", kind.to_string()))]
+    Deleting { kind: ResourceKind },
     #[snafu(display(
         "Retried creation of resource id {} kind {} with different parameters. Existing resource: {}, Request: {}",
         id,
@@ -397,11 +413,11 @@ impl From<SvcError> for ReplyError {
                 source: desc.to_string(),
                 extra: error.full_string(),
             },
-            SvcError::Deleting { .. } => ReplyError {
+            SvcError::Deleting { kind } => ReplyError {
                 kind: ReplyErrorKind::Deleting,
-                resource: ResourceKind::Unknown,
+                resource: kind,
                 source: desc.to_string(),
-                extra: error.full_string(),
+                extra: error_str,
             },
             SvcError::ReCreateMismatch {
                 id: _, ref kind, ..
@@ -787,6 +803,18 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::ReplicaSnapError { .. } => ReplyError {
                 kind: ReplyErrorKind::Aborted,
+                resource: ResourceKind::VolumeSnapshot,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::VolSnapshotNotFound { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::VolumeSnapshot,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::InvalidSnapshotSource { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::VolumeSnapshot,
                 source: desc.to_string(),
                 extra: error_str,

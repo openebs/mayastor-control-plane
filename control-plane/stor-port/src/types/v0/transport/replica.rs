@@ -95,6 +95,19 @@ impl CreateReplicaSnapshot {
     }
 }
 
+/// The request type to delete a replica's snapshot.
+pub struct DestroyReplicaSnapshot {
+    /// Id of the snapshot to be deleted.
+    pub snap_id: SnapshotId,
+}
+
+impl DestroyReplicaSnapshot {
+    /// Create new request.
+    pub fn new(snap_id: SnapshotId) -> Self {
+        Self { snap_id }
+    }
+}
+
 /// A replica's snapshot.
 pub type ReplicaSnapshot = ReplicaSnapshotDescr;
 

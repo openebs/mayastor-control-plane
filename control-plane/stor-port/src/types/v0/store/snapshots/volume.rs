@@ -66,6 +66,10 @@ impl VolumeSnapshot {
         );
         Some(params)
     }
+    /// Set the transactions to the params.
+    pub fn set_transactions(&mut self, transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>) {
+        self.metadata.transactions = transactions
+    }
 }
 impl From<&VolumeSnapshotUserSpec> for VolumeSnapshot {
     fn from(value: &VolumeSnapshotUserSpec) -> Self {
@@ -116,6 +120,11 @@ impl VolumeSnapshotMeta {
         let txn_id: u64 = self.txn_id.parse().unwrap_or_default();
         (txn_id + 1).to_string()
     }
+
+    /// Get the transactions.
+    pub fn transactions(&self) -> &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
+        &self.transactions
+    }
 }
 
 /// Operation State for a VolumeSnapshot resource.
@@ -161,6 +170,7 @@ impl VolumeSnapshotCreateInfo {
         }
     }
 }
+
 impl PartialEq for VolumeSnapshotCreateInfo {
     fn eq(&self, other: &Self) -> bool {
         self.txn_id
