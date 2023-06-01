@@ -1,14 +1,39 @@
 use super::{SnapshotId, SnapshotSpec};
 use crate::types::v0::{
     store::{AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction},
-    transport::{ReplicaId, SnapshotParameters, SnapshotTxId, VolumeId},
+    transport::{PoolId, ReplicaId, SnapshotParameters, SnapshotTxId, VolumeId},
 };
 use chrono::{DateTime, Utc};
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
 use serde::{Deserialize, Serialize};
 
+/// User specification of a replica snapshot source.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct ReplicaSnapshotSource {
+    replica_id: ReplicaId,
+    pool_id: PoolId,
+}
+impl ReplicaSnapshotSource {
+    /// Create a new `Self` from the given parameters.
+    /// todo: use pool uuid
+    pub fn new(replica_id: &ReplicaId, pool_id: &PoolId) -> Self {
+        Self {
+            replica_id: replica_id.clone(),
+            pool_id: pool_id.clone(),
+        }
+    }
+    /// Get the snapshot source id.
+    pub fn replica_id(&self) -> &ReplicaId {
+        &self.replica_id
+    }
+    /// Get the snapshot id.
+    pub fn pool_id(&self) -> &PoolId {
+        &self.pool_id
+    }
+}
+
 /// User specification of a replica snapshot.
-pub type ReplicaSnapshotSpec = SnapshotSpec<ReplicaId>;
+pub type ReplicaSnapshotSpec = SnapshotSpec<ReplicaSnapshotSource>;
 /// State of the ReplicaSnapshotSpec Spec.
 pub type ReplicaSnapshotSpecStatus = SpecStatus<()>;
 

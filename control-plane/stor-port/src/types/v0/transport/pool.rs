@@ -340,3 +340,9 @@ pub struct DestroyPool {
     /// Id of the pool.
     pub id: PoolId,
 }
+impl DestroyPool {
+    /// Create a new `Self` from the given parameters.
+    pub fn new(node: NodeId, id: PoolId) -> Self {
+        Self { node, id }
+    }
+}

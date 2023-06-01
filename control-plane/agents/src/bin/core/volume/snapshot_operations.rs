@@ -18,7 +18,7 @@ use stor_port::{
     types::v0::{
         store::{
             snapshots::{
-                replica::{ReplicaSnapshot, ReplicaSnapshotSpec},
+                replica::{ReplicaSnapshot, ReplicaSnapshotSource, ReplicaSnapshotSpec},
                 volume::{
                     VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
                     VolumeSnapshotCreateResult, VolumeSnapshotUserSpec,
@@ -247,8 +247,10 @@ impl OperationGuardArc<VolumeSnapshot> {
         };
         let volume = self.as_ref().spec().source_id();
         let generic_params = parameters.params().clone();
+        let snapshot_source =
+            ReplicaSnapshotSource::new(replica.spec().uid(), &replica.state().pool_id);
         let replica_snapshot = ReplicaSnapshot::new_vol(
-            ReplicaSnapshotSpec::new(replica.spec().uid(), SnapshotId::new()),
+            ReplicaSnapshotSpec::new(&snapshot_source, SnapshotId::new()),
             SnapshotParameters::new(volume, generic_params),
             replica.spec().size,
         );
@@ -285,26 +287,27 @@ impl OperationGuardArc<VolumeSnapshot> {
         let replica = &prep_params.replica_snapshot.0;
         let generic_params = prep_params.parameters.params();
 
+        let replica_id = replica_snap.spec().source_id().replica_id();
         let response = target_node
             .create_nexus_snapshot(&CreateNexusSnapshot::new(
                 SnapshotParameters::new(target.nexus(), generic_params.clone()),
                 vec![CreateNexusSnapReplDescr::new(
-                    replica_snap.spec().source_id(),
+                    replica_id,
                     replica_snap.spec().uuid().clone(),
                 )],
             ))
             .await?;
 
-        if response.skipped.contains(replica_snap.spec().source_id())
-            || !response.skipped.is_empty()
-        {
+        if response.skipped.contains(replica_id) || !response.skipped.is_empty() {
             return Err(SvcError::ReplicaSnapSkipped {
                 replica: replica_snap.spec().uuid().to_string(),
             });
         }
 
         let snapped = match response.replicas_status.as_slice() {
-            [snapped] if &snapped.replica_uuid == replica_snap.spec().source_id() => Ok(snapped),
+            [snapped] if &snapped.replica_uuid == replica_snap.spec().source_id().replica_id() => {
+                Ok(snapped)
+            }
             _ => Err(SvcError::ReplicaSnapMiss {
                 replica: replica_snap.spec().uuid().to_string(),
             }),
@@ -325,7 +328,7 @@ impl OperationGuardArc<VolumeSnapshot> {
             if let Ok(snapshot) = NodeWrapper::fetch_update_snapshot_state(
                 &node,
                 ReplicaSnapshotInfo::new(
-                    replica_snap.spec().source_id(),
+                    replica_snap.spec().source_id().replica_id(),
                     replica_snap.spec().uuid().clone(),
                 ),
             )
@@ -344,12 +347,13 @@ impl OperationGuardArc<VolumeSnapshot> {
         target_node: N,
     ) -> Result<VolumeSnapshotCreateResult, SvcError> {
         let mut replica_snap = prep_params.replica_snapshot.clone();
-        let generic_params = prep_params.parameters.params();
+        let volume_params = prep_params.parameters.params().clone();
 
+        let replica_params = volume_params.with_uuid(replica_snap.1.spec().uuid());
         let response = target_node
             .create_repl_snapshot(&CreateReplicaSnapshot::new(SnapshotParameters::new(
-                prep_params.replica_snapshot.1.spec().source_id(),
-                generic_params.clone(),
+                replica_snap.1.spec().source_id().replica_id(),
+                replica_params,
             )))
             .await?;
 
@@ -366,10 +370,11 @@ impl OperationGuardArc<VolumeSnapshot> {
         let specs = registry.specs();
 
         // Fetch the replica spec for the snapshot's source replica.
+        let replica_id = replica_snapshot.spec().source_id().replica_id();
         let replica_spec = specs
-            .replica_rsc(replica_snapshot.spec().source_id())
+            .replica_rsc(replica_id)
             .ok_or(SvcError::ReplicaNotFound {
-                replica_id: replica_snapshot.spec().source_id().clone(),
+                replica_id: replica_id.clone(),
             })?
             .lock()
             .clone();

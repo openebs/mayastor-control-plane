@@ -620,7 +620,7 @@ impl ResourceSpecsLocked {
         specs.affinity_groups.get(vol_grp_id).cloned()
     }
 
-    /// Get or Create the resourced AffinityGroupSpec for the given request.
+    /// Get or Create the resourced VolumeSnapshot for the given request.
     pub(crate) fn volume_snapshot_rsc(
         &self,
         snapshot_id: &SnapshotId,
@@ -658,23 +658,25 @@ impl ResourceSpecsLocked {
     }
 
     /// Get the list of nodes where the replicas of the volume are currently placed.
-    pub(crate) fn get_volume_replica_nodes(
-        &self,
-        registry: &Registry,
-        volume_id: &VolumeId,
-    ) -> Vec<NodeId> {
+    pub(crate) fn get_volume_replica_nodes(&self, volume_id: &VolumeId) -> Vec<NodeId> {
+        let specs = self.read();
         // Map of pool id to the node id.
-        let mut pool_node_map: HashMap<PoolId, NodeId> = HashMap::new();
+        let mut pool_node_map: HashMap<PoolId, NodeId> = HashMap::with_capacity(specs.pools.len());
         // Fetch all pools and create the map.
-        for pool in registry.specs().pools() {
-            pool_node_map.insert(pool.id, pool.node);
+        for pool in specs.pools.values() {
+            let pool = pool.lock();
+            pool_node_map.insert(pool.id.clone(), pool.node.clone());
         }
         // Map the replica's pool to the node and return the list of nodes.
-        registry
-            .specs()
-            .volume_replicas(volume_id)
-            .iter()
-            .filter_map(|replica| pool_node_map.get(replica.lock().pool_name()).cloned())
+        let replicas_ref = specs.replicas.values();
+        replicas_ref
+            .filter_map(|replica| {
+                let replica = replica.lock();
+                replica
+                    .owned_by(volume_id)
+                    .then_some(pool_node_map.get(replica.pool_name()).cloned())
+                    .flatten()
+            })
             .collect()
     }
 

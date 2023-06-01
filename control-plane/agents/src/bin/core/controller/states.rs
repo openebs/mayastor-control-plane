@@ -180,11 +180,20 @@ impl ResourceStates {
         self.replicas.get(id)
     }
 
+    /// Get a snapshot with the given ID.
+    pub(crate) fn snapshot_state(
+        &self,
+        id: &SnapshotId,
+    ) -> Option<&ResourceMutex<ReplicaSnapshotState>> {
+        self.snapshots.get(id)
+    }
+
     /// Clear all state information.
     pub(crate) fn clear_all(&mut self) {
         self.nexuses.clear();
         self.pools.clear();
         self.replicas.clear();
+        self.snapshots.clear();
     }
 
     /// Takes an iterator of resources resourced by an 'Arc' and 'Mutex' and returns a vector of

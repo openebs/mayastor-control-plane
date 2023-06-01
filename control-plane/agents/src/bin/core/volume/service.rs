@@ -21,7 +21,7 @@ use grpc::{
             DeleteVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
             UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
-            VolumeSnapshotState, VolumeSnapshots,
+            VolumeSnapshots,
         },
         Pagination,
     },
@@ -349,11 +349,7 @@ impl Service {
                 &VolumeSnapshotUserSpec::new(volume.uuid(), request.snap_id),
             )
             .await?;
-
-        let spec = snapshot.as_ref().spec();
-        let info = CreateVolumeSnapshot::new(spec.source_id(), spec.uuid().clone());
-        // todo: get state from registry..
-        let state = VolumeSnapshotState::new(info, 0, None);
+        let state = self.registry.snapshot_state(snapshot.as_ref()).await?;
         Ok(VolumeSnapshot::new(snapshot.as_ref().into(), state))
     }
 

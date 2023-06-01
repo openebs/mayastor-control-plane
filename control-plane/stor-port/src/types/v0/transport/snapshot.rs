@@ -98,6 +98,12 @@ impl GenericSnapshotParameters {
     pub fn name(&self) -> &SnapshotName {
         &self.name
     }
+
+    /// Modify the uuid.
+    pub fn with_uuid(mut self, uuid: &SnapshotId) -> Self {
+        self.uuid = uuid.clone();
+        self
+    }
 }
 
 /// The request type to list replica's snapshots.

@@ -1,15 +1,27 @@
 use crate::controller::registry::Registry;
 use agents::errors::SvcError;
 use stor_port::types::v0::transport::{
-    uri_with_hostnqn, Nexus, NexusStatus, ReplicaStatus, ReplicaTopology, Volume, VolumeId,
-    VolumeState, VolumeStatus, VolumeUsage,
+    uri_with_hostnqn, Nexus, NexusStatus, ReplicaSnapshot, ReplicaStatus, ReplicaTopology, Volume,
+    VolumeId, VolumeState, VolumeStatus, VolumeUsage,
 };
 
-use crate::controller::{reconciler::PollTriggerEvent, resources::ResourceMutex};
-use grpc::operations::{PaginatedResult, Pagination};
+use crate::{
+    controller::{reconciler::PollTriggerEvent, resources::ResourceMutex},
+    node::wrapper::GetterOps,
+};
+use grpc::operations::{
+    volume::traits::{VolumeReplicaSnapshotState, VolumeSnapshotState},
+    PaginatedResult, Pagination,
+};
 use std::collections::HashMap;
 use stor_port::{
-    types::v0::store::{nexus::NexusSpec, replica::ReplicaSpec, volume::VolumeSpec},
+    transport_api::ResourceKind,
+    types::v0::store::{
+        nexus::NexusSpec,
+        replica::ReplicaSpec,
+        snapshots::{replica::ReplicaSnapshotSpec, volume::VolumeSnapshot},
+        volume::VolumeSpec,
+    },
     IntoOption,
 };
 
@@ -196,5 +208,45 @@ impl Registry {
         if volume.status() == Some(VolumeStatus::Degraded) {
             self.notify(event).await;
         }
+    }
+
+    /// Get the replica snapshot state for the specified volume.
+    pub(crate) async fn snapshot_replica(
+        &self,
+        snapshot: &ReplicaSnapshotSpec,
+    ) -> Result<ReplicaSnapshot, SvcError> {
+        let err = || SvcError::NotFound {
+            kind: ResourceKind::ReplicaSnapshot,
+            id: String::new(),
+        };
+
+        let pool_id = snapshot.source_id().pool_id();
+        let pool_node = self.pool_node(pool_id).await.ok_or(err())?;
+        let node = self.node_wrapper(&pool_node).await?;
+        let snapshot = node.snapshot(snapshot.uuid()).await;
+        snapshot.ok_or(err())
+    }
+    /// Get the snapshot state for the specified volume.
+    pub(crate) async fn snapshot_state(
+        &self,
+        snapshot: &VolumeSnapshot,
+    ) -> Result<VolumeSnapshotState, SvcError> {
+        let mut replica_snaps = vec![];
+        let mut size = None;
+        if let Some(meta_snapshots) = snapshot.metadata().replica_snapshots() {
+            replica_snaps = Vec::with_capacity(meta_snapshots.len());
+            for replica_snap in meta_snapshots {
+                replica_snaps.push(
+                    if let Ok(state) = self.snapshot_replica(replica_snap.spec()).await {
+                        size = Some(state.snap_size);
+                        VolumeReplicaSnapshotState::new_online(replica_snap.spec(), state)
+                    } else {
+                        VolumeReplicaSnapshotState::new_offline(replica_snap.spec())
+                    },
+                );
+            }
+        }
+
+        Ok(VolumeSnapshotState::new(snapshot, size, replica_snaps))
     }
 }
