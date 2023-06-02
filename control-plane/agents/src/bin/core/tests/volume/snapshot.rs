@@ -1,10 +1,14 @@
-use deployer_cluster::ClusterBuilder;
-use grpc::operations::volume::traits::{
-    CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations,
+use deployer_cluster::{Cluster, ClusterBuilder};
+use grpc::operations::{
+    pool::traits::PoolOperations,
+    volume::traits::{CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations},
 };
-use stor_port::types::v0::transport::{CreateVolume, PublishVolume, SnapshotId};
+use stor_port::types::v0::transport::{
+    CreateVolume, DestroyPool, DestroyVolume, PublishVolume, SnapshotId,
+};
 
 use std::time::Duration;
+use stor_port::transport_api::ReplyErrorKind;
 
 #[tokio::test]
 async fn snapshot() {
@@ -20,6 +24,7 @@ async fn snapshot() {
         .unwrap();
 
     let vol_cli = cluster.grpc_client().volume();
+
     let volume = vol_cli
         .create(
             &CreateVolume {
@@ -43,7 +48,7 @@ async fn snapshot() {
 
     tracing::info!("Snapshot: {replica_snapshot:?}");
 
-    let del_error = vol_cli
+    vol_cli
         .delete_snapshot(
             &DeleteVolumeSnapshot::new(
                 &Some(replica_snapshot.spec().source_id.clone()),
@@ -52,9 +57,7 @@ async fn snapshot() {
             None,
         )
         .await
-        .expect_err("Delete is expected to fail");
-
-    tracing::error!("Delete Snapshot Error: {del_error:?}");
+        .unwrap();
 
     let volume = vol_cli
         .publish(
@@ -76,4 +79,55 @@ async fn snapshot() {
         .expect_err("unimplemented");
 
     tracing::info!("Snapshot: {nexus_snapshot:?}");
+
+    pool_destroy_validation(&cluster).await;
+}
+
+async fn pool_destroy_validation(cluster: &Cluster) {
+    let vol_cli = cluster.grpc_client().volume();
+    let pool_cli = cluster.grpc_client().pool();
+
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "0e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 5242880,
+                replicas: 1,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let replica_snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    vol_cli
+        .destroy(&DestroyVolume::new(volume.uuid()), None)
+        .await
+        .unwrap();
+
+    let destroy_pool = DestroyPool::new(cluster.node(0), cluster.pool(0, 0));
+    let del_error = pool_cli
+        .destroy(&destroy_pool, None)
+        .await
+        .expect_err("Snapshot Exists");
+    assert_eq!(del_error.kind, ReplyErrorKind::InUse);
+
+    vol_cli
+        .delete_snapshot(
+            &DeleteVolumeSnapshot::new(
+                &Some(replica_snapshot.spec().source_id.clone()),
+                replica_snapshot.spec().snap_id.clone(),
+            ),
+            None,
+        )
+        .await
+        .expect_err("Delete is expected to fail");
 }

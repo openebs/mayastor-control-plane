@@ -6,9 +6,9 @@ Feature: Snapshot - CSI Controller Operations
     Scenario: Create Snapshot Operation is implemented
         Given a single replica volume
         When a CreateSnapshotRequest request is sent to the CSI controller
-        Then it should succeed
+        Then the creation should succeed
 
-    Scenario: Delete Snapshot Operation is not implemented
+    Scenario: Delete Snapshot Operation is implemented
         When a DeleteSnapshotRequest request is sent to the CSI controller
         Then the deletion should succeed
 

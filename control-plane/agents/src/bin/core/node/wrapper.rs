@@ -554,6 +554,12 @@ impl NodeWrapper {
             .replica_state(replica_id)
             .map(|r| r.lock().replica.clone())
     }
+    /// Get snapshot from `snapshot_id`.
+    pub(crate) fn snapshot(&self, snapshot_id: &SnapshotId) -> Option<ReplicaSnapshot> {
+        self.resources()
+            .snapshot_state(snapshot_id)
+            .map(|r| r.lock().snapshot.clone())
+    }
     /// Is the node online.
     pub(crate) fn is_online(&self) -> bool {
         self.status() == NodeStatus::Online
@@ -947,6 +953,8 @@ pub(crate) trait GetterOps {
     async fn nexuses(&self) -> Vec<Nexus>;
     async fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus>;
     async fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus>;
+
+    async fn snapshot(&self, snapshot: &SnapshotId) -> Option<ReplicaSnapshot>;
 }
 
 #[async_trait]
@@ -986,6 +994,11 @@ impl GetterOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus> {
         let node = self.read().await;
         node.volume_nexus(volume_id)
+    }
+
+    async fn snapshot(&self, snapshot: &SnapshotId) -> Option<ReplicaSnapshot> {
+        let node = self.read().await;
+        node.snapshot(snapshot)
     }
 }
 

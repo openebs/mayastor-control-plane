@@ -78,7 +78,8 @@ impl apis::actix_server::Snapshots for RestApi {
             ),
             state: models::VolumeSnapshotState::new_all(
                 snap.state().uuid(),
-                snap.state().size(),
+                // todo: should be optional?
+                snap.state().size().unwrap_or_default(),
                 snap.state().source_id(),
                 snap.state()
                     .timestamp()

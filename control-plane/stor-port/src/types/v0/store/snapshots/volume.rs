@@ -59,9 +59,9 @@ impl VolumeSnapshot {
             self.spec().source_id(),
             GenericSnapshotParameters::new(
                 self.spec().uuid(),
-                self.spec.source_id.to_string(),
-                self.metadata.prepare(),
-                "what's-my-name?",
+                self.spec().source_id().to_string(),
+                self.metadata().prepare(),
+                self.spec().uuid().to_string(),
             ),
         );
         Some(params)
@@ -124,6 +124,10 @@ impl VolumeSnapshotMeta {
     /// Get the transactions.
     pub fn transactions(&self) -> &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
         &self.transactions
+    }
+    /// Get the current replica snapshots.
+    pub fn replica_snapshots(&self) -> Option<&Vec<ReplicaSnapshot>> {
+        self.transactions.get(&self.txn_id)
     }
 }
 

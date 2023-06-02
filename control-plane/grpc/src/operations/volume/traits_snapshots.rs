@@ -6,8 +6,10 @@ use crate::{
 use stor_port::{
     transport_api::{ReplyError, ResourceKind},
     types::v0::{
-        store::SpecStatus,
-        transport::{Filter, ReplicaId, SnapshotId, SnapshotTxId, VolumeId},
+        self,
+        store::{snapshots::replica::ReplicaSnapshotSpec, SpecStatus},
+        transport,
+        transport::{Filter, PoolId, ReplicaId, SnapshotId, SnapshotTxId, VolumeId},
     },
     IntoOption,
 };
@@ -132,24 +134,74 @@ pub struct ReplicaSnapshot {
     source_id: ReplicaId,
 }
 
+/// Volume replica snapshot state information.
+#[derive(Debug)]
+#[allow(unused)]
+pub enum VolumeReplicaSnapshotState {
+    /// When the replica snapshot is available.
+    Online {
+        /// The pool hosting the replica snapshot.
+        pool_id: PoolId,
+        /// The replica snapshot state.
+        state: transport::ReplicaSnapshot,
+    },
+    /// When the replica snapshot is unavailable.
+    Offline {
+        /// The source id of the replica snapshot.
+        replica_id: ReplicaId,
+        /// The pool hosting the replica snapshot.
+        pool_id: PoolId,
+        /// The replica snapshot id.
+        snapshot_id: SnapshotId,
+    },
+}
+impl VolumeReplicaSnapshotState {
+    /// Create a new volume replica snapshot state when the state is present.
+    pub fn new_online(spec: &ReplicaSnapshotSpec, state: transport::ReplicaSnapshot) -> Self {
+        Self::Online {
+            pool_id: spec.source_id().pool_id().clone(),
+            state,
+        }
+    }
+    /// Create a new volume replica snapshot state when the state is unavailable.
+    pub fn new_offline(spec: &ReplicaSnapshotSpec) -> Self {
+        Self::Offline {
+            pool_id: spec.source_id().pool_id().clone(),
+            replica_id: spec.source_id().replica_id().clone(),
+            snapshot_id: spec.uuid().clone(),
+        }
+    }
+}
+
 /// Volume snapshot state information.
 #[derive(Debug)]
 pub struct VolumeSnapshotState {
     info: SnapshotInfo<VolumeId>,
-    size: u64,
+    size: Option<u64>,
     timestamp: Option<prost_types::Timestamp>,
+    repl_snapshots: Vec<VolumeReplicaSnapshotState>,
 }
 impl VolumeSnapshotState {
     /// Create a new `Self` with the given parameters.
     pub fn new(
-        info: SnapshotInfo<VolumeId>,
-        size: u64,
-        timestamp: Option<prost_types::Timestamp>,
+        volume_snapshot: &v0::store::snapshots::volume::VolumeSnapshot,
+        size: Option<u64>,
+        repl_snapshots: Vec<VolumeReplicaSnapshotState>,
     ) -> Self {
+        let spec = volume_snapshot.spec();
+        let info = CreateVolumeSnapshot::new(spec.source_id(), spec.uuid().clone());
+        let timestamp = volume_snapshot
+            .metadata()
+            .timestamp()
+            .map(|t| prost_types::Timestamp {
+                seconds: t.timestamp(),
+                nanos: t.timestamp_subsec_nanos() as i32,
+            });
         Self {
             info,
             size,
             timestamp,
+            repl_snapshots,
         }
     }
     /// Get the volume snapshot state.
@@ -161,7 +213,7 @@ impl VolumeSnapshotState {
         self.info.source_id()
     }
     /// Get the volume snapshot state.
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> Option<u64> {
         self.size
     }
     /// Get the volume snapshot state.
@@ -171,6 +223,10 @@ impl VolumeSnapshotState {
     /// Get the volume snapshot state.
     pub fn clone_ready(&self) -> bool {
         false
+    }
+    /// Get a reference to the replica snapshots.
+    pub fn repl_snapshots(&self) -> &Vec<VolumeReplicaSnapshotState> {
+        &self.repl_snapshots
     }
 }
 
@@ -301,8 +357,10 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
             },
             state: VolumeSnapshotState {
                 info,
-                size: state.state.as_ref().map(|s| s.size).unwrap_or_default(),
+                size: state.state.as_ref().map(|s| s.size),
                 timestamp: state.state.as_ref().and_then(|s| s.timestamp.clone()),
+                // todo: grpc protobuf
+                repl_snapshots: vec![],
             },
         })
     }

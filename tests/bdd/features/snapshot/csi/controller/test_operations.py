@@ -49,9 +49,8 @@ def test_create_snapshot_operation_is_implemented():
     """Create Snapshot Operation is implemented."""
 
 
-# @pytest.mark.skip("This would be fixed in the upcoming changes")
-@scenario("operations.feature", "Delete Snapshot Operation is not implemented")
-def test_delete_snapshot_operation_is_not_implemented():
+@scenario("operations.feature", "Delete Snapshot Operation is implemented")
+def test_delete_snapshot_operation_is_implemented():
     """Delete Snapshot Operation."""
 
 
@@ -71,12 +70,6 @@ def a_single_replica_volume():
     """a single replica volume."""
     yield csi_create_1_replica_nvmf_volume1()
     csi_delete_1_replica_nvmf_volume1()
-
-
-@then("it should succeed")
-def it_should_succeed(snapshot_response):
-    """it should succeed."""
-    assert snapshot_response.snapshot.source_volume_id == VOLUME1_UUID
 
 
 @when(
@@ -118,8 +111,15 @@ def a_listsnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
     return grpc_error.value
 
 
+@then("the creation should succeed")
+def the_creation_should_succeed(snapshot_response):
+    """the creation should succeed."""
+    assert snapshot_response.snapshot.source_volume_id == VOLUME1_UUID
+
+
 @then("the deletion should succeed")
 def the_deletion_should_succeed(grpc_error):
+    """the deletion should succeed."""
     assert grpc_error is None
 
 

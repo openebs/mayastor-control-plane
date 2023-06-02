@@ -9,7 +9,7 @@ use crate::{
         },
         transport::{
             self, CreateReplica, HostNqn, NodeId, PoolId, PoolUuid, Protocol, ReplicaId,
-            ReplicaName, ReplicaOwners, ReplicaShareProtocol,
+            ReplicaName, ReplicaOwners, ReplicaShareProtocol, VolumeId,
         },
     },
     IntoOption, IntoVec,
@@ -102,6 +102,10 @@ impl ReplicaSpec {
     /// Get the pool name.
     pub fn pool_name(&self) -> &PoolId {
         self.pool.pool_name()
+    }
+    /// Check if this replica is owned by the volume.
+    pub fn owned_by(&self, id: &VolumeId) -> bool {
+        self.owners.owned_by(id)
     }
 }
 
