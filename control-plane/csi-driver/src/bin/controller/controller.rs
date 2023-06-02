@@ -89,6 +89,7 @@ impl From<ApiClientError> for Status {
             ApiClientError::NotImplemented(reason) => Status::unimplemented(reason),
             ApiClientError::RequestTimeout(reason) => Status::deadline_exceeded(reason),
             ApiClientError::Conflict(reason) => Status::unavailable(reason),
+            ApiClientError::Aborted(reason) => Status::unavailable(reason),
             error => Status::internal(format!("Operation failed: {error:?}")),
         }
     }

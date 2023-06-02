@@ -40,6 +40,7 @@ use stor_port::{
 #[derive(Debug, Clone)]
 pub(super) struct Service {
     registry: Registry,
+    create_volume_limiter: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
 #[tonic::async_trait]
@@ -209,7 +210,22 @@ impl VolumeOperations for Service {
 
 impl Service {
     pub(super) fn new(registry: Registry) -> Self {
-        Self { registry }
+        Self {
+            create_volume_limiter: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                registry.create_volume_limit(),
+            )),
+            registry,
+        }
+    }
+    async fn create_volume_permit(&self) -> Result<tokio::sync::SemaphorePermit, SvcError> {
+        tokio::time::timeout(
+            // if we take too long waiting for our turn just abort..
+            std::time::Duration::from_secs(10),
+            self.create_volume_limiter.acquire(),
+        )
+        .await
+        .map_err(|_| SvcError::ServiceBusy {})?
+        .map_err(|_| SvcError::ServiceShutdown {})
     }
     fn specs(&self) -> &ResourceSpecsLocked {
         self.registry.specs()
@@ -259,6 +275,7 @@ impl Service {
     /// Create a volume using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn create_volume(&self, request: &CreateVolume) -> Result<Volume, SvcError> {
+        let _permit = self.create_volume_permit().await?;
         OperationGuardArc::<VolumeSpec>::create(&self.registry, request).await?;
         self.registry.volume(&request.uuid).await
     }

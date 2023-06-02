@@ -25,6 +25,7 @@ pub enum ApiClientError {
     ResourceNotExists(String),
     NotImplemented(String),
     RequestTimeout(String),
+    Aborted(String),
     Conflict(String),
     ResourceExhausted(String),
     // Generic operation errors.
@@ -71,6 +72,7 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
                         StatusCode::REQUEST_TIMEOUT => Self::RequestTimeout(detailed),
                         StatusCode::CONFLICT => Self::Conflict(detailed),
                         StatusCode::INSUFFICIENT_STORAGE => Self::ResourceExhausted(detailed),
+                        StatusCode::SERVICE_UNAVAILABLE => Self::Aborted(detailed),
                         status => Self::GenericOperation(status, detailed),
                     }
                 }

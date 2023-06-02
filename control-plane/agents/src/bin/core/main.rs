@@ -71,6 +71,10 @@ pub(crate) struct CliArgs {
     #[clap(long, short, default_value = utils::DEFAULT_REQ_TIMEOUT)]
     pub(crate) request_timeout: humantime::Duration,
 
+    /// The maximum number of concurrent create volume requests.
+    #[clap(long, default_value = "10")]
+    create_volume_limit: usize,
+
     /// Control hosts access control via their NQN's.
     #[clap(long, use_value_delimiter = true, default_value = utils::DEFAULT_HOST_ACCESS_CONTROL)]
     pub(crate) hosts_acl: Vec<HostAccessControl>,
@@ -151,6 +155,7 @@ async fn server(cli_args: CliArgs) {
         cli_args.reconcile_idle_period.into(),
         cli_args.faulted_child_wait_period.map(|t| t.into()),
         cli_args.max_rebuilds,
+        cli_args.create_volume_limit,
         if cli_args.hosts_acl.contains(&HostAccessControl::None) {
             vec![]
         } else {

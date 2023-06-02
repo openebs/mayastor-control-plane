@@ -300,6 +300,10 @@ pub enum SvcError {
     ReplicaSnapMiss { replica: String },
     #[snafu(display("Replica's {} snapshot failed with status {}", replica, status))]
     ReplicaSnapError { replica: String, status: u32 },
+    #[snafu(display("The service is busy, cannot process request"))]
+    ServiceBusy {},
+    #[snafu(display("The service is shutdown, cannot process request"))]
+    ServiceShutdown {},
 }
 
 impl SvcError {
@@ -816,6 +820,18 @@ impl From<SvcError> for ReplyError {
             SvcError::InvalidSnapshotSource { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::VolumeSnapshot,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::ServiceBusy {} => ReplyError {
+                kind: ReplyErrorKind::Aborted,
+                resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::ServiceShutdown {} => ReplyError {
+                kind: ReplyErrorKind::Unavailable,
+                resource: ResourceKind::Unknown,
                 source: desc.to_string(),
                 extra: error_str,
             },
