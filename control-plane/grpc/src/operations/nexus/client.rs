@@ -3,17 +3,18 @@ use crate::{
     context::{Client, Context, TracedChannel},
     nexus::{
         add_nexus_child_reply, create_nexus_reply, get_nexuses_reply, get_nexuses_request,
-        nexus_grpc_client::NexusGrpcClient, share_nexus_reply, GetNexusesRequest,
+        nexus_grpc_client::NexusGrpcClient, rebuild_history_reply, share_nexus_reply,
+        GetNexusesRequest,
     },
     operations::nexus::traits::{
-        AddNexusChildInfo, CreateNexusInfo, DestroyNexusInfo, NexusOperations,
-        RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
+        AddNexusChildInfo, CreateNexusInfo, DestroyNexusInfo, GetRebuildRecordInfo,
+        NexusOperations, RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{v0::Nexuses, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Child, Filter, MessageIdVs, Nexus},
+    types::v0::transport::{Child, Filter, MessageIdVs, Nexus, RebuildHistory},
 };
 use tonic::transport::Uri;
 
@@ -172,6 +173,24 @@ impl NexusOperations for NexusClient {
         match response.error {
             None => Ok(()),
             Some(err) => Err(err.into()),
+        }
+    }
+
+    async fn get_rebuild_history(
+        &self,
+        request: &dyn GetRebuildRecordInfo,
+        ctx: Option<Context>,
+    ) -> Result<RebuildHistory, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::GetRebuildRecord);
+        let response = self.client().get_rebuild_history(req).await?.into_inner();
+        match response.reply {
+            Some(rebuild_history_reply) => match rebuild_history_reply {
+                rebuild_history_reply::Reply::Record(history) => {
+                    Ok(RebuildHistory::try_from(history)?)
+                }
+                rebuild_history_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Nexus)),
         }
     }
 }

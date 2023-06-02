@@ -163,6 +163,8 @@ pub enum MessageIdVs {
     ReplacePathInfo,
     /// Get Nvme Subsystems.
     GetNvmeSubsystems,
+    /// Get Rebuild records.
+    GetRebuildRecord,
 }
 
 impl From<MessageIdVs> for MessageId {

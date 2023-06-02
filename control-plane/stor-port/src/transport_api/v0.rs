@@ -54,6 +54,7 @@ impl_message!(AddNexusChild);
 impl_message!(FaultNexusChild);
 impl_message!(NexusChildAction);
 impl_message!(ShutdownNexus);
+impl_message!(GetRebuildRecord);
 impl_message!(CreateNexusSnapshot);
 
 impl_vector_request_token!(Volumes, Volume);

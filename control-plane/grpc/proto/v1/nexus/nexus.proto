@@ -3,6 +3,8 @@ syntax = "proto3";
 import "v1/misc/common.proto";
 import "google/protobuf/wrappers.proto";
 
+import "google/protobuf/timestamp.proto";
+
 package v1.nexus;
 
 message Nexus {
@@ -303,6 +305,46 @@ message RemoveNexusChildReply {
   optional common.ReplyError error = 1;
 }
 
+message RebuildHistoryRequest {
+  string uuid = 1;  // uuid of the nexus
+}
+
+message RebuildHistoryReply {
+  oneof reply {
+      RebuildHistory record = 1;
+      common.ReplyError error = 2;
+  }
+}
+
+message RebuildHistory {
+  string nexus = 1;                          // uuid of the nexus
+  repeated RebuildHistoryRecord records = 2; // List of all the rebuild records across all the child
+}
+
+message RebuildHistoryRecord {
+  string child_uri = 1;                      // URI of the rebuilt child (destination)
+  string src_uri = 2;                        // URI of the source child
+  RebuildJobState state = 3;                 // final state of the rebuild job
+  uint64 blocks_total = 4;                   // total number of blocks of the child
+  uint64 blocks_recovered = 5;               // number of blocks recovered
+  uint64 blocks_transferred = 6;             // number of blocks for which the actual data transfer occurred
+  uint64 blocks_remaining = 7;               // number of blocks remaining to transfer
+  uint64 blocks_per_task = 8;                // granularity of each recovery task in blocks
+  uint64 block_size = 9;                     // size in bytes of logical block
+  bool is_partial = 10;                      // true for partial (only modified blocked transferred); false for the full rebuild (all blocks transferred)
+  google.protobuf.Timestamp start_time = 11; // start time of the rebuild (UTC)
+  google.protobuf.Timestamp end_time = 12;   // end time of the rebuild (UTC)
+}
+
+enum RebuildJobState {
+  Init = 0;        // Initialized, not yet rebuilding
+  Rebuilding = 1;  // Running rebuild
+  Stopped = 2;     // Stopped rebuild
+  Paused = 3;      // Paused rebuild
+  Failed = 4;      // Failed for some reason
+  Completed = 5;   // Rebuild completed succesfully
+}
+
 // Nexus Grpc Service
 service NexusGrpc {
   rpc GetNexuses (GetNexusesRequest) returns (GetNexusesReply) {}
@@ -312,4 +354,5 @@ service NexusGrpc {
   rpc UnshareNexus (UnshareNexusRequest) returns (UnshareNexusReply) {}
   rpc AddNexusChild (AddNexusChildRequest) returns (AddNexusChildReply) {}
   rpc RemoveNexusChild (RemoveNexusChildRequest) returns (RemoveNexusChildReply) {}
+  rpc GetRebuildHistory (RebuildHistoryRequest) returns (RebuildHistoryReply) {}
 }

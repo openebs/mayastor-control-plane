@@ -738,3 +738,80 @@ pub struct UnshareNexus {
     /// uuid of the nexus
     pub uuid: NexusId,
 }
+
+/// Get rebuild history request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct GetRebuildRecord {
+    /// UUID of Nexus.
+    pub nexus: NexusId,
+}
+
+impl GetRebuildRecord {
+    /// Returns instance of self.
+    pub fn new(uuid: NexusId) -> Self {
+        Self { nexus: uuid }
+    }
+
+    /// Get nexus id from request.
+    pub fn nexus(&self) -> NexusId {
+        self.nexus.clone()
+    }
+}
+
+/// Rebuild history lists all rebuild jobs for a nexus.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RebuildHistory {
+    /// Nexus UUID.
+    pub uuid: NexusId,
+    /// List of all rebuilds finalised on the nexus.
+    pub records: Vec<RebuildRecord>,
+}
+
+/// Rebuild job record of a child. This record is for the finalised rebuild job.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RebuildRecord {
+    /// Rebuilding child uri.
+    pub child_uri: ChildUri,
+    /// Uri of the src child for rebuild job.
+    pub src_uri: ChildUri,
+    /// Final state of the rebuild job.
+    pub state: RebuildJobState,
+    /// Total blocks to rebuild.
+    pub blocks_total: u64,
+    /// Number of blocks recovered.
+    pub blocks_recovered: u64,
+    /// Number of blocks transferred when job ended.
+    pub blocks_transferred: u64,
+    /// Number of blocks remaining when job ended.
+    pub blocks_remaining: u64,
+    /// Number of blocks per task in the job.
+    pub blocks_per_task: u64,
+    /// Size of each blocks in the task.
+    pub block_size: u64,
+    /// True means its Partial rebuild job. If false, its Full rebuild job.
+    pub is_partial: bool,
+    /// Start time of the rebuild job (UTC).
+    pub start_time: SystemTime,
+    /// End time of the rebuild job (UTC).
+    pub end_time: SystemTime,
+}
+
+/// Defines the state of Rebuild job.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub enum RebuildJobState {
+    #[default]
+    /// Rebuild Job is created.
+    Init,
+    /// Rebuild job is in progress.
+    Rebuilding,
+    /// Rebuild job is stopped.
+    Stopped,
+    /// Rebuild job is manually paused.
+    Paused,
+    /// Rebuild job failed in between.
+    Failed,
+    /// Rebuild job is completed, Successful.
+    Completed,
+}

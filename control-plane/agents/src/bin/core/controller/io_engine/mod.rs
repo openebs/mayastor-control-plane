@@ -13,10 +13,11 @@ use stor_port::{
     types::v0::transport::{
         AddNexusChild, ApiVersion, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp,
         CreatePool, CreateReplica, CreateReplicaSnapshot, DestroyNexus, DestroyPool,
-        DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild, GetBlockDevices, ImportPool,
-        ListReplicaSnapshots, Nexus, NexusChildAction, NexusChildActionContext,
-        NexusChildActionKind, NexusId, NodeId, PoolState, Register, RemoveNexusChild, Replica,
-        ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica,
+        DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild, GetBlockDevices, GetRebuildRecord,
+        ImportPool, ListReplicaSnapshots, Nexus, NexusChildAction, NexusChildActionContext,
+        NexusChildActionKind, NexusId, NodeId, PoolState, RebuildHistory, Register,
+        RemoveNexusChild, Replica, ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus,
+        UnshareNexus, UnshareReplica,
     },
 };
 
@@ -34,6 +35,7 @@ pub(crate) trait NodeApi:
     + NexusChildActionApi<NexusChildActionContext>
     + HostApi
     + NexusSnapshotApi
+    + NexusChildRebuildApi
     + ReplicaSnapshotApi
     + Sync
     + Send
@@ -146,6 +148,15 @@ pub(crate) trait NexusSnapshotApi {
         &self,
         request: &CreateNexusSnapshot,
     ) -> Result<CreateNexusSnapshotResp, SvcError>;
+}
+
+#[async_trait]
+pub(crate) trait NexusChildRebuildApi {
+    /// Lists rebuild history for a given nexus.
+    async fn list_rebuild_history(
+        &self,
+        request: &GetRebuildRecord,
+    ) -> Result<RebuildHistory, SvcError>;
 }
 
 /// The trait for replica snapshot operations like create, remove, list.

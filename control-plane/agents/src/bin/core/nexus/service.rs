@@ -10,20 +10,21 @@ use agents::errors::SvcError;
 use grpc::{
     context::Context,
     operations::nexus::traits::{
-        AddNexusChildInfo, CreateNexusInfo, DestroyNexusInfo, NexusOperations,
-        RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
+        AddNexusChildInfo, CreateNexusInfo, DestroyNexusInfo, GetRebuildRecordInfo,
+        NexusOperations, RemoveNexusChildInfo, ShareNexusInfo, UnshareNexusInfo,
     },
 };
 use stor_port::{
-    transport_api::{v0::Nexuses, ReplyError},
+    transport_api::{v0::Nexuses, ReplyError, ResourceKind},
     types::v0::{
         store::nexus::NexusSpec,
         transport::{
-            AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, Nexus,
-            RemoveNexusChild, ShareNexus, UnshareNexus,
+            AddNexusChild, Child, CreateNexus, DestroyNexus, Filter, GetNexuses, GetRebuildRecord,
+            Nexus, RebuildHistory, RemoveNexusChild, ShareNexus, UnshareNexus,
         },
     },
 };
+use tonic::Status;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -105,7 +106,21 @@ impl NexusOperations for Service {
         Context::spawn(async move { service.remove_nexus_child(&unshare_nexus).await }).await??;
         Ok(())
     }
+
+    async fn get_rebuild_history(
+        &self,
+        req: &dyn GetRebuildRecordInfo,
+        _ctx: Option<Context>,
+    ) -> Result<RebuildHistory, ReplyError> {
+        let rebuild_history = req.into();
+        let service = self.clone();
+        let records =
+            Context::spawn(async move { service.get_rebuild_history(&rebuild_history).await })
+                .await??;
+        Ok(records)
+    }
 }
+
 impl Service {
     /// Return new `Self`.
     pub(super) fn new(registry: Registry) -> Self {
@@ -179,5 +194,18 @@ impl Service {
     ) -> Result<(), SvcError> {
         let mut nexus = self.specs().nexus_opt(&request.nexus).await?;
         nexus.as_mut().remove_child(&self.registry, request).await
+    }
+
+    /// Gets rebuild history details for a nexus.
+    #[tracing::instrument(level = "info", skip(self), err, fields(nexus.uuid = %request.nexus))]
+    pub(super) async fn get_rebuild_history(
+        &self,
+        request: &GetRebuildRecord,
+    ) -> Result<RebuildHistory, SvcError> {
+        Err(SvcError::Unimplemented {
+            resource: ResourceKind::Nexus,
+            request: "get_rebuild_history".to_string(),
+            source: Status::unimplemented("api still unimplemented"),
+        })
     }
 }
