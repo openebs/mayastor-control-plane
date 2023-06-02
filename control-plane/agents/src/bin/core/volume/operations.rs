@@ -4,8 +4,8 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{
-                ResourceLifecycle, ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas,
-                ResourceSharing, ResourceShutdownOperations,
+                ResourceLifecycle, ResourceLifecycleWithLifetime, ResourceOwnerUpdate,
+                ResourcePublishing, ResourceReplicas, ResourceSharing, ResourceShutdownOperations,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
@@ -15,12 +15,13 @@ use crate::{
         },
         scheduling::pool::ENoSpcReplica,
     },
-    volume::specs::{
-        create_volume_replicas, healthy_volume_replicas, volume_move_replica_candidates,
+    volume::{
+        snapshot_operations::DestroyVolumeSnapshotRequest,
+        specs::{create_volume_replicas, healthy_volume_replicas, volume_move_replica_candidates},
     },
 };
-use agents::errors::SvcError;
 
+use agents::errors::SvcError;
 use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
@@ -219,6 +220,27 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
                 if let Err(error) = replica.remove_owners(registry, &disowner, true).await {
                     tracing::error!(replica.uuid=%replica.uuid(), error=%error, "Failed to disown volume replica");
                 }
+            }
+        }
+
+        // Destroy all the snapshots that are in creating state as the source is getting destroyed.
+        let pending_creation_snapshots = specs.creating_snapshots_by_volume(self.uuid());
+        for snapshot in pending_creation_snapshots {
+            let mut snapshot_guard = match snapshot.operation_guard_wait().await {
+                Ok(snapshot_guard) => snapshot_guard,
+                Err(_) => continue,
+            };
+            let snapshot_user_spec = snapshot.lock().spec().clone();
+            let result = snapshot_guard
+                .destroy(
+                    registry,
+                    &DestroyVolumeSnapshotRequest::new(snapshot, snapshot_user_spec),
+                )
+                .await;
+            if let Err(error) = result {
+                tracing::warn!(snapshot.uuid=%snapshot_guard.uuid(), error=%error,
+                    "Snapshot destruction failed. It will be garbage collected later"
+                );
             }
         }
 

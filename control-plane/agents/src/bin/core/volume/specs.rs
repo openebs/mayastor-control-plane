@@ -635,6 +635,23 @@ impl ResourceSpecsLocked {
         specs.volume_snapshots.to_vec()
     }
 
+    /// Get the list of snapshots that are in creating state by its source.
+    pub(crate) fn creating_snapshots_by_volume(
+        &self,
+        volume_id: &VolumeId,
+    ) -> Vec<ResourceMutex<VolumeSnapshot>> {
+        let specs = self.read();
+        specs
+            .volume_snapshots
+            .values()
+            .filter(|s| {
+                let locked_spec = s.lock();
+                locked_spec.status().creating() && locked_spec.spec().source_id() == volume_id
+            })
+            .cloned()
+            .collect()
+    }
+
     /// Get or Create the resourced VolumeSpec for the given request.
     pub(crate) fn get_or_create_volume(&self, request: &CreateVolume) -> ResourceMutex<VolumeSpec> {
         let mut specs = self.write();
