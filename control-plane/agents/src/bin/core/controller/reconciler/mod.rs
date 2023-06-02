@@ -4,6 +4,7 @@ mod persistent_store;
 pub(crate) mod poller;
 mod pool;
 mod replica;
+mod snapshot;
 mod volume;
 
 pub(crate) use crate::controller::task_poller::PollTriggerEvent;
