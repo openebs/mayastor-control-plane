@@ -213,10 +213,11 @@ if [ -n "$TAG" ] && [ "$TAG" != "$(get_tag)" ]; then
   # Set the TAG which basically allows building the binaries as if it were a git tag
   NIX_TAG_ARGS="--argstr tag $TAG"
   NIX_BUILD="$NIX_BUILD $NIX_TAG_ARGS"
+  alias_tag=
 fi
 
 TAG=${TAG:-$HASH}
-if [ -n "$OVERRIDE_COMMIT_HASH" ]; then
+if [ -n "$OVERRIDE_COMMIT_HASH" ] && [ -n "$alias_tag" ]; then
   # Set the TAG to the alias and remove the alias
   NIX_TAG_ARGS="--argstr img_tag $alias_tag"
   NIX_BUILD="$NIX_BUILD $NIX_TAG_ARGS"

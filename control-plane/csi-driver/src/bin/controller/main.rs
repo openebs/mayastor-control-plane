@@ -12,6 +12,8 @@ use client::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
 use config::CsiControllerConfig;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
+const CONCURRENCY_LIMIT: usize = 10;
+const REST_TIMEOUT: &str = "30s";
 
 /// Initialize all components before starting the CSI controller.
 fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
@@ -53,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
                 .short('t')
                 .long("rest-timeout")
                 .env("REST_TIMEOUT")
-                .default_value("30s"),
+                .default_value(REST_TIMEOUT),
         )
         .arg(
             Arg::new("node-selector")
@@ -65,6 +67,15 @@ async fn main() -> anyhow::Result<()> {
                 .help(
                     "The node selector label which this plugin will report as part of its topology.\n\
                     Example:\n --node-selector key=value --node-selector key2=value2",
+                ),
+        )
+        .arg(
+            Arg::new("create-volume-limit")
+                .long("create-volume-limit")
+                .value_parser(clap::value_parser!(usize))
+                .default_value(CONCURRENCY_LIMIT.to_string())
+                .help(
+                    "The number of worker threads that process requests"
                 ),
         )
         .get_matches();

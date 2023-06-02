@@ -10,6 +10,7 @@ use tracing::{debug, error, info};
 use std::{
     fs,
     io::ErrorKind,
+    ops::Add,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -127,9 +128,12 @@ impl CsiServer {
         // Try to detect REST API endpoint to debug the accessibility status.
         ping_rest_api().await;
 
+        let cfg = crate::CsiControllerConfig::get_config();
+
         Server::builder()
+            .timeout(cfg.io_timeout().add(std::time::Duration::from_secs(3)))
             .add_service(IdentityServer::new(CsiIdentitySvc::default()))
-            .add_service(ControllerServer::new(CsiControllerSvc::default()))
+            .add_service(ControllerServer::new(CsiControllerSvc::new(cfg)))
             .serve_with_incoming_shutdown(incoming, shutdown::Shutdown::wait())
             .await
             .map_err(|_| "Failed to start gRPC server")?;
