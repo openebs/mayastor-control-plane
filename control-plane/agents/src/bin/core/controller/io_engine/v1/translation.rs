@@ -194,33 +194,29 @@ impl TryIoEngineToAgent for v1::replica::CreateReplicaSnapshotResponse {
 impl TryIoEngineToAgent for v1::replica::ReplicaSnapshot {
     type AgentMessage = transport::ReplicaSnapshotDescr;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
-        Ok(Self::AgentMessage {
-            snap_uuid: SnapshotId::try_from(self.snapshot_uuid.as_str()).map_err(|_| {
+        Ok(Self::AgentMessage::new(
+            SnapshotId::try_from(self.snapshot_uuid.as_str()).map_err(|_| {
                 SvcError::InvalidUuid {
                     uuid: self.snapshot_uuid.to_owned(),
                     kind: ResourceKind::ReplicaSnapshot,
                 }
             })?,
-            snap_name: self.snapshot_name.clone(),
-            snap_size: self.snapshot_size,
-            num_clones: self.num_clones,
-            snap_time: self
-                .timestamp
+            &self.snapshot_uuid,
+            self.snapshot_size,
+            self.num_clones,
+            self.timestamp
                 .clone()
                 .and_then(|t| std::time::SystemTime::try_from(t).ok())
-                // only valid on create, not on list! should we handle this as None ?
                 .unwrap_or(UNIX_EPOCH),
-            replica_uuid: ReplicaId::try_from(self.replica_uuid.as_str()).map_err(|_| {
-                SvcError::InvalidUuid {
-                    uuid: self.replica_uuid.to_owned(),
-                    kind: ResourceKind::Replica,
-                }
+            ReplicaId::try_from(self.replica_uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.replica_uuid.to_owned(),
+                kind: ResourceKind::Replica,
             })?,
-            replica_size: self.replica_size,
-            entity_id: self.entity_id.clone(),
-            txn_id: self.txn_id.clone(),
-            valid: self.valid_snapshot,
-        })
+            self.replica_size,
+            &self.entity_id,
+            &self.txn_id,
+            self.valid_snapshot,
+        ))
     }
 }
 

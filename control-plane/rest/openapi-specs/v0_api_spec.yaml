@@ -1678,9 +1678,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VolumeSnapshot'
+                $ref: '#/components/schemas/VolumeSnapshots'
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -1754,9 +1752,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VolumeSnapshot'
+                $ref: '#/components/schemas/VolumeSnapshots'
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -3181,6 +3177,17 @@ components:
       required:
         - spec
         - state
+    VolumeSnapshots:
+      description: |-
+        Array of volume snapshots.
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/VolumeSnapshot'
+      required:
+        - entries
     VolumeSnapshot:
       description: |-
         Volume Snapshot Information.

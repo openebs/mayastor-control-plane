@@ -745,6 +745,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         Ok(tonic::Response::new(ListSnapshotsResponse {
             entries: snapshots
+                .entries
                 .into_iter()
                 .map(snapshot_to_csi)
                 .map(|snapshot| list_snapshots_response::Entry {

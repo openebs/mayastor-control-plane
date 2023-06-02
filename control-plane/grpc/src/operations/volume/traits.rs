@@ -116,7 +116,6 @@ pub trait VolumeOperations: Send + Sync {
         &self,
         filter: Filter,
         ignore_notfound: bool,
-        pagination: Option<Pagination>,
         ctx: Option<Context>,
     ) -> Result<VolumeSnapshots, ReplyError>;
 }

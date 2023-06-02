@@ -197,12 +197,9 @@ impl VolumeOperations for Service {
         &self,
         filter: Filter,
         ignore_notfound: bool,
-        pagination: Option<Pagination>,
         _ctx: Option<Context>,
     ) -> Result<VolumeSnapshots, ReplyError> {
-        let snapshots = self
-            .get_snapshots(filter, ignore_notfound, pagination)
-            .await?;
+        let snapshots = self.get_snapshots(filter, ignore_notfound).await?;
         Ok(snapshots)
     }
 }
@@ -349,8 +346,8 @@ impl Service {
                 &VolumeSnapshotUserSpec::new(volume.uuid(), request.snap_id),
             )
             .await?;
-        let state = self.registry.snapshot_state(snapshot.as_ref()).await?;
-        Ok(VolumeSnapshot::new(snapshot.as_ref().into(), state))
+        let state = self.registry.snapshot_state(snapshot.as_ref()).await;
+        Ok(VolumeSnapshot::new(snapshot.as_ref(), state))
     }
 
     /// Delete a volume snapshot.
@@ -398,10 +395,37 @@ impl Service {
     /// Get snapshots.
     pub(super) async fn get_snapshots(
         &self,
-        _filter: Filter,
-        _ignore_notfound: bool,
-        _pagination: Option<Pagination>,
+        filter: Filter,
+        ignore_notfound: bool,
     ) -> Result<VolumeSnapshots, SvcError> {
-        todo!()
+        // The filter criteria is matched to figure out whether we need to fetch a single
+        // or multiple snapshots.
+        let filtered_snaps = match filter {
+            Filter::None => self.registry.volume_snapshots_all().await,
+
+            Filter::Volume(volume_id) => self.registry.volume_snapshots(&volume_id).await,
+
+            Filter::VolumeSnapshot(volume_id, snap_id) => {
+                // Get a single snapshot.
+                match self.registry.snapshot(Some(&volume_id), &snap_id).await {
+                    Ok(snapshot) => Ok(vec![snapshot]),
+                    Err(SvcError::NotFound { .. }) if ignore_notfound => Ok(vec![]),
+                    Err(error) => Err(error),
+                }?
+            }
+            Filter::Snapshot(snap_id) => {
+                // Get a single snapshot.
+                match self.registry.snapshot(None, &snap_id).await {
+                    Ok(snapshot) => Ok(vec![snapshot]),
+                    Err(SvcError::NotFound { .. }) if ignore_notfound => Ok(vec![]),
+                    Err(error) => Err(error),
+                }?
+            }
+            filter => return Err(SvcError::InvalidFilter { filter }),
+        };
+
+        Ok(VolumeSnapshots {
+            entries: filtered_snaps,
+        })
     }
 }

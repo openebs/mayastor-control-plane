@@ -384,7 +384,7 @@ impl IoEngineApiClient {
         &self,
         volume_id: Option<uuid::Uuid>,
         snapshot_id: Option<uuid::Uuid>,
-    ) -> Result<Vec<models::VolumeSnapshot>, ApiClientError> {
+    ) -> Result<models::VolumeSnapshots, ApiClientError> {
         let snapshots = self
             .rest_client
             .snapshots_api()
