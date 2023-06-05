@@ -126,12 +126,16 @@ pub struct ReplicaSnapshotDescr {
     snap_time: SystemTime,
     /// UUID of the replica this snapshot is taken from.
     replica_uuid: ReplicaId,
+    /// UUID of the pool where the snapshot resides.
+    pool_uuid: PoolUuid,
+    /// Name of the poool where the snapshot resides.
+    pool_id: PoolId,
     /// Amount of bytes referenced by replica.
     replica_size: u64,
     /// Identity of the entity under which snapshot is taken.
     entity_id: String,
     /// Unique transaction id for snapshot.
-    txn_id: String,
+    txn_id: SnapshotTxId,
     /// Validity of the snapshot: the xattr metadata might be corrupted
     valid: bool,
 }
@@ -145,6 +149,8 @@ impl ReplicaSnapshotDescr {
         num_clones: u64,
         snap_time: SystemTime,
         replica_uuid: ReplicaId,
+        pool_uuid: PoolUuid,
+        pool_id: PoolId,
         replica_size: u64,
         entity_id: &str,
         txn_id: &str,
@@ -157,6 +163,8 @@ impl ReplicaSnapshotDescr {
             num_clones,
             snap_time,
             replica_uuid,
+            pool_uuid,
+            pool_id,
             replica_size,
             entity_id: entity_id.to_owned(),
             txn_id: txn_id.to_owned(),
@@ -169,14 +177,47 @@ impl ReplicaSnapshotDescr {
         self.snap_time
     }
 
-    /// Get a reference to snapshot id.
+    /// Get a reference to the snapshot id.
     pub fn snap_uuid(&self) -> &SnapshotId {
         &self.snap_uuid
+    }
+
+    /// Overrides the pool id and uuid.
+    /// This is only needed until we get this data from the dataplane.
+    pub fn with_pool_info(mut self, pool_id: &PoolId, pool_uuid: &PoolUuid) -> Self {
+        self.pool_id = pool_id.clone();
+        self.pool_uuid = pool_uuid.clone();
+        self
+    }
+
+    /// Get a reference to the pool uuid.
+    pub fn pool_uuid(&self) -> &PoolUuid {
+        &self.pool_uuid
+    }
+
+    /// Get a reference to the pool id.
+    pub fn pool_id(&self) -> &PoolId {
+        &self.pool_id
+    }
+
+    /// Get the size of snapshot source.
+    pub fn source_size(&self) -> u64 {
+        self.replica_size
     }
 
     /// Get the size of snapshot referenced data.
     pub fn snap_size(&self) -> u64 {
         self.snap_size
+    }
+
+    /// Get the transaction id.
+    pub fn txn_id(&self) -> &SnapshotTxId {
+        &self.txn_id
+    }
+
+    /// Get the valid flag.
+    pub fn valid(&self) -> bool {
+        self.valid
     }
 }
 

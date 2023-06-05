@@ -212,19 +212,22 @@ impl Registry {
     }
 
     /// Get the replica snapshot state for the specified volume.
+    /// TODO: retrieve snapshot from node's resource state map.
     pub(crate) async fn snapshot_replica(
         &self,
         snapshot: &ReplicaSnapshotSpec,
     ) -> Result<ReplicaSnapshot, SvcError> {
         let err = || SvcError::NotFound {
             kind: ResourceKind::ReplicaSnapshot,
-            id: String::new(),
+            id: snapshot.uuid().to_string(),
         };
 
         let pool_id = snapshot.source_id().pool_id();
+        let pool_uuid = snapshot.source_id().pool_uuid();
         let pool_node = self.pool_node(pool_id).await.ok_or(err())?;
         let node = self.node_wrapper(&pool_node).await?;
         let snapshot = node.snapshot(snapshot.uuid()).await;
+        let snapshot = snapshot.map(|snap| snap.with_pool_info(pool_id, pool_uuid));
         snapshot.ok_or(err())
     }
     /// Get the snapshot state for the specified volume.
@@ -248,8 +251,8 @@ impl Registry {
         VolumeSnapshotState::new(snapshot, size, replica_snaps)
     }
 
-    /// Return a single snapshot object corresponding to the either matching (volumeid + snapid)
-    /// OR matching snapid when input volumeid is None.
+    /// Return a single snapshot object corresponding, either matching (vol_id + snap_id)
+    /// OR matching snap_id when the input vol_id is None.
     pub(crate) async fn snapshot(
         &self,
         vol_id: Option<&VolumeId>,
@@ -264,24 +267,25 @@ impl Registry {
                     source_id: vol_id.map(|v| v.to_string()),
                 })?;
 
-        let snap_source_id = snapshot.lock().spec().source_id().clone();
+        let snapshot = snapshot.lock().clone();
+        if let Some(vol_id) = vol_id {
+            let snap_source_id = snapshot.spec().source_id();
 
-        // Verify that the fetched snashot spec has the same volume id as input.
-        // For debug builds assert, for production builds return error that indicates
-        // the provided input combination of volume id and snapshot id isn't valid.
-        if let Some(vid) = vol_id {
-            if vid != &snap_source_id {
+            // Verify that the fetched snashot spec has the same volume id as input.
+            if vol_id != snap_source_id {
                 return Err(SvcError::InvalidSnapshotSource {
                     snap_id: snap_id.to_string(),
-                    invalid_source_id: vid.to_string(),
+                    invalid_source_id: vol_id.to_string(),
                     correct_source_id: snap_source_id.to_string(),
                 });
             }
         }
 
+        tracing::info!("S: {snapshot:?}");
+
         Ok(grpc_mod::VolumeSnapshot::new(
-            snapshot.immutable_ref().as_ref(),
-            self.snapshot_state(snapshot.immutable_ref()).await,
+            &snapshot,
+            self.snapshot_state(&snapshot).await,
         ))
     }
 

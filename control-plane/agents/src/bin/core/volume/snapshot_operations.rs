@@ -281,8 +281,11 @@ impl OperationGuardArc<VolumeSnapshot> {
         };
         let volume = self.as_ref().spec().source_id();
         let generic_params = parameters.params().clone();
-        let snapshot_source =
-            ReplicaSnapshotSource::new(replica.spec().uid(), &replica.state().pool_id);
+        let snapshot_source = ReplicaSnapshotSource::new(
+            replica.spec().uid().clone(),
+            replica.state().pool_id.clone(),
+            replica.state().pool_uuid.clone().unwrap_or_default(),
+        );
         let replica_snapshot = ReplicaSnapshot::new_vol(
             ReplicaSnapshotSpec::new(&snapshot_source, SnapshotId::new()),
             SnapshotParameters::new(volume, generic_params),
@@ -390,7 +393,6 @@ impl OperationGuardArc<VolumeSnapshot> {
                 replica_params,
             )))
             .await?;
-
         let timestamp = response.timestamp();
         replica_snap.1.complete_vol(timestamp.into());
 

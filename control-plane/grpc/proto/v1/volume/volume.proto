@@ -445,9 +445,9 @@ message VolumeSnapshot {
   VolumeSnapshotState    state = 3;
 }
 message VolumeSnapshotState {
-  snapshot.SnapshotState             state = 1;
+  snapshot.SnapshotState                          state = 1;
   // allows us to grow volume snapshot-specific state
-  repeated snapshot.ReplicaSnapshotState replicas = 2;
+  repeated snapshot.VolumeReplicaSnapshotState replicas = 2;
 }
 
 message VolumeSnapshotSpec {

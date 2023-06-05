@@ -44,7 +44,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             });
         }
 
-        let pool = specs
+        let mut pool = specs
             .get_or_create_pool(request)
             .operation_guard_wait()
             .await?;

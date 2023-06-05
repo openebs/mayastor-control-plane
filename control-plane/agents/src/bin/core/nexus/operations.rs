@@ -50,7 +50,7 @@ impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
 
         let node = registry.node_wrapper(&request.node).await?;
 
-        let nexus = specs
+        let mut nexus = specs
             .get_or_create_nexus(request)
             .operation_guard_wait()
             .await?;

@@ -1,7 +1,7 @@
 use super::{SnapshotId, SnapshotSpec};
 use crate::types::v0::{
     store::{AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction},
-    transport::{PoolId, ReplicaId, SnapshotParameters, SnapshotTxId, VolumeId},
+    transport::{PoolId, PoolUuid, ReplicaId, SnapshotParameters, SnapshotTxId, VolumeId},
 };
 use chrono::{DateTime, Utc};
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
@@ -12,23 +12,28 @@ use serde::{Deserialize, Serialize};
 pub struct ReplicaSnapshotSource {
     replica_id: ReplicaId,
     pool_id: PoolId,
+    pool_uuid: PoolUuid,
 }
 impl ReplicaSnapshotSource {
     /// Create a new `Self` from the given parameters.
-    /// todo: use pool uuid
-    pub fn new(replica_id: &ReplicaId, pool_id: &PoolId) -> Self {
+    pub fn new(replica_id: ReplicaId, pool_id: PoolId, pool_uuid: PoolUuid) -> Self {
         Self {
-            replica_id: replica_id.clone(),
-            pool_id: pool_id.clone(),
+            replica_id,
+            pool_id,
+            pool_uuid,
         }
     }
     /// Get the snapshot source id.
     pub fn replica_id(&self) -> &ReplicaId {
         &self.replica_id
     }
-    /// Get the snapshot id.
+    /// Get the snapshot pool id.
     pub fn pool_id(&self) -> &PoolId {
         &self.pool_id
+    }
+    /// Get the snapshot pool uuid.
+    pub fn pool_uuid(&self) -> &PoolUuid {
+        &self.pool_uuid
     }
 }
 
@@ -63,6 +68,10 @@ impl ReplicaSnapshot {
     /// Get a reference to the replica spec.
     pub fn spec(&self) -> &ReplicaSnapshotSpec {
         &self.spec
+    }
+    /// Get a reference to the replica status.
+    pub fn status(&self) -> &ReplicaSnapshotSpecStatus {
+        &self.status
     }
     /// Get a reference to the replica metadata.
     pub fn meta(&self) -> &ReplicaSnapshotMeta {
@@ -117,6 +126,14 @@ impl ReplicaSnapshotMeta {
     pub fn size(&self) -> u64 {
         self.size
     }
+    /// Get the snapshot timestamp reference.
+    pub fn timestamp(&self) -> Option<&DateTime<Utc>> {
+        self.creation_timestamp.as_ref()
+    }
+    /// Get the transaction identifier reference.
+    pub fn txn_id(&self) -> Option<&SnapshotTxId> {
+        self.meta.txn_id()
+    }
 }
 
 /// Snapshot meta information.
@@ -125,7 +142,7 @@ enum SnapshotMeta {
     #[default]
     Default,
     /// If we want to allow taking a replica snapshot directly?
-    Replica { txn_id: String },
+    Replica { txn_id: SnapshotTxId },
     Volume {
         /// Volume Snapshot "parent" which owns this replica snapshot.
         /// Example: when taking a volume snapshot with N replicas, all replica snapshots will
@@ -136,6 +153,15 @@ enum SnapshotMeta {
         /// identifier to ensure we don't mix snapshots from different points in time.
         txn_id: String,
     },
+}
+impl SnapshotMeta {
+    fn txn_id(&self) -> Option<&SnapshotTxId> {
+        match &self {
+            Self::Default => None,
+            Self::Replica { txn_id } => Some(txn_id),
+            Self::Volume { txn_id, .. } => Some(txn_id),
+        }
+    }
 }
 
 /// Operation State for a ReplicaSnapshot resource.

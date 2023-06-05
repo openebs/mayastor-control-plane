@@ -42,7 +42,7 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
 
         let node = registry.node_wrapper(&request.node).await?;
 
-        let replica = specs
+        let mut replica = specs
             .get_or_create_replica(request)
             .operation_guard_wait()
             .await?;
