@@ -13,6 +13,8 @@ pub(crate) struct CsiControllerConfig {
     io_timeout: Duration,
     /// Node Plugin selector label.
     node_selector: HashMap<String, String>,
+    /// Max Outstanding Create Volume Requests.
+    create_volume_limit: usize,
 }
 
 impl CsiControllerConfig {
@@ -32,6 +34,10 @@ impl CsiControllerConfig {
             .context("I/O timeout must be specified")?
             .parse::<humantime::Duration>()?;
 
+        let create_volume_limit = *args
+            .get_one::<usize>("create-volume-limit")
+            .context("create-volume-limit must be specified")?;
+
         let node_selector = csi_driver::csi_node_selector_parse(
             args.get_many::<String>("node-selector")
                 .map(|s| s.map(|s| s.as_str())),
@@ -41,6 +47,7 @@ impl CsiControllerConfig {
             rest_endpoint: rest_endpoint.into(),
             io_timeout: io_timeout.into(),
             node_selector,
+            create_volume_limit,
         });
         Ok(())
     }
@@ -55,6 +62,11 @@ impl CsiControllerConfig {
     /// Get REST API endpoint.
     pub(crate) fn rest_endpoint(&self) -> &str {
         &self.rest_endpoint
+    }
+
+    /// The maximum number of concurrent create volume requests.
+    pub(crate) fn create_volume_limit(&self) -> usize {
+        self.create_volume_limit
     }
 
     /// Get I/O timeout for REST API operations.

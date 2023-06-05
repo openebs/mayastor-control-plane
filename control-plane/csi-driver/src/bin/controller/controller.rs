@@ -23,8 +23,29 @@ const VOLUME_NAME_PATTERN: &str =
 const SNAPSHOT_NAME_PATTERN: &str =
     r"snapshot-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 
-#[derive(Debug, Default)]
-pub(crate) struct CsiControllerSvc {}
+#[derive(Debug)]
+pub(crate) struct CsiControllerSvc {
+    create_volume_limiter: std::sync::Arc<tokio::sync::Semaphore>,
+}
+impl CsiControllerSvc {
+    pub(crate) fn new(cfg: &CsiControllerConfig) -> Self {
+        Self {
+            create_volume_limiter: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                cfg.create_volume_limit(),
+            )),
+        }
+    }
+    async fn create_volume_permit(&self) -> Result<tokio::sync::SemaphorePermit, tonic::Status> {
+        tokio::time::timeout(
+            // if we take too long waiting for our turn just abort..
+            std::time::Duration::from_secs(3),
+            self.create_volume_limiter.acquire(),
+        )
+        .await
+        .map_err(|_| tonic::Status::aborted("Too many create volumes in progress"))?
+        .map_err(|_| tonic::Status::unavailable("Service is shutdown"))
+    }
+}
 
 /// Check whether target volume capabilities are valid. As of now, only
 /// SingleNodeWriter capability is supported.
@@ -68,6 +89,7 @@ impl From<ApiClientError> for Status {
             ApiClientError::NotImplemented(reason) => Status::unimplemented(reason),
             ApiClientError::RequestTimeout(reason) => Status::deadline_exceeded(reason),
             ApiClientError::Conflict(reason) => Status::unavailable(reason),
+            ApiClientError::Aborted(reason) => Status::unavailable(reason),
             error => Status::internal(format!("Operation failed: {error:?}")),
         }
     }
@@ -90,10 +112,15 @@ fn check_existing_volume(
     let spec = &volume.spec;
 
     if spec.status != SpecStatus::Created {
-        return Err(Status::already_exists(format!(
+        let message = format!(
             "Existing volume {} is in insufficient state: {:?}",
             spec.uuid, spec.status
-        )));
+        );
+        return Err(if spec.status == SpecStatus::Creating {
+            Status::aborted(message)
+        } else {
+            Status::already_exists(message)
+        });
     }
 
     if spec.num_replicas < replica_count {
@@ -145,6 +172,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<CreateVolumeResponse>, tonic::Status> {
         let args = request.into_inner();
         tracing::trace!(request = ?args);
+        let _permit = self.create_volume_permit().await?;
 
         if args.volume_content_source.is_some() {
             return Err(Status::invalid_argument(
@@ -323,7 +351,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             None => {
                 return Err(Status::invalid_argument("Missing volume capability"));
             }
-        };
+        }
 
         // Check if the volume is already published.
         let volume = IoEngineApiClient::get_client()
@@ -680,7 +708,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 return Err(Status::invalid_argument(format!(
                     "Expected the snapshot name in snapshot-<UUID> format: {}",
                     request.name
-                )))
+                )));
             }
         };
         tracing::Span::current().record("snapshot.uuid", snapshot_uuid_str.as_str());

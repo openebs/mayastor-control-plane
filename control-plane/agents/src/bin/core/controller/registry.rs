@@ -90,6 +90,8 @@ pub(crate) struct RegistryInner<S: Store> {
     config: parking_lot::RwLock<CoreRegistryConfig>,
     /// system-wide maximum number of concurrent rebuilds allowed.
     max_rebuilds: Option<NumRebuilds>,
+    /// The maximum number of concurrent create volume requests.
+    create_volume_limit: usize,
     /// Enablement of host access control.
     host_acl: Vec<HostAccessControl>,
     /// Check for the legacy product version's key prefix present.
@@ -113,6 +115,7 @@ impl Registry {
         reconcile_idle_period: std::time::Duration,
         faulted_child_wait_period: Option<std::time::Duration>,
         max_rebuilds: Option<NumRebuilds>,
+        create_volume_limit: usize,
         host_acl: Vec<HostAccessControl>,
         thin_args: ThinArgs,
     ) -> Result<Self, SvcError> {
@@ -159,6 +162,7 @@ impl Registry {
                         })?,
                 ),
                 max_rebuilds,
+                create_volume_limit,
                 host_acl,
                 legacy_prefix_present: product_v1_prefix,
                 thin_args,
@@ -261,6 +265,10 @@ impl Registry {
     /// Wait period before attempting to online a faulted child.
     pub(crate) fn faulted_child_wait_period(&self) -> Option<std::time::Duration> {
         self.faulted_child_wait_period
+    }
+    /// The maximum number of concurrent create volume requests.
+    pub(crate) fn create_volume_limit(&self) -> usize {
+        self.create_volume_limit
     }
 
     /// Get a reference to the actual state of the nodes.
