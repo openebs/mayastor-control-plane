@@ -3,10 +3,11 @@ use crate::{
     nexus::{
         add_nexus_child_reply, create_nexus_reply, get_nexuses_reply,
         nexus_grpc_server::{NexusGrpc, NexusGrpcServer},
-        share_nexus_reply, AddNexusChildReply, AddNexusChildRequest, CreateNexusReply,
-        CreateNexusRequest, DestroyNexusReply, DestroyNexusRequest, GetNexusesReply,
-        GetNexusesRequest, RemoveNexusChildReply, RemoveNexusChildRequest, ShareNexusReply,
-        ShareNexusRequest, UnshareNexusReply, UnshareNexusRequest,
+        rebuild_history_reply, share_nexus_reply, AddNexusChildReply, AddNexusChildRequest,
+        CreateNexusReply, CreateNexusRequest, DestroyNexusReply, DestroyNexusRequest,
+        GetNexusesReply, GetNexusesRequest, RebuildHistoryReply, RebuildHistoryRequest,
+        RemoveNexusChildReply, RemoveNexusChildRequest, ShareNexusReply, ShareNexusRequest,
+        UnshareNexusReply, UnshareNexusRequest,
     },
     operations::nexus::traits::NexusOperations,
 };
@@ -132,6 +133,21 @@ impl NexusGrpc for NexusServer {
             })),
             Err(err) => Ok(Response::new(GetNexusesReply {
                 reply: Some(get_nexuses_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn get_rebuild_history(
+        &self,
+        request: tonic::Request<RebuildHistoryRequest>,
+    ) -> Result<tonic::Response<RebuildHistoryReply>, tonic::Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.get_rebuild_history(&req, None).await {
+            Ok(history) => Ok(Response::new(RebuildHistoryReply {
+                reply: Some(rebuild_history_reply::Reply::Record(history.try_into()?)),
+            })),
+            Err(err) => Ok(Response::new(RebuildHistoryReply {
+                reply: Some(rebuild_history_reply::Reply::Error(err.into())),
             })),
         }
     }

@@ -5,9 +5,11 @@ use crate::{
     nexus,
     nexus::{
         get_nexuses_request, AddNexusChildRequest, CreateNexusRequest, DestroyNexusRequest,
+        RebuildHistoryRecord, RebuildHistoryRequest, RebuildJobState as GrpcRebuildState,
         RemoveNexusChildRequest, ShareNexusRequest, UnshareNexusRequest,
     },
 };
+use prost_types::Timestamp;
 use std::convert::TryFrom;
 use stor_port::{
     transport_api::{v0::Nexuses, ReplyError, ResourceKind},
@@ -21,8 +23,9 @@ use stor_port::{
         },
         transport::{
             AddNexusChild, Child, ChildState, ChildStateReason, ChildUri, CreateNexus,
-            DestroyNexus, Filter, HostNqn, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
-            NexusShareProtocol, NexusStatus, NodeId, NvmeReservation, NvmfControllerIdRange,
+            DestroyNexus, Filter, GetRebuildRecord, HostNqn, Nexus, NexusId, NexusNvmePreemption,
+            NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId, NvmeReservation,
+            NvmfControllerIdRange, RebuildHistory, RebuildJobState, RebuildRecord,
             RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
         },
     },
@@ -70,6 +73,12 @@ pub trait NexusOperations: Send + Sync {
         req: &dyn RemoveNexusChildInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
+    /// Get rebuild history details of nexus.
+    async fn get_rebuild_history(
+        &self,
+        req: &dyn GetRebuildRecordInfo,
+        ctx: Option<Context>,
+    ) -> Result<RebuildHistory, ReplyError>;
 }
 
 impl TryFrom<nexus::Nexus> for Nexus {
@@ -282,6 +291,153 @@ impl TryFrom<nexus::Child> for Child {
             has_io_log: None,
         };
         Ok(child)
+    }
+}
+
+impl TryFrom<RebuildHistory> for nexus::RebuildHistory {
+    type Error = ReplyError;
+
+    fn try_from(value: RebuildHistory) -> Result<Self, Self::Error> {
+        Ok(Self {
+            nexus: value.uuid.to_string(),
+            records: value
+                .records
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<RebuildRecord> for RebuildHistoryRecord {
+    type Error = ReplyError;
+
+    fn try_from(value: RebuildRecord) -> Result<Self, Self::Error> {
+        let job_state: GrpcRebuildState = value.state.into();
+        Ok(RebuildHistoryRecord {
+            child_uri: value.child_uri.to_string(),
+            src_uri: value.src_uri.to_string(),
+            state: job_state.into(),
+            blocks_total: value.blocks_total,
+            blocks_recovered: value.blocks_recovered,
+            blocks_transferred: value.blocks_transferred,
+            blocks_remaining: value.blocks_remaining,
+            blocks_per_task: value.blocks_per_task,
+            block_size: value.block_size,
+            is_partial: value.is_partial,
+            start_time: Some(Timestamp::from(value.start_time)),
+            end_time: Some(Timestamp::from(value.end_time)),
+        })
+    }
+}
+
+impl TryFrom<nexus::RebuildHistory> for RebuildHistory {
+    type Error = ReplyError;
+    fn try_from(value: nexus::RebuildHistory) -> Result<Self, Self::Error> {
+        let history = RebuildHistory {
+            uuid: NexusId::try_from(value.nexus.as_str()).map_err(|err| {
+                ReplyError::invalid_argument(ResourceKind::Nexus, "nexus_id", err.to_string())
+            })?,
+            records: value
+                .records
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
+        };
+        Ok(history)
+    }
+}
+
+impl TryFrom<RebuildHistoryRecord> for RebuildRecord {
+    type Error = ReplyError;
+    fn try_from(value: RebuildHistoryRecord) -> Result<Self, Self::Error> {
+        Ok(RebuildRecord {
+            child_uri: match ChildUri::try_from(value.child_uri.as_str()) {
+                Ok(child) => child,
+                Err(e) => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Child,
+                        "child_uri",
+                        e.to_string(),
+                    ))
+                }
+            },
+            src_uri: match ChildUri::try_from(value.src_uri.as_str()) {
+                Ok(child) => child,
+                Err(e) => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Child,
+                        "child_uri",
+                        e.to_string(),
+                    ))
+                }
+            },
+            state: match nexus::RebuildJobState::from_i32(value.state).map(RebuildJobState::from) {
+                Some(state) => state,
+                None => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Nexus,
+                        "state",
+                        value.state.to_string(),
+                    ))
+                }
+            },
+            blocks_total: value.blocks_total,
+            blocks_recovered: value.blocks_recovered,
+            blocks_transferred: value.blocks_transferred,
+            blocks_remaining: value.blocks_remaining,
+            blocks_per_task: value.blocks_per_task,
+            block_size: value.block_size,
+            is_partial: value.is_partial,
+            start_time: value
+                .start_time
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .ok_or(ReplyError::invalid_argument(
+                    ResourceKind::Nexus,
+                    "start_time",
+                    "time conversion failure".to_string(),
+                ))?,
+            end_time: value
+                .end_time
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .ok_or(ReplyError::invalid_argument(
+                    ResourceKind::Nexus,
+                    "end_time",
+                    "time conversion failure".to_string(),
+                ))?,
+        })
+    }
+}
+
+impl From<GrpcRebuildState> for RebuildJobState {
+    fn from(grpc_rebuild_state: GrpcRebuildState) -> Self {
+        match grpc_rebuild_state {
+            GrpcRebuildState::Init => Self::Init,
+            GrpcRebuildState::Rebuilding => Self::Rebuilding,
+            GrpcRebuildState::Stopped => Self::Stopped,
+            GrpcRebuildState::Paused => Self::Paused,
+            GrpcRebuildState::Failed => Self::Failed,
+            GrpcRebuildState::Completed => Self::Completed,
+        }
+    }
+}
+
+impl From<RebuildJobState> for GrpcRebuildState {
+    fn from(src: RebuildJobState) -> Self {
+        Self::from(&src)
+    }
+}
+
+impl From<&RebuildJobState> for GrpcRebuildState {
+    fn from(src: &RebuildJobState) -> Self {
+        match src {
+            RebuildJobState::Init => Self::Init,
+            RebuildJobState::Rebuilding => Self::Rebuilding,
+            RebuildJobState::Stopped => Self::Stopped,
+            RebuildJobState::Paused => Self::Paused,
+            RebuildJobState::Failed => Self::Failed,
+            RebuildJobState::Completed => Self::Completed,
+        }
     }
 }
 
@@ -1190,6 +1346,56 @@ impl From<&dyn RemoveNexusChildInfo> for RemoveNexusChild {
             node: data.node(),
             nexus: data.nexus(),
             uri: data.uri(),
+        }
+    }
+}
+
+/// GetRebuildRecordInfo trait for the add nexus child to be implemented by entities which want to
+/// use this operation.
+pub trait GetRebuildRecordInfo: Send + Sync + std::fmt::Debug {
+    /// Uuid of the nexus.
+    fn nexus(&self) -> NexusId;
+}
+
+impl GetRebuildRecordInfo for GetRebuildRecord {
+    fn nexus(&self) -> NexusId {
+        self.nexus.clone()
+    }
+}
+
+/// Intermediate structure that validates the conversion to RebuildHistoryRequest type
+#[derive(Debug)]
+pub struct ValidatedGetRebuildRecord {
+    nexus: NexusId,
+}
+
+impl GetRebuildRecordInfo for ValidatedGetRebuildRecord {
+    fn nexus(&self) -> NexusId {
+        self.nexus.clone()
+    }
+}
+
+impl ValidateRequestTypes for RebuildHistoryRequest {
+    type Validated = ValidatedGetRebuildRecord;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedGetRebuildRecord {
+            nexus: NexusId::try_from(StringValue(Some(self.uuid)))?,
+        })
+    }
+}
+
+impl From<&dyn GetRebuildRecordInfo> for RebuildHistoryRequest {
+    fn from(value: &dyn GetRebuildRecordInfo) -> Self {
+        Self {
+            uuid: value.nexus().to_string(),
+        }
+    }
+}
+
+impl From<&dyn GetRebuildRecordInfo> for GetRebuildRecord {
+    fn from(value: &dyn GetRebuildRecordInfo) -> Self {
+        Self {
+            nexus: value.nexus(),
         }
     }
 }

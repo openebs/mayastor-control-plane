@@ -469,9 +469,10 @@ pub mod v1 {
             ListNexusResponse, Nexus, NexusCreateSnapshotReplicaDescriptor,
             NexusCreateSnapshotReplicaStatus, NexusCreateSnapshotRequest,
             NexusCreateSnapshotResponse, NexusNvmePreemption, NexusState, NvmeAnaState,
-            NvmeReservation, PublishNexusRequest, PublishNexusResponse, RemoveChildNexusRequest,
-            RemoveChildNexusResponse, ShutdownNexusRequest, UnpublishNexusRequest,
-            UnpublishNexusResponse,
+            NvmeReservation, PublishNexusRequest, PublishNexusResponse, RebuildHistoryRecord,
+            RebuildHistoryRequest, RebuildHistoryResponse, RebuildJobState,
+            RemoveChildNexusRequest, RemoveChildNexusResponse, ShutdownNexusRequest,
+            UnpublishNexusRequest, UnpublishNexusResponse,
         };
     }
 

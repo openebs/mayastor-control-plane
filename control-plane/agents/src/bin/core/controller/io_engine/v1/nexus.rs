@@ -9,8 +9,8 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         AddNexusChild, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp, DestroyNexus,
-        FaultNexusChild, Nexus, NexusChildAction, NexusChildActionContext, NexusId, NodeId,
-        RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
+        FaultNexusChild, GetRebuildRecord, Nexus, NexusChildAction, NexusChildActionContext,
+        NexusId, NodeId, RebuildHistory, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
 
@@ -329,6 +329,24 @@ impl crate::controller::io_engine::NexusSnapshotApi for super::RpcClient {
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "create_snapshot",
+            })?;
+        response.into_inner().try_to_agent()
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::controller::io_engine::NexusChildRebuildApi for super::RpcClient {
+    async fn list_rebuild_history(
+        &self,
+        request: &GetRebuildRecord,
+    ) -> Result<RebuildHistory, SvcError> {
+        let response = self
+            .nexus()
+            .get_rebuild_history(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Nexus,
+                request: "get_rebuild_history",
             })?;
         response.into_inner().try_to_agent()
     }

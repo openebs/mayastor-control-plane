@@ -2,8 +2,8 @@ use crate::{
     controller::{
         io_engine::{
             GrpcClient, GrpcClientLocked, GrpcContext, NexusApi, NexusChildActionApi,
-            NexusChildApi, NexusShareApi, NexusSnapshotApi, PoolApi, ReplicaApi,
-            ReplicaSnapshotApi,
+            NexusChildApi, NexusChildRebuildApi, NexusShareApi, NexusSnapshotApi, PoolApi,
+            ReplicaApi, ReplicaSnapshotApi,
         },
         registry::Registry,
         resources::ResourceUid,
@@ -24,11 +24,11 @@ use stor_port::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreateNexusSnapshot,
             CreateNexusSnapshotResp, CreatePool, CreateReplica, CreateReplicaSnapshot,
             DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
-            ImportPool, ListReplicaSnapshots, MessageIdVs, Nexus, NexusChildAction,
-            NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, NodeState, NodeStatus,
-            PoolId, PoolState, Register, RemoveNexusChild, Replica, ReplicaId, ReplicaName,
-            ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus,
-            UnshareReplica, VolumeId,
+            GetRebuildRecord, ImportPool, ListReplicaSnapshots, MessageIdVs, Nexus,
+            NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
+            NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
+            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica,
+            ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -1391,6 +1391,17 @@ impl NexusShareApi<String, ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+#[async_trait]
+impl NexusChildRebuildApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    async fn list_rebuild_history(
+        &self,
+        request: &GetRebuildRecord,
+    ) -> Result<RebuildHistory, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        dataplane.list_rebuild_history(request).await
     }
 }
 

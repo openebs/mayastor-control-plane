@@ -4,12 +4,14 @@ mod pool;
 mod replica;
 mod translation;
 
-use crate::controller::io_engine::{ApiVersion, GrpcContext};
+use crate::controller::io_engine::{ApiVersion, GrpcContext, NexusChildRebuildApi};
 use agents::errors::{GrpcConnect, SvcError};
 use rpc::io_engine::IoEngineClientV0;
+use stor_port::types::v0::transport::{GetRebuildRecord, RebuildHistory};
 
 use snafu::ResultExt;
-use tonic::transport::Channel;
+use stor_port::transport_api::ResourceKind;
+use tonic::{transport::Channel, Status};
 
 /// Io-Engine client v0.
 #[derive(Clone)]
@@ -41,6 +43,20 @@ impl RpcClient {
     }
     fn client(&self) -> IoEngineClientV0<Channel> {
         self.client.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl NexusChildRebuildApi for RpcClient {
+    async fn list_rebuild_history(
+        &self,
+        _request: &GetRebuildRecord,
+    ) -> Result<RebuildHistory, SvcError> {
+        Err(SvcError::Unimplemented {
+            resource: ResourceKind::Nexus,
+            request: "get_rebuild_history".to_string(),
+            source: Status::unimplemented("api still unimplemented"),
+        })
     }
 }
 

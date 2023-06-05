@@ -226,6 +226,8 @@ pub enum SvcError {
         volume_id: String,
         volume_state: String,
     },
+    #[snafu(display("Could not get rebuild history for nexus'{}'", nexus_id))]
+    RebuildHistoryNotFound { nexus_id: String },
     #[snafu(display("No suitable replica removal candidates found for Volume '{}'", id))]
     ReplicaRemovalNoCandidates { id: String },
     #[snafu(display("Failed to create the desired number of replicas for Volume '{}'", id))]
@@ -688,6 +690,12 @@ impl From<SvcError> for ReplyError {
             SvcError::ReplicaIncrease { .. } => ReplyError {
                 kind: ReplyErrorKind::ReplicaIncrease,
                 resource: ResourceKind::Volume,
+                source: desc.to_string(),
+                extra: error.full_string(),
+            },
+            SvcError::RebuildHistoryNotFound { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Nexus,
                 source: desc.to_string(),
                 extra: error.full_string(),
             },

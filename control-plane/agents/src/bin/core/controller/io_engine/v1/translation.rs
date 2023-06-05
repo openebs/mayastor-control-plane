@@ -5,9 +5,10 @@ use stor_port::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, ChildStateReason, CreateNexusSnapReplDescr, Nexus, NexusId,
-            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState,
-            PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
+            self, ChildState, ChildStateReason, ChildUri, CreateNexusSnapReplDescr,
+            GetRebuildRecord, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig, NexusStatus,
+            NodeId, NvmeReservation, PoolState, PoolUuid, Protocol, RebuildJobState, RebuildRecord,
+            Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
         },
     },
 };
@@ -587,6 +588,86 @@ impl AgentToIoEngine for transport::ImportPool {
             uuid: None,
             disks: self.disks.clone().into_vec(),
             pooltype: v1::pool::PoolType::Lvs as i32,
+        }
+    }
+}
+
+impl AgentToIoEngine for GetRebuildRecord {
+    type IoEngineMessage = v1::nexus::RebuildHistoryRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::nexus::RebuildHistoryRequest {
+            uuid: self.nexus.clone().to_string(),
+        }
+    }
+}
+
+impl TryIoEngineToAgent for v1::nexus::RebuildHistoryResponse {
+    type AgentMessage = transport::RebuildHistory;
+    /// This converts gRPC rebuild history object into Control plane object.
+    fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        Ok(Self::AgentMessage {
+            uuid: NexusId::try_from(self.nexus.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.nexus.to_owned(),
+                kind: ResourceKind::Nexus,
+            })?,
+            records: self
+                .records
+                .iter()
+                .map(|record| (ExternalType(record.clone())).try_into())
+                .collect::<Result<Vec<_>, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<ExternalType<v1::nexus::RebuildHistoryRecord>> for RebuildRecord {
+    type Error = SvcError;
+    fn try_from(value: ExternalType<v1::nexus::RebuildHistoryRecord>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            child_uri: ChildUri::try_from(value.0.child_uri.as_str()).map_err(|_| {
+                SvcError::InvalidUuid {
+                    uuid: value.0.child_uri.to_owned(),
+                    kind: ResourceKind::Child,
+                }
+            })?,
+            src_uri: ChildUri::try_from(value.0.src_uri.as_str()).map_err(|_| {
+                SvcError::InvalidUuid {
+                    uuid: value.0.src_uri.to_owned(),
+                    kind: ResourceKind::Child,
+                }
+            })?,
+            state: v1::nexus::RebuildJobState::from_i32(value.0.state)
+                .map(|f| From::from(ExternalType(f)))
+                .unwrap(),
+            blocks_total: value.0.blocks_total,
+            blocks_recovered: value.0.blocks_recovered,
+            blocks_transferred: value.0.blocks_transferred,
+            blocks_remaining: value.0.blocks_remaining,
+            blocks_per_task: value.0.blocks_per_task,
+            block_size: value.0.block_size,
+            is_partial: value.0.is_partial,
+            start_time: value
+                .0
+                .start_time
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .ok_or(SvcError::InvalidArguments {})?,
+            end_time: value
+                .0
+                .end_time
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .ok_or(SvcError::InvalidArguments {})?,
+        })
+    }
+}
+
+impl From<ExternalType<v1::nexus::RebuildJobState>> for RebuildJobState {
+    fn from(value: ExternalType<v1::nexus::RebuildJobState>) -> Self {
+        match value.0 {
+            v1::nexus::RebuildJobState::Init => Self::Init,
+            v1::nexus::RebuildJobState::Rebuilding => Self::Rebuilding,
+            v1::nexus::RebuildJobState::Stopped => Self::Stopped,
+            v1::nexus::RebuildJobState::Paused => Self::Paused,
+            v1::nexus::RebuildJobState::Failed => Self::Failed,
+            v1::nexus::RebuildJobState::Completed => Self::Completed,
         }
     }
 }
