@@ -2,7 +2,7 @@ use crate::{
     controller::{
         reconciler::{poller::ReconcilerWorker, GarbageCollect},
         resources::{
-            operations::ResourceLifecycleWithLifetime,
+            operations::{ResourceLifecycleWithLifetime, ResourcePruning},
             operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
             OperationGuardArc,
         },
@@ -55,7 +55,11 @@ impl TaskPoller for GarbageCollector {
 #[async_trait::async_trait]
 impl GarbageCollect for OperationGuardArc<VolumeSnapshot> {
     async fn garbage_collect(&mut self, context: &PollContext) -> PollResult {
-        self.destroy_deleting(context).await
+        GarbageCollector::squash_results(vec![
+            self.destroy_deleting(context).await,
+            creating_orphaned_volume_snapshot_reconciler(self, context).await,
+            prune_volume_snapshot_reconciler(self, context).await,
+        ])
     }
 
     async fn destroy_deleting(&mut self, context: &PollContext) -> PollResult {
@@ -90,11 +94,11 @@ async fn deleting_volume_snapshot_reconciler(
         return Ok(PollerState::Idle);
     };
 
-    let snap_user_spec = snapshot.lock().spec().clone();
+    let snap_uuid = snapshot.uuid().clone();
     match snapshot
         .destroy(
             context.registry(),
-            &DestroyVolumeSnapshotRequest::new(snap_rsc, snap_user_spec),
+            &DestroyVolumeSnapshotRequest::new(snap_rsc, None, snap_uuid),
         )
         .await
     {
@@ -113,4 +117,62 @@ async fn deleting_volume_snapshot_reconciler(
             Err(error)
         }
     }
+}
+
+#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true))]
+async fn creating_orphaned_volume_snapshot_reconciler(
+    snapshot: &mut OperationGuardArc<VolumeSnapshot>,
+    context: &PollContext,
+) -> PollResult {
+    // Check if there is no source volume present for the snapshot.
+    let volume = context
+        .specs()
+        .volume_rsc(snapshot.as_ref().spec().source_id());
+
+    if !snapshot.as_ref().status().creating() || volume.is_some() {
+        return Ok(PollerState::Idle);
+    }
+
+    let Some(snap_rsc) = context.specs().volume_snapshot_rsc(snapshot.uuid()) else {
+        return Ok(PollerState::Idle);
+    };
+
+    let snap_uuid = snapshot.uuid().clone();
+    match snapshot
+        .destroy(
+            context.registry(),
+            &DestroyVolumeSnapshotRequest::new(snap_rsc, None, snap_uuid),
+        )
+        .await
+    {
+        Ok(_) => {
+            tracing::info!(
+                snapshot.uuid = %snapshot.uuid(),
+                "VolumeSnapshot deleted successfully"
+            );
+            Ok(PollerState::Idle)
+        }
+        Err(error) => {
+            tracing::error!(
+                snapshot.uuid = %snapshot.uuid(),
+                "Failed to delete volumeSnapshot"
+            );
+            Err(error)
+        }
+    }
+}
+
+#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true))]
+async fn prune_volume_snapshot_reconciler(
+    snapshot: &mut OperationGuardArc<VolumeSnapshot>,
+    context: &PollContext,
+) -> PollResult {
+    // If the spec is already in deleting state, no need to do any cleanup.
+    if !snapshot.as_ref().status().created() {
+        return Ok(PollerState::Idle);
+    }
+
+    let _ = snapshot.prune(context.registry()).await;
+
+    Ok(PollerState::Idle)
 }

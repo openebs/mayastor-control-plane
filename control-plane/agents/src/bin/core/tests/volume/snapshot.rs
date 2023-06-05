@@ -171,5 +171,5 @@ async fn pool_destroy_validation(cluster: &Cluster) {
             None,
         )
         .await
-        .expect_err("Delete is expected to fail");
+        .unwrap();
 }

@@ -70,6 +70,16 @@ impl VolumeSnapshot {
     pub fn set_transactions(&mut self, transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>) {
         self.metadata.transactions = transactions
     }
+    /// Set the transactions after stale cleanup to the params.
+    pub fn set_transactions_after_stale_cleanup(
+        &mut self,
+        transactions: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
+    ) {
+        self.metadata
+            .transactions
+            .retain(|key, _| key == &self.metadata.txn_id);
+        self.metadata.transactions.extend(transactions.clone())
+    }
 }
 impl From<&VolumeSnapshotUserSpec> for VolumeSnapshot {
     fn from(value: &VolumeSnapshotUserSpec) -> Self {
@@ -125,6 +135,12 @@ impl VolumeSnapshotMeta {
     pub fn transactions(&self) -> &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
         &self.transactions
     }
+    /// Get the stale transactions.
+    pub fn stale_transactions(&self) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
+        let mut transactions_copy = self.transactions.clone();
+        transactions_copy.retain(|key, _| key != &self.txn_id);
+        transactions_copy
+    }
     /// Get the current replica snapshots.
     pub fn replica_snapshots(&self) -> Option<&Vec<ReplicaSnapshot>> {
         self.transactions.get(&self.txn_id)
@@ -146,6 +162,7 @@ pub struct VolumeSnapshotOperationState {
 pub enum VolumeSnapshotOperation {
     Create(VolumeSnapshotCreateInfo),
     Destroy,
+    CleanupStaleTransactions,
 }
 
 /// Completion info for volume snapshot create operation.
@@ -245,6 +262,7 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                     tracing::error!(?self, "Snapshot Create completion without the result");
                 }
             }
+            VolumeSnapshotOperation::CleanupStaleTransactions => {}
         }
         self.clear_op();
     }

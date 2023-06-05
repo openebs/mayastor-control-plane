@@ -233,3 +233,11 @@ pub(crate) trait ResourceSnapshotting {
         request: &Self::Destroy,
     ) -> Result<(), SvcError>;
 }
+
+/// Resource Pruning Operations.
+/// This is used to prune unused resources owned by this resource.
+#[async_trait::async_trait]
+pub(crate) trait ResourcePruning {
+    /// Prune unused resources owned by this resource.
+    async fn prune(&mut self, registry: &Registry) -> Result<(), SvcError>;
+}

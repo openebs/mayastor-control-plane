@@ -3,7 +3,7 @@ use crate::{
         io_engine::{NexusSnapshotApi, ReplicaSnapshotApi},
         registry::Registry,
         resources::{
-            operations::{ResourceLifecycleWithLifetime, ResourceSnapshotting},
+            operations::{ResourceLifecycleWithLifetime, ResourcePruning, ResourceSnapshotting},
             operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
             OperationGuardArc, ResourceMutex, ResourceUid, UpdateInnerValue,
         },
@@ -21,20 +21,20 @@ use stor_port::{
                 replica::{ReplicaSnapshot, ReplicaSnapshotSource, ReplicaSnapshotSpec},
                 volume::{
                     VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
-                    VolumeSnapshotCreateResult, VolumeSnapshotUserSpec,
+                    VolumeSnapshotCreateResult, VolumeSnapshotOperation, VolumeSnapshotUserSpec,
                 },
             },
             volume::{VolumeOperation, VolumeSpec, VolumeTarget},
         },
         transport::{
             CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateReplicaSnapshot,
-            DestroyReplicaSnapshot, SnapshotId, SnapshotParameters, SnapshotTxId,
+            DestroyReplicaSnapshot, NodeId, SnapshotId, SnapshotParameters, SnapshotTxId, VolumeId,
         },
     },
 };
 
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[async_trait::async_trait]
 impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
@@ -84,8 +84,15 @@ impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
         let mut snapshot_guard = request.volume_snapshot.operation_guard_wait().await?;
 
         // Get the volume state and start update.
-        let state = registry.volume_state(request.info.source_id()).await?;
-        let operation = VolumeOperation::DestroySnapshot(request.info.uuid().clone());
+        let state = registry
+            .volume_state(
+                &request
+                    .vol_id
+                    .clone()
+                    .ok_or(SvcError::InvalidArguments {})?,
+            )
+            .await?;
+        let operation = VolumeOperation::DestroySnapshot(request.snap_id.clone());
         let spec_clone = self.start_update(registry, &state, operation).await?;
 
         // Execute snapshot destroy using snapshot guard.
@@ -110,19 +117,23 @@ pub(crate) struct CreateVolumeSnapshotRequest<'a> {
 pub(crate) struct DestroyVolumeSnapshotRequest {
     /// A mutable reference to the volume snapshot which will own this snapshot.
     volume_snapshot: ResourceMutex<VolumeSnapshot>,
-    /// Request specific info.
-    info: VolumeSnapshotUserSpec,
+    /// Source volume id, may not be present at time of deletion.
+    vol_id: Option<VolumeId>,
+    /// Id of snapshot undergoing deletion.
+    snap_id: SnapshotId,
 }
 
 impl DestroyVolumeSnapshotRequest {
     /// Create a new DestroyVolumeSnapshotRequest.
     pub(crate) fn new(
         volume_snapshot: ResourceMutex<VolumeSnapshot>,
-        info: VolumeSnapshotUserSpec,
+        vol_id: Option<VolumeId>,
+        snap_id: SnapshotId,
     ) -> Self {
         Self {
             volume_snapshot,
-            info,
+            vol_id,
+            snap_id,
         }
     }
 }
@@ -193,28 +204,8 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         let volume_snapshot = request.volume_snapshot.lock().clone();
 
         // Create a map to track the transactions upon deletion.
-        let mut updated_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> = HashMap::new();
-
-        // Iterate over current transactions and destroy each replica snapshot in a transaction,
-        // store the transactions and replica snapshots whose deletion failed.
-        for (txn_id, snap_list) in volume_snapshot.metadata().transactions() {
-            for snap in snap_list {
-                if let Err(err) =
-                    OperationGuardArc::<VolumeSnapshot>::destroy_replica_snapshot(snap, registry)
-                        .await
-                {
-                    if !matches!(err.tonic_code(), tonic::Code::NotFound) {
-                        let mut snap = snap.clone();
-                        // If it was an error mark the spec as deleting and push it in a map.
-                        snap.set_status_deleting();
-                        updated_transactions
-                            .entry(txn_id.clone())
-                            .or_insert_with(Vec::new)
-                            .push(snap);
-                    }
-                }
-            }
-        }
+        let updated_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> =
+            destroy_transactions(volume_snapshot.metadata().transactions(), registry).await;
 
         if updated_transactions.is_empty() {
             // If there we no errors remove the persisted spec and complete destroy.
@@ -233,6 +224,49 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
             )
             .await?;
         }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
+    async fn prune(&mut self, registry: &Registry) -> Result<(), SvcError> {
+        let spec = self.lock().clone();
+
+        // If the transaction is the only transaction or there are no transactions, then no cleanup
+        // is needed. Also if no nodes are online don't attempt.
+        if spec.metadata().transactions().len() <= 1
+            || !check_nodes_availability(
+                spec.metadata()
+                    .stale_transactions()
+                    .into_values()
+                    .flat_map(|v| v.into_iter())
+                    .collect(),
+                registry,
+            )
+            .await
+        {
+            return Ok(());
+        }
+
+        let mut spec_clone = self
+            .start_update(
+                registry,
+                &spec,
+                VolumeSnapshotOperation::CleanupStaleTransactions,
+            )
+            .await?;
+
+        // Create a map to track the remaining stale transactions upon cleanup.
+        let remaining_stale_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> =
+            destroy_transactions(&spec.metadata().stale_transactions(), registry).await;
+
+        self.lock()
+            .set_transactions_after_stale_cleanup(&remaining_stale_transactions);
+        spec_clone.set_transactions_after_stale_cleanup(&remaining_stale_transactions);
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+
         Ok(())
     }
 }
@@ -372,18 +406,10 @@ impl OperationGuardArc<VolumeSnapshot> {
     ) -> Result<(), SvcError> {
         let specs = registry.specs();
 
-        // Fetch the replica spec for the snapshot's source replica.
-        let replica_id = replica_snapshot.spec().source_id().replica_id();
-        let replica_spec = specs
-            .replica_rsc(replica_id)
-            .ok_or(SvcError::ReplicaNotFound {
-                replica_id: replica_id.clone(),
-            })?
-            .lock()
-            .clone();
-
-        // Get the pool using the replica spec and extract the node_id.
-        let node_id = specs.pool(replica_spec.pool_name())?.node;
+        // Get the pool using the replica snapshot's pool and extract the node_id.
+        let node_id = specs
+            .pool(replica_snapshot.spec().source_id().pool_id())?
+            .node;
 
         // Get the corresponding node wrapper for the same.
         let node_wrapper = registry.node_wrapper(&node_id).await?;
@@ -397,4 +423,57 @@ impl OperationGuardArc<VolumeSnapshot> {
 
         Ok(())
     }
+}
+
+/// Iterates over the transaction dataset and call destroy for each replica snapshot in that
+/// transactions and returns the transactions for which the destroy failed.
+async fn destroy_transactions(
+    data_set: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
+    registry: &Registry,
+) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
+    // Create a map to track of transactions upon cleanup failure.
+    let mut final_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> = HashMap::new();
+
+    // Iterate over current transactions and destroy each replica snapshot in the given data set
+    // transactions and store the transactions and replica snapshots whose cleanup failed.
+    for (txn_id, snap_list) in data_set {
+        for snap in snap_list {
+            if let Err(err) =
+                OperationGuardArc::<VolumeSnapshot>::destroy_replica_snapshot(snap, registry).await
+            {
+                if !matches!(err.tonic_code(), tonic::Code::NotFound) {
+                    let mut snap = snap.clone();
+                    snap.set_status_deleting();
+                    final_transactions
+                        .entry(txn_id.clone())
+                        .or_insert_with(Vec::new)
+                        .push(snap);
+                }
+            }
+        }
+    }
+
+    final_transactions
+}
+
+async fn check_nodes_availability(
+    replica_snaps: Vec<ReplicaSnapshot>,
+    registry: &Registry,
+) -> bool {
+    let mut nodes: HashSet<NodeId> = HashSet::new();
+    // Get the list of nodes from the list of replica_snaps.
+    for snap in replica_snaps {
+        if let Ok(pool_spec) = registry.specs().pool(snap.spec().source_id().pool_id()) {
+            nodes.insert(pool_spec.node);
+        }
+    }
+    // If at least one node is online return true.
+    for node in nodes {
+        if let Ok(node_wrapper) = registry.node_wrapper(&node).await {
+            if node_wrapper.read().await.is_online() {
+                return true;
+            }
+        }
+    }
+    false
 }
