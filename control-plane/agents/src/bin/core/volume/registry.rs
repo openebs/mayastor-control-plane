@@ -1,29 +1,30 @@
-use crate::controller::registry::Registry;
-use agents::errors::SvcError;
-use stor_port::types::v0::transport::{
-    uri_with_hostnqn, Nexus, NexusStatus, ReplicaSnapshot, ReplicaStatus, ReplicaTopology, Volume,
-    VolumeId, VolumeState, VolumeStatus, VolumeUsage,
-};
-
 use crate::{
-    controller::{reconciler::PollTriggerEvent, resources::ResourceMutex},
+    controller::{reconciler::PollTriggerEvent, registry::Registry, resources::ResourceMutex},
     node::wrapper::GetterOps,
 };
+use agents::errors::SvcError;
 use grpc::operations::{
-    volume::traits::{VolumeReplicaSnapshotState, VolumeSnapshotState},
+    volume::traits::{self as grpc_mod, VolumeReplicaSnapshotState, VolumeSnapshotState},
     PaginatedResult, Pagination,
 };
-use std::collections::HashMap;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::store::{
-        nexus::NexusSpec,
-        replica::ReplicaSpec,
-        snapshots::{replica::ReplicaSnapshotSpec, volume::VolumeSnapshot},
-        volume::VolumeSpec,
+    types::v0::{
+        store::{
+            nexus::NexusSpec,
+            replica::ReplicaSpec,
+            snapshots::{replica::ReplicaSnapshotSpec, volume::VolumeSnapshot},
+            volume::VolumeSpec,
+        },
+        transport::{
+            uri_with_hostnqn, Nexus, NexusStatus, ReplicaSnapshot, ReplicaStatus, ReplicaTopology,
+            SnapshotId, Volume, VolumeId, VolumeState, VolumeStatus, VolumeUsage,
+        },
     },
     IntoOption,
 };
+
+use std::collections::HashMap;
 
 impl Registry {
     /// Get the volume state for the specified volume.
@@ -227,10 +228,7 @@ impl Registry {
         snapshot.ok_or(err())
     }
     /// Get the snapshot state for the specified volume.
-    pub(crate) async fn snapshot_state(
-        &self,
-        snapshot: &VolumeSnapshot,
-    ) -> Result<VolumeSnapshotState, SvcError> {
+    pub(crate) async fn snapshot_state(&self, snapshot: &VolumeSnapshot) -> VolumeSnapshotState {
         let mut replica_snaps = vec![];
         let mut size = None;
         if let Some(meta_snapshots) = snapshot.metadata().replica_snapshots() {
@@ -238,7 +236,7 @@ impl Registry {
             for replica_snap in meta_snapshots {
                 replica_snaps.push(
                     if let Ok(state) = self.snapshot_replica(replica_snap.spec()).await {
-                        size = Some(state.snap_size);
+                        size = Some(state.snap_size());
                         VolumeReplicaSnapshotState::new_online(replica_snap.spec(), state)
                     } else {
                         VolumeReplicaSnapshotState::new_offline(replica_snap.spec())
@@ -247,6 +245,72 @@ impl Registry {
             }
         }
 
-        Ok(VolumeSnapshotState::new(snapshot, size, replica_snaps))
+        VolumeSnapshotState::new(snapshot, size, replica_snaps)
+    }
+
+    /// Return a single snapshot object corresponding to the either matching (volumeid + snapid)
+    /// OR matching snapid when input volumeid is None.
+    pub(crate) async fn snapshot(
+        &self,
+        vol_id: Option<&VolumeId>,
+        snap_id: &SnapshotId,
+    ) -> Result<grpc_mod::VolumeSnapshot, SvcError> {
+        // Since snapshot id is universally unique, we can use only snap id to filter the spec.
+        let snapshot =
+            self.specs()
+                .volume_snapshot_rsc(snap_id)
+                .ok_or(SvcError::VolSnapshotNotFound {
+                    snap_id: snap_id.to_string(),
+                    source_id: vol_id.map(|v| v.to_string()),
+                })?;
+
+        let snap_source_id = snapshot.lock().spec().source_id().clone();
+
+        // Verify that the fetched snashot spec has the same volume id as input.
+        // For debug builds assert, for production builds return error that indicates
+        // the provided input combination of volume id and snapshot id isn't valid.
+        if let Some(vid) = vol_id {
+            if vid != &snap_source_id {
+                return Err(SvcError::InvalidSnapshotSource {
+                    snap_id: snap_id.to_string(),
+                    invalid_source_id: vid.to_string(),
+                    correct_source_id: snap_source_id.to_string(),
+                });
+            }
+        }
+
+        Ok(grpc_mod::VolumeSnapshot::new(
+            snapshot.immutable_ref().as_ref(),
+            self.snapshot_state(snapshot.immutable_ref()).await,
+        ))
+    }
+
+    /// For a particular volume, get all the volume snapshots with states.
+    pub(crate) async fn volume_snapshots(
+        &self,
+        vol_id: &VolumeId,
+    ) -> Vec<grpc_mod::VolumeSnapshot> {
+        let snap_specs = self.specs().snapshots_by_vol(vol_id);
+
+        let mut snapshots = Vec::with_capacity(snap_specs.len());
+
+        for spec in snap_specs {
+            let state = self.snapshot_state(&spec).await;
+            snapshots.push(grpc_mod::VolumeSnapshot::new(&spec, state));
+        }
+        snapshots
+    }
+
+    /// Get all the volume snapshots and corresponding states, for all existing volumes.
+    // TODO: Merge volume_snapshots() and volume_snapshots_all, taking Optional<&VolumeId> ?
+    pub(crate) async fn volume_snapshots_all(&self) -> Vec<grpc_mod::VolumeSnapshot> {
+        let snap_specs = self.specs().snapshots();
+        let mut snapshots = Vec::with_capacity(snap_specs.len());
+
+        for spec in snap_specs {
+            let state = self.snapshot_state(&spec).await;
+            snapshots.push(grpc_mod::VolumeSnapshot::new(&spec, state));
+        }
+        snapshots
     }
 }

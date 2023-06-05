@@ -7,14 +7,17 @@ use stor_port::{
     transport_api::{ReplyError, ResourceKind},
     types::v0::{
         self,
-        store::{snapshots::replica::ReplicaSnapshotSpec, SpecStatus},
+        store::{
+            snapshots::{replica::ReplicaSnapshotSpec, ReplicaSnapshotState},
+            SpecStatus,
+        },
         transport,
         transport::{Filter, PoolId, ReplicaId, SnapshotId, SnapshotTxId, VolumeId},
     },
     IntoOption,
 };
 
-use std::{collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, time::UNIX_EPOCH};
 
 /// Volume snapshot creation information.
 pub trait CreateVolumeSnapshotInfo: Send + Sync + std::fmt::Debug {
@@ -38,7 +41,8 @@ pub struct VolumeSnapshot {
 }
 impl VolumeSnapshot {
     /// Create a new `Self` from the given definition and state.
-    pub fn new(def: VolumeSnapshotDef, state: VolumeSnapshotState) -> Self {
+    pub fn new(def: impl Into<VolumeSnapshotDef>, state: VolumeSnapshotState) -> Self {
+        let def = def.into();
         Self {
             spec: def.spec,
             meta: def.meta,
@@ -231,8 +235,18 @@ impl VolumeSnapshotState {
 }
 
 /// Collection of volume snapshots.
+// next_token field to be added here for pagination.
+#[derive(Default, Debug)]
 pub struct VolumeSnapshots {
-    snapshots: Vec<VolumeSnapshot>,
+    /// Snapshot entries.
+    pub entries: Vec<VolumeSnapshot>,
+}
+
+impl VolumeSnapshots {
+    /// Get a refernce to all the snapshot entries.
+    pub fn entries(&self) -> &Vec<VolumeSnapshot> {
+        &self.entries
+    }
 }
 
 /// Validated create/delete volume snapshot parameters.
@@ -305,7 +319,7 @@ impl TryFrom<volume::VolumeSnapshots> for VolumeSnapshots {
     type Error = ReplyError;
     fn try_from(value: volume::VolumeSnapshots) -> Result<Self, Self::Error> {
         Ok(Self {
-            snapshots: value
+            entries: value
                 .snapshots
                 .into_iter()
                 .map(TryFrom::try_from)
@@ -313,6 +327,7 @@ impl TryFrom<volume::VolumeSnapshots> for VolumeSnapshots {
         })
     }
 }
+
 impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
     type Error = ReplyError;
     fn try_from(value: volume::VolumeSnapshot) -> Result<Self, Self::Error> {
@@ -366,6 +381,41 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
     }
 }
 
+impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
+    type Error = ReplyError;
+    fn try_from(val: &snapshot::ReplicaSnapshotState) -> Result<Self, Self::Error> {
+        Ok(Self {
+            snapshot: transport::ReplicaSnapshot::new(
+                SnapshotId::try_from(val.uuid.as_str()).map_err(|_| {
+                    ReplyError::invalid_argument(
+                        ResourceKind::ReplicaSnapshot,
+                        "snap uuid",
+                        val.status.to_string(),
+                    )
+                })?,
+                &val.uuid,
+                val.size_referenced,
+                val.num_clones,
+                val.timestamp
+                    .clone()
+                    .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                    .unwrap_or(UNIX_EPOCH),
+                ReplicaId::try_from(val.source_id.as_str()).map_err(|_| {
+                    ReplyError::invalid_argument(
+                        ResourceKind::ReplicaSnapshot,
+                        "source(replica) id",
+                        val.status.to_string(),
+                    )
+                })?,
+                val.size,
+                &val.source_id,
+                &val.txn_id,
+                val.valid,
+            ),
+        })
+    }
+}
+
 impl TryFrom<volume::ReplicaSnapshot> for ReplicaSnapshot {
     type Error = ReplyError;
     fn try_from(value: volume::ReplicaSnapshot) -> Result<Self, Self::Error> {
@@ -404,7 +454,6 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                     status: 0,
                     timestamp: None,
                     size: 0,
-                    size_referenced: 0,
                     source_id: "".to_string(),
                 }),
                 replicas: vec![],
@@ -412,12 +461,13 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
         })
     }
 }
+
 impl TryFrom<VolumeSnapshots> for volume::VolumeSnapshots {
     type Error = ReplyError;
     fn try_from(value: VolumeSnapshots) -> Result<Self, Self::Error> {
         Ok(Self {
             snapshots: value
-                .snapshots
+                .entries
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<Vec<_>, _>>()?,

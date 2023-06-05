@@ -1,7 +1,6 @@
 use super::*;
 
 use crate::{types::v0::store::nexus::ReplicaUri, IntoOption};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Debug, ops::Deref, time::SystemTime};
 use strum_macros::{Display, EnumString};
@@ -116,30 +115,68 @@ pub type ReplicaSnapshot = ReplicaSnapshotDescr;
 #[allow(unused)]
 pub struct ReplicaSnapshotDescr {
     /// UUID of the snapshot.
-    pub snap_uuid: SnapshotId,
+    snap_uuid: SnapshotId,
     /// Name of the snapshot.
-    pub snap_name: String,
+    snap_name: String,
     /// Amount of bytes referenced by snapshot.
-    pub snap_size: u64,
+    snap_size: u64,
     /// Number of clones created from this snapshot.
-    pub num_clones: u64,
+    num_clones: u64,
     /// Snapshot creation_timestamp.
-    pub snap_time: SystemTime,
+    snap_time: SystemTime,
     /// UUID of the replica this snapshot is taken from.
-    pub replica_uuid: ReplicaId,
+    replica_uuid: ReplicaId,
     /// Amount of bytes referenced by replica.
-    pub replica_size: u64,
+    replica_size: u64,
     /// Identity of the entity under which snapshot is taken.
-    pub entity_id: String,
+    entity_id: String,
     /// Unique transaction id for snapshot.
-    pub txn_id: String,
+    txn_id: String,
     /// Validity of the snapshot: the xattr metadata might be corrupted
-    pub valid: bool,
+    valid: bool,
 }
 impl ReplicaSnapshotDescr {
+    #[allow(clippy::too_many_arguments)]
+    // Creates a new descriptor from given input values.
+    pub fn new(
+        snap_uuid: SnapshotId,
+        snap_name: &str,
+        snap_size: u64,
+        num_clones: u64,
+        snap_time: SystemTime,
+        replica_uuid: ReplicaId,
+        replica_size: u64,
+        entity_id: &str,
+        txn_id: &str,
+        valid: bool,
+    ) -> Self {
+        Self {
+            snap_uuid,
+            snap_name: snap_name.to_owned(),
+            snap_size,
+            num_clones,
+            snap_time,
+            replica_uuid,
+            replica_size,
+            entity_id: entity_id.to_owned(),
+            txn_id: txn_id.to_owned(),
+            valid,
+        }
+    }
+
     /// Returns the snapshot timestamp.
-    pub fn timestamp(&self) -> DateTime<Utc> {
-        self.snap_time.into()
+    pub fn timestamp(&self) -> SystemTime {
+        self.snap_time
+    }
+
+    /// Get a reference to snapshot id.
+    pub fn snap_uuid(&self) -> &SnapshotId {
+        &self.snap_uuid
+    }
+
+    /// Get the size of snapshot referenced data.
+    pub fn snap_size(&self) -> u64 {
+        self.snap_size
     }
 }
 

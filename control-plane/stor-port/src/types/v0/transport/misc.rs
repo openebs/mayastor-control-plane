@@ -42,6 +42,8 @@ pub enum Filter {
     Nexus(NexusId),
     /// Filter by Volume.
     Volume(VolumeId),
+    /// Filter by Snapshot Id.
+    Snapshot(SnapshotId),
     /// Filter by Volume and Snapshot.
     VolumeSnapshot(VolumeId, SnapshotId),
 }

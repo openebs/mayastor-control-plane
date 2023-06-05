@@ -20,6 +20,6 @@ impl ResourceUid for VolumeSnapshot {
 impl ResourceUid for ReplicaSnapshotState {
     type Uid = SnapshotId;
     fn uid(&self) -> &Self::Uid {
-        &self.snapshot.snap_uuid
+        self.snapshot.snap_uuid()
     }
 }

@@ -4,7 +4,7 @@ use grpc::operations::{
     volume::traits::{CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations},
 };
 use stor_port::types::v0::transport::{
-    CreateVolume, DestroyPool, DestroyVolume, PublishVolume, SnapshotId,
+    CreateVolume, DestroyPool, DestroyVolume, Filter, PublishVolume, SnapshotId,
 };
 
 use std::time::Duration;
@@ -46,7 +46,35 @@ async fn snapshot() {
         .await
         .unwrap();
 
-    tracing::info!("Snapshot: {replica_snapshot:?}");
+    tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+
+    // Get snapshot by source id and snapshot id.
+    let snaps = vol_cli
+        .get_snapshots(
+            Filter::VolumeSnapshot(
+                volume.uuid().clone(),
+                replica_snapshot.spec().snap_id.clone(),
+            ),
+            false,
+            None,
+        )
+        .await
+        .expect("Error while listing snapshot...");
+
+    tracing::info!("List Snapshot by sourceid and snapid: {snaps:?}");
+
+    // Get snapshot by snapshot id.
+    let snaps = vol_cli
+        .get_snapshots(
+            Filter::Snapshot(replica_snapshot.spec().snap_id.clone()),
+            false,
+            None,
+        )
+        .await
+        .expect("Error while listing snapshot...");
+
+    tracing::info!("List Snapshot by snapid: {snaps:?}");
+    assert!(!snaps.entries().is_empty());
 
     vol_cli
         .delete_snapshot(
@@ -58,6 +86,20 @@ async fn snapshot() {
         )
         .await
         .unwrap();
+
+    tracing::info!("Deleted Snapshot: {}", replica_snapshot.spec().snap_id);
+
+    // Get snapshot by snapshot id. Shouldn't be found.
+    let snaps = vol_cli
+        .get_snapshots(
+            Filter::Snapshot(replica_snapshot.spec().snap_id.clone()),
+            false,
+            None,
+        )
+        .await
+        .expect("Error while listing snapshot...");
+
+    assert!(snaps.entries().is_empty());
 
     let volume = vol_cli
         .publish(
@@ -78,7 +120,7 @@ async fn snapshot() {
         .await
         .expect_err("unimplemented");
 
-    tracing::info!("Snapshot: {nexus_snapshot:?}");
+    tracing::info!("Nexus Snapshot: {nexus_snapshot:?}");
 
     pool_destroy_validation(&cluster).await;
 }

@@ -327,6 +327,28 @@ impl ResourceSpecs {
         self.volumes.values().map(|v| v.lock().clone()).collect()
     }
 
+    /// Gets all VolumeSnapshot Specs.
+    pub(crate) fn snapshots(&self) -> Vec<VolumeSnapshot> {
+        self.volume_snapshots
+            .values()
+            .map(|v| v.lock().clone())
+            .collect()
+    }
+
+    /// Gets all VolumeSnapshot Specs, filtered by volume id.
+    pub(crate) fn snapshots_by_vol(&self, filter_by: &VolumeId) -> Vec<VolumeSnapshot> {
+        self.volume_snapshots
+            .values()
+            .filter_map(|v| {
+                if v.immutable_ref().spec().source_id() == filter_by {
+                    Some(v.lock().clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Gets all AffinityGroupSpecs.
     pub(crate) fn affinity_groups(&self) -> Vec<AffinityGroupSpec> {
         self.affinity_groups
@@ -352,6 +374,7 @@ impl ResourceSpecs {
         PaginatedResult::new(self.volumes.paginate(offset, length), last_result)
     }
 }
+
 impl ResourceSpecsLocked {
     /// Get the resourced VolumeSpec for the given volume `id`, if any exists.
     pub(crate) fn volume_rsc(&self, id: &VolumeId) -> Option<ResourceMutex<VolumeSpec>> {
@@ -399,6 +422,18 @@ impl ResourceSpecsLocked {
                 Ok(spec.clone())
             }
         }
+    }
+
+    /// Gets a copy of all VolumeSnapshot Specs.
+    pub(crate) fn snapshots(&self) -> Vec<VolumeSnapshot> {
+        let specs = self.read();
+        specs.snapshots()
+    }
+
+    /// Gets a copy of all VolumeSnapshot Specs, filtered by volume id.
+    pub(crate) fn snapshots_by_vol(&self, filter_by: &VolumeId) -> Vec<VolumeSnapshot> {
+        let specs = self.read();
+        specs.snapshots_by_vol(filter_by)
     }
 
     /// Gets a copy of all VolumeSpec's.

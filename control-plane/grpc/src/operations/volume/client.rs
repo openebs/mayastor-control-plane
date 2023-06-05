@@ -278,7 +278,6 @@ impl VolumeOperations for VolumeClient {
         &self,
         filter: Filter,
         ignore_notfound: bool,
-        pagination: Option<Pagination>,
         ctx: Option<Context>,
     ) -> Result<VolumeSnapshots, ReplyError> {
         let req: GetSnapshotsRequest = match filter {
@@ -286,12 +285,10 @@ impl VolumeOperations for VolumeClient {
                 filter: Some(get_snapshots_request::Filter::Volume(VolumeFilter {
                     volume_id: volume_id.to_string(),
                 })),
-                pagination: pagination.map(|p| p.into()),
                 ignore_notfound,
             },
             _ => GetSnapshotsRequest {
                 filter: None,
-                pagination: pagination.map(|p| p.into()),
                 ignore_notfound,
             },
         };

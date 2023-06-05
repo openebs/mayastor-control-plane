@@ -422,10 +422,8 @@ message GetSnapshotsRequest {
     common.VolumeFilter           volume = 1;
     common.VolumeSnapshotFilter snapshot = 2;
   }
-  // pagination to allow for multiple requests to get all snapshots
-  common.Pagination           pagination = 3;
   // ignore 404 not found errors
-  bool                   ignore_notfound = 4;
+  bool                   ignore_notfound = 3;
 }
 // Reply type for a GetVolumeSnapshots request
 message GetSnapshotsReply {
@@ -434,6 +432,7 @@ message GetSnapshotsReply {
     common.ReplyError  error = 2;
   }
 }
+
 message VolumeSnapshots {
   repeated VolumeSnapshot snapshots = 1;
 }
@@ -446,7 +445,7 @@ message VolumeSnapshot {
 message VolumeSnapshotState {
   snapshot.SnapshotState             state = 1;
   // allows us to grow volume snapshot-specific state
-  repeated snapshot.SnapshotState replicas = 2;
+  repeated snapshot.ReplicaSnapshotState replicas = 2;
 }
 
 message VolumeSnapshotSpec {

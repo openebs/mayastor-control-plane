@@ -867,7 +867,7 @@ impl NodeStateFetcher {
                 replica: Some(snapshot.source_id),
             })
             .await?;
-        match replicas.into_iter().find(|r| r.snap_uuid == snap_id) {
+        match replicas.into_iter().find(|r| r.snap_uuid() == &snap_id) {
             Some(replica) => Ok(replica),
             None => Err(SvcError::NotFound {
                 kind: ResourceKind::ReplicaSnapshot,

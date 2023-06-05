@@ -334,7 +334,7 @@ impl OperationGuardArc<VolumeSnapshot> {
             )
             .await
             {
-                replica_timestamp = snapshot.timestamp();
+                replica_timestamp = snapshot.timestamp().into();
             }
         }
 
@@ -358,9 +358,12 @@ impl OperationGuardArc<VolumeSnapshot> {
             .await?;
 
         let timestamp = response.timestamp();
-        replica_snap.1.complete_vol(timestamp);
+        replica_snap.1.complete_vol(timestamp.into());
 
-        Ok(VolumeSnapshotCreateResult::new(replica_snap.1, timestamp))
+        Ok(VolumeSnapshotCreateResult::new(
+            replica_snap.1,
+            timestamp.into(),
+        ))
     }
 
     async fn destroy_replica_snapshot(

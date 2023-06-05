@@ -54,9 +54,9 @@ def test_delete_snapshot_operation_is_implemented():
     """Delete Snapshot Operation."""
 
 
-@scenario("operations.feature", "List Snapshot Operation is not implemented")
-def test_list_snapshot_operation_is_not_implemented():
-    """List Snapshot Operation is not implemented."""
+@scenario("operations.feature", "List Snapshot Operation is implemented")
+def test_list_snapshot_operation_is_implemented():
+    """List Snapshot Operation is implemented."""
 
 
 @given("a running CSI controller plugin", target_fixture="csi_instance")
@@ -105,10 +105,8 @@ def a_deletesnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
 )
 def a_listsnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
     """a ListSnapshotRequest request is sent to the CSI controller."""
-    with pytest.raises(grpc.RpcError) as grpc_error:
-        request = pb.ListSnapshotsRequest(snapshot_id=SNAP1_UUID)
-        csi_instance.controller.ListSnapshots(request)
-    return grpc_error.value
+    request = pb.ListSnapshotsRequest(snapshot_id=SNAP1_UUID)
+    csi_instance.controller.ListSnapshots(request)
 
 
 @then("the creation should succeed")
@@ -120,6 +118,12 @@ def the_creation_should_succeed(snapshot_response):
 @then("the deletion should succeed")
 def the_deletion_should_succeed(grpc_error):
     """the deletion should succeed."""
+    assert grpc_error is None
+
+
+@then("the list should succeed")
+def the_list_should_succeed(grpc_error):
+    """the list should succeed."""
     assert grpc_error is None
 
 
