@@ -73,9 +73,6 @@ async fn get_snapshots(
     volid: &Option<VolumeId>,
     snapid: &Option<SnapshotId>,
 ) -> Option<Vec<openapi::models::VolumeSnapshot>> {
-    // XXX: 500 is a ballpark number. Once pagination is implemented, we'll reduce this
-    // to max entries per call.
-    let mut snapshots = Vec::with_capacity(500);
     match RestClient::client()
         .snapshots_api()
         .get_volumes_snapshots(volid.as_ref(), snapid.as_ref())
@@ -83,13 +80,11 @@ async fn get_snapshots(
     {
         Ok(snaps) => {
             let s = snaps.into_body();
-            snapshots.extend(s.entries);
+            Some(s.entries)
         }
         Err(e) => {
             println!("Failed to list volume snapshots. Error {e}");
-            return None;
+            None
         }
     }
-
-    Some(snapshots)
 }

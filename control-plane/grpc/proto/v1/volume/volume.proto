@@ -424,8 +424,7 @@ message GetSnapshotsRequest {
     common.SnapshotFilter              snapshot = 3;
   }
   // ignore 404 not found errors.
-  // Left few field numbers in between to accomodate any future filters.
-  bool                   ignore_notfound = 6;
+  bool                   ignore_notfound = 4;
 }
 // Reply type for a GetVolumeSnapshots request
 message GetSnapshotsReply {
