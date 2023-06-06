@@ -464,11 +464,12 @@ pub mod v1 {
             nexus_rpc_client, AddChildNexusRequest, AddChildNexusResponse, Child, ChildAction,
             ChildOperationRequest, ChildState, ChildStateReason, CreateNexusRequest,
             CreateNexusResponse, DestroyNexusRequest, FaultNexusChildRequest, ListNexusOptions,
-            ListNexusResponse, Nexus, NexusNvmePreemption, NexusState, NvmeAnaState,
-            NvmeReservation, PublishNexusRequest, PublishNexusResponse, RebuildHistoryRecord,
-            RebuildHistoryRequest, RebuildHistoryResponse, RebuildJobState,
-            RemoveChildNexusRequest, RemoveChildNexusResponse, ShutdownNexusRequest,
-            UnpublishNexusRequest, UnpublishNexusResponse,
+            ListNexusResponse, ListRebuildHistoryRequest, Nexus, NexusNvmePreemption, NexusState,
+            NvmeAnaState, NvmeReservation, PublishNexusRequest, PublishNexusResponse,
+            RebuildHistoryMapResponse, RebuildHistoryRecord, RebuildHistoryRequest,
+            RebuildHistoryResponse, RebuildJobState, RemoveChildNexusRequest,
+            RemoveChildNexusResponse, ShutdownNexusRequest, UnpublishNexusRequest,
+            UnpublishNexusResponse,
         };
     }
 

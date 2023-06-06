@@ -746,6 +746,25 @@ pub struct GetRebuildRecord {
     pub nexus: NexusId,
 }
 
+/// List rebuild history request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct ListRebuildRecord {
+    /// Maximum number of rebuild records per nexus.
+    count: Option<u32>,
+}
+
+impl ListRebuildRecord {
+    /// Returns instance of self.
+    pub fn new(count: Option<u32>) -> Self {
+        Self { count }
+    }
+
+    /// Get count from the request.
+    pub fn count(&self) -> Option<u32> {
+        self.count
+    }
+}
+
 impl GetRebuildRecord {
     /// Returns instance of self.
     pub fn new(uuid: NexusId) -> Self {

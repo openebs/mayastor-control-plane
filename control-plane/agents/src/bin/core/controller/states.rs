@@ -1,12 +1,12 @@
 use crate::controller::resources::{resource_map::ResourceMap, ResourceMutex};
 use stor_port::types::v0::{
     store::{nexus::NexusState, pool::PoolState, replica::ReplicaState},
-    transport::{self, Nexus, NexusId, PoolId, Replica, ReplicaId},
+    transport::{self, Nexus, NexusId, PoolId, RebuildHistory, Replica, ReplicaId},
 };
 
 use indexmap::map::Values;
 use parking_lot::RwLock;
-use std::{ops::Deref, sync::Arc};
+use std::{collections::HashMap, ops::Deref, sync::Arc};
 use stor_port::types::v0::{
     store::snapshots::ReplicaSnapshotState,
     transport::{ReplicaSnapshot, SnapshotId},
@@ -37,6 +37,7 @@ pub(crate) struct ResourceStates {
     pools: ResourceMap<PoolId, PoolState>,
     replicas: ResourceMap<ReplicaId, ReplicaState>,
     snapshots: ResourceMap<SnapshotId, ReplicaSnapshotState>,
+    rebuild_history: ResourceMap<NexusId, RebuildHistory>,
 }
 
 /// Add/Update or remove resource from the registry.
@@ -55,11 +56,13 @@ impl ResourceStates {
         replicas: Vec<Replica>,
         nexuses: Vec<Nexus>,
         snapshots: Vec<ReplicaSnapshot>,
+        rebuild_histories: HashMap<NexusId, RebuildHistory>,
     ) {
         self.update_replicas(replicas);
         self.update_pools(pools);
         self.update_nexuses(nexuses);
         self.update_snapshots(snapshots);
+        self.update_rebuild_history(rebuild_histories);
     }
 
     /// Update nexus states.
@@ -188,12 +191,25 @@ impl ResourceStates {
         self.snapshots.get(id)
     }
 
+    /// This updates rebuild history resource map.
+    pub(crate) fn update_rebuild_history(&mut self, histories: HashMap<NexusId, RebuildHistory>) {
+        self.rebuild_history.clear();
+        let l: Vec<RebuildHistory> = histories.into_values().collect();
+        self.rebuild_history.populate(l);
+    }
+
+    /// Get a rebuild history with the given ID.
+    pub(crate) fn rebuild_history(&self, id: &NexusId) -> Option<&ResourceMutex<RebuildHistory>> {
+        self.rebuild_history.get(id)
+    }
+
     /// Clear all state information.
     pub(crate) fn clear_all(&mut self) {
         self.nexuses.clear();
         self.pools.clear();
         self.replicas.clear();
         self.snapshots.clear();
+        self.rebuild_history.clear();
     }
 
     /// Takes an iterator of resources resourced by an 'Arc' and 'Mutex' and returns a vector of

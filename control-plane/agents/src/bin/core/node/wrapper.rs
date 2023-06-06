@@ -24,18 +24,18 @@ use stor_port::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreateNexusSnapshot,
             CreateNexusSnapshotResp, CreatePool, CreateReplica, CreateReplicaSnapshot,
             DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
-            GetRebuildRecord, ImportPool, ListReplicaSnapshots, MessageIdVs, Nexus,
-            NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
-            NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica,
-            ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
+            GetRebuildRecord, ImportPool, ListRebuildRecord, ListReplicaSnapshots, MessageIdVs,
+            Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId,
+            NodeId, NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register,
+            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus,
+            ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use std::{ops::DerefMut, sync::Arc};
+use std::{collections::HashMap, ops::DerefMut, sync::Arc};
 use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (
@@ -43,10 +43,13 @@ type NodeResourceStates = (
     Vec<PoolState>,
     Vec<Nexus>,
     Vec<ReplicaSnapshot>,
+    HashMap<NexusId, RebuildHistory>,
 );
 
 /// Default timeout for GET* gRPC requests (ex: GetPools, GetNexuses, etc..)
 const GETS_TIMEOUT: MessageId = MessageId::v0(MessageIdVs::Default);
+/// Maximum number of rebuild histories control plane requests per nexus.
+const MAX_HISTORY_PER_NEXUS: u32 = 8;
 
 enum ResourceType {
     All(
@@ -54,6 +57,7 @@ enum ResourceType {
         Vec<Replica>,
         Vec<Nexus>,
         Vec<ReplicaSnapshot>,
+        HashMap<NexusId, RebuildHistory>,
     ),
     Nexuses(Vec<Nexus>),
     Nexus(Either<Nexus, NexusId>),
@@ -541,6 +545,14 @@ impl NodeWrapper {
     fn nexus(&self, nexus_id: &NexusId) -> Option<Nexus> {
         self.resources().nexus_state(nexus_id).map(|s| s.nexus)
     }
+
+    /// Gets rebuild history for a nexus from resource map.
+    pub(crate) fn rebuild_history(&self, nexus_id: &NexusId) -> Option<RebuildHistory> {
+        self.resources()
+            .rebuild_history(nexus_id)
+            .map(|rs| rs.lock().clone())
+    }
+
     /// Get nexus for the given volume.
     fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus> {
         self.resources()
@@ -576,9 +588,9 @@ impl NodeWrapper {
 
         let mut client = self.grpc_client().await?;
         match self.fetcher().fetch_resources(&mut client).await {
-            Ok((replicas, pools, nexuses, snapshots)) => {
+            Ok((replicas, pools, nexuses, snapshots, rebuild_histories)) => {
                 let mut states = self.resources_mut();
-                states.update(pools, replicas, nexuses, snapshots);
+                states.update(pools, replicas, nexuses, snapshots, rebuild_histories);
                 Ok(())
             }
             Err(error) => {
@@ -608,8 +620,14 @@ impl NodeWrapper {
             );
 
             match fetch_result {
-                Ok((replicas, pools, nexuses, snapshots)) => {
-                    self.update_resources(ResourceType::All(pools, replicas, nexuses, snapshots));
+                Ok((replicas, pools, nexuses, snapshots, rebuild_history)) => {
+                    self.update_resources(ResourceType::All(
+                        pools,
+                        replicas,
+                        nexuses,
+                        snapshots,
+                        rebuild_history,
+                    ));
                     if setting_online {
                         // we only set it as online after we've updated the resource states
                         // so an online node should be "up-to-date"
@@ -764,9 +782,9 @@ impl NodeWrapper {
     /// Whenever the nexus states are updated the number of rebuilds must be updated.
     fn update_resources(&self, resource_type: ResourceType) {
         match resource_type {
-            ResourceType::All(pools, replicas, nexuses, snapshots) => {
+            ResourceType::All(pools, replicas, nexuses, snapshots, rebuild_histories) => {
                 self.resources_mut()
-                    .update(pools, replicas, nexuses, snapshots);
+                    .update(pools, replicas, nexuses, snapshots, rebuild_histories);
                 self.update_num_rebuilds();
             }
             ResourceType::Nexuses(nexuses) => {
@@ -841,7 +859,16 @@ impl NodeStateFetcher {
         let pools = self.fetch_pools(client).await?;
         let nexuses = self.fetch_nexuses(client).await?;
         let snapshots = self.fetch_snapshots(client).await?;
-        Ok((replicas, pools, nexuses, snapshots))
+        let rebuild_history = self.fetch_rebuild_history(client).await?;
+        Ok((replicas, pools, nexuses, snapshots, rebuild_history))
+    }
+
+    pub(crate) async fn fetch_rebuild_history(
+        &self,
+        client: &mut GrpcClient,
+    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError> {
+        let request = ListRebuildRecord::new(Some(MAX_HISTORY_PER_NEXUS));
+        client.list_rebuild_record(&request).await
     }
 
     /// Fetch all snapshots from this node via gRPC.
@@ -948,6 +975,7 @@ pub(crate) trait GetterOps {
     async fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus>;
 
     async fn snapshot(&self, snapshot: &SnapshotId) -> Option<ReplicaSnapshot>;
+    async fn rebuild_history(&self, nexus: &NexusId) -> Option<RebuildHistory>;
 }
 
 #[async_trait]
@@ -992,6 +1020,11 @@ impl GetterOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn snapshot(&self, snapshot: &SnapshotId) -> Option<ReplicaSnapshot> {
         let node = self.read().await;
         node.snapshot(snapshot)
+    }
+
+    async fn rebuild_history(&self, nexus: &NexusId) -> Option<RebuildHistory> {
+        let node = self.read().await;
+        node.rebuild_history(nexus)
     }
 }
 
@@ -1389,12 +1422,20 @@ impl NexusShareApi<String, ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
 #[async_trait]
 impl NexusChildRebuildApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
-    async fn list_rebuild_history(
+    async fn get_rebuild_history(
         &self,
         request: &GetRebuildRecord,
     ) -> Result<RebuildHistory, SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        dataplane.list_rebuild_history(request).await
+        dataplane.get_rebuild_history(request).await
+    }
+
+    async fn list_rebuild_record(
+        &self,
+        request: &ListRebuildRecord,
+    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        dataplane.list_rebuild_record(request).await
     }
 }
 

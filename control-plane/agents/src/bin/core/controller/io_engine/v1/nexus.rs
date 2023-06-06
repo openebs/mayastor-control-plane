@@ -5,12 +5,14 @@ use super::{
 use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::nexus::ListNexusOptions;
+use std::collections::HashMap;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         AddNexusChild, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp, DestroyNexus,
-        FaultNexusChild, GetRebuildRecord, Nexus, NexusChildAction, NexusChildActionContext,
-        NexusId, NodeId, RebuildHistory, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
+        FaultNexusChild, GetRebuildRecord, ListRebuildRecord, Nexus, NexusChildAction,
+        NexusChildActionContext, NexusId, NodeId, RebuildHistory, RemoveNexusChild, ShareNexus,
+        ShutdownNexus, UnshareNexus,
     },
 };
 
@@ -336,7 +338,7 @@ impl crate::controller::io_engine::NexusSnapshotApi for super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusChildRebuildApi for super::RpcClient {
-    async fn list_rebuild_history(
+    async fn get_rebuild_history(
         &self,
         request: &GetRebuildRecord,
     ) -> Result<RebuildHistory, SvcError> {
@@ -349,5 +351,29 @@ impl crate::controller::io_engine::NexusChildRebuildApi for super::RpcClient {
                 request: "get_rebuild_history",
             })?;
         response.into_inner().try_to_agent()
+    }
+
+    async fn list_rebuild_record(
+        &self,
+        request: &ListRebuildRecord,
+    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError> {
+        let response = self
+            .nexus()
+            .list_rebuild_history(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Nexus,
+                request: "get_rebuild_history",
+            })?;
+        let mut rebuild_map: HashMap<NexusId, RebuildHistory> = HashMap::new();
+        for (nexus, rebuild_record) in response.into_inner().histories.iter() {
+            let nex = NexusId::try_from(nexus.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: nexus.to_owned(),
+                kind: ResourceKind::Nexus,
+            })?;
+            let history = rebuild_record.try_to_agent()?;
+            let _ = rebuild_map.insert(nex, history);
+        }
+        Ok(rebuild_map)
     }
 }

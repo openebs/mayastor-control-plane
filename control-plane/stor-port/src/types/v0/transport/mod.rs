@@ -165,6 +165,8 @@ pub enum MessageIdVs {
     GetNvmeSubsystems,
     /// Get Rebuild records.
     GetRebuildRecord,
+    /// List rebuild records.
+    ListRebuildRecord,
 }
 
 impl From<MessageIdVs> for MessageId {
