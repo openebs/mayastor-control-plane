@@ -3,10 +3,11 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{
-                ResourceLifecycle, ResourcePublishing, ResourceReplicas, ResourceSharing,
-                ResourceShutdownOperations, ResourceSnapshotting,
+                ResourceLifecycle, ResourceLifecycleWithLifetime, ResourcePublishing,
+                ResourceReplicas, ResourceSharing, ResourceShutdownOperations,
+                ResourceSnapshotting,
             },
-            operations_helper::ResourceSpecsLocked,
+            operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
             OperationGuardArc,
         },
     },
@@ -380,7 +381,7 @@ impl Service {
         let source_id = snapshot.lock().spec().source_id().clone();
 
         // Fetch the volume using the snapshot source.
-        let mut volume = match request.source_id() {
+        let result = match request.source_id() {
             None => self.specs().volume(&source_id).await,
             Some(vol_id) => {
                 if &source_id == vol_id {
@@ -394,18 +395,34 @@ impl Service {
                     })
                 }
             }
-        }?;
+        };
 
         // Execute the destroy.
-        volume
-            .destroy_snap(
-                &self.registry,
-                &DestroyVolumeSnapshotRequest::new(
-                    snapshot,
-                    VolumeSnapshotUserSpec::new(volume.uuid(), request.snap_id),
-                ),
-            )
-            .await?;
+        match result {
+            Ok(mut volume) => {
+                volume
+                    .destroy_snap(
+                        &self.registry,
+                        &DestroyVolumeSnapshotRequest::new(
+                            snapshot,
+                            Some(volume.uuid().clone()),
+                            request.snap_id,
+                        ),
+                    )
+                    .await
+            }
+            Err(SvcError::VolumeNotFound { .. }) => {
+                let mut snapshot_guard = snapshot.operation_guard_wait().await?;
+                snapshot_guard
+                    .destroy(
+                        &self.registry,
+                        &DestroyVolumeSnapshotRequest::new(snapshot, None, request.snap_id),
+                    )
+                    .await
+            }
+            Err(error) => Err(error),
+        }?;
+
         Ok(())
     }
 

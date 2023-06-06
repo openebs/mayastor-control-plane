@@ -234,7 +234,11 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
             let result = snapshot_guard
                 .destroy(
                     registry,
-                    &DestroyVolumeSnapshotRequest::new(snapshot, snapshot_user_spec),
+                    &DestroyVolumeSnapshotRequest::new(
+                        snapshot,
+                        Some(snapshot_user_spec.source_id().clone()),
+                        snapshot_user_spec.uuid().clone(),
+                    ),
                 )
                 .await;
             if let Err(error) = result {
