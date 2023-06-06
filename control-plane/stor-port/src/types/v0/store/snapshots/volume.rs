@@ -249,6 +249,7 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 self.status = SpecStatus::Deleted;
             }
             VolumeSnapshotOperation::Create(info) => {
+                self.metadata.txn_id = info.txn_id.clone();
                 if let Some(result) = info.complete.lock().unwrap().as_ref() {
                     self.metadata.size = result.replica.meta().size();
                     // replace-in-place the logged replica specs.
@@ -268,7 +269,16 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
     }
 
     fn clear_op(&mut self) {
-        self.metadata.operation = None;
+        let Some(op) = self.metadata.operation.take() else {
+            return;
+        };
+        match op.operation {
+            VolumeSnapshotOperation::Create(info) => {
+                self.metadata.txn_id = info.txn_id;
+            }
+            VolumeSnapshotOperation::Destroy => {}
+            VolumeSnapshotOperation::CleanupStaleTransactions => todo!(),
+        }
     }
 
     fn start_op(&mut self, operation: VolumeSnapshotOperation) {

@@ -157,7 +157,7 @@ pub(crate) trait GuardedOperationsHelper:
     /// `on_err_destroy` is used to determine if the resource spec should be deleted on error.
     /// On most cases we don't want to destroy as that will prevent garbage collection.
     async fn complete_create<O, R: Send + Debug>(
-        &self,
+        &mut self,
         result: Result<R, SvcError>,
         registry: &Registry,
         on_fail: OnCreateFail,
@@ -172,14 +172,13 @@ pub(crate) trait GuardedOperationsHelper:
                 let mut spec_clone = self.lock().clone();
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
-                let mut spec = self.lock();
                 match stored {
                     Ok(_) => {
-                        spec.commit_op();
+                        self.complete_op();
                         Ok(val)
                     }
                     Err(error) => {
-                        spec.set_op_result(true);
+                        self.lock().set_op_result(true);
                         Err(error)
                     }
                 }

@@ -52,7 +52,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError> {
         let specs = registry.specs();
-        let volume = specs
+        let mut volume = specs
             .get_or_create_volume(request)
             .operation_guard_wait()
             .await?;

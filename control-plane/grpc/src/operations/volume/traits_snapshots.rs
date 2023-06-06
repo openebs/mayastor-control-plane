@@ -8,11 +8,15 @@ use stor_port::{
     types::v0::{
         self,
         store::{
-            snapshots::{replica::ReplicaSnapshotSpec, ReplicaSnapshotState},
+            snapshots::{
+                replica::{ReplicaSnapshotSource, ReplicaSnapshotSpec},
+                ReplicaSnapshotState,
+            },
             SpecStatus,
         },
-        transport,
-        transport::{Filter, PoolId, ReplicaId, SnapshotId, SnapshotTxId, VolumeId},
+        transport::{
+            self, Filter, PoolId, PoolUuid, ReplicaId, SnapshotId, SnapshotTxId, VolumeId,
+        },
     },
     IntoOption,
 };
@@ -72,6 +76,12 @@ pub struct VolumeSnapshotDef {
 
 impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for VolumeSnapshotDef {
     fn from(value: &stor_port::types::v0::store::snapshots::volume::VolumeSnapshot) -> Self {
+        let transactions = value
+            .metadata()
+            .transactions()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.iter().map(From::from).collect::<Vec<_>>()))
+            .collect::<HashMap<String, Vec<ReplicaSnapshot>>>();
         Self {
             spec: SnapshotInfo {
                 source_id: value.spec().source_id().clone(),
@@ -84,8 +94,7 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
                     .timestamp()
                     .map(|t| std::time::SystemTime::from(t).into()),
                 txn_id: value.metadata().txn_id().clone(),
-                // todo: add replica transactions..
-                transactions: Default::default(),
+                transactions,
             },
         }
     }
@@ -137,6 +146,24 @@ pub struct ReplicaSnapshot {
     txn_id: SnapshotTxId,
     source_id: ReplicaId,
 }
+impl From<&v0::store::snapshots::replica::ReplicaSnapshot> for ReplicaSnapshot {
+    fn from(value: &v0::store::snapshots::replica::ReplicaSnapshot) -> ReplicaSnapshot {
+        ReplicaSnapshot {
+            status: value.status().clone(),
+            uuid: value.spec().uuid().clone(),
+            creation_timestamp: value.meta().timestamp().map(|t| prost_types::Timestamp {
+                seconds: t.timestamp(),
+                nanos: t.timestamp_subsec_nanos() as i32,
+            }),
+            txn_id: value
+                .meta()
+                .txn_id()
+                .cloned()
+                .unwrap_or(SnapshotTxId::default()),
+            source_id: value.spec().source_id().replica_id().clone(),
+        }
+    }
+}
 
 /// Volume replica snapshot state information.
 #[derive(Debug)]
@@ -155,6 +182,8 @@ pub enum VolumeReplicaSnapshotState {
         replica_id: ReplicaId,
         /// The pool hosting the replica snapshot.
         pool_id: PoolId,
+        /// The uuid of the pool hosting the replica snapshot.
+        pool_uuid: PoolUuid,
         /// The replica snapshot id.
         snapshot_id: SnapshotId,
     },
@@ -170,6 +199,7 @@ impl VolumeReplicaSnapshotState {
     /// Create a new volume replica snapshot state when the state is unavailable.
     pub fn new_offline(spec: &ReplicaSnapshotSpec) -> Self {
         Self::Offline {
+            pool_uuid: spec.source_id().pool_uuid().clone(),
             pool_id: spec.source_id().pool_id().clone(),
             replica_id: spec.source_id().replica_id().clone(),
             snapshot_id: spec.uuid().clone(),
@@ -259,12 +289,12 @@ impl ValidateRequestTypes for volume::CreateSnapshotRequest {
     type Validated = CreateVolumeSnapshot;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(CreateVolumeSnapshot {
-            source_id: self.volume_id.try_into().map_err(|error| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
-            })?,
-            snap_id: self.snapshot_id.try_into().map_err(|error| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
-            })?,
+            source_id: self
+                .volume_id
+                .try_into_id(ResourceKind::VolumeSnapshot, "volume_id")?,
+            snap_id: self
+                .snapshot_id
+                .try_into_id(ResourceKind::VolumeSnapshot, "volume_id")?,
         })
     }
 }
@@ -274,13 +304,11 @@ impl ValidateRequestTypes for volume::DeleteSnapshotRequest {
         Ok(DeleteVolumeSnapshot {
             source_id: match self.volume_id {
                 None => None,
-                Some(id) => Some(id.try_into().map_err(|error| {
-                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
-                })?),
+                Some(id) => Some(id.try_into_id(ResourceKind::VolumeSnapshot, "volume_id")?),
             },
-            snap_id: self.snapshot_id.try_into().map_err(|error| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
-            })?,
+            snap_id: self
+                .snapshot_id
+                .try_into_id(ResourceKind::VolumeSnapshot, "snapshot_id")?,
         })
     }
 }
@@ -342,12 +370,12 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
             .ok_or_else(|| ReplyError::missing_argument(ResourceKind::VolumeSnapshot, "state"))?;
 
         let info = VolumeSnapshotSpec {
-            source_id: VolumeId::try_from(spec.volume_id).map_err(|e| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "spec.volume_id", e)
-            })?,
-            snap_id: SnapshotId::try_from(spec.snapshot_id).map_err(|e| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "spec.snapshot_id", e)
-            })?,
+            source_id: spec
+                .volume_id
+                .try_into_id(ResourceKind::VolumeSnapshot, "spec.volume_id")?,
+            snap_id: spec
+                .snapshot_id
+                .try_into_id(ResourceKind::VolumeSnapshot, "spec.snapshot_id")?,
         };
         Ok(Self {
             spec: info.clone(),
@@ -374,8 +402,64 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
                 info,
                 size: state.state.as_ref().map(|s| s.size),
                 timestamp: state.state.as_ref().and_then(|s| s.timestamp.clone()),
-                // todo: grpc protobuf
-                repl_snapshots: vec![],
+                repl_snapshots: state
+                    .replicas
+                    .into_iter()
+                    .map(|r| {
+                        let state = r.state.unwrap();
+                        match state {
+                            snapshot::volume_replica_snapshot_state::State::Online(state) => {
+                                let n_state = state.clone().try_into()?;
+                                let snapshot_id = state
+                                    .uuid
+                                    .try_into_id(ResourceKind::VolumeSnapshot, "state.uuid")?;
+                                let replica_id = state.replica_id.try_into_id(
+                                    ResourceKind::VolumeSnapshot,
+                                    "state.replica_id",
+                                )?;
+                                let source = ReplicaSnapshotSource::new(
+                                    replica_id,
+                                    state.pool_id.into(),
+                                    state.pool_uuid.try_into_id(
+                                        ResourceKind::VolumeSnapshot,
+                                        "state.pool_uuid",
+                                    )?,
+                                );
+                                let spec = ReplicaSnapshotSpec::new(&source, snapshot_id);
+                                let status =
+                                    crate::snapshot::SnapshotStatus::from_i32(state.status)
+                                        .unwrap_or_default();
+                                Ok(match status {
+                                    crate::snapshot::SnapshotStatus::Unknown => {
+                                        VolumeReplicaSnapshotState::new_offline(&spec)
+                                    }
+                                    crate::snapshot::SnapshotStatus::Online => {
+                                        VolumeReplicaSnapshotState::new_online(&spec, n_state)
+                                    }
+                                })
+                            }
+                            snapshot::volume_replica_snapshot_state::State::Offline(state) => {
+                                let snapshot_id = state
+                                    .uuid
+                                    .try_into_id(ResourceKind::VolumeSnapshot, "state.uuid")?;
+                                let replica_id = state.replica_id.try_into_id(
+                                    ResourceKind::VolumeSnapshot,
+                                    "state.replica_id",
+                                )?;
+                                let source = ReplicaSnapshotSource::new(
+                                    replica_id,
+                                    state.pool_id.into(),
+                                    state.pool_uuid.try_into_id(
+                                        ResourceKind::VolumeSnapshot,
+                                        "state.pool_uuid",
+                                    )?,
+                                );
+                                let spec = ReplicaSnapshotSpec::new(&source, snapshot_id);
+                                Ok(VolumeReplicaSnapshotState::new_offline(&spec))
+                            }
+                        }
+                    })
+                    .collect::<Result<Vec<_>, ReplyError>>()?,
             },
         })
     }
@@ -386,13 +470,9 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
     fn try_from(val: &snapshot::ReplicaSnapshotState) -> Result<Self, Self::Error> {
         Ok(Self {
             snapshot: transport::ReplicaSnapshot::new(
-                SnapshotId::try_from(val.uuid.as_str()).map_err(|_| {
-                    ReplyError::invalid_argument(
-                        ResourceKind::ReplicaSnapshot,
-                        "snap uuid",
-                        val.status.to_string(),
-                    )
-                })?,
+                val.uuid
+                    .clone()
+                    .try_into_id(ResourceKind::ReplicaSnapshot, "snapshot_id")?,
                 &val.uuid,
                 val.size_referenced,
                 val.num_clones,
@@ -400,15 +480,15 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
                     .clone()
                     .and_then(|t| std::time::SystemTime::try_from(t).ok())
                     .unwrap_or(UNIX_EPOCH),
-                ReplicaId::try_from(val.source_id.as_str()).map_err(|_| {
-                    ReplyError::invalid_argument(
-                        ResourceKind::ReplicaSnapshot,
-                        "source(replica) id",
-                        val.status.to_string(),
-                    )
-                })?,
+                val.replica_id
+                    .clone()
+                    .try_into_id(ResourceKind::ReplicaSnapshot, "replica_uuid")?,
+                val.pool_uuid
+                    .clone()
+                    .try_into_id(ResourceKind::ReplicaSnapshot, "pool_uuid")?,
+                PoolId::from(&val.pool_id),
                 val.size,
-                &val.source_id,
+                &val.replica_id,
                 &val.txn_id,
                 val.valid,
             ),
@@ -423,14 +503,14 @@ impl TryFrom<volume::ReplicaSnapshot> for ReplicaSnapshot {
             status: common::SpecStatus::from_i32(value.spec_status)
                 .unwrap_or_default()
                 .into(),
-            uuid: value.uuid.try_into().map_err(|error| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "uuid", error)
-            })?,
+            uuid: value
+                .uuid
+                .try_into_id(ResourceKind::ReplicaSnapshot, "uuid")?,
             creation_timestamp: value.timestamp.into_opt(),
             txn_id: value.txn_id,
-            source_id: value.source_id.try_into().map_err(|error| {
-                ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "source_id", error)
-            })?,
+            source_id: value
+                .source_id
+                .try_into_id(ResourceKind::ReplicaSnapshot, "source_id")?,
         })
     }
 }
@@ -443,20 +523,59 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                 snapshot_id: value.spec.snap_id.to_string(),
             }),
             meta: Some(volume::VolumeSnapshotMeta {
-                spec_status: 0,
-                timestamp: None,
-                txn_id: "".to_string(),
+                spec_status: common::SpecStatus::from(&value.meta().status) as i32,
+                timestamp: value.meta().timestamp().cloned(),
+                txn_id: value.meta().txn_id().clone(),
                 transactions: Default::default(),
             }),
             state: Some(volume::VolumeSnapshotState {
                 state: Some(snapshot::SnapshotState {
-                    uuid: "".to_string(),
+                    uuid: value.state().uuid().to_string(),
                     status: 0,
-                    timestamp: None,
-                    size: 0,
-                    source_id: "".to_string(),
+                    timestamp: value.state().timestamp().cloned(),
+                    size: value.state().size().unwrap_or_default(),
+                    source_id: value.state().source_id().to_string(),
                 }),
-                replicas: vec![],
+                replicas: value
+                    .state()
+                    .repl_snapshots()
+                    .iter()
+                    .map(|r| {
+                        let state = match r {
+                            VolumeReplicaSnapshotState::Online { state, .. } => {
+                                crate::snapshot::volume_replica_snapshot_state::State::Online(
+                                    crate::snapshot::ReplicaSnapshotState {
+                                        uuid: state.snap_uuid().to_string(),
+                                        replica_id: state.snap_uuid().to_string(),
+                                        pool_uuid: state.pool_uuid().to_string(),
+                                        pool_id: state.pool_id().to_string(),
+                                        status: crate::snapshot::SnapshotStatus::Online as i32,
+                                        timestamp: state.timestamp().try_into().ok(),
+                                        size: state.source_size(),
+                                        size_referenced: state.snap_size(),
+                                        num_clones: 0,
+                                        txn_id: state.txn_id().to_string(),
+                                        valid: state.valid(),
+                                    },
+                                )
+                            }
+                            VolumeReplicaSnapshotState::Offline {
+                                replica_id,
+                                pool_id,
+                                pool_uuid,
+                                snapshot_id,
+                            } => crate::snapshot::volume_replica_snapshot_state::State::Offline(
+                                crate::snapshot::ReplicaSnapshotSourceState {
+                                    uuid: snapshot_id.to_string(),
+                                    replica_id: replica_id.to_string(),
+                                    pool_uuid: pool_uuid.to_string(),
+                                    pool_id: pool_id.to_string(),
+                                },
+                            ),
+                        };
+                        crate::snapshot::VolumeReplicaSnapshotState { state: Some(state) }
+                    })
+                    .collect::<Vec<_>>(),
             }),
         })
     }
@@ -478,24 +597,81 @@ impl TryFrom<get_snapshots_request::Filter> for Filter {
     type Error = ReplyError;
     fn try_from(filter: get_snapshots_request::Filter) -> Result<Self, Self::Error> {
         Ok(match filter {
-            get_snapshots_request::Filter::Volume(filter) => {
-                Filter::Volume(VolumeId::try_from(filter.volume_id).map_err(|error| {
-                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
-                })?)
-            }
-            get_snapshots_request::Filter::VolumeSnapshot(filter) => Filter::VolumeSnapshot(
-                VolumeId::try_from(filter.volume_id).map_err(|error| {
-                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
-                })?,
-                SnapshotId::try_from(filter.snapshot_id).map_err(|error| {
-                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
-                })?,
+            get_snapshots_request::Filter::Volume(filter) => Filter::Volume(
+                filter
+                    .volume_id
+                    .try_into_id(ResourceKind::VolumeSnapshot, "volume_id")?,
             ),
-            get_snapshots_request::Filter::Snapshot(filter) => {
-                Filter::Snapshot(SnapshotId::try_from(filter.snapshot_id).map_err(|error| {
-                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
-                })?)
-            }
+            get_snapshots_request::Filter::VolumeSnapshot(filter) => Filter::VolumeSnapshot(
+                filter
+                    .volume_id
+                    .try_into_id(ResourceKind::VolumeSnapshot, "volume_id")?,
+                filter
+                    .snapshot_id
+                    .try_into_id(ResourceKind::VolumeSnapshot, "snapshot_id")?,
+            ),
+            get_snapshots_request::Filter::Snapshot(filter) => Filter::Snapshot(
+                filter
+                    .snapshot_id
+                    .try_into_id(ResourceKind::VolumeSnapshot, "snapshot_id")?,
+            ),
         })
     }
 }
+
+impl From<&SpecStatus<()>> for common::SpecStatus {
+    fn from(value: &SpecStatus<()>) -> Self {
+        match value {
+            SpecStatus::Creating => common::SpecStatus::Creating,
+            SpecStatus::Created(_) => common::SpecStatus::Created,
+            SpecStatus::Deleting => common::SpecStatus::Deleting,
+            SpecStatus::Deleted => common::SpecStatus::Deleted,
+        }
+    }
+}
+
+impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
+    type Error = ReplyError;
+    fn try_from(value: snapshot::ReplicaSnapshotState) -> Result<Self, Self::Error> {
+        Ok(transport::ReplicaSnapshot::new(
+            value
+                .uuid
+                .try_into_id(ResourceKind::VolumeSnapshot, "snap_uuid")?,
+            "",
+            value.size_referenced,
+            value.num_clones,
+            value
+                .timestamp
+                .and_then(|t| std::time::SystemTime::try_from(t).ok())
+                .unwrap_or(UNIX_EPOCH),
+            value
+                .replica_id
+                .try_into_id(ResourceKind::VolumeSnapshot, "replica_id")?,
+            value
+                .pool_uuid
+                .try_into_id(ResourceKind::VolumeSnapshot, "pool_uuid")?,
+            value.pool_id.into(),
+            value.size,
+            "",
+            &value.txn_id,
+            value.valid,
+        ))
+    }
+}
+
+/// Convert a string to `T`, which can be converted using `TryFrom<String, Error=uuid::Error>`.
+trait TryIntoId {
+    fn try_into_id<T: TryFrom<String, Error = uuid::Error>>(
+        self,
+        kind: ResourceKind,
+        arg_name: &str,
+    ) -> Result<T, ReplyError>
+    where
+        Self: Sized + Into<String>,
+    {
+        T::try_from(self.into())
+            .map_err(|error| ReplyError::invalid_argument(kind, arg_name, error))
+    }
+}
+
+impl TryIntoId for String {}

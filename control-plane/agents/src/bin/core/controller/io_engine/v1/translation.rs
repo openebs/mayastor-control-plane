@@ -5,10 +5,10 @@ use stor_port::{
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, ChildStateReason, ChildUri, CreateNexusSnapReplDescr,
-            GetRebuildRecord, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig, NexusStatus,
-            NodeId, NvmeReservation, PoolState, PoolUuid, Protocol, RebuildJobState, RebuildRecord,
-            Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
+            self, ChildState, ChildStateReason, CreateNexusSnapReplDescr, Nexus, NexusId,
+            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolId,
+            PoolState, PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
+            SnapshotId,
         },
     },
 };
@@ -213,6 +213,10 @@ impl TryIoEngineToAgent for v1::replica::ReplicaSnapshot {
                 uuid: self.replica_uuid.to_owned(),
                 kind: ResourceKind::Replica,
             })?,
+            // todo: from new api changes
+            PoolUuid::default(),
+            // todo: from new api changes
+            PoolId::default(),
             self.replica_size,
             &self.entity_id,
             &self.txn_id,
@@ -592,7 +596,7 @@ impl AgentToIoEngine for transport::ImportPool {
     }
 }
 
-impl AgentToIoEngine for GetRebuildRecord {
+impl AgentToIoEngine for transport::GetRebuildRecord {
     type IoEngineMessage = v1::nexus::RebuildHistoryRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         v1::nexus::RebuildHistoryRequest {
@@ -619,17 +623,17 @@ impl TryIoEngineToAgent for v1::nexus::RebuildHistoryResponse {
     }
 }
 
-impl TryFrom<ExternalType<v1::nexus::RebuildHistoryRecord>> for RebuildRecord {
+impl TryFrom<ExternalType<v1::nexus::RebuildHistoryRecord>> for transport::RebuildRecord {
     type Error = SvcError;
     fn try_from(value: ExternalType<v1::nexus::RebuildHistoryRecord>) -> Result<Self, Self::Error> {
         Ok(Self {
-            child_uri: ChildUri::try_from(value.0.child_uri.as_str()).map_err(|_| {
+            child_uri: transport::ChildUri::try_from(value.0.child_uri.as_str()).map_err(|_| {
                 SvcError::InvalidUuid {
                     uuid: value.0.child_uri.to_owned(),
                     kind: ResourceKind::Child,
                 }
             })?,
-            src_uri: ChildUri::try_from(value.0.src_uri.as_str()).map_err(|_| {
+            src_uri: transport::ChildUri::try_from(value.0.src_uri.as_str()).map_err(|_| {
                 SvcError::InvalidUuid {
                     uuid: value.0.src_uri.to_owned(),
                     kind: ResourceKind::Child,
@@ -659,7 +663,7 @@ impl TryFrom<ExternalType<v1::nexus::RebuildHistoryRecord>> for RebuildRecord {
     }
 }
 
-impl From<ExternalType<v1::nexus::RebuildJobState>> for RebuildJobState {
+impl From<ExternalType<v1::nexus::RebuildJobState>> for transport::RebuildJobState {
     fn from(value: ExternalType<v1::nexus::RebuildJobState>) -> Self {
         match value.0 {
             v1::nexus::RebuildJobState::Init => Self::Init,
