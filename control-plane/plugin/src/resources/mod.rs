@@ -1,6 +1,7 @@
 use crate::resources::{
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs},
+    snapshot::VolumeSnapshotArgs,
 };
 
 pub mod blockdevice;
@@ -8,10 +9,12 @@ pub mod cordon;
 pub mod drain;
 pub mod node;
 pub mod pool;
+pub mod snapshot;
 pub mod utils;
 pub mod volume;
 
 pub type VolumeId = openapi::apis::Uuid;
+pub type SnapshotId = openapi::apis::Uuid;
 pub type ReplicaCount = u8;
 pub type PoolId = String;
 pub type NodeId = String;
@@ -33,6 +36,8 @@ pub enum GetResources {
     VolumeReplicaTopologies,
     /// Get the replica topology for the volume with the given ID.
     VolumeReplicaTopology { id: VolumeId },
+    /// Get volume snapshots based on input args.
+    VolumeSnapshots(VolumeSnapshotArgs),
     /// Get all pools.
     Pools,
     /// Get pool with the given ID.

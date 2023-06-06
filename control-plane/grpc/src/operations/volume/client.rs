@@ -1,5 +1,5 @@
 use crate::{
-    common::VolumeFilter,
+    common::{SnapshotFilter, VolumeFilter, VolumeSnapshotFilter},
     context::{Client, Context, TracedChannel},
     operations::{
         volume::{
@@ -284,6 +284,21 @@ impl VolumeOperations for VolumeClient {
             Filter::Volume(volume_id) => GetSnapshotsRequest {
                 filter: Some(get_snapshots_request::Filter::Volume(VolumeFilter {
                     volume_id: volume_id.to_string(),
+                })),
+                ignore_notfound,
+            },
+            Filter::VolumeSnapshot(volume_id, snap_id) => GetSnapshotsRequest {
+                filter: Some(get_snapshots_request::Filter::VolumeSnapshot(
+                    VolumeSnapshotFilter {
+                        volume_id: volume_id.to_string(),
+                        snapshot_id: snap_id.to_string(),
+                    },
+                )),
+                ignore_notfound,
+            },
+            Filter::Snapshot(snap_id) => GetSnapshotsRequest {
+                filter: Some(get_snapshots_request::Filter::Snapshot(SnapshotFilter {
+                    snapshot_id: snap_id.to_string(),
                 })),
                 ignore_notfound,
             },

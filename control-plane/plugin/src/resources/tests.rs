@@ -160,6 +160,17 @@ async fn get_volume() {
 }
 
 #[tokio::test]
+async fn get_snapshots() {
+    cluster()
+        .await
+        .rest_v00()
+        .snapshots_api()
+        .get_volumes_snapshots(None, None)
+        .await
+        .expect("Listing the snapshots failed");
+}
+
+#[tokio::test]
 async fn get_pools() {
     let pools = cluster()
         .await

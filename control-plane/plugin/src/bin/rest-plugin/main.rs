@@ -2,10 +2,11 @@ use clap::Parser;
 use openapi::tower::client::Url;
 use plugin::{
     operations::{
-        Cordoning, Drain, Get, GetBlockDevices, List, Operations, ReplicaTopology, Scale,
+        Cordoning, Drain, Get, GetBlockDevices, GetSnapshots, List, Operations, ReplicaTopology,
+        Scale,
     },
     resources::{
-        blockdevice, cordon, drain, node, pool, volume, CordonResources, DrainResources,
+        blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DrainResources,
         GetCordonArgs, GetDrainArgs, GetResources, ScaleResources,
     },
     rest_wrapper::RestClient,
@@ -98,6 +99,14 @@ async fn execute(cli_args: CliArgs) {
                 blockdevice::BlockDevice::get_blockdevices(
                     &bdargs.node_id(),
                     &bdargs.all(),
+                    &cli_args.output,
+                )
+                .await
+            }
+            GetResources::VolumeSnapshots(snapargs) => {
+                snapshot::VolumeSnapshots::get_snapshots(
+                    &snapargs.volume(),
+                    &snapargs.snapshot(),
                     &cli_args.output,
                 )
                 .await

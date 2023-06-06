@@ -90,16 +90,14 @@ async fn snapshot() {
     tracing::info!("Deleted Snapshot: {}", replica_snapshot.spec().snap_id);
 
     // Get snapshot by snapshot id. Shouldn't be found.
-    let snaps = vol_cli
+    vol_cli
         .get_snapshots(
             Filter::Snapshot(replica_snapshot.spec().snap_id.clone()),
             false,
             None,
         )
         .await
-        .expect("Error while listing snapshot...");
-
-    assert!(snaps.entries().is_empty());
+        .expect_err("Snapshot not found - expected");
 
     let volume = vol_cli
         .publish(

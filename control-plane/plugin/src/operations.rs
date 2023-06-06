@@ -74,6 +74,21 @@ pub trait GetBlockDevices {
     async fn get_blockdevices(id: &Self::ID, all: &bool, output: &utils::OutputFormat);
 }
 
+/// GetSnapshots trait.
+/// To be implemented by resources which support the 'get snapshots' operation.
+#[async_trait(?Send)]
+pub trait GetSnapshots {
+    // Representing a volume or replica for exmaple.
+    type SourceID;
+    // Representing the actual resource i.e. snapshot.
+    type ResourceID;
+    async fn get_snapshots(
+        volid: &Self::SourceID,
+        snapid: &Self::ResourceID,
+        output: &utils::OutputFormat,
+    );
+}
+
 /// Cordon trait.
 /// To be implemented by resources which support cordoning.
 #[async_trait(?Send)]
