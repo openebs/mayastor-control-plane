@@ -483,7 +483,7 @@ impl TryFrom<get_snapshots_request::Filter> for Filter {
                     ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
                 })?)
             }
-            get_snapshots_request::Filter::Snapshot(filter) => Filter::VolumeSnapshot(
+            get_snapshots_request::Filter::VolumeSnapshot(filter) => Filter::VolumeSnapshot(
                 VolumeId::try_from(filter.volume_id).map_err(|error| {
                     ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "volume_id", error)
                 })?,
@@ -491,6 +491,11 @@ impl TryFrom<get_snapshots_request::Filter> for Filter {
                     ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
                 })?,
             ),
+            get_snapshots_request::Filter::Snapshot(filter) => {
+                Filter::Snapshot(SnapshotId::try_from(filter.snapshot_id).map_err(|error| {
+                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "snapshot_id", error)
+                })?)
+            }
         })
     }
 }

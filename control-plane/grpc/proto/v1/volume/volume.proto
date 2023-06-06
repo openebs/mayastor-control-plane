@@ -419,11 +419,13 @@ message DeleteSnapshotReply {
 message GetSnapshotsRequest {
   // filter snapshots
   oneof filter {
-    common.VolumeFilter           volume = 1;
-    common.VolumeSnapshotFilter snapshot = 2;
+    common.VolumeFilter                  volume = 1;
+    common.VolumeSnapshotFilter volume_snapshot = 2;
+    common.SnapshotFilter              snapshot = 3;
   }
-  // ignore 404 not found errors
-  bool                   ignore_notfound = 3;
+  // ignore 404 not found errors.
+  // Left few field numbers in between to accomodate any future filters.
+  bool                   ignore_notfound = 6;
 }
 // Reply type for a GetVolumeSnapshots request
 message GetSnapshotsReply {

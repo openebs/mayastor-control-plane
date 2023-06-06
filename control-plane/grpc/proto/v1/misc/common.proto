@@ -167,6 +167,11 @@ message NodeNexusFilter {
   string nexus_id = 2;
 }
 
+// Filter by Snapshot id
+message SnapshotFilter {
+  string snapshot_id = 1;
+}
+
 // Filter by Volume Snapshot id
 message VolumeSnapshotFilter {
   string volume_id = 1;

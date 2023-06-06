@@ -115,7 +115,7 @@ impl apis::actix_server::Snapshots for RestApi {
     }
 
     async fn get_volumes_snapshots(
-        Query((snapshot_id, volume_id)): Query<(Option<Uuid>, Option<Uuid>)>,
+        Query((volume_id, snapshot_id)): Query<(Option<Uuid>, Option<Uuid>)>,
     ) -> Result<models::VolumeSnapshots, RestError<RestJsonError>> {
         let filter = match (snapshot_id, volume_id) {
             (Some(snapshot), Some(volume)) => {

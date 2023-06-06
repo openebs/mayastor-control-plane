@@ -22,6 +22,7 @@ lazy_static! {
         "THIN-PROVISIONED",
         "ALLOCATED"
     ];
+    pub static ref SNAPSHOT_HEADERS: Row = row!["ID", "TIMESTAMP", "SIZE", "SOURCE-VOL"];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",
         "DISKS",
