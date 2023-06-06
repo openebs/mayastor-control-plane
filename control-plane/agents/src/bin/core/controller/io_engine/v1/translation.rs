@@ -202,7 +202,7 @@ impl TryIoEngineToAgent for v1::replica::ReplicaSnapshot {
                     kind: ResourceKind::ReplicaSnapshot,
                 }
             })?,
-            &self.snapshot_uuid,
+            self.snapshot_name.clone(),
             self.snapshot_size,
             self.num_clones,
             self.timestamp
@@ -218,8 +218,8 @@ impl TryIoEngineToAgent for v1::replica::ReplicaSnapshot {
             // todo: from new api changes
             PoolId::default(),
             self.replica_size,
-            &self.entity_id,
-            &self.txn_id,
+            self.entity_id.clone(),
+            self.txn_id.clone(),
             self.valid_snapshot,
         ))
     }

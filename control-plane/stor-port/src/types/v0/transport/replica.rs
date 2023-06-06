@@ -144,7 +144,7 @@ impl ReplicaSnapshotDescr {
     // Creates a new descriptor from given input values.
     pub fn new(
         snap_uuid: SnapshotId,
-        snap_name: &str,
+        snap_name: String,
         snap_size: u64,
         num_clones: u64,
         snap_time: SystemTime,
@@ -152,13 +152,13 @@ impl ReplicaSnapshotDescr {
         pool_uuid: PoolUuid,
         pool_id: PoolId,
         replica_size: u64,
-        entity_id: &str,
-        txn_id: &str,
+        entity_id: String,
+        txn_id: String,
         valid: bool,
     ) -> Self {
         Self {
             snap_uuid,
-            snap_name: snap_name.to_owned(),
+            snap_name,
             snap_size,
             num_clones,
             snap_time,
@@ -166,8 +166,8 @@ impl ReplicaSnapshotDescr {
             pool_uuid,
             pool_id,
             replica_size,
-            entity_id: entity_id.to_owned(),
-            txn_id: txn_id.to_owned(),
+            entity_id,
+            txn_id,
             valid,
         }
     }
@@ -200,6 +200,11 @@ impl ReplicaSnapshotDescr {
         &self.pool_id
     }
 
+    /// Get the number of clones.
+    pub fn num_clones(&self) -> u64 {
+        self.num_clones
+    }
+
     /// Get the size of snapshot source.
     pub fn source_size(&self) -> u64 {
         self.replica_size
@@ -208,6 +213,16 @@ impl ReplicaSnapshotDescr {
     /// Get the size of snapshot referenced data.
     pub fn snap_size(&self) -> u64 {
         self.snap_size
+    }
+
+    /// Get the snapshot name.
+    pub fn snap_name(&self) -> &str {
+        &self.snap_name
+    }
+
+    /// Get the snapshot entity id.
+    pub fn entity_id(&self) -> &str {
+        &self.entity_id
     }
 
     /// Get the transaction id.
