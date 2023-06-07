@@ -3,7 +3,7 @@ use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::{
     replica::ListReplicaOptions,
-    snapshot::{DestroySnapshotRequest, ListSnapshotsRequest},
+    snapshot::{destroy_snapshot_request, DestroySnapshotRequest},
 };
 use stor_port::{
     transport_api::ResourceKind,
@@ -125,7 +125,9 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
         self.snapshot()
             .destroy_snapshot(DestroySnapshotRequest {
                 snapshot_uuid: request.snap_id.to_string(),
-                pool: None,
+                pool: Some(destroy_snapshot_request::Pool::PoolUuid(
+                    request.pool_uuid.to_string(),
+                )),
             })
             .await
             .context(GrpcRequestError {
@@ -142,10 +144,7 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
     ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
         let response = self
             .snapshot()
-            .list_snapshot(ListSnapshotsRequest {
-                source_uuid: request.replica.as_ref().map(|r| r.to_string()),
-                snapshot_uuid: None,
-            })
+            .list_snapshot(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,

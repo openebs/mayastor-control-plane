@@ -6,9 +6,8 @@ use stor_port::{
         openapi::apis::IntoVec,
         transport::{
             self, ChildState, ChildStateReason, CreateNexusSnapReplDescr, Nexus, NexusId,
-            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolId,
-            PoolState, PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus,
-            SnapshotId,
+            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState,
+            PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
         },
     },
 };
@@ -195,6 +194,14 @@ impl TryIoEngineToAgent for v1::snapshot::CreateReplicaSnapshotResponse {
 impl TryIoEngineToAgent for v1::snapshot::SnapshotInfo {
     type AgentMessage = transport::ReplicaSnapshotDescr;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
+        let replica_uuid = if !self.source_uuid.is_empty() {
+            ReplicaId::try_from(self.source_uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.source_uuid.to_owned(),
+                kind: ResourceKind::Replica,
+            })?
+        } else {
+            ReplicaId::default()
+        };
         Ok(Self::AgentMessage::new(
             SnapshotId::try_from(self.snapshot_uuid.as_str()).map_err(|_| {
                 SvcError::InvalidUuid {
@@ -209,14 +216,15 @@ impl TryIoEngineToAgent for v1::snapshot::SnapshotInfo {
                 .clone()
                 .and_then(|t| std::time::SystemTime::try_from(t).ok())
                 .unwrap_or(UNIX_EPOCH),
-            ReplicaId::try_from(self.source_uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
-                uuid: self.source_uuid.to_owned(),
-                kind: ResourceKind::Replica,
-            })?,
-            // todo: from new api changes
-            PoolUuid::default(),
-            // todo: from new api changes
-            PoolId::default(),
+            replica_uuid,
+            self.pool_uuid
+                .as_str()
+                .try_into()
+                .map_err(|_| SvcError::InvalidUuid {
+                    uuid: self.pool_uuid.to_owned(),
+                    kind: ResourceKind::ReplicaSnapshot,
+                })?,
+            self.pool_name.clone().into(),
             self.source_size,
             self.entity_id.clone(),
             self.txn_id.clone(),
@@ -517,6 +525,21 @@ impl AgentToIoEngine for transport::CreateReplicaSnapshot {
             snapshot_name: self.params().name().to_string(),
             entity_id: self.params().entity().to_string(),
             txn_id: self.params().txn_id().to_string(),
+        }
+    }
+}
+
+impl AgentToIoEngine for transport::ListReplicaSnapshots {
+    type IoEngineMessage = v1::snapshot::ListSnapshotsRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        let (source, snapshot) = match self {
+            transport::ListReplicaSnapshots::All => (None, None),
+            transport::ListReplicaSnapshots::ReplicaSnapshots(id) => (Some(id), None),
+            transport::ListReplicaSnapshots::Snapshot(id) => (None, Some(id)),
+        };
+        v1::snapshot::ListSnapshotsRequest {
+            source_uuid: source.map(ToString::to_string),
+            snapshot_uuid: snapshot.map(ToString::to_string),
         }
     }
 }

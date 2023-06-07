@@ -98,12 +98,13 @@ impl CreateReplicaSnapshot {
 pub struct DestroyReplicaSnapshot {
     /// Id of the snapshot to be deleted.
     pub snap_id: SnapshotId,
+    pub pool_uuid: PoolUuid,
 }
 
 impl DestroyReplicaSnapshot {
     /// Create new request.
-    pub fn new(snap_id: SnapshotId) -> Self {
-        Self { snap_id }
+    pub fn new(snap_id: SnapshotId, pool_uuid: PoolUuid) -> Self {
+        Self { snap_id, pool_uuid }
     }
 }
 

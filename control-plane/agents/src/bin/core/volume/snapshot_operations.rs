@@ -407,11 +407,10 @@ impl OperationGuardArc<VolumeSnapshot> {
         registry: &Registry,
     ) -> Result<(), SvcError> {
         let specs = registry.specs();
+        let source = replica_snapshot.spec().source_id();
 
         // Get the pool using the replica snapshot's pool and extract the node_id.
-        let node_id = specs
-            .pool(replica_snapshot.spec().source_id().pool_id())?
-            .node;
+        let node_id = specs.pool(source.pool_id())?.node;
 
         // Get the corresponding node wrapper for the same.
         let node_wrapper = registry.node_wrapper(&node_id).await?;
@@ -420,6 +419,7 @@ impl OperationGuardArc<VolumeSnapshot> {
         node_wrapper
             .destroy_repl_snapshot(&DestroyReplicaSnapshot::new(
                 replica_snapshot.spec().uuid().clone(),
+                source.pool_uuid().clone(),
             ))
             .await?;
 

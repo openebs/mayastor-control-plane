@@ -108,7 +108,12 @@ impl GenericSnapshotParameters {
 
 /// The request type to list replica's snapshots.
 #[derive(Default)]
-pub struct ListReplicaSnapshots {
-    /// If Some, list snapshots from this replica only.
-    pub replica: Option<ReplicaId>,
+pub enum ListReplicaSnapshots {
+    /// All snapshots.
+    #[default]
+    All,
+    /// All snapshots from the given source.
+    ReplicaSnapshots(ReplicaId),
+    /// The specific snapshot.
+    Snapshot(SnapshotId),
 }
