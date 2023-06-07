@@ -51,4 +51,8 @@ message ReplicaSnapshotState {
   string                       txn_id = 10;
   // Whether this replica snapshot is valid w.r.t all attributes.
   bool                          valid = 11;
+  // Name of the snapshot.
+  string                         name = 12;
+  // id of the entity for which snapshot is taken.
+  string                    entity_id = 13;
 }

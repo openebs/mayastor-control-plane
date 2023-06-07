@@ -473,7 +473,7 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
                 val.uuid
                     .clone()
                     .try_into_id(ResourceKind::ReplicaSnapshot, "snapshot_id")?,
-                &val.uuid,
+                val.name.clone(),
                 val.size_referenced,
                 val.num_clones,
                 val.timestamp
@@ -488,8 +488,8 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
                     .try_into_id(ResourceKind::ReplicaSnapshot, "pool_uuid")?,
                 PoolId::from(&val.pool_id),
                 val.size,
-                &val.replica_id,
-                &val.txn_id,
+                val.entity_id.clone(),
+                val.txn_id.clone(),
                 val.valid,
             ),
         })
@@ -526,7 +526,28 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                 spec_status: common::SpecStatus::from(&value.meta().status) as i32,
                 timestamp: value.meta().timestamp().cloned(),
                 txn_id: value.meta().txn_id().clone(),
-                transactions: Default::default(),
+                transactions: value
+                    .meta()
+                    .transactions
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            volume::volume_snapshot_meta::ReplicaSnapshots {
+                                snapshots: v
+                                    .iter()
+                                    .map(|r| volume::ReplicaSnapshot {
+                                        uuid: r.uuid.to_string(),
+                                        spec_status: common::SpecStatus::from(&r.status) as i32,
+                                        timestamp: r.creation_timestamp.clone(),
+                                        txn_id: r.txn_id.clone(),
+                                        source_id: r.source_id.to_string(),
+                                    })
+                                    .collect::<Vec<_>>(),
+                            },
+                        )
+                    })
+                    .collect::<HashMap<_, _>>(),
             }),
             state: Some(volume::VolumeSnapshotState {
                 state: Some(snapshot::SnapshotState {
@@ -549,11 +570,13 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                                         replica_id: state.snap_uuid().to_string(),
                                         pool_uuid: state.pool_uuid().to_string(),
                                         pool_id: state.pool_id().to_string(),
+                                        name: state.snap_name().to_string(),
+                                        entity_id: state.entity_id().to_string(),
                                         status: crate::snapshot::SnapshotStatus::Online as i32,
                                         timestamp: state.timestamp().try_into().ok(),
                                         size: state.source_size(),
                                         size_referenced: state.snap_size(),
-                                        num_clones: 0,
+                                        num_clones: state.num_clones(),
                                         txn_id: state.txn_id().to_string(),
                                         valid: state.valid(),
                                     },
@@ -637,7 +660,7 @@ impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
             value
                 .uuid
                 .try_into_id(ResourceKind::VolumeSnapshot, "snap_uuid")?,
-            "",
+            value.name,
             value.size_referenced,
             value.num_clones,
             value
@@ -652,8 +675,8 @@ impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
                 .try_into_id(ResourceKind::VolumeSnapshot, "pool_uuid")?,
             value.pool_id.into(),
             value.size,
-            "",
-            &value.txn_id,
+            value.entity_id,
+            value.txn_id,
             value.valid,
         ))
     }
