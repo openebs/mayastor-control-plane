@@ -19,7 +19,10 @@ pub const STORE_OP_TIMEOUT: &str = "5s";
 pub const STORE_LEASE_LOCK_TTL: &str = "30s";
 
 fn target_tag() -> String {
-    TARGET_BRANCH.replace('/', "-")
+    // until we address rpc api changes
+    let _ = TARGET_BRANCH;
+    "ed04bc1be11c".to_string()
+    // TARGET_BRANCH.replace('/', "-")
 }
 
 /// Fio Spdk image.
