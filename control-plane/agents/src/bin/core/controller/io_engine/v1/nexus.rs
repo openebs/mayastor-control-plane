@@ -323,8 +323,8 @@ impl crate::controller::io_engine::NexusSnapshotApi for super::RpcClient {
         request: &CreateNexusSnapshot,
     ) -> Result<CreateNexusSnapshotResp, SvcError> {
         let response = self
-            .nexus()
-            .create_snapshot(request.to_rpc())
+            .snapshot()
+            .create_nexus_snapshot(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Nexus,

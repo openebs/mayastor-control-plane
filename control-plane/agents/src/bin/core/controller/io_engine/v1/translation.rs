@@ -128,7 +128,7 @@ impl IoEngineToAgent for v1::replica::ReplicaSpaceUsage {
     }
 }
 
-impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotResponse {
+impl TryIoEngineToAgent for v1::snapshot::NexusCreateSnapshotResponse {
     type AgentMessage = transport::CreateNexusSnapshotResp;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         let nexus = self
@@ -165,7 +165,7 @@ impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotResponse {
 
 /// Helper implementation to be used as part of nexus snapshot
 /// response translation.
-impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotReplicaStatus {
+impl TryIoEngineToAgent for v1::snapshot::NexusCreateSnapshotReplicaStatus {
     type AgentMessage = transport::CreateNexusSnapshotReplicaStatus;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         Ok(Self::AgentMessage {
@@ -180,7 +180,7 @@ impl TryIoEngineToAgent for v1::nexus::NexusCreateSnapshotReplicaStatus {
     }
 }
 
-impl TryIoEngineToAgent for v1::replica::CreateReplicaSnapshotResponse {
+impl TryIoEngineToAgent for v1::snapshot::CreateReplicaSnapshotResponse {
     type AgentMessage = transport::ReplicaSnapshot;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         self.snapshot
@@ -192,7 +192,7 @@ impl TryIoEngineToAgent for v1::replica::CreateReplicaSnapshotResponse {
 
 /// Translate gRPC single snapshot representation to snapshot
 /// descriptor single snapshot representation in control-plane.
-impl TryIoEngineToAgent for v1::replica::ReplicaSnapshot {
+impl TryIoEngineToAgent for v1::snapshot::SnapshotInfo {
     type AgentMessage = transport::ReplicaSnapshotDescr;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         Ok(Self::AgentMessage::new(
@@ -209,15 +209,15 @@ impl TryIoEngineToAgent for v1::replica::ReplicaSnapshot {
                 .clone()
                 .and_then(|t| std::time::SystemTime::try_from(t).ok())
                 .unwrap_or(UNIX_EPOCH),
-            ReplicaId::try_from(self.replica_uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
-                uuid: self.replica_uuid.to_owned(),
+            ReplicaId::try_from(self.source_uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.source_uuid.to_owned(),
                 kind: ResourceKind::Replica,
             })?,
             // todo: from new api changes
             PoolUuid::default(),
             // todo: from new api changes
             PoolId::default(),
-            self.replica_size,
+            self.source_size,
             self.entity_id.clone(),
             self.txn_id.clone(),
             self.valid_snapshot,
@@ -485,9 +485,9 @@ impl AgentToIoEngine for transport::NexusChildActionKind {
 }
 
 impl AgentToIoEngine for transport::CreateNexusSnapshot {
-    type IoEngineMessage = v1::nexus::NexusCreateSnapshotRequest;
+    type IoEngineMessage = v1::snapshot::NexusCreateSnapshotRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        v1::nexus::NexusCreateSnapshotRequest {
+        v1::snapshot::NexusCreateSnapshotRequest {
             nexus_uuid: self.nexus().to_string(),
             entity_id: self.params().entity().to_string(),
             txn_id: self.params().txn_id().to_string(),
@@ -498,7 +498,7 @@ impl AgentToIoEngine for transport::CreateNexusSnapshot {
 }
 
 impl AgentToIoEngine for CreateNexusSnapReplDescr {
-    type IoEngineMessage = v1::nexus::NexusCreateSnapshotReplicaDescriptor;
+    type IoEngineMessage = v1::snapshot::NexusCreateSnapshotReplicaDescriptor;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
             replica_uuid: self.replica.to_string(),
@@ -509,9 +509,9 @@ impl AgentToIoEngine for CreateNexusSnapReplDescr {
 }
 
 impl AgentToIoEngine for transport::CreateReplicaSnapshot {
-    type IoEngineMessage = v1::replica::CreateReplicaSnapshotRequest;
+    type IoEngineMessage = v1::snapshot::CreateReplicaSnapshotRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        v1::replica::CreateReplicaSnapshotRequest {
+        v1::snapshot::CreateReplicaSnapshotRequest {
             replica_uuid: self.replica().to_string(),
             snapshot_uuid: self.params().uuid().to_string(),
             snapshot_name: self.params().name().to_string(),

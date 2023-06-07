@@ -116,7 +116,7 @@ async fn snapshot() {
             None,
         )
         .await
-        .expect_err("unimplemented");
+        .unwrap();
 
     tracing::info!("Nexus Snapshot: {nexus_snapshot:?}");
 
