@@ -240,7 +240,7 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
                 spec.metadata()
                     .stale_transactions()
                     .into_values()
-                    .flat_map(|v| v.into_iter())
+                    .flatten()
                     .collect(),
                 registry,
             )

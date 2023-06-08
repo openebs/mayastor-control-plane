@@ -3220,7 +3220,7 @@ components:
         Volume Snapshot Metadata information.
       type: object
       properties:
-        creation_timestamp:
+        timestamp:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
           format: date-time
@@ -3262,7 +3262,7 @@ components:
           minimum: 0
         source_volume:
           $ref: '#/components/schemas/VolumeId'
-        creation_timestamp:
+        timestamp:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
           format: date-time
@@ -3279,7 +3279,7 @@ components:
         - uuid
         - size
         - source_volume
-        - creation_timestamp
+        - timestamp
         - ready
         - replica_snapshots
     ReplicaSnapshot:
@@ -3306,7 +3306,7 @@ components:
           $ref: '#/components/schemas/SnapshotId'
         source_id:
           $ref: '#/components/schemas/ReplicaId'
-        creation_timestamp:
+        timestamp:
           description: Timestamp when replica snapshot is taken on the storage system.
           type: string
           format: date-time
@@ -3323,7 +3323,7 @@ components:
       required:
         - uuid
         - source_id
-        - creation_timestamp
+        - timestamp
         - size
         - referenced_size
         - state
