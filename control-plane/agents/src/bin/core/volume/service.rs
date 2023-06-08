@@ -199,9 +199,12 @@ impl VolumeOperations for Service {
         &self,
         filter: Filter,
         ignore_notfound: bool,
+        pagination: Option<Pagination>,
         _ctx: Option<Context>,
     ) -> Result<VolumeSnapshots, ReplyError> {
-        let snapshots = self.get_snapshots(filter, ignore_notfound).await?;
+        let snapshots = self
+            .get_snapshots(filter, ignore_notfound, pagination)
+            .await?;
         Ok(snapshots)
     }
 }
@@ -431,13 +434,31 @@ impl Service {
         &self,
         filter: Filter,
         ignore_notfound: bool,
+        pagination: Option<Pagination>,
     ) -> Result<VolumeSnapshots, SvcError> {
+        // The last result can only ever be false if using pagination.
+        let mut last_result = true;
         // The filter criteria is matched to figure out whether we need to fetch a single
         // or multiple snapshots.
         let filtered_snaps = match filter {
-            Filter::None => self.registry.volume_snapshots_all().await,
+            Filter::None => match &pagination {
+                Some(p) => {
+                    let paginated_snaps = self.registry.paginated_snapshots(p, None).await;
+                    last_result = paginated_snaps.last();
+                    paginated_snaps.result()
+                }
+                None => self.registry.volume_snapshots_all().await,
+            },
 
-            Filter::Volume(volume_id) => self.registry.volume_snapshots(&volume_id).await,
+            Filter::Volume(volume_id) => match &pagination {
+                Some(p) => {
+                    let paginated_snaps =
+                        self.registry.paginated_snapshots(p, Some(&volume_id)).await;
+                    last_result = paginated_snaps.last();
+                    paginated_snaps.result()
+                }
+                None => self.registry.volume_snapshots(&volume_id).await,
+            },
 
             Filter::VolumeSnapshot(volume_id, snap_id) => {
                 // Get a single snapshot.
@@ -460,6 +481,10 @@ impl Service {
 
         Ok(VolumeSnapshots {
             entries: filtered_snaps,
+            next_token: match last_result {
+                true => None,
+                false => pagination.map(|p| p.starting_token() + p.max_entries()),
+            },
         })
     }
 }

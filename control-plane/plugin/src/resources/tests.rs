@@ -161,13 +161,59 @@ async fn get_volume() {
 
 #[tokio::test]
 async fn get_snapshots() {
-    cluster()
+    let snap_uuids = [
+        "12fb45d2-23e8-430d-9bbd-0bbce5b0c040",
+        "22fb45d2-23e8-430d-9bbd-0bbce5b0c040",
+        "32fb45d2-23e8-430d-9bbd-0bbce5b0c040",
+        "42fb45d2-23e8-430d-9bbd-0bbce5b0c040",
+    ];
+
+    let test_cluster = cluster().await;
+    let vol = test_cluster
+        .rest_v00()
+        .volumes_api()
+        .get_volume(&Uuid::parse_str(VOLUME_UUID).unwrap())
         .await
+        .expect("Volume not found");
+
+    // Create four snapshots
+    for snapid in snap_uuids[0 ..= 3].iter() {
+        // Create four snapshots.
+        test_cluster
+            .rest_v00()
+            .snapshots_api()
+            .put_volume_snapshot(&vol.spec.uuid, &Uuid::parse_str(snapid).unwrap())
+            .await
+            .expect("Snapshot creation failed");
+    }
+
+    // Get snapshots - non paginated.
+    test_cluster
         .rest_v00()
         .snapshots_api()
-        .get_volumes_snapshots(None, None)
+        .get_volumes_snapshots(0, None, None, Some(0))
         .await
         .expect("Listing the snapshots failed");
+
+    // Get snapshots - paginated.
+    // Get max_entries at a time, and num_iter times.
+    // At the end, total_listed must be equal to total number of
+    // snapshots created earlier.
+    let max_entries = 1;
+    let mut starting_token = Some(0);
+    let mut total_listed = 0;
+    while starting_token.is_some() {
+        let snapshots = test_cluster
+            .rest_v00()
+            .snapshots_api()
+            .get_volumes_snapshots(max_entries, None, None, starting_token)
+            .await
+            .expect("Listing the snapshots failed");
+        assert_eq!(snapshots.entries.len(), max_entries as usize);
+        total_listed += snapshots.entries.len();
+        starting_token = snapshots.next_token;
+    }
+    assert_eq!(total_listed, snap_uuids.len());
 }
 
 #[tokio::test]

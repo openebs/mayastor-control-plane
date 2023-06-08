@@ -84,8 +84,20 @@ where
 
     /// Return a subset of the map (i.e. a paginated result).
     pub(crate) fn paginate(&self, offset: u64, len: u64) -> Vec<S> {
+        self.paginate_filter(offset, len, |_| true)
+    }
+
+    /// Apply the closure on the elements and return a subset of the map (i.e. a paginated result),
+    /// containing the elements for which closure returns true.
+    pub(crate) fn paginate_filter<F: Fn(&&ResourceMutex<S>) -> bool>(
+        &self,
+        offset: u64,
+        len: u64,
+        seive: F,
+    ) -> Vec<S> {
         self.map
             .values()
+            .filter(seive)
             .skip(offset as usize)
             .take(len as usize)
             .map(|v| v.lock().clone())

@@ -766,9 +766,13 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         };
         let snap_uuid = opt_uuid(&request.snapshot_id, "snapshot")?;
         let vol_uuid = opt_uuid(&request.source_volume_id, "volume")?;
+        let max_entries = request.max_entries;
+        if max_entries < 0 {
+            return Err(Status::invalid_argument("max_entries can't be negative"));
+        }
 
         let snapshots = IoEngineApiClient::get_client()
-            .list_volume_snapshots(snap_uuid, vol_uuid)
+            .list_volume_snapshots(snap_uuid, vol_uuid, max_entries, request.starting_token)
             .await?;
 
         Ok(tonic::Response::new(ListSnapshotsResponse {

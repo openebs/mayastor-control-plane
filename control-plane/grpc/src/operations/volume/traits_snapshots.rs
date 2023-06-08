@@ -288,12 +288,19 @@ impl VolumeSnapshotState {
 pub struct VolumeSnapshots {
     /// Snapshot entries.
     pub entries: Vec<VolumeSnapshot>,
+    /// Next token for the paginated response.
+    pub next_token: Option<u64>,
 }
 
 impl VolumeSnapshots {
     /// Get a refernce to all the snapshot entries.
     pub fn entries(&self) -> &Vec<VolumeSnapshot> {
         &self.entries
+    }
+
+    /// Get the next token for pagination.
+    pub fn next_token(&self) -> Option<u64> {
+        self.next_token
     }
 }
 
@@ -370,6 +377,7 @@ impl TryFrom<volume::VolumeSnapshots> for VolumeSnapshots {
                 .into_iter()
                 .map(TryFrom::try_from)
                 .collect::<Result<Vec<VolumeSnapshot>, ReplyError>>()?,
+            next_token: value.next_token,
         })
     }
 }
@@ -625,12 +633,14 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
 impl TryFrom<VolumeSnapshots> for volume::VolumeSnapshots {
     type Error = ReplyError;
     fn try_from(value: VolumeSnapshots) -> Result<Self, Self::Error> {
+        let next_token = value.next_token();
         Ok(Self {
             snapshots: value
                 .entries
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<Vec<_>, _>>()?,
+            next_token,
         })
     }
 }

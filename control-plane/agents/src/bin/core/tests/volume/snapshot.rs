@@ -57,6 +57,7 @@ async fn snapshot() {
             ),
             false,
             None,
+            None,
         )
         .await
         .expect("Error while listing snapshot...");
@@ -68,6 +69,7 @@ async fn snapshot() {
         .get_snapshots(
             Filter::Snapshot(replica_snapshot.spec().snap_id.clone()),
             false,
+            None,
             None,
         )
         .await
@@ -94,6 +96,7 @@ async fn snapshot() {
         .get_snapshots(
             Filter::Snapshot(replica_snapshot.spec().snap_id.clone()),
             false,
+            None,
             None,
         )
         .await

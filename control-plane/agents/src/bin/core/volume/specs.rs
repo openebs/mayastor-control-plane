@@ -373,6 +373,38 @@ impl ResourceSpecs {
 
         PaginatedResult::new(self.volumes.paginate(offset, length), last_result)
     }
+
+    pub(crate) fn paginated_snapshots(
+        &self,
+        pagination: &Pagination,
+        vol_id: Option<&VolumeId>,
+    ) -> PaginatedResult<VolumeSnapshot> {
+        let mut last_result = false;
+        let num_snaps = self.volume_snapshots.len() as u64;
+        let max_entries = pagination.max_entries();
+        let offset = std::cmp::min(pagination.starting_token(), num_snaps);
+
+        let length = match offset + max_entries >= num_snaps {
+            true => {
+                last_result = true;
+                num_snaps - offset
+            }
+            false => pagination.max_entries(),
+        };
+
+        if let Some(vol_id) = vol_id {
+            // We need to filter the resource map based on volume id and apply the pagination
+            // parameters on that.
+            PaginatedResult::new(
+                self.volume_snapshots
+                    .paginate_filter(offset, length, |s| s.lock().spec().source_id() == vol_id),
+                last_result,
+            )
+        } else {
+            // Use complete resource map for pagination, without any filtering.
+            PaginatedResult::new(self.volume_snapshots.paginate(offset, length), last_result)
+        }
+    }
 }
 
 impl ResourceSpecsLocked {
@@ -446,6 +478,16 @@ impl ResourceSpecsLocked {
     pub(crate) fn paginated_volumes(&self, pagination: &Pagination) -> PaginatedResult<VolumeSpec> {
         let specs = self.read();
         specs.paginated_volumes(pagination)
+    }
+
+    /// Get a subset of volumes based on the pagination argument.
+    pub(crate) fn paginated_snapshots(
+        &self,
+        pagination: &Pagination,
+        vol: Option<&VolumeId>,
+    ) -> PaginatedResult<VolumeSnapshot> {
+        let specs = self.read();
+        specs.paginated_snapshots(pagination, vol)
     }
 
     /// Gets a copy of all locked VolumeSpec's.
