@@ -3,7 +3,7 @@ use crate::{
         registry::Registry,
         resources::{
             operations_helper::{
-                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs,
+                GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecs,
                 ResourceSpecsLocked, SpecOperationsHelper,
             },
             OperationGuardArc, ResourceMutex, TraceSpan, TraceStrLog,
@@ -698,7 +698,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Worker that reconciles dirty VolumeSpecs's with the persistent store.
-    /// This is useful when nexus operations are performed but we fail to
+    /// This is useful when volume operations are performed but we fail to
     /// update the spec with the persistent store.
     pub(crate) async fn reconcile_dirty_volumes(&self, registry: &Registry) -> bool {
         let mut pending_ops = false;
@@ -707,6 +707,26 @@ impl ResourceSpecsLocked {
         for volume_spec in volumes {
             if let Ok(mut guard) = volume_spec.operation_guard() {
                 if !guard.handle_incomplete_ops(registry).await {
+                    // Not all pending operations could be handled.
+                    pending_ops = true;
+                }
+            }
+        }
+        pending_ops
+    }
+
+    /// Worker that reconciles dirty VolumeSnapshot's with the persistent store.
+    /// This is useful when snapshot operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub(crate) async fn reconcile_dirty_volume_snapshots(&self, registry: &Registry) -> bool {
+        let mut pending_ops = false;
+
+        for snapshot in self.volume_snapshots_rsc() {
+            if let Ok(mut guard) = snapshot.operation_guard() {
+                if !guard
+                    .handle_incomplete_ops_ext(registry, OnCreateFail::LeaveAsIs)
+                    .await
+                {
                     // Not all pending operations could be handled.
                     pending_ops = true;
                 }
@@ -970,7 +990,7 @@ impl SpecOperationsHelper for VolumeSpec {
         self.start_op(VolumeOperation::Destroy);
     }
     fn dirty(&self) -> bool {
-        self.pending_op()
+        self.has_pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::Volume

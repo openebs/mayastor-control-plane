@@ -38,12 +38,7 @@ impl VolumeSnapshotArgs {
 impl CreateRow for openapi::models::VolumeSnapshot {
     fn row(&self) -> Row {
         let state = &self.state;
-        row![
-            state.uuid,
-            state.creation_timestamp,
-            state.size,
-            state.source_volume
-        ]
+        row![state.uuid, state.timestamp, state.size, state.source_volume]
     }
 }
 

@@ -18,6 +18,8 @@ type ReplicaClient = rpc::v1::replica::replica_rpc_client::ReplicaRpcClient<Chan
 type NexusClient = rpc::v1::nexus::nexus_rpc_client::NexusRpcClient<Channel>;
 /// The V1 PoolClient.
 type PoolClient = rpc::v1::pool::pool_rpc_client::PoolRpcClient<Channel>;
+/// The V1 SnapshotClient.
+type SnapshotClient = rpc::v1::snapshot::snapshot_rpc_client::SnapshotRpcClient<Channel>;
 
 /// A collection of all clients for the Io-Engine V1 services.
 #[derive(Clone, Debug)]
@@ -26,6 +28,7 @@ pub(crate) struct RpcClient {
     replica: ReplicaClient,
     nexus: NexusClient,
     pool: PoolClient,
+    snapshot: SnapshotClient,
     context: GrpcContext,
 }
 
@@ -45,7 +48,8 @@ impl RpcClient {
             host: HostClient::new(channel.clone()),
             replica: ReplicaClient::new(channel.clone()),
             nexus: NexusClient::new(channel.clone()),
-            pool: PoolClient::new(channel),
+            pool: PoolClient::new(channel.clone()),
+            snapshot: SnapshotClient::new(channel),
             context: context.clone(),
         })
     }
@@ -64,6 +68,10 @@ impl RpcClient {
     /// Get the v1 pool client.
     fn pool(&self) -> PoolClient {
         self.pool.clone()
+    }
+    /// Get the v1 snapshot client.
+    fn snapshot(&self) -> SnapshotClient {
+        self.snapshot.clone()
     }
 
     async fn fetcher_client(&self) -> Result<Self, SvcError> {

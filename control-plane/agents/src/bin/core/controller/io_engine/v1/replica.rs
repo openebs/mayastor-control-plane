@@ -1,8 +1,9 @@
 use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
 use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
-use rpc::v1::replica::{
-    DeleteReplicaSnapshotRequest, ListReplicaOptions, ListReplicaSnapshotsRequest,
+use rpc::v1::{
+    replica::ListReplicaOptions,
+    snapshot::{destroy_snapshot_request, DestroySnapshotRequest},
 };
 use stor_port::{
     transport_api::ResourceKind,
@@ -107,7 +108,7 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
         request: &CreateReplicaSnapshot,
     ) -> Result<ReplicaSnapshot, SvcError> {
         let response = self
-            .replica()
+            .snapshot()
             .create_replica_snapshot(request.to_rpc())
             .await
             .context(GrpcRequestError {
@@ -121,9 +122,12 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
         &self,
         request: &DestroyReplicaSnapshot,
     ) -> Result<(), SvcError> {
-        self.replica()
-            .delete_replica_snapshot(DeleteReplicaSnapshotRequest {
+        self.snapshot()
+            .destroy_snapshot(DestroySnapshotRequest {
                 snapshot_uuid: request.snap_id.to_string(),
+                pool: Some(destroy_snapshot_request::Pool::PoolUuid(
+                    request.pool_uuid.to_string(),
+                )),
             })
             .await
             .context(GrpcRequestError {
@@ -139,10 +143,8 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
         request: &ListReplicaSnapshots,
     ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
         let response = self
-            .replica()
-            .list_replica_snapshot(ListReplicaSnapshotsRequest {
-                replica_uuid: request.replica.as_ref().map(|r| r.to_string()),
-            })
+            .snapshot()
+            .list_snapshot(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,

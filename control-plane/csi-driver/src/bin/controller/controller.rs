@@ -806,7 +806,7 @@ fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
         size_bytes: snapshot.state.size as i64,
         snapshot_id: snapshot.definition.spec.uuid.to_string(),
         source_volume_id: snapshot.definition.spec.source_volume.to_string(),
-        creation_time: prost_types::Timestamp::from_str(&snapshot.state.creation_timestamp).ok(),
+        creation_time: prost_types::Timestamp::from_str(&snapshot.state.timestamp).ok(),
         ready_to_use: snapshot.state.clone_ready.unwrap_or_default(),
     }
 }

@@ -223,11 +223,9 @@ impl Registry {
         };
 
         let pool_id = snapshot.source_id().pool_id();
-        let pool_uuid = snapshot.source_id().pool_uuid();
         let pool_node = self.pool_node(pool_id).await.ok_or(err())?;
         let node = self.node_wrapper(&pool_node).await?;
         let snapshot = node.snapshot(snapshot.uuid()).await;
-        let snapshot = snapshot.map(|snap| snap.with_pool_info(pool_id, pool_uuid));
         snapshot.ok_or(err())
     }
     /// Get the snapshot state for the specified volume.
@@ -280,8 +278,6 @@ impl Registry {
                 });
             }
         }
-
-        tracing::info!("S: {snapshot:?}");
 
         Ok(grpc_mod::VolumeSnapshot::new(
             &snapshot,

@@ -99,7 +99,7 @@ pub struct VolumeSnapshotMeta {
     operation: Option<VolumeSnapshotOperationState>,
 
     /// Creation timestamp of the snapshot (set after creation time).
-    creation_timestamp: Option<DateTime<Utc>>,
+    timestamp: Option<DateTime<Utc>>,
     /// Size of the snapshot (typically follows source size).
     size: u64,
     /// Transaction Id that defines this snapshot when it is created.
@@ -117,7 +117,7 @@ impl VolumeSnapshotMeta {
     }
     /// Get the snapshot timestamp.
     pub fn timestamp(&self) -> &Option<DateTime<Utc>> {
-        &self.creation_timestamp
+        &self.timestamp
     }
     /// Get the snapshot transaction id.
     pub fn txn_id(&self) -> &SnapshotTxId {
@@ -236,7 +236,7 @@ impl AsOperationSequencer for VolumeSnapshot {
     }
 }
 impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.metadata.operation.is_some()
     }
 
@@ -252,6 +252,7 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 self.metadata.txn_id = info.txn_id.clone();
                 if let Some(result) = info.complete.lock().unwrap().as_ref() {
                     self.metadata.size = result.replica.meta().size();
+                    self.metadata.timestamp = Some(result.timestamp);
                     // replace-in-place the logged replica specs.
                     self.metadata
                         .transactions
@@ -265,7 +266,6 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
             }
             VolumeSnapshotOperation::CleanupStaleTransactions => {}
         }
-        self.clear_op();
     }
 
     fn clear_op(&mut self) {
@@ -273,11 +273,15 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
             return;
         };
         match op.operation {
-            VolumeSnapshotOperation::Create(info) => {
-                self.metadata.txn_id = info.txn_id;
+            VolumeSnapshotOperation::Create(mut info) => {
+                self.metadata.txn_id = info.txn_id.clone();
+                info.replica.set_status_deleting();
+                self.metadata
+                    .transactions
+                    .insert(info.txn_id, vec![info.replica]);
             }
             VolumeSnapshotOperation::Destroy => {}
-            VolumeSnapshotOperation::CleanupStaleTransactions => todo!(),
+            VolumeSnapshotOperation::CleanupStaleTransactions => {}
         }
     }
 
@@ -292,6 +296,10 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
         if let Some(op) = &mut self.metadata.operation {
             op.result = Some(result);
         }
+    }
+
+    fn pending_op(&self) -> Option<&VolumeSnapshotOperation> {
+        self.metadata.operation.as_ref().map(|o| &o.operation)
     }
 }
 

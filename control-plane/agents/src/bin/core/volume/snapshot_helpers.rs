@@ -72,7 +72,7 @@ impl SpecOperationsHelper for VolumeSnapshot {
         self.start_op(VolumeSnapshotOperation::Destroy);
     }
     fn dirty(&self) -> bool {
-        self.pending_op()
+        self.has_pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::VolumeSnapshot

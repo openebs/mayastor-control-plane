@@ -72,7 +72,7 @@ impl SpecOperationsHelper for PoolSpec {
     fn dirty(&self) -> bool {
         // The pool spec can be dirty if a pool create operation fails to complete because it cannot
         // write to etcd.
-        self.pending_op()
+        self.has_pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::Pool
@@ -161,7 +161,7 @@ impl SpecOperationsHelper for ReplicaSpec {
         self.start_op(ReplicaOperation::Destroy);
     }
     fn dirty(&self) -> bool {
-        self.pending_op()
+        self.has_pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::Replica

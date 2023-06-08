@@ -89,7 +89,7 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
             },
             meta: VolumeSnapshotMeta {
                 status: value.status().clone(),
-                creation_timestamp: value
+                timestamp: value
                     .metadata()
                     .timestamp()
                     .map(|t| std::time::SystemTime::from(t).into()),
@@ -111,7 +111,7 @@ pub struct VolumeSnapshotMeta {
     status: SpecStatus<()>,
 
     /// Creation timestamp of the snapshot (set after creation time).
-    creation_timestamp: Option<prost_types::Timestamp>,
+    timestamp: Option<prost_types::Timestamp>,
 
     /// Transaction Id that defines this snapshot when it is created.
     txn_id: SnapshotTxId,
@@ -124,7 +124,7 @@ pub struct VolumeSnapshotMeta {
 impl VolumeSnapshotMeta {
     /// Get the volume snapshot timestamp.
     pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
-        self.creation_timestamp.as_ref()
+        self.timestamp.as_ref()
     }
     /// Get the volume snapshot transaction id.
     pub fn txn_id(&self) -> &SnapshotTxId {
@@ -141,7 +141,7 @@ pub struct ReplicaSnapshot {
     /// The id of the snapshot.
     uuid: SnapshotId,
     /// Creation timestamp of the snapshot (set after creation time).
-    creation_timestamp: Option<prost_types::Timestamp>,
+    timestamp: Option<prost_types::Timestamp>,
     /// A transaction id for this request.
     txn_id: SnapshotTxId,
     source_id: ReplicaId,
@@ -151,7 +151,7 @@ impl From<&v0::store::snapshots::replica::ReplicaSnapshot> for ReplicaSnapshot {
         ReplicaSnapshot {
             status: value.status().clone(),
             uuid: value.spec().uuid().clone(),
-            creation_timestamp: value.meta().timestamp().map(|t| prost_types::Timestamp {
+            timestamp: value.meta().timestamp().map(|t| prost_types::Timestamp {
                 seconds: t.timestamp(),
                 nanos: t.timestamp_subsec_nanos() as i32,
             }),
@@ -383,7 +383,7 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
                 status: common::SpecStatus::from_i32(meta.spec_status)
                     .unwrap_or_default()
                     .into(),
-                creation_timestamp: meta.timestamp,
+                timestamp: meta.timestamp,
                 txn_id: meta.txn_id,
                 transactions: meta
                     .transactions
@@ -506,7 +506,7 @@ impl TryFrom<volume::ReplicaSnapshot> for ReplicaSnapshot {
             uuid: value
                 .uuid
                 .try_into_id(ResourceKind::ReplicaSnapshot, "uuid")?,
-            creation_timestamp: value.timestamp.into_opt(),
+            timestamp: value.timestamp.into_opt(),
             txn_id: value.txn_id,
             source_id: value
                 .source_id
@@ -539,7 +539,7 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                                     .map(|r| volume::ReplicaSnapshot {
                                         uuid: r.uuid.to_string(),
                                         spec_status: common::SpecStatus::from(&r.status) as i32,
-                                        timestamp: r.creation_timestamp.clone(),
+                                        timestamp: r.timestamp.clone(),
                                         txn_id: r.txn_id.clone(),
                                         source_id: r.source_id.to_string(),
                                     })

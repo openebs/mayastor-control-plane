@@ -847,12 +847,9 @@ impl NodeStateFetcher {
     /// Fetch all snapshots from this node via gRPC.
     pub(crate) async fn fetch_snapshots(
         &self,
-        _client: &mut GrpcClient,
+        client: &mut GrpcClient,
     ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
-        // client
-        //     .list_repl_snapshots(&ListReplicaSnapshots::default())
-        //     .await
-        Ok(vec![])
+        client.list_repl_snapshots(&ListReplicaSnapshots::All).await
     }
     /// Fetch all snapshots from this node via gRPC.
     pub(crate) async fn fetch_snapshot(
@@ -860,18 +857,14 @@ impl NodeStateFetcher {
         client: &mut GrpcClient,
         snapshot: ReplicaSnapshotInfo,
     ) -> Result<ReplicaSnapshot, SvcError> {
-        // todo: list only our snapshot!
-        let snap_id = snapshot.snap_id;
         let replicas = client
-            .list_repl_snapshots(&ListReplicaSnapshots {
-                replica: Some(snapshot.source_id),
-            })
+            .list_repl_snapshots(&ListReplicaSnapshots::Snapshot(snapshot.snap_id.clone()))
             .await?;
-        match replicas.into_iter().find(|r| r.snap_uuid() == &snap_id) {
+        match replicas.into_iter().next() {
             Some(replica) => Ok(replica),
             None => Err(SvcError::NotFound {
                 kind: ResourceKind::ReplicaSnapshot,
-                id: snap_id.to_string(),
+                id: snapshot.snap_id.to_string(),
             }),
         }
     }

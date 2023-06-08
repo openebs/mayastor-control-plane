@@ -80,11 +80,12 @@ impl ReplicaSnapshot {
     /// Complete the volume operation on the replica.
     pub fn complete_vol(&mut self, timestamp: DateTime<Utc>) {
         self.commit_op();
-        self.metadata.creation_timestamp = Some(timestamp);
+        self.metadata.timestamp = Some(timestamp);
     }
     /// Mark the status as deleting.
     pub fn set_status_deleting(&mut self) {
-        self.status = ReplicaSnapshotSpecStatus::Deleting
+        self.status = ReplicaSnapshotSpecStatus::Deleting;
+        self.clear_op();
     }
 }
 
@@ -98,7 +99,7 @@ pub struct ReplicaSnapshotMeta {
     operation: Option<ReplicaSnapshotOperationState>,
 
     /// Creation timestamp of the snapshot (set after creation time).
-    creation_timestamp: Option<DateTime<Utc>>,
+    timestamp: Option<DateTime<Utc>>,
     /// Size of the snapshot (typically follows source size).
     size: u64,
     /// Information about the snapshot which is specific to how the snapshot was created,
@@ -114,7 +115,7 @@ impl ReplicaSnapshotMeta {
                 operation: ReplicaSnapshotOperation::Create,
                 result: None,
             }),
-            creation_timestamp: None,
+            timestamp: None,
             size,
             meta: SnapshotMeta::Volume {
                 parent: parent.clone(),
@@ -128,7 +129,7 @@ impl ReplicaSnapshotMeta {
     }
     /// Get the snapshot timestamp reference.
     pub fn timestamp(&self) -> Option<&DateTime<Utc>> {
-        self.creation_timestamp.as_ref()
+        self.timestamp.as_ref()
     }
     /// Get the transaction identifier reference.
     pub fn txn_id(&self) -> Option<&SnapshotTxId> {
@@ -190,12 +191,12 @@ impl AsOperationSequencer for ReplicaSnapshot {
     }
 }
 impl SpecTransaction<ReplicaSnapshotOperation> for ReplicaSnapshot {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.metadata.operation.is_some()
     }
 
     fn commit_op(&mut self) {
-        if let Some(op) = self.metadata.operation.clone() {
+        if let Some(op) = self.metadata.operation.take() {
             match op.operation {
                 ReplicaSnapshotOperation::Destroy => {
                     self.status = SpecStatus::Deleted;
@@ -205,7 +206,6 @@ impl SpecTransaction<ReplicaSnapshotOperation> for ReplicaSnapshot {
                 }
             }
         }
-        self.clear_op();
     }
 
     fn clear_op(&mut self) {
@@ -223,6 +223,10 @@ impl SpecTransaction<ReplicaSnapshotOperation> for ReplicaSnapshot {
         if let Some(op) = &mut self.metadata.operation {
             op.result = Some(result);
         }
+    }
+
+    fn pending_op(&self) -> Option<&ReplicaSnapshotOperation> {
+        self.metadata.operation.as_ref().map(|o| &o.operation)
     }
 }
 

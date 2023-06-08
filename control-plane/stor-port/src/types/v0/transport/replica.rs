@@ -98,12 +98,13 @@ impl CreateReplicaSnapshot {
 pub struct DestroyReplicaSnapshot {
     /// Id of the snapshot to be deleted.
     pub snap_id: SnapshotId,
+    pub pool_uuid: PoolUuid,
 }
 
 impl DestroyReplicaSnapshot {
     /// Create new request.
-    pub fn new(snap_id: SnapshotId) -> Self {
-        Self { snap_id }
+    pub fn new(snap_id: SnapshotId, pool_uuid: PoolUuid) -> Self {
+        Self { snap_id, pool_uuid }
     }
 }
 
@@ -122,7 +123,7 @@ pub struct ReplicaSnapshotDescr {
     snap_size: u64,
     /// Number of clones created from this snapshot.
     num_clones: u64,
-    /// Snapshot creation_timestamp.
+    /// Snapshot timestamp.
     snap_time: SystemTime,
     /// UUID of the replica this snapshot is taken from.
     replica_uuid: ReplicaId,
