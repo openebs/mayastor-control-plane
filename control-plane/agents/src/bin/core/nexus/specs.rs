@@ -92,7 +92,7 @@ impl SpecOperationsHelper for NexusSpec {
     }
 
     fn dirty(&self) -> bool {
-        self.pending_op()
+        self.has_pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::Nexus

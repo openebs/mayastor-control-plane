@@ -243,7 +243,7 @@ pub struct ReplicaOperationState {
 }
 
 impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.operation.is_some()
     }
 
@@ -290,6 +290,20 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
 
     fn allow_op_deleting(&mut self, operation: &ReplicaOperation) -> bool {
         matches!(operation, ReplicaOperation::OwnerUpdate(_))
+    }
+
+    fn log_op(&self, operation: &ReplicaOperation) -> (bool, bool) {
+        match operation {
+            ReplicaOperation::Create => (true, true),
+            ReplicaOperation::Destroy => (true, true),
+            ReplicaOperation::Share(_, _) => (true, true),
+            ReplicaOperation::Unshare => (true, true),
+            ReplicaOperation::OwnerUpdate(_) => (false, true),
+        }
+    }
+
+    fn pending_op(&self) -> Option<&ReplicaOperation> {
+        self.operation.as_ref().map(|o| &o.operation)
     }
 }
 

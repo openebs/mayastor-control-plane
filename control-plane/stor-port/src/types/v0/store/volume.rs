@@ -341,7 +341,7 @@ impl From<VolumeOperationState> for models::VolumeSpecOperation {
 }
 
 impl SpecTransaction<VolumeOperation> for VolumeSpec {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.operation.is_some()
     }
 
@@ -412,6 +412,20 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
+    }
+
+    fn log_op(&self, operation: &VolumeOperation) -> (bool, bool) {
+        match operation {
+            VolumeOperation::CreateSnapshot(_) | VolumeOperation::DestroySnapshot(_) => {
+                (false, false)
+            }
+            VolumeOperation::RemoveUnusedReplica(_) => (false, false),
+            _ => (true, true),
+        }
+    }
+
+    fn pending_op(&self) -> Option<&VolumeOperation> {
+        self.operation.as_ref().map(|o| &o.operation)
     }
 }
 
@@ -524,9 +538,11 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
             VolumeOperation::RemoveUnusedReplica(_) => {
                 models::volume_spec_operation::Operation::RemoveUnusedReplica
             }
-            VolumeOperation::CreateSnapshot(_) | VolumeOperation::DestroySnapshot(_) => {
-                // todo: update openapi
-                models::volume_spec_operation::Operation::RemoveUnusedReplica
+            VolumeOperation::CreateSnapshot(_) => {
+                models::volume_spec_operation::Operation::CreateSnapshot
+            }
+            VolumeOperation::DestroySnapshot(_) => {
+                models::volume_spec_operation::Operation::DestroySnapshot
             }
         }
     }

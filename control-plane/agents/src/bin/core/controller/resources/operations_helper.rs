@@ -417,15 +417,18 @@ pub(crate) trait GuardedOperationsHelper:
         Self::Inner: SpecTransaction<Self::UpdateOp>,
         Self::Inner: StorableObject,
     {
-        let spec_clone = {
+        let (spec_clone, log_op) = {
             let mut spec = self.lock().clone();
+            let log_op = spec.log_op(&update_operation);
             spec.start_update_inner(registry, state, update_operation)
                 .await?;
             *self.lock() = spec.clone();
-            spec
+            (spec, log_op.0)
         };
 
-        self.store_operation_log(registry, &spec_clone).await?;
+        if log_op {
+            self.store_operation_log(registry, &spec_clone).await?;
+        }
         Ok(spec_clone)
     }
 
@@ -442,10 +445,15 @@ pub(crate) trait GuardedOperationsHelper:
         Self::Inner: SpecTransaction<O>,
         Self::Inner: StorableObject,
     {
+        let store_obj = spec_clone.flush_pending_op();
         match result {
             Ok(val) => {
                 tracing::info!(?val, "complete_update");
 
+                if !store_obj {
+                    self.complete_op();
+                    return Ok(val);
+                }
                 spec_clone.commit_op();
                 let stored = registry.store_obj(&spec_clone).await;
                 match stored {
@@ -460,6 +468,10 @@ pub(crate) trait GuardedOperationsHelper:
                 }
             }
             Err(error) => {
+                if !store_obj {
+                    self.lock().clear_op();
+                    return Err(error);
+                }
                 spec_clone.clear_op();
                 let stored = registry.store_obj(&spec_clone).await;
                 let mut spec = self.lock();

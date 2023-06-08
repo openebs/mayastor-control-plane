@@ -530,7 +530,7 @@ pub struct NodeOperationState {
 }
 
 impl SpecTransaction<NodeOperation> for NodeSpec {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.operation.is_some()
     }
 
@@ -578,5 +578,21 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
+    }
+
+    fn log_op(&self, operation: &NodeOperation) -> (bool, bool) {
+        match operation {
+            NodeOperation::Cordon(_) => (false, false),
+            NodeOperation::Uncordon(_) => (false, false),
+            NodeOperation::Drain(_) => (false, false),
+            NodeOperation::AddDrainingVolumes(_) => (false, false),
+            NodeOperation::RemoveDrainingVolumes(_) => (false, false),
+            NodeOperation::RemoveAllDrainingVolumes() => (false, false),
+            NodeOperation::SetDrained() => (false, false),
+        }
+    }
+
+    fn pending_op(&self) -> Option<&NodeOperation> {
+        self.operation.as_ref().map(|o| &o.operation)
     }
 }

@@ -56,6 +56,7 @@ mkShell {
 
   # variables used to easily create containers with docker files
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";
+  ETCDCTL_API = "3";
 
   # using the nix rust toolchain
   USE_NIX_RUST = "${toString (!norust)}";

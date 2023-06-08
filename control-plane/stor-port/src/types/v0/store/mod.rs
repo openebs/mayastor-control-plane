@@ -65,19 +65,34 @@ impl<T: std::cmp::PartialEq> SpecStatus<T> {
 
 /// Transaction Operations for a Spec
 pub trait SpecTransaction<Operation> {
-    /// Check for a pending operation
-    fn pending_op(&self) -> bool;
-    /// Commit the operation to the spec and clear it
+    /// Check for a pending operation.
+    fn has_pending_op(&self) -> bool;
+    /// Commit the operation to the spec and clear it.
     fn commit_op(&mut self);
-    /// Clear the operation
+    /// Clear the operation.
     fn clear_op(&mut self);
-    /// Add a new pending operation
+    /// Add a new pending operation.
     fn start_op(&mut self, operation: Operation);
-    /// Sets the result of the operation
+    /// Sets the result of the operation.
     fn set_op_result(&mut self, result: bool);
     /// Allow this operation while deleting a spec.
     fn allow_op_deleting(&mut self, _operation: &Operation) -> bool {
         false
+    }
+    /// Check if an operation needs to be performed as a transaction
+    /// (ie if we need to log the opertion to the pstor before attempting to perform it)
+    /// and if we need to update pstor on completion.
+    fn log_op(&self, _operation: &Operation) -> (bool, bool) {
+        (true, true)
+    }
+    /// Return the pending operation, if any.
+    fn pending_op(&self) -> Option<&Operation>;
+    /// Check if an operation needs to be flushed to the pstor.
+    fn flush_pending_op(&self) -> bool {
+        match self.pending_op() {
+            Some(op) => self.log_op(op).1,
+            None => false,
+        }
     }
 }
 

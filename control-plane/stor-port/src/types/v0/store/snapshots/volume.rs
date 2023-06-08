@@ -236,7 +236,7 @@ impl AsOperationSequencer for VolumeSnapshot {
     }
 }
 impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.metadata.operation.is_some()
     }
 
@@ -277,7 +277,7 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 self.metadata.txn_id = info.txn_id;
             }
             VolumeSnapshotOperation::Destroy => {}
-            VolumeSnapshotOperation::CleanupStaleTransactions => todo!(),
+            VolumeSnapshotOperation::CleanupStaleTransactions => {}
         }
     }
 
@@ -292,6 +292,10 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
         if let Some(op) = &mut self.metadata.operation {
             op.result = Some(result);
         }
+    }
+
+    fn pending_op(&self) -> Option<&VolumeSnapshotOperation> {
+        self.metadata.operation.as_ref().map(|o| &o.operation)
     }
 }
 

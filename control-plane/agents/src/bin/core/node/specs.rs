@@ -182,7 +182,7 @@ impl SpecOperationsHelper for NodeSpec {
     }
 
     fn dirty(&self) -> bool {
-        self.pending_op()
+        self.has_pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::Node

@@ -190,7 +190,7 @@ impl AsOperationSequencer for ReplicaSnapshot {
     }
 }
 impl SpecTransaction<ReplicaSnapshotOperation> for ReplicaSnapshot {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.metadata.operation.is_some()
     }
 
@@ -223,6 +223,10 @@ impl SpecTransaction<ReplicaSnapshotOperation> for ReplicaSnapshot {
         if let Some(op) = &mut self.metadata.operation {
             op.result = Some(result);
         }
+    }
+
+    fn pending_op(&self) -> Option<&ReplicaSnapshotOperation> {
+        self.metadata.operation.as_ref().map(|o| &o.operation)
     }
 }
 

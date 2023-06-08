@@ -121,7 +121,7 @@ pub struct PoolOperationState {
 }
 
 impl SpecTransaction<PoolOperation> for PoolSpec {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.operation.is_some()
     }
 
@@ -154,6 +154,10 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
+    }
+
+    fn pending_op(&self) -> Option<&PoolOperation> {
+        self.operation.as_ref().map(|o| &o.operation)
     }
 }
 

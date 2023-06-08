@@ -970,7 +970,7 @@ impl SpecOperationsHelper for VolumeSpec {
         self.start_op(VolumeOperation::Destroy);
     }
     fn dirty(&self) -> bool {
-        self.pending_op()
+        self.has_pending_op()
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::Volume

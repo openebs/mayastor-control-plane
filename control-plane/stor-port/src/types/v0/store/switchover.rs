@@ -140,7 +140,7 @@ impl ObjectKey for SwitchOverSpecKey {
 }
 
 impl SpecTransaction<Operation> for SwitchOverSpec {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.operation.is_some()
     }
 
@@ -178,5 +178,9 @@ impl SpecTransaction<Operation> for SwitchOverSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
+    }
+
+    fn pending_op(&self) -> Option<&Operation> {
+        self.operation.as_ref().map(|o| &o.operation)
     }
 }

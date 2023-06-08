@@ -223,7 +223,7 @@ pub struct NexusOperationState {
 }
 
 impl SpecTransaction<NexusOperation> for NexusSpec {
-    fn pending_op(&self) -> bool {
+    fn has_pending_op(&self) -> bool {
         self.operation.is_some()
     }
 
@@ -270,6 +270,10 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
         if let Some(op) = &mut self.operation {
             op.result = Some(result);
         }
+    }
+
+    fn pending_op(&self) -> Option<&NexusOperation> {
+        self.operation.as_ref().map(|o| &o.operation)
     }
 }
 
