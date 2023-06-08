@@ -130,6 +130,10 @@ impl VolumeSnapshotMeta {
     pub fn txn_id(&self) -> &SnapshotTxId {
         &self.txn_id
     }
+    /// Get a reference to the transactions hashmap.
+    pub fn transactions(&self) -> &HashMap<String, Vec<ReplicaSnapshot>> {
+        &self.transactions
+    }
 }
 
 /// Volume replica snapshot information.
@@ -145,6 +149,20 @@ pub struct ReplicaSnapshot {
     /// A transaction id for this request.
     txn_id: SnapshotTxId,
     source_id: ReplicaId,
+}
+impl ReplicaSnapshot {
+    /// Get the status of this replica snapshot.
+    pub fn status(&self) -> SpecStatus<()> {
+        self.status.clone()
+    }
+    /// Get the uuid of this replica snapshot.
+    pub fn uuid(&self) -> &uuid::Uuid {
+        self.uuid.uuid()
+    }
+    /// Get the source id of this replica snapshot.
+    pub fn source_id(&self) -> &uuid::Uuid {
+        self.source_id.uuid()
+    }
 }
 impl From<&v0::store::snapshots::replica::ReplicaSnapshot> for ReplicaSnapshot {
     fn from(value: &v0::store::snapshots::replica::ReplicaSnapshot) -> ReplicaSnapshot {

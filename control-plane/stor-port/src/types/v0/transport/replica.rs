@@ -235,6 +235,11 @@ impl ReplicaSnapshotDescr {
     pub fn valid(&self) -> bool {
         self.valid
     }
+
+    /// Get the replica snapshot's replica uuid
+    pub fn replica_uuid(&self) -> &ReplicaId {
+        &self.replica_uuid
+    }
 }
 
 /// Name of a Replica.

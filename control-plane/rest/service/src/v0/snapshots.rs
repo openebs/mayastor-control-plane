@@ -1,8 +1,12 @@
 use super::*;
 use grpc::operations::volume::traits::{
-    CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations, VolumeSnapshot,
+    CreateVolumeSnapshot, DeleteVolumeSnapshot, ReplicaSnapshot, VolumeOperations,
+    VolumeReplicaSnapshotState, VolumeSnapshot,
 };
+use humantime::Timestamp;
+use models::ReplicaSnapshotStatus;
 use rest_client::versions::v0::apis::Uuid;
+use std::collections::HashMap;
 
 fn client() -> impl VolumeOperations {
     core_grpc().volume()
@@ -146,13 +150,22 @@ impl apis::actix_server::Snapshots for RestApi {
     }
 }
 
-pub fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
+fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
     models::VolumeSnapshot {
         definition: models::VolumeSnapshotDefinition::new_all(
             models::VolumeSnapshotMetadata::new_all(
                 snap.meta().timestamp().map(|t| t.to_string()),
                 snap.meta().txn_id(),
-                std::collections::HashMap::new(),
+                snap.meta()
+                    .transactions()
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            v.iter().map(to_models_replica_snapshot).collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>(),
             ),
             models::VolumeSnapshotSpec::new_all(snap.spec().snap_id(), snap.spec().source_id()),
         ),
@@ -165,7 +178,47 @@ pub fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapsho
                 .map(|t| t.to_string())
                 .unwrap_or_default(),
             snap.state().clone_ready(),
-            Vec::<models::ReplicaSnapshotState>::new(),
+            snap.state()
+                .repl_snapshots()
+                .iter()
+                .map(to_models_replica_snapshot_state)
+                .collect::<Vec<_>>(),
         ),
+    }
+}
+
+fn to_models_replica_snapshot(repl_snap: &ReplicaSnapshot) -> models::ReplicaSnapshot {
+    models::ReplicaSnapshot {
+        uuid: repl_snap.uuid().to_owned(),
+        source_id: repl_snap.source_id().to_owned(),
+        status: repl_snap.status().into(),
+    }
+}
+
+fn to_models_replica_snapshot_state(
+    repl_snap_state: &VolumeReplicaSnapshotState,
+) -> models::ReplicaSnapshotState {
+    match repl_snap_state {
+        VolumeReplicaSnapshotState::Online { pool_id: _, state } => models::ReplicaSnapshotState {
+            uuid: state.snap_uuid().uuid().to_owned(),
+            source_id: state.replica_uuid().uuid().to_owned(),
+            timestamp: Timestamp::from(state.timestamp()).to_string(),
+            size: state.source_size() as i64,
+            referenced_size: state.snap_size() as i64,
+            state: ReplicaSnapshotStatus::Online,
+        },
+        VolumeReplicaSnapshotState::Offline {
+            replica_id,
+            pool_id: _,
+            pool_uuid: _,
+            snapshot_id,
+        } => models::ReplicaSnapshotState {
+            uuid: snapshot_id.uuid().to_owned(),
+            source_id: replica_id.uuid().to_owned(),
+            timestamp: "".to_string(),
+            size: 0,
+            referenced_size: 0,
+            state: ReplicaSnapshotStatus::Offline,
+        },
     }
 }
