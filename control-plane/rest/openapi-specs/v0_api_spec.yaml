@@ -3294,7 +3294,7 @@ components:
           format: date-time
         clone_ready:
           description: Indicates if a snapshot is ready to be used as a clone.
-          type: bool
+          type: boolean
           default: false
         replica_snapshots:
           description: List of individual ReplicaSnapshotStates.
