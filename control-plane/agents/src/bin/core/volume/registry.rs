@@ -313,4 +313,20 @@ impl Registry {
         }
         snapshots
     }
+
+    /// Get a paginated subset of volume snapshots.
+    pub(super) async fn paginated_snapshots(
+        &self,
+        pagination: &Pagination,
+        vol_id: Option<&VolumeId>,
+    ) -> PaginatedResult<grpc_mod::VolumeSnapshot> {
+        let snap_specs = self.specs().paginated_snapshots(pagination, vol_id);
+        let mut snapshots = Vec::with_capacity(snap_specs.len());
+        let last = snap_specs.last();
+        for spec in snap_specs.result() {
+            let state = self.snapshot_state(&spec).await;
+            snapshots.push(grpc_mod::VolumeSnapshot::new(&spec, state));
+        }
+        PaginatedResult::new(snapshots, last)
+    }
 }

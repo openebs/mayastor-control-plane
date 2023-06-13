@@ -1,6 +1,5 @@
 //! The Core Agent.
 //! todo: document.
-
 /// The controller logic for all resources.
 pub(crate) mod controller;
 /// The nexus related operations.

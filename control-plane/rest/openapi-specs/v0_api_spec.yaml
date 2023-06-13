@@ -1672,6 +1672,18 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/VolumeId'
+        - in: query
+          name: max_entries
+          description: the maximum number of results to return
+          schema:
+            type: integer
+            default: 0
+          required: true
+        - in: query
+          name: starting_token
+          description: the offset to start pagination from
+          schema:
+            type: integer
       responses:
         '200':
           description: OK
@@ -1746,6 +1758,18 @@ paths:
           schema:
             $ref: '#/components/schemas/SnapshotId'
           required: false
+        - in: query
+          name: max_entries
+          description: the maximum number of results to return
+          schema:
+            type: integer
+            default: 0
+          required: true
+        - in: query
+          name: starting_token
+          description: the offset to start pagination from
+          schema:
+            type: integer
       responses:
         '200':
           description: OK
@@ -3182,13 +3206,15 @@ components:
         - state
     VolumeSnapshots:
       description: |-
-        Array of volume snapshots.
+        Array of volume snapshots plus the next token for subsequent get requests when using pagination
       type: object
       properties:
         entries:
           type: array
           items:
             $ref: '#/components/schemas/VolumeSnapshot'
+        next_token:
+          type: integer
       required:
         - entries
     VolumeSnapshot:

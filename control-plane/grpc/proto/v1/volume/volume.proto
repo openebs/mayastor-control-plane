@@ -424,7 +424,9 @@ message GetSnapshotsRequest {
     common.SnapshotFilter              snapshot = 3;
   }
   // ignore 404 not found errors.
-  bool                   ignore_notfound = 4;
+  bool                          ignore_notfound = 4;
+  // pagination to allow for multiple requests to get all volumes
+  common.Pagination                  pagination = 5;
 }
 // Reply type for a GetVolumeSnapshots request
 message GetSnapshotsReply {
@@ -436,6 +438,11 @@ message GetSnapshotsReply {
 
 message VolumeSnapshots {
   repeated VolumeSnapshot snapshots = 1;
+  // This token allows you to get the next page of entries for
+  // `GetSnapshots` request. If the number of entries is larger than
+  // `max_entries`, use the `next_token` as a value for the
+  // `starting_token` field in the next `GetSnapshots` request.
+  optional uint64 next_token = 3;
 }
 
 message VolumeSnapshot {

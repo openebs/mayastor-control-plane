@@ -1,7 +1,10 @@
 use super::*;
-use grpc::operations::volume::traits::{
-    CreateVolumeSnapshot, DeleteVolumeSnapshot, ReplicaSnapshot, VolumeOperations,
-    VolumeReplicaSnapshotState, VolumeSnapshot,
+use grpc::operations::{
+    volume::traits::{
+        CreateVolumeSnapshot, DeleteVolumeSnapshot, ReplicaSnapshot, VolumeOperations,
+        VolumeReplicaSnapshotState, VolumeSnapshot,
+    },
+    MaxEntries, Pagination, StartingToken,
 };
 use humantime::Timestamp;
 use models::ReplicaSnapshotStatus;
@@ -50,6 +53,7 @@ impl apis::actix_server::Snapshots for RestApi {
                 Filter::VolumeSnapshot(volume_id.into(), snapshot_id.into()),
                 true,
                 None,
+                None,
             )
             .await?;
         let snap = if let Some(s) = snaps.entries().first() {
@@ -88,15 +92,29 @@ impl apis::actix_server::Snapshots for RestApi {
 
     async fn get_volume_snapshots(
         Path(volume_id): Path<Uuid>,
+        Query((max_entries, starting_token)): Query<(isize, Option<isize>)>,
     ) -> Result<models::VolumeSnapshots, RestError<RestJsonError>> {
+        let starting_token = starting_token.unwrap_or_default();
+        // If max entries is 0, pagination is disabled. All snapshots will be returned in a single
+        // call.
+        let pagination = if max_entries > 0 {
+            Some(Pagination::new(
+                max_entries as MaxEntries,
+                starting_token as StartingToken,
+            ))
+        } else {
+            None
+        };
+
         let snaps = client()
-            .get_snapshots(Filter::Volume(volume_id.into()), true, None)
+            .get_snapshots(Filter::Volume(volume_id.into()), true, pagination, None)
             .await?;
         Ok(models::VolumeSnapshots {
+            next_token: snaps.next_token().map(|t| t as isize),
             entries: snaps
-                .entries
-                .into_iter()
-                .map(|e| to_models_volume_snapshot(&e))
+                .entries()
+                .iter()
+                .map(to_models_volume_snapshot)
                 .collect(),
         })
     }
@@ -105,7 +123,7 @@ impl apis::actix_server::Snapshots for RestApi {
         Path(snapshot_id): Path<Uuid>,
     ) -> Result<models::VolumeSnapshot, RestError<RestJsonError>> {
         let snaps = client()
-            .get_snapshots(Filter::Snapshot(snapshot_id.into()), true, None)
+            .get_snapshots(Filter::Snapshot(snapshot_id.into()), true, None, None)
             .await?;
         let snap = snaps.entries().first().ok_or_else(|| {
             ReplyError::not_found(
@@ -119,8 +137,25 @@ impl apis::actix_server::Snapshots for RestApi {
     }
 
     async fn get_volumes_snapshots(
-        Query((volume_id, snapshot_id)): Query<(Option<Uuid>, Option<Uuid>)>,
+        Query((snapshot_id, volume_id, max_entries, starting_token)): Query<(
+            Option<Uuid>,
+            Option<Uuid>,
+            isize,
+            Option<isize>,
+        )>,
     ) -> Result<models::VolumeSnapshots, RestError<RestJsonError>> {
+        let starting_token = starting_token.unwrap_or_default();
+        // If max entries is 0, pagination is disabled. All snapshots will be returned in a single
+        // call.
+        let pagination = if max_entries > 0 {
+            Some(Pagination::new(
+                max_entries as MaxEntries,
+                starting_token as StartingToken,
+            ))
+        } else {
+            None
+        };
+
         let filter = match (snapshot_id, volume_id) {
             (Some(snapshot), Some(volume)) => {
                 Filter::VolumeSnapshot(volume.into(), snapshot.into())
@@ -130,13 +165,16 @@ impl apis::actix_server::Snapshots for RestApi {
             _ => Filter::None,
         };
 
-        let snaps = client().get_snapshots(filter, true, None).await?;
+        let snaps = client()
+            .get_snapshots(filter, true, pagination, None)
+            .await?;
 
         Ok(models::VolumeSnapshots {
+            next_token: snaps.next_token().map(|t| t as isize),
             entries: snaps
-                .entries
-                .into_iter()
-                .map(|e| to_models_volume_snapshot(&e))
+                .entries()
+                .iter()
+                .map(to_models_volume_snapshot)
                 .collect(),
         })
     }

@@ -383,11 +383,29 @@ impl IoEngineApiClient {
         &self,
         volume_id: Option<uuid::Uuid>,
         snapshot_id: Option<uuid::Uuid>,
+        max_entries: i32,
+        starting_token: String,
     ) -> Result<models::VolumeSnapshots, ApiClientError> {
+        let max_entries = max_entries as isize;
+        let starting_token = if starting_token.is_empty() {
+            0
+        } else {
+            starting_token.parse::<isize>().map_err(|_| {
+                ApiClientError::InvalidArgument(
+                    "Failed to parse starting token as an isize".to_string(),
+                )
+            })?
+        };
+
         let snapshots = self
             .rest_client
             .snapshots_api()
-            .get_volumes_snapshots(volume_id.as_ref(), snapshot_id.as_ref())
+            .get_volumes_snapshots(
+                max_entries,
+                snapshot_id.as_ref(),
+                volume_id.as_ref(),
+                Some(starting_token),
+            )
             .await?;
 
         Ok(snapshots.into_body())

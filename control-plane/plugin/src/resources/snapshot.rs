@@ -68,18 +68,28 @@ async fn get_snapshots(
     volid: &Option<VolumeId>,
     snapid: &Option<SnapshotId>,
 ) -> Option<Vec<openapi::models::VolumeSnapshot>> {
-    match RestClient::client()
-        .snapshots_api()
-        .get_volumes_snapshots(volid.as_ref(), snapid.as_ref())
-        .await
-    {
-        Ok(snaps) => {
-            let s = snaps.into_body();
-            Some(s.entries)
-        }
-        Err(e) => {
-            println!("Failed to list volume snapshots. Error {e}");
-            None
+    let max_entries = 100;
+    let mut starting_token = Some(0);
+    let mut snapshots = Vec::with_capacity(max_entries as usize);
+
+    // The last paginated request will set the `starting_token` to `None`.
+    while starting_token.is_some() {
+        match RestClient::client()
+            .snapshots_api()
+            .get_volumes_snapshots(max_entries, volid.as_ref(), snapid.as_ref(), starting_token)
+            .await
+        {
+            Ok(snaps) => {
+                let s = snaps.into_body();
+                snapshots.extend(s.entries);
+                starting_token = s.next_token;
+            }
+            Err(e) => {
+                println!("Failed to list volume snapshots. Error {e}");
+                return None;
+            }
         }
     }
+
+    Some(snapshots)
 }

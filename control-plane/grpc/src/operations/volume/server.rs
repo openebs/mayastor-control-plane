@@ -248,9 +248,10 @@ impl VolumeGrpc for VolumeServer {
             None => Filter::None,
         };
 
+        let pagination: Option<Pagination> = req.pagination.map(|p| p.into());
         match self
             .service
-            .get_snapshots(filter, req.ignore_notfound, None)
+            .get_snapshots(filter, req.ignore_notfound, pagination, None)
             .await
         {
             Ok(snapshots) => Ok(Response::new(GetSnapshotsReply {
