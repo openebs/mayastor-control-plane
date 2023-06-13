@@ -593,7 +593,7 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                                 crate::snapshot::volume_replica_snapshot_state::State::Online(
                                     crate::snapshot::ReplicaSnapshotState {
                                         uuid: state.snap_uuid().to_string(),
-                                        replica_id: state.snap_uuid().to_string(),
+                                        replica_id: state.replica_uuid().to_string(),
                                         pool_uuid: state.pool_uuid().to_string(),
                                         pool_id: state.pool_id().to_string(),
                                         name: state.snap_name().to_string(),
