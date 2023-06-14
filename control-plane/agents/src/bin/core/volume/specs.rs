@@ -852,6 +852,8 @@ impl SpecOperationsHelper for VolumeSpec {
             VolumeOperation::Publish(..)
                 | VolumeOperation::Unpublish
                 | VolumeOperation::Republish(..)
+                | VolumeOperation::CreateSnapshot(..)
+                | VolumeOperation::DestroySnapshot(..)
         ) {
             // don't attempt to modify the volume parameters if the nexus target is not "stable"
             if self.target().is_some() != state.target.is_some() {

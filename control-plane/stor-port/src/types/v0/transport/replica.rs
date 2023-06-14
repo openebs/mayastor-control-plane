@@ -129,7 +129,7 @@ pub struct ReplicaSnapshotDescr {
     replica_uuid: ReplicaId,
     /// UUID of the pool where the snapshot resides.
     pool_uuid: PoolUuid,
-    /// Name of the poool where the snapshot resides.
+    /// Name of the pool where the snapshot resides.
     pool_id: PoolId,
     /// Amount of bytes referenced by replica.
     replica_size: u64,
@@ -137,7 +137,7 @@ pub struct ReplicaSnapshotDescr {
     entity_id: String,
     /// Unique transaction id for snapshot.
     txn_id: SnapshotTxId,
-    /// Validity of the snapshot: the xattr metadata might be corrupted
+    /// Validity of the snapshot: the xattr metadata might be corrupted.
     valid: bool,
 }
 impl ReplicaSnapshotDescr {
@@ -236,7 +236,7 @@ impl ReplicaSnapshotDescr {
         self.valid
     }
 
-    /// Get the replica snapshot's replica uuid
+    /// Get the replica snapshot's replica uuid.
     pub fn replica_uuid(&self) -> &ReplicaId {
         &self.replica_uuid
     }

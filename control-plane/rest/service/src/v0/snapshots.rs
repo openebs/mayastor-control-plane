@@ -7,7 +7,6 @@ use grpc::operations::{
     MaxEntries, Pagination, StartingToken,
 };
 use humantime::Timestamp;
-use models::ReplicaSnapshotStatus;
 use rest_client::versions::v0::apis::Uuid;
 use std::collections::HashMap;
 
@@ -237,26 +236,27 @@ fn to_models_replica_snapshot_state(
     repl_snap_state: &VolumeReplicaSnapshotState,
 ) -> models::ReplicaSnapshotState {
     match repl_snap_state {
-        VolumeReplicaSnapshotState::Online { pool_id: _, state } => models::ReplicaSnapshotState {
-            uuid: state.snap_uuid().uuid().to_owned(),
-            source_id: state.replica_uuid().uuid().to_owned(),
-            timestamp: Timestamp::from(state.timestamp()).to_string(),
-            size: state.source_size() as i64,
-            referenced_size: state.snap_size() as i64,
-            state: ReplicaSnapshotStatus::Online,
-        },
+        VolumeReplicaSnapshotState::Online { pool_id, state } => {
+            models::ReplicaSnapshotState::online(models::OnlineReplicaSnapshotState {
+                uuid: state.snap_uuid().uuid().to_owned(),
+                source_id: state.replica_uuid().uuid().to_owned(),
+                pool_id: pool_id.to_string(),
+                pool_uuid: state.pool_uuid().uuid().to_owned(),
+                timestamp: Timestamp::from(state.timestamp()).to_string(),
+                size: state.source_size() as i64,
+                referenced_size: state.snap_size() as i64,
+            })
+        }
         VolumeReplicaSnapshotState::Offline {
             replica_id,
-            pool_id: _,
-            pool_uuid: _,
+            pool_id,
+            pool_uuid,
             snapshot_id,
-        } => models::ReplicaSnapshotState {
+        } => models::ReplicaSnapshotState::offline(models::OfflineReplicaSnapshotState {
             uuid: snapshot_id.uuid().to_owned(),
             source_id: replica_id.uuid().to_owned(),
-            timestamp: "".to_string(),
-            size: 0,
-            referenced_size: 0,
-            state: ReplicaSnapshotStatus::Offline,
-        },
+            pool_id: pool_id.to_string(),
+            pool_uuid: pool_uuid.uuid().to_owned(),
+        }),
     }
 }

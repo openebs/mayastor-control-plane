@@ -3294,7 +3294,7 @@ components:
           format: date-time
         clone_ready:
           description: Indicates if a snapshot is ready to be used as a clone.
-          type: bool
+          type: boolean
           default: false
         replica_snapshots:
           description: List of individual ReplicaSnapshotStates.
@@ -3328,12 +3328,31 @@ components:
         Replica Snapshot state information.
       type: object
       properties:
+        online:
+          $ref: '#/components/schemas/OnlineReplicaSnapshotState'
+        offline:
+          $ref: '#/components/schemas/OfflineReplicaSnapshotState'
+      additionalProperties: false
+      oneOf:
+        - required:
+          - online
+        - required:
+          - offline
+    OnlineReplicaSnapshotState:
+      description: |-
+        Online ReplicaSnapshotState representation.
+      type: object
+      properties:
         uuid:
           $ref: '#/components/schemas/SnapshotId'
         source_id:
           $ref: '#/components/schemas/ReplicaId'
+        pool_id:
+          $ref: '#/components/schemas/PoolId'
+        pool_uuid:
+          $ref: '#/components/schemas/PoolUuid'
         timestamp:
-          description: Timestamp when replica snapshot is taken on the storage system.
+          description: Timestamp when the replica snapshot is taken on the storage system.
           type: string
           format: date-time
         size:
@@ -3344,15 +3363,32 @@ components:
           description: Replica snapshot referenced size.
           type: integer
           format: int64
-        state:
-          $ref: '#/components/schemas/ReplicaSnapshotStatus'
       required:
         - uuid
         - source_id
+        - pool_uuid
+        - pool_id
         - timestamp
         - size
         - referenced_size
-        - state
+    OfflineReplicaSnapshotState:
+      description: |-
+        Offline ReplicaSnapshotState representation.
+      type: object
+      properties:
+        uuid:
+          $ref: '#/components/schemas/SnapshotId'
+        source_id:
+          $ref: '#/components/schemas/ReplicaId'
+        pool_id:
+          $ref: '#/components/schemas/PoolId'
+        pool_uuid:
+          $ref: '#/components/schemas/PoolUuid'
+      required:
+        - uuid
+        - source_id
+        - pool_uuid
+        - pool_id
     ReplicaTopology:
       description: Volume Replica information.
       type: object
