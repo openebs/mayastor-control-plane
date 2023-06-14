@@ -60,6 +60,13 @@ class Docker(object):
         container = docker_client.containers.get(name)
         container.pause()
 
+    # Unpause a container with the given name.
+    @staticmethod
+    def unpause_container(name):
+        docker_client = docker.from_env()
+        container = docker_client.containers.get(name)
+        container.unpause()
+
     # Restart a container with the given name.
     def restart_container(name):
         docker_client = docker.from_env()
