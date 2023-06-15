@@ -122,6 +122,10 @@ pub struct VolumeSnapshotMeta {
     transactions: HashMap<String, Vec<ReplicaSnapshot>>,
 }
 impl VolumeSnapshotMeta {
+    /// Get the volume snapshot status.
+    pub fn status(&self) -> &SpecStatus<()> {
+        &self.status
+    }
     /// Get the volume snapshot timestamp.
     pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
         self.timestamp.as_ref()

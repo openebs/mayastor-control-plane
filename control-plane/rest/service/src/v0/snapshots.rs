@@ -55,38 +55,15 @@ impl apis::actix_server::Snapshots for RestApi {
                 None,
             )
             .await?;
-        let snap = if let Some(s) = snaps.entries().first() {
-            s
-        } else {
-            return Err(ReplyError::not_found(
+        let snapshot = snaps.entries().first().ok_or_else(|| {
+            ReplyError::not_found(
                 ResourceKind::VolumeSnapshot,
                 "Snapshot not found".to_string(),
                 snapshot_id.to_string(),
             )
-            .into());
-        };
+        })?;
 
-        Ok(models::VolumeSnapshot {
-            definition: models::VolumeSnapshotDefinition::new_all(
-                models::VolumeSnapshotMetadata::new_all(
-                    snap.meta().timestamp().map(|t| t.to_string()),
-                    snap.meta().txn_id(),
-                    std::collections::HashMap::new(),
-                ),
-                models::VolumeSnapshotSpec::new_all(snap.spec().snap_id(), snap.spec().source_id()),
-            ),
-            state: models::VolumeSnapshotState::new_all(
-                snap.state().uuid(),
-                snap.state().size().unwrap_or_default(),
-                snap.state().source_id(),
-                snap.state()
-                    .timestamp()
-                    .map(|t| t.to_string())
-                    .unwrap_or_default(),
-                snap.state().clone_ready(),
-                Vec::<models::ReplicaSnapshotState>::new(),
-            ),
-        })
+        Ok(to_models_volume_snapshot(snapshot))
     }
 
     async fn get_volume_snapshots(
@@ -191,6 +168,7 @@ fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
     models::VolumeSnapshot {
         definition: models::VolumeSnapshotDefinition::new_all(
             models::VolumeSnapshotMetadata::new_all(
+                snap.meta().status().clone(),
                 snap.meta().timestamp().map(|t| t.to_string()),
                 snap.meta().txn_id(),
                 snap.meta()
@@ -210,10 +188,7 @@ fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
             snap.state().uuid(),
             snap.state().size().unwrap_or_default(),
             snap.state().source_id(),
-            snap.state()
-                .timestamp()
-                .map(|t| t.to_string())
-                .unwrap_or_default(),
+            snap.state().timestamp().map(|t| t.to_string()),
             snap.state().clone_ready(),
             snap.state()
                 .repl_snapshots()
