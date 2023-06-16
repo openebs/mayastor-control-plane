@@ -16,7 +16,7 @@ dockerhub_tag_exists() {
 
 # Get the tag at the HEAD
 get_tag() {
-  vers=`git tag --points-at HEAD`
+  vers=`git tag --points-at HEAD | tail -n 1`
   echo -n $vers
 }
 get_hash() {

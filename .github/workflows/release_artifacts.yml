@@ -9,6 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2.4.0
+      with:
+        submodules: recursive
+        fetch-depth: 0
+    - run: |
+        # BUG: HEAD tag is fetched as lightweight instead of annotated
+        # https://github.com/actions/checkout/issues/290
+        if [ "${{ github.ref_type }}" == "tag" ]; then
+          git fetch -f origin ${{ github.ref }}:${{ github.ref }}
+        fi
     - uses: cachix/install-nix-action@v15
       with:
         nix_path: nixpkgs=channel:nixos
