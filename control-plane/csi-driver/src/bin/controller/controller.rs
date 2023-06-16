@@ -815,6 +815,7 @@ fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
             .metadata
             .timestamp
             .and_then(|t| prost_types::Timestamp::from_str(&t).ok()),
-        ready_to_use: snapshot.state.clone_ready.unwrap_or_default(),
+        // What about when snapshot is in deleted phase?
+        ready_to_use: snapshot.definition.metadata.status == models::SpecStatus::Created,
     }
 }

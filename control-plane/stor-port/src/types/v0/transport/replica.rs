@@ -236,6 +236,11 @@ impl ReplicaSnapshotDescr {
         self.valid
     }
 
+    /// Get the snapshot readiness to clone.
+    pub fn clone_ready(&self) -> bool {
+        false
+    }
+
     /// Get the replica snapshot's replica uuid.
     pub fn replica_uuid(&self) -> &ReplicaId {
         &self.replica_uuid
