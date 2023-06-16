@@ -184,6 +184,7 @@ impl From<nexus::NexusStatus> for NexusStatus {
             nexus::NexusStatus::Online => Self::Online,
             nexus::NexusStatus::Degraded => Self::Degraded,
             nexus::NexusStatus::Faulted => Self::Faulted,
+            nexus::NexusStatus::ShuttingDown => Self::ShuttingDown,
             nexus::NexusStatus::Shutdown => Self::Shutdown,
         }
     }
@@ -194,6 +195,7 @@ impl From<NexusStatus> for nexus::NexusStatus {
             NexusStatus::Online => Self::Online,
             NexusStatus::Degraded => Self::Degraded,
             NexusStatus::Faulted => Self::Faulted,
+            NexusStatus::ShuttingDown => Self::ShuttingDown,
             NexusStatus::Shutdown => Self::Shutdown,
             NexusStatus::Unknown => Self::Unknown,
         }

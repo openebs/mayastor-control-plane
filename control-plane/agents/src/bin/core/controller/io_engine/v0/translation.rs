@@ -129,7 +129,7 @@ impl TryIoEngineToAgent for v0::ReplicaV2 {
     }
 }
 
-/// Volume Agent conversions
+/// Nexus Agent conversions
 
 impl TryIoEngineToAgent for v0::NexusV2 {
     type AgentMessage = transport::Nexus;
@@ -143,7 +143,7 @@ impl TryIoEngineToAgent for v0::NexusV2 {
                 kind: ResourceKind::Nexus,
             })?,
             size: self.size,
-            status: NexusStatus::from(self.state),
+            status: ExternalType(v0::NexusState::from_i32(self.state).unwrap_or_default()).into(),
             children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
@@ -172,7 +172,7 @@ impl TryIoEngineToAgent for v0::Nexus {
             name: self.uuid.clone(),
             uuid: Default::default(),
             size: self.size,
-            status: NexusStatus::from(self.state),
+            status: ExternalType(v0::NexusState::from_i32(self.state).unwrap_or_default()).into(),
             children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
@@ -194,6 +194,18 @@ impl TryIoEngineToAgent for v0::Nexus {
 /// New-type wrapper for external types.
 /// Allows us to convert from external types which would otherwise not be allowed.
 struct ExternalType<T>(T);
+impl From<ExternalType<v0::NexusState>> for NexusStatus {
+    fn from(src: ExternalType<v0::NexusState>) -> Self {
+        match src.0 {
+            v0::NexusState::NexusUnknown => NexusStatus::Unknown,
+            v0::NexusState::NexusOnline => NexusStatus::Online,
+            v0::NexusState::NexusDegraded => NexusStatus::Degraded,
+            v0::NexusState::NexusFaulted => NexusStatus::Faulted,
+            v0::NexusState::NexusShuttingDown => NexusStatus::ShuttingDown,
+            v0::NexusState::NexusShutdown => NexusStatus::Shutdown,
+        }
+    }
+}
 impl From<ExternalType<v0::ChildState>> for ChildState {
     fn from(src: ExternalType<v0::ChildState>) -> Self {
         match src.0 {
