@@ -122,6 +122,10 @@ pub struct VolumeSnapshotMeta {
     transactions: HashMap<String, Vec<ReplicaSnapshot>>,
 }
 impl VolumeSnapshotMeta {
+    /// Get the volume snapshot status.
+    pub fn status(&self) -> &SpecStatus<()> {
+        &self.status
+    }
     /// Get the volume snapshot timestamp.
     pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
         self.timestamp.as_ref()
@@ -272,9 +276,13 @@ impl VolumeSnapshotState {
     pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
         self.timestamp.as_ref()
     }
-    /// Get the volume snapshot state.
+    /// Get the volume snapshot readiness to clone.
     pub fn clone_ready(&self) -> bool {
-        false
+        match self.repl_snapshots.as_slice() {
+            [VolumeReplicaSnapshotState::Online { state, .. }] => state.clone_ready(),
+            // todo: handle more than one replica for multi-replica snapshots
+            _ => false,
+        }
     }
     /// Get a reference to the replica snapshots.
     pub fn repl_snapshots(&self) -> &Vec<VolumeReplicaSnapshotState> {

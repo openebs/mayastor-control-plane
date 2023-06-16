@@ -3246,6 +3246,8 @@ components:
         Volume Snapshot Metadata information.
       type: object
       properties:
+        status:
+          $ref: '#/components/schemas/SpecStatus'
         timestamp:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
@@ -3259,6 +3261,7 @@ components:
             items:
               $ref: '#/components/schemas/ReplicaSnapshot'
       required:
+        - status
         - txn_id
         - transactions
     VolumeSnapshotSpec:
@@ -3305,7 +3308,6 @@ components:
         - uuid
         - size
         - source_volume
-        - timestamp
         - ready
         - replica_snapshots
     ReplicaSnapshot:

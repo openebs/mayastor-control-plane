@@ -28,7 +28,7 @@ use grpc::{
     },
 };
 use stor_port::{
-    transport_api::{v0::Volumes, ReplyError},
+    transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
         store::{snapshots::volume::VolumeSnapshotUserSpec, volume::VolumeSpec},
         transport::{
@@ -360,7 +360,22 @@ impl Service {
         &self,
         request: CreateVolumeSnapshot,
     ) -> Result<VolumeSnapshot, SvcError> {
-        let mut volume = self.specs().volume(&request.source_id).await?;
+        let mut volume = match self.specs().volume(request.source_id()).await {
+            Ok(volume) => Ok(volume),
+            Err(SvcError::VolumeNotFound { vol_id }) => {
+                match self.specs().volume_snapshot_rsc(request.snap_id()) {
+                    Some(snapshot) if snapshot.lock().status().created() => {
+                        Err(SvcError::AlreadyExists {
+                            kind: ResourceKind::VolumeSnapshot,
+                            id: request.snap_id().to_string(),
+                        })
+                    }
+                    Some(_) => Err(SvcError::SnapshotNotCreatedNoVolume {}),
+                    None => Err(SvcError::VolumeNotFound { vol_id }),
+                }
+            }
+            Err(error) => Err(error),
+        }?;
         let snapshot = volume
             .create_snap(
                 &self.registry,

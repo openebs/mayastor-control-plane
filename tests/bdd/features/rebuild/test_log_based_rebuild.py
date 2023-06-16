@@ -42,10 +42,10 @@ POOL_4_UUID = "d5c5e3de-d77b-11ed-afa1-0242ac120002"
 VOLUME_SIZE = 524288000
 POOL_SIZE = 734003200
 NUM_VOLUME_REPLICAS = 3
-RECONCILE_PERIOD_SECS = "1s"
-FAULTED_CHILD_WAIT_SECS = 10
-FIO_RUN = 20
-SLEEP_BEFORE_START = 5
+RECONCILE_PERIOD_SECS = "300ms"
+FAULTED_CHILD_WAIT_SECS = 3
+FIO_RUN = 7
+SLEEP_BEFORE_START = 2
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +58,7 @@ def init(disks):
         wait="10s",
         reconcile_period=RECONCILE_PERIOD_SECS,
         faulted_child_wait_period=f"{FAULTED_CHILD_WAIT_SECS}s",
-        cache_period="500ms",
+        cache_period="200ms",
     )
 
     assert len(disks) == (NUM_VOLUME_REPLICAS + 1)

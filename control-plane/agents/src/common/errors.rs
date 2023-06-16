@@ -306,6 +306,8 @@ pub enum SvcError {
     ServiceBusy {},
     #[snafu(display("The service is shutdown, cannot process request"))]
     ServiceShutdown {},
+    #[snafu(display("The snapshot is not created, and its parent volume is gone"))]
+    SnapshotNotCreatedNoVolume {},
 }
 
 impl SvcError {
@@ -827,6 +829,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::InvalidSnapshotSource { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::VolumeSnapshot,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::SnapshotNotCreatedNoVolume { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::VolumeSnapshot,
                 source: desc.to_string(),
                 extra: error_str,

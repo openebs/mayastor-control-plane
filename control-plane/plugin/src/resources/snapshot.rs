@@ -1,6 +1,6 @@
 use crate::{
     operations::GetSnapshots,
-    resources::{utils, SnapshotId, VolumeId},
+    resources::{utils, utils::optional_cell, SnapshotId, VolumeId},
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
@@ -38,7 +38,12 @@ impl VolumeSnapshotArgs {
 impl CreateRow for openapi::models::VolumeSnapshot {
     fn row(&self) -> Row {
         let state = &self.state;
-        row![state.uuid, state.timestamp, state.size, state.source_volume]
+        row![
+            state.uuid,
+            optional_cell(state.timestamp.as_ref()),
+            state.size,
+            state.source_volume
+        ]
     }
 }
 
