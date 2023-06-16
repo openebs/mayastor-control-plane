@@ -19,6 +19,15 @@ VOLUME1_SIZE = 1024 * 1024 * 32
 SNAP1_UUID = "3f49d30d-a446-4b40-b3f6-f439345f1ce9"
 
 
+@pytest.fixture(scope="module")
+def deployer_cluster():
+    Deployer.start(io_engines=1, cache_period="200ms", reconcile_period="300ms")
+    put_pool()
+    pytest.exception = None
+    yield
+    Deployer.stop()
+
+
 @scenario("delete.feature", "Remove pool where snapshot is present")
 def test_remove_pool_where_snapshot_is_present():
     """Remove pool where snapshot is present."""
@@ -39,22 +48,9 @@ def test_snapshot_deletion_volume_after_volume_deletion():
     """Snapshot deletion volume after volume deletion."""
 
 
-@pytest.fixture(autouse=True)
 @given("a deployer cluster")
-def a_deployer_cluster():
+def a_deployer_cluster(deployer_cluster):
     """a deployer cluster."""
-    Deployer.start(
-        io_engines=1,
-    )
-    pool_api = ApiClient.pools_api()
-    pool_api.put_node_pool(
-        NODE1,
-        POOL1_NAME,
-        CreatePoolBody(["malloc:///disk?size_mb=128"]),
-    )
-    pytest.exception = None
-    yield
-    Deployer.stop()
 
 
 @given(parsers.parse("we have a single replica {publish_status} volume"))
@@ -76,12 +72,22 @@ def a_single_replica_publish_status_volume(publish_status):
                 {}, Protocol("nvmf"), node=NODE1, frontend_node="app-node-1"
             ),
         )
+    yield
+    try:
+        ApiClient.volumes_api().del_volume(VOLUME1_UUID)
+    except openapi.exceptions.ApiException:
+        pass
 
 
 @given("we've created a snapshot for the volume")
 def weve_created_a_snapshot_for_the_volume():
     """we've created a snapshot for the volume."""
     ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, SNAP1_UUID)
+    yield
+    try:
+        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
+    except openapi.exceptions.ApiException:
+        pass
 
 
 @when("the snapshot is deleted")
@@ -103,11 +109,14 @@ def we_attempt_to_delete_the_pool_hosting_the_snapshot():
         ApiClient.pools_api().del_pool(POOL1_NAME)
     except openapi.exceptions.ApiException as e:
         pytest.exception = e
+    yield
+    put_pool()
 
 
 @when("we attempt to delete the snapshot")
 def we_attempt_to_delete_the_snapshot():
     """we attempt to delete the snapshot."""
+    pytest.exception = None
     try:
         ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
     except openapi.exceptions.ApiException as e:
@@ -117,6 +126,7 @@ def we_attempt_to_delete_the_snapshot():
 @when("we attempt to delete the source volume")
 def we_attempt_to_delete_the_source_volume():
     """we attempt to delete the source volume."""
+    pytest.exception = None
     try:
         ApiClient.volumes_api().del_volume(VOLUME1_UUID)
     except openapi.exceptions.ApiException as e:
@@ -181,3 +191,16 @@ def we_should_be_able_to_delete_the_pool():
     except openapi.exceptions.ApiException:
         # We should not have reached here for the test to pass.
         assert False
+    yield
+    put_pool()
+
+
+def put_pool():
+    try:
+        ApiClient.pools_api().put_node_pool(
+            NODE1,
+            POOL1_NAME,
+            CreatePoolBody(["malloc:///disk?size_mb=128"]),
+        )
+    except openapi.exceptions.ApiException:
+        pass
