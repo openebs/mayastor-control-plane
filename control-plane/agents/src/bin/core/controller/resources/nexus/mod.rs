@@ -1,7 +1,7 @@
 use super::{ResourceMutex, ResourceUid};
 use stor_port::types::v0::{
     store::nexus::{NexusSpec, NexusState},
-    transport::NexusId,
+    transport::{NexusId, RebuildHistory},
 };
 
 impl ResourceMutex<NexusSpec> {
@@ -19,6 +19,13 @@ impl ResourceUid for ResourceMutex<NexusSpec> {
 }
 
 impl ResourceUid for NexusSpec {
+    type Uid = NexusId;
+    fn uid(&self) -> &Self::Uid {
+        &self.uuid
+    }
+}
+
+impl ResourceUid for RebuildHistory {
     type Uid = NexusId;
     fn uid(&self) -> &Self::Uid {
         &self.uuid

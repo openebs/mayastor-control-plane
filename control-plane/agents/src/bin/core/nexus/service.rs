@@ -1,10 +1,13 @@
-use crate::controller::{
-    registry::Registry,
-    resources::{
-        operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
-        operations_helper::ResourceSpecsLocked,
-        OperationGuardArc,
+use crate::{
+    controller::{
+        registry::Registry,
+        resources::{
+            operations::{ResourceLifecycle, ResourceOffspring, ResourceSharing},
+            operations_helper::ResourceSpecsLocked,
+            OperationGuardArc,
+        },
     },
+    node::wrapper::GetterOps,
 };
 use agents::errors::SvcError;
 use grpc::{
@@ -15,7 +18,7 @@ use grpc::{
     },
 };
 use stor_port::{
-    transport_api::{v0::Nexuses, ReplyError, ResourceKind},
+    transport_api::{v0::Nexuses, ReplyError},
     types::v0::{
         store::nexus::NexusSpec,
         transport::{
@@ -24,7 +27,6 @@ use stor_port::{
         },
     },
 };
-use tonic::Status;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -202,10 +204,12 @@ impl Service {
         &self,
         request: &GetRebuildRecord,
     ) -> Result<RebuildHistory, SvcError> {
-        Err(SvcError::Unimplemented {
-            resource: ResourceKind::Nexus,
-            request: "get_rebuild_history".to_string(),
-            source: Status::unimplemented("api still unimplemented"),
-        })
+        let node_id = self.registry.nexus(&request.nexus).await?.node;
+        let node = self.registry.node_wrapper(&node_id).await?;
+        node.rebuild_history(&request.nexus)
+            .await
+            .ok_or(SvcError::RebuildHistoryNotFound {
+                nexus_id: request.nexus.to_string(),
+            })
     }
 }

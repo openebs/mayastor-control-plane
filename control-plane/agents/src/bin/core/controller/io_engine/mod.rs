@@ -5,6 +5,7 @@ pub(crate) mod v0;
 pub(crate) mod v1;
 
 pub(crate) use client::*;
+use std::collections::HashMap;
 
 use agents::errors::SvcError;
 use async_trait::async_trait;
@@ -14,10 +15,10 @@ use stor_port::{
         AddNexusChild, ApiVersion, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp,
         CreatePool, CreateReplica, CreateReplicaSnapshot, DestroyNexus, DestroyPool,
         DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild, GetBlockDevices, GetRebuildRecord,
-        ImportPool, ListReplicaSnapshots, Nexus, NexusChildAction, NexusChildActionContext,
-        NexusChildActionKind, NexusId, NodeId, PoolState, RebuildHistory, Register,
-        RemoveNexusChild, Replica, ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus,
-        UnshareNexus, UnshareReplica,
+        ImportPool, ListRebuildRecord, ListReplicaSnapshots, Nexus, NexusChildAction,
+        NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, PoolState, RebuildHistory,
+        Register, RemoveNexusChild, Replica, ReplicaSnapshot, ShareNexus, ShareReplica,
+        ShutdownNexus, UnshareNexus, UnshareReplica,
     },
 };
 
@@ -153,10 +154,15 @@ pub(crate) trait NexusSnapshotApi {
 #[async_trait]
 pub(crate) trait NexusChildRebuildApi {
     /// Lists rebuild history for a given nexus.
-    async fn list_rebuild_history(
+    async fn get_rebuild_history(
         &self,
         request: &GetRebuildRecord,
     ) -> Result<RebuildHistory, SvcError>;
+
+    async fn list_rebuild_record(
+        &self,
+        request: &ListRebuildRecord,
+    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError>;
 }
 
 /// The trait for replica snapshot operations like create, remove, list.

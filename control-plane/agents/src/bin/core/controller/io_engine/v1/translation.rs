@@ -628,6 +628,15 @@ impl AgentToIoEngine for transport::GetRebuildRecord {
     }
 }
 
+impl AgentToIoEngine for transport::ListRebuildRecord {
+    type IoEngineMessage = v1::nexus::ListRebuildHistoryRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::nexus::ListRebuildHistoryRequest {
+            count: self.count(),
+        }
+    }
+}
+
 impl TryIoEngineToAgent for v1::nexus::RebuildHistoryResponse {
     type AgentMessage = transport::RebuildHistory;
     /// This converts gRPC rebuild history object into Control plane object.
