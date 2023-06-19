@@ -35,7 +35,7 @@ use stor_port::{
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use std::{collections::HashMap, ops::DerefMut, sync::Arc};
+use std::{collections::HashMap, future::Future, ops::DerefMut, sync::Arc};
 use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (
@@ -850,6 +850,16 @@ impl NodeStateFetcher {
     fn id(&self) -> &NodeId {
         self.node_state.id()
     }
+    async fn ignore_unimplemented<T: Default, F: Future<Output = Result<T, SvcError>>>(
+        fetch: F,
+    ) -> Result<T, SvcError> {
+        match fetch.await {
+            Err(error) if error.tonic_code() == tonic::Code::Unimplemented => {
+                Ok(Default::default())
+            }
+            others => others,
+        }
+    }
     /// Fetch the various resources from the Io Engine.
     async fn fetch_resources(
         &self,
@@ -858,8 +868,9 @@ impl NodeStateFetcher {
         let replicas = self.fetch_replicas(client).await?;
         let pools = self.fetch_pools(client).await?;
         let nexuses = self.fetch_nexuses(client).await?;
-        let snapshots = self.fetch_snapshots(client).await?;
-        let rebuild_history = self.fetch_rebuild_history(client).await?;
+        let snapshots = Self::ignore_unimplemented(self.fetch_snapshots(client)).await?;
+        let rebuild_history =
+            Self::ignore_unimplemented(self.fetch_rebuild_history(client)).await?;
         Ok((replicas, pools, nexuses, snapshots, rebuild_history))
     }
 
