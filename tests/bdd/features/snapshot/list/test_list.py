@@ -300,9 +300,12 @@ def validate_snapshots(listed_snapshots, ref_snaps_list, state, volume):
     assert len(listed_snapshots.entries) == len(ref_snaps_list)
     for snapshot in listed_snapshots.entries:
         try:
-            VOLUME1_SNAP_IDS.index(snapshot.state.uuid)
-            # XXX: Revisit this check. Should work.
-            # assert snapshot.state.size == volume.spec.size
+            idx = VOLUME1_SNAP_IDS.index(snapshot.state.uuid)
+            # Since there are multiple snapshots created for volume, and
+            # we are not writing anything to the volume, only first snapshot
+            # will have size equal to volume size.
+            if idx == 0 and hasattr(snapshot, "size"):
+                assert snapshot.state.size == volume.spec.size
             assert snapshot.state.clone_ready is False
             timestamp_within(snapshot.state.timestamp)
             wait_snapshot_state(snapshot, state)
