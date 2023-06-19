@@ -45,6 +45,8 @@ enum NexusStatus {
   Faulted = 3;
   // shutdown i.e. blocked from serving IO
   Shutdown = 4;
+  // shutdown in progress: not able to serve I/O
+  ShuttingDown = 5;
 }
 
 message Child {

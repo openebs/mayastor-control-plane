@@ -18,6 +18,7 @@ from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.replica_state import ReplicaState
+from openapi.model.pool_status import PoolStatus
 from openapi.model.node_status import NodeStatus
 from openapi.exceptions import NotFoundException
 import openapi.exceptions
@@ -514,6 +515,8 @@ def restart_node(name):
 def wait_node_ready(name):
     node = ApiClient.nodes_api().get_node(name)
     assert node.state.status == NodeStatus("Online")
+    for pool in ApiClient.pools_api().get_node_pools(name):
+        assert pool.state.status == PoolStatus("Online")
 
 
 def timestamp_within(timestamp, minutes=1):

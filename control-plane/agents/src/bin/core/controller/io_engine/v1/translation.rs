@@ -309,7 +309,8 @@ impl TryIoEngineToAgent for v1::nexus::Nexus {
                 kind: ResourceKind::Nexus,
             })?,
             size: self.size,
-            status: NexusStatus::from(self.state),
+            status: ExternalType(v1::nexus::NexusState::from_i32(self.state).unwrap_or_default())
+                .into(),
             children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
@@ -331,6 +332,18 @@ impl TryIoEngineToAgent for v1::nexus::Nexus {
 /// New-type wrapper for external types.
 /// Allows us to convert from external types which would otherwise not be allowed.
 struct ExternalType<T>(T);
+impl From<ExternalType<v1::nexus::NexusState>> for NexusStatus {
+    fn from(src: ExternalType<v1::nexus::NexusState>) -> Self {
+        match src.0 {
+            v1::nexus::NexusState::NexusUnknown => NexusStatus::Unknown,
+            v1::nexus::NexusState::NexusOnline => NexusStatus::Online,
+            v1::nexus::NexusState::NexusDegraded => NexusStatus::Degraded,
+            v1::nexus::NexusState::NexusFaulted => NexusStatus::Faulted,
+            v1::nexus::NexusState::NexusShuttingDown => NexusStatus::ShuttingDown,
+            v1::nexus::NexusState::NexusShutdown => NexusStatus::Shutdown,
+        }
+    }
+}
 impl From<ExternalType<v1::nexus::ChildState>> for ChildState {
     fn from(src: ExternalType<v1::nexus::ChildState>) -> Self {
         match src.0 {

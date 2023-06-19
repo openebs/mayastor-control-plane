@@ -6,7 +6,7 @@ use crate::{
             operations_helper::{
                 GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
             },
-            OperationGuardArc, TraceSpan, TraceStrLog,
+            OperationGuardArc, ResourceUid, TraceSpan, TraceStrLog,
         },
         scheduling::resources::{HealthyChildItems, ReplicaItem},
     },
@@ -604,6 +604,12 @@ impl OperationGuardArc<VolumeSpec> {
             }
         }
         nexus_replicas.truncate(vol_spec.num_replicas as usize);
+
+        if nexus_replicas.is_empty() {
+            return Err(SvcError::NoOnlineReplicas {
+                id: vol_spec.uid_str(),
+            });
+        }
 
         // Create the nexus on the requested node
         let (guard, nexus) = OperationGuardArc::<NexusSpec>::create(

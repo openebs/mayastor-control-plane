@@ -47,6 +47,9 @@ impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
                 node_id: request.node.to_string(),
             });
         }
+        if request.children.is_empty() {
+            return Err(SvcError::InvalidArguments {});
+        }
 
         let node = registry.node_wrapper(&request.node).await?;
 

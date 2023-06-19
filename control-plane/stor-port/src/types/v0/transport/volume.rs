@@ -182,6 +182,7 @@ impl From<VolumeStatus> for models::VolumeStatus {
             VolumeStatus::Online => models::VolumeStatus::Online,
             VolumeStatus::Degraded => models::VolumeStatus::Degraded,
             VolumeStatus::Faulted => models::VolumeStatus::Faulted,
+            VolumeStatus::ShuttingDown => models::VolumeStatus::Unknown,
             VolumeStatus::Shutdown => models::VolumeStatus::Unknown,
         }
     }

@@ -2374,6 +2374,7 @@ components:
         - Online
         - Degraded
         - Faulted
+        - ShuttingDown
         - Shutdown
     Nexus:
       example:

@@ -10,7 +10,7 @@ use std::{collections::HashMap, time::Duration};
 use stor_port::{
     transport_api::{ReplyErrorKind, ResourceKind},
     types::v0::{
-        openapi::{apis::specs_api::tower::client::direct::Specs, models::SpecStatus},
+        openapi::{apis::specs_api::tower::client::direct::Specs, models, models::SpecStatus},
         store::nexus::NexusSpec,
         transport::{
             CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, GetSpecs, Nexus,
@@ -96,6 +96,14 @@ async fn old_nexus_delete_after_vol_destroy() {
         republished_node, target_node,
         "expected nexus node to change post republish"
     );
+
+    let nexus_api = rest_client.nexuses_api();
+    let nexuses = nexus_api.get_nexuses().await.unwrap();
+    tracing::info!("Nexuses after republish: {nexuses:?}");
+
+    assert!(nexuses
+        .iter()
+        .any(|n| n.state == models::NexusState::Shutdown));
 
     let nexuses = nexus_client
         .get(Filter::None, None)

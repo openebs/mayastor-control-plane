@@ -155,30 +155,21 @@ pub struct CreateNexusSnapshotReplicaStatus {
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum NexusStatus {
     /// Default Unknown state.
-    Unknown = 0,
+    Unknown,
     /// Healthy and working.
-    Online = 1,
+    Online,
     /// Not healthy but is able to serve IO (i.e. rebuild is in progress).
-    Degraded = 2,
+    Degraded,
     /// Broken and unable to serve IO.
-    Faulted = 3,
+    Faulted,
     /// Shutdown state, i.e. blocked from serving IO.
-    Shutdown = 4,
+    Shutdown,
+    /// Shutdown in progress: not able to serve I/O.
+    ShuttingDown,
 }
 impl Default for NexusStatus {
     fn default() -> Self {
         Self::Unknown
-    }
-}
-impl From<i32> for NexusStatus {
-    fn from(src: i32) -> Self {
-        match src {
-            1 => Self::Online,
-            2 => Self::Degraded,
-            3 => Self::Faulted,
-            4 => Self::Shutdown,
-            _ => Self::Unknown,
-        }
     }
 }
 impl From<NexusStatus> for models::NexusState {
@@ -189,6 +180,7 @@ impl From<NexusStatus> for models::NexusState {
             NexusStatus::Faulted => Self::Faulted,
             NexusStatus::Unknown => Self::Unknown,
             NexusStatus::Shutdown => Self::Shutdown,
+            NexusStatus::ShuttingDown => Self::ShuttingDown,
         }
     }
 }
