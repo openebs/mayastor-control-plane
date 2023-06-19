@@ -772,7 +772,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         }
 
         let snapshots = IoEngineApiClient::get_client()
-            .list_volume_snapshots(snap_uuid, vol_uuid, max_entries, request.starting_token)
+            .list_volume_snapshots(vol_uuid, snap_uuid, max_entries, request.starting_token)
             .await?;
 
         Ok(tonic::Response::new(ListSnapshotsResponse {
@@ -784,7 +784,9 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     snapshot: Some(snapshot),
                 })
                 .collect(),
-            next_token: "".into(),
+            next_token: snapshots
+                .next_token
+                .map_or("".to_string(), |v| v.to_string()),
         }))
     }
 
