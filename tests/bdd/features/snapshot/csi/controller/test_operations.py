@@ -36,11 +36,10 @@ def setup():
         CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
     )
     yield
-    # Seems to crash, maybe because we don't delete the snapshot?
-    # try:
-    #     pool_api.del_pool(POOL1_NAME)
-    # except grpc.RpcError:
-    #     pass
+    try:
+        pool_api.del_pool(POOL1_NAME)
+    except grpc.RpcError:
+        pass
     Deployer.stop()
 
 
@@ -65,11 +64,21 @@ def a_running_csi_controller_plugin(setup):
     return csi_rpc_handle()
 
 
-@given("a single replica volume", target_fixture="volume")
-def a_single_replica_volume():
-    """a single replica volume."""
+@given("we have a single replica volume", target_fixture="volume")
+def we_have_a_single_replica_volume():
+    """we have a single replica volume."""
     yield csi_create_1_replica_nvmf_volume1()
     csi_delete_1_replica_nvmf_volume1()
+
+
+@given("a snapshot is created for that volume")
+def a_snapshot_is_created_for_that_volume():
+    ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, SNAP1_UUID)
+    yield
+    try:
+        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
+    except:
+        pass
 
 
 @when(
@@ -105,14 +114,22 @@ def a_deletesnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
 )
 def a_listsnapshotrequest_request_is_sent_to_the_csi_controller(csi_instance):
     """a ListSnapshotRequest request is sent to the CSI controller."""
-    request = pb.ListSnapshotsRequest(snapshot_id=SNAP1_UUID)
-    csi_instance.controller.ListSnapshots(request)
+    try:
+        request = pb.ListSnapshotsRequest(snapshot_id=SNAP1_UUID)
+        csi_instance.controller.ListSnapshots(request)
+    except grpc.RpcError as grpc_error:
+        return grpc_error.value
 
 
 @then("the creation should succeed")
 def the_creation_should_succeed(snapshot_response):
     """the creation should succeed."""
     assert snapshot_response.snapshot.source_volume_id == VOLUME1_UUID
+    yield
+    try:
+        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
+    except:
+        pass
 
 
 @then("the deletion should succeed")
@@ -125,14 +142,6 @@ def the_deletion_should_succeed(grpc_error):
 def the_list_should_succeed(grpc_error):
     """the list should succeed."""
     assert grpc_error is None
-
-
-@then("it should fail with status NOT_IMPLEMENTED")
-def it_should_fail_with_status_not_implemented(grpc_error):
-    """it should fail with status NOT_IMPLEMENTED."""
-    assert (
-        grpc_error.code() is grpc.StatusCode.UNIMPLEMENTED
-    ), "Unexpected gRPC Error Code"
 
 
 def csi_rpc_handle():
