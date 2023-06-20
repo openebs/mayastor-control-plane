@@ -32,7 +32,7 @@ spec:
           name: rest-probe
       containers:
         - name: csi-provisioner
-          image: k8s.gcr.io/sig-storage/csi-provisioner:v2.2.1
+          image: registry.k8s.io/sig-storage/csi-provisioner:v2.2.1
           args:
             - "--v=2"
             - "--csi-address=$(ADDRESS)"
@@ -47,7 +47,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-attacher
-          image: k8s.gcr.io/sig-storage/csi-attacher:v3.2.1
+          image: registry.k8s.io/sig-storage/csi-attacher:v3.2.1
           args:
             - "--v=2"
             - "--csi-address=$(ADDRESS)"
