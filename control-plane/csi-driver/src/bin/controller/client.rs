@@ -408,6 +408,16 @@ impl IoEngineApiClient {
             )
             .await?;
 
-        Ok(snapshots.into_body())
+        let next_token = snapshots.body().next_token;
+        // Don't return snapshots that are still in Creating state.
+        Ok(models::VolumeSnapshots {
+            entries: snapshots
+                .into_body()
+                .entries
+                .into_iter()
+                .filter(|s| s.definition.metadata.status != models::SpecStatus::Creating)
+                .collect(),
+            next_token,
+        })
     }
 }
