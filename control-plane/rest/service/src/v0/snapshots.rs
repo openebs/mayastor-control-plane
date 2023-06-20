@@ -189,7 +189,7 @@ fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
             snap.state().size().unwrap_or_default(),
             snap.state().source_id(),
             snap.state().timestamp().map(|t| t.to_string()),
-            snap.state().clone_ready(),
+            snap.state().ready_as_source(),
             snap.state()
                 .repl_snapshots()
                 .iter()

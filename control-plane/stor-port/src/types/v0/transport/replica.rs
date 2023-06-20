@@ -139,6 +139,8 @@ pub struct ReplicaSnapshotDescr {
     txn_id: SnapshotTxId,
     /// Validity of the snapshot: the xattr metadata might be corrupted.
     valid: bool,
+    /// Snapshot is ready as source.
+    ready_as_source: bool,
 }
 impl ReplicaSnapshotDescr {
     #[allow(clippy::too_many_arguments)]
@@ -156,6 +158,7 @@ impl ReplicaSnapshotDescr {
         entity_id: String,
         txn_id: String,
         valid: bool,
+        ready_as_source: bool,
     ) -> Self {
         Self {
             snap_uuid,
@@ -170,6 +173,7 @@ impl ReplicaSnapshotDescr {
             entity_id,
             txn_id,
             valid,
+            ready_as_source,
         }
     }
 
@@ -236,9 +240,9 @@ impl ReplicaSnapshotDescr {
         self.valid
     }
 
-    /// Get the snapshot readiness to clone.
-    pub fn clone_ready(&self) -> bool {
-        false
+    /// Get the snapshot readiness to be used as a source.
+    pub fn ready_as_source(&self) -> bool {
+        self.ready_as_source
     }
 
     /// Get the replica snapshot's replica uuid.
