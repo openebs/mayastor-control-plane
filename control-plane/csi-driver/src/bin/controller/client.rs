@@ -410,4 +410,19 @@ impl IoEngineApiClient {
 
         Ok(snapshots.into_body())
     }
+
+    /// Get volume snapshot.
+    #[instrument(fields(snapshot.uuid = ?snapshot_id), skip(self, snapshot_id))]
+    pub(crate) async fn get_volumes_snapshot(
+        &self,
+        snapshot_id: &uuid::Uuid,
+    ) -> Result<models::VolumeSnapshot, ApiClientError> {
+        let snapshot = self
+            .rest_client
+            .snapshots_api()
+            .get_volumes_snapshot(snapshot_id)
+            .await?;
+
+        Ok(snapshot.into_body())
+    }
 }

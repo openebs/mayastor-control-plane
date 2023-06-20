@@ -55,4 +55,6 @@ message ReplicaSnapshotState {
   string                         name = 12;
   // id of the entity for which snapshot is taken.
   string                    entity_id = 13;
+  // ready for usage, i,e source for another volume.
+  bool                ready_as_source = 14;
 }
