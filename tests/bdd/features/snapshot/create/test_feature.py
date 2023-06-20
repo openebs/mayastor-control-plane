@@ -359,10 +359,10 @@ def the_snapshot_source_size_should_be_equal_to_the_volume_size(volume, snapshot
     assert snapshot.state.size == volume.spec.size
 
 
-@then("the snapshot status ready to clone should be true")
-def the_snapshot_status_ready_to_clone_should_be_true(snapshot):
-    """the snapshot status ready to clone should be true."""
-    assert snapshot.state.clone_ready is False
+@then("the snapshot status ready as source should be false")
+def the_snapshot_status_ready_as_source_should_be_false(snapshot):
+    """the snapshot status ready as source should be false."""
+    assert snapshot.state.ready_as_source is False
 
 
 @then("the snapshot timestamp should be in the RFC 3339 format")

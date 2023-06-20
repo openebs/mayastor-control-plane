@@ -276,12 +276,11 @@ impl VolumeSnapshotState {
     pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
         self.timestamp.as_ref()
     }
-    /// Get the volume snapshot readiness to clone.
-    pub fn clone_ready(&self) -> bool {
+    /// Get the volume snapshot readiness to be used as a source.
+    pub fn ready_as_source(&self) -> bool {
         match self.repl_snapshots.as_slice() {
-            [VolumeReplicaSnapshotState::Online { state, .. }] => state.clone_ready(),
-            // todo: handle more than one replica for multi-replica snapshots
-            _ => false,
+            [VolumeReplicaSnapshotState::Online { state, .. }] => state.ready_as_source(),
+            _ => false, // todo: handle more than one replica for multi-replica snapshots
         }
     }
     /// Get a reference to the replica snapshots.
@@ -525,6 +524,7 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
                 val.entity_id.clone(),
                 val.txn_id.clone(),
                 val.valid,
+                val.ready_as_source,
             ),
         })
     }
@@ -613,6 +613,7 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                                         num_clones: state.num_clones(),
                                         txn_id: state.txn_id().to_string(),
                                         valid: state.valid(),
+                                        ready_as_source: state.ready_as_source(),
                                     },
                                 )
                             }
@@ -714,6 +715,7 @@ impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
             value.entity_id,
             value.txn_id,
             value.valid,
+            value.ready_as_source,
         ))
     }
 }

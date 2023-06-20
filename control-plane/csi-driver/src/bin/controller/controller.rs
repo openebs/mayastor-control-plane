@@ -817,7 +817,7 @@ fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
             .metadata
             .timestamp
             .and_then(|t| prost_types::Timestamp::from_str(&t).ok()),
-        // What about when snapshot is in deleted phase?
+        // Seems like csi, doesn't really care what the state is after successful creation.
         ready_to_use: snapshot.definition.metadata.status == models::SpecStatus::Created,
     }
 }

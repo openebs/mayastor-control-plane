@@ -18,6 +18,8 @@ from common.deployer import Deployer
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 PVC_VOLUME1_NAME = "pvc-%s" % VOLUME1_UUID
+VOLUME2_UUID = "415c27ae-6b4d-48c1-a769-b08e63eff18c"
+PVC_VOLUME2_NAME = "pvc-%s" % VOLUME2_UUID
 POOL1_NAME = "pool-1"
 NODE1 = "io-engine-1"
 VOLUME1_SIZE = 1024 * 1024 * 32
@@ -56,6 +58,11 @@ def test_delete_snapshot_operation_is_implemented():
 @scenario("operations.feature", "List Snapshot Operation is implemented")
 def test_list_snapshot_operation_is_implemented():
     """List Snapshot Operation is implemented."""
+
+
+@scenario("operations.feature", "Create Volume Operation with snapshot source")
+def test_create_Volume_operation_with_snapshot_source():
+    """Create Volume Operation with snapshot source."""
 
 
 @given("a running CSI controller plugin", target_fixture="csi_instance")
@@ -167,3 +174,36 @@ def csi_delete_1_replica_nvmf_volume1():
     csi_rpc_handle().controller.DeleteVolume(
         pb.DeleteVolumeRequest(volume_id=VOLUME1_UUID)
     )
+
+
+@when(
+    "a CreateVolumeRequest request with snapshot as source is sent to the CSI controller",
+    target_fixture="grpc_error",
+)
+def a_CreateVolumeRequest_request_with_snapshot_as_source_is_sent_to_the_CSI_controller():
+    capacity = pb.CapacityRange(required_bytes=VOLUME1_SIZE, limit_bytes=0)
+    parameters = {
+        "protocol": "nvmf",
+        "ioTimeout": "30",
+        "repl": "1",
+    }
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME2_NAME,
+        capacity_range=capacity,
+        parameters=parameters,
+        volume_content_source=pb.VolumeContentSource(
+            snapshot=pb.VolumeContentSource.SnapshotSource(snapshot_id=SNAP1_UUID)
+        ),
+    )
+
+    try:
+        csi_rpc_handle().controller.CreateVolume(req)
+    except grpc.RpcError as grpc_error:
+        return grpc_error
+
+
+@then("the volume creation should fail with invalid argument")
+def the_volume_creation_should_fail(grpc_error):
+    assert grpc_error is not None
+    assert grpc_error.code() == grpc.StatusCode.INVALID_ARGUMENT

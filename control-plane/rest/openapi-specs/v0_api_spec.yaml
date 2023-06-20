@@ -3296,7 +3296,7 @@ components:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
           format: date-time
-        clone_ready:
+        ready_as_source:
           description: Indicates if a snapshot is ready to be used as a clone.
           type: boolean
           default: false
@@ -3309,7 +3309,7 @@ components:
         - uuid
         - size
         - source_volume
-        - ready
+        - ready_as_source
         - replica_snapshots
     ReplicaSnapshot:
       description: |-

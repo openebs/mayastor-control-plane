@@ -306,7 +306,7 @@ def validate_snapshots(listed_snapshots, ref_snaps_list, state, volume):
             # will have size equal to volume size.
             if idx == 0 and hasattr(snapshot, "size"):
                 assert snapshot.state.size == volume.spec.size
-            assert snapshot.state.clone_ready is False
+            assert snapshot.state.ready_as_source is False
             timestamp_within(snapshot.state.timestamp)
             wait_snapshot_state(snapshot, state)
         except ValueError as ve:

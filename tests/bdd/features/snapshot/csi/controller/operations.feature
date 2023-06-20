@@ -19,3 +19,9 @@ Feature: Snapshot - CSI Controller Operations
         And a snapshot is created for that volume
         When a ListSnapshotRequest request is sent to the CSI controller
         Then the list should succeed
+
+    Scenario: Create Volume Operation with snapshot source
+        Given we have a single replica volume
+        And a snapshot is created for that volume
+        When a CreateVolumeRequest request with snapshot as source is sent to the CSI controller
+        Then the volume creation should fail with invalid argument
