@@ -7,7 +7,7 @@ Feature: Volume Snapshot Creation
     Given we have a single replica <publish_status> volume where the replica is <replica_location> to the target
     When we try to create a snapshot for the volume
     Then the snapshot creation should be successful
-    And the snapshot status ready to clone should be true
+    And the snapshot status ready as source should be false
     And the snapshot source size should be equal to the volume size
     And the snapshot size should be equal to the volume size
     And the snapshot timestamp should be in the RFC 3339 format
