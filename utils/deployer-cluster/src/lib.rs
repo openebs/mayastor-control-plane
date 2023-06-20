@@ -622,12 +622,18 @@ impl ClusterBuilder {
     #[must_use]
     pub fn with_tmpfs_pool(mut self, size: u64) -> Self {
         for node in 0 .. self.opts.io_engines {
-            let disk = TmpDiskFile::new(&Uuid::new_v4().to_string(), size);
-            if let Some(pools) = self.pools.get_mut(&node) {
-                pools.push(PoolDisk::Tmp(disk));
-            } else {
-                self.pools.insert(node, vec![PoolDisk::Tmp(disk)]);
-            }
+            self = self.with_tmpfs_pool_ix(node, size);
+        }
+        self
+    }
+    /// Add a tmpfs img pool with `disk` to the indexed io-engine node with the specified `size`.
+    #[must_use]
+    pub fn with_tmpfs_pool_ix(mut self, node: u32, size: u64) -> Self {
+        let disk = TmpDiskFile::new(&Uuid::new_v4().to_string(), size);
+        if let Some(pools) = self.pools.get_mut(&node) {
+            pools.push(PoolDisk::Tmp(disk));
+        } else {
+            self.pools.insert(node, vec![PoolDisk::Tmp(disk)]);
         }
         self
     }

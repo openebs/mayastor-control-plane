@@ -46,6 +46,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
+    #[tracing::instrument(name = "rpc::v1::replica::create", level = "debug", skip(self))]
     async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
         let rpc_replica = self
             .replica()
@@ -103,6 +104,7 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
+    #[tracing::instrument(name = "rpc::v1::replica::snapshot", level = "debug", skip(self))]
     async fn create_repl_snapshot(
         &self,
         request: &CreateReplicaSnapshot,

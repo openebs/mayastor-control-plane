@@ -171,6 +171,7 @@ pub(crate) trait GuardedOperationsHelper:
 
                 let mut spec_clone = self.lock().clone();
                 spec_clone.commit_op();
+
                 let stored = registry.store_obj(&spec_clone).await;
                 match stored {
                     Ok(_) => {

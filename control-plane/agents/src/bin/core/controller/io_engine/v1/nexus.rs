@@ -2,21 +2,23 @@ use super::{
     super::NexusListApi,
     translation::{rpc_nexus_to_agent, AgentToIoEngine},
 };
-use crate::controller::io_engine::translation::TryIoEngineToAgent;
+use crate::controller::io_engine::{
+    translation::TryIoEngineToAgent,
+    types::{CreateNexusSnapshot, CreateNexusSnapshotResp},
+};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::nexus::ListNexusOptions;
-use std::collections::HashMap;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        AddNexusChild, CreateNexus, CreateNexusSnapshot, CreateNexusSnapshotResp, DestroyNexus,
-        FaultNexusChild, GetRebuildRecord, ListRebuildRecord, Nexus, NexusChildAction,
-        NexusChildActionContext, NexusId, NodeId, RebuildHistory, RemoveNexusChild, ShareNexus,
-        ShutdownNexus, UnshareNexus,
+        AddNexusChild, CreateNexus, DestroyNexus, FaultNexusChild, GetRebuildRecord,
+        ListRebuildRecord, Nexus, NexusChildAction, NexusChildActionContext, NexusId, NodeId,
+        RebuildHistory, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
 
 use snafu::ResultExt;
+use std::collections::HashMap;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusListApi for super::RpcClient {
@@ -320,6 +322,7 @@ impl super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusSnapshotApi for super::RpcClient {
+    #[tracing::instrument(name = "rpc::v1::nexus::snapshot", level = "debug", skip(self))]
     async fn create_nexus_snapshot(
         &self,
         request: &CreateNexusSnapshot,

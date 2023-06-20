@@ -1,6 +1,9 @@
 use crate::{
     controller::{
-        io_engine::{NexusSnapshotApi, ReplicaSnapshotApi},
+        io_engine::{
+            types::{CreateNexusSnapReplDescr, CreateNexusSnapshot},
+            NexusSnapshotApi, ReplicaSnapshotApi,
+        },
         registry::Registry,
         resources::{
             operations::{ResourceLifecycleWithLifetime, ResourcePruning, ResourceSnapshotting},
@@ -27,8 +30,8 @@ use stor_port::{
             volume::{VolumeOperation, VolumeSpec, VolumeTarget},
         },
         transport::{
-            CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateReplicaSnapshot,
-            DestroyReplicaSnapshot, NodeId, SnapshotId, SnapshotParameters, SnapshotTxId, VolumeId,
+            CreateReplicaSnapshot, DestroyReplicaSnapshot, NodeId, SnapshotId, SnapshotParameters,
+            SnapshotTxId, VolumeId,
         },
     },
 };
@@ -350,10 +353,10 @@ impl OperationGuardArc<VolumeSnapshot> {
             }),
         }?;
 
-        if snapped.status != 0 {
+        if let Some(error) = snapped.error {
             return Err(SvcError::ReplicaSnapError {
                 replica: replica_snap.spec().uuid().to_string(),
-                status: snapped.status,
+                error,
             });
         }
 

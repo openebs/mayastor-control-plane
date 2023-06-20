@@ -55,6 +55,7 @@ tower = { version = "0.4.13", features = [ "timeout", "util" ] }
 hyper = { version = "0.14.24", features = [ "client", "http1", "http2", "tcp", "stream" ] }
 opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
 tracing = "0.1.37"
+nix = { version = "0.26.2", default-features = false }
 
 grpc = { path = "../grpc" }
 shutdown = { path = "../../utils/shutdown" }

@@ -75,6 +75,7 @@ impl Replica {
 }
 
 /// The request type to create a replica's snapshot.
+#[derive(Debug)]
 pub struct CreateReplicaSnapshot {
     params: SnapshotParameters<ReplicaId>,
 }

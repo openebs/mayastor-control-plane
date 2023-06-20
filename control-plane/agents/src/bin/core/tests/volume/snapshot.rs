@@ -1,14 +1,17 @@
+use crate::volume::helpers::wait_node_online;
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     pool::traits::PoolOperations,
     volume::traits::{CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations},
 };
-use stor_port::types::v0::transport::{
-    CreateVolume, DestroyPool, DestroyVolume, Filter, PublishVolume, SnapshotId,
+use stor_port::{
+    transport_api::{ReplyErrorKind, TimeoutOptions},
+    types::v0::transport::{
+        CreateVolume, DestroyPool, DestroyVolume, Filter, PublishVolume, SnapshotId,
+    },
 };
 
 use std::time::Duration;
-use stor_port::transport_api::ReplyErrorKind;
 
 #[tokio::test]
 async fn snapshot() {
@@ -173,4 +176,75 @@ async fn pool_destroy_validation(cluster: &Cluster) {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn snapshot_timeout() {
+    fn grpc_timeout_opts(timeout: Duration) -> TimeoutOptions {
+        TimeoutOptions::default()
+            .with_max_retries(0)
+            .with_req_timeout(timeout)
+            .with_min_req_timeout(None)
+    }
+    let req_timeout = Duration::from_millis(350);
+    let grpc_timeout = Duration::from_millis(250);
+
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
+        .with_tmpfs_pool_ix(1, 100 * 1024 * 1024)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_req_timeouts(req_timeout, req_timeout)
+        .with_grpc_timeouts(grpc_timeout_opts(grpc_timeout))
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 5242880,
+                replicas: 1,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let snapshot = SnapshotId::new();
+
+    cluster.composer().pause(&cluster.node(1)).await.unwrap();
+    let replica_snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), snapshot.clone()),
+            None,
+        )
+        .await
+        .expect_err("timeout");
+    tracing::info!("Replica Snapshot Error: {replica_snapshot:?}");
+    cluster.composer().pause("core").await.unwrap();
+    cluster.composer().thaw(&cluster.node(1)).await.unwrap();
+    tokio::time::sleep(req_timeout - grpc_timeout).await;
+    cluster.composer().restart("core").await.unwrap();
+    cluster.volume_service_liveness(None).await.unwrap();
+
+    let grpc = cluster.grpc_client();
+    wait_node_online(&grpc.node(), cluster.node(1))
+        .await
+        .unwrap();
+
+    let replica_snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), snapshot.clone()),
+            None,
+        )
+        .await
+        .unwrap();
+    tracing::info!("Replica Snapshot: {replica_snapshot:?}");
 }

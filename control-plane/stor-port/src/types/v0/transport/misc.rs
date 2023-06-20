@@ -128,6 +128,13 @@ macro_rules! rpc_impl_string_id {
                 $Name(uuid::Uuid::new_v4().to_string())
             }
         }
+        impl std::ops::Deref for $Name {
+            type Target = str;
+
+            fn deref(&self) -> &Self::Target {
+                self.as_str()
+            }
+        }
     };
 }
 

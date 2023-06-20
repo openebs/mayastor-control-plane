@@ -34,7 +34,7 @@ rpc = { path = "../../rpc" }
 grpc = { path = "../grpc" }
 tokio = { version = "1.25.0", features = ["full"] }
 clap =  { version = "4.1.4", features = ["color", "env", "string"] }
-nix = "0.26.2"
+nix = { version = "0.26.2", default-features = false, features = [ "ioctl", "fs" ] }
 strum = "0.24.1"
 strum_macros = "0.24.3"
 heck = "0.4.1"

@@ -11,7 +11,8 @@ pub type SnapshotTxId = String;
 pub type SnapshotName = String;
 
 /// Common set of snapshot parameters used for snapshot creation against `TargetId`.
-pub struct SnapshotParameters<TargetId> {
+#[derive(Debug)]
+pub struct SnapshotParameters<TargetId: Debug> {
     /// Name of the target which we'll aim create snapshot at, which can either be
     /// a nexus or a replica at the moment.
     target: TargetId,
@@ -19,7 +20,7 @@ pub struct SnapshotParameters<TargetId> {
 }
 
 /// Common set of snapshot parameters used for snapshot creation.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct GenericSnapshotParameters {
     /// Unique identification of the snapshot.
     uuid: SnapshotId,
@@ -31,7 +32,7 @@ pub struct GenericSnapshotParameters {
     name: SnapshotName,
 }
 
-impl<TargetId> SnapshotParameters<TargetId> {
+impl<TargetId: Debug> SnapshotParameters<TargetId> {
     /// Create a new set of snapshot parameters.
     pub fn new(target: impl Into<TargetId>, params: GenericSnapshotParameters) -> Self {
         Self {
@@ -72,13 +73,15 @@ impl GenericSnapshotParameters {
         uuid: impl Into<SnapshotId>,
         entity_id: impl Into<SnapshotEntId>,
         txn_id: impl Into<SnapshotTxId>,
-        name: impl Into<SnapshotName>,
     ) -> Self {
+        let uuid = uuid.into();
+        let txn_id = txn_id.into();
+        let name = format!("{uuid}/{txn_id}");
         Self {
-            uuid: uuid.into(),
+            uuid,
             entity_id: entity_id.into(),
-            txn_id: txn_id.into(),
-            name: name.into(),
+            txn_id,
+            name,
         }
     }
 

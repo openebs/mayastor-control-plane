@@ -61,7 +61,6 @@ impl VolumeSnapshot {
                 self.spec().uuid(),
                 self.spec().source_id().to_string(),
                 self.metadata().prepare(),
-                self.spec().uuid().to_string(),
             ),
         );
         Some(params)

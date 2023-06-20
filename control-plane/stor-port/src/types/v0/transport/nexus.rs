@@ -81,6 +81,7 @@ rpc_impl_string_uuid!(NexusId, "UUID of a nexus");
 
 /// A request for creating snapshot of a nexus, which essentially means a snapshot
 /// of all(or selected) replicas associated with that nexus.
+#[derive(Debug)]
 pub struct CreateNexusSnapshot {
     params: SnapshotParameters<NexusId>,
     replica_desc: Vec<CreateNexusSnapReplDescr>,
@@ -113,8 +114,7 @@ impl CreateNexusSnapshot {
 
 /// A descriptor that specifies the replicas which need to taken snapshot
 /// of specifically.
-#[derive(Clone)]
-#[allow(unused)]
+#[derive(Clone, Debug)]
 pub struct CreateNexusSnapReplDescr {
     /// UUID of the replica involved in snapshot operation.
     pub replica: ReplicaId,
@@ -129,26 +129,6 @@ impl CreateNexusSnapReplDescr {
             snap_uuid,
         }
     }
-}
-
-/// A response for the nexus snapshot request.
-pub struct CreateNexusSnapshotResp {
-    /// The nexus involved in the snapshot operation.
-    pub nexus: Nexus,
-    /// Timestamp when the nexus was paused to take the snapshot on all replicas.
-    pub snap_time: SystemTime,
-    /// Results of snapping each replica as part of this snapshot request.
-    pub replicas_status: Vec<CreateNexusSnapshotReplicaStatus>,
-    /// Replicas which weren't snapped as part of this request.
-    pub skipped: Vec<ReplicaId>,
-}
-
-/// Per-replica status of the snapshot operation.
-pub struct CreateNexusSnapshotReplicaStatus {
-    /// UUID of replica.
-    pub replica_uuid: ReplicaId,
-    /// Result of snapping this replica.
-    pub status: u32,
 }
 
 /// Nexus State information
