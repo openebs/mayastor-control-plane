@@ -1407,6 +1407,30 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/volumes/{volume_id}/rebuild':
+    get:
+      tags:
+        - Volumes
+      operationId: get_rebuild_history
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RebuildHistory'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/volumes/{volume_id}/replica_count/{replica_count}':
     put:
       tags:
@@ -2375,6 +2399,97 @@ components:
         - Degraded
         - Faulted
         - Shutdown
+    RebuildJobState:
+      description: State of the rebuild job
+      type: string
+      enum:
+        - Init
+        - Rebuilding
+        - Stopped
+        - Paused
+        - Failed
+        - Completed
+    RebuildRecord:
+      example:
+        - childUri: 'nvmf://10.1.0.5:8420/nqn.2019-05.io.openebs:37d83441-e8ef-4e17-a29e-25169d91cb96'
+          srcUri: 'nvmf://10.1.0.9:8420/nqn.2019-05.io.openebs:37d83441-e8ef-4e17-a29e-25169d91cb25'
+          state: Completed
+          blocksTotal: 13452
+          blocksRecovered: 13452
+          blocksTransferred: 12343
+          blocksRemaining: 0
+          blockSize: 512
+          isPartial: true
+          startTime: "2023-06-20T07:25:25.974218428Z"
+          endTime: "2023-06-20T07:25:25.975338717Z"
+      description: Rebuild record of a Child
+      type: object
+      properties:
+        childUri:
+          description: Uri of the rebuilding child
+          type: string
+        srcUri:
+          description: Uri of source child for rebuild job
+          type: string
+        rebuildJobState:
+          $ref: '#/components/schemas/RebuildJobState'
+        blocksTotal:
+          description: Total blocks to rebuild
+          type: integer
+          format: uint64
+        blocksRecovered:
+          description: Number of blocks processed
+          type: integer
+          format: uint64
+        blocksTransferred:
+          description: Number of blocks to transferred
+          type: integer
+          format: uint64
+        blocksRemaining:
+          description: Number of blocks remaining
+          type: integer
+          format: uint64
+        blockSize:
+          description: Size of each block in the task
+          type: integer
+          format: uint64
+        isPartial:
+          description: True means its Partial rebuild job. If false, its Full rebuild job
+          type: boolean
+        startTime:
+          description: Start time of the rebuild job (UTC)
+          type: string
+          format: date-time
+        endTime:
+          description: End time of the rebuild job (UTC)
+          type: string
+          format: date-time
+      required:
+        - childUri
+        - srcUri
+        - rebuildJobState
+        - blocksTotal
+        - blocksRecovered
+        - blocksTransferred
+        - blockRemaining
+        - blockSize
+        - isPartial
+        - startTime
+        - endTime
+    RebuildHistory:
+      properties:
+        targetUuid:
+          description: Id of the volume target
+          type: string
+          format: uuid
+        records:
+          description: Array of rebuild record
+          type: array
+          items:
+            $ref: '#/components/schemas/RebuildRecord'
+      required:
+        - targetUuid
+        - records
     Nexus:
       example:
         children:
