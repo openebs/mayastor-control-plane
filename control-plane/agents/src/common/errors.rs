@@ -300,8 +300,11 @@ pub enum SvcError {
     ReplicaSnapSkipped { replica: String },
     #[snafu(display("Replica's {} snapshot was unexpectedly not taken", replica))]
     ReplicaSnapMiss { replica: String },
-    #[snafu(display("Replica's {} snapshot failed with status {}", replica, status))]
-    ReplicaSnapError { replica: String, status: u32 },
+    #[snafu(display("Replica's {} snapshot failed with error {}", replica, error))]
+    ReplicaSnapError {
+        replica: String,
+        error: nix::errno::Errno,
+    },
     #[snafu(display("The service is busy, cannot process request"))]
     ServiceBusy {},
     #[snafu(display("The service is shutdown, cannot process request"))]

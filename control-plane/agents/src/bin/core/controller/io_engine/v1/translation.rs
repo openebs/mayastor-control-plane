@@ -1,18 +1,24 @@
-use crate::controller::io_engine::translation::{IoEngineToAgent, TryIoEngineToAgent};
+use crate::controller::io_engine::{
+    translation::{IoEngineToAgent, TryIoEngineToAgent},
+    types::{
+        CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateNexusSnapshotReplicaStatus,
+        CreateNexusSnapshotResp,
+    },
+};
 use agents::errors::SvcError;
+use rpc::v1;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         openapi::apis::IntoVec,
         transport::{
-            self, ChildState, ChildStateReason, CreateNexusSnapReplDescr, Nexus, NexusId,
-            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState,
-            PoolUuid, Protocol, Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
+            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
+            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
+            Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
         },
     },
 };
 
-use rpc::v1;
 use std::{convert::TryFrom, time::UNIX_EPOCH};
 
 /// Trait for converting agent messages to io-engine messages.
@@ -128,7 +134,7 @@ impl IoEngineToAgent for v1::replica::ReplicaSpaceUsage {
 }
 
 impl TryIoEngineToAgent for v1::snapshot::NexusCreateSnapshotResponse {
-    type AgentMessage = transport::CreateNexusSnapshotResp;
+    type AgentMessage = CreateNexusSnapshotResp;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         let nexus = self
             .nexus
@@ -165,7 +171,7 @@ impl TryIoEngineToAgent for v1::snapshot::NexusCreateSnapshotResponse {
 /// Helper implementation to be used as part of nexus snapshot
 /// response translation.
 impl TryIoEngineToAgent for v1::snapshot::NexusCreateSnapshotReplicaStatus {
-    type AgentMessage = transport::CreateNexusSnapshotReplicaStatus;
+    type AgentMessage = CreateNexusSnapshotReplicaStatus;
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         Ok(Self::AgentMessage {
             replica_uuid: ReplicaId::try_from(self.replica_uuid.as_str()).map_err(|_| {
@@ -174,7 +180,10 @@ impl TryIoEngineToAgent for v1::snapshot::NexusCreateSnapshotReplicaStatus {
                     kind: ResourceKind::Replica,
                 }
             })?,
-            status: self.status_code,
+            error: match self.status_code {
+                0 => None,
+                errno => Some(nix::errno::Errno::from_i32(errno as i32)),
+            },
         })
     }
 }
@@ -506,7 +515,7 @@ impl AgentToIoEngine for transport::NexusChildActionKind {
     }
 }
 
-impl AgentToIoEngine for transport::CreateNexusSnapshot {
+impl AgentToIoEngine for CreateNexusSnapshot {
     type IoEngineMessage = v1::snapshot::NexusCreateSnapshotRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         v1::snapshot::NexusCreateSnapshotRequest {

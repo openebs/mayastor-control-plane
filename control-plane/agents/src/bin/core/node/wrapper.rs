@@ -1,6 +1,7 @@
 use crate::{
     controller::{
         io_engine::{
+            types::{CreateNexusSnapshot, CreateNexusSnapshotResp},
             GrpcClient, GrpcClientLocked, GrpcContext, NexusApi, NexusChildActionApi,
             NexusChildApi, NexusChildRebuildApi, NexusShareApi, NexusSnapshotApi, PoolApi,
             ReplicaApi, ReplicaSnapshotApi,
@@ -21,14 +22,14 @@ use stor_port::{
         store,
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
-            AddNexusChild, ApiVersion, Child, CreateNexus, CreateNexusSnapshot,
-            CreateNexusSnapshotResp, CreatePool, CreateReplica, CreateReplicaSnapshot,
-            DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
-            GetRebuildRecord, ImportPool, ListRebuildRecord, ListReplicaSnapshots, MessageIdVs,
-            Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId,
-            NodeId, NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register,
-            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus,
-            ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
+            AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica,
+            CreateReplicaSnapshot, DestroyNexus, DestroyPool, DestroyReplica,
+            DestroyReplicaSnapshot, FaultNexusChild, GetRebuildRecord, ImportPool,
+            ListRebuildRecord, ListReplicaSnapshots, MessageIdVs, Nexus, NexusChildAction,
+            NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, NodeState, NodeStatus,
+            PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild, Replica, ReplicaId,
+            ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId,
+            UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
