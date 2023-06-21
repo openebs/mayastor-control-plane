@@ -168,11 +168,16 @@ async fn prune_volume_snapshot_reconciler(
     context: &PollContext,
 ) -> PollResult {
     // If the spec is already in deleting state, no need to do any cleanup.
-    if !snapshot.as_ref().status().created() {
+    if snapshot.as_ref().status().deleted() || snapshot.as_ref().status().deleting() {
         return Ok(PollerState::Idle);
     }
 
-    let _ = snapshot.prune(context.registry()).await;
+    let _ = snapshot
+        .prune(
+            context.registry(),
+            Some(utils::SNAPSHOT_TRANSACTION_PRUNE_LIMIT),
+        )
+        .await;
 
     Ok(PollerState::Idle)
 }

@@ -311,6 +311,11 @@ pub enum SvcError {
     ServiceShutdown {},
     #[snafu(display("The snapshot is not created, and its parent volume is gone"))]
     SnapshotNotCreatedNoVolume {},
+    #[snafu(display(
+        "Reached maximum transactions for snapshot: {}, needs to be reconciled",
+        snap_id
+    ))]
+    SnapshotMaxTransactions { snap_id: String },
 }
 
 impl SvcError {
@@ -851,6 +856,12 @@ impl From<SvcError> for ReplyError {
             SvcError::ServiceShutdown {} => ReplyError {
                 kind: ReplyErrorKind::Unavailable,
                 resource: ResourceKind::Unknown,
+                source: desc.to_string(),
+                extra: error_str,
+            },
+            SvcError::SnapshotMaxTransactions { .. } => ReplyError {
+                kind: ReplyErrorKind::DeadlineExceeded,
+                resource: ResourceKind::VolumeSnapshot,
                 source: desc.to_string(),
                 extra: error_str,
             },

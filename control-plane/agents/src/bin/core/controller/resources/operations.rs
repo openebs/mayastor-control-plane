@@ -239,5 +239,9 @@ pub(crate) trait ResourceSnapshotting {
 #[async_trait::async_trait]
 pub(crate) trait ResourcePruning {
     /// Prune unused resources owned by this resource.
-    async fn prune(&mut self, registry: &Registry) -> Result<(), SvcError>;
+    async fn prune(
+        &mut self,
+        registry: &Registry,
+        max_prune_limit: Option<usize>,
+    ) -> Result<(), SvcError>;
 }

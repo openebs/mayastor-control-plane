@@ -171,6 +171,15 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
             .operation_guard_wait()
             .await?;
 
+        let snapshot_spec = snapshot.lock().clone();
+
+        // Abort creation if we have reached max transactions limit.
+        if snapshot_spec.metadata().transactions().len() > utils::SNAPSHOT_MAX_TRANSACTION_LIMIT {
+            return Err(SvcError::SnapshotMaxTransactions {
+                snap_id: snapshot.uuid().to_string(),
+            });
+        }
+
         let prepare_snapshot = snapshot.snapshot_params(&replica)?;
         snapshot
             .start_create_update(
@@ -188,6 +197,16 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
             .await;
         if let Ok(ref result) = result {
             *prepare_snapshot.completer.lock().unwrap() = Some(result.clone());
+        }
+
+        // If we encounter any error cleanup the transaction.
+        if result.is_err() {
+            let current_txn_id = snapshot_spec.metadata().txn_id();
+            let all_transactions = snapshot_spec.metadata().transactions();
+            let updated_transactions =
+                destroy_transaction(all_transactions, registry, current_txn_id).await;
+            snapshot.lock().set_transactions(updated_transactions);
+            snapshot.update();
         }
 
         snapshot
@@ -208,7 +227,7 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
 
         // Create a map to track the transactions upon deletion.
         let updated_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> =
-            destroy_transactions(volume_snapshot.metadata().transactions(), registry).await;
+            destroy_transactions(volume_snapshot.metadata().transactions(), registry, None).await;
 
         if updated_transactions.is_empty() {
             // If there we no errors remove the persisted spec and complete destroy.
@@ -233,7 +252,11 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
 
 #[async_trait::async_trait]
 impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
-    async fn prune(&mut self, registry: &Registry) -> Result<(), SvcError> {
+    async fn prune(
+        &mut self,
+        registry: &Registry,
+        max_prune_limit: Option<usize>,
+    ) -> Result<(), SvcError> {
         let spec = self.lock().clone();
 
         // If the transaction is the only transaction or there are no transactions, then no cleanup
@@ -262,7 +285,12 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
 
         // Create a map to track the remaining stale transactions upon cleanup.
         let remaining_stale_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> =
-            destroy_transactions(&spec.metadata().stale_transactions(), registry).await;
+            destroy_transactions(
+                &spec.metadata().stale_transactions(),
+                registry,
+                max_prune_limit,
+            )
+            .await;
 
         self.lock()
             .set_transactions_after_stale_cleanup(&remaining_stale_transactions);
@@ -430,18 +458,61 @@ impl OperationGuardArc<VolumeSnapshot> {
     }
 }
 
-/// Iterates over the transaction dataset and call destroy for each replica snapshot in that
-/// transactions and returns the transactions for which the destroy failed.
 async fn destroy_transactions(
     data_set: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
     registry: &Registry,
+    max_prune_limit: Option<usize>,
 ) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
-    // Create a map to track of transactions upon cleanup failure.
     let mut final_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> = HashMap::new();
 
-    // Iterate over current transactions and destroy each replica snapshot in the given data set
-    // transactions and store the transactions and replica snapshots whose cleanup failed.
+    for (txn_id, snap_list) in data_set.iter().take(max_prune_limit.unwrap_or(usize::MAX)) {
+        for snap in snap_list {
+            if let Err(err) =
+                OperationGuardArc::<VolumeSnapshot>::destroy_replica_snapshot(snap, registry).await
+            {
+                if !matches!(err.tonic_code(), tonic::Code::NotFound) {
+                    let mut snap = snap.clone();
+                    snap.set_status_deleting();
+                    final_transactions
+                        .entry(txn_id.clone())
+                        .or_insert_with(Vec::new)
+                        .push(snap);
+                }
+            }
+        }
+    }
+
+    // If the limit is exceeded, include the remaining elements in final_transactions
+    if let Some(limit) = max_prune_limit {
+        for (remaining_txn_id, remaining_snap_list) in data_set.iter().skip(limit) {
+            final_transactions
+                .entry(remaining_txn_id.clone())
+                .or_insert_with(Vec::new)
+                .extend_from_slice(remaining_snap_list);
+        }
+    }
+
+    final_transactions
+}
+
+async fn destroy_transaction(
+    data_set: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
+    registry: &Registry,
+    txn_id_to_delete: &SnapshotTxId,
+) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
+    let mut final_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> = HashMap::new();
+
+    // Iterate over the transactions in the data_set, if it doesn't match the txn_id, just add it
+    // back, else delete it.
     for (txn_id, snap_list) in data_set {
+        if txn_id != txn_id_to_delete {
+            final_transactions
+                .entry(txn_id.clone())
+                .or_insert_with(Vec::new)
+                .extend_from_slice(snap_list);
+            continue;
+        }
+
         for snap in snap_list {
             if let Err(err) =
                 OperationGuardArc::<VolumeSnapshot>::destroy_replica_snapshot(snap, registry).await
