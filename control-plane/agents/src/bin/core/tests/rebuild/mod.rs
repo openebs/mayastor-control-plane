@@ -38,7 +38,8 @@ async fn build_cluster(num_ioe: u32, pool_size: u64, _num_pools: u32) -> Cluster
 // stops io engine hosting one of the child,
 // polls for rebuild history and validates there is 1 record for the nexus,
 // validates that rebuild type is Full rebuild,
-// validates that faulted child is removed from nexus.
+// validates that faulted child is removed from nexus,
+// gets and validates rebuild history response from rest api.
 #[tokio::test]
 async fn rebuild_history_for_full_rebuild() {
     let cluster = build_cluster(4, 52428800, 0).await; // 50MiB pool size
@@ -97,7 +98,6 @@ async fn rebuild_history_for_full_rebuild() {
 
     // Check where the replicas are, apart from vol target node.
     let replicas = api_client.replicas_api().get_replicas().await.unwrap();
-    tracing::info!({?replicas}, "Available replicas - ");
     let testrep = replicas.iter().find(|r| r.node != vol_target).unwrap();
     let testrep_node = &testrep.node;
     tracing::info!(
@@ -141,6 +141,26 @@ async fn rebuild_history_for_full_rebuild() {
     // The child must not be in the nexus anymore.
     let is_removed = !nexus.children.iter().any(|c| c.uri == testrep.uri);
     assert!(is_removed);
+    let history = api_client
+        .volumes_api()
+        .get_rebuild_history(&vol.spec.uuid)
+        .await
+        .expect("could not find rebuild history in rest");
+    assert_eq!(
+        nexus_id.to_string(),
+        history.target_uuid.to_string(),
+        "Cant match nexus id in rebuild history in rest"
+    );
+    assert_eq!(
+        1,
+        history.records.len(),
+        "Number of rebuild history is not equal to 1 in rest"
+    );
+
+    assert!(
+        !history.records.get(0).unwrap().is_partial,
+        "Rebuild type is not Full rebuild in rest"
+    );
 }
 
 // This test:
@@ -149,7 +169,8 @@ async fn rebuild_history_for_full_rebuild() {
 // restarts io engine hosting one of the child,
 // polls for rebuild history and validates there is 1 record for the nexus,
 // validates that rebuild type is Partial rebuild,
-// validates that previously faulted child is not removed from nexus.
+// validates that previously faulted child is not removed from nexus,
+// gets and validates rebuild history response from rest api.
 
 #[tokio::test]
 async fn rebuild_history_for_partial_rebuild() {
@@ -205,7 +226,6 @@ async fn rebuild_history_for_partial_rebuild() {
 
     // Check where the replicas are, apart from vol target node.
     let replicas = api_client.replicas_api().get_replicas().await.unwrap();
-    tracing::info!({?replicas}, "Available replicas - ");
     let testrep = replicas.iter().find(|r| r.node != vol_target).unwrap();
     let testrep_node = &testrep.node;
     tracing::info!(
@@ -265,7 +285,27 @@ async fn rebuild_history_for_partial_rebuild() {
     assert!(
         history.records.get(0).unwrap().is_partial,
         "Rebuild type is not Partial rebuild"
-    )
+    );
+    let history = api_client
+        .volumes_api()
+        .get_rebuild_history(&vol.spec.uuid)
+        .await
+        .expect("could not find rebuild history in rest");
+    assert_eq!(
+        nexus_id.to_string(),
+        history.target_uuid.to_string(),
+        "Cant match nexus id in rebuild history in rest"
+    );
+    assert_eq!(
+        1,
+        history.records.len(),
+        "Number of rebuild history is not equal to 1 in rest"
+    );
+
+    assert!(
+        history.records.get(0).unwrap().is_partial,
+        "Rebuild type is not Partial rebuild in rest"
+    );
 }
 
 /// Checks if node is online, returns true if yes.

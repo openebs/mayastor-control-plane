@@ -1,15 +1,25 @@
 use super::*;
-use grpc::operations::{volume::traits::VolumeOperations, MaxEntries, Pagination, StartingToken};
+use grpc::operations::{
+    nexus::traits::NexusOperations, volume::traits::VolumeOperations, MaxEntries, Pagination,
+    StartingToken,
+};
 use stor_port::types::v0::{
     openapi::apis::Uuid,
     transport::{
-        DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume, RepublishVolume,
-        SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+        DestroyShutdownTargets, DestroyVolume, Filter, GetRebuildRecord, PublishVolume,
+        RebuildHistory, RebuildJobState, RebuildRecord, RepublishVolume, SetVolumeReplica,
+        ShareVolume, UnpublishVolume, UnshareVolume, Volume,
     },
 };
 
+use humantime::Timestamp;
+
 fn client() -> impl VolumeOperations {
     core_grpc().volume()
+}
+
+fn nexus_client() -> impl NexusOperations {
+    core_grpc().nexus()
 }
 
 #[async_trait::async_trait]
@@ -57,6 +67,31 @@ impl apis::actix_server::Volumes for RestApi {
             )
             .await?;
         Ok(volume.into())
+    }
+
+    async fn get_rebuild_history(
+        Path(volume_id): Path<Uuid>,
+    ) -> Result<models::RebuildHistory, RestError<RestJsonError>> {
+        let volume = volume(
+            volume_id.to_string(),
+            client()
+                .get(Filter::Volume(volume_id.into()), false, None, None)
+                .await?
+                .entries
+                .get(0),
+        )?;
+        let target = volume
+            .state()
+            .target
+            .ok_or(ReplyError::failed_precondition(
+                ResourceKind::Nexus,
+                "volume target not available".to_string(),
+                String::new(),
+            ))?;
+        let record = nexus_client()
+            .get_rebuild_history(&GetRebuildRecord::new(target.uuid), None)
+            .await?;
+        Ok(rebuild_history_to_rest(record))
     }
 
     async fn get_volume(
@@ -204,5 +239,43 @@ fn volume(volume_id: String, volume: Option<&Volume>) -> Result<Volume, ReplyErr
             source: "Requested volume was not found".to_string(),
             extra: format!("Volume id : {volume_id}"),
         }),
+    }
+}
+
+fn rebuild_history_to_rest(value: RebuildHistory) -> models::RebuildHistory {
+    let records: Vec<_> = value
+        .records
+        .into_iter()
+        .map(rebuild_record_to_rest)
+        .collect();
+    models::RebuildHistory::new(value.uuid, records)
+}
+
+fn rebuild_record_to_rest(value: RebuildRecord) -> models::RebuildRecord {
+    let start = Timestamp::from(value.start_time).to_string();
+    let end = Timestamp::from(value.end_time).to_string();
+    let state = rebuild_state_to_rest(value.state);
+    models::RebuildRecord::new(
+        value.child_uri,
+        value.src_uri,
+        state,
+        value.blocks_total as isize,
+        value.blocks_recovered as isize,
+        value.blocks_transferred as isize,
+        value.block_size as isize,
+        value.is_partial,
+        start,
+        end,
+    )
+}
+
+fn rebuild_state_to_rest(value: RebuildJobState) -> models::RebuildJobState {
+    match value {
+        RebuildJobState::Init => models::RebuildJobState::Init,
+        RebuildJobState::Rebuilding => models::RebuildJobState::Rebuilding,
+        RebuildJobState::Stopped => models::RebuildJobState::Stopped,
+        RebuildJobState::Paused => models::RebuildJobState::Paused,
+        RebuildJobState::Failed => models::RebuildJobState::Failed,
+        RebuildJobState::Completed => models::RebuildJobState::Completed,
     }
 }
