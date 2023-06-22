@@ -69,15 +69,15 @@ impl VolumeSnapshot {
     pub fn set_transactions(&mut self, transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>) {
         self.metadata.transactions = transactions
     }
-    /// Set the transactions after stale cleanup to the params.
-    pub fn set_transactions_after_stale_cleanup(
+    /// Set the stale transactions, that is, all which don't match the current txn.
+    pub fn set_stale_transactions(
         &mut self,
-        transactions: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
+        transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
     ) {
         self.metadata
             .transactions
             .retain(|key, _| key == &self.metadata.txn_id);
-        self.metadata.transactions.extend(transactions.clone())
+        self.metadata.transactions.extend(transactions)
     }
 }
 impl From<&VolumeSnapshotUserSpec> for VolumeSnapshot {
@@ -136,9 +136,15 @@ impl VolumeSnapshotMeta {
     }
     /// Get the stale transactions.
     pub fn stale_transactions(&self) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
-        let mut transactions_copy = self.transactions.clone();
-        transactions_copy.retain(|key, _| key != &self.txn_id);
-        transactions_copy
+        self.stale_transactions_ref()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+    /// Get the stale transactions as a reference.
+    pub fn stale_transactions_ref(&self) -> impl Iterator<Item = (&String, &Vec<ReplicaSnapshot>)> {
+        self.transactions
+            .iter()
+            .filter(|(txn, _)| txn != &&self.txn_id)
     }
     /// Get the current replica snapshots.
     pub fn replica_snapshots(&self) -> Option<&Vec<ReplicaSnapshot>> {
