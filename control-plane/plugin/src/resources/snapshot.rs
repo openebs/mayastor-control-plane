@@ -81,7 +81,7 @@ async fn get_snapshots(
     while starting_token.is_some() {
         match RestClient::client()
             .snapshots_api()
-            .get_volumes_snapshots(max_entries, volid.as_ref(), snapid.as_ref(), starting_token)
+            .get_volumes_snapshots(max_entries, snapid.as_ref(), volid.as_ref(), starting_token)
             .await
         {
             Ok(snaps) => {
