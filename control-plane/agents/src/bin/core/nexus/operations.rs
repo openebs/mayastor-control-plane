@@ -469,9 +469,20 @@ impl OperationGuardArc<NexusSpec> {
         }
 
         match node.create_nexus(&CreateNexus::from(&nexus)).await {
-            Ok(_) => {
+            Ok(nexus_state) if nexus_state.io_online() => {
                 nexus.info_span(|| tracing::info!("Nexus successfully recreated"));
                 Ok(())
+            }
+            Ok(nexus_state) => {
+                nexus.warn_span(|| {
+                    tracing::warn!(
+                        "Nexus successfully recreated but in state {}",
+                        nexus_state.status
+                    )
+                });
+                Err(SvcError::Internal {
+                    details: "Created Nexus in invalid state, not expected".to_string(),
+                })
             }
             Err(error) => {
                 nexus.error_span(|| tracing::error!(error=%error, "Failed to recreate the nexus"));

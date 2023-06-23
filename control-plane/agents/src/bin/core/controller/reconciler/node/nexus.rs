@@ -5,7 +5,7 @@ use crate::controller::{
         operations_helper::OperationSequenceGuard,
         OperationGuard, OperationGuardArc, ResourceMutex,
     },
-    task_poller::{PollEvent, PollResult, PollTimer, PollerState},
+    task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 use agents::errors::SvcError;
 use std::{collections::HashSet, time::Duration};
@@ -52,7 +52,10 @@ impl TaskPoller for NodeNexusReconciler {
     }
 
     async fn poll_event(&mut self, context: &PollContext) -> bool {
-        matches!(context.event(), PollEvent::TimedRun)
+        matches!(
+            context.event(),
+            PollEvent::TimedRun | PollEvent::Triggered(PollTriggerEvent::NodeDrain)
+        )
     }
 }
 

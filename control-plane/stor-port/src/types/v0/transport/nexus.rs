@@ -60,6 +60,10 @@ impl Nexus {
         self.device_uri = add_query(self.device_uri, name, value);
         self
     }
+    /// Check if the nexus is able to process IO.
+    pub fn io_online(&self) -> bool {
+        matches!(self.status, NexusStatus::Online | NexusStatus::Degraded)
+    }
 }
 
 impl From<Nexus> for models::Nexus {
