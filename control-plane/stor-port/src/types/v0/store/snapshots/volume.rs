@@ -6,7 +6,10 @@ use crate::types::v0::{
 use chrono::{DateTime, Utc};
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// User specification of a volume snapshot.
 /// todo: is e-derivations a better way of doing this?
@@ -374,7 +377,21 @@ impl StorableObject for VolumeSnapshot {
 /// List of all volume snapshots and related information.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct VolumeSnapshotList {
-    snapshots: HashMap<SnapshotId, VolumeSnapshot>,
+    snapshots: HashSet<SnapshotId>,
+}
+impl VolumeSnapshotList {
+    /// Insert snapshot into the list.
+    pub fn insert(&mut self, snapshot: SnapshotId) {
+        self.snapshots.insert(snapshot);
+    }
+    /// Remove snapshot from the list.
+    pub fn remove(&mut self, snapshot: &SnapshotId) {
+        self.snapshots.remove(snapshot);
+    }
+    /// Check if there's any snapshot.
+    pub fn is_empty(&self) -> bool {
+        self.snapshots.is_empty()
+    }
 }
 
 impl PartialEq<()> for VolumeSnapshot {

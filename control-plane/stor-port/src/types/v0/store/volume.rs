@@ -172,11 +172,10 @@ pub struct VolumeSpec {
     /// Affinity Group related information.
     #[serde(default)]
     pub affinity_group: Option<AffinityGroup>,
-    // /// Runtime volume information, useful to quick checks without having to read out from PSTOR
-    // /// or any other control-plane related registry.
-    // /// reviewer: is this something useful to keep?
-    // #[serde(skip)]
-    // runtime_info: VolumeRuntimeMetadata,
+    /// Runtime volume information, useful to quick checks without having to read out from PSTOR
+    /// or any other control-plane related registry.
+    #[serde(skip)]
+    pub runtime_info: VolumeRuntimeMetadata,
 }
 
 /// Runtime volume information.
@@ -184,6 +183,16 @@ pub struct VolumeSpec {
 pub struct VolumeRuntimeMetadata {
     /// Runtime list of all volume snapshots.
     snapshots: super::snapshots::volume::VolumeSnapshotList,
+}
+impl VolumeRuntimeMetadata {
+    /// Insert snapshot in the list.
+    pub fn insert_snapshot(&mut self, snapshot: &SnapshotId) {
+        self.snapshots.insert(snapshot.clone());
+    }
+    /// Check if there's any snapshot.
+    pub fn has_snapshots(&self) -> bool {
+        !self.snapshots.is_empty()
+    }
 }
 
 /// The volume's Nvmf Configuration.
@@ -268,6 +277,11 @@ impl AsOperationSequencer for AffinityGroupSpec {
 }
 
 impl VolumeSpec {
+    /// Check if the volume behaves as thin provisioned.
+    /// This can happen when a volume has snapshots.
+    pub fn as_thin(&self) -> bool {
+        self.thin | self.runtime_info.has_snapshots()
+    }
     /// Get the currently active target.
     pub fn target(&self) -> Option<&VolumeTarget> {
         self.target_config
@@ -388,10 +402,8 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::Unpublish => {
                     self.deactivate_target();
                 }
-                // we might not need to do anything here, depending on what we need to store as part
-                // of the operation, but we probably want to ensure we only take 1 snap at a time.
-                VolumeOperation::CreateSnapshot(_) => {}
-                VolumeOperation::DestroySnapshot(_) => {}
+                VolumeOperation::CreateSnapshot(snap) => self.runtime_info.snapshots.insert(snap),
+                VolumeOperation::DestroySnapshot(snap) => self.runtime_info.snapshots.remove(&snap),
             }
         }
         self.clear_op();
@@ -601,6 +613,7 @@ impl From<&CreateVolume> for VolumeSpec {
             target_config: None,
             publish_context: None,
             affinity_group: request.affinity_group.clone(),
+            runtime_info: Default::default(),
         }
     }
 }
